@@ -141,7 +141,7 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   }
 
   if (t.Kind === 'tuple') {
-    // #sec-canonicalizetype (F-S, spec.emu item 7): a REST element whose type
+    // #sec-canonicalizetype (spec.emu item 7): a REST element whose type
     // is itself a tuple is that tuple's elements in place - `[...[uint8,
     // string], T]` is `[uint8, string, T]` - which is what lets a spread of a
     // bound variadic parameter, `[...Ts, T]`, intern as the tuple it spells
@@ -160,7 +160,7 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     return { Kind: 'tuple', Elements };
   }
   if (t.Kind === 'application') {
-    // PLAN-where-on-methods.md, unblocking D1, step 4. #sec-canonicalizetype:
+    // #sec-canonicalizetype:
     // "If _t_.[[Kind]] is ~application~ … for each element _a_ of
     // _t_.[[Arguments]], if _a_ is a Type Record append CanonicalizeType(_a_),
     // else append _a_."
@@ -408,7 +408,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       }
       return Throw.TypeError('$1 is not a value of this enum', arg);
     }
-    // proposal-runtime-types (PLAN-decimal.md stage A): calling a decimal Type
+    // proposal-runtime-types: calling a decimal Type
     // Object with a STRING reads a decimal from its digits. That is where a
     // cohort member comes from - "a decimal type reads its cohort member from
     // the SOURCE TEXT rather than from the mathematical value, since `1.0` and
@@ -418,8 +418,8 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     // A NUMBER is deliberately not accepted: `decimal128(0.1)` would have to
     // choose a cohort member for a binary double whose exact expansion is 55
     // digits, which the specification flags as the hard conversion and which
-    // stage F owns. The existing "not assignable" TypeError is the right answer
-    // until it is defined.
+    // is not defined yet. The existing "not assignable" TypeError is the right
+    // answer until it is.
     if (record.Kind === 'primitive' && (record.Name === 'decimal32' || record.Name === 'decimal64' || record.Name === 'decimal128')) {
       const width = record.Name === 'decimal32' ? 32 : record.Name === 'decimal64' ? 64 : 128;
       if (arg instanceof JSStringValue) {
@@ -429,8 +429,8 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
         }
         return CreateDecimalValue(digits.significand, digits.exponent, width, surroundingAgent.currentRealmRecord);
       }
-      // A NUMBER converts by CARRYING WHAT THE FLOAT HOLDS (PLAN-decimal.md
-      // stage F, settled by decimal.md): the exact binary expansion, rounded to
+      // A NUMBER converts by CARRYING WHAT THE FLOAT HOLDS, as decimal.md
+      // settles it: the exact binary expansion, rounded to
       // the width's digits. `decimal128(0.1)` is therefore NOT
       // `decimal128('0.1')` - the first carries the binary approximation the
       // double already was, and the second is exactly one tenth.

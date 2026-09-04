@@ -137,7 +137,7 @@ export abstract class TypeParser extends ExpressionParser {
    */
   private parsePostfixTypeRest(primary: ParseNode.Type): ParseNode.Type {
     let type = primary;
-    // F190. `TypeArguments` joins the postfix loop, so a parameterization
+    // `TypeArguments` joins the postfix loop, so a parameterization
     // composes with itself and with an indexed access in either order - the
     // same shape `IndexedAccessType` already has below.
     while (this.test(Token.LBRACK) || this.test(Token.PERIOD_LT)) {
@@ -373,7 +373,7 @@ export abstract class TypeParser extends ExpressionParser {
         // `-Infinity` is a NEGATED numeric literal whose numeral has a name.
         // Only reachable behind `-`, because a bare identifier in a type
         // position is a type reference and resolves as one - `Infinity` and
-        // `NaN` are handled there (F63). Without this a bounds-shaped meta type
+        // `NaN` are handled there. Without this a bounds-shaped meta type
         // could not state its own default, since `-Infinity` was a SyntaxError
         // where `Infinity` had just become writable.
         if (!negated || (tok.value !== 'Infinity' && tok.value !== 'NaN')) {
@@ -486,10 +486,10 @@ export abstract class TypeParser extends ExpressionParser {
     const node = this.startNode<ParseNode.TypeArguments>();
     this.expect(Token.PERIOD_LT);
     this.noFuseGT += 1;
-    // OQ-type-arguments-vs-metadata.md D2. `X.<>` supplies NO argument, so every
+    // `X.<>` supplies NO argument, so every
     // parameter takes its default.
     //
-    // It exists because D2 made `Grid.<{ brand: 'V' }>` an APPLICATION wherever
+    // It exists because the base-decides rule made `Grid.<{ brand: 'V' }>` an APPLICATION wherever
     // `Grid` declares a parameter, which is right but takes away the only
     // one-step spelling a fully-defaulted generic had for being branded. Without
     // an empty list the alternative is `Grid.<float64>.<{ brand: 'V' }>`, which
@@ -557,7 +557,7 @@ export abstract class TypeParser extends ExpressionParser {
       }
       param.Variance = Variance;
       // proposal-runtime-types #sec-type-parameters: `...` declares a VARIADIC
-      // parameter (PLAN-variadic-and-named-generic-arguments.md Phase 3). Its
+      // parameter. Its
       // constraint is the type of what it collects, and what it binds is a
       // tuple; the marker sits where a rest parameter's does.
       param.IsVariadic = this.eat(Token.ELLIPSIS);
@@ -588,7 +588,7 @@ export abstract class TypeParser extends ExpressionParser {
         }
       }
       param.Arity = Arity;
-      // PLAN-literal-type-arguments.md F166. `:` and `extends` are NOT one
+      // `:` and `extends` are NOT one
       // declaration. sec-generic-parameters-as-values: a TYPE parameter is
       // "declared with `extends` or unbounded" and denotes, in an expression
       // position, the Type Object bound to it; a VALUE parameter is "declared
@@ -681,9 +681,8 @@ export abstract class TypeParser extends ExpressionParser {
     // target that is not also a decorator context", so this is decorating the
     // return POSITION and not the type in it.
     // A DECORATOR MAY PRECEDE A TYPE ONLY IN A POSITION THAT HAS A REFLECTION
-    // CONTEXT, which is a return and nothing else. §7.3 of the decorators plan
-    // asked whether `Reflect.Type` is a decorator context and the design
-    // answers no - "a bare type expression carries no decorator" - but the
+    // CONTEXT, which is a return and nothing else. Whether `Reflect.Type` is a
+    // decorator context was asked, and the design answers no - "a bare type expression carries no decorator" - but the
     // grammar had been admitting `let x: @f uint8`, a class field's `a: @f T`,
     // and a parameter's `p: @f T` and then DROPPING the decoration, which reads
     // as support. Refused here, where the position is known; the caller passes
@@ -705,7 +704,7 @@ export abstract class TypeParser extends ExpressionParser {
   }
 
   // ArrayOrTupleType :
-  //   `[` `]`                        <- the EMPTY TUPLE (F115, direction B)
+  //   `[` `]`                        <- the EMPTY TUPLE
   //   `[` `]` TypeArguments
   //   `[` ArrayExtent `]` TypeArguments
   //   `[` TupleElementList `,`? `]`
@@ -719,7 +718,7 @@ export abstract class TypeParser extends ExpressionParser {
     const node = this.startNode<ParseNode.ArrayType | ParseNode.TupleType>();
     this.expect(Token.LBRACK);
     if (this.eat(Token.RBRACK)) {
-      // PLAN-std-types.md F115, direction B. `[]` FOLLOWED BY `.<...>` is an
+      // `[]` FOLLOWED BY `.<...>` is an
       // array - `[].<uint8>` is the dynamic array of `uint8`. `[]` ALONE is the
       // EMPTY TUPLE.
       //
@@ -1160,7 +1159,7 @@ export abstract class TypeParser extends ExpressionParser {
     while (this.test('where')) {
       const node = this.startNode<ParseNode.WhereClause>();
       this.next();
-      // PLAN-where-on-methods.md D1. `return` is a |PrimaryExpression| only
+      // `return` is a |PrimaryExpression| only
       // HERE, so the flag is raised across the predicate and lowered after it
       // rather than being a property of the expression parser.
       const outer = (this as { inRefinementPredicate?: boolean }).inRefinementPredicate;

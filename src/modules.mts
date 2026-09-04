@@ -898,7 +898,6 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // all of them in source order. Without it a module's second declaration
     // silently won and the first was unreachable - which is why this lands
     // BEFORE the parser stops refusing the pair, not after.
-    // `PLAN-module-scope-overloads` §7.
     //
     // `#sec-module-semantics` binds a module's functions LEXICALLY, so the
     // rebinding is an initialized lexical binding rather than the script's

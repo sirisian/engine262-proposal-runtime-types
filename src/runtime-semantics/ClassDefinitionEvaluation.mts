@@ -192,9 +192,9 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         fieldDefinition.Decorators = decorators;
         return fieldDefinition;
       } else {
-        // PLAN-accessor.md stage A opens the GRAMMAR and nothing else. An
+        // The GRAMMAR is open and nothing else. An
         // `accessor` field desugars to a private typed field and a get/set pair
-        // whose backing participates in the memory layout (stage B), and none of
+        // whose backing participates in the memory layout, and none of
         // that is built - so the declaration is REFUSED rather than evaluated as
         // the plain field it currently resembles. A plain field would get and
         // set, which is close enough to an accessor to read as support while
@@ -223,13 +223,13 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // "a decorator runs when the declaration it decorates is evaluated"
           // and a context that described a half-built field would be describing
           // something the program never has.
-          // PLAN-accessor.md stage E. An `accessor` is a FieldDefinition
-          // carrying the marker, so this arm is where the two part - stage 0
-          // established that, after finding the decision written in
-          // `memberContextKind`, which the method arm alone reaches.
+          // An `accessor` is a FieldDefinition
+          // carrying the marker, so this arm is where the two part, after the
+          // decision written in `memberContextKind`, which the method arm alone
+          // reaches.
           //
           // The KEY comes from the node rather than from the record: an
-          // accessor's record carries its BACKING Private Name (stage B), and
+          // accessor's record carries its BACKING Private Name, and
           // the context must name what was declared, not the storage.
           const isAccessor = (node as { accessor?: boolean }).accessor === true;
           const accessorPair = (plain as { AccessorPair?: { Getter: Value, Setter: Value } }).AccessorPair;
@@ -484,7 +484,7 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
     // the context takes its own default, and the candidate needing the fewest
     // defaults wins. CallDecorator carries that rule, because it has to see
     // each candidate signature BEFORE resolution rather than after.
-    // OQ-18 (B1): the context is OPEN only while its decorator runs, which is
+    // The context is OPEN only while its decorator runs, which is
     // the window in which `Reflect.declareInverse` accepts it.
     OpenDecorationContext(context);
     let returned;
@@ -739,7 +739,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   // https://github.com/tc39/ecma262/pull/3212/
   // 17. Perform MakeClassConstructor(F).
   MakeClassConstructor(F);
-  // D8: carry a collection heritage's TYPE ARGUMENTS on the class constructor,
+  // Carry a collection heritage's TYPE ARGUMENTS on the class constructor,
   // so that `new M()` for `class M extends Map.<string, uint8> {}` can stamp the
   // instance. The heritage evaluates to the plain `Map` constructor - a library
   // generic has no per-specialization constructor - so the arguments are lost at
@@ -1002,7 +1002,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     if ((F as { SealInstances?: boolean }).SealInstances === true) {
       Q(yield* SetIntegrityLevel(proto, 'frozen'));
     }
-    // PLAN-type-declared-zero.md phase 2. #sec-declared-zero: the declared zero
+    // #sec-declared-zero: the declared zero
     // "is evaluated ONCE, when the class is declared". Read here, after the
     // static fields have been defined, so the value is the one the class holds.
     if (surroundingAgent.feature('runtime-types')
@@ -1011,7 +1011,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // as [[Declaration]] - the ClassTail is the body, and the record never
       // sees it. `ClassTail.parent` is how this file already reaches the
       // declaration for modifiers and decorators.
-    // PLAN-generic-declared-zero.md phase 1. An UNSPECIALIZED generic's static
+    // An UNSPECIALIZED generic's static
     // fields and blocks are DEFERRED - the loop above skipped them, because "a
     // static field's initializer may read the class's type parameters" and none
     // are bound yet. Reading `default` here would therefore observe *undefined*
@@ -1029,7 +1029,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const owner = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
       const held = Q(yield* Get(F as ObjectValue, Value('default')));
       if (!unspecializedGeneric) {
-      // PLAN-generic-declared-zero.md Q2: keyed by the ARGUMENTS this
+      // Keyed by the ARGUMENTS this
       // specialization was built for, so `Bx.<uint8>` and `Bx.<string>` hold
       // different zeros. The frame is what the specialization bound, and it is
       // still pushed here - `unspecializedGeneric` is false precisely because
@@ -1087,7 +1087,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         continue;
       }
       if (e.type === 'OperatorDefinition' || e.type === 'AbstractMethodDefinition') {
-        // PLAN-abstract-implementation.md phase 2a. An AbstractMethodDefinition
+        // An AbstractMethodDefinition
         // is intercepted here and never reaches ClassElementEvaluation, which is
         // where every other member is recorded - so `abstract` in a
         // MemberDeclaration was a field nothing could set, and the registry had
@@ -1246,7 +1246,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           container.push(field);
         }
       } else if (field instanceof ClassFieldDefinitionRecord) { // f. Else if field is a ClassFieldDefinition Record, then
-        // PLAN-accessor.md Â§2.3: a PRIVATE accessor yields TWO things from one
+        // A PRIVATE accessor yields TWO things from one
         // declaration - the backing FIELD, which allocates the slot and is
         // handled below like any other, and a private GET/SET PAIR, which is a
         // PrivateElement and belongs in the same container a private getter or
@@ -1302,7 +1302,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // TypeError when NewTarget is that constructor itself, while super() from a
       // concrete subclass (a concrete NewTarget) runs it as a constructor body.
       (F as { IsAbstract?: boolean }).IsAbstract = modifiers.includes('abstract');
-      // PLAN-abstract-implementation.md phase 2b. #sec-abstract-classes: "a type
+      // #sec-abstract-classes: "a type
       // error if a class not declared `abstract` leaves an inherited abstract
       // method unimplemented". Until now the class declared, constructed, and
       // reported only when the missing member was CALLED - "h.m is not a
@@ -1317,12 +1317,12 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // what makes implementing at a middle level satisfy the contract for
       // everything below it - the question is "is the collected declaration
       // abstract", not "is any declaration in the chain abstract".
-      // PLAN-abstract-implementation.md phase 3, rule 1. #sec-abstract-classes:
+      // #sec-abstract-classes:
       // an abstract method's "annotation types the implementations: it is a type
       // error if a subclass implements an inherited abstract method with a
       // signature the abstract declaration does not accept".
       //
-      // The SUBTYPE relation (D3), which is what interface satisfaction already
+      // The SUBTYPE relation, which is what interface satisfaction already
       // uses for the same question - `class C implements I { m(): uint8 }` for an
       // `I` declaring `m(): number` is refused, and an abstract `m(): number`
       // accepting it was the engine answering one question two ways.
@@ -1419,7 +1419,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // #sec-layout-properties calls these compile-time constants.
     //
     // FINITENESS needs no cycle guard at this point, which is worth stating
-    // because the plan expected one: a class whose field type names the class
+    // because one might be expected: a class whose field type names the class
     // itself is already refused by the ordinary temporal dead zone, before any
     // layout is computed - `class A { a: A; }` is a ReferenceError. The
     // condition of #sec-layout-finiteness therefore holds by construction here.
@@ -1485,7 +1485,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     }
     // 32. Set the running execution context's PrivateEnvironment to outerPrivateEnvironment.
     surroundingAgent.runningExecutionContext.PrivateEnvironment = outerPrivateEnvironment;
-    // PLAN-type-declared-zero.md phase 2. The same registration as the branch
+    // The same registration as the branch
     // above: this function has TWO `return F` sites and a typed class may leave
     // by either, so the declared zero has to be recorded at both or it is
     // recorded for some classes and not others.
@@ -1495,7 +1495,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const owner2 = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
       const held2 = Q(yield* Get(F as ObjectValue, Value('default')));
       if (!unspecializedGeneric) {
-      // PLAN-generic-declared-zero.md Q2: keyed by the ARGUMENTS this
+      // Keyed by the ARGUMENTS this
       // specialization was built for, so `Bx.<uint8>` and `Bx.<string>` hold
       // different zeros. The frame is what the specialization bound, and it is
       // still pushed here - `unspecializedGeneric` is false precisely because
@@ -1566,7 +1566,7 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
         const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
         RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
       }
-      // PLAN-abstract-implementation.md phase 2a. An AbstractMethodDefinition is
+      // An AbstractMethodDefinition is
       // intercepted here and never reaches ClassElementEvaluation, which is
       // where every other member is recorded - so `abstract` in a
       // MemberDeclaration was a field that could never be true, and the
@@ -1910,10 +1910,10 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
  *
  * decorators.md's `ClassFieldReflection` is larger than this — `type`, `static`,
  * `private`, `protected`, `readonly`, `initial`, `offset`, `byteLength`, and
- * `metadata`. Stage A of PLAN-decorators.md builds the CALL, not the contexts,
+ * `metadata`. This builds the CALL, not the contexts,
  * so this carries the `kind` and the `name` that identify what was decorated
- * and leaves the rest to stage B, which widens `Reflect.ClassField` properly.
- * A partial context is stated here rather than implied, so that a stage B that
+ * and leaves the rest to whatever widens `Reflect.ClassField` properly. A
+ * partial context is stated here rather than implied, so that a widening which
  * forgets a field fails a test rather than shipping a hole.
  */
 /**
@@ -1940,8 +1940,8 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
  *
  * ONE derivation, shared by the field and accessor contexts. decorators.md gives
  * `initial` on `ClassFieldReflection` AND `ClassAccessorReflection`, and the two
- * describe the same declaration - writing it twice is how the two paths in this
- * plan have repeatedly drifted.
+ * describe the same declaration - writing it twice is how the two paths have
+ * repeatedly drifted.
  */
 export function* DeclaredInitialOf(decl: ParseNode.FieldDefinition): ValueEvaluator {
   const initialiser = (decl as { Initializer?: ParseNode | null }).Initializer;
@@ -1982,7 +1982,7 @@ export function* ClassAccessorDecoratorContext(key: Value, node: ParseNode, clas
   X(CreateDataProperty(context, Value('static'), decl.static === true ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('private'), key instanceof PrivateName ? Value.true : Value.false));
   X(CreateDataProperty(context, Value('protected'), decl.protected === true ? Value.true : Value.false));
-  // PLAN-accessor.md Â§2.5: `readonly accessor` is legal and means getter-only,
+  // `readonly accessor` is legal and means getter-only,
   // so the context reports it as a field's does. Without this the modifier was
   // invisible to a decorator as well as unenforced.
   X(CreateDataProperty(context, Value('readonly'), decl.readonly === true ? Value.true : Value.false));
@@ -2020,7 +2020,7 @@ export function* ClassFieldDecoratorContext(key: Value, node: ParseNode, classNa
   // named `Readonly` and `Access`, which are the FIELD RECORD's spellings; a
   // FieldDefinition node carries `readonly` and `protected`. So both properties
   // reported FALSE for every field, however the member was declared - the same
-  // failure as the `Accessor`/`accessor` branch stage 0 removed, and the same
+  // failure as the `Accessor`/`accessor` branch that was removed, and the same
   // cause: `as unknown as { ... }` invents a shape, so no name in it is checked
   // against the node that arrives.
   const decl = node as ParseNode.FieldDefinition;
@@ -2167,7 +2167,7 @@ export interface MemberDeclaration {
    *
    * Recorded here because the READ PATH answers from this record and had no
    * `type` at all, while the context did: two reflections of ONE declaration
-   * disagreeing, which is the failure this plan has met most often. Derived by
+   * disagreeing, which is the failure this area has met most often. Derived by
    * the same operation the context uses, so they cannot drift.
    */
   readonly type?: TypeRecord | undefined;
@@ -2578,7 +2578,7 @@ export function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeR
     TypeAnnotation?: { Type?: ParseNode } | null,
   };
   const formals = n.UniqueFormalParameters ?? n.PropertySetParameterList ?? n.FormalParameters ?? [];
-  // PLAN-variadic-and-named-generic-arguments.md Phase 5: a GENERIC method's
+  // A GENERIC method's
   // own type parameters are in scope for its annotations - `on<U>(h: (e: U) =>
   // void)` resolved `U` with no frame, failed silently, and typed the parameter
   // `any` - and its signature carries their Type Parameter Records, which is
@@ -2674,7 +2674,7 @@ export function* ClassMemberDecoratorContext(kind: string, key: Value, isStatic:
   // decorators.md: `ClassMethodReflection<T extends (...args) => any>` has
   // `type: T`, and `ClassGetterReflection` has `type: () => T`. **Both are the
   // member's FUNCTION type, not its return type** - easy to miss, and missed
-  // here in cycle 197, which reported the RETURN type and so made a getter's
+  // here once, when it reported the RETURN type and so made a getter's
   // `type` indistinguishable from its RETURN sub-target's.
   //
   // A member that annotates nothing reports nothing, rather than a function
@@ -2730,9 +2730,9 @@ function memberContextKind(node: ParseNode.MethodDefinition | ParseNode.Generato
   // `ClassAccessor` was decided on an `Accessor` field NO PARSER SETS - the
   // spelling is `accessor`, lower case - and it could not have run even
   // spelled right, because `accessor` produces a FIELD DEFINITION and this
-  // function is reached only from the method arm. When the grammar lands
-  // (PLAN-accessor.md stage A) the decision belongs in the FieldDefinition arm
-  // beside `ClassFieldDecoratorContext`, reading `node.accessor`.
+  // function is reached only from the method arm. The decision belongs in the
+  // FieldDefinition arm beside `ClassFieldDecoratorContext`, reading
+  // `node.accessor`.
   //
   // A MethodDefinition carries no accessor marker; the PARAMETER LIST is what
   // distinguishes the three, and it is what MethodDefinitionEvaluation itself
@@ -2780,10 +2780,10 @@ function subTargetKinds(ownerKind: string): { parameter: string, ret: string } {
       return { parameter: 'ClassOperatorParameter', ret: 'ClassOperatorReturn' };
     case 'ClassAccessor':
       // An `accessor` has no parameter list and no return annotation - its
-      // TypeAnnotation is a FIELD's, and cycle 132 made a decorator there a
+      // TypeAnnotation is a FIELD's, and a decorator there is a
       // SyntaxError. Named anyway rather than left to the default arm, which
       // would hand an accessor the METHOD contexts: relying on a position being
-      // unreachable is how C1's operator bug survived.
+      // unreachable is how the operator bug survived.
       return { parameter: 'ClassAccessor', ret: 'ClassAccessor' };
     case 'Function':
       // A plain function's parameters and return take the FUNCTION contexts,

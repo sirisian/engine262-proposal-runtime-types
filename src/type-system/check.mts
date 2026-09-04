@@ -74,7 +74,7 @@ const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
 /**
  * The [[ThisType]] a METHOD carries, as one record.
  *
- * PLAN-nominal-records.md v2 item 2.3. The checker built this per class and per
+ * The checker built this per class and per
  * interface, which is fine because identity of a ~nominal~ is its
  * [[Declaration]] and they all share SELF_THIS. It is exported because the
  * RUNTIME record for an interface has to attach the SAME marker: a class's
@@ -93,7 +93,7 @@ export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arg
 /**
  * Constructors whose instance type is the constructor's own name.
  *
- * PLAN-remaining-blockers.md item 7. `new Error("x")` is an `Error` whatever it
+ * `new Error("x")` is an `Error` whatever it
  * is passed, so the answer is determined without reading the arguments - the
  * `FIXED_STATIC_RESULTS` idea one syntax along.
  *
@@ -110,7 +110,7 @@ const FIXED_CONSTRUCTOR_INSTANCES = new Set([
 /**
  * Static DATA properties whose type is fixed.
  *
- * PLAN-standard-library-statics.md Family A. At the types these already answer -
+ * At the types these already answer -
  * `number`, `string`, `symbol` - and never a numeric value type.
  * #sec-overloading-of-the-standard-library's bound is the reason: a value type
  * "would change what every existing call returns", and `float64` is not
@@ -141,13 +141,13 @@ const FIXED_STATIC_PROPERTIES: Record<string, (() => TypeRecord) | undefined> = 
 /**
  * Global functions whose result type depends on nothing the call passes.
  *
- * PLAN-standard-library-statics.md Family B. The same rule as
+ * The same rule as
  * FIXED_STATIC_RESULTS, for callees that are bare identifiers.
  *
  * `isNaN` and `isFinite` are NOT here. #sec-overloading-of-the-standard-library
  * names them among the functions overloaded for the numeric types, and
  * `table-numeric-library-signatures` gives them LITERAL results per family, so a
- * fixed `boolean` would displace an overload - the mistake this plan made once
+ * fixed `boolean` would displace an overload - a mistake made once
  * with `Math.*` and again with the `Number` predicates.
  *
  * `parseInt` and `parseFloat` ARE here, at `number`. `sec-parsing` leaves them
@@ -179,7 +179,7 @@ const FIXED_GLOBAL_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
 /**
  * Statics whose result type depends on nothing the call passes.
  *
- * PLAN-standard-library-statics.md Group A. Each is a predicate or a producer
+ * Each is a predicate or a producer
  * with one answer: `Array.isArray` is a Boolean whatever it is asked about, and
  * `Symbol.for` a Symbol whatever string it is given. Held as thunks because a
  * type record is built rather than shared, and because the numeric ones must be
@@ -205,7 +205,7 @@ const FIXED_STATIC_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
   // accepted it, the two spellings of one predicate disagreeing.
   //
   // They belong to the overload work, not to this table. A fixed result must
-  // never displace an overload, which is the mistake this plan already made once
+  // never displace an overload, which is a mistake already made once
   // with `Math.*` and made again here.
   'Object.is': () => makePrimitive('boolean'),
   'ArrayBuffer.isView': () => makePrimitive('boolean'),
@@ -364,7 +364,7 @@ export function GetNarrowingResolution(root: object, key: object): NarrowingReso
  * are COLLECTED during the walk and adjudicated by the checking pass, because
  * claims register when a MetaDeclaration EVALUATES: deciding here would
  * reject a parameterization written above its meta type, which is legal.
- * Mirrors the deferred-metadata channel above (the plan's Phase 3, F44).
+ * Mirrors the deferred-metadata channel above.
  */
 export interface UnclaimedKeyCheck {
   readonly node: ParseNode;
@@ -377,7 +377,7 @@ const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
 /**
  * A binding declared with a type and NO initializer, held for the pass.
  *
- * PLAN-default-timing.md phase 1. #sec-defaultvalueof: "It is a type error to
+ * #sec-defaultvalueof: "It is a type error to
  * declare a binding or a field with a type _t_ and no initializer when
  * DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
  * determinable before the text runs an Early Error. The engine reported it at
@@ -390,7 +390,7 @@ const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
  * registered `default` supplies one for a type that has no structural zero.
  * This walk is synchronous and runs before that, so it can only collect.
  *
- * [[MetaNamesUnprocessed]] carries D4's guard: the names of types that a `meta`
+ * [[MetaNamesUnprocessed]] carries the nested-`meta` guard: the names of types that a `meta`
  * declaration the pre-evaluation loop did NOT process could supply a default
  * for. The loop scans a Script's top-level items, so a `meta` nested in a block
  * is invisible to it while being perfectly visible to the running program.
@@ -402,7 +402,7 @@ export interface DefaultRequirement {
   /**
    * The name the annotation WROTE, where it wrote one.
    *
-   * D4's guard compares against the name a `meta` declaration targets, and a
+   * That guard compares against the name a `meta` declaration targets, and a
    * meta declaration targets a NAME - `meta T { ... }` - while [[Display]] is
    * the resolved type, `uint.<8> | string` for the same annotation. Comparing
    * displays found nothing and the guard never fired.
@@ -492,8 +492,7 @@ interface Frame {
   // The names this frame NARROWS rather than declares. sec-narrowing: "a
   // narrowed binding is invalidated by an assignment that leaves the narrowed
   // type", so an assignment has to find the DECLARED type to check against and
-  // then drop the narrowing - which needs the two kinds of entry told apart
-  // (F78).
+  // then drop the narrowing - which needs the two kinds of entry told apart.
   readonly narrowed?: Set<string>;
   readonly aliases: Map<string, TypeRecord>;
   // Enum declarations in scope, by enum name, and the bindings known to hold an
@@ -550,7 +549,7 @@ function widen(t: TypeRecord): TypeRecord {
  * #sec-check-elision: "A check is required only where the static types do not
  * already establish the result." The checker proves that at a boundary and
  * records the annotation whose check may be skipped; the run time consults the
- * same set (F81).
+ * same set.
  *
  * The condition is narrower than the clause's first bullet reads, and the
  * narrowing is the whole correctness argument. A LITERAL is assignable to
@@ -611,7 +610,7 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
   if (library === 'Span') {
     return true;
   }
-  // D25 / OQ12: a boundary at a collection SPECIALIZATION does more than check.
+  // A boundary at a collection SPECIALIZATION does more than check.
   // #sec-collection-construction has an unstamped collection ADOPT the target's
   // type arguments there, and adoption is not a no-op - so the boundary may not
   // be elided however provably the value already satisfies the type.
@@ -624,7 +623,7 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
   // Measured before this: `let m: Map.<string, uint8> = new Map()` adopted,
   // `let g: Map.<…> = Map.groupBy(…)` did NOT, and laundering the same call
   // through `any` made it adopt again - one behaviour decided by what the
-  // checker happened to prove. Giving `Map.groupBy` a Static Type in Phase 1 is
+  // checker happened to prove. Giving `Map.groupBy` a Static Type is
   // what created that, by making the proof possible.
   //
   // Keyed on the NAME and the argument count, deliberately. An earlier attempt
@@ -661,7 +660,7 @@ function bigintTarget(t: TypeRecord): boolean {
     return t.Name === 'bigint';
   }
   if (t.Kind === 'union') {
-    // PLAN-number-bigint-coercion.md. A union is a bigint target only where NO
+    // A union is a bigint target only where NO
     // arm already accepts the literal as a Number. `some` alone made every
     // union containing `bigint` one, so `let x: number | bigint = 5` propagated
     // the literal to `bigint` and the binding held `5n`:
@@ -682,7 +681,7 @@ function bigintTarget(t: TypeRecord): boolean {
  * Whether a type accepts an integer numeric literal AS A NUMBER, without
  * conversion.
  *
- * PLAN-number-bigint-coercion.md: this is the half `bigintTarget` was missing.
+ * This is the half `bigintTarget` was missing.
  * `number` and every sized numeric type hold `5` as written; `bigint` does not,
  * which is why it is the one numeric name excluded here.
  */
@@ -745,7 +744,7 @@ export function IsBigIntContextLiteral(node: object): boolean {
  * Numeric literals the checker read at a DECIMAL type, with the width to build
  * them at - consulted by NumericValue, exactly as the bigint mark is.
  *
- * PLAN-decimal.md stage B. "In a decimal context the literal `0.1` is the
+ * "In a decimal context the literal `0.1` is the
  * decimal one tenth, where in a `float64` context the same `0.1` is the nearest
  * binary float", and the cohort member comes from the SOURCE TEXT: `1.0` is
  * 10 x 10^-1 where `1.00` is 100 x 10^-2, and by the time the lexer has made a
@@ -791,7 +790,7 @@ const publishedReturnTypes = new WeakMap<object, TypeRecord>();
 /**
  * The instance type the checker built for a class declaration, by its node.
  *
- * PLAN-nominal-records.md phase 2: the runtime's own record for the same class
+ * The runtime's own record for the same class
  * reads [[Base]] and [[Structure]] from here rather than computing them again.
  */
 const publishedClassTypes = new WeakMap<object, TypeRecord>();
@@ -803,7 +802,7 @@ export function PublishedClassTypeOf(declaration: object): TypeRecord | undefine
 /**
  * The ABSTRACT members a class declares, by name, with their declared types.
  *
- * PLAN-abstract-implementation.md, the checking-pass migration. Published beside
+ * Published beside
  * the class record because the two rules of #sec-abstract-classes are questions
  * about a CHAIN - "a class not declared `abstract` leaves an inherited abstract
  * method unimplemented" - and the chain is walked through [[Base]], whose
@@ -974,7 +973,7 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
 }
 
 /**
- * The signature of an Array method for a given ELEMENT type (D46).
+ * The signature of an Array method for a given ELEMENT type.
  *
  * Lifted to module scope so both readers can share ONE source: the checker
  * instantiates it with the receiver's element to check a call, and the
@@ -1006,11 +1005,11 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
     // `sort` reorder, `concat` joins. `map` is NOT here - its element type is
     // the callback's return, which needs the callback typed first, and
     // claiming the receiver's type would be wrong rather than merely
-    // imprecise (F79).
+    // imprecise.
     // The methods that take a CALLBACK: its first parameter is the element,
     // its second the index at `uint32`, its third the array itself. Writing
     // that as a function type is what lets the call site push those types
-    // into the literal's parameters (F80).
+    // into the literal's parameters.
     case 'forEach':
     case 'map':
     case 'find':
@@ -1046,7 +1045,7 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
     case 'shrinkToFit':
       // #sec-array.prototype.shrinktofit: takes nothing and answers nothing.
       // It had no entry, so it resolved to ~any~ and `a.shrinkToFit(1, 2, 3)`
-      // was accepted - the same hole Phase C closed for `capacity`, reopened
+      // was accepted - the same hole that was closed for `capacity`, reopened
       // by adding an operation without adding its signature alongside.
       return { Kind: 'function', Signatures: [{ Parameters: [], Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
     case 'reserve':
@@ -1055,7 +1054,7 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
       // argument is checked exactly as a length or a capacity would be.
       return { Kind: 'function', Signatures: [{ Parameters: shapes([builtinTypeRecord('uint', [64])!], 0), Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
     // `push`, `unshift` and `splice` were absent from this table entirely
-    // (D102 row 2), so a foreign element raised no static error at all -
+    //, so a foreign element raised no static error at all -
     // `a.push("s")` on a `[].<uint8>` type-checked. The RUN TIME refused every
     // one of them, which is what these entries are copied from: it throws for
     // a wrong element and accepts a right one, `push` and `unshift` answer the
@@ -1075,7 +1074,7 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
       // then refused `let b: [].<uint8> = a.splice(0, 1)` - which happens to
       // match what the RUN TIME does, and the run time is WRONG there: it
       // reports `"[undefined].<uint.<8>>" is not assignable to "[].<uint.<8>>"`,
-      // a malformed extent. Copying an error is not agreement (D103).
+      // a malformed extent. Copying an error is not agreement.
       return {
         Kind: 'function',
         Signatures: [{
@@ -1087,7 +1086,7 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
           Return: receiver,
         }],
       } as Known;
-    // `concat` is NOT one of the five below (D102).
+    // `concat` is NOT one of the five below.
     //
     // It shared their case and so returned the RECEIVER, ignoring its
     // arguments - but concat's result unions the arguments' element types,
@@ -1128,9 +1127,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
   const unclaimed: UnclaimedKeyCheck[] = [];
-  /** PLAN-default-timing.md phase 1: declarations the pass must answer for. */
+  /** Declarations the pass must answer for. */
   const defaultsNeeded: DefaultRequirement[] = [];
-  /** D4: type names named by a `meta` the pre-evaluation loop cannot reach. */
+  /** Type names named by a `meta` the pre-evaluation loop cannot reach. */
   const nestedMetaNames = new Set<string>();
   // The outermost frame is the session's where there is one, so a console entry
   // sees what earlier entries declared. It is already a copy (see
@@ -1188,8 +1187,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** The `this` a non-arrow literal adopted from its contextual signature. */
   /**
-   * A Map whose writes can be UNDONE, for trying an adaptation speculatively
-   * (D113). `staticTypeIn` is not a query - it RECORDS a contextual type for
+   * A Map whose writes can be UNDONE, for trying an adaptation speculatively.
+   * `staticTypeIn` is not a query - it RECORDS a contextual type for
    * every literal it walks - so an arm that loses a trial must be rolled back.
    *
    * On the MAP rather than at its callers: the write sites were miscounted twice
@@ -1241,7 +1240,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * its parameters for its whole signature and body, so they are pushed while
    * that declaration is read and popped after.
    */
-  // PLAN-parameter-composition Stage A. A scope maps each name to its RESOLVED
+  // A scope maps each name to its RESOLVED
   // constraint, or null where it declares none. It was a `Set<string>` - names
   // only - which is why `#sec-issubtype`'s [[Constraint]] step had nothing to
   // read and `function f<T: string>(x: T): string { return x; }` was refused.
@@ -1294,7 +1293,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (tp.TypeParameterConstraint) {
         scope.set(name, resolveType(tp.TypeParameterConstraint));
       } else if (tp.IsVariadic) {
-        // #sec-variadic-parameters (Phase 6): a bare `...Ts` binds a tuple by
+        // #sec-variadic-parameters: a bare `...Ts` binds a tuple by
         // construction, so its effective constraint is `[].<any>` - a pack of
         // anything - which is what lets `...xs: Ts` pass the rest-annotation
         // rule that rightly refuses a scalar `T` with no constraint.
@@ -1330,17 +1329,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const returnTypes: Known[] = [];
   /**
    * Whether the return context at each depth came from a CONTEXTUAL type rather
-   * than the function's OWN annotation (D57).
+   * than the function's OWN annotation.
    *
    * The two are merged into `declaredForReturn` and the `ReturnStatement` arm
    * sees only the result, so `void` reaching it says nothing about who declared
    * it - and the two callers need opposite answers:
    *
-   *   function f(): void { return "s"; }            must REFUSE (D56) - a body
+   *   function f(): void { return "s"; }            must REFUSE - a body
    *                                                 contradicting its OWN
    *                                                 annotation
    *   type O = { m(): void };
-   *   const o: O = { m() { return "s"; } };         must ACCEPT (D57) - the
+   *   const o: O = { m() { return "s"; } };         must ACCEPT - the
    *                                                 TARGET declared it, and
    *                                                 #sec-issubtype says "a
    *                                                 `void` return is required of
@@ -1356,10 +1355,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * Depth of branches whose guard this walk cannot judge yet.
    *
-   * PLAN-declarative-checker-facts.md phase 3. #sec-declared-narrowing lets a
+   * #sec-declared-narrowing lets a
    * CALL be the test - `if (isU8(box))` - and the callee's [[Narrows]] is
    * readable only once its type is, which for a constructed guard means once
-   * its alias has evaluated (phase 2). The PARSE-TIME walk runs before that, so
+   * its alias has evaluated. The PARSE-TIME walk runs before that, so
    * it sees an unknown callee, narrows nothing, and reported the guarded branch
    * as an early error - a verdict the later walk, which CAN narrow, was never
    * able to overturn.
@@ -1492,7 +1491,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // - so `let s: shared uint8 = 1;` was refused the moment the annotation
     // resolved, while the runtime converted and admitted it.
     //
-    // PLAN-checker-type-resolution, C2's `SharedType` gap: the annotation was
+    // The `shared` annotation was
     // left UNRESOLVED to avoid that refusal, which bought silence at the cost of
     // the whole annotation being unchecked. Looking through here is what lets it
     // be resolved.
@@ -1505,13 +1504,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return true;
     }
     // A BigInt literal at `bigint` is the same rule with the other literal
-    // kind: the value is already of the target type (F66).
+    // kind: the value is already of the target type.
     if (source.Kind === 'literal' && target.Kind === 'primitive' && target.Name === 'bigint'
         && source.Value instanceof BigIntValue) {
       return true;
     }
     if (target.Kind === 'union') {
-      // A union that contains ITSELF terminates here too (D94). This is the
+      // A union that contains ITSELF terminates here too. This is the
       // SECOND unguarded recursion over [[Members]] on this path: guarding
       // `eraseMetadata` alone moved the overflow rather than removing it, and
       // the frame count named this one next.
@@ -1531,10 +1530,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // unions and intersections. This is exactly the view resolveType gave before
   // it learnt to build ~parameterized~ records, and judging non-deferred shapes
   // on it keeps this pass's diagnostics byte-identical to what they were: the
-  // one new judgment this cycle adds, the metadata subtype judgment, is the
+  // one new judgment added here, the metadata subtype judgment, is the
   // checking pass's, not this one's.
   const eraseMetadata = (t: TypeRecord, seen: Set<TypeRecord> = new Set()): TypeRecord => {
-    // A member that is the union ITSELF terminates the walk (D94).
+    // A member that is the union ITSELF terminates the walk.
     //
     // `type R = { a: int32 } | R` has no finite layout, and the declaration says
     // so - "R contains itself through field, so it has no finite layout", from
@@ -1792,13 +1791,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return false;
     }
     // A record already being asked about contributes no NEW parameter mention
-    // (D98), so `false` is the honest answer on a revisit rather than a guess.
+    //, so `false` is the honest answer on a revisit rather than a guess.
     //
-    // This is the THIRD walk of this shape: D94 guarded `eraseMetadata` and
+    // This is the THIRD walk of this shape: the recursion guard reached `eraseMetadata` and
     // `literalFitsNumericType` after a self-referential union overflowed the
     // host stack. Here the cyclic record is a recursive ALIAS reached through a
     // function PARAMETER inside a BLOCK - at top level the same program is
-    // merely unchecked (D96), and the block takes a path that walks the type
+    // merely unchecked, and the block takes a path that walks the type
     // instead of decaying it to `any`.
     if (seen.has(t)) {
       return false;
@@ -1819,15 +1818,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (withElement.Element && mentionsTypeParameter(withElement.Element, seen)) {
       return true;
     }
-    // A TUPLE's elements, beside the array's singular [[Element]] one line above
-    // (D87). The plural was missing where the singular was handled - one letter
+    // A TUPLE's elements, beside the array's singular [[Element]] one line above.
+    // The plural was missing where the singular was handled - one letter
     // apart - so `type P<T> = [T, string]` read as mentioning no parameter, and
     // the substitution arm keyed on this predicate never ran for it.
     const withElements = t as { Elements?: readonly { Type?: TypeRecord }[] };
     if (withElements.Elements?.some((el) => !!el?.Type && mentionsTypeParameter(el.Type, seen))) {
       return true;
     }
-    // An array's EXTENT may be a VALUE PARAMETER (D40) - the same omission the
+    // An array's EXTENT may be a VALUE PARAMETER - the same omission the
     // next comment records for a function type's signature.
     const withExtentM = t as { Extent?: number | 'dynamic' | TypeRecord };
     if (withExtentM.Extent && typeof withExtentM.Extent === 'object'
@@ -1862,15 +1861,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // and an interface each failed twice over - neither constraining a variable
     // nor being recognised as mentioning one. Fixing either half alone changes
     // nothing observable, which is what made the pair hard to see.
-    // An INDEX SIGNATURE mentions a parameter through either half (D86). The
+    // An INDEX SIGNATURE mentions a parameter through either half. The
     // predicate walked Members, Arguments, Element, Extent, Signatures and
     // Properties, and not this - so `{ [k: string]: T }` read as mentioning
     // nothing, and the substitution arm below, which is GATED on this, never
     // ran for it.
     //
-    // This is D62's shape exactly: there the same predicate was missing
-    // `Properties`, and `PLAN-D62` §14 records that the substitution arm already
-    // existed and was gated off, so the fix that added an arm changed nothing.
+    // This is a shape seen before: the same predicate was missing `Properties`,
+    // and the substitution arm already existed and was gated off, so the fix
+    // that added an arm changed nothing.
     // The KEY is walked as well as the value, since `{ [k: K]: V }` may
     // parameterise either.
     const withIndexSignatures = t as {
@@ -1902,7 +1901,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The element type an ARGUMENT offers to an iterable-typed parameter, or
    * *null* where it offers none.
    *
-   * The same derivation `for`-`of` uses (D17), from the same places: an array's
+   * The same derivation `for`-`of` uses, from the same places: an array's
    * [[Element]], a tuple's positions, a `string`'s characters, a nominal's own
    * arguments. Kept beside the inference rather than shared with the statement
    * walk because that one also has to handle a Map's pair, which is a binding
@@ -2021,7 +2020,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * The signature a named static carries when its type arguments are WRITTEN.
    *
-   * PLAN-remaining-blockers.md item 5(a). `Promise.withResolvers` takes no
+   * `Promise.withResolvers` takes no
    * arguments, so there is nothing for its variables to be inferred FROM - every
    * other signature here reads them out of the call. What it CAN read is what
    * the program wrote, and explicit type arguments already bind a result-only
@@ -2080,7 +2079,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[], contextual?: Known) => Known) | undefined => {
     /**
      * The type an ARGUMENT should be read at, given what the call's target wants
-     * of the RESULT (D43).
+     * of the RESULT.
      *
      * `staticType(args[i])` alone widens an untyped literal - `1` becomes
      * `number` - and no later check recovers the `uint8` the position wanted.
@@ -2094,7 +2093,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      */
     /**
      * An ITERABLE argument's wanted type, given the ELEMENT the target wants of
-     * the result (D43).
+     * the result.
      *
      * `Array.from`, `Array.fromAsync`, `Iterator.from` and `Promise.all` take an
      * iterable rather than per-argument values, so the wanted type is pushed
@@ -2136,7 +2135,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (shadowedByProgram(base.name)) {
       return undefined;
     }
-    // Group A: a static whose result type is FIXED - it depends on nothing the
+    // A static whose result type is FIXED - it depends on nothing the
     // call passes, so there is no inference and the row is the whole signature.
     //
     // These are not overloading. `sec-overloading-of-the-standard-library`
@@ -2150,7 +2149,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (fixed) {
       return () => fixed();
     }
-    // PLAN-standard-library-statics.md Group B: an element type in, an element
+    // An element type in, an element
     // type out. `standardlibrary.md`'s "Building From an Iterable" states them,
     // and the derivation is the one `Map.groupBy` already uses - the first
     // parameter is `Iterable.<T>`, so a typed array, a collection, a generator
@@ -2163,14 +2162,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       //
       // Selected by ARITY, as `Array.from`'s pair is: a builtin's overloads
       // differ in how many arguments they take, so the general overload-ranking
-      // machinery the plan once budgeted for is not needed here.
+      // machinery once budgeted for is not needed here.
       //
       // A promise-valued ELEMENT contributes what it RESOLVES with, which is the
       // one thing this signature needs that no other does: `fromAsync` awaits
       // each element, so a `[].<Promise.<uint8, E>>` yields a `[].<uint8>`.
       return (args, contextual) => {
         // The target resolves with an ARRAY, so its element is what the
-        // iterable argument's own elements adapt to (D43).
+        // iterable argument's own elements adapt to.
         const wantedAsync = contextual && contextual.Kind === 'nominal'
           && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
           && (contextual.Arguments[0] as TypeRecord).Kind === 'array'
@@ -2208,8 +2207,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base.name === 'Array' && (method === 'from' || method === 'of')) {
       return (args, contextual) => {
         // The target's ELEMENT type, where it wants an array. Each argument of
-        // `Array.of` is one element, so that is what its literals adapt to
-        // (D43). `Array.from`'s argument is an ITERABLE rather than an element,
+        // `Array.of` is one element, so that is what its literals adapt to.
+        // `Array.from`'s argument is an ITERABLE rather than an element,
         // so it is not decomposed here.
         const wantedElement = contextual && contextual.Kind === 'array'
           ? contextual.Element as TypeRecord
@@ -2250,7 +2249,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (base.name === 'Iterator' && method === 'from') {
       return (args, contextual) => {
-        // The target's element, pushed through the ITERABLE argument (D43).
+        // The target's element, pushed through the ITERABLE argument.
         const wantedIter = contextual && contextual.Kind === 'nominal'
           && contextual.LibraryName === 'IteratorHelper' && contextual.Arguments.length >= 1
           ? iterableOf(contextual.Arguments[0] as TypeRecord)
@@ -2262,7 +2261,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : null;
       };
     }
-    // PLAN-standard-library-statics.md Group D: the `Promise` statics.
+    // The `Promise` statics.
     // `standardlibrary.md` states all six of the combinators plus `resolve` and
     // `reject`; the shapes they need - `Iterable.<Promise.<R, E>>` as a
     // parameter, and a nominal carrying two arguments - the checker already had.
@@ -2285,8 +2284,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           resolved, rejected ?? anyTypeRecord,
         ]) ?? null,
         // `AggregateError` is a LIBRARY nominal, not a declared class, so
-        // `classTypeOf` does not know it - the same distinction D13's library
-        // half turned on. Resolved through `libraryTypeRecord`, which does.
+        // `classTypeOf` does not know it - the same distinction the library
+        // rule turned on. Resolved through `libraryTypeRecord`, which does.
         // `allSettled` NEVER REJECTS - every outcome is reported as a settled
         // result - so its rejection type is `undefined` and not the elements'
         // _E_. That is the one thing distinguishing it from `all`.
@@ -2306,7 +2305,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // target's element must be wrapped before it can be pushed down:
           // a `Promise.<[].<uint8>, any>` target wants
           // `[].<Promise.<uint8, any>>`. That extra wrap is the only thing
-          // separating this arm from the other three iterable ones (D43).
+          // separating this arm from the other three iterable ones.
           const wantedAll = contextual && contextual.Kind === 'nominal'
             && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
             && (contextual.Arguments[0] as TypeRecord).Kind === 'array'
@@ -2393,7 +2392,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // signature.
         return (args, contextual) => {
           // The target's REJECTION type, this argument being what the promise
-          // rejects WITH - the mirror of `resolve` one arm below (D43).
+          // rejects WITH - the mirror of `resolve` one arm below.
           const wantedReason = contextual && contextual.Kind === 'nominal'
             && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
             ? contextual.Arguments[1] as TypeRecord
@@ -2442,23 +2441,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // assignable to `Promise.<`R`, any>` and to no other instantiation.
         // #sec-generic-variance declares a promise `Promise.<out `R`, out `E`>`
         // and a covariant position admits what it is ASSIGNABLE FROM, so an
-        // `any` rejection reaches any declared one (OQ18/OQ19).
+        // `any` rejection reaches any declared one.
         //
-        // An arm that read E from the CONTEXTUAL type stood here (D42). It was
+        // An arm that read E from the CONTEXTUAL type stood here. It was
         // measured dead once covariance landed: removed, all five of its rows
         // answered identically and the suite passed. It computed by hand, one
         // call at a time, what the variance rule now gives - and a checker path
         // that answers no question invites the next reader to extend it.
         return (args, contextual) => {
           // The target's RESOLUTION type, where it wants a promise: the single
-          // argument becomes it, so that is what its literals adapt to (D43).
+          // argument becomes it, so that is what its literals adapt to.
           const wantedValue = contextual && contextual.Kind === 'nominal'
             && contextual.LibraryName === 'Promise' && contextual.Arguments.length === 2
             ? contextual.Arguments[0] as TypeRecord
             : null;
           const value = adaptArgument(args[0], wantedValue);
           return value
-          // The REJECTION type is ~never~, not ~any~ (D48), which is the exact
+          // The REJECTION type is ~never~, not ~any~, which is the exact
           // mirror of the `reject` arm above and was the half not done.
           //
           // The statics table gives `Promise.resolve` the row
@@ -2484,7 +2483,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // points there rather than restating them - the reflection clauses are where
     // this API's shape is settled, and putting it in two documents is how the two
     // would drift.
-    // `Reflect.typeOf`'s row is WITHDRAWN (D34, D35). #sec-reflect-typeof says
+    // `Reflect.typeOf`'s row is WITHDRAWN. #sec-reflect-typeof says
     // it returns `GetTypeObject(RuntimeTypeOf(_value_))`, so `Reflect.Type` is
     // the right answer - but NO VALUE REPORTS AS `Reflect.Type`: a Type Object's
     // runtime type is `{}`, and `Reflect.typeOf(type uint8) === (type
@@ -2494,7 +2493,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // f(1)` among them.
     //
     // The signature is correct and the MEMBERSHIP is what is missing, so this
-    // waits on D35 rather than being written a different way. `isAssignable`
+    // waits on a name for it rather than being written a different way. `isAssignable`
     // below answers a `boolean` and has no such problem.
     if (base.name === 'Reflect' && method === 'isAssignable') {
       // "Return IsAssignable(_source_.[[TypeRecord]], _target_.[[TypeRecord]])" -
@@ -2502,9 +2501,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return () => makePrimitive('boolean');
     }
     if (base.name === 'Reflect' && method === 'typeOf') {
-      // #table-typed-statics: `<T>(value: T): Reflect.TypeObject` (OQ20).
+      // #table-typed-statics: `<T>(value: T): Reflect.TypeObject`.
       //
-      // The row was WITHDRAWN once, written as `Reflect.Type` (D34), because a
+      // The row was WITHDRAWN once, written as `Reflect.Type`, because a
       // Type Object does not report `Reflect.Type` - and it does not, correctly.
       // `Reflect.Type` is the type of a reflection NODE; a Type Object is the
       // type itself, reified. Naming the second is what the earlier row lacked.
@@ -2522,7 +2521,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base.name === 'Object' && (method === 'freeze' || method === 'seal' || method === 'preventExtensions')) {
       // `Object.freeze<T>(o: T): T` and its siblings. The IDENTITY signature:
       // each answers the object it was given, so a type crossing one is not
-      // lost. Group A listed these and they were never written - a fixed result
+      // lost. The fixed-result group listed these and they were never written - a fixed result
       // could not express them, since the answer depends on the argument.
       return (args) => {
         const value = args[0] ? staticType(args[0]) : null;
@@ -2630,7 +2629,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base.name === 'Map' && method === 'groupBy') {
       return (args) => {
         // T from the items, K from the callback's RETURN - the two the design
-        // says the signature exists to state, and the two Phase 0 made
+        // says the signature exists to state, and the two made
         // inferable. Read here rather than through a declared signature record
         // because there is no declaration node for a builtin to hang one on.
         const items = args[0] ? staticType(args[0]) : null;
@@ -2813,7 +2812,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // either field from - while the concise `(v) => "k"` answers a function
         // type and binds. So a block body's return is unavailable at that point,
         // not merely stored elsewhere, and closing it is a separate piece of
-        // work (see PLAN-static-signatures.md, gap 4).
+        // work.
         const pReturn = pSig.Return ?? pSig.InferredReturn;
         const aReturn = aSig.Return ?? aSig.InferredReturn;
         if (pReturn && aReturn) {
@@ -2825,8 +2824,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const p = parameters[i]!;
       const pt = p.Type ?? null;
       if ((p as { Rest?: boolean }).Rest === true && pt) {
-        // PLAN-variadic-and-named-generic-arguments.md Phase 6, rung one
-        // (#sec-variadic-parameters): a REST parameter annotated with a type
+        // Rung one (#sec-variadic-parameters): a REST parameter annotated with a type
         // parameter, `...xs: Ts`, binds it to the TUPLE of the trailing
         // arguments' types - the rule the runtime binder already applies - and
         // one annotated with an array binds through its element against each
@@ -2855,13 +2853,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * PLAN-variadic-and-named-generic-arguments.md Phase 6: binds a call's
-   * EXPLICIT type arguments into `into` by the shared assignment - names, a
+   * Binds a call's EXPLICIT type arguments into `into` by the shared assignment - names, a
    * named pack's run, spreads spliced first, and a variadic parameter bound to
    * the tuple of its run - so the checker's reading of `count.<uint8, string>`
    * is the runtime binder's. A list the assignment refuses binds nothing; the
    * call's evaluation raises the diagnostic. (The split runs by arity alone
-   * here; a second pack needs the element bounds, Phase 6's remainder.)
+   * here; a second pack needs the element bounds, which is not yet done.)
    */
   const bindExplicitTypeArguments = (typeParams: readonly TypeParameterRecord[], argNodes: readonly ParseNode[], into: Map<string, TypeRecord>): void => {
     type Entry = { node: ParseNode | null, record: TypeRecord | null, name: string | undefined };
@@ -2870,7 +2867,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if ((a as { IsSpread?: boolean }).IsSpread) {
         const t = resolveType(a as ParseNode.Type);
         if (!t) {
-          // F-AA remainder: a spread whose operand NAMES A VALUE binding
+          // A spread whose operand NAMES A VALUE binding
           // (`...xs` with `xs` a local) is refused statically - the checker's
           // own `lookup` knows it as a value, which is what tells "not a
           // type" from "deferred" here.
@@ -2892,7 +2889,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             entries.push({ node: null, record: (t as { Element: TypeRecord }).Element, name: undefined });
           }
         } else if (t.Kind === 'array') {
-          // #sec-type-references E6 (F-AA): a spread of a DYNAMIC array cannot
+          // #sec-type-references E6: a spread of a DYNAMIC array cannot
           // say how many parameters it fills - a STATIC refusal, reported here
           // without the program running it.
           const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(t)), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
@@ -2956,8 +2953,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : substituteTypeParameters(a, bindings) as TypeRecord)),
       } as Known;
     }
-    // A TUPLE's elements, beside the array's singular [[Element]] arm below
-    // (D87). `substituteTypeParameters` handled `Element` and not `Elements`,
+    // A TUPLE's elements, beside the array's singular [[Element]] arm below.
+    // `substituteTypeParameters` handled `Element` and not `Elements`,
     // exactly as `mentionsTypeParameter` did, so `type P<T> = [T, string]` kept
     // its `T` and `P.<uint8>` was satisfied by nothing - an exact
     // `[uint8, string]` source included.
@@ -2976,7 +2973,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const withElement = t as { Element?: TypeRecord };
     if (withElement.Element) {
       {
-        // A parameterized EXTENT is substituted alongside the element (D40).
+        // A parameterized EXTENT is substituted alongside the element.
         // A literal record's [[Value]] is an ENGINE Value, not a JS number, and
         // a value generic binds the value its constraint admits - `f.<4>` binds
         // a TYPED uint32 4 - so it is unwrapped rather than read with `typeof`.
@@ -3031,7 +3028,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         })),
       } as Known;
     }
-    // An INDEX SIGNATURE's halves are substituted beside the properties (D86).
+    // An INDEX SIGNATURE's halves are substituted beside the properties.
     // This walk had a `Properties` arm and NO `IndexSignatures` arm at all, so
     // `interface Box<T> { [k: string]: T }` kept its `T` and `Box.<uint8>` was
     // satisfied by nothing - not even by a source declaring the very signature
@@ -3097,7 +3094,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // the metadata subtype judgment's question, which consults `subtype` hooks
     // (user code), so this synchronous pass defers the pair to the checking
     // pass rather than deciding it. A mixed position, a parameterization
-    // meeting its bare base, is the construction boundary (F33) and stays
+    // meeting its bare base, is the construction boundary and stays
     // outside this pass, which the erasure below preserves.
     if (source.Kind === 'parameterized' && target.Kind === 'parameterized'
         && displayType(source.Base) === displayType(target.Base)) {
@@ -3148,11 +3145,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     // A BigInt literal at a FLOAT family follows the checked rule the runtime
-    // applies (F38): admitted exactly where the width represents it exactly,
+    // applies: admitted exactly where the width represents it exactly,
     // an Early Error where it would round. An integer family stays reported:
     // exactness at the wide widths is the pinned prerequisite.
     // (Discriminated by the VALUE: staticType currently labels a BigInt
-    // literal's Base as `number`, a mislabel F38 pins, so the Base name is
+    // literal's Base as `number`, a mislabel pinned elsewhere, so the Base name is
     // not the reliable half here.)
     if (erasedSource && erasedSource.Kind === 'literal'
         && erasedTarget && erasedTarget.Kind === 'primitive' && isFloatTypeName(erasedTarget.Name)
@@ -3334,7 +3331,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (sawBigint) {
-      // The bigint column resolves at run time this cycle; F37 pins it.
+      // The bigint column resolves at run time.
       return null;
     }
     if (mixed) {
@@ -3373,7 +3370,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const lit of literals) {
       // #sec-literal-overload-ranking: a literal argument takes the chosen
       // parameter's type where it can represent it, and is a type error where
-      // it cannot; the plan's out-of-range-literal Early Error, uniformly.
+      // it cannot; the out-of-range-literal Early Error, uniformly.
       if (!fitsNumericType(lit.value, chosen.Name, chosen.Arguments)) {
         report(lit.record, chosen);
         literalsFit = false;
@@ -3392,7 +3389,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * at - the alternative is reporting an arity the program does not have.
    */
   /**
-   * An array literal at a TUPLE annotation — the ARITY half (D18).
+   * An array literal at a TUPLE annotation — the ARITY half.
    *
    * The sibling of `checkArrayLiteralAgainst` below, which this pairing had no
    * counterpart for: an array literal at a tuple target returned null and was
@@ -3403,7 +3400,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *
    * TOO MANY only. Two neighbouring rules are deliberately absent:
    *
-   * - TOO FEW (D33). A trailing position may carry a default and a literal that
+   * - TOO FEW. A trailing position may carry a default and a literal that
    *   omits it is valid; the default is recorded - two tuple types differing
    *   only in one are distinguishable - but reading `Initial` here does not find
    *   it, and refusing on a count this arm cannot compute would refuse a working
@@ -3457,8 +3454,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       );
       return;
     }
-    // Each element against ITS OWN position (D18's element half) - the rule D37
-    // landed for a STORE, at the literal site. Only the ARITY was checked here,
+    // Each element against ITS OWN position - the rule the tuple-position store
+    // landed on, at the literal site. Only the ARITY was checked here,
     // so `let _x_: [uint8, string] = ["a", (1 := uint8)]`, the positions
     // SWAPPED, was accepted.
     //
@@ -3469,7 +3466,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // untyped literal ADAPTS as it does everywhere - `[1, "s"]` at
     // `[uint8, string]` stays valid.
     //
-    // Blocked twice on D43: the corpus spells a promise tuple
+    // Blocked twice on literal adaptation: the corpus spells a promise tuple
     // `[Promise.resolve(1), Promise.resolve("a")]`, and a static's inferred
     // return widened those literals to `number`, so the elements were refused
     // for a reason unrelated to positions. That is fixed and this now lands.
@@ -3550,7 +3547,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     fresh: boolean,
     requiresMembers: boolean = fresh,
   ) => {
-    // A member the TARGET requires and the literal does not supply (D64).
+    // A member the TARGET requires and the literal does not supply.
     // #sec-isoftype: "an object that HAS THE MEMBERS satisfies an interface-typed
     // position", and `IsOfType` "walks the members" - which the RUN TIME does,
     // throwing on every row this admitted. The loop below walks the LITERAL's
@@ -3598,7 +3595,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
-    // The LAST member writing a key decides its type (D64e).
+    // The LAST member writing a key decides its type.
     //
     // The walk had no notion of order: it tested each member against the target
     // as it met it. So `{ a: (1 := uint8), ...t }` was accepted by checking the
@@ -3636,17 +3633,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const member of node.PropertyDefinitionList ?? []) {
       // A METHOD in shorthand is walked for its body and its KEY is checked
       // against the target, so a key the target cannot supply a type for is
-      // reported (D71's last row).
+      // reported.
       //
       // The walk below skipped every non-`PropertyDefinition` outright, so a
       // method's key was never compared: an intersection of CONFLICTING method
       // arms accepted a literal where the DATA equivalent refused and the ARROW
-      // spelling refused. D84 gives such a key `never` in the merged shape -
+      // spelling refused. Such a key takes `never` in the merged shape -
       // nothing satisfies it, a method included.
       //
       // Only the KEY is judged here. The method's RETURN is checked where the
       // body is entered, from the contextual return the target's member gives
-      // it, which is the other half of D71.
+      // it, which is the other half of the same rule.
       if (member && (member as ParseNode).type === 'MethodDefinition') {
         const methodName = (member as unknown as {
           ClassElementName?: { name?: string, value?: string } | null,
@@ -3676,7 +3673,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         AssignmentExpression?: ParseNode,
       };
       // A SPREAD carries its operand's members, and each is judged as though it
-      // had been written here (D64d).
+      // had been written here.
       //
       // The walk reads `PropertyDefinitionList`, so a spread - a
       // PropertyDefinition with NO PropertyName - contributed no key and the
@@ -3684,7 +3681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // with `u`'s excess `zz` unreported, while the same members written
       // plainly were refused.
       //
-      // `objectLiteralMembers` (D64c) is the enumeration to use, and it keeps
+      // `objectLiteralMembers` is the enumeration to use, and it keeps
       // the NULL where the keys are unknowable - an `any`-typed operand, a
       // getter - so an unknowable spread reports nothing rather than everything.
       if (!def.PropertyName && def.AssignmentExpression) {
@@ -3694,7 +3691,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           Kind?: string, Properties?: readonly { key: string }[],
         } | null);
         // A spread member the target DECLARES must also have the right type
-        // (D64e), and only where this spread is the key's LAST writer.
+        //, and only where this spread is the key's LAST writer.
         const spreadTyped = (spreadShape as unknown as {
           Kind?: string, Properties?: readonly { key: string, type: TypeRecord }[],
         } | null);
@@ -3734,7 +3731,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const key = memberKeyOf(def.PropertyName);
       // A member's wanted type: its NAMED declaration, or failing that the INDEX
-      // SIGNATURE that admits its key (D77).
+      // SIGNATURE that admits its key.
       //
       // `Properties` alone left a key reached through a signature with no
       // `declared` at all, so the block below was skipped and its value was
@@ -3761,15 +3758,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               : undefined;
           })();
       if (declared && def.AssignmentExpression) {
-        // PLAN-declarative-checker-facts.md phase 1b. A method's [[ThisType]]
+        // A method's [[ThisType]]
         // is the SELF MARKER - "the receiver this method expects" - which has
         // no members, so a literal adopting it got a `this` that was typed and
         // unusable. The OWNER is what the marker stands for, and this is the
         // one place that knows it: the loop is walking `target`'s properties.
         //
-        // Recorded rather than resolved into the signature: ANALYSIS-self-marker
-        // -resolution.md rules that out, since [[ThisType]] is contravariant and
-        // a real owner in the signature would refuse a richer class where a
+        // Recorded rather than resolved into the signature, since [[ThisType]]
+        // is contravariant and a real owner in the signature would refuse a
+        // richer class where a
         // narrower interface is wanted - the ordinary use of `implements`. The
         // marker stays the marker for every comparison; only the reading site
         // sees a structure.
@@ -3824,7 +3821,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const contextualReturnTypes = new Journaled<Known>();
   /**
    * The RETURN type a METHOD written in an object literal is expected to have,
-   * taken from the member the target declares (D71's body half).
+   * taken from the member the target declares.
    *
    * `contextualReturnTypes` above is set only for an `ArrowFunction` or a
    * `FunctionExpression`, and `enterFunction` enforces a return only where a
@@ -3836,10 +3833,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * A CALL's contextual type, recorded the way `contextualReturnTypes` records a
    * function literal's and read in the same place - `staticType`'s own arm for
-   * the node (D43).
+   * the node.
    *
-   * A near-identical map was added for D42 and REMOVED when covariance made it
-   * dead. This is not that: D42 wanted the target's REJECTION type, which the
+   * A near-identical map was added once and REMOVED when covariance made it
+   * dead. This is not that: that one wanted the target's REJECTION type, which the
    * variance rule now supplies without asking. This wants each ARGUMENT's type,
    * so that an untyped literal adapts as it does at every other position -
    * `Array.of(1, 2)` at a `[].<uint8>` widened its literals to `number` and was
@@ -3848,13 +3845,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const contextualCallTypes = new Journaled<Known>();
   /**
-   * An OBJECT LITERAL's contextual type (D58).
+   * An OBJECT LITERAL's contextual type.
    *
    * Its members were recorded as `widen(memberType)`, so
    * `let g: Grid = { t: 1.0, c: 1 }` for a `Grid` of `{ t: float64, c: uint8 }`
    * built `{ t: number, c: number }` and was refused - the untyped literals
-   * widened before they could adapt. That is D43's defect one level in, and
-   * this is D43's mechanism: read each member against the type the target wants
+   * widened before they could adapt. That is the literal-adaptation defect one
+   * level in, and this is its mechanism: read each member against the type the target wants
    * of it, and take that type where `literalFitsNumericType` says the literal
    * belongs there.
    */
@@ -3866,8 +3863,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node && contextual && (node as ParseNode).type === 'CallExpression') {
       contextualCallTypes.set(node as ParseNode, contextual);
     }
-    // An OBJECT LITERAL's members adapt to the target's members (D58), the way
-    // a static's arguments adapt to its target (D43). Recorded here and read in
+    // An OBJECT LITERAL's members adapt to the target's members, the way
+    // a static's arguments adapt to its target. Recorded here and read in
     // `objectLiteralShape`, which is reached from `staticType`'s own arm and so
     // cannot take the target as a parameter.
     if (node && contextual && (node as ParseNode).type === 'ObjectLiteral') {
@@ -3890,7 +3887,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (wanted) {
         contextualReturnTypes.set(node, wanted as Known);
       }
-      // PLAN-declarative-checker-facts.md phase 1. #sec-this-adoption: "Where a
+      // #sec-this-adoption: "Where a
       // non-arrow function literal's contextual type is a ~function~ type whose
       // applicable signature has a [[ThisType]], the literal adopts it: `this`
       // within the body has that type, and the literal's own signature has that
@@ -3943,17 +3940,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     // An ARRAY or OBJECT literal takes its contextual type apart and checks
-    // its parts against it. This is F37's standing pin, and until now the only
+    // its parts against it. This is a standing pin, and until now the only
     // check on a literal's contents was the RUNTIME boundary: `let a:
     // [].<uint8> = [1, 300]` inside a never-called function raised nothing at
-    // all, while `let x: uint8 = 300` had been an Early Error since Phase 3.
+    // all, while `let x: uint8 = 300` had long been an Early Error.
     // The two are the same mistake written at different depths.
     //
     // Recursing through staticTypeIn rather than staticType is what makes the
     // parts behave like the whole: an element adopts the element type by the
     // literal rule, a nested literal takes its own contextual type apart in
     // turn, and a numeric literal at a `bigint` element reads its source text
-    // exactly as it does at a binding (F85).
+    // exactly as it does at a binding.
     // proposal-runtime-types (#sec-ranges): a RANGE literal takes its contextual
     // type apart the way an array literal does. Its shape and bounds are its
     // own - the markers in the source fix them - but its ELEMENT type comes
@@ -4061,7 +4058,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return staticTypeIn(inner, contextual);
       }
     }
-    // An EMPTY array literal at a target no array can satisfy (D58b).
+    // An EMPTY array literal at a target no array can satisfy.
     //
     // `staticType` returns `null` for an element-less `ArrayLiteral`, so the
     // annotation had nothing to compare against: `let n: uint8 = []` and
@@ -4126,7 +4123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.type === 'ObjectLiteral' && contextual) {
       // A nominal carrying [[Arguments]] has them SUBSTITUTED into its structure
-      // before the literal is checked member by member (D63). `structureOf`
+      // before the literal is checked member by member. `structureOf`
       // answers the DECLARED structure, whose members are still the
       // declaration's own parameters - so `{ x: (1 := uint8) }` was compared
       // against `T` and refused, a correct value failing for want of the
@@ -4144,7 +4141,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ) as Known
         : rawShape;
       // An INTERSECTION target is MERGED into one object shape so the member
-      // walk can run at all (D75). Freshness was withheld there entirely -
+      // walk can run at all. Freshness was withheld there entirely -
       // traced, `contextual=intersection shape=intersection`, so this block and
       // every flag inside it were skipped, and
       // `let c: { x: int32 } & { } = { x: (1 := int32), u: "s" }` accepted a
@@ -4153,7 +4150,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-literal-freshness: "an own property the expected type neither
       // declares nor admits through an index signature is a type error". An
       // intersection DECLARES the union of its arms, so the arms' [[Properties]]
-      // are unioned - the OPPOSITE of D70's adaptation rule for the same target
+      // are unioned - the OPPOSITE of the adaptation rule for the same target
       // form, where the arms had to AGREE on a key's type. Two questions, two
       // rules; conflating them breaks one.
       //
@@ -4168,7 +4165,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const intersectionArms = shape && shape.Kind === 'intersection'
         ? (shape as unknown as { Members?: readonly TypeRecord[] }).Members ?? []
         : [];
-      // Arms of a UNION target whose freshness can be judged (D97): every arm is
+      // Arms of a UNION target whose freshness can be judged: every arm is
       // an object, a nominal with a structure, or `null`.
       const collectFreshArms = (t: unknown, seen: Set<unknown>, out: TypeRecord[]): void => {
         if (!t || typeof t !== 'object' || seen.has(t)) {
@@ -4180,10 +4177,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           out.push(t as TypeRecord);
           return;
         }
-        // An arm that is ITSELF a composite is flattened, not dropped (D93's
+        // An arm that is ITSELF a composite is flattened, not dropped (the
         // lesson): `({ x } | { y }) | { z }` denotes one three-arm union, and a
         // filter that kept only object arms reported `x` as excess. `seen`
-        // guards a recursive alias, as D94's walks do.
+        // guards a recursive alias, as the other walks do.
         if (kind === 'union' || kind === 'intersection') {
           for (const member of (t as { Members?: readonly TypeRecord[] }).Members ?? []) {
             collectFreshArms(member, seen, out);
@@ -4197,17 +4194,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const mergeableArms = intersectionArms.length > 0
         && intersectionArms.every((arm) => arm.Kind === 'object'
           && ((arm as unknown as { IndexSignatures?: readonly unknown[] }).IndexSignatures ?? []).length === 0);
-      // Merged BY KEY, not concatenated (D84). Flat-mapping the arms put a key
+      // Merged BY KEY, not concatenated. Flat-mapping the arms put a key
       // two arms declare into the list TWICE, and `checkObjectLiteralAgainst`
       // matches the first with `Properties.find(...)` - so
       // `let c: { x: int32 } & { x: string } = { x: 1 }` was checked against
-      // `int32` alone and accepted, where D70's `wantedOf` had refused it for
+      // `int32` alone and accepted, where `wantedOf` had refused it for
       // want of agreement between the arms. The merge introduced a second,
-      // laxer path to a question D70 had already answered.
+      // laxer path to a question already answered.
       //
       // A key every arm agrees on keeps its type. A key the arms DISAGREE on
       // takes `never`: it stays DECLARED, so freshness still admits it - the
-      // arms UNION their keys (D75) - while no value satisfies it, which is what
+      // arms UNION their keys - while no value satisfies it, which is what
       // an intersection of incompatible member types means. The two rules stay
       // separate, which is the whole difficulty of this seam.
       //
@@ -4238,7 +4235,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } as unknown as Known)
         : shape;
       // FRESHNESS at a UNION target, checked WITHOUT entering the structural arm
-      // below (D97).
+      // below.
       //
       // #sec-literal-freshness is written for "an expected OBJECT TYPE", so a
       // union was outside it and an excess property survived - at RUN TIME as
@@ -4254,7 +4251,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       //
       // The CONSERVATIVE rule: a property is excess only where NO arm declares
       // or admits it. A stricter rule - fresh against the arm that actually
-      // takes the literal - needs an arm CHOSEN, which D89 left open where the
+      // takes the literal - needs an arm CHOSEN, which the union rule left open where the
       // arms disagree. Every property refused here is refused under either.
       if (unionFreshArms.length > 0) {
         for (const member of node.PropertyDefinitionList ?? []) {
@@ -4303,51 +4300,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // Each is an incompleteness of the shape rather than of the rule, and
         // each is pinned by a test so the limit is recorded rather than assumed.
-        // `mergeableArms` is the INTERSECTION case (D75): the shape above is the
+        // `mergeableArms` is the INTERSECTION case: the shape above is the
         // union of its arms, so it is as structural as an inline object type and
         // the same two rules apply to it. Without this the walk ran with BOTH
         // flags false - the gate admitted a composite and then disabled every
         // check inside it, which silenced the MISSING-member rule that
         // assignability had been catching.
-        // Hoisted above `structural`, which now reads it (D79).
+        // Hoisted above `structural`, which now reads it.
         const targetIsInterface = contextual.Kind === 'nominal'
           && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration';
-        // `targetIsInterface` joins the sources of `structural` (D79). The
+        // `targetIsInterface` joins the sources of `structural`. The
         // comment above lists an INTERFACE among the three places freshness is
         // withheld, "whose structure here does not carry what a `partial
         // interface` contributes, so a member a partial declares reads as
         // undeclared".
         //
         // That WAS true and is no longer: the structure held ONE declaration -
-        // the first at one site and the last at another - and D82 made every
-        // declaration of a name contribute. Applying this before D82 refused a
+        // the first at one site and the last at another - and every declaration
+        // of a name now contributes. Applying this before that merge refused a
         // correct partial-interface literal, which is why the two are ordered.
         //
         // Without it an interface accepted a property it does not declare, at
         // the RUN TIME as well, which misses the case entirely - so it could not
         // be left to the boundary as an ordinary member could.
         //
-        // A key an INDEX SIGNATURE admits is still not excess: D78 made an
+        // A key an INDEX SIGNATURE admits is still not excess: an
         // interface's signatures survive into the structure, and the rule below
         // consults them through `keyAdmittedBy`.
         const structural = (contextual.Kind === 'object' || mergeableArms || targetIsInterface)
           && (shape.Properties.length > 0 || shape.IndexSignatures.length > 0)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
-        // An INTERFACE target requires its members too (D64 row 4). It is a
+        // An INTERFACE target requires its members too. It is a
         // ~nominal~, so `structural` above is false for it - that flag gates the
         // EXCESS rule, which needs a complete shape - but the members an
         // interface declares are as knowable as an object type's.
         //
         // A CLASS nominal is NOT included: whether an object literal may satisfy
-        // a class type at all is D61, and widening here would answer it by
+        // a class type at all is open, and widening here would answer it by
         // accident.
         const requiresMembers = (structural || targetIsInterface || mergeableArms)
           && (contextual as { Refinements?: readonly unknown[] }).Refinements === undefined;
-        // A CLASS type is NOT satisfied by an object literal (D61).
+        // A CLASS type is NOT satisfied by an object literal.
         //
         // #sec-object-types: "Every interface has one [a structural form]. A
         // class has none: a class states a construction and an identity as well
-        // as a shape, and it is the identity that its type is for." OQ22 settled
+        // as a shape, and it is the identity that its type is for." It is settled
         // the same rule from the `implements` side.
         //
         // The arm below returns `contextual` - the literal is GIVEN the target's
@@ -4372,7 +4369,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ) as { Value: ObjectValue }).Value);
           return contextual;
         }
-        // An INTERSECTION names itself and the member that rejected (D108).
+        // An INTERSECTION names itself and the member that rejected.
         //
         // The merge above collapses a same-key member the arms disagree on to
         // `never`, and a missing member is reported against the MERGED shape - a
@@ -4417,7 +4414,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // SOURCE TEXT rather than from the double the lexer produced. The rule was
     // bounded at 2**53 and refused beyond it, which never corrupted but meant
     // the `n` suffix was still required exactly where it is most tedious - the
-    // large constants (F67). #sec-literalvalueintype converts from "the
+    // large constants. #sec-literalvalueintype converts from "the
     // mathematical value denoted by the literal", and the text is where that
     // value still exists.
     //
@@ -4487,11 +4484,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * code - and it applies to every name the engine binds, `Token` and the
    * `Reflect` namespace included.
    *
-   * `PLAN-checker-type-resolution.md` stage A read its registry by written name
-   * and never consulted scope, so the checker answered with the intrinsic where
-   * the runtime, which walks the scope chain, answered with the binding. That is
-   * a checker/runtime divergence about what an annotation MEANS - the defect that
-   * plan exists to remove, reintroduced by it.
+   * An earlier registry was read by written name and never consulted scope, so
+   * the checker answered with the intrinsic where the runtime, which walks the
+   * scope chain, answered with the binding. That is a checker/runtime divergence
+   * about what an annotation MEANS - the very defect the registry existed to
+   * remove, reintroduced by it.
    *
    * Where a name IS shadowed the checker answers nothing rather than guessing:
    * it cannot know statically what a value binding holds, and the runtime
@@ -4528,8 +4525,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * Class DECLARATIONS by name (F57), and their instance types built lazily and
-   * memoized (F60). Lazily, because a class's structure now includes what it
+   * Class DECLARATIONS by name, and their instance types built lazily and
+   * memoized. Lazily, because a class's structure now includes what it
    * INHERITS, and resolving heritage eagerly in declaration order would miss a
    * superclass declared later in the list or in an enclosing scope. The
    * in-progress set guards a heritage cycle, which is a ReferenceError at run
@@ -4539,7 +4536,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * Function declarations by name, for reading a BUILDER's contract.
    *
-   * PLAN-where-on-methods.md, the assumed half. A contract's facts live on the
+   * The assumed half. A contract's facts live on the
    * builder's |WhereClauses|, which are on its declaration node - and the
    * checker cannot reach a function OBJECT (it never touches the realm's
    * global), so the node is the only route. Collected the way `classNodes`
@@ -4561,15 +4558,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const sealedSubclasses = new Map<ParseNode, ParseNode[]>();
   /**
-   * Interface declarations by name, and their structures (F61). The checker
+   * Interface declarations by name, and their structures. The checker
    * resolved an interface name in a type position to NOTHING, so
    * `function f(i: I) { i.k = 300 }` was unchecked entirely - a bigger gap than
-   * the one this cycle set out to close, which was only that a class did not
+   * the one this set out to close, which was only that a class did not
    * pick up the members of an interface it implements.
    */
   const interfaceNodes = new Map<string, ParseNode>();
   /**
-   * EVERY declaration of an interface name, in source order (D82).
+   * EVERY declaration of an interface name, in source order.
    *
    * `interfaceNodes` holds ONE node - the first at one site, the last at the
    * other - so a `partial interface` REPLACED the interface's members instead of
@@ -4619,7 +4616,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The comparable key a member name denotes: its literal text, or the minted
    * Symbol of the `const` a computed name resolves to. Shared by the interface
    * walk and the object-literal check so a declaration and a use agree by
-   * construction rather than by two rules that must be kept in step (F58).
+   * construction rather than by two rules that must be kept in step.
    */
   const memberKeyOf = (propertyName: { name?: string, value?: string, ComputedPropertyName?: { type?: string, name?: string } } | null | undefined): string | SymbolValue | undefined => {
     const literal = propertyName?.name ?? propertyName?.value;
@@ -4728,7 +4725,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /**
    * A generic declaration's parameter DEFAULTS, as an argument list, or an empty
-   * list where any parameter has none (D59).
+   * list where any parameter has none.
    *
    * A bare generic name takes its defaults - #sec-type-arguments - and the
    * comparison arms already substitute [[Arguments]] into a [[Structure]], so
@@ -4775,15 +4772,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // same type the completed one denotes; only its members are filled in
     // later, and they are filled into the array this record already holds.
     const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
-    // An interface's INDEX SIGNATURES, filled beside its members (D78). The
+    // An interface's INDEX SIGNATURES, filled beside its members. The
     // structure below hardcoded `IndexSignatures: []` and the walk skipped every
     // non-TypeMember, so a declared signature was PARSED and then dropped -
     // measured, `iface member type=IndexSignature` reaches the walk - and
     // `interface I { [k: string]: int32 } let c: I = { x: "s" }` was accepted by
     // the checker AND by the run time, since neither had anything to enforce.
     const IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[] = [];
-    // A bare generic INTERFACE takes its parameters' DEFAULTS as its arguments
-    // (D59). #sec-type-arguments: "Each parameter takes, in order: its positional
+    // A bare generic INTERFACE takes its parameters' DEFAULTS as its arguments.
+    // #sec-type-arguments: "Each parameter takes, in order: its positional
     // argument where one was supplied, otherwise the named argument bearing its
     // name, otherwise its |TypeParameterDefault|."
     //
@@ -4807,7 +4804,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       InterfaceMemberList?: readonly ParseNode[] | null,
       TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
     };
-    // PLAN-generic-interface-membership.md phase 1b (checker half). The same
+    // The checker half. The same
     // erasure as the runtime's, in a separate structure: the checker keeps its
     // own `interfaceTypeMemo`, so `T` has to be in scope HERE too or the
     // checking pass compares against `{ x: any }` exactly as membership did.
@@ -4818,7 +4815,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       typeParameterScopes.push(scopeOfNames(ifaceParamNames));
     }
     try {
-    // EVERY declaration of the name contributes, base and `partial` alike (D82),
+    // EVERY declaration of the name contributes, base and `partial` alike,
     // as `RuntimeTypesDeclarations.mts:600` already does for the run time.
     //
     // A member ALREADY DECLARED is left to the run time, which reports
@@ -4830,7 +4827,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const declarations = interfaceDeclarations.get(name) ?? [decl];
     // Each member paired with the INDEX of the declaration it came from, so a
     // redeclaration ACROSS declarations can be told from two members written in
-    // one (D83).
+    // one.
     //
     // #sec-partial-declarations: "A member already declared on the interface is
     // a *TypeError* rather than an override, so the meaning of an interface does
@@ -4873,12 +4870,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       const key = memberKeyOf(tm.PropertyName);
       // A member ALREADY DECLARED by an EARLIER declaration is a TypeError, as
-      // the run time makes it (D83). Keyed on the declaration INDEX so two
+      // the run time makes it. Keyed on the declaration INDEX so two
       // members of the same declaration are not reported, and the FIRST is kept
       // so the structure does not depend on load order.
       if (typeof key === 'string') {
-        // A duplicate is reported WITHIN one declaration as well as across two
-        // (OQ25). D83 added this walk for the ACROSS case and excluded the
+        // A duplicate is reported WITHIN one declaration as well as across two.
+        // This walk was added for the ACROSS case and excluded the
         // within-declaration one with `declaredAt !== declarationIndex`; the
         // index comparison is what is dropped here.
         //
@@ -4946,7 +4943,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       if (tm.MethodSignature) {
-        // F-AB: a GENERIC method signature's annotations resolve under the
+        // A GENERIC method signature's annotations resolve under the
         // method's own type-parameter scope and the signature carries the
         // Records, so `on<T>(…, h: (e: T) => void)` is not typed as
         // `(…, any) => void` and a class's `on<U>` compares against it by
@@ -5008,16 +5005,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const classTypeOf = (name: string): Known => {
     const node = classNodes.get(name);
     // A LIBRARY nominal is deliberately NOT resolved here, though `new
-    // Map.<string, uint8>()` consequently has no Static Type (D13's second
+    // Map.<string, uint8>()` consequently has no Static Type (the second
     // half). Returning `libraryTypeRecord(name)` gives `new Map()` the BARE
-    // `Map`, and a bare nominal is not assignable to a specialization (D2) - so
+    // `Map`, and a bare nominal is not assignable to a specialization - so
     // `let m: Map.<string, uint8> = new Map()`, the canonical spelling, is
     // refused by the checker while the run time ADOPTS it
     // (#sec-collection-construction).
     //
     // Making that work needs the checker to model adoption - an unstamped
     // collection being assignable to a specialization AT AN INITIALIZER, and
-    // only there - which is a rule this proposal has not stated and which D2
+    // only there - which is a rule this proposal has not stated and which the bare-nominal rule
     // deliberately declined for the general case. Filed rather than guessed.
     return node ? instanceTypeOf(node) : null;
   };
@@ -5097,13 +5094,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     enumTypeMemo.set(node, built);
     return built;
   };
-  /** Construct signatures by class node, for checking `new C(...)` (F59). */
+  /** Construct signatures by class node, for checking `new C(...)`. */
   const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }>();
 
   const resolvingAliases = new Set<string>();
   /**
    * A generic alias's body with every parameter bound to its
-   * |TypeParameterDefault|, or null where any has none (D59).
+   * |TypeParameterDefault|, or null where any has none.
    *
    * Mirrors `AllDefaultsFrame` (`runtime.mts:133`) including its completeness
    * requirement. BINDINGS then SUBSTITUTION: `typeParameterScopes` records a
@@ -5170,7 +5167,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!declared) {
           return null;
         }
-        // PLAN-declarative-checker-facts.md phase 2. A |ComputedType| -
+        // A |ComputedType| -
         // `type G = makeG();` - resolves by EVALUATING, not by walking, so
         // `resolveType` below cannot answer for one and answers ~any~ instead:
         // the annotation admitted everything and the bad value was refused at
@@ -5208,7 +5205,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         resolvingAliases.delete(name);
       }
     }
-    // PLAN-declarative-checker-facts.md phase 2. Nothing in THIS source text
+    // Nothing in THIS source text
     // answers: either the alias is only mentioned here and declared elsewhere,
     // or its Type is a |ComputedType| - `type G = makeG();` - which resolves by
     // EVALUATING rather than by walking, so no walk of it can answer. Where
@@ -5244,7 +5241,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * The enumerators a `switch` covers, and which enum it is over.
    *
-   * PLAN-do-expressions.md: extracted so that the coverage is computed ONCE.
+   * Extracted so that the coverage is computed ONCE.
    * It was inline in the SwitchStatement walk, which is where the diagnostics
    * are raised, and completionTypeOf needed the same answer - a second copy
    * would have been a second thing to keep in step, and the two would have
@@ -5352,7 +5349,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {
           const args: (TypeRecord | number)[] = [];
           if (node.TypeName.MemberNames.length > 0) {
-            // #sec-computed-constraints (F-W): `I.length` in a default or a
+            // #sec-computed-constraints: `I.length` in a default or a
             // constraint reads a type parameter's BINDING - a value pack's
             // array - which exists per application. Statically the head is a
             // parameter in scope and the member is unknowable, so the type is
@@ -5363,7 +5360,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A QUALIFIED name - `Reflect.Block`. This answered null
             // unconditionally, and a null type is treated as no constraint, so
             // every annotation naming one was silently never compared:
-            // `PLAN-checker-type-resolution.md stage A`, R2.
             //
             // Resolved from the registry the intrinsics fill as they bind these
             // names, so the checker gets the SAME record the runtime walks the
@@ -5382,8 +5378,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             return null;
           }
-          // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): the
-          // checker resolved named arguments POSITIONALLY, so its judgment and
+          // The checker resolved named arguments POSITIONALLY, so its judgment and
           // the runtime's disagreed about what one annotation meant. It orders
           // by the shared operation where the names are known (the library
           // table), and answers null - "this pass does not know" - where they
@@ -5422,7 +5417,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // its bare base, which is why the metadata subtype judgment had no
           // static site.
           //
-          // OQ-type-arguments-vs-metadata.md D2. THE BASE DECIDES. A base that
+          // THE BASE DECIDES. A base that
           // declares type parameters is being APPLIED, and its argument is a
           // type however object-shaped it looks; only a base with no parameters
           // reads its argument as metadata.
@@ -5462,10 +5457,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // RESOLVED: an unresolved name is still left alone, since a record
             // invented for it would be a guess this pass has no way to check.
             //
-            // A GENERIC alias is excluded, by the same rule as everywhere else
-            // (OQ-type-arguments-vs-metadata.md D2): a base that declares type
-            // parameters is being APPLIED, so its object-shaped argument is a
-            // type and not a record. `lookupAlias` does not distinguish them -
+            // A GENERIC alias is excluded, by the same rule as everywhere else:
+            // a base that declares type parameters is being APPLIED, so its
+            // object-shaped argument is a type and not a record. `lookupAlias`
+            // does not distinguish them -
             // its "declared but not yet walked" fallback reads `aliasNodes`,
             // which holds every declaration - so the parameter list is consulted
             // here. Without this, `Box.<{ a: uint8 }>` became `Box.<{ }>` with
@@ -5550,7 +5545,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // sides dropping them is why `const x: A.<uint16> = new A.<uint8>()`
           // matched: two empty argument lists agree.
           // A generic ALIAS under WRITTEN arguments resolves to its body with
-          // those arguments substituted (D62). This path resolved a user CLASS,
+          // those arguments substituted. This path resolved a user CLASS,
           // a builtin and one `Identity` special case and NOTHING else, so
           // `type G<T> = { t: T }; let g: G.<uint8> = …` answered null - and a
           // null target makes `requireAssignable` return before it compares, so
@@ -5611,8 +5606,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
           }
-          // A generic INTERFACE under written arguments (D63). This path resolved
-          // a user CLASS, an ALIAS (D62) and a builtin and NOT an interface, so
+          // A generic INTERFACE under written arguments. This path resolved
+          // a user CLASS, an ALIAS and a builtin and NOT an interface, so
           // `interface I<T> { x: T } let i: I.<uint8> = …` answered NULL - and a
           // null target makes `requireAssignable` return before it compares, so
           // the annotation accepted every value. The NON-generic
@@ -5679,7 +5674,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // `BoundTypeRecordForName` covers `Token` and the 27 metadata interfaces,
         // which the runtime resolves off the global and this resolver did not
-        // know: `PLAN-checker-type-resolution.md stage A`, R1.
+        // know.
         //
         // It sits LAST among the name lookups, after `interfaceTypeOf`, because
         // `partial interface ClassFieldMetadata { ... }` completes exactly these
@@ -5697,11 +5692,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return node.keyword === 'void' ? voidType : makePrimitive('null');
       case 'ParenthesizedType':
         return resolveType(node.Type);
-      // `PLAN-checker-type-resolution.md stage E`, closing the resolver gaps C2
-      // reports. Each mirrors its arm of `TypeNodeToTypeRecord` exactly - the
-      // record shape is the contract between the two resolvers, and building a
-      // different one here is the mistake stage A's first attempt made with
-      // `Token`.
+      // Closing the remaining resolver gaps. Each mirrors its arm of
+      // `TypeNodeToTypeRecord` exactly - the record shape is the contract
+      // between the two resolvers, and building a different one here is the
+      // mistake an earlier attempt made with `Token`.
       //
       // #sec-shared-types: `shared T` is a marker over its target. Resolving it
       // once made `let s: shared uint8 = 1;` an early error, because a numeric
@@ -5720,21 +5714,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // table-metadata-values: source and flags, never a RegExp object - the same
       // two fields the runtime reads, from the same node.
       //
-      // The last blocking entry in C2's gap list. What blocked it was not
+      // The last blocking entry in that gap list. What blocked it was not
       // patterns: resolving it let the checker's unclaimed-key rule reach a
       // pattern metadata value as it already reached a numeric one, and the
       // RUNTIME did not enforce that rule at all, so tests written with an
-      // unclaimed key failed. The runtime enforces it now
-      // (`FINDING-unclaimed-metadata-key.md`), which needed a composite shape to
-      // be built where the clause says it belongs first
-      // (`FINDING-composite-shape-ignored.md`). Three findings, one order.
+      // unclaimed key failed. The runtime enforces it now, which needed a
+      // composite shape to be built where the clause says it belongs first.
+      // Three findings, one order.
       case 'PatternType':
         return { Kind: 'pattern', Source: node.Source, Flags: node.Flags } as Known;
       // #sec-keyof: the Type Record `KeyTypesOf` answers for the operand. That
       // operation is already a plain function over records, so both resolvers
       // call the one implementation.
       case 'ComputedType': {
-        // PLAN-where-on-methods.md, the ASSUMED half. #sec-checked-contracts:
+        // The ASSUMED half. #sec-checked-contracts:
         // "before specialization, where the application is deferred and no
         // result exists, the checker takes each clause as a known fact about the
         // ~application~ Type Record."
@@ -5805,7 +5798,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // "unchecked statically and unelidable" - and found this the moment the
         // node was given a row.
         //
-        // By OQ-type-arguments-vs-metadata.md D2 the BASE decides the reading.
+        // The BASE decides the reading.
         // A base reaching this arm is an already-resolved postfix type with no
         // parameters left to supply, so the arguments are a metadata record;
         // where they are not one, the annotation is left unresolved rather than
@@ -5911,7 +5904,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ArrayType': {
         // A VALUE PARAMETER may fix the extent - `[N].<uint8>` for an
         // `<N: uint32>` - and is carried so the substitution at an application
-        // replaces it, as it does an element type (D40). This refused any
+        // replaces it, as it does an element type. This refused any
         // non-literal extent, so `[N].<uint8>` became `any` and `f.<2>("no")`
         // was accepted.
         let parameterExtent: TypeRecord | null = null;
@@ -5957,8 +5950,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // #sec-array-and-tuple-types: "A tuple's TRAILING position may carry a
           // default". A tuple is positional, so the only way to leave a position
           // unsupplied is to stop short of it - a default anywhere but the tail
-          // could never be taken, and one after a rest could never be reached
-          // (D38).
+          // could never be taken, and one after a rest could never be reached.
           //
           // The RUN TIME already refuses both, with these diagnostics; the
           // checker's arm had neither, so `[uint8 = 1, uint8]` was a type a
@@ -5991,7 +5983,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // [[Initial]] stays ~none~: evaluating the initializer is a generator
           // step and this resolution is synchronous. [[DeclaredDefault]] carries
-          // the FACT of the default, which is all the arity rule needs (D33).
+          // the FACT of the default, which is all the arity rule needs.
           Elements.push({ Type: r, Rest: e.Rest, Initial: 'none' as const, DeclaredDefault: !!e.Initializer });
         }
         return { Kind: 'tuple', Elements };
@@ -6027,7 +6019,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!r) {
             return null;
           }
-          // PLAN-rest-parameters.md phase 0: a function TYPE's parameters carry
+          // A function TYPE's parameters carry
           // the same record a declaration's do, which is what lets a rest be
           // written in a type at all.
           Parameters.push(parameter(r, {
@@ -6053,18 +6045,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-object-types: a CALL SIGNATURE (a member with no name) makes
         // this a function type. The checker answers null - this pass does not
         // know - and the runtime resolver builds the function record, so the
-        // two never disagree about it (Phase 5 gives the checker its own
+        // two never disagree about it (the checker has its own
         // reading alongside generic-signature subtyping).
         if (node.TypeMemberList.some((m) => m.type === 'TypeMember' && (m as ParseNode.TypeMember).PropertyName === null)) {
           return null;
         }
         const Properties = [];
         const IndexSignatures = [];
-        // Keys already seen in THIS object type, for the duplicate check below
-        // (OQ25). The interface path has its own, D83's `declaredIn`.
+        // Keys already seen in THIS object type, for the duplicate check below.
+        // The interface path has its own, `declaredIn`.
         const objectTypeKeys = new Set<string>();
         for (const member of node.TypeMemberList) {
-          // An INDEX SIGNATURE member (OQ17). Any member that was not a
+          // An INDEX SIGNATURE member. Any member that was not a
           // `TypeMember` made the WHOLE type resolve to *null*, so
           // `{ [key: string]: uint8 }` had no Static Type at all - which is why
           // a binding of one was untyped, its reads unchecked, and an
@@ -6096,7 +6088,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return null;
           }
           // A duplicate |PropertyName| in ONE object type is a TypeError
-          // (OQ25), matching the interface path and
+          //, matching the interface path and
           // `sec-partial-declarations`' rule that a redeclaration is "a
           // *TypeError* rather than an override".
           //
@@ -6113,7 +6105,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             continue;
           }
           objectTypeKeys.add(key);
-          // A METHOD member, `{ get(): uint8 }` (D66). The parser gives a
+          // A METHOD member, `{ get(): uint8 }`. The parser gives a
           // TypeMember carrying a [[MethodSignature]] and sets TypeAnnotation to
           // NULL, so the bail below made the WHOLE object type resolve to null -
           // and a null annotation is not checked at all, so
@@ -6136,7 +6128,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }).MethodSignature;
           if (asMethod) {
             // A method's OWN type parameters are in scope across its signature
-            // and nowhere else (D68). #sec-type-members gives them to the
+            // and nowhere else. #sec-type-members gives them to the
             // signature - `MethodSignature : TypeParameters? '(' … ')'
             // TypeAnnotation?` - and `TypeMember` is the production an object
             // type and an interface body SHARE, so `{ m<T>(v: T): T }` is as
@@ -6176,7 +6168,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: selfThisType }] } as unknown as TypeRecord,
               optional: !!(member as unknown as { Optional?: boolean }).Optional,
               // `readonly: true`, as the INTERFACE path sets it for a method and
-              // for the reason it records (D67). #sec-variance-annotations: "a
+              // for the reason it records. #sec-variance-annotations: "a
               // covariant parameter is well-formed only where it appears in
               // output positions of the declaration, a METHOD RETURN or a
               // `readonly` field" - so a method is compared by IsSubtype, which
@@ -6271,9 +6263,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * The type of a statement list's completion value.
    *
-   * PLAN-do-expressions.md phase 4, per #sec-completiontypeof: a union over the
-   * TAILS, with divergence removing the paths that cannot produce one. Nothing
-   * in it is new - divergence is phase 0's analysis, and the Early Errors of
+   * Per #sec-completiontypeof: a union over the TAILS, with divergence removing
+   * the paths that cannot produce one. Nothing in it is new - divergence is a
+   * separate analysis, and the Early Errors of
    * #sec-do-expression-early-errors have already removed the forms whose
    * completion type would have been hard to state.
    */
@@ -6687,10 +6679,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'NumericLiteral': {
         // A BIGINT literal is a literal of `bigint`, not of `number`. It was
-        // labelled `number`, which F38 pinned as cosmetic - it is not: with
+        // labelled `number`, which was pinned as cosmetic - it is not: with
         // the base wrong, `let x: bigint = 65n` failed as "a literal type of
         // number is not assignable to bigint", so the `bigint` type could not
-        // be used with an annotation AT ALL (F66).
+        // be used with an annotation AT ALL.
         // proposal-runtime-types #sec-complex-numbers: "An imaginary literal has
         // the type `complex`", so it is not a literal type of `number` - its
         // value is a pair rather than one of the values a literal type can name.
@@ -6715,11 +6707,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return inferRegExpLiteralType(rx.RegularExpressionBody, rx.RegularExpressionFlags);
       }
       case 'NullLiteral':
-        // `null` has a type for the same reason `undefined` does (D52) - it had
+        // `null` has a type for the same reason `undefined` does - it had
         // no arm here at all, so `let n: uint8 = null` went unchecked.
         return makePrimitive('null') as Known;
       case 'IdentifierReference': {
-        // `undefined` is a VALUE with a type, not an absent one (D52).
+        // `undefined` is a VALUE with a type, not an absent one.
         //
         // It resolved through `lookup`, which finds no binding for it and
         // answers null - and `requireAssignable` returns early on a null source,
@@ -6760,7 +6752,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return lookup(referenced);
       }
       case 'ThisExpression':
-        // PLAN-declarative-checker-facts.md phase 1. #sec-this-adoption: within
+        // #sec-this-adoption: within
         // an adopting literal's body, "`this` has that type". Outside one there
         // is no frame and `this` keeps the type it had - which for a class body
         // is the receiver rule that clause leaves alone, and elsewhere is
@@ -6775,7 +6767,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TypeArgumentsExpression':
         return staticType((node as unknown as { Expression: ParseNode }).Expression);
       case 'ObjectLiteral':
-        // An object literal HAS a type (D58). #table-type-record-kinds, quoted
+        // An object literal HAS a type. #table-type-record-kinds, quoted
         // in `sec-interfaces`: "an object literal's type is ~object~".
         //
         // `staticType` had no arm for one, so `let n: uint8 = {}` reached
@@ -6791,7 +6783,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ArrayLiteral': {
         const elements = (node as unknown as { ElementList?: readonly ParseNode[] }).ElementList ?? [];
         if (elements.length === 0) {
-          // An EMPTY array literal is left UNTYPED (D58 half-two, NOT taken).
+          // An EMPTY array literal is left UNTYPED.
           // Typing it as an array of `never` refuses `let a: T = []` at an
           // opaque type parameter and `let a: U = []` where `U = [].<T>` - four
           // existing tests - so it needs the type-parameter interaction worked
@@ -6875,8 +6867,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         const calleeNode = (node as { CallExpression?: ParseNode }).CallExpression;
-        // #sec-typed-standard-library-statics (PLAN-static-signatures.md phase 1):
-        // a named STATIC of the standard library may carry a typed signature.
+        // #sec-typed-standard-library-statics: a named STATIC of the standard
+        // library may carry a typed signature.
         //
         // `standardlibrary.md` states four, and `Map.groupBy` is the first:
         // "function Map.groupBy<K, T>(items: Iterable.<T>, callback: (value: T,
@@ -6917,7 +6909,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return staticSig(((node as { Arguments?: readonly ParseNode[] }).Arguments ?? []), contextualForCall);
           }
         }
-        // PLAN-standard-library-statics.md Family B: a GLOBAL function, whose
+        // A GLOBAL function, whose
         // callee is a bare identifier rather than a member. The dispatch above
         // requires a member callee, so `parseInt(…)` matched nothing; this is
         // the same table one shape along, and `Composite` below is the
@@ -6957,7 +6949,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // where the type is stated rather than guessed.
           return makePrimitive('Composite', []);
         }
-        // PLAN-brand-layering-F.md F172. CALLING A TYPE OBJECT is the
+        // CALLING A TYPE OBJECT is the
         // construction boundary (sec-parameterized-types), and the static type
         // of that call is the type called: `Email('a@b')` is an `Email`.
         //
@@ -6989,10 +6981,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // known; the argument check happens in the walk.
         const callee = staticType((node as { CallExpression: ParseNode }).CallExpression);
         // `a.map(cb)` returns an array of the CALLBACK'S return type, which is
-        // why F79 left it ~any~ rather than guessing. The inference happens
+        // why it is left ~any~ rather than guessed at. The inference happens
         // HERE rather than through a channel: a declaration asks for its
         // initializer's type before the walk reaches the call, so a value
-        // recorded during the walk would arrive too late (F80). It is readable
+        // recorded during the walk would arrive too late. It is readable
         // for a concise-bodied arrow, whose body IS the returned expression;
         // a block body needs return-type inference the checker does not have,
         // and stays ~any~ - imprecise rather than wrong.
@@ -7019,7 +7011,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // `p.then(f, g)` and `p.catch(g)` resolve with what their HANDLERS
         // return, which a signature written at the member access cannot express -
-        // the same reason `map` is handled here (D47).
+        // the same reason `map` is handled here.
         //
         // `promiseMethodSignature` builds `Promise.<any, any>` because it gets
         // the receiver's types and not the handler ARGUMENTS. That was harmless
@@ -7135,12 +7127,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
             {
               const bindings = new Map<string, TypeRecord>();
-              // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A):
-              // explicit arguments are ordered by name before they bind. A
+              // Explicit arguments are ordered by name before they bind. A
               // list the ordering refuses binds NOTHING here - the runtime
               // raises the diagnostic - rather than binding the wrong thing.
               bindExplicitTypeArguments(only.TypeParameters!, argNodes ?? [], bindings);
-              // #sec-variadic-parameters (F-Z): a spread argument binds a PACK
+              // #sec-variadic-parameters: a spread argument binds a PACK
               // only where its length is static. The rest annotated with the
               // pack collects a tuple whose length the binding must know, so a
               // spread of a DYNAMIC array into such a rest is refused here - the
@@ -7212,8 +7203,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // this call site can use.
             return null;
           }
-          // A signature is trusted only where the CALLEE'S NAME cannot be replaced
-      // (D107).
+          // A signature is trusted only where the CALLEE'S NAME cannot be replaced.
       //
       // A `function` declaration creates a MUTABLE binding, so
       // `function g(p: uint32){ return "s"; } g = function(p){ return 1; }`
@@ -7276,7 +7266,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       case 'YieldExpression': {
-        // PLAN-do-expressions.md phase 1, #sec-generator-types. A `yield`
+        // #sec-generator-types. A `yield`
         // evaluates to what the caller sends to `next`, which is the enclosing
         // generator's N; a `yield*` evaluates to what the DELEGATED generator
         // RETURNED, which is its R. The second is the rule everyone gets
@@ -7330,7 +7320,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MemberExpression': {
         const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
         if (m.IdentifierName && m.MemberExpression) {
-          // PLAN-standard-library-statics.md Family A: a static DATA property.
+          // A static DATA property.
           // Not a call, so neither static table above can reach it - the third
           // dispatch site, and the reason a census of calls could not see these.
           //
@@ -7354,7 +7344,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const receiver = staticType(m.MemberExpression);
           // A PROMISE receiver: its two arguments are the resolution and the
-          // rejection type, and a handler's parameter is one of them (D45).
+          // rejection type, and a handler's parameter is one of them.
           // Placed beside `receiver` rather than inside the ARRAY arm below,
           // which binds its own `name` within a block guarded on array kinds.
           if (receiver && receiver.Kind === 'nominal' && receiver.LibraryName === 'Promise'
@@ -7370,9 +7360,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // A method of a TYPED ARRAY takes the element type. The design gives a
           // typed collection element-typed method signatures, and the run time
-          // enforces them (F68/F69); the checker knowing them is what turns
+          // enforces them; the checker knowing them is what turns
           // `a.includes(70000)` from a run-time RangeError into the Early Error
-          // a statically determinable mistake deserves (F70).
+          // a statically determinable mistake deserves.
           if (receiver && receiver.Kind === 'array') {
             // #index-type: one type describes every count an array reports or
             // accepts - its `length`, its `capacity`, an index, and a view's
@@ -7566,7 +7556,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           // A read from a UNION is the union of that key's type across the arms,
-          // and an ERROR where any arm does not declare it (D111).
+          // and an ERROR where any arm does not declare it.
           //
           // `structureOf` resolves a ~nominal~ to its structure and returns
           // everything else unchanged, so a union receiver arrived as `Kind:
@@ -7604,7 +7594,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return CanonicalizeType({ Kind: 'union', Members: perArm } as TypeRecord) as Known;
               }
               // A key one arm does NOT declare is an ERROR, not a fall-through to
-              // ~any~ (D111, direction A). The accessible keys are the INTERSECTION of
+              // ~any~. The accessible keys are the INTERSECTION of
               // the arms', because the program cannot know which arm it holds:
               // `{ x: int32 } | { y: string }` has an `x` only if it took the first.
               // Narrowing is the escape, and the DISCRIMINANT still reads, since a key
@@ -7627,8 +7617,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (prop) {
               return prop.type;
             }
-            // An INDEX SIGNATURE answers where no declared property does
-            // (OQ17). Without this a read through one was ~any~, so
+            // An INDEX SIGNATURE answers where no declared property does.
+            // Without this a read through one was ~any~, so
             // `let _s_: string = _o_.a` type-checked on an
             // `_o_: { [key: string]: uint8 }` - the type resolved, the relation
             // honoured it, and the only thing that did not was the access.
@@ -7700,7 +7690,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             return receiver.Element;
           }
-          // PLAN-parameter-composition Stage B. The third arm. A computed access
+          // The third arm. A computed access
           // with a String LITERAL key reads a declared property, and is the same
           // operation the annotation `T["n"]` denotes - so both call
           // `IndexedAccessTypeRecord` and cannot drift apart, which is what
@@ -7729,7 +7719,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'NewExpression': {
         // `new C()` produces an instance of C, so the class's instance type is
         // the expression's type - which is what lets `new C().x` be read at the
-        // field's declared type (F59).
+        // field's declared type.
         const target = (node as { MemberExpression?: ParseNode }).MemberExpression;
         if (target && target.type === 'IdentifierReference') {
           const targetName = (target as { name: string }).name;
@@ -7737,14 +7727,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (declared) {
             return declared;
           }
-          // PLAN-remaining-blockers.md item 7: a BUILTIN constructor, where the
+          // A BUILTIN constructor, where the
           // call determines its own answer. `classTypeOf` knows only declared
           // classes, so `new WeakRef(_k_)` and `new Error("x")` were ~any~.
           //
           // Only where the answer IS determined. `new Array(3)` is left alone:
           // an untyped array's Static Type is not `[].<any>`, so there is no
-          // type to give it that the call supports - the same question D13's
-          // library half settled by resolving library nominals ONLY where type
+          // type to give it that the call supports - the same question settled
+          // by resolving library nominals ONLY where type
           // arguments are written, and `new Array(3)` writes none. `new Map()`
           // is left for the same reason, and because #sec-collection-construction
           // has the ADOPTION at a boundary do that work instead.
@@ -7779,7 +7769,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           };
           if (spec.Expression.type === 'IdentifierReference') {
             const specName = (spec.Expression as unknown as { name: string }).name;
-            // D13's library half. A LIBRARY generic is constructed the same way
+            // The library half. A LIBRARY generic is constructed the same way
             // a user class is, and `new Map.<string, uint8>()` had no Static
             // Type because `classTypeOf` knows only the classes a program
             // declares.
@@ -7787,7 +7777,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Resolved HERE and not in the bare-name branch above, which is the
             // whole of what makes this safe. Giving bare `new Map()` the type
             // `Map` would refuse `let m: Map.<string, uint8> = new Map()` - a
-            // bare nominal is not assignable to a specialization (D2) - and that
+            // bare nominal is not assignable to a specialization - and that
             // is the canonical spelling, the one #sec-collection-construction
             // describes the run time ADOPTING. A construction that WRITES its
             // arguments has asked for the specialization and needs no adoption.
@@ -7908,7 +7898,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * A DECLARED function's signature, which the checker did not have: function
    * types were built only from FunctionType annotations, so `function f(v:
    * uint8) {}` put nothing in scope and no call to it was argument-checked at
-   * all (F55 measured this; F56 fixes it). A parameter with no annotation is
+   * all. A parameter with no annotation is
    * ~any~, which makes the signature usable even when only some parameters are
    * typed, and a rest parameter suppresses the signature entirely rather than
    * inviting an arity mistake.
@@ -7916,8 +7906,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * A class's INSTANCE type. Until now a class name in a type position resolved
    * to nothing, so `function f(c: C) { c.x = 300 }` was unchecked, no field's
-   * type was visible, and every value of a class type was ~any~ to the checker
-   * (F57). The record is NOMINAL - assignability compares [[Declaration]]
+   * type was visible, and every value of a class type was ~any~ to the checker.
+   * The record is NOMINAL - assignability compares [[Declaration]]
    * identity, so two classes with the same fields stay distinct - and it
    * carries the declared fields as its [[Structure]], which is the same channel
    * an interface already uses. Private fields are deliberately absent: they are
@@ -8001,13 +7991,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
     // Methods, accumulated per name because a method may be OVERLOADED exactly
-    // as a function may (F59). A getter contributes its return type as the
+    // as a function may. A getter contributes its return type as the
     // property's type, since that is what reading the property yields; a setter
     // contributes nothing yet, and is the natural next step for checking a
     // store through an accessor.
     const methods = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     /**
-     * PLAN-abstract-implementation.md, the checking-pass migration.
      * #sec-type-errors makes a determinable type error an Early Error, and both
      * abstract rules refused at class definition EVALUATION - so the marker
      * before the class ran, and a class in dead code was never checked.
@@ -8056,7 +8045,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // The constructor is the class's CONSTRUCT signature, not a member of
           // the instance shape: `c.constructor` is the class, and typing it as
           // a method taking the constructor's parameters would be wrong twice
-          // over. It is collected separately, for `new C(...)` (F59).
+          // over. It is collected separately, for `new C(...)`.
           const cparams: ParameterRecord[] = [];
           let cusable = true;
           for (const p of md.UniqueFormalParameters ?? []) {
@@ -8080,7 +8069,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // through the accessor must satisfy. It is kept apart from the read
           // type because a getter and setter pair may legitimately differ, and
           // before this a store through a setter was unchecked entirely while a
-          // store to a field of the same name was caught (F61).
+          // store to a field of the same name was caught.
           const sp = md.PropertySetParameterList[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
           const t = sp?.TypeAnnotation ? resolveType(sp.TypeAnnotation.Type) : null;
           if (t) {
@@ -8113,10 +8102,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (t) {
-            // `readonly` set for completeness (D91). Not observable here - a
+            // `readonly` set for completeness. Not observable here - a
             // class reaches the relation as a ~nominal~ judged by identity, so
             // these records never meet the exact-match arm - but a record either
-            // carries its fields or it does not, and three defects this session
+            // carries its fields or it does not, and three defects here
             // were a field missing from a record nothing happened to read.
             //
             // `false` preserves the current answer. Whether a GETTER-only member
@@ -8129,7 +8118,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const Parameters: ParameterRecord[] = [];
         const annotated: Known[] = [];
         let usable = true;
-        // F-AB: a GENERIC method's annotations resolve under its own
+        // A GENERIC method's annotations resolve under its own
         // type-parameter scope, and its signature carries the Records - as a
         // function declaration's does - so `on<T, U>` is not typed as
         // `(name: string, h: any) => void` and `implements` can compare it.
@@ -8239,12 +8228,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // #sec-typed-classes: a subclass's instances have their superclass's
     // members too, so the inherited shape is merged UNDER the class's own
     // declarations - an override wins, which is what the prototype chain does
-    // at run time (F60). Only a heritage clause naming a class is followed; an
+    // at run time. Only a heritage clause naming a class is followed; an
     // expression like `class B extends mixin(A)` leaves the base unknown, and
     // an unknown base contributes nothing rather than guessing.
     // An `implements` clause contributes members too: a class that satisfies an
     // interface has that interface's members, and the checker could not see one
-    // the class did not also declare itself (F61). Merged UNDER both the class's
+    // the class did not also declare itself. Merged UNDER both the class's
     // own declarations and its heritage, since either is more specific.
     const implemented = (cls.ClassTail as { ImplementsClause?: readonly ParseNode[] | null } | null | undefined)?.ImplementsClause ?? [];
     for (const ref of implemented) {
@@ -8258,7 +8247,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? (it as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
         : null;
       if (istruct && istruct.Kind === 'object') {
-        // F-AB: `implements` is VERIFIED, not merely declared. Every member the
+        // `implements` is VERIFIED, not merely declared. Every member the
         // interface requires must be declared by the class with an assignable
         // type - a generic method through identity up to renaming, so `on<U>`
         // satisfies `on<T>` and `on<T, U>` does not - and an optional member
@@ -8314,7 +8303,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // undefined and the chain the subtype relation walks stopped short. The run
     // time walked it anyway: `new MyErr() is Error` and `instanceof` both
     // answered *true* while `let e: Error = new MyErr()` was refused, which is
-    // the disagreement this record exists to end (OQ-library-nominal-subtyping.md).
+    // the disagreement this record exists to end.
     //
     // Worse than a refusal, it disagreed with ITSELF across a module boundary:
     // the same class imported from another module was ACCEPTED, because this
@@ -8355,8 +8344,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const key of getterKeys) {
         const own = Properties.find((prop) => prop.key === key);
         const inherited = baseStructure.Properties.find((prop) => prop.key === key);
-        // Judged for every pair of types, not only class ones. Cycle 141
-        // restricted this to nominals believing a numeric refinement would be
+        // Judged for every pair of types, not only class ones. This was once
+        // restricted to nominals, believing a numeric refinement would be
         // wrongly refused; README settles that one value type never implicitly
         // becomes another, so a differing numeric IS a failed refinement and
         // the restriction was unnecessary.
@@ -8395,7 +8384,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Kind: 'nominal',
       Declaration: n,
       // A bare generic CLASS takes its parameters' DEFAULTS as its arguments
-      // (D59), the way a bare generic interface does one registration over.
+      //, the way a bare generic interface does one registration over.
       // #sec-type-arguments: a name supplying no argument takes "its
       // |TypeParameterDefault|" - so `class C<T = uint8> {}` written as `C` is
       // `C.<uint8>`, and `let c: C = new C.<uint8>()` stopped being an
@@ -8420,7 +8409,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (construct) {
       constructSignatures.set(n, construct);
     }
-    // PLAN-nominal-records.md phase 2. The RUNTIME builds its own nominal
+    // The RUNTIME builds its own nominal
     // record for this class - at ClassDeclaration, ClassExpression and
     // NamedEvaluation - and carries neither [[Base]] nor [[Structure]], so
     // `Reflect.isAssignable(type Derived, type Base)` answered *false* for a
@@ -8441,18 +8430,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * Only the ones with a fixed leading parameter are given here: `push` and
    * `unshift` take a rest parameter, and the checker's argument loop would
    * check only their first argument, which is worse than leaving them to the
-   * run time that already enforces them correctly (F70).
+   * run time that already enforces them correctly.
    */
   /**
    * The narrowing forms of sec-narrowing that speak about a BINDING, read off a
    * test expression. Returns the binding's name, the type the test establishes,
    * and whether the sense is inverted, or undefined where the test says nothing
-   * the checker can use (F75).
+   * the checker can use.
    */
   /**
    * The binding name a narrowing subject refers to, or null.
    *
-   * PLAN-pipeline-operator.md phase 2. The topic is bound under the name `%`,
+   * The topic is bound under the name `%`,
    * which no program can write, so every row of the narrowing table reaches it
    * with no new machinery: `shape |> (% is Circle ? %.radius : 0)` narrows
    * because `%` is a name like any other here. That is the whole reason the
@@ -8520,8 +8509,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // `a && b` implies its LEFT operand only where the whole is true, and
     // `a || b` implies the left is false only where the whole is false. So a
     // conjunction narrows the branch it guards and a disjunction narrows the
-    // other one, and neither says anything about the branch it does not imply
-    // (F77).
+    // other one, and neither says anything about the branch it does not imply.
     if (e.type === 'LogicalANDExpression') {
       const l = narrowingFactOf((e as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression);
       return l ? { ...l, negated: l.negated !== negated, sense: negated ? 'false' : 'true' } : undefined;
@@ -8579,7 +8567,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // A DISCRIMINANT: `x.kind === 'a'` over a union of object types keeps the
       // members whose `kind` admits that literal. The subject is a property
       // access rather than a binding, and what narrows is the OBJECT, which is
-      // what makes a tagged union usable (F77).
+      // what makes a tagged union usable.
       for (const [subject, against] of sides) {
         if (subject.type !== 'MemberExpression') {
           continue;
@@ -8616,7 +8604,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
       }
     }
-    // PLAN-declarative-checker-facts.md phase 3. #sec-declared-narrowing: a
+    // #sec-declared-narrowing: a
     // signature may carry [[Narrows]], and "a binding declared of a constructed
     // guard type narrows at every call through it" - the call IS the test, so
     // this is where the fact comes from. The engine built the field, reflected
@@ -8625,7 +8613,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // invisible until an annotated binding in the guarded branch was asked for.
     //
     // The callee's type is reachable only now that a call-form alias resolves
-    // at an annotation (phase 2): [[Narrows]] has no source spelling, so a
+    // at an annotation: [[Narrows]] has no source spelling, so a
     // constructed type behind an alias is the ONLY way a program states one.
     if (e.type === 'CallExpression') {
       const call = e as unknown as { CallExpression?: ParseNode, Arguments?: ParseNode[] };
@@ -8735,7 +8723,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * Walk a test and the two branches it guards, with the binding the test
    * speaks about narrowed in each. Shared by `if`, `while`, and the conditional
-   * operator, which differ only in what they guard (F76).
+   * operator, which differ only in what they guard.
    */
   /**
    * The narrowing an ASSERTION statement states, applied to the rest of its
@@ -8832,7 +8820,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       if (!fact) {
-        // PLAN-declarative-checker-facts.md phase 3. A CALL that yields no fact
+        // A CALL that yields no fact
         // may be a declared guard whose callee this walk cannot type yet - a
         // constructed guard behind an alias resolves only after the pass
         // pre-evaluates it, and this walk may be the parse-time one. Judging
@@ -8891,7 +8879,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // test can never succeed or can never fail, since the branch it guards is
     // then dead code the program did not intend." The checker had this rule and
     // reached it only for a test over a TYPE, never for one over a binding,
-    // which is the shape a program writes (F76).
+    // which is the shape a program writes.
     // The dead-branch rule reasons from the STATIC type, so it applies only
     // where membership is a stable fact about the value. It is not, for an
     // object type or a refinement: sec-isoftype says in as many words that the
@@ -8900,7 +8888,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // predicate is re-evaluated on every test. The suite has the case that
     // proves it - `let p: Pos = ...; p.a = 0; p is Pos` is *false* at run time
     // while the static type still says `Pos` - and reporting that branch as
-    // dead would have contradicted a documented behaviour (F76). So the rule
+    // dead would have contradicted a documented behaviour. So the rule
     // fires for the kinds whose membership a value cannot lose.
     const decidable = (t: TypeRecord): boolean => t.Kind === 'primitive' || t.Kind === 'literal'
       || (t.Kind === 'union' && t.Members.every(decidable));
@@ -8951,7 +8939,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * array's element positions and which the run time enforces. The checker
    * knowing them is what turns `s.add(300)` on a `Set.<uint8>` from a run-time
    * RangeError into the Early Error a statically determinable mistake
-   * deserves - the same step the array methods took in F70, and the reason a
+   * deserves - the same step the array methods took, and the reason a
    * collection's methods were the array methods' one remaining asymmetry.
    *
    * The signatures are the DESIGN's own, written out in the weak-reference
@@ -8982,14 +8970,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * Whether _stmt_ can complete NORMALLY - that is, without returning or
    * throwing.
    *
-   * PLAN-implicit-return.md phase 2. Distinct from `endsWithReturn` below, and
+   * Distinct from `endsWithReturn` below, and
    * deliberately not built on it: that helper is conservative in the direction
    * ELISION wants, where a false negative merely keeps a check that was not
    * needed. Here a false negative REJECTS A CORRECT PROGRAM, so the
    * conservatism has to run the other way - when this cannot tell, it answers
    * *true* ("can complete"), which withholds the error.
    *
-   * Syntactic, per OQ1-A. It recognises the shapes a reader would call
+   * Syntactic. It recognises the shapes a reader would call
    * obviously total; anything else is assumed to complete.
    */
   const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean => {
@@ -9138,7 +9126,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The RETURN TYPE of a function literal written at a call, inferred from its
    * body with the parameters bound to the types the position supplies.
    *
-   * F80 could read a CONCISE arrow body, whose body IS the returned
+   * The callback rule could read a CONCISE arrow body, whose body IS the returned
    * expression, and left a BLOCK body at ~any~ - so `a.map(x => x)` flowed and
    * `a.map(x => { return x; })` did not, which is the same function written
    * two ways. This is the machinery that closes it, and it is the join of the
@@ -9148,7 +9136,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *    expression. A `return` with NO expression contributes *undefined*.
    *  - A body that can complete without returning also contributes
    *    *undefined*, since falling off the end answers it. `endsWithReturn` is
-   *    the same conservative test the return-boundary elision uses (F82): a
+   *    the same conservative test the return-boundary elision uses: a
    *    body ending in `if (c) return a; else return b;` is treated as able to
    *    complete, which loses precision and cannot lose soundness.
    *  - If any contribution is UNKNOWN the whole inference is unknown, because
@@ -9263,7 +9251,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /**
    * Whether an expression DERIVES FROM A DECLARED TYPE, which is what
-   * #sec-anchored-contributions asks (D105).
+   * #sec-anchored-contributions asks.
    *
    * The comment above states the assumption this replaces: "a known,
    * non-literal contribution is one that derives from an annotation
@@ -9359,7 +9347,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     // Two passes settle a chain written in either order; a third changes
-    // nothing that a second did not, absent recursion, which this cycle leaves
+    // nothing that a second did not, absent recursion, which is left
     // unpublished rather than iterated to a fixpoint.
     // Iterate to convergence. Two passes settle a chain written in either
     // order; a cycle needs one pass per edge before it stops changing, and the
@@ -9387,7 +9375,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // _R_ alongside _Y_: the same walk that collects yield operands sees
             // `return`, and #sec-inferred-result-type asks for the join of both.
             // `'return'` mode is what routes a fall-off-the-end `undefined` into
-            // R rather than into Y, which is the distinction OQ11 drew.
+            // R rather than into Y, which is the distinction drawn here.
             const inferredR = inferredReturnType(item.fn, item.parameterTypes, null, { anchored: false }, 'return');
             const rebuilt = generatorDeclaredType(
               inferredYield,
@@ -9566,7 +9554,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * describes a value with fewer members than it has.
    */
   /**
-   * The literal's members for a MEMBERSHIP question (D64c).
+   * The literal's members for a MEMBERSHIP question.
    *
    * `objectLiteralShape` answers what TYPE a literal has, and is deliberately
    * conservative: "a spread, a computed key, and a method each yield NOTHING
@@ -9575,13 +9563,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * would state it".
    *
    * That is right for a type and wrong for MEMBERSHIP. The missing-member rule
-   * and D75's excess rule are not publishing a type; they ask whether a required
+   * and the excess rule are not publishing a type; they ask whether a required
    * key is present, and a spread whose operand's type is KNOWN answers that. So
    * `{ ...s }` at `{ a: uint8, b: uint8 }` was accepted with `b` never supplied,
    * and a literal written plainly was refused - the same program, two answers.
    *
    * The NULL is kept where the keys are genuinely unknowable: an `any`-typed
-   * operand (D54), a getter, a computed key. Enumerating those would report
+   * operand, a getter, a computed key. Enumerating those would report
    * every declared member as missing.
    */
   const objectLiteralMembers = (node: ParseNode): Known => {
@@ -9622,7 +9610,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return null;
     }
     const members = (node as unknown as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList ?? [];
-    // An EMPTY object literal has a type too: `{ }` with no properties (D58).
+    // An EMPTY object literal has a type too: `{ }` with no properties.
     // Returning null here made `let n: uint8 = {}` unchecked, where
     // `let n: uint8 = { a: 1 }` was refused - the same literal, one property
     // apart, answering differently.
@@ -9638,7 +9626,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * The type the TARGET wants of a member, or null where it wants none.
      *
      * A COMPOSITE target carries its arms on [[Members]] and has no
-     * [[Properties]] at all (D70) - traced, an intersection and a union both
+     * [[Properties]] at all - traced, an intersection and a union both
      * arrive as `keys=["Kind","Members"] props=0` - so reading [[Properties]]
      * alone found nothing and no member of `{ x: 1, y: 2 }` adapted, where the
      * same literal adapts at either arm written alone.
@@ -9653,7 +9641,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * comes first would be arbitrary.
      */
     /**
-     * The arms a UNION offers for a key its arms DISAGREE about (D70b).
+     * The arms a UNION offers for a key its arms DISAGREE about.
      *
      * `wantedOf` answers ONE type, and a union whose arms disagree has none - so
      * an untyped numeric literal was never adapted toward any arm. `{ x: 1 }`
@@ -9670,7 +9658,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      *
      * A SECOND entry point rather than a change to `wantedOf`, because that
      * walk's "no single answer" is read four ways: adaptation hears "do not
-     * adapt", D89's intersection rule hears "the arms disagree, refuse", D97's
+     * adapt", the intersection rule hears "the arms disagree, refuse", the union row's
      * union freshness hears "no key here, stay conservative", and the nested-arm
      * walk hears "recurse no further". Collecting inside it broke the last three.
      */
@@ -9680,7 +9668,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return [];
       }
       const arms: TypeRecord[] = [];
-      // A NESTED union contributes ITS arms. D112 flattens the record the RUN
+      // A NESTED union contributes ITS arms. Flattening handles the record the RUN
       // TIME receives; the checker resolves its own, which is still nested - so
       // `({ x: int32 } | { x: string }) | { z: boolean }` offered two arms here
       // where three exist. The `seen` set is required for the same reason it is
@@ -9716,7 +9704,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // `kind=nominal keys=["Kind","Declaration","Arguments","Structure"] props=0`.
       //
       // That left every member of a literal at an interface target unadapted and
-      // every METHOD there without the return type its position wants (D71).
+      // every METHOD there without the return type its position wants.
       const propertiesOf = (t: unknown): readonly { key: string, type: TypeRecord }[] | undefined => {
         const own = (t as { Properties?: readonly { key: string, type: TypeRecord }[] } | undefined)?.Properties;
         if (own) {
@@ -9729,7 +9717,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A PARAMETERISED nominal's [[Structure]] holds its members
         // UNSUBSTITUTED - `interface Box<T> { get(): T; }` carries `T`, not the
         // argument - so the members must be substituted before they can be
-        // compared, as D63 does everywhere else this structure is read. Without
+        // compared, as happens everywhere else this structure is read. Without
         // it a correct `Box.<uint8>` literal was refused for returning `uint8`
         // where `T` was wanted.
         const nominalArguments = (t as { Arguments?: readonly (TypeRecord | number)[] } | undefined)?.Arguments ?? [];
@@ -9743,7 +9731,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ) as unknown as { Properties?: readonly { key: string, type: TypeRecord }[] };
         return substituted?.Properties ?? structure.Properties;
       };
-      // Every arm is consulted, at any DEPTH (D93).
+      // Every arm is consulted, at any DEPTH.
       //
       // A composite written inside another - `({ x: int32 } | { y: string }) |
       // { z: boolean }` - reaches here UNFLATTENED: traced, `arms=2
@@ -9758,11 +9746,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       //
       // ONE agreement check across ALL levels, not one per level. The arms of
       // `({ x: int32 } | { x: string }) | { z }` are two levels apart and must
-      // still be seen to disagree - D89 left a disagreeing key REFUSED as an
+      // still be seen to disagree - the union rule left a disagreeing key REFUSED as an
       // open design question, and a per-level check would pick an arm instead.
       //
       // `seen` guards a recursive alias putting a composite inside itself, the
-      // discipline every arm of the substitution walk uses (D88).
+      // discipline every arm of the substitution walk uses.
       const collectWanted = (t: unknown, seen: Set<unknown>): { found: boolean, type: TypeRecord | null } => {
         if (!t || typeof t !== 'object' || seen.has(t)) {
           return { found: false, type: null };
@@ -9798,7 +9786,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     for (const member of members) {
       // A METHOD written in shorthand contributes a member rather than voiding
-      // the whole shape (D71, and D84's row G).
+      // the whole shape.
       //
       // `member.type !== 'PropertyDefinition'` returned null for the LITERAL, so
       // `{ m() { … } }` had no shape at all and NOTHING about it was checked -
@@ -9812,7 +9800,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // answer for it. That is enough to make the member EXIST - so freshness,
       // the missing-member rule and a non-function value all see it - without
       // claiming a return type this pass has not computed. Checking the body
-      // against the declared signature is D71's other half and is not this.
+      // against the declared signature is the other half and is not this.
       if (member && member.type === 'MethodDefinition') {
         const asMethodDefinition = member as unknown as {
           ClassElementName?: { name?: string, value?: string } | null,
@@ -9823,7 +9811,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return null;
         }
         // The member the TARGET declares gives this method its return type
-        // (D71's body half), recorded against the method node and read by
+        // (the body half), recorded against the method node and read by
         // `enterFunction` - which otherwise enforces a return only where one was
         // written.
         const wantedMethod = wantedOf(methodKey);
@@ -9834,16 +9822,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             contextualMethodReturns.set(member as ParseNode, wantedReturn as Known);
           }
         }
-        // The member takes the signature the TARGET wants, where one is wanted
-        // (D92). D71 introduced `Signatures: []` here deliberately - "without
-        // claiming a return type this pass has not computed" - which is right
-        // for the member WALK, where each member is compared on its own, and
-        // fails at an EXACT-MATCH comparison, where a signature-less function is
-        // not the same type as any signature. `PLAN-D71` section 9 recorded that
-        // as a limit; a union target is where it came due, since a union reaches
+        // The member takes the signature the TARGET wants, where one is wanted.
+        // `Signatures: []` was introduced here deliberately - "without claiming
+        // a return type this pass has not computed" - which is right for the
+        // member WALK, where each member is compared on its own, and fails at an
+        // EXACT-MATCH comparison, where a signature-less function is not the
+        // same type as any signature. That was recorded as a limit; a union
+        // target is where it came due, since a union reaches
         // neither `checkObjectLiteralAgainst` nor the merge.
         //
-        // The WANTED signature, not an inferred one, so D71's honesty is kept:
+        // The WANTED signature, not an inferred one, so the honesty is kept:
         // this pass still does not infer a body's return. It records what the
         // position asks for, exactly as `contextualMethodReturns` above already
         // does - and the BODY is checked against that return independently, so
@@ -9875,8 +9863,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const declaredMember = prop.TypeAnnotation ? resolveType(prop.TypeAnnotation.Type) : null;
       // What the TARGET wants of this member, computed BEFORE the recursive
-      // shape call below so a NESTED literal has a contextual type of its own
-      // (D74).
+      // shape call below so a NESTED literal has a contextual type of its own.
       //
       // `objectLiteralShape` reads its target from `contextualObjectTypes`, and
       // the recursive call recorded nothing - traced, the inner literal of
@@ -9886,11 +9873,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       //
       // Only a COMPOSITE target lost it: at a single target the member walk
       // checks the inner literal separately, where at a composite only the shape
-      // is compared. That is the asymmetry D73 turned on, one level in.
+      // is compared. That is the asymmetry the nested-member rule turned on, one level in.
       const wantedForMember = wantedOf(key);
       // Where a UNION's arms DISAGREE about this key, `wantedOf` has no single
       // answer and the nested literal was handed NO contextual - so the arms
-      // were invisible one level down and nothing adapted (D113).
+      // were invisible one level down and nothing adapted.
       //
       // Each arm is tried with the adaptation ITSELF, and the test is whether
       // the attempt REPORTED anything. It cannot be whether the result is
@@ -9912,22 +9899,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // ERRORS are the signal, not the returned type. `staticTypeIn`
             // answers NULL for an ARRAY literal by design - reporting the target
             // would manufacture assignability and elide the boundary where a
-            // typed array is built (D114) - so requiring a non-null result made
+            // typed array is built - so requiring a non-null result made
             // every arm lose and an array member at DISAGREEING arms was never
             // adapted, while its object twin was.
             //
             // A member that adapts cleanly reports nothing whatever it returns,
-            // which is the same test D113 arrived at for the object case.
+            // which is the same test the object case arrived at.
             staticTypeIn(memberNode, arm);
             return errors.length === before;
           });
           errors.length = before;
-          const dbg = (globalThis as unknown as { process?: { env?: Record<string, string> }, console: { error(m: string): void } });
-          if (dbg.process?.env?.D114) {
-            dbg.console.error('[D114] trial key=' + String(key)
-              + ' node=' + String((prop.AssignmentExpression as ParseNode | undefined)?.type)
-              + ' arm=' + displayType(arm as TypeRecord) + ' won=' + String(won));
-          }
           if (won) {
             return arm as Known;
           }
@@ -9942,7 +9923,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Recursive: a member that is itself an object literal has no Static Type
       // either, and `{ inner: { p: g() } }` is an ordinary shape.
       // An ARRAY or TUPLE literal member takes its CONTEXTUAL as its type, once
-      // the elements have been checked against it (D114).
+      // the elements have been checked against it.
       //
       // An OBJECT-literal member reaches its contextual by recursing into
       // `objectLiteralShape`, which consults `contextualObjectTypes`. An ARRAY
@@ -9980,15 +9961,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       // A member ADAPTS to what the target wants of it, and is widened only
-      // where there is no target to adapt to (D58). Widening unconditionally
+      // where there is no target to adapt to. Widening unconditionally
       // made `let g: Grid = { t: 1.0, c: 1 }` build `{ t: number, c: number }`
       // and be refused, the untyped literals losing their adaptability before
-      // the comparison - D43's defect one level in, and this is D43's fix:
+      // the comparison - the literal-adaptation defect one level in, and this is its fix:
       // `literalFitsNumericType` decides whether the literal belongs at the
       // wanted type.
       // Where the arms disagree, `wantedOf` has no answer and the SCALAR rule
       // still does: the arm the literal FITS (D70b, direction A'). The union's
-      // arms are ordered and flattened by now (D110, D112), so this is a
+      // arms are ordered and flattened by now, so this is a
       // function of the TYPE and not of how the program spelled it.
       const wantedMember = wantedForMember ?? (() => {
         if (typeof key !== 'string') {
@@ -10016,7 +9997,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       })();
       // A member is taken at the type the target WANTS where the value belongs
       // there: a numeric literal by `literalFitsNumericType`, and a NESTED
-      // OBJECT by assignability (D73).
+      // OBJECT by assignability.
       //
       // Widening a nested object lost it: `{ a: { x: (1 := int32) } }` at
       // `{ a: { x: int32 } } & { }` widened `a` and the widened shape no longer
@@ -10027,9 +10008,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const adapted = wantedMember
         && (literalFitsNumericType(memberType as TypeRecord, wantedMember)
           // ANY member that fits its wanted type takes it, not only an ~object~
-          // one (D95).
+          // one.
           //
-          // D73 added the `IsAssignable` arm for a nested OBJECT member and
+          // The `IsAssignable` arm was added for a nested OBJECT member and
           // scoped it to that kind, which was the case it had. A member of any
           // other kind fell through to `widen`, so at
           // `type L = { value: uint8, next: L | null }` the inner literal's
@@ -10046,18 +10027,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Adaptation still happens ONLY where the member is assignable, so a
           // member that does not fit is untouched and refused as before.
           //
-          // D73's arm is kept EXACTLY as it was and a second one added beside
-          // it, rather than the kind test being dropped. Widening D73's arm to
+          // That arm is kept EXACTLY as it was and a second one added beside
+          // it, rather than the kind test being dropped. Widening it to
           // every kind was measured first and LOOSENED freshness: an excess
           // member in the nested literal stopped being reported, because taking
           // `wantedMember` wholesale replaces the shape the excess member lives
           // in. Restricting the new arm to NON-object members leaves every
-          // object member on D73's path, where freshness still sees it.
+          // object member on that path, where freshness still sees it.
           || ((memberType as TypeRecord).Kind === 'object' && IsAssignable(memberType as TypeRecord, wantedMember))
           || ((memberType as TypeRecord).Kind !== 'object' && IsAssignable(memberType as TypeRecord, wantedMember)))
         ? wantedMember
         : widen(memberType) as TypeRecord;
-      // `readonly` is SET, not left absent (D91). A Property Type Record has a
+      // `readonly` is SET, not left absent. A Property Type Record has a
       // [[Readonly]] field (#sec-type-records), and `relations.mts`'s exact-match
       // arm compares it with `===` - so a record omitting it carried `undefined`
       // where a written type carries `false`, and two structurally identical
@@ -10164,7 +10145,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
 
     // A concise arrow body: the expression IS the return. Two wrapper nodes
-    // deep - `ConciseBody` holds an `ExpressionBody` which holds it (F80).
+    // deep - `ConciseBody` holds an `ExpressionBody` which holds it.
     let body = (fn as { ConciseBody?: ParseNode, FunctionBody?: ParseNode }).ConciseBody
       ?? (fn as { FunctionBody?: ParseNode }).FunctionBody
       ?? (fn as { GeneratorBody?: ParseNode }).GeneratorBody
@@ -10785,7 +10766,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   ]);
 
   /**
-   * `then`, `catch` and `finally` on a `Promise.<R, E>` (D45).
+   * `then`, `catch` and `finally` on a `Promise.<R, E>`.
    *
    * #table-promise-prototype-signatures. These were typed NOWHERE - not in the
    * specification and not here - so `p.then((v) => { let s: string = v; })` on a
@@ -10812,7 +10793,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // receiver, so the result resolves with `any` rather than with a union this
     // arm cannot compute. Naming a narrower type here would be a claim the
     // signature cannot support - the same error `Promise.resolve`'s pinned `any`
-    // rejection was (D42), one position over.
+    // rejection was, one position over.
     switch (name) {
       case 'then':
         return { Kind: 'function', Signatures: [{ Parameters: shapes([handler(resolution), handler(rejection)], 0), Return: promiseOf(anyType), Untyped: false }] } as unknown as Known;
@@ -10853,7 +10834,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // this proposal's function overloading - so the signatures are collected
     // per name and declared together. Declaring one at a time let the last
     // declaration clobber the earlier ones, which turned every call matching
-    // an earlier overload into a spurious Early Error (measured, cycle 50).
+    // an earlier overload into a spurious Early Error (measured).
     // The argument check at a call site fires only for a SINGLE-signature
     // type, so an overloaded name keeps resolving where it did before, at run
     // time, until the checker learns to rank signatures.
@@ -10909,7 +10890,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     // A plain alias is PUBLISHED to the frame before the signatures that may
-    // name it are built (D101).
+    // name it are built.
     //
     // The scan above records the alias NODE, and the walk publishes the TYPE
     // when it reaches the declaration - which for a NESTED list is after the
@@ -10924,7 +10905,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // after the declaration; only a SIGNATURE is read early. A NON-recursive
     // alias is unaffected for the same reason it needs no placeholder.
     //
-    // This is D106's shape for an alias: that moved a publication AFTER the
+    // This is the same shape for an alias: that moved a publication AFTER the
     // list's declarations, and this moves one BEFORE the signatures.
     for (const n of list) {
       if (n.type !== 'TypeAliasDeclaration') {
@@ -10957,7 +10938,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     for (const n of list) {
-      // PLAN-do-expressions.md phase 1, #sec-generator-types. A generator
+      // #sec-generator-types. A generator
       // declaration was skipped entirely, so a call of one had no type at all.
       // It is collected now, and its annotation is read by the shorthand: a
       // bare `T` is the YIELD type of a `Generator.<T, void, void>`.
@@ -10992,7 +10973,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const typeParameterScope = typeParameterNamesOf(n as ParseNode);
       const pushedTypeParameters = pushTypeParameterScopeOf(n as ParseNode);
       for (const p of fn.FormalParameters ?? []) {
-        // A REST parameter is usable (D39). This read "no arity to check against,
+        // A REST parameter is usable. This read "no arity to check against,
         // so the whole name is left untyped rather than half-described", and the
         // consequence was that ONE rest switched off argument checking for the
         // entire call, the FIXED parameters included:
@@ -11005,11 +10986,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (p.type === 'BindingRestElement') {
           const rp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null };
           const restResolved = rp.TypeAnnotation ? resolveType(rp.TypeAnnotation.Type) : null;
-          // D36's rule, restated here. Making a rest parameter USABLE routes the
+          // The rest-annotation rule, restated here. Making a rest parameter USABLE routes the
           // declaration through this branch instead of the one that carried the
           // check, so `function f<C>(...a: C)` stopped being refused. A rule that
           // lives at one of two sites resolving the same thing is the shape of
-          // D33 and D38 both; it is stated at both here rather than moved.
+          // the range rule and the trailing-default rule both; it is stated at
+          // both here rather than moved.
           //
           // #sec-type-annotations: the annotation must RESOLVE to an array or
           // tuple type, and a type PARAMETER is judged by its CONSTRAINT.
@@ -11085,8 +11067,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const signature: { Parameters: unknown, Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[] } = { Parameters, Return: declared, Untyped, ReturnWasWritten: returnWasWritten } as never;
       // #sec-generic-functions: the type parameters a call binds with its
-      // arguments, as RECORDS (PLAN-variadic-and-named-generic-arguments.md
-      // Phase 0.1) - name, kind, variance, arity, and the constraint and
+      // arguments, as RECORDS - name, kind, variance, arity, and the constraint and
       // default nodes - because a call site needs them to order named
       // arguments and substitute into the return type, and the declaration
       // node is not reachable from the signature record. The string-list
@@ -11158,8 +11139,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // checker could not tell apart, accepted at the declarations and then
         // ambiguous at EVERY call - an error naming neither of them. The
         // annotated pair was already refused here, early; this is the same rule
-        // reaching the case that declares nothing. `PLAN-module-scope-overloads`
-        // Q6.
+        // reaching the case that declares nothing.
         if (Return === null && !returnWasWritten && e.ReturnWasWritten === false) {
           return true;
         }
@@ -11175,7 +11155,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // types of the other declarations in this scope and none of them is in
       // scope yet, so the work is queued and run once every signature exists.
       // A generator or async function is not queued: what each publishes is a
-      // protocol type built from a different join, which this cycle leaves to
+      // protocol type built from a different join, which is left to
       // the clause that defines it.
       if (!fn.TypeAnnotation && isGenerator) {
         pendingInferences.push({
@@ -11215,7 +11195,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       declare(name, { Kind: 'function', Signatures } as unknown as Known);
     }
     // The fixpoint is NOT run here when the caller will run it after the list's
-    // own declarations are walked (D106).
+    // own declarations are walked.
     //
     // This function runs BEFORE its statement list is walked - which is the
     // point, so `f(300)` above `function f(v: uint8) {}` is an Early Error - and
@@ -11337,7 +11317,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The type a name was DECLARED with, ignoring any narrowing in force. An
    * assignment is checked against this, because the declared type is what the
    * binding may hold; the narrowing is a fact about the current value and the
-   * assignment is what ends it (F78).
+   * assignment is what ends it.
    */
   const lookupDeclared = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -11712,7 +11692,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (b.TypeAnnotation && declared && b.Initializer) {
         const source = staticType(b.Initializer);
         // Not `any`, not a literal, and assignable: the value is already of the
-        // target type, so the boundary has nothing to do (F81).
+        // target type, so the boundary has nothing to do.
         if (source && source.Kind !== 'any' && source.Kind !== 'literal'
             && !conversionHasEffect(declared) && IsAssignable(source, declared)
             && derivationIsStable(b.Initializer)) {
@@ -11733,7 +11713,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // `undefined`. The checker had it as the bare annotation, which made
       // `b === undefined` a test that can never succeed - invisible until the
       // dead-branch diagnostic started reporting such tests, and then reported
-      // against a program that was right (F76). A parameter with a DEFAULT is
+      // against a program that was right. A parameter with a DEFAULT is
       // not optional in this sense: it is always bound to something.
       const optional = (b as unknown as { Optional?: boolean }).Optional === true && !b.Initializer;
       declare(b.BindingIdentifier.name, optional && declared
@@ -11750,7 +11730,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * type. Recorded at the call site, keyed by the literal's node, and consulted
    * when the walk reaches it - the same channel shape the numeric overload
    * resolution uses, because a contextual type has to travel from where it is
-   * known to where it is needed (F80).
+   * known to where it is needed.
    */
   const contextualParameterTypes = new Journaled<readonly Known[]>();
   /** A callback's inferred return type, keyed by the CALL that passed it. */
@@ -11764,7 +11744,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * records, per function being walked, whether every return seen so far hands
    * back a value already of the declared type.
    *
-   * The condition is F81's, unchanged: not ~any~, not a literal, and
+   * The elision condition, unchanged: not ~any~, not a literal, and
    * assignable. A literal is assignable to `uint8` and still must be
    * CONVERTED, so `return 5` from a `(): uint8` needs its boundary; a binding
    * of type `uint8` does not.
@@ -11774,7 +11754,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * The enclosing generator's declared type, for `yield` to read its N.
    *
-   * PLAN-do-expressions.md phase 1. It cannot live in `returnTypes`: a `return`
+   * It cannot live in `returnTypes`: a `return`
    * inside a generator sets the generator's R rather than producing the
    * generator, so checking one against `Generator.<Y, R, N>` would be checking
    * it against the wrong thing. That is why the generator forms enter with a
@@ -11864,7 +11844,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null) => {
     frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
-    // PLAN-async-generator-types.md F188 / OQ1-C. A `return` is compared against
+    // A `return` is compared against
     // what the function RETURNS, and for a generator that is the _R_ of
     // `Generator.<Y, R, N>` - not the annotation, which types the values
     // YIELDED.
@@ -11875,12 +11855,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // exists precisely to type a generator's return was the one that could not
     // be used.
     //
-    // Reading _R_ fixes that and settles OQ1-C in the same step: a BARE
+    // Reading _R_ fixes that and settles the bare form in the same step: a BARE
     // annotation maps to `Generator.<Y, void, void>`, so its _R_ is `void` and a
-    // value-returning `return` is refused - which is the rule OQ1-C chose, and
+    // value-returning `return` is refused - which is the rule chosen, and
     // it falls out of the mapping rather than needing one of its own.
     // A METHOD in an object literal has no written annotation; its return comes
-    // from the member the target declares (D71's body half). Either source
+    // from the member the target declares. Either source
     // yields a declared return, and the gates below test THAT rather than the
     // presence of an annotation.
     const declaredForReturn = checkReturns
@@ -11890,17 +11870,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const generatorReturn = generatorType
       ? ((generatorType as { Arguments?: readonly TypeRecord[] }).Arguments?.[1] ?? null)
       : null;
-    // PLAN-async-generator-types.md phase 4. An ASYNC function's annotation
+    // An ASYNC function's annotation
     // types the PROMISE the call returns (sec-function-annotations), so a
     // `return` inside it produces the promise's RESOLUTION type - the first
     // argument of `Promise.<T, E>` - not the annotation itself. The same shape
-    // as F188 one form over: pushing the raw annotation would compare
+    // as for a generator one form over: pushing the raw annotation would compare
     // `return 1` against `Promise.<uint8, Error>` and refuse it.
     const asyncResolution = resumable && !generatorType
       && (declaredForReturn as { LibraryName?: string } | null)?.LibraryName === 'Promise'
       ? ((declaredForReturn as { Arguments?: readonly TypeRecord[] }).Arguments?.[0] ?? null)
       : null;
-    // OQ2-A. An `async` function's annotation types the PROMISE, so a
+    // An `async` function's annotation types the PROMISE, so a
     // non-promise annotation is a mistake. It is NOT read as shorthand for
     // `Promise.<T, ?>` the way a bare generator annotation is read as
     // `Generator.<Y, void, void>`: that shorthand fills its remaining arguments
@@ -11921,7 +11901,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ? generatorReturn as Known | null
       : (asyncResolution as Known | null) ?? declaredForReturn);
     // `declaredForReturn` above is `returnAnnotation ? … : contextualReturn`, so
-    // the origin is known HERE and nowhere downstream (D57).
+    // the origin is known HERE and nowhere downstream.
     returnContextIsContextual.push(!returnAnnotation && !!contextualReturn);
     generatorTypes.push(generatorType ?? null);
     returnsProven.push(true);
@@ -11949,8 +11929,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           declare(named, annotated ? resolveType(annotated.Type) : null);
         }
       } else if (p.type === 'BindingRestElement' && (p as { Ref?: boolean }).Ref === true) {
-        // The static half of the ref-rest second-class rule (#sec-function-types;
-        // PLAN-variadic-and-named-generic-arguments.md 2.5): the name a
+        // The static half of the ref-rest second-class rule
+        // (#sec-function-types): the name a
         // `ref ...refs` binds in this frame. A reference to it is admitted in
         // exactly three forms - `refs[k]` with a constant k, `refs.length`, and
         // `...refs` as a call argument - and refused statically in every other,
@@ -11979,7 +11959,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ?? (body as { AssignmentExpression?: ParseNode }).AssignmentExpression;
         if (expr) {
           (expr as unknown as { ContextualType?: Known }).ContextualType = conciseReturn;
-          // ...and CHECKED against it (D109). The contextual was recorded and
+          // ...and CHECKED against it. The contextual was recorded and
           // never compared, so `(): uint8 => "s"` and `(): void => "s"` were
           // both accepted although the comment above says the declaration is
           // refused before any call runs.
@@ -11990,7 +11970,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // RequireType against it would refuse the legitimate *undefined* too,
           // and the static check is the only one there can be.
           //
-          // The `void` exception here is D57's, not a hole: a CONTEXTUAL `void`
+          // The `void` exception here is the contextual-return rule, not a hole: a CONTEXTUAL `void`
           // requires nothing of the body - #sec-issubtype's "a `void` return is
           // required of nothing" - while an arrow's OWN `: void` still refuses,
           // which is what this arm is for.
@@ -12016,11 +11996,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && !conversionHasEffect(declaredReturn) && endsWithReturn(body)) {
       elidableAnnotations.add(returnAnnotation);
     }
-    // PLAN-implicit-return.md phase 1: MEASURE ONLY. Counts what the Early
+    // MEASURE ONLY. Counts what the Early
     // Error would reject, without rejecting anything, so the blast radius is a
     // number before it is a decision.
     if (checkReturns && hasDeclaredReturn && declaredReturn
-      // PLAN-async-generator-types.md phase 1. A GENERATOR or ASYNC function
+      // A GENERATOR or ASYNC function
       // does not return its annotation's type by falling off its end: a
       // generator that reaches its end returns from the ITERATOR, whose type is
       // the _R_ of `Generator.<Y, R, N>` rather than the annotation - which
@@ -12028,9 +12008,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // with *undefined*, its annotation typing the PROMISE, which exists
       // either way.
       //
-      // F184's rule therefore does not apply to these forms. It fired on all
+      // The fall-off rule therefore does not apply to these forms. It fired on all
       // four typed-generator and typed-promise corpus programs the moment they
-      // were routed through the checked path, which is what phase 1 measured.
+      // were routed through the checked path, which is what the measurement showed.
       && !resumable
       && canCompleteNormally(body as ParseNode)
       // `void` is the annotation for a function that returns nothing, and
@@ -12055,7 +12035,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
     frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
-    // PLAN-declarative-checker-facts.md phase 3, the ~void~ form: a deferral
+    // The ~void~ form: a deferral
     // opened by an assertion statement covers the rest of ITS block and no
     // further, so the depth is restored with the frame it belongs to.
     const deferredAtEntry = deferredGuardDepth;
@@ -12217,7 +12197,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     switch (e.type) {
       case 'NumericLiteral':
         return typeof e.value === 'number';
-      // D3: a reference to a marked `const` is itself constant, so
+      // A reference to a marked `const` is itself constant, so
       // `const A = 3.14; const B = A * 2` chains. Without this the feature
       // applies exactly one level deep, and `const TAU = 2 * PI` - which is what
       // people write - is refused for a reason no user could state.
@@ -12309,7 +12289,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         BindingIdentifier?: { name?: string },
       } | undefined;
       const name = decl?.ForBinding?.BindingIdentifier?.name ?? decl?.BindingIdentifier?.name;
-      // #sec-iteration-types (D17): the binding a `for`-`of` introduces takes
+      // #sec-iteration-types: the binding a `for`-`of` introduces takes
       // the ELEMENT TYPE of what is iterated. It took no type at all - for EVERY
       // receiver, not only a collection - so
       // `for (const v of a) { let s: string = v; }` was accepted for an
@@ -12388,11 +12368,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Function declarations are hoisted, so a call may precede the
       // declaration. Their signatures are declared over the whole list before
       // any of it is walked, which is what lets `f(300)` above `function
-      // f(v: uint8) {}` be the Early Error it should be (F56).
+      // f(v: uint8) {}` be the Early Error it should be.
       declareFunctionSignatures(node as readonly ParseNode[], false);
       node.forEach((n) => walk(n));
       // The list's own bindings are declared by now, so an inference anchored by
-      // one of them has something to read (D106). `let s: string = "s";
+      // one of them has something to read. `let s: string = "s";
       // function g(){ return s; }` in a block published nothing before this,
       // and the same program at top level published `string`.
       publishInferredReturns();
@@ -12428,8 +12408,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The type OPERAND is resolved so an expression-position
         // parameterization is collected for the unclaimed-key adjudication:
         // `x is T.<{ ... }>` writes the parameterization as surely as an
-        // annotation does. F44 claimed the type-meta pin had flipped; it had
-        // not, because this position was never resolved, and F45 closes that
+        // annotation does. The type-meta pin was thought to have flipped; it had
+        // not, because this position was never resolved, and this closes that
         // by resolving it here and at the bare cast below.
         const ie = n as ParseNode.IsExpression;
         walk(ie.Expression as ParseNode);
@@ -12477,7 +12457,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'LogicalANDExpression':
       case 'LogicalORExpression': {
-        // PLAN-brand-layering-F.md F183 item 1. `??` is reported because its
+        // `??` is reported because its
         // RIGHT OPERAND can never be evaluated - the form contains code the
         // program wrote and cannot reach - and `||` and `&&` are the same shape
         // whenever the left operand's type settles the test.
@@ -12539,8 +12519,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'ExpressionStatement': {
-        // PLAN-declarative-checker-facts.md phase 3, the ~void~ form.
-        // #sec-declared-narrowing: an assertion narrows "every position the
+        // The ~void~ form. #sec-declared-narrowing: an assertion narrows "every position the
         // call dominates" rather than a branch, so it is applied AFTER the
         // statement is walked and takes effect for its siblings - which the
         // generic walk visits in order, and whose extent is the enclosing
@@ -12647,7 +12626,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // because a nominal whose declaration is an alias is not a type.
           //
           // Where every parameter has a DEFAULT the resolved body rides along as
-          // [[Structure]] (D59). #sec-type-arguments: the bare name "takes ...
+          // [[Structure]]. #sec-type-arguments: the bare name "takes ...
           // its |TypeParameterDefault|", so `type G<T = float64> = { t: T }`
           // written as `G` IS a type - while [[Declaration]] STAYS on the
           // record, or `interface I<W<_> = G>` loses the constructor it binds.
@@ -12959,7 +12938,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return;
           }
           const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
-          // PLAN-default-timing.md phase 1. A binding with a type and NO
+          // A binding with a type and NO
           // initializer holds its type's default, and #sec-defaultvalueof makes
           // it a type error where there is none. Deciding that needs
           // `DefaultValueOf` - an evaluator - and needs this text's `meta`
@@ -13020,7 +12999,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (isConstDeclaration) {
             frames[frames.length - 1].immutableNames.add(n.BindingIdentifier.name);
           }
-          // D13: a `const` bound to a CONSTRUCTION takes that construction's
+          // A `const` bound to a CONSTRUCTION takes that construction's
           // Static Type. It took nothing, so `const c = new C(); c.x` read the
           // field at ~any~ while `new C().x` - the same access one step earlier
           // - read it at its declared type. Every signature the checker provides
@@ -13069,7 +13048,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!sig && callee.Signatures.length > 1) {
             // #sec-overload-resolution, statically: rank the declared
             // signatures against the argument types by the SHARED resolver, so
-            // the checker selects the row the run time would (F58). An
+            // the checker selects the row the run time would. An
             // argument whose static type is unknown is ~any~, and the clause
             // says such a resolution is performed at run time, so the whole
             // call is left to the run time rather than guessed at.
@@ -13078,7 +13057,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // resolver would see before ranking, and the literal's own fit
             // against the chosen parameter is then the ordinary assignability
             // check below. Without this every literal argument resolved to
-            // ~none~ (F58).
+            // ~none~.
             const argTypes = c.Arguments.map((a) => {
               if (a.type === 'AssignmentRestElement') {
                 return null;
@@ -13087,7 +13066,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return t && t.Kind === 'literal' ? t.Base : t;
             });
             if (argTypes.every((t) => t !== null)) {
-              // PLAN-rest-parameters.md phase 0: the parameters ARE the records
+              // The parameters ARE the records
               // now, so the zip of a Shapes sidecar with a type list is gone.
               const candidates = callee.Signatures.map((s) => ({
                 Parameters: s.Parameters,
@@ -13144,7 +13123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // compute it differently, and an earlier attempt indexed the counts
             // as though they were the slot map.
             const restPresent = chosen.Parameters.some((pp) => !!pp?.Rest);
-            // #sec-variadic-parameters (F-Z): a spread argument, `f(...xs)`,
+            // #sec-variadic-parameters: a spread argument, `f(...xs)`,
             // binds a PACK only where its length is static - the rest annotated
             // with the pack collects a tuple whose length the binding must know.
             // A spread of a dynamic array into such a rest is refused here,
@@ -13186,7 +13165,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `[2].<uint8>`, or `[`_N_`].<uint8>` for a value parameter _N_ - the
             // extent is part of the type and the call must supply that many
             // arguments; for a value parameter this is checked where _N_ is
-            // supplied" (D36).
+            // supplied".
             //
             // Checked HERE rather than at the declaration, because that is where
             // the count is knowable: `[N].<uint8>` is well formed whatever N is,
@@ -13205,7 +13184,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const received = counts[k] ?? 0;
                 // A fixed-extent array fixes the count; a tuple with no rest of
                 // its own fixes it at its positions, less any trailing defaults
-                // (D33's range).
+                // (the length range).
                 let least: number | null = null;
                 let most: number | null = null;
                 if (restType.Kind === 'array' && typeof restType.Extent === 'number') {
@@ -13257,7 +13236,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const bindings = new Map<string, TypeRecord>();
                 if (argNodes && argNodes.length > 0) {
                   // Named explicit arguments are ordered before they zip - the
-                  // same shared operation every application site uses (F-A);
+                  // same shared operation every application site uses;
                   // this zip read them positionally, so `f.<V: 5>(x)` checked
                   // its arguments under the wrong binding. A list the ordering
                   // refuses binds nothing here; the call's evaluation raises
@@ -13291,7 +13270,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 if (bindings.size > 0) {
                   param = substituteTypeParameters(param, bindings) as TypeRecord;
                 if (slot?.Rest && param && param.Kind === 'tuple') {
-                  // Phase 6: a rest bound to a TUPLE checks each argument
+                  // A rest bound to a TUPLE checks each argument
                   // against the element at its position in the run, not the
                   // whole tuple; `restElementType` above ran before the
                   // substitution and saw only the parameter.
@@ -13303,7 +13282,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               // A FUNCTION LITERAL in a position whose type is a function type
               // takes that type's parameters as its own, which is how a
-              // callback learns the element type (F80). Recorded here and read
+              // callback learns the element type. Recorded here and read
               // when the walk reaches the literal.
               if (param && param.Kind === 'function' && param.Signatures.length === 1
                   && (arg.type === 'ArrowFunction' || arg.type === 'FunctionExpression')) {
@@ -13325,11 +13304,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }
                 // `map`'s result element type is the CALLBACK'S RETURN, which
                 // is why it could not be claimed before the callback was typed
-                // (F79 left it ~any~ deliberately). It is readable for a
+                // (left ~any~ deliberately). It is readable for a
                 // concise-bodied arrow, whose body IS the returned expression,
                 // with the callback's parameters in scope. A block-bodied
                 // callback needs return-type inference the checker does not
-                // have, and stays ~any~ - imprecise rather than wrong (F80).
+                // have, and stays ~any~ - imprecise rather than wrong.
                 if (arg.type === 'ArrowFunction') {
                   const arrow = arg as unknown as { ConciseBody?: ParseNode, ArrowParameters?: readonly ParseNode[] };
                   const body = arrow.ConciseBody;
@@ -13361,7 +13340,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // Unbound: nothing to check against until a binding exists.
                 return;
               }
-              // An OPTIONAL parameter admits *undefined* explicitly (D52 row
+              // An OPTIONAL parameter admits *undefined* explicitly (row
               // 18): `f()` and `f(undefined)` are the same call, and refusing
               // the second while accepting the first would make the spelling
               // decide.
@@ -13418,7 +13397,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'LogicalORExpression': {
         // The RIGHT operand is evaluated only where the left decided a way, so
         // it sees the binding narrowed - `x !== null && x.f` is the idiom this
-        // exists for (F77). A disjunction narrows by the complement, since its
+        // exists for. A disjunction narrows by the complement, since its
         // right operand runs where the left was false.
         const lg = n as unknown as { LogicalANDExpression?: ParseNode, LogicalORExpression?: ParseNode, BitwiseORExpression?: ParseNode, LogicalANDExpression_b?: ParseNode };
         const isAnd = n.type === 'LogicalANDExpression';
@@ -13431,7 +13410,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ConditionalExpression': {
         // `t ? a : b` guards its two arms exactly as an `if` guards two
-        // statements, so the same fact applies (F76).
+        // statements, so the same fact applies.
         const c = n as unknown as { ShortCircuitExpression: ParseNode, AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
         walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
         return;
@@ -13443,11 +13422,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'IfStatement': {
-        // PHASE 4 of the checker plan: a test refines a binding's type in the
+        // A test refines a binding's type in the
         // branch it guards. Without this the checker rejected the very idiom
         // the `is` operator exists for - `if (x is uint8) { let y: uint8 = x; }`
-        // was a type error, because `x` kept its union type inside the branch
-        // (F75). The narrowing operations themselves already existed; nothing
+        // was a type error, because `x` kept its union type inside the branch.
+        // The narrowing operations themselves already existed; nothing
         // consulted them for a BINDING.
         const s = n as unknown as { Expression: ParseNode, Statement_a: ParseNode, Statement_b?: ParseNode | null };
         walkGuarded(s.Expression, s.Statement_a, s.Statement_b ?? null);
@@ -13505,7 +13484,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Checked against the DECLARED type, not the narrowed one: a binding
           // of `uint8 | string` may be assigned a string inside a branch that
           // narrowed it to `uint8`, and doing so ENDS the narrowing rather than
-          // being an error (F78).
+          // being an error.
           const name = (a.LeftHandSideExpression as { name: string }).name;
           const target = lookupDeclared(name);
           requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
@@ -13515,7 +13494,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // has a known typed property or element type is the same shape as a
           // store to an annotated binding, so it is an Early Error where the
           // static types settle it and the run-time check remains the backstop
-          // for the ~any~ path (F56). A class instance has no structural type
+          // for the ~any~ path. A class instance has no structural type
           // here, so `c.x = 300` for a class-typed `c` still waits on the
           // checker learning class field types.
           const m = a.LeftHandSideExpression as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
@@ -13524,7 +13503,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (objType && objType.Kind === 'object' && m.IdentifierName) {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
             // A store satisfies the property's WRITE type where one is declared
-            // separately, which is what a setter's parameter gives (F61).
+            // separately, which is what a setter's parameter gives.
             target = prop ? ((prop as { writeType?: TypeRecord }).writeType ?? prop.type) : null;
           } else if (objType && objType.Kind === 'object' && m.Expression) {
             // A SYMBOL-keyed store, `m[k] = v`. The computed expression names a
@@ -13543,7 +13522,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } else if (objType && objType.Kind === 'array' && m.Expression) {
             target = objType.Element;
           } else if (objType && objType.Kind === 'tuple' && m.Expression) {
-            // A store into a TUPLE POSITION takes that position's type (D37).
+            // A store into a TUPLE POSITION takes that position's type.
             // The array arm above existed and this one did not, so
             // `_x_[1] = (9 := uint8)` on a `[uint8, string]` was accepted - and
             // at run time the store CONVERTS, so the uint8 became the String
@@ -13581,18 +13560,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const expr = (n as { Expression?: ParseNode | null }).Expression;
         const context = returnTypes[returnTypes.length - 1] ?? null;
         if (expr) {
-          // A `void` RETURN admits *undefined* (D52 row 19). #sec-void makes
+          // A `void` RETURN admits *undefined*. #sec-void makes
           // `void` "the type with no values", so no BINDING may hold one - and
           // its very next sentence says "a call of a function whose return type
           // is `void` evaluates to *undefined*". The same word, two positions,
           // and only this one admits the value.
           //
-          // Gated on the VALUE, not on the context (D56). Written as
+          // Gated on the VALUE, not on the context. Written as
           // `if (!(context.Kind === 'void'))` it skipped the check WHOLESALE, so
           // `function f(): void { return "s"; }` and `{ return (1 := uint8); }`
           // were both accepted - and so was
           // `function* g(): uint8 { return (0 := uint8); }`, whose bare
-          // annotation "types the yields and returns nothing" (OQ1-C). That
+          // annotation "types the yields and returns nothing". That
           // test failing is how the skip was found: a check that asks no
           // question shows up only as something that USED to be refused.
           //
@@ -13604,9 +13583,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const returned = staticTypeIn(expr, context);
           const voidAdmitsUndefined = context && (context as { Kind?: string }).Kind === 'void'
             && returned && (returned as { Name?: string }).Name === 'undefined';
-          // A CONTEXTUAL `void` requires nothing of the body (D57). The target
+          // A CONTEXTUAL `void` requires nothing of the body. The target
           // said the result will not be used; the function never claimed to
-          // produce none. An OWN annotation still refuses, which is D56.
+          // produce none. An OWN annotation still refuses.
           const contextualVoid = (context as { Kind?: string } | null)?.Kind === 'void'
             && returnContextIsContextual[returnContextIsContextual.length - 1] === true;
           if (!voidAdmitsUndefined && !contextualVoid) {
@@ -13638,11 +13617,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'FunctionDeclaration':
       case 'FunctionExpression': {
-        // PLAN-declarative-checker-facts.md phase 1: the adopted `this` is in
+        // The adopted `this` is in
         // scope for exactly this literal's body. Pushed here rather than inside
         // `enterFunction` because only a literal that MET a contextual type has
         // one, and a declaration never does.
-        // PLAN-declarative-checker-facts.md phase 1b: where the adopted type is
+        // Where the adopted type is
         // the SELF MARKER and the owner of the signature is known, `this` is
         // the owner - which is what the marker stands for. Where no owner was
         // recorded the marker is pushed unchanged, which types `this` without
@@ -13665,7 +13644,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // resolved to nothing, and `let v: T = 5` inside `function f<T>` was
         // accepted because there was no constraint to violate.
         //
-        // `FINDING-generic-body-unchecked.md`. What the parameter record then
+        // What the parameter record then
         // gives is the relation `relations.mts` already states - a parameter is
         // opaque, a subtype of itself and of its constraint, and NOTHING ELSE
         // relates to it - so assigning any concrete value into a `T` is refused,
@@ -13685,7 +13664,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // #sec-type-annotations: "A rest element's annotation is the type of
             // what it COLLECTS, an ~array~ or ~tuple~ type rather than an element
             // type ... It is a type error if the annotation does not RESOLVE to
-            // an array or tuple type" (D36).
+            // an array or tuple type".
             //
             // On what it RESOLVES to, not on how it is written: a name, a type
             // parameter and a computed type are each judged by what they denote,
@@ -13741,7 +13720,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       case 'ClassDeclaration':
       case 'ClassExpression': {
-        // PLAN-nominal-records.md v2 task A. A class DECLARATION is registered
+        // A class DECLARATION is registered
         // by name in `classNodes` and forced with the others, which is what
         // publishes its instance type for the runtime record to read. A class
         // EXPRESSION is registered nowhere, so `classInstanceType` never ran for
@@ -13765,7 +13744,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           walk(el);
         }
         classContext.pop();
-        // PLAN-abstract-implementation.md, the checking-pass migration.
         // #sec-abstract-classes: "a type error if a class not declared
         // `abstract` leaves an inherited abstract method unimplemented".
         //
@@ -13784,7 +13762,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The modifiers live on the CLASS node, which the evaluator reaches as
         // `ClassTail.parent.ClassModifiers`; here the node IS the class.
         const classModifiers = (n as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
-        // PLAN-abstract-implementation.md, the checking-pass migration, rule 1.
         // #sec-abstract-classes: an abstract method's "annotation types the
         // implementations: it is a type error if a subclass implements an
         // inherited abstract method with a signature the abstract declaration
@@ -13940,7 +13917,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
           const isAsyncGen = n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
           const ann = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          // PLAN-async-generator-types.md phase 4. The body field for an
+          // The body field for an
           // AsyncFunctionDeclaration is `AsyncBody`, not `AsyncFunctionBody` - the name
           // the body EVALUATOR uses. Naming the evaluator's field here found nothing, so
           // `body` was undefined, the walk never descended, and no `return` inside an

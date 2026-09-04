@@ -58,11 +58,11 @@ import {
 /**
  * proposal-runtime-types #sec-isoftype
  * Determines whether a value is a value of the type. Until the numeric value
- * types of a later milestone exist as distinct values, a Number within the
+ * types exist as distinct values, a Number within the
  * range of an integer type counts as a member; the divergence is deliberate
  * and temporary.
  */
-// proposal-runtime-types M17: type parameter substitution. Instantiating a
+// proposal-runtime-types: type parameter substitution. Instantiating a
 // generic alias pushes a frame mapping each parameter name to its argument's
 // record and evaluates the alias body; identical instantiations therefore
 // produce the same record and intern to the same Type Object.
@@ -109,8 +109,7 @@ export function typeParameterFrameDepth(): number {
 }
 
 /**
- * PLAN-variadic-and-named-generic-arguments.md Phase 8 (F-V, #sec-evaluation-budget):
- * a declaration that specializes ITSELF without end - `grow.<...Ts, uint8>`
+ * #sec-evaluation-budget: a declaration that specializes ITSELF without end - `grow.<...Ts, uint8>`
  * inside `grow` - must be stopped by the budget with a diagnostic, never by the
  * host's stack. Nested specialized calls each push a frame, so the frame depth
  * is the specialization depth; beyond this limit the application is refused.
@@ -196,7 +195,7 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
 /**
  * The bindings that belong to a VALUE parameter.
  *
- * F165. A binding's record cannot say which kind of parameter it belongs to - a
+ * A binding's record cannot say which kind of parameter it belongs to - a
  * literal argument to a TYPE parameter is a literal record just the same - so
  * the declaration is carried alongside. A side table rather than a field
  * because Type Records are interned: a flag on one would be a flag on every
@@ -210,7 +209,7 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
 /**
  * The bindings that belong to a VALUE parameter.
  *
- * F165/F168. Keyed on the RECORD, and that choice was made against the
+ * Keyed on the RECORD, and that choice was made against the
  * alternative rather than by default.
  *
  * Keying on the (frame, name) pair is the more principled shape - a frame is
@@ -255,14 +254,14 @@ export function bindTypeParameter(
 }
 
 /** Whether _record_ is a value parameter's binding. */
-/** Phase 4: the array a value pack reads as, one per binding record (a specialization's constant). */
+/** The array a value pack reads as, one per binding record (a specialization's constant). */
 const packValueViews = new WeakMap<object, Value>();
 
 /**
  * #sec-variadic-parameters: a VALUE pack reads as a frozen fixed-extent array of
  * its literal elements' values, the same array on every read of one
  * specialization. Shared by GetValue (a body's `I`) and by the qualified type
- * name path (`I.length` in a computed default or constraint, F-W).
+ * name path (`I.length` in a computed default or constraint).
  */
 export function* ValuePackView(bound: TypeRecord): ValueEvaluator {
   const cached = packValueViews.get(bound as unknown as object);
@@ -394,8 +393,7 @@ function typeArgumentBindingError(kind: string, applied: string, name?: string):
 }
 
 /**
- * PLAN-variadic-and-named-generic-arguments.md Phase 4, #sec-bindtypearguments:
- * the engine's BindTypeArguments for an application whose parameters include a
+ * #sec-bindtypearguments: the engine's BindTypeArguments for an application whose parameters include a
  * VARIADIC one or whose arguments include a SPREAD. Expands spreads, resolves
  * every argument, distributes the positional prefix by SequenceAssignment with
  * the pack's element bound as the admits (a bound that cannot be evaluated
@@ -536,7 +534,7 @@ export function* BindTypeArgumentsInto(
       }
     }
     // Canonical before it binds or keys anything: a spliced tuple, `[...Ts, T]`,
-    // must key the same specialization as the tuple it spells (F-S).
+    // must key the same specialization as the tuple it spells.
     record = CanonicalizeType(record);
     if (name) {
       bindTypeParameter(frame, name, record, q);
@@ -652,7 +650,7 @@ export function* OrderNamedTypeArguments(
   argNames: readonly (string | undefined)[],
   typeName: string,
 ): PlainEvaluator<readonly TypeRecord[]> {
-  // Phase 4: a list with a VARIADIC parameter distributes by the pack rule.
+  // A list with a VARIADIC parameter distributes by the pack rule.
   if (params.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)) {
     return yield* BindTypeArgumentRecords(params, argRecords, argNames, typeName);
   }
@@ -731,7 +729,7 @@ function mentionsThis(clauses: readonly ParseNode.WhereClause[]): boolean {
 /**
  * The clauses of a WRITTEN generic-alias application, checked early.
  *
- * PLAN-alias-where-enforcement.md phase 1. #sec-generic-where: a `where` clause
+ * #sec-generic-where: a `where` clause
  * is "checked at each specialization once its parameters are bound", and a
  * written application's arguments are in the SOURCE - so the bound is
  * determinable without running the program, and #sec-type-errors then makes it
@@ -745,10 +743,10 @@ function mentionsThis(clauses: readonly ParseNode.WhereClause[]): boolean {
 /**
  * Applications whose clauses the EARLY check already verified.
  *
- * PLAN-alias-where-enforcement.md, closing test P3. The backstop in
+ * The backstop in
  * `InstantiateGenericAlias` re-resolves the annotation on every crossing, so a
  * `Pos.<3>` in a hot function's signature ran its predicate once per CALL - the
- * measured 10-for-5 that Q0(b) said a parameter bound must not pay.
+ * measured 10-for-5 a parameter bound must not pay.
  *
  * A bound over type arguments answers the same question every time, so once the
  * pass has answered it for a (declaration, arguments) pair, the backstop skips
@@ -803,7 +801,7 @@ export function* EvaluateAliasApplicationClauses(
     // `record` is a Completion here and `.Value` unwraps IT, not a literal
     // type - see the `record.Type === 'throw'` test above. The binding still
     // needs its parameter's declaration, which is what a `where` clause reading
-    // `N` as a value depends on. F165.
+    // `N` as a value depends on.
     bindTypeParameter(frame, name, record.Value as TypeRecord, params[i]);
   }
   typeParameterFrames.push(frame);
@@ -836,7 +834,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
   const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
   const leastArgs = firstDefault === -1 ? params.length : firstDefault;
   if (argRecords.length < leastArgs || argRecords.length > params.length) {
-    // OQ-type-arguments-vs-metadata.md D2. The parameter list decides what
+    // The parameter list decides what
     // `.<...>` MEANS, so it has to decide the error too, and say which parameter
     // is at fault. Both arities reported "$1 is not a type" - which is false of
     // the alias, unhelpful about the application, and actively misleading now
@@ -910,7 +908,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
     typeParameterFrames.push(frame);
     try {
       const body = Q(yield* TypeNodeToTypeRecord(declaration.Type));
-      // PLAN-alias-where-enforcement.md phase 2, the BACKSTOP. #sec-generic-where:
+      // The BACKSTOP. #sec-generic-where:
       // a `where` clause is "checked at each specialization once its parameters
       // are bound. Where the expression is *false* for an application's
       // bindings, that application is a type error."
@@ -921,7 +919,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
       // same alias written bare, `Deflt`, refused.
       //
       // Checked with the parameter frame still pushed, which is the only place
-      // the bindings exist. The early check (phase 1) is what a developer should
+      // the bindings exist. The early check is what a developer should
       // usually meet; this catches an application the checker did not see.
       // Only a generic TYPE ALIAS. A dependent-record declaration also carries
       // `WhereClauses`, and its predicates read `this` - evaluating one here,
@@ -934,7 +932,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
         for (const clause of clauses) {
           const holds = Q(yield* EvaluateRefinementPredicate(clause.RefinementPredicate, Value.undefined));
           if (holds === false) {
-            // PLAN-alias-where-enforcement.md phase 3. #sec-generic-where: the
+            // #sec-generic-where: the
             // error is "reported against the CLAUSE'S SOURCE" - not against the
             // application that failed it. Measured, the function form already
             // does this and the alias form did not: a violated `Pos.<0>` pointed
@@ -973,8 +971,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
  * types. A parameter with no inferable argument falls back to its default, if any.
  */
 /**
- * PLAN-variadic-and-named-generic-arguments.md 2.6, rung three
- * (#sec-inference-through-results, #sec-declared-inverses): the name of the
+ * Rung three (#sec-inference-through-results, #sec-declared-inverses): the name of the
  * BUILDER - a computed type in a parameter annotation - through which a type
  * parameter is reached but not bound, or null where no annotation mentions the
  * parameter inside a computed type. A parameter reached only through a builder
@@ -1078,7 +1075,7 @@ function closedInhabitants(constraint: TypeRecord, cap = 256): TypeRecord[] | nu
   return null;
 }
 
-/** OQ-18: one inverse call per (computed-type site, argument type), the spec's memoization. */
+/** One inverse call per (computed-type site, argument type), the spec's memoization. */
 const inverseProposals = new WeakMap<object, Map<string, Value>>();
 
 /** The computed-type node in `formals` whose arguments mention `paramName`, with the index of the formal that carries it. */
@@ -1297,7 +1294,7 @@ export function* InferGenericBindings(
   try {
     for (const tp of typeParameters) {
       const paramName = tp.BindingIdentifier.name;
-      // PLAN-variadic-and-named-generic-arguments.md F-W: a parameter ALREADY
+      // A parameter ALREADY
       // BOUND - by the explicit arguments of `d.<4, 1>()`, or a specialization's
       // frame - keeps that binding, and the parameters after it evaluate their
       // computed constraints and defaults OVER it. Inferring here first, with
@@ -1325,7 +1322,7 @@ export function* InferGenericBindings(
         // `...parts: S` binds S to the tuple of the trailing arguments' types.
         const elements: { Type: TypeRecord, Rest: boolean, Initial: 'none' }[] = [];
         for (let i = ordinary.length; i < args.length; i += 1) {
-          // F-T: a `ref` argument in the run contributes its REFERENT's type -
+          // A `ref` argument in the run contributes its REFERENT's type -
           // `apply2(cb, ref a, ref f)` binds Cs to [uint32, float32].
           const arg = args[i]!;
           const referent = arg instanceof ReferenceValue ? Q(yield* GetValue(arg.Location)) : arg;
@@ -1350,14 +1347,14 @@ export function* InferGenericBindings(
         }
       }
       if (bound === null) {
-        // Rung three (F-Y): a parameter reached only THROUGH A BUILDER binds
+        // Rung three: a parameter reached only THROUGH A BUILDER binds
         // through that builder's declared inverse, never by search - and no
         // inverse mechanism exists here yet - so the call is refused naming the
         // builder, as the design's diagnostic contract requires. Binding `any`
         // here ran the builder over nothing and accepted every argument.
         const builder = builderMentioning(formals, paramName);
         if (builder) {
-          // Rung two (F-X): a CLOSED constraint proposes its inhabitants, each
+          // Rung two: a CLOSED constraint proposes its inhabitants, each
           // verified FORWARD - the builder evaluated over the candidate, the
           // arguments checked against the result - and exactly one must pass.
           const candidates = constraint === null ? null : closedInhabitants(constraint);
@@ -1401,7 +1398,7 @@ export function* InferGenericBindings(
               return Throw.TypeError('$1', Value(`${passing.length} inhabitants of ${displayType(constraint!)} make ${builder} accept the arguments; supply explicit type arguments for ${paramName}`));
             }
           } else {
-            // Rung three's POSITIVE half (OQ-18 A1/B1/C, F-Y): the builder's
+            // Rung three's POSITIVE half: the builder's
             // declared inverse - read from the function the builder's name
             // resolves to in this call's scope - proposes a binding from the
             // ARGUMENT'S type: for a rest, the tuple of the collected
@@ -1521,7 +1518,7 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
       || (value as Value)?.type === 'Vector') {
     return (value as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
   }
-  // PLAN-brand-layering-F.md T3b. An object or array carries its brand as a mark
+  // An object or array carries its brand as a mark
   // on the value, the way an array's [[TypedElement]] and a tuple's record do -
   // "only a mark on the object itself can refuse a store that the narrow view
   // forbids", and a brand is the same kind of mark.
@@ -1529,7 +1526,7 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
   // The comment at the ~parameterized~ arm of IsOfType assumed "every value that
   // can be of a parameterized type is a primitive stamped at construction". That
   // was true while an object base silently discarded its parameterization
-  // (F174); it is not now, and reading the mark here is what makes the arm's
+  // once; it is not now, and reading the mark here is what makes the arm's
   // first limb - "IsSubtype(RuntimeTypeOf(value), t)" - answer for an object
   // without going through the shape inference that a brand is invisible to.
   if ((value as { BrandTypeRecord?: unknown })?.BrandTypeRecord !== undefined) {
@@ -1579,8 +1576,7 @@ export function ResolveTypeName(name: JSStringValue) {
 }
 
 /**
- * PLAN-variadic-and-named-generic-arguments.md Phase 4 (F-C,
- * #sec-generic-function-values): the instantiated type of a specialization
+ * #sec-generic-function-values: the instantiated type of a specialization
  * value - `Reflect.typeOf(id.<uint8>)` is `(uint8) => uint8` while the bare name
  * keeps `<T>(x: T) => T`.
  */
@@ -1641,8 +1637,8 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     //
     // `Reflect.typeOf(Promise.resolve(1))` answered `{}` while the CHECKER
     // answered `Promise.<uint.<8>>` for the same shape - two mechanisms
-    // disagreeing about one value, which is what the regexp half of D30 fixed
-    // for a fourth kind and what `Reflect_typeOf`'s own comment calls out for
+    // disagreeing about one value, which is what the regexp arm below fixed for
+    // a fourth kind and what `Reflect_typeOf`'s own comment calls out for
     // callables.
     //
     // No type ARGUMENTS are passed. `TypedCollection` is STAMPED by
@@ -1665,12 +1661,12 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
       }
     }
     // A REGEXP reports `RegExp.<Captures, Groups>`, inferred from its own
-    // pattern (D30). It reported `{}` - an object with no structure - though the
+    // pattern. It reported `{}` - an object with no structure - though the
     // CHECKER has always known the type: `RegExp.<[string], {}>` at `/(a)/` is
     // accepted and a wrong ARITY refused. Only REPORTING was missing.
     //
-    // No stamp is needed, which is what makes this the one of D30's three kinds
-    // the engine can answer today: a capture count is derivable from the source,
+    // No stamp is needed, which is what makes this the one such kind the engine
+    // can answer today: a capture count is derivable from the source,
     // and `[[OriginalSource]]`/`[[OriginalFlags]]` are on the object.
     // `inferRegExpLiteralType` is the SAME operation the checker uses, so the two
     // cannot disagree about a pattern.
@@ -1719,7 +1715,6 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     // does not answer that name cannot be MATCHED against it by overload
     // resolution - which is what stopped one name carrying both a replacement
     // and an ordinary decorator.
-    // `FINDING-overload-resolution-host-nominals.md`.
     if (isTokenStream(value)) {
       const stream = libraryTypeRecord('TokenStream', []);
       if (stream) {
@@ -1995,7 +1990,7 @@ function declaredZeroKey(args: readonly (TypeRecord | number)[] | undefined): st
   )).join(',');
 }
 
-// PLAN-generic-declared-zero.md Q2. Keyed on the DECLARATION and the ARGUMENTS,
+// Keyed on the DECLARATION and the ARGUMENTS,
 // not the declaration alone: one declaration serves every application, so a
 // single-key map let `Bx.<string>` pick up whatever `Bx.<uint8>` had registered
 // and report "[object Object] is not assignable to Bx.<string>". A zero that
@@ -2052,7 +2047,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       }
       const name = t.Name;
       if (name === 'number') {
-        // PLAN-parameterized-defaults.md phase 2. `number` was stamped here
+        // `number` was stamped here
         // alongside the value types, and it is the one name in that list whose
         // values are NOT the stamped ones: primitiveMembership answers
         // `value instanceof NumberValue && !(value instanceof TypedNumberValue)`
@@ -2103,7 +2098,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         // #sec-defaultvalueof: "If _t_ is a numeric type, return the value of
         // _t_ representing 0", and a complex type is a numeric type
         // (#sec-numeric-types-of-this-proposal names the complex family). Its
-        // zero is the pair of its component's zeros - the row D20 had to leave
+        // zero is the pair of its component's zeros - a row that had to be left
         // open, since the type objects did not exist to default.
         const component = (t.Arguments[0] as TypeRecord | undefined) ?? makePrimitive('number');
         return CreateComplexValue(0, 0, component, surroundingAgent.currentRealmRecord);
@@ -2240,7 +2235,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // _t_.[[Metadata]])). If _crossed_ is an abrupt completion, return
       // ~none~. Return _crossed_.[[Value]]."
       //
-      // PLAN-parameterized-defaults.md phase 4. This tested MEMBERSHIP, which
+      // This tested MEMBERSHIP, which
       // secured the operation's contract but answered a different question than
       // the declaration beside it: `let w: T;` succeeded where `let w: T = 0;`
       // failed, because a bare zero is a MEMBER of a parameterization whose
@@ -2273,7 +2268,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       return crossed.Value;
     }
     case 'nominal': {
-      // PLAN-type-declared-zero.md phases 2-3. #sec-defaultvalueof, as amended:
+      // #sec-defaultvalueof, as amended:
       // "If _t_.[[Kind]] is ~nominal~ and _t_.[[Declaration]] has a declared
       // zero _z_, return A COPY OF _z_." Ahead of every derived rule, because
       // #sec-declared-zero makes it a REPLACEMENT: "a class that declares one is
@@ -2462,7 +2457,7 @@ export function SubstituteTypeArguments(
         ...prop, type: walk(prop.type as TypeRecord),
       }));
       // [[IndexSignatures]] was copied VERBATIM beside a [[Properties]] that is
-      // walked (D86), so a NOMINAL target kept its parameter:
+      // walked, so a NOMINAL target kept its parameter:
       // `interface Box<T> { [k: string]: T }` at `Box.<uint8>` was satisfied by
       // nothing, an exact `{ [k: string]: uint8 }` source included.
       //
@@ -2478,7 +2473,7 @@ export function SubstituteTypeArguments(
       return out;
     }
     // A FUNCTION type's SIGNATURES carry parameters in their Return and their
-    // Parameters, and were not walked (D63). `interface Box<T> { get(): T; }`
+    // Parameters, and were not walked. `interface Box<T> { get(): T; }`
     // substituted to `{ get(): T }` unchanged, so a class whose `get` returns a
     // `uint8` did not satisfy `Box.<uint8>` - a program that worked until a
     // parameterised interface began resolving.
@@ -2503,7 +2498,7 @@ export function SubstituteTypeArguments(
     }
     if (r.Kind === 'tuple') {
       // A NOMINAL reaches this walk where an ALIAS reaches
-      // `substituteTypeParameters` in `check.mts` (D87, and D86 before it), so
+      // `substituteTypeParameters` in `check.mts`, so
       // `interface B<T> { n: [T, string] }` needs the arm here as well - it was
       // the row that stayed REFUSED with only the checker's two edits.
       //
@@ -2519,7 +2514,7 @@ export function SubstituteTypeArguments(
         return out;
       }
     }
-    // An ARRAY's element, and its EXTENT where that is a Type Record (D88).
+    // An ARRAY's element, and its EXTENT where that is a Type Record.
     //
     // This walk dispatches on [[Kind]] and had five arms - parameter, object,
     // function, tuple, union/intersection - where `substituteTypeParameters` in
@@ -2529,7 +2524,7 @@ export function SubstituteTypeArguments(
     // ALIAS spelling of the same thing worked.
     //
     // [[Extent]] is "a non-negative integer or ~dynamic~" per #sec-type-records
-    // and may also be a Type Record for a VALUE parameter (D40), which the alias
+    // and may also be a Type Record for a VALUE parameter, which the alias
     // walk already reads that way - so it is walked rather than assumed numeric.
     if (r.Kind === 'array') {
       const out = { ...r } as TypeRecord;
@@ -2543,13 +2538,13 @@ export function SubstituteTypeArguments(
       }
       return out;
     }
-    // A nested NOMINAL's arguments (D88). `Outer<T>` carrying `Inner.<T>` is
+    // A nested NOMINAL's arguments. `Outer<T>` carrying `Inner.<T>` is
     // ordinary generic code and was refused, while `Inner.<uint8>` - a CONCRETE
     // argument, needing no substitution - passed. That difference is what says
     // this is [[Arguments]].
     //
     // [[Structure]] is NOT walked: it is populated from the declaration rather
-    // than rewritten in place, and D71 handles the reading side.
+    // than rewritten in place, and the reading side is handled separately.
     if (r.Kind === 'nominal') {
       const withArguments = r as unknown as { Arguments?: readonly (TypeRecord | number)[] };
       if (withArguments.Arguments && withArguments.Arguments.length > 0) {
@@ -2559,7 +2554,7 @@ export function SubstituteTypeArguments(
           ? a
           : walk(a as TypeRecord)));
         (out as unknown as { Arguments: unknown }).Arguments = substitutedArguments;
-        // F-AF: substituted arguments name a DIFFERENT specialization than the
+        // Substituted arguments name a DIFFERENT specialization than the
         // one whose [[Constructor]] this record carried (`Box.<T>`'s is not
         // `Box.<uint8>`'s); the slot is dropped and re-resolved where the
         // record is used, rather than pointing `Box.<uint8>` at `Box.<T>`'s
@@ -2622,7 +2617,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   // assignment goes through IsSubtype - while `Composite({x: 1}) is Composite`
   // answered *false*. One relation said yes and the other no about the same
   // pair, which a pattern form made visible.
-  // proposal-runtime-types (PLAN-decimal.md stage B): a decimal value belongs to
+  // proposal-runtime-types: a decimal value belongs to
   // the decimal type of its own WIDTH. The value is an object carrying a
   // significand and an exponent - the structural test is written out here for
   // the reason the rational one beside it is, so the type system does not depend
@@ -2632,13 +2627,13 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   // construction converted each - so the check is the type's identity, not a
   // walk. SameType rather than reference equality, since a record reaching here
   // may be an equal one built elsewhere.
-  // A TYPE OBJECT is of `Reflect.TypeObject` (OQ20). `Reflect.typeOf` returns
-  // one, and its row was WITHDRAWN (D34) because `Reflect.Type` - the type of a
-  // reflection NODE - was the only name available and is the wrong one.
+  // A TYPE OBJECT is of `Reflect.TypeObject`. `Reflect.typeOf` returns one, and
+  // its row was once WITHDRAWN because `Reflect.Type` - the type of a reflection
+  // NODE - was the only name available and is the wrong one.
   //
   // Placed HERE and not at the top of this operation: the ~reference~ and
   // ~shared~ arms above DEREFERENCE first, and an early return before them tests
-  // the reference rather than what it borrows. An attempt at D35 did exactly
+  // the reference rather than what it borrows. An earlier attempt did exactly
   // that and turned `c is Reflect.ClassField` FALSE for a decorator context,
   // though its guard could not match that name.
   //
@@ -2707,8 +2702,8 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     case 'parameterized': {
       // #sec-isoftype, the arm's FIRST step: "If IsSubtype(RuntimeTypeOf(value),
       // _t_, « ») is *true*, return *true*." It was absent, and the absence only
-      // becomes visible once a brand can be crossed into (PLAN-parameterized-
-      // defaults.md phase 1): a value that crossed through an implicit cast is
+      // becomes visible once a brand can be crossed into: a value that crossed
+      // through an implicit cast is
       // stamped AT the target - "its result is taken AT the target rather than
       // checked against it" - and yet every later boundary asked the judgment
       // again and answered *false* for a meta type defining no `validate`. The
@@ -2749,16 +2744,15 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           // The sit-out (the judgment's "whose portion is not M's default"): a
           // portion equal to the default constrains nothing, so the meta type
           // takes no part, and a brand written at its own default admits every
-          // bare value of the base while remaining a distinct type, the plan's
-          // section 2, third consequence.
+          // bare value of the base while remaining a distinct type - the third
+          // consequence of the participation rule.
           continue;
         }
         // "it holds of v and THAT PORTION": each meta type judges its own
         // portion, completed from its default, never the whole metadata. This
-        // call site bypassed MetadataPortion entirely until the plan's Phase 1
-        // (the audit's C2 named three call sites; this was the unlisted
-        // fourth, and the reason a two-key `validate` saw undefined where the
-        // defaulted key should be).
+        // call site bypassed MetadataPortion entirely at first - an audit named
+        // three call sites and this was the unlisted fourth, which is why a
+        // two-key `validate` saw undefined where the defaulted key should be.
         const verdict = Q(yield* ApplyValidateHook(metaType, value, MetadataPortion(t.Metadata, metaType), t.Base));
         if (verdict === undefined) {
           // The meta type claims a key here and offers no judgment, so it
@@ -2840,7 +2834,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         return true;
       }
-      // PLAN-rest-parameters.md phase 3, per #sec-array-membership.
+      // Per #sec-array-membership.
       //
       // A tuple with NO rest is positional and exact, which is the common case
       // and reads each element once. Any rest at all goes through
@@ -2916,13 +2910,13 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           && RegisteredEnumOf(m) === undefined
           && SameValue(value, m));
       }
-      // PLAN-nominal-records.md phase 2. A CLASS type is not satisfied
+      // A CLASS type is not satisfied
       // structurally: "a class states a construction and an identity as well as
       // a shape, and it is the identity that its type is for"
       // (#sec-object-types). Membership follows the prototype chain, which the
       // [[Constructor]] arm below decides.
       //
-      // The guard exists because phase 2 gave a runtime class record a
+      // The guard exists because a runtime class record was given a
       // [[Structure]] for SUBTYPING - the relation needs it to decide that a
       // class satisfies an interface it implements - and this operation would
       // otherwise have read the same field as a membership rule, which made
@@ -2932,12 +2926,11 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       const isClassType = (t.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
         || (t.Declaration as { type?: string } | undefined)?.type === 'ClassExpression';
       if (t.Structure && !isClassType) {
-        // PLAN-generic-interface-membership.md phase 1c. The structure now
-        // carries ~parameter~ records (phase 1b, in the checker AND the runtime
-        // - each builds its own), so an application's arguments can replace
-        // them. Without this the parameters would reach a membership test that
-        // cannot compare them; without phase 1b there would be nothing here to
-        // replace. The three edits are one fix.
+        // The structure carries ~parameter~ records (in the checker AND the
+        // runtime - each builds its own), so an application's arguments can
+        // replace them. Without this the parameters would reach a membership
+        // test that cannot compare them; without the records there would be
+        // nothing here to replace. The edits are one fix.
         //
         // Substituted rather than STORED, because [[Structure]] is read for
         // subtyping too - `relations.mts` at 833 and 837 - and the comment above
@@ -2992,7 +2985,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           }
           proto = Q(yield* proto.GetPrototypeOf());
         }
-        // F-AE: a SPECIALIZED class has two constructors here - one from the
+        // A SPECIALIZED class has two constructors here - one from the
         // expression-position route (`Box.<t>`, the constructor) and one from
         // the type-position route (`type Box.<t>`) - and the interned record
         // carries whichever came first, so the prototype walk can miss an
@@ -3270,8 +3263,8 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
       let r = (value as TypedNumberValue).TypeRecord as TypeRecord;
       // #sec-primitive-metadata, the branding rule: a parameterized type is a
       // subtype of its base, so a value carrying `float64.<{ min: 0 }>` IS a
-      // float64 � which is what lets a constructed value satisfy its own
-      // type's base check, and what F33's construction boundary produces.
+      // float64 — which is what lets a constructed value satisfy its own
+      // type's base check, and what the construction boundary produces.
       if (r.Kind === 'parameterized') {
         r = r.Base;
       }
@@ -3280,7 +3273,7 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
         && r.Arguments.every((a, i) => a === args[i]);
     }
     case 'number': {
-      // PLAN-parameterized-defaults.md phase 2b. A plain Number is `number` and
+      // A plain Number is `number` and
       // a value type's value is not, which is what this arm existed to say. But
       // it said it by excluding EVERY carried value, and a value of
       // `number.<M>` is necessarily carried - the parameterization is what the
@@ -3346,8 +3339,8 @@ export function toNumericArgument(record: TypeRecord): TypeRecord | number {
 
 /**
  * Evaluates a Type parse node to a Type Record. Computed types, qualified
- * names, generic aliases, and the remaining forms arrive with the checker
- * milestone; they throw a TypeError for now.
+ * names, generic aliases, and the remaining forms are not handled here; they
+ * throw a TypeError for now.
  */
 
 /**
@@ -3443,7 +3436,7 @@ export function MetadataObjectFromType(t: TypeRecord): MetadataRecord {
       }
     }
   }
-  // PLAN-metadata-typing.md. This is the canonical builder of the slot, and it
+  // This is the canonical builder of the slot, and it
   // is where the original cast lived: `as unknown as Value` asserted a contract
   // the value did not satisfy, and that assertion is what let the record and
   // the `Value` readings of [[Metadata]] diverge behind three separate bugs.
@@ -3560,7 +3553,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // reachable case today is an enum member, whose type is the literal
         // type of that member's value.
         const baseName = node.TypeName.IdentifierReference.name;
-        // #sec-computed-constraints (F-W): a head that is a VALUE parameter
+        // #sec-computed-constraints: a head that is a VALUE parameter
         // reads as its value - the literal, or a pack's array - so `I.length`
         // in a default or a constraint is the pack's length. ResolveTypeName
         // answered with the Type Object, whose `length` is nothing.
@@ -3610,7 +3603,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       for (let i = typeParameterFrames.length - 1; i >= 0; i -= 1) {
         const bound = typeParameterFrames[i].get(name);
         if (bound) {
-          // OQ-type-arguments-vs-metadata.md D2, the DEFERRED reading.
+          // The DEFERRED reading.
           //
           // `T.<{ brand: 'B' }>` cannot be read where it is written: whether the
           // arguments are types or metadata depends on what `T` turns out to be,
@@ -3657,7 +3650,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (node.TypeArguments) {
         for (const argNode of node.TypeArguments.TypeArgumentList) {
           // #sec-type-references: a SPREAD argument splices its tuple's elements
-          // into the list before anything binds (Phase 4).
+          // into the list before anything binds.
           if ((argNode as { IsSpread?: boolean }).IsSpread) {
             const spreadRecord = Q(yield* TypeNodeToTypeRecord(argNode));
             const spreadElements = spreadElementsOf(spreadRecord);
@@ -3713,7 +3706,6 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // metadata. So the shape went into [[Metadata]] while `#sec-issubtype`
       // looks for it in [[Arguments]]: it found none, treated the type as the TOP
       // composite, and every composite satisfied every shape.
-      // `FINDING-composite-shape-ignored.md`.
       if (name === 'Composite' && argRecords.length === 1
           && (argRecords[0]!.Kind === 'object' || argRecords[0]!.Kind === 'tuple')) {
         // The shape's members are READONLY, whatever the annotation wrote.
@@ -3736,7 +3728,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return composite;
         }
       }
-      // OQ-type-arguments-vs-metadata.md D2. THE BASE DECIDES, NOT THE ARGUMENT.
+      // THE BASE DECIDES, NOT THE ARGUMENT.
       //
       // `X.<{ a: uint8 }>` has two readings - a generic application whose one
       // type argument is an object type, and a metadata parameterization whose
@@ -3799,7 +3791,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         ? argRecords[0]!
         : null;
       if (metadataRecord) {
-        // PLAN-brand-layering-F.md F174. The base was looked up as a BUILTIN
+        // The base was looked up as a BUILTIN
         // only, so `Base.<{ brand: 'B' }>` where `Base` is a user alias found
         // nothing, fell past this branch, and the parameterization was never
         // built - `T` interned as `Base` itself, kind `object` rather than
@@ -3822,7 +3814,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
             }
           }
         }
-        // OQ-type-arguments-vs-metadata.md D2, second source of parameters. A
+        // The second source of parameters. A
         // LIBRARY generic - `Iterable`, and its neighbours in the standard types
         // - declares its parameters neither in this source text nor in
         // `builtinTypeRecord`, so the two tests above cannot see them. It is
@@ -3849,7 +3841,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // The CHECKER enforced this and the runtime did not, so
           // `type float32.<{ p: 1 }>` was accepted here while
           // `(1 := float32) is float32.<{ p: 1 }>` was refused there - one rule,
-          // two answers. `FINDING-unclaimed-metadata-key.md`.
+          // two answers.
           //
           // This could not be added until a SHAPE parameterization stopped
           // arriving in this branch: `Composite.<{ x: uint8 }>` reached it too,
@@ -3879,12 +3871,12 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return record;
         }
       }
-      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-O): the
-      // builtin/library branches below resolve BEFORE the declaration-backed
-      // path my other ordering sites cover, so `Map.<V: uint8, K: string>`
-      // bound positionally here while the checker's site ordered - the two
-      // resolvers disagreed about what one annotation meant, each enforcing
-      // its own reading. Names are ordered here, by the table (OQ-17), and a
+      // The builtin/library branches below resolve BEFORE the
+      // declaration-backed path the other ordering sites cover, so
+      // `Map.<V: uint8, K: string>` bound positionally here while the checker's
+      // site ordered - the two resolvers disagreed about what one annotation
+      // meant, each enforcing its own reading. Names are ordered here, by the
+      // table, and a
       // name the table does not know on a base these branches WOULD resolve is
       // refused rather than silently positional - the same rule a misspelling
       // gets. A user declaration's name falls through untouched; the
@@ -4028,15 +4020,14 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         }
         baseRecord = record;
       } else if (value instanceof ObjectValue) {
-        // proposal-runtime-types M21: a class name denotes its class type.
+        // proposal-runtime-types: a class name denotes its class type.
         const classType = LookupClassType(value);
         if (classType && isTypeObject(classType)) {
           baseRecord = classType.TypeRecord;
         }
       }
       if (baseRecord) {
-        // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): named
-        // type arguments are ordered into PARAMETER order here, at the single
+        // Named type arguments are ordered into PARAMETER order here, at the single
         // attach point, so a class, an interface, and a library nominal honour
         // a name the way a generic alias already does. Ordering runs before the
         // iteration-interface and nominal branches so both see the positional
@@ -4045,7 +4036,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         const declParamsEarly = baseRecord.Kind === 'nominal'
           ? (baseRecord.Declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })?.TypeParameters?.TypeParameterList
           : undefined;
-        // Phase 4: a declaration with a VARIADIC parameter distributes its
+        // A declaration with a VARIADIC parameter distributes its
         // arguments by the pack rule whether or not any is named.
         if (argNames2.some((n) => n !== undefined) || (declParamsEarly?.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true) ?? false)) {
           const declParams = declParamsEarly;
@@ -4058,7 +4049,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           argRecords.length = 0;
           argRecords.push(...ordered2);
         }
-        // F-N: a VALUE parameter's argument in TYPE position stayed the plain
+        // A VALUE parameter's argument in TYPE position stayed the plain
         // literal it was written as, while `SpecializeGenericClass` converts it
         // to the constraint's type - so `let c: B.<uint8, 9> = new B.<uint8, 9>()`
         // compared a plain 9 against a uint32 9 and refused its own value. The
@@ -4120,7 +4111,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // resolves the same name through the checker, which does pass its
         // arguments, so the two disagreed about what one spelling meant.
         //
-        // This is the interning half of D16. The RELATION half is separate and
+        // This is the interning half. The RELATION half is separate and
         // still open: nothing is assignable to these records through
         // `Reflect.isAssignable` even now that they carry their arguments, while
         // the checker accepts the same pairs at a parameter position. Both
@@ -4159,7 +4150,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
                 Value(bad.parameter), Value(String(bad.wanted)),
               );
           }
-          // PLAN-generic-instance-membership.md phase 1. The spread carries
+          // The spread carries
           // baseRecord's [[Constructor]] - the UNSPECIALIZED one - so a
           // `Box.<uint8>` annotation described the right type with the wrong
           // constructor, and membership tested a specialized instance against a
@@ -4180,10 +4171,9 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         }
         return baseRecord;
       }
-      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): a library
-      // generic that resolves BELOW the class attach point - `Map`, `Set`, the
-      // iteration interfaces reached by name - orders its named arguments here,
-      // by the names the specification writes (OQ-17). An unknown name is
+      // A library generic that resolves BELOW the class attach point - `Map`,
+      // `Set`, the iteration interfaces reached by name - orders its named
+      // arguments here, by the names the specification writes. An unknown name is
       // refused rather than silently positional.
       if (argNames2.some((n) => n !== undefined)) {
         const libNames = libraryTypeParameterNames(name);
@@ -4249,7 +4239,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       for (const m of node.Types) {
         Members.push(Q(yield* TypeNodeToTypeRecord(m)));
       }
-      // A written UNION's arms are ORDERED (D110).
+      // A written UNION's arms are ORDERED.
       //
       // `Members` is built by walking `node.Types` in SOURCE order, and this is
       // the record the BOUNDARY receives: `ConvertValueToUnion` iterates the
@@ -4269,7 +4259,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // publish an in-progress copy before walking members - so a
       // SELF-REFERENTIAL union, which #sec-type-alias-declarations admits,
       // does not survive it. Sorting is the whole of what this defect needs.
-      // A member that is itself a UNION contributes ITS members (D112).
+      // A member that is itself a UNION contributes ITS members.
       //
       // `(uint8 | int8) | uint16` and `type P = uint8 | int8; P | uint16` build
       // the SAME nested record here, and the alias one is flattened downstream
@@ -4501,14 +4491,14 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         if (member.TypeAnnotation) {
           type = Q(yield* TypeNodeToTypeRecord(member.TypeAnnotation.Type));
         } else if (member.MethodSignature) {
-          // PLAN-nominal-records.md v2 item 2.3: a METHOD member carries the
+          // A METHOD member carries the
           // self marker as its [[ThisType]], here as in an interface and as in a
           // class. Method syntax means "expects a receiver", and [[ThisType]] is
           // where that is said; a member written `m: () => uint8` says the
           // opposite and is left unmarked, which is the distinction the syntax
           // draws.
           // A method's OWN type parameters are in scope across its signature and
-          // nowhere else (D68). #sec-type-members:
+          // nowhere else. #sec-type-members:
           // `MethodSignature : TypeParameters? '(' … ')' TypeAnnotation?`, and
           // `TypeMember` is the production an object type and an interface body
           // SHARE - so `{ m<T>(v: T): T }` is as grammatical as the interface
@@ -4560,7 +4550,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
     }
     case 'FunctionType':
       // #sec-function-types: a generic function type's own parameters are in
-      // scope for its parameter and return types (F-F).
+      // scope for its parameter and return types.
       return Q(yield* functionRecordFromSignature(
         node.FunctionTypeParameterList,
         { Type: node.ReturnType } as ParseNode.TypeAnnotation,
@@ -4617,7 +4607,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       return KeyTypesOf(operand);
     }
     case 'ParameterizedType': {
-      // PLAN-chained-parameterization.md F190. A parameterization whose operand
+      // A parameterization whose operand
       // is any |PostfixType| rather than a bare |TypeName|.
       //
       // The record it builds is the one an alias spelling already produces:
@@ -4625,7 +4615,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // `string.<{brand}>.<{brand}>` intern to the same type, which is the check
       // that this adds SYNTAX and not semantics.
       const baseRecord = Q(yield* TypeNodeToTypeRecord(node.BaseType));
-      // F191. Intern the BASE's Type Object, not only the parameterization's.
+      // Intern the BASE's Type Object, not only the parameterization's.
       //
       // The inline form builds its base as an intermediate record and never
       // asked for a Type Object, so nothing was interned for it. A later
@@ -4669,7 +4659,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // (whose type is `void`). This is the operator form of the kit's `indexed`.
       const objectType = Q(yield* TypeNodeToTypeRecord(node.ObjectType));
       const indexType = Q(yield* TypeNodeToTypeRecord(node.IndexType));
-      // PLAN-parameter-composition Stage E. Where a type PARAMETER is involved
+      // Where a type PARAMETER is involved
       // the access is deferred rather than refused, and the two resolvers have to
       // agree about that: `#sec-indexedtypeof` states one operation, and a
       // checker that defers while the runtime raises is exactly the drift the
@@ -4748,12 +4738,12 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
  * key of _K_, of the type of that arm's property, with an optional property's
  * access admitting `undefined`.
  *
- * Shared by the runtime resolver and the checker's `resolveType`
- * (`PLAN-checker-type-resolution.md stage E`). It returns ~null~ where the
+ * Shared by the runtime resolver and the checker's `resolveType`. It returns
+ * ~null~ where the
  * runtime raises a type error, so the checker can answer "no type" without
  * throwing while the runtime keeps reporting which of the three ways it failed.
  * Extracted rather than copied because a second copy of this walk is how the
- * two resolvers diverge, which is the defect that plan exists to close.
+ * two resolvers diverge.
  */
 
 /**
@@ -4788,7 +4778,7 @@ function deferredIndexedName(objectType: TypeRecord, indexType: TypeRecord): str
 }
 
 export function IndexedAccessTypeRecord(objectType: TypeRecord, indexType: TypeRecord): TypeRecord | null {
-  // PLAN-parameter-composition Stage C. Where either side is a type PARAMETER
+  // Where either side is a type PARAMETER
   // the access cannot be computed - within the declaration nothing is known
   // about `T` - but it is not an error either, and answering null made it one
   // by omission: the annotation `T[K]` resolved to nothing, so `return 5` from
@@ -4958,14 +4948,14 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
   }
   if (name === 'bigint') {
     // A plain integer literal fits `bigint`, so `let x: bigint = 65` works and
-    // the `n` suffix is redundant where a type is written (F66) - but only up
+    // the `n` suffix is redundant where a type is written - but only up
     // to 2**53. #sec-literalvalueintype converts from "the mathematical value
     // denoted by the literal", which is EXACT, and this engine cannot honour
     // that: the lexer turns a NumericLiteral into a double at scan time, so by
     // the time a contextual type is known the digits beyond 2**53 are already
-    // gone (F67).
+    // gone.
     //
-    // THE LITERAL PATH NO LONGER REACHES HERE (F85): a numeric literal at a
+    // THE LITERAL PATH NO LONGER REACHES HERE: a numeric literal at a
     // `bigint` contextual position is read from its SOURCE TEXT by the
     // checker, which is where the exact value still exists, so the whole range
     // now works and the suffix is redundant wherever a type is written. What
@@ -4982,7 +4972,7 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
 }
 
 export function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null, typeParameters?: readonly ParseNode.TypeParameter[] | null): PlainEvaluator<TypeRecord> {
-  // PLAN-variadic-and-named-generic-arguments.md Phase 0.1: a GENERIC
+  // A GENERIC
   // signature's own parameters are in scope for its parameter and return
   // types, each resolving to a ~parameter~ record, and the signature record
   // carries their Type Parameter Records - the interface-member site passed
@@ -5027,7 +5017,7 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
     if (t) {
       paramType = Q(yield* TypeNodeToTypeRecord(t.Type));
     }
-    // PLAN-rest-parameters.md phase 0: a signature's parameters are records.
+    // A signature's parameters are records.
     Parameters.push(parameter(paramType, {
       Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
       // A FunctionTypeParameter carries its own `Rest` flag (TypeParser sets it
@@ -5092,7 +5082,7 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
     const ref = Q(yield* Evaluate(a));
     args.push(Q(yield* GetValue(ref)));
   }
-  // ISSUES-found-while-writing-examples.md I8. #sec-iscompiletimeevaluable puts
+  // #sec-iscompiletimeevaluable puts
   // the discipline on what the code can NAME: a compile-time-evaluable function
   // "reads only its parameters, its own local bindings, immutable bindings whose
   // initializers are compile-time evaluable, and other compile-time-evaluable

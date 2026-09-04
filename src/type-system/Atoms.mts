@@ -155,8 +155,7 @@ export function Atoms(
     case 'literal':
       // A literal is NOT a source on its own; it is an atom only as a member of
       // a union whose other members qualify. Returning it here would make a
-      // literal-typed subject exhaustively checkable, which the standing
-      // decision declines.
+      // literal-typed subject exhaustively checkable, which the rule declines.
       return NO_ATOMS;
     case 'union': {
       const members = (t as { Members: readonly TypeRecord[] }).Members;
@@ -164,8 +163,8 @@ export function Atoms(
         return NO_ATOMS;
       }
       // **"A union with a member of ~literal~ kind has atoms ~none~"** - stated
-      // as its own sentence in the clause, and it is the standing decision
-      // restated: "a closed set of literals that wants the check is an enum over
+      // as its own sentence in the clause, and it is the general rule restated:
+      // "a closed set of literals that wants the check is an enum over
       // its base". So one literal member disqualifies the whole union.
       if (members.some((m) => m.Kind === 'literal')) {
         return NO_ATOMS;
@@ -271,10 +270,10 @@ export function AtomsOfType(t: TypeRecord | undefined): readonly Atom[] {
 }
 
 /**
- * A type-record literal's value as the string stage A produced from the PARSE
- * TREE.
+ * A type-record literal's value as the string `DiscriminatingChainOf` produced
+ * from the PARSE TREE.
  *
- * **The two sides spell a constant differently**: stage A reads a
+ * **The two sides spell a constant differently**: the chain analysis reads a
  * `StringLiteral` node and gets `US`, while a `literal` Type Record carries an
  * engine `Value`, whose `String(...)` is `[object Object]`. They never matched,
  * and every denotation came back empty — the constants were compared, found

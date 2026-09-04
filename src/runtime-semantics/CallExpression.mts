@@ -114,7 +114,7 @@ function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: O
 /**
  * The type-parameter frame a METHOD's receiver contributes.
  *
- * PLAN-where-on-methods.md D2, phase 4. A method's `where` clause may name its
+ * A method's `where` clause may name its
  * CLASS's parameters, and those are bound at the instantiation - `V.<4>` binds
  * `N` - which the receiver carries and the call does not. Pairs the receiver's
  * type ARGUMENTS with the class declaration's parameter NAMES, in order.
@@ -124,7 +124,7 @@ function* ReflectionForMemberPart(realm: { Intrinsics: { readonly [k: string]: O
  * pushing an empty one would only cost a pop.
  */
 export function classTypeParameterFrame(ref: unknown): Map<string, TypeRecord> | null {
-  // Phase 8: an instance's run-time type, or a prototype's constructor - one
+  // An instance's run-time type, or a prototype's constructor - one
   // derivation for both, shared with the method-typing site.
   const base = (ref as { Base?: Value } | undefined)?.Base;
   return classFrameOfObject(base);
@@ -231,7 +231,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       return Q(yield* CreateArrayView(element, 'dynamic', argList as unknown as readonly Value[]));
     }
   }
-  // F-C: a `TypeArgumentsExpression` callee evaluates to the BARE function
+  // A `TypeArgumentsExpression` callee evaluates to the BARE function
   // here - this call binds the arguments itself - and to its specialization
   // value everywhere else (#sec-generic-function-values).
   if (memberExpr.type === 'TypeArgumentsExpression') {
@@ -283,7 +283,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       return Q(yield* TypedJSONParse(text, typeRecord));
     }
   }
-  // proposal-runtime-types soa.md: `SoA.withCapacity.<T>(n)` � "Empty, capacity
+  // proposal-runtime-types soa.md: `SoA.withCapacity.<T>(n)` - "Empty, capacity
   // >= n". Its element type is a TYPE argument rather than inferred, because
   // there is no value to infer it from, so the call is intercepted where the
   // type arguments are in scope.
@@ -883,7 +883,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
               Q(yield* SignatureListReflection(signatures))));
           }
         }
-        // PLAN-constructor-returns.md phase 1 (OQ3-C). A CONSTRUCTOR always
+        // A CONSTRUCTOR always
         // reflects exactly one signature, whether or not it declares anything -
         // including the implicit constructor of a class that writes none.
         //
@@ -894,15 +894,15 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // constructor is the case where nothing is being inferred: its
         // parameters are syntactically present, so their names and arity are
         // known, and its RESULT is fixed by the rule - a typed class yields its
-        // class, which phase 1 made true by refusing any other `return`. So the
+        // class, which the rule makes true by refusing any other `return`. So the
         // signature is DERIVED, not guessed.
         //
         // No `return` slot, which #sec-published-return-types requires: "a
-        // constructor has none to infer", and after phase 1 none can be
+        // constructor has none to infer", and none can be
         // written either.
         //
         // Not scoped to typed classes: reflection describes what a thing IS,
-        // and an untyped class is constructible too. Only OQ1's RULE is scoped.
+        // and an untyped class is constructible too. Only the `return` RULE is scoped.
         const isConstructorMember = declaration.kind === 'ClassMethod'
           && !declaration.static
           && memberName.stringValue() === 'constructor';
@@ -1094,13 +1094,13 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const kindedParam = params?.some((p: ParseNode.TypeParameter) => ((p as unknown as { Arity?: number }).Arity ?? 0) > 0);
     if (params && params.length > 0 && !kindedParam) {
       const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
-      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): `f.<V: 5>()`
+      // `f.<V: 5>()`
       // bound V's argument to the FIRST parameter. Named arguments are ordered
       // into parameter order here, before the arity check and the binding loop,
       // by the same shared operation every other application site uses.
       const explicitArgNames = typeArgs.map((a) => typeArgumentNameOf(a));
       const namedTypeArgs = explicitArgNames.some((n) => n !== undefined);
-      // Phase 4: packs and spreads bind by the engine's BindTypeArguments.
+      // Packs and spreads bind by the engine's BindTypeArguments.
       const usesPacks = params.some((q: ParseNode.TypeParameter) => q.IsVariadic === true)
         || typeArgs.some((a) => (a as { IsSpread?: boolean }).IsSpread === true);
       let orderedTypeArgs: readonly (ParseNode.Type | undefined)[] | null = null;
@@ -1166,7 +1166,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         if (record.Kind === 'literal' && p.TypeParameterConstraint) {
           // #sec-computed-constraints: the constraint is evaluated over the
           // bindings so far, so it resolves UNDER the frame - `V: T = 0` read
-          // T with no frame in scope and threw "'T' is not defined" (F-M).
+          // T with no frame in scope and threw "'T' is not defined".
           pushTypeParameterFrame(frame);
           let declared;
           try {
@@ -1183,7 +1183,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           // #sec-computed-constraints step 8 for a NON-literal explicit argument:
           // `f<T: string>` applied `f.<number>` was caught only because inference
           // re-checked the call's ARGUMENT against T; the explicit site is where
-          // the constraint belongs (F-W's root fix made inference honour the
+          // the constraint belongs (the root fix made inference honour the
           // explicit binding, which removed that accidental check).
           pushTypeParameterFrame(frame);
           let declaredForType;
@@ -1213,7 +1213,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // the Syntax Error it replaced.
       const whereClauses = functionWhereClauses(func as never);
       if (whereClauses && whereClauses.length > 0) {
-        // PLAN-where-on-methods.md D2, phase 4. A METHOD's clause may name the
+        // A METHOD's clause may name the
         // parameters of its CLASS as well as its own - `lane<I>(): T where I < N`
         // for a `class vector<T, N>` reads both - and the frame built above holds
         // only the call's own bindings, so `N` was "not defined".

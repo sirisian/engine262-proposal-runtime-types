@@ -34,7 +34,7 @@ export interface ClassFieldDefinitionRecord {
    */
   readonly Access?: 'protected' | undefined;
   /**
-   * proposal-runtime-types (PLAN-accessor.md §2.3): a PRIVATE accessor's
+   * proposal-runtime-types: a PRIVATE accessor's
    * get/set pair, as a PrivateElement.
    *
    * `accessor #internal` desugars to a private backing field PLUS A PRIVATE
@@ -65,7 +65,7 @@ export interface ClassFieldDefinitionRecord {
   // binding lookup - `class C { k: K; }` asserted `env instanceof
   // EnvironmentRecord` inside the default (builtin) constructor - and it is
   // also what the store check needs, since a field's declared type must be
-  // recorded on the instance for #table-check-sites to enforce it (F51).
+  // recorded on the instance for #table-check-sites to enforce it.
   readonly TypeObject?: object;
   // proposal-runtime-types: whether the field is declared `readonly`, so it may
   // be assigned only in its own initializer and in the declaring class's
@@ -142,7 +142,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
           // correctly. The frame is for the UNSPECIALIZED declaration, where
           // there is genuinely nothing to bind to.
           const bound = lookupTypeParameter(name);
-          // PLAN-literal-type-arguments.md F165. Re-binding a LOOKED-UP record into a
+          // Re-binding a LOOKED-UP record into a
           // fresh frame drops the value-parameter mark, which lives on the binding
           // rather than in the map. The same object has to be carried across, or the
           // enclosing class's `W` reads as a Type Object inside a method body while
@@ -166,7 +166,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       typeObject = GetTypeObject(record);
     }
   }
-  // PLAN-accessor.md stage B. README: "An `accessor` field declares a typed
+  // README: "An `accessor` field declares a typed
   // field together with a getter and setter over it. It desugars to a private
   // typed field and the matching pair."
   //
@@ -183,7 +183,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   // only from inside the accessor); C#'s reflection-visible backing field is
   // the one this deliberately does not copy.
   if (surroundingAgent.feature('runtime-types') && (FieldDefinition as { accessor?: boolean }).accessor === true) {
-    // PLAN-accessor.md §2.3, settled: `accessor #internal` desugars to a private
+    // Settled: `accessor #internal` desugars to a private
     // backing field PLUS A PRIVATE PAIR - two Private Names for one
     // declaration. The pair is a PrivateElement rather than a property, which
     // is the whole of what made this harder than the public case; the backing
@@ -221,7 +221,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
         Setter: set,
       });
     } else {
-      // PLAN-accessor.md §2.5, settled: `readonly accessor` is LEGAL and means
+      // Settled: `readonly accessor` is LEGAL and means
       // a GETTER-ONLY accessor. The modifier parsed and did nothing before -
       // assignment succeeded and the context did not report it - which is worse
       // than refusing the syntax, since the declaration read as a constraint

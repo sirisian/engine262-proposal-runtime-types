@@ -5,8 +5,8 @@ import type { ManagedRealm } from '../api.mts';
 import { FinishLoadingImportedModule, surroundingAgent, type Realm, type ScriptRecord } from '#self';
 
 /**
- * proposal-runtime-types `annex-standard-kit`, PLAN-std-types.md phase 1: the
- * STANDARD BUILDER KIT, shipped under the specifier `std:types`.
+ * proposal-runtime-types `annex-standard-kit`: the STANDARD BUILDER KIT,
+ * shipped under the specifier `std:types`.
  *
  * The annex fixes the implementation strategy and rules out the obvious
  * shortcut. The kit is "roughly two hundred lines of ordinary evaluable code"
@@ -19,60 +19,48 @@ import { FinishLoadingImportedModule, surroundingAgent, type Realm, type ScriptR
  * Written over the primitives of typeprogramming.md §3.6 - `Reflect.makeType`,
  * `Reflect.getReflection`, `Reflect.isAssignable`, and `type never` - plus
  * `Reflect.typeOf`, which `literal` needs and which neither §3.6 nor the annex
- * lists (PLAN-std-types.md, phase 5: the two lists also differ from each other
- * on `keyof`).
+ * lists (the two lists also differ from each other on `keyof`).
  *
- * WHERE THIS DEPARTS FROM THE DESIGN DOCUMENT, and why. Each is a finding fed
- * back by PLAN-std-types.md phase 5; none is a silent edit.
+ * WHERE THIS DEPARTS FROM THE DESIGN DOCUMENT, and why. None is a silent edit.
  *
- *   F105  §4.1's `js` block is missing from typeprogramming.md, so `indexed`
- *         had no definition anywhere. Reconstructed here against
- *         #sec-indexed-access-types and checked to agree with the `T[K]`
- *         operator.
- *   F113  §4.0 annotates with `Reflect.TypeReflection`,
- *         `TypePropertyReflection`, `TypeTupleElement` and `TypeIndexSignature`
- *         - twenty uses of four names that exist in NEITHER the specification
- *         nor the engine. Erased here rather than invented.
- *   F114  §4.5's `head` is `elementTypes(T)[0] ?? never`, which does not run: a
- *         `[].<type>` annotation makes the result a CHECKED array, so the guard
- *         is statically dead code and the empty case raises rather than
- *         yielding `undefined`. Written as a length test.
- *   F116  §4.3's `awaited` compares `node.generic?.base === Promise`, which is
- *         the CONSTRUCTOR, not the type. `type Promise` is the operand.
- *   F117  a signature's `this` slot reflects as a NODE where every other
- *         type-valued slot reflects as a Type Object, so §6.3's
- *         `thisParameterType` needs a `makeType` to normalise it.
- *   F120  §4.0's `genericApplication` spreads the READ view
- *         (`{ ...reflect(base), generic: {...} }`). The write side ignores a
- *         `generic` field on a primitive node, so that spelling silently
- *         returns the BARE BASE - a wrong type rather than an error. The write
- *         form is the `generic` KIND.
+ *   - §4.1's `js` block is missing from typeprogramming.md, so `indexed` had no
+ *     definition anywhere. Reconstructed here against
+ *     #sec-indexed-access-types and checked to agree with the `T[K]` operator.
+ *   - §4.0 annotates with `Reflect.TypeReflection`, `TypePropertyReflection`,
+ *     `TypeTupleElement` and `TypeIndexSignature` - twenty uses of four names
+ *     that exist in NEITHER the specification nor the engine. Erased here
+ *     rather than invented.
+ *   - §4.5's `head` is `elementTypes(T)[0] ?? never`, which does not run: a
+ *     `[].<type>` annotation makes the result a CHECKED array, so the guard is
+ *     statically dead code and the empty case raises rather than yielding
+ *     `undefined`. Written as a length test.
+ *   - §4.3's `awaited` compares `node.generic?.base === Promise`, which is the
+ *     CONSTRUCTOR, not the type. `type Promise` is the operand.
+ *   - a signature's `this` slot reflects as a NODE where every other
+ *     type-valued slot reflects as a Type Object, so §6.3's
+ *     `thisParameterType` needs a `makeType` to normalise it.
+ *   - §4.0's `genericApplication` spreads the READ view
+ *     (`{ ...reflect(base), generic: {...} }`). The write side ignores a
+ *     `generic` field on a primitive node, so that spelling silently returns
+ *     the BARE BASE - a wrong type rather than an error. The write form is the
+ *     `generic` KIND.
  *
- * THE EXPORT SET IS 71, and three decisions moved it after this module first
+ * THE EXPORT SET IS 71, and three choices moved it after this module first
  * landed at 73. Each is recorded at the definition it touches:
  *
- *   OQ1-C   `keys` ADDED - the function form of `keyof`, forwarding to the
- *           operator rather than reimplementing it. Named for the kit's own
- *           convention, where an `Of` suffix constructs and a bare plural
- *           extracts; `keysOf`, which three sources advertise, would be the
- *           first extractor carrying `Of`.
- *   OQ8-C   `suffixed` and `stringPattern` WITHHELD - written, unexported,
- *           reversible in one word. The `pattern` claim they depend on is
- *           provisional.
- *   OQ10-C  `instanceType` RETIRED - the identity for a class, `returnType`
- *           under a second name for a factory.
+ *   - `keys` ADDED - the function form of `keyof`, forwarding to the operator
+ *     rather than reimplementing it. Named for the kit's own convention, where
+ *     an `Of` suffix constructs and a bare plural extracts; `keysOf`, which
+ *     three sources advertise, would be the first extractor carrying `Of`.
+ *   - `suffixed` and `stringPattern` WITHHELD - written, unexported, reversible
+ *     in one word. The `pattern` claim they depend on is provisional.
+ *   - `instanceType` RETIRED - the identity for a class, `returnType` under a
+ *     second name for a factory.
  *
- * BLOCKED, and on what. `brand` alone, and twice over: it builds a
- * `parameterized` node, which the read side emits and the write side rejects
- * (F110), and no meta type claims the `brand` key, so even the syntactic
- * `uint32.<{ brand: 'X' }>` is refused (F126). It needs OQ6-A and OQ9-A. It is
- * exported as written so the failure names the gap rather than the caller.
- *
- * NOT blocked, contrary to an earlier note: a walk over a struct CONTAINING a
- * branded or enum field works, because a field's type rides as a Type Object
- * and a walk's default arm passes it through untouched. `deepPartial`,
- * `traverse` and `deepMap` are fine; only reconstruction of the parameterized
- * or enum type ITSELF fails.
+ * A walk over a struct CONTAINING a branded or enum field works, because a
+ * field's type rides as a Type Object and a walk's default arm passes it
+ * through untouched. `deepPartial`, `traverse` and `deepMap` are fine; only
+ * reconstruction of the enum type ITSELF fails.
  */
 export const STD_TYPES_SPECIFIER = 'std:types';
 
@@ -159,7 +147,7 @@ export function propertyType(T: type, name: string | symbol) {
   throw new TypeError(\`propertyType expects an object type, got \${String(T)}\`);
 }
 export function genericApplication(base: type, args: [].<any>): type {
-  // F120: §4.0 writes \`{ ...reflect(base), generic: { base, arguments } }\`,
+  // §4.0 writes \`{ ...reflect(base), generic: { base, arguments } }\`,
   // which mirrors the READ view. The write side ignores a \`generic\` FIELD on a
   // primitive node, so that spelling silently returns the bare base instead of
   // the application - a wrong answer rather than an error. The write form is
@@ -169,7 +157,7 @@ export function genericApplication(base: type, args: [].<any>): type {
 
 // ---- object utilities — §4.2 -----------------------------------
 
-/** typeprogramming.md R15 / OQ-18: @inverse(fn) on a builder declares the function that proposes its argument. */
+/** typeprogramming.md R15: @inverse(fn) on a builder declares the function that proposes its argument. */
 export function inverse(fn: any, c: any): void { Reflect.declareInverse(c, fn); }
 export function partial(T: type): type  { return mapProperties(T, p => ({ ...p, optional: true  })); }
 export function required(T: type): type { return mapProperties(T, p => ({ ...p, optional: false })); }
@@ -290,11 +278,11 @@ export function listeners(T: type): type {
 // ---- tuples and arrays — §4.5 ----------------------------------
 
 export function head(T: type): type {
-  // F114: \`elementTypes(T)[0] ?? never\`, as §4.5 writes it, does not work. The
+  // \`elementTypes(T)[0] ?? never\`, as §4.5 writes it, does not work. The
   // \`[].<type>\` return annotation makes the result a CHECKED array, so the
   // guard is statically dead code (refused at check time) and the empty case
   // raises a range error at run time rather than yielding \`undefined\`. A length
-  // test is correct under either answer to OQ8.
+  // test is correct either way.
   const elements = elementTypes(T);
   return elements.length === 0 ? never : elements[0];
 }
@@ -352,7 +340,7 @@ export function deepMap(T: type, leaf): type { return traverse(T, { leaf }); }
 // ---- keys and indexing, promises, routes, and the maximal set — §4.1, §4.3, §4.4, §6 ----
 
 export function keys(T: type): type {
-  // OQ1-C. The function form of \`keyof\`, and literally the operator: not a
+  // The function form of \`keyof\`, and literally the operator: not a
   // reimplementation over reflection, which could not agree with it. \`keyof\`
   // reads a class body and a nominal's structure; reflection collapses both to
   // an opaque \`primitive\` leaf, so a version written over \`reflect()\` would
@@ -366,12 +354,12 @@ export function keys(T: type): type {
   // \`elementTypes\`, \`tupleElements\`). This extracts. \`paths\` is the exact
   // model - a bare plural returning a union of literal types.
   //
-  // OQ5-D: keyless is \`never\`, not an error. \`keys(uint8)\` is \`never\`; the
+  // Keyless is \`never\`, not an error. \`keys(uint8)\` is \`never\`; the
   // refusal lives at the USE, which \`indexed\` below performs.
   return type keyof T;
 }
 export function indexed(T: type, K: type): type {
-  // F105: §4.1's \`js\` block is missing from the design document. This
+  // §4.1's \`js\` block is missing from the design document. This
   // reproduces #sec-indexed-access-types / IndexedAccessTypeRecord: distribute
   // over T's arms and K's keys; an optional property's read admits \`undefined\`.
   return union(arms(T).flatMap(arm => literalValues(K).map(key => {
@@ -384,7 +372,7 @@ export function indexed(T: type, K: type): type {
 export function awaited(T: type): type {
   const node = reflect(T);
   if (node.kind === 'union') return union(node.members.map(awaited));
-  if (node.kind === 'primitive' && node.generic?.base === type Promise)   // F116: §4.3 writes bare \`Promise\`, which is the CONSTRUCTOR, not the type
+  if (node.kind === 'primitive' && node.generic?.base === type Promise)   // §4.3 writes bare \`Promise\`, which is the CONSTRUCTOR, not the type
     return awaited(node.generic.arguments[0]);
   const then = node.kind === 'object' && node.properties.find(p => p.name === 'then');
   if (then) {
@@ -404,7 +392,7 @@ export function withThisType(F: type, Self: type): type {
   return Reflect.makeType({ ...node, signatures: node.signatures.map(s => ({ ...s, this: Self })) });
 }
 export function thisParameterType(F: type): type {
-  // F117: the \`this\` slot holds a reflection NODE, where every other
+  // The \`this\` slot holds a reflection NODE, where every other
   // type-valued slot on a signature holds a Type Object. \`makeType\` normalises
   // it. §6.3 writes \`?? any\` against the Type Object the model promises.
   const thisNode = reflect(F).signatures[0].this;
@@ -424,8 +412,8 @@ export function options(Data: type, Methods: type): type {
 export function brand(T: type, tag: string | symbol): type {
   return Reflect.makeType({ kind: 'parameterized', base: T, metadata: { brand: tag } });
 }
-// NOT EXPORTED - OQ8-C. Written and kept so the decision is reversible in one
-// word, but withheld while the \`pattern\` claim is provisional. \`StringPattern\`
+// NOT EXPORTED. Written and kept so the choice is reversible in one word, but
+// withheld while the \`pattern\` claim is provisional. \`StringPattern\`
 // is a hardcoded intrinsic claiming a good name out of a flat, first-come
 // namespace, and its \`subtype\` judgment is at the floor of reflexivity and not
 // consulted anywhere yet - so the reservation currently buys nothing over
@@ -438,14 +426,14 @@ function suffixed(suffix: string): type {
 
 export function constructorParameters(C: type): type {
   const { signatures } = Reflect.getReflection.<Reflect.ClassMethod, C>('constructor');
-  // F118: a ZERO-PARAMETER constructor reflects with no \`signatures\` at all,
+  // A ZERO-PARAMETER constructor reflects with no \`signatures\` at all,
   // where a one-parameter constructor reflects one. Named rather than papered
   // over, so the diagnostic points at the engine gap instead of at the caller.
-  if (signatures === undefined) throw new TypeError(\`constructorParameters: \${String(C)} reflects no constructor signatures (F118)\`);
+  if (signatures === undefined) throw new TypeError(\`constructorParameters: \${String(C)} reflects no constructor signatures\`);
   return Reflect.makeType({ kind: 'tuple',
     elements: signatures[0].parameters.map(p => ({ type: p.type, rest: p.rest, initial: p.initial })) });
 }
-// RETIRED - OQ10-C. For a class it is the IDENTITY: §4.3 says "a class's type
+// RETIRED. For a class it is the IDENTITY: §4.3 says "a class's type
 // object is the class and the class name is its instance type - there is no
 // \`typeof C\` constructor-type / instance-type split", and §4.11's coverage
 // table says "a class is its own". For a function type it is \`returnType\`
@@ -453,11 +441,11 @@ export function constructorParameters(C: type): type {
 // deliberately does not have, which is the reasoning §4.12 used to decline
 // \`isEqual\`. Use \`returnType\` for the factory case.
 
-// NOT EXPORTED - OQ8-C, see \`suffixed\` above.
+// NOT EXPORTED, see \`suffixed\` above.
 function stringPattern(pattern, ...holes) {
   // §6.4. Callable with a RegExp, or as a template tag where each hole
-  // contributes the sub-pattern its type matches. BLOCKED on F110 in the same
-  // way \`brand\` and \`suffixed\` are: it builds a \`parameterized\` node.
+  // contributes the sub-pattern its type matches. Builds a \`parameterized\`
+  // node, as \`brand\` and \`suffixed\` do.
   const holePattern = (t: type): string => {
     const node = reflect(t);
     if (node.kind === 'literal') return RegExp.escape(String(node.value));
@@ -479,9 +467,9 @@ const compiled = new WeakMap<Realm, ReturnType<ManagedRealm['compileModule']>>()
 /**
  * Resolve `std:types` if this request is for it, and answer whether it was.
  *
- * PLAN-std-types.md OQ3-B: a dedicated resolver ahead of the host, NOT a
- * widening of `createBuiltinModuleLoader`'s `isBuiltinModule` predicate. Three
- * reasons, in the plan's order. The predicate is
+ * A dedicated resolver ahead of the host, NOT a widening of
+ * `createBuiltinModuleLoader`'s `isBuiltinModule` predicate. Three reasons. The
+ * predicate is
  * `!/^(\.|\/|#|\w+:)/.test(specifier)`, so `std:types` matches `\w+:` and is
  * DECLINED by default - admitting it means widening a shared predicate for one
  * specifier, and `preprocessor:` and `node:` shapes already ride on it. The

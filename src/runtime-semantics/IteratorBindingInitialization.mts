@@ -51,7 +51,7 @@ export function* IteratorBindingInitialization_FormalParameters(FormalParameters
     return NormalCompletion(undefined);
   }
 
-  // proposal-runtime-types, PLAN-rest-parameters.md phase 4c. A rest away from
+  // proposal-runtime-types: a rest away from
   // the end, or more than one, has no meaning to the streaming walk below: it
   // binds each parameter in turn from the argument iterator, and a rest that is
   // not last would take one argument like any other parameter. Which run each
@@ -128,7 +128,7 @@ function* IteratorBindingInitialization_AssignedParameters(FormalParameters: Par
       const wanted = p.type === 'BindingRestElement' ? restElementType(declared) : declared;
       let ok = Q(yield* IsOfType(arg, wanted));
       if (!ok && !(arg instanceof ObjectValue)) {
-        // #sec-literal-propagation (F-E): an untyped primitive argument takes a
+        // #sec-literal-propagation: an untyped primitive argument takes a
         // typed parameter by CONVERSION at binding, so the distribution admits
         // exactly what the enforcement below will accept - the README's
         // `f(...a: [].<uint32>, c: uint32)` called `f(0, 1, 2)` splits, while a
@@ -315,7 +315,7 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
   if (BindingIdentifier) {
     // 1. Let lhs be ? ResolveBinding(StringValue of BindingIdentifier, environment).
     const lhs = Q(yield* ResolveBinding(StringValue(BindingIdentifier), environment, BindingIdentifier.strict));
-    // proposal-runtime-types #sec-function-types (F-T): `ref ...refs` - the
+    // proposal-runtime-types #sec-function-types: `ref ...refs` - the
     // modifier distributes over the run, so each argument the rest collects
     // must be a ref argument, and the rest binds NO ARRAY: it binds the run of
     // their locations, which the reference operations read and write through.
@@ -340,7 +340,7 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
     }
     // #sec-type-annotations: "A rest element's annotation is the type of what it
     // COLLECTS", so each argument the rest takes is checked against that type's
-    // ELEMENT type (D41, and D32's run-time half). This function did not read its
+    // ELEMENT type, the run-time half. This function did not read its
     // annotation at all - the parameter was not even destructured - so a rest was
     // the ONE position in the language whose declared type the run time ignored.
     let restElement: TypeRecord | undefined;
@@ -367,16 +367,15 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
       if (next === 'done') {
         // #sec-type-annotations: "Where the annotation states an EXTENT -
         // `[2].<uint8>`, or `[N].<uint8>` for a value parameter N - the extent is
-        // part of the type and the call must supply that many arguments" (D41
-        // phase 2).
+        // part of the type and the call must supply that many arguments".
         //
         // Checked once the rest has collected everything, since `n` is the count
         // it received. A DYNAMIC extent admits any number and is the common case;
         // a fixed extent, or a tuple with no rest of its own, fixes it - less any
-        // TRAILING DEFAULTS, which is D33's length range and is why the minimum
+        // TRAILING DEFAULTS, which is the length range and is why the minimum
         // and the maximum are computed apart.
         //
-        // This is the half that makes `PLAN-D36-implementation.md` §15's static
+        // This is the half that makes the static
         // check compatible: that check refuses these calls, and until now the run
         // time accepted them, so the checker was refusing programs that worked.
         if (restDeclared !== undefined) {
@@ -391,7 +390,7 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
             // `Initial`, not `DeclaredDefault`. This resolution EVALUATES the
             // initializer, so a defaulted position carries its VALUE here;
             // `DeclaredDefault` is the checker's flag, set where the resolution
-            // is synchronous and the value cannot be evaluated (D33). Reading
+            // is synchronous and the value cannot be evaluated. Reading
             // the checker's field on this path found nothing and refused
             // `...a: [uint8, string = "d"]` given one argument - a program the
             // clause's own length range admits.

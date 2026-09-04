@@ -5,8 +5,8 @@
 // callable and never asks what a value declared. A type refusing a hand-written
 // `{ next() { … } }` would describe a language this is not.
 //
-// PLAN-iteration-types-engine.md phase 2. `IteratorResult` comes first because
-// it is what `next` returns and nothing else can be written before it.
+// `IteratorResult` comes first because it is what `next` returns and nothing
+// else can be written before it.
 
 import type { TypeRecord } from './records.mts';
 import {

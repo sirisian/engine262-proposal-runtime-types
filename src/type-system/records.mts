@@ -47,7 +47,7 @@ export interface PropertyTypeRecord {
  * Record has a [[Name]], a [[Type]], an [[Optional]] field, a [[Rest]] field,
  * an [[Initial]] field, and a [[Reference]] field").
  *
- * PLAN-rest-parameters.md phase 0. A signature's parameters were a bare
+ * A signature's parameters were a bare
  * `TypeRecord[]`, so the type system - the half that interns, relates, and
  * reflects - could not say that a parameter was a rest, was optional, or had a
  * name. The information existed twice elsewhere and in neither of those places:
@@ -74,7 +74,7 @@ export interface ParameterRecord {
 /**
  * The ELEMENT type of a rest parameter: what ONE argument reaching it must be.
  *
- * PLAN-rest-parameters.md phase 5. A rest's own [[Type]] is what it COLLECTS -
+ * A rest's own [[Type]] is what it COLLECTS -
  * `...args: [].<uint32>` has the array type - so every operation that compares
  * a single argument against a rest must compare against this instead. The
  * specification says so where it defines the annotation ("an operation
@@ -227,12 +227,12 @@ export function parameter(Type: TypeRecord, extra?: Partial<Omit<ParameterRecord
 }
 
 /**
- * proposal-runtime-types #sec-signature-records
- * (PLAN-variadic-and-named-generic-arguments.md 2.11): one declared type
- * parameter of a generic signature or declaration. [[Kind]] distinguishes a
- * VALUE parameter (`V: uint32`, the node's IsValueParameter, F166) from a type
- * parameter. [[Variadic]] is the pack marker, the node's IsVariadic (declared
- * with `...`), so identity, subtyping, and reflection read one shape. The constraint and the default stay as Parse Nodes
+ * proposal-runtime-types #sec-signature-records: one declared type parameter of
+ * a generic signature or declaration. [[Kind]] distinguishes a VALUE parameter
+ * (`V: uint32`, the node's IsValueParameter) from a type parameter.
+ * [[Variadic]] is the pack marker, the node's IsVariadic (declared with `...`),
+ * so identity, subtyping, and reflection read one shape. The constraint and the
+ * default stay as Parse Nodes
  * rather than Type Records because both evaluate PER APPLICATION, under the
  * frame of the bindings before them (#sec-computed-constraints); a record that
  * evaluated them once would freeze `V: T = 0` at whatever `T` meant first.
@@ -299,7 +299,7 @@ export interface SignatureRecord {
    * [[TypeParameters]], as Records rather than Parse Nodes). Identity is up to
    * renaming - [[Name]] is carried for named arguments and tooling, never
    * compared - which is what SameFunctionType reads when generic signatures
-   * compare (Phase 5).
+   * compare.
    */
   readonly TypeParameters?: readonly TypeParameterRecord[];
 }
@@ -345,7 +345,7 @@ export interface TupleElementRecord {
    * The ARITY rule does not need the value, only the fact: a tuple's minimum
    * length is its positions less its trailing defaults. This field carries that
    * fact to the one consumer that needs it, rather than making the checker
-   * evaluate or the record carry a half-built value (D33).
+   * evaluate or the record carry a half-built value.
    */
   readonly DeclaredDefault?: boolean;
 }
@@ -354,13 +354,13 @@ export interface TupleElementRecord {
  * A `[[Metadata]]` record: what a ~parameterized~ Type Record carries alongside
  * its [[Base]].
  *
- * PLAN-metadata-representation.md phase 2. The slot was typed `Value` and did
+ * The slot was typed `Value` and did
  * not hold one - `MetadataObjectFromType` builds a frozen plain record and
  * casts it, `Object.freeze(fields) as unknown as Value` - and that cast is
  * where the contract went missing. **A cast asserts a contract instead of
  * checking it**, so the two consumers diverged without anything complaining,
  * and the same representation mismatch then appeared at three depths in turn,
- * each hidden by the one above it (F148, F154, F155). Naming the shape is the
+ * each hidden by the one above it. Naming the shape is the
  * cheapest thing that makes the class of defect visible rather than the
  * instance.
  *
@@ -371,7 +371,7 @@ export interface TupleElementRecord {
  *   - a LEAF: an engine `Value`. A literal's value, a brand's tag. It stays a
  *     `Value` because a Symbol tag has no plain equivalent whose identity
  *     survives, and `SameValue` on two SymbolValues is what makes a
- *     symbol-tagged brand unforgeable (F147).
+ *     symbol-tagged brand unforgeable.
  *   - a CONTAINER: another frozen plain record. A structural marker built by
  *     `metadataValueFromType` - a pattern's `{ __pattern, source, flags }`, a
  *     range's `{ __range, ... }` - or a nested record of further metadata.
@@ -418,9 +418,9 @@ export type MetadataRecord = { readonly [key: string]: Value | MetadataRecord };
  * (`makeType(getReflection(T)) === T` answering false), and each fix exposing
  * the next:
  *
- *   F148  the RECORD:       plain vs ObjectValue - reading `.metadata` crashed
- *   F154  the CONTAINER:    a marker, plain vs ObjectValue
- *   F155  the DISCRIMINANT: `__pattern`, `true` vs BooleanValue
+ *   the RECORD:       plain vs ObjectValue - reading `.metadata` crashed
+ *   the CONTAINER:    a marker, plain vs ObjectValue
+ *   the DISCRIMINANT: `__pattern`, `true` vs BooleanValue
  *
  * Typing the slot is what makes that class of defect impossible rather than
  * fixable one layer at a time - and the evidence is not the argument, it is
@@ -459,7 +459,7 @@ export type TypeRecord =
    * whose arguments involves an unbound generic parameter, carried as a type
    * until specialization evaluates it".
    *
-   * PLAN-where-on-methods.md, unblocking D1's assumed half. The kind was listed
+   * The kind was listed
    * among those "declared for the later milestones" and nothing produced one, so
    * `#sec-computed-types` had nowhere to carry a call it could not evaluate and
    * a checked contract had nothing to attach its facts to.
@@ -531,7 +531,7 @@ export type TypeRecord =
     readonly Kind: 'nominal',
     readonly Declaration: ParseNode,
     readonly Arguments: readonly (TypeRecord | number)[],
-    // proposal-runtime-types M11: evaluated enum member values, and the
+    // proposal-runtime-types: evaluated enum member values, and the
     // resolved structural shape of an interface, attached at declaration
     // evaluation. SameType compares by [[Declaration]] identity only.
     readonly EnumMembers?: readonly Value[],
@@ -539,11 +539,10 @@ export type TypeRecord =
     // underlying type, so a value of an enum type is usable wherever the
     // underlying type is required and no conversion is written." The record
     // carried its members and NOT its underlying type, so that subtype
-    // relation could not be answered and Reflect.isAssignable said *false*
-    // (F62).
+    // relation could not be answered and Reflect.isAssignable said *false*.
     readonly Underlying?: TypeRecord,
     readonly Structure?: TypeRecord,
-    // PLAN-nominal-records.md phase 1. The class this one EXTENDS, so the
+    // The class this one EXTENDS, so the
     // subtype relation has a chain to walk. It was written and read through
     // `as unknown as` casts on both sides - the checker attaching it, IsSubtype
     // reading it - which is how the two came to disagree without either being
@@ -561,7 +560,7 @@ export type TypeRecord =
     // because it travels with it - both are relations the record holds for the
     // checker, and both were reached through casts.
     readonly SetterTypes?: ReadonlyMap<string, TypeRecord>,
-    // proposal-runtime-types M21: the class constructor whose instances the
+    // proposal-runtime-types: the class constructor whose instances the
     // class type contains. Identity is still by [[Declaration]]; this is the
     // resolved constructor so membership needs no name lookup.
     readonly Constructor?: Value,
@@ -576,7 +575,7 @@ export type TypeRecord =
   | { readonly Kind: 'tuple', readonly Elements: readonly TupleElementRecord[] }
   /**
    * [[Extent]] is a NUMBER, ~dynamic~, or a Type Record for a VALUE PARAMETER
-   * that fixes it - `[`_N_`].<uint8>` for an `<`_N_`: uint32>` (D40).
+   * that fixes it - `[`_N_`].<uint8>` for an `<`_N_`: uint32>`.
    */
   | { readonly Kind: 'array', readonly Element: TypeRecord, readonly Extent: number | 'dynamic' | TypeRecord }
   | { readonly Kind: 'reference', readonly Target: TypeRecord }
@@ -710,8 +709,8 @@ const libraryTypeNames = new Set([
   // the objects a generator function returns, and the async one. The design
   // writes `Generator.<Y, R, N>` throughout and the core already parses a return
   // annotation on a generator; neither this engine nor the specification had the
-  // TYPE until PLAN-do-expressions.md phase 1, so nothing said what a call of a
-  // generator returns or what a yield expression evaluates to.
+  // TYPE at first, so nothing said what a call of a generator returns or what a
+  // yield expression evaluates to.
   'Generator', 'AsyncGenerator',
   // proposal-runtime-types #sec-iteration-types.
   // proposal-runtime-types #sec-iteration-types: the carrier the helper methods
@@ -768,7 +767,7 @@ function rangeEnumRecord(name: 'Bound' | 'Interval'): TypeRecord | null {
  * The records of the types bound BY NAME in a realm, keyed by the name a
  * program writes: `Token`, `ClassMetadata`, `Reflect.Block`.
  *
- * `PLAN-checker-type-resolution.md stage A`. The checker resolves an annotation
+ * The checker resolves an annotation
  * with `resolveType`, a second resolver that mirrors `TypeNodeToTypeRecord`; a
  * name the runtime resolves and the checker does not resolves to NOTHING there,
  * and a null type is then treated as no constraint, so the annotation is never
@@ -859,7 +858,7 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
  * a type", which left a bounds-shaped meta type unable to state its own default
  * and the suite writing `1e400` instead - a workaround that produces the very
  * same value, as its own error messages showed by printing it back as Infinity
- * (F63). They resolve as LITERAL types, which the language already has and
+ * They resolve as LITERAL types, which the language already has and
  * already writes: `let x: 1` is a literal type today.
  */
 export function namedNumericLiteralRecord(name: string): TypeRecord | null {
@@ -1030,7 +1029,7 @@ export function propertiesInKeyOrder<T extends { key: string | SymbolValue }>(pr
 /**
  * A canonical key for a `[[Metadata]]` record.
  *
- * PLAN-brand-layering-F.md F169. Deterministic over the shape `MetadataRecord`
+ * Deterministic over the shape `MetadataRecord`
  * describes: engine `Value` leaves, and nested plain records - including the
  * structural markers a pattern and a range take. Record keys are SORTED, so two
  * records holding the same metadata key alike however they were built.
@@ -1063,7 +1062,7 @@ function metadataOrderKey(m: unknown): string {
     // interning table would be needed to be exact. Two distinct symbols with
     // one description therefore key alike here - which is safe, because the key
     // only ORDERS members; `SameMetadata` decides identity and compares symbols
-    // by `SameValue` (F147).
+    // by `SameValue`.
     const sym = m as { Description?: { stringValue?(): string } };
     if (typeof sym.Description?.stringValue === 'function') {
       return `y:${JSON.stringify(sym.Description.stringValue())}`;
@@ -1105,7 +1104,7 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
     case 'void': return 'void';
     case 'primitive': return `primitive:${t.Name}:${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : orderKey(a))).join(',')}`;
     case 'literal': return `literal:${orderKey(t.Base)}:${String((t.Value as { value?: unknown }).value ?? t.Value)}`;
-    // PLAN-brand-layering-F.md F169. The METADATA is part of the identity and
+    // The METADATA is part of the identity and
     // so belongs in the key. Without it two parameterizations of one base -
     // `string.<{ brand: 'E' }>` and `string.<{ brand: 'V' }>` - produce the
     // IDENTICAL key, the sort at #sec-canonicalizetype cannot separate them,
@@ -1143,7 +1142,7 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
       // makes the key what #sec-sameobjecttype says identity is: independent of
       // the order the members were written in.
       return `object:${propertiesInKeyOrder(t.Properties).map((p) => `${p.readonly ? 'readonly ' : ''}${String(p.key)}${p.optional ? '?' : ''}:${orderKey(p.type)}`).join(',')};${t.IndexSignatures.map((ix) => `[${orderKey(ix.Key)}]:${orderKey(ix.Value)}`).join(',')}`;
-    // PLAN-rest-parameters.md phase 0: a parameter's Rest and Optional flags are
+    // A parameter's Rest and Optional flags are
     // part of a signature's identity, so they belong in the canonical order key.
     // Without them `(...a: [].<uint8>) => void` and `(a: [].<uint8>) => void`
     // produce the same key and intern as ONE Type Object.
@@ -1174,7 +1173,7 @@ export function UnderlyingOf(t: TypeRecord): TypeRecord {
 /**
  * The CANONICAL SOURCE FORM of a type: the text a developer could paste back.
  *
- * PLAN-devtools-type-inspection.md F194. `typeprogramming.md` §3.3 promises this
+ * `typeprogramming.md` §3.3 promises this
  * of `Type.prototype.toString` - *"`String(type 'a' | 'b')` is `"'a' | 'b'"`"* -
  * and nothing implemented it, so every type stringified as `[object Type]`.
  *
@@ -1251,7 +1250,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     case 'union': return t.Members.length === 0 ? 'never' : t.Members.map(displayType).join(' | ');
     case 'intersection': return t.Members.map(displayType).join(' & ');
     // TWO array arms live in this file; fixing one leaves `[[object Object]]`
-    // coming from the other (D40).
+    // coming from the other.
     case 'array': return `[${t.Extent === 'dynamic' ? '' : (typeof t.Extent === 'object' ? displayType(t.Extent as TypeRecord) : t.Extent)}].<${displayType(t.Element)}>`;
     case 'tuple': return `[${t.Elements.map((e) => displayType(e.Type)).join(', ')}]`;
     case 'shared': return `shared ${displayType(t.Target)}`;
@@ -1260,18 +1259,18 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     // parameterizations rather than the word "parameterized".
     case 'parameterized': return `${displayType(t.Base)}.<${displayMetadataValue(t.Metadata)}>`;
     case 'nominal': {
-      // PLAN-declarative-checker-facts.md phase 1b. The SELF MARKER of
-      // #sec-this-adoption is a synthetic nominal standing for "the receiver
-      // this method expects", and it has no declaration to name - so it printed
-      // as `nominal`, which is the same uselessness F57 fixed for classes, one
-      // level in. It prints as `this` because that is what a reader wrote.
+      // The SELF MARKER of #sec-this-adoption is a synthetic nominal standing
+      // for "the receiver this method expects", and it has no declaration to
+      // name - so it printed as `nominal`, the same uselessness a bare class
+      // printed with, one level in. It prints as `this` because that is what a
+      // reader wrote.
       if ((t.Declaration as { type?: string } | undefined)?.type === 'SelfThisMarker') {
         return 'this';
       }
       // A class or interface prints by its declared NAME. It fell through to
       // the default before, so a rejected assignment between two classes read
       // "nominal is not assignable to nominal", which names neither party and
-      // is useless to whoever has to fix the program (F57).
+      // is useless to whoever has to fix the program.
       const declared = (t.Declaration as { BindingIdentifier?: { name?: string } | null, TypeName?: { IdentifierReference?: { name?: string } } | null } | undefined);
       // ranges.md's printer policy: "A diagnostic should prefer them:
       // `ClosedRange.<uint8>` ... reads where `Range.<uint8, Bound.Closed,

@@ -510,7 +510,7 @@ function* TypeProto_epsilonGetter(_args: Arguments, { thisValue }: FunctionCallC
 /**
  * `Type.prototype.toString` - the canonical source form of the type.
  *
- * PLAN-devtools-type-inspection.md F194. `typeprogramming.md` §3.3 promises this
+ * `typeprogramming.md` §3.3 promises this
  * - *"`String(type 'a' | 'b')` is `"'a' | 'b'"`, because builders throwing
  * authored `TypeError`s need to print types"* - and nothing implemented it, so
  * every Type Object stringified as `[object Type]`. A developer had no way to

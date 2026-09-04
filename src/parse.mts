@@ -198,7 +198,6 @@ function TakesARegionContext(macro: ObjectValue): boolean {
   // enforced where the macro is called. Working around it meant a union
   // enumerating every position a macro might appear in - measured at EIGHTEEN,
   // and one more whenever the language gains a position.
-  // `PLAN-region-context-removal` §20.
   return candidates.some((signature) => IsReplacementDecorator(signature, macro));
 }
 
@@ -629,8 +628,7 @@ function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: Modul
         // Asked of resolution rather than inferred from the error it would
         // throw: "no overload matches" from a macro's own BODY is a real failure
         // and must stay one, and the two are indistinguishable by message.
-        // `#sec-syntax-replacement`, and
-        // `FINDING-overload-resolution-host-nominals.md` 9.3.
+        // `#sec-syntax-replacement`.
         const declared = EnsureCompletion(skipDebugger(SignaturesOf(fn as ObjectValue))) as {
           Type: string, Value?: readonly OverloadSignature[],
         };

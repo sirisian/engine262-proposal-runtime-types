@@ -296,17 +296,17 @@ export abstract class StatementParser extends TypeParser {
   // MetaHook :
   //   `default` `=` AssignmentExpression `;`
   //   MethodDefinition
-  // The table of permitted hook names is a semantics-milestone early error.
+  // The table of permitted hook names is an early error of the semantics.
   parseMetaDeclaration(): ParseNode.MetaDeclaration {
     const node = this.startNode<ParseNode.MetaDeclaration>();
     this.expect('meta');
     node.TypeName = this.parseTypeName();
-    // PLAN-generic-meta-declarations.md phase 1. The same line `type`,
+    // The same line `type`,
     // `interface` and `primitive` already carry above and below - a `meta`
     // declaration was the only one in this file that did not take parameters,
     // though #sec-meta-declarations gives it `TypeParameters?`.
     node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
-    // PLAN-generic-meta-declarations.md phase 3 (D4). #sec-meta-declarations: a
+    // #sec-meta-declarations: a
     // meta declaration "may instead name a PRIMITIVE type rather than an object
     // type, declaring a base-form meta type". A primitive has no parameter to
     // bind, so `meta uint8<T> { … }` states something the language cannot mean.
@@ -315,7 +315,7 @@ export abstract class StatementParser extends TypeParser {
     // `TypeParameters?` after ANY TypeName - and refused now rather than
     // accepted-and-ignored, since a program that writes it would have no way to
     // discover the parameter did nothing, and refusing it later would break.
-    // PLAN-meta-hook-signatures.md phase 2. #sec-meta-declarations: "It is an
+    // #sec-meta-declarations: "It is an
     // early error for a |MetaDeclaration| to declare more than one type
     // parameter". The parameter is not an ordinary generic one - it "is bound to
     // the base at each parameterization the meta type governs … the name of what
@@ -361,14 +361,14 @@ export abstract class StatementParser extends TypeParser {
         const hookName = (hook as { ClassElementName?: { name?: string } }).ClassElementName?.name;
         const hookArity: Record<string, number> = {
           subtype: 2, validate: 2, narrow: 3, conversionFactor: 2,
-          // #table-meta-hooks names seven, and the parser must match it (the
-          // plan's C4: `quantize` was undeclarable while its consumer ran on
-          // every crossing). `rescale` and `describe` become declarable and
+          // #table-meta-hooks names seven, and the parser must match it -
+          // `quantize` was undeclarable while its consumer ran on every
+          // crossing. `rescale` and `describe` become declarable and
           // stay pinned-unconsumed: rescale's consumer is the operator-block
           // conversion path that does not exist yet, describe's is reflection.
           quantize: 2, rescale: 2, describe: 1,
         };
-        // PLAN-meta-hook-form-diagnostics.md phase 1. #sec-meta-declarations
+        // #sec-meta-declarations
         // gives a MetaHook exactly two forms:
         //
         //   MetaHook : `default` `=` AssignmentExpression `;`
@@ -479,7 +479,7 @@ export abstract class StatementParser extends TypeParser {
 
     this.scope.declare(node.BindingList, 'lexical');
     node.BindingList.forEach((b) => {
-      // PLAN-typed-const-default.md phase 2. #sec-typed-bindings: a `const`
+      // #sec-typed-bindings: a `const`
       // declaration without an |Initializer| is a Syntax Error "where the
       // binding carries no |TypeAnnotation|" - the annotation is what makes the
       // initializer redundant rather than absent, since `const c: [].<uint8>;`
@@ -1003,7 +1003,7 @@ export abstract class StatementParser extends TypeParser {
    *
    * A block reflection carries `label` and, per the design, a `block:
    * Expression` that "is not defined here. Macro AST is out of scope." So only
-   * the label and the firing are real; see the stage note in PLAN-decorators.md.
+   * the label and the firing are real.
    */
   parseBlock(lexical = true): ParseNode.Block {
     if (surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
@@ -1647,9 +1647,9 @@ export abstract class StatementParser extends TypeParser {
       this.semicolon();
     }
     const finished = this.finishNode(node, 'ReturnStatement');
-    // PLAN-constructor-returns.md phase 1 (OQ1-E). A `return` with an operand
-    // inside a class constructor's own body. Collected rather than reported
-    // here for two reasons: whether the class is TYPED (OQ2-B) is not known
+    // A `return` with an operand inside a class constructor's own body.
+    // Collected rather than reported here for two reasons: whether the class is
+    // TYPED is not known
     // until the class body ends - an annotation may come after the constructor,
     // as in `class C { constructor() { return {}; } x: uint8 = 1; }` - and the
     // class-body early-error pass is where every other constructor rule already

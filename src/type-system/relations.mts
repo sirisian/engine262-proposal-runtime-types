@@ -41,7 +41,7 @@ export const COLLECTION_LIBRARY_NAMES: ReadonlySet<string> = new Set(['Map', 'Se
 /**
  * Is this pair already assumed to hold?
  *
- * PLAN-nominal-records.md v2 task B. Identity alone is not enough for two
+ * Identity alone is not enough for two
  * NOMINAL types. The assumption list exists so that a comparison of recursive
  * types terminates - "assume this pair holds and see whether that is
  * consistent" - and for a nominal pair the thing that recurs is the
@@ -108,7 +108,7 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
   const ap = a as { __pattern?: boolean, source?: string, flags?: string };
   const bp = b as { __pattern?: boolean, source?: string, flags?: string };
   if (ap.__pattern || bp.__pattern) {
-    // PLAN-brand.md F153. `source` and `flags` reach here in one of two
+    // `source` and `flags` reach here in one of two
     // representations - plain JS strings as `metadataValueFromType` builds
     // them, engine `JSStringValue`s when the record was rebuilt from a
     // reflected node - and a raw `===` never equates the two.
@@ -118,7 +118,8 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
     // two representations as its fields: a plain `true` as built, a
     // `BooleanValue` when rebuilt. Comparing it with `===` was the last leaf
     // keeping a pattern from round-tripping after the CONTAINER was fixed
-    // (F154) - three layers of the same mismatch, each hidden by the one above.
+    // was fixed - three layers of the same mismatch, each hidden by the one
+    // above.
     const truthy = (x: unknown) => (x === true || (x as { booleanValue?(): boolean })?.booleanValue?.() === true);
     return truthy(ap.__pattern) === truthy(bp.__pattern)
       && leaf(ap.source) === leaf(bp.source) && leaf(ap.flags) === leaf(bp.flags);
@@ -146,7 +147,7 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
     // each index in order. Object.keys gives a list's indices, so one recursion
     // serves both, with the array check above keeping the two forms apart.
     // An engine Value is compared as a VALUE, before the nested-record branch
-    // below can swallow it. PLAN-brand.md F147: a SymbolValue is a JS object
+    // below can swallow it. A SymbolValue is a JS object
     // with neither `numberValue` nor `stringValue`, so it fell into that branch
     // and was compared by `Object.keys` on the engine's own fields - identical
     // for any two symbols. Two distinct `Symbol('x')` tags therefore interned
@@ -375,9 +376,9 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'void':
       return true;
     case 'application':
-      // #sec-issubtype: "If _s_.[[Kind]] is ~application~ � if _s_.[[Builder]]
+      // #sec-issubtype: "If _s_.[[Kind]] is ~application~ ... if _s_.[[Builder]]
       // and _t_.[[Builder]] are not the same function, return *false*; return
-      // SameArgumentList(�)". And #sec-computed-types: "A deferred ~application~
+      // SameArgumentList(...)". And #sec-computed-types: "A deferred ~application~
       // is a subtype only of itself and of the `any` type. Before specialization
       // nothing finer than identity is known about its result, so nothing finer
       // is assumed: two mentions of one deferred call are one type by interning,
@@ -387,7 +388,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // `any` is handled by its own arm above, so identity is the whole of this
       // WHERE THERE ARE NO FACTS.
       //
-      // #sec-checked-contracts: a contract "is ASSUMED: before specialization �
+      // #sec-checked-contracts: a contract "is ASSUMED: before specialization ...
       // the checker takes each clause as a known fact about the ~application~
       // Type Record. The second is sound because of the first: any
       // specialization that would falsify an assumption is stopped at the
@@ -401,7 +402,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // with no contract.
       // A LOWER bound licensed by a fact: `where Reflect.isAssignable(X, return)`
       // says every X value is a `return` value, so `X <: thisApplication`. That
-      // is the direction `typeprogramming.md` �6.2 warns is easy to reverse -
+      // is the direction `typeprogramming.md` 6.2 warns is easy to reverse -
       // "checking a generic body that PRODUCES the result needs a lower bound,
       // and for `omit` the true one is `T <: return`".
       if (t.Kind === 'application' && licensesLowerBound(t, s, assumptions)) {
@@ -433,7 +434,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // Matched as a SET, not a sequence. A union is its members and nothing
       // about their order - `uint8 | string` and `string | uint8` are one type -
       // and comparing them position by position made two spellings of one union
-      // different types (D26).
+      // different types.
       //
       // Invisible almost everywhere, because a union written in source is
       // canonicalised and two spellings arrive already in the same order. It
@@ -442,7 +443,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // to the same union written the other way round. `Set.<string | uint8>`
       // against a `Set.<uint8 | string>` shows it with no promise involved.
       //
-      // This is D16 one container along - object PROPERTIES were compared
+      // This is the same defect one container along - object PROPERTIES were compared
       // positionally for the same reason and were fixed the same way - and it
       // was found the same way, by an assertion that should have held in either
       // spelling and held in only one.
@@ -500,7 +501,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
           // already use - so `<T>(x: T) => T` and `<U>(x: U) => U` are one type
           // and [[Name]] is never read; kind, variadic marker, variance and
           // arity must agree (constraints and defaults are Parse Nodes here and
-          // compare in the resolver-side check, Phase 5's remainder).
+          // compare in the resolver-side check).
           const identified = identifyTypeParameters(g, tf.Signatures[i], next);
           if (identified === null) {
             return false;
@@ -508,7 +509,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
           const nextG = identified;
           return g.Parameters.length === tf.Signatures[i].Parameters.length
           && g.Parameters.every((p, j) => {
-            // PLAN-rest-parameters.md phase 0: Rest and Optional are part of a
+            // Rest and Optional are part of a
             // signature's identity, not decoration on the type.
             const q = tf.Signatures[i].Parameters[j];
             return p.Rest === q.Rest && p.Optional === q.Optional
@@ -542,7 +543,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
 /**
  * The least length a tuple admits.
  *
- * PLAN-rest-parameters.md phase 3, per #sec-array-membership: the count of the
+ * Per #sec-array-membership: the count of the
  * elements carrying neither a rest nor a default, WHEREVER THEY SIT. This
  * stopped at the first rest, which undercounts the moment an element follows
  * one: `[...[].<uint8>, string]` requires one element and was reported as
@@ -595,7 +596,7 @@ function tupleSourceTypesAt(t: readonly TupleElementRecord[], i: number): TypeRe
     const [least, greatest] = positionRange(t, k);
     if (i >= least && i <= greatest) {
       // A rest element's Type is the ARRAY it stands for; what it puts at ONE
-      // position is that array's element (phase 5's restElementType, the same
+      // position is that array's element (`restElementType`, the same
       // unwrapping a rest parameter needs and for the same reason).
       types.push(t[k].Rest ? restElementType(t[k].Type) : t[k].Type);
     }
@@ -666,7 +667,7 @@ function spanElementOf(t: TypeRecord): TypeRecord | undefined {
 /**
  * Does this class's declaration say it implements that interface's?
  *
- * PLAN-nominal-records.md phase 4. #sec-issubtype relates a class to an
+ * #sec-issubtype relates a class to an
  * interface only where the class REFINES it - "a nominal type whose declaration
  * extends or implements that type's declaration" - and the arm below compared
  * STRUCTURES for any class against any interface, so a class that declared
@@ -698,7 +699,7 @@ export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode):
 /**
  * The members a CLASS has, for comparison against an ~object~ type.
  *
- * PLAN-interface-satisfaction.md phase 1. Not `InterfaceStructureOf`: that is
+ * Not `InterfaceStructureOf`: that is
  * named for what #sec-object-types defines - "The structural form of an
  * interface type ... Every interface has one. A class has none" - and widening
  * it would let the interface-to-interface step start matching classes. A class
@@ -724,7 +725,7 @@ function ClassShapeOf(t: TypeRecord): TypeRecord | undefined {
 /**
  * The structural form of an interface type, where the type has one.
  *
- * PLAN-nominal-records.md phase 3. #sec-object-types: "The structural form of
+ * #sec-object-types: "The structural form of
  * an interface type is the ~object~ Type Record whose [[Members]] are the
  * members the interface declares, taken together with those it inherits ...
  * Every interface has one. A class has none: a class states a construction and
@@ -735,7 +736,7 @@ function ClassShapeOf(t: TypeRecord): TypeRecord | undefined {
  * shape, and one whose members are a superset of another's must not satisfy it.
  */
 /**
- * A TYPE ALIAS's structure, where its nominal record carries one (D59).
+ * A TYPE ALIAS's structure, where its nominal record carries one.
  *
  * A generic alias is registered as `{ Kind: 'nominal', Declaration, Arguments }`
  * so a HIGHER-KINDED argument reaches the declaration - `interface I<W<_> =
@@ -802,7 +803,7 @@ function licensesLowerBound(
 }
 
 /**
- * Whether a target's return position requires nothing of a source (D57).
+ * Whether a target's return position requires nothing of a source.
  *
  * #sec-issubtype states this beside the ~none~ step the engine already had:
  * "1. If _b_.[[Return]] is ~none~, return *true*. 1. If _b_.[[Return]].[[Kind]]
@@ -842,7 +843,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // A library nominal may be a SUBTYPE of another library nominal, which is the
   // built-in error hierarchy: `TypeError` is an `Error`, as `is` and
   // `instanceof` both already answered, while this relation refused it
-  // (OQ-library-nominal-subtyping.md). Same shape as the user-class rule below -
+  // Same shape as the user-class rule below -
   // "the run time walks a prototype chain and the checker had nothing to walk" -
   // and that fix landed for classes DECLARED IN SOURCE, leaving the built-ins
   // behind for want of a declaration to read.
@@ -860,11 +861,11 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     return true;
   }
   const next = [...assumptions, { First: s, Second: t }];
-  // PLAN-where-on-methods.md, the ASSUMED half. A checked contract's fact is a
+  // The ASSUMED half. A checked contract's fact is a
   // LOWER bound on a deferred application - `T <: return` - so it is consulted
   // where the application is the TARGET. #sec-checked-contracts: "the checker
   // takes each clause as a known fact about the ~application~ Type Record", and
-  // `typeprogramming.md` �6.2: "checking a generic body that PRODUCES the result
+  // `typeprogramming.md` 6.2: "checking a generic body that PRODUCES the result
   // needs a lower bound, and for `omit` the true one is `T <: return`".
   //
   // Here rather than in the `case 'application':` arm of SameTypeWithAssumptions:
@@ -912,7 +913,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // #sec-enums: "An enum type is a subtype of its underlying type, so a value
   // of an enum type is usable wherever the underlying type is required and no
   // conversion is written." The relation held nowhere, because the enum's
-  // record did not carry the underlying type to relate it to (F62). Placed
+  // record did not carry the underlying type to relate it to. Placed
   // before the switch on `t` so it answers for any target the underlying type
   // is a subtype of, which is usually a primitive.
   if (s.Kind === 'nominal' && s.EnumMembers !== undefined && s.Underlying !== undefined) {
@@ -1051,7 +1052,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     }
     return false;
   }
-  // PLAN-nominal-records.md phase 3, and #sec-issubtype's two structural steps.
+  // #sec-issubtype's two structural steps.
   // They come BEFORE the step that separates the kinds, which is the whole
   // point: #sec-object-types names the failure this prevents - "Without it the
   // rules would refuse `f({ a: 'a' })` for `interface IExample { a: string; }`,
@@ -1068,7 +1069,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // so a class that declares no `implements` must not satisfy an interface by
   // shape; the class-satisfies-interface arm below handles the declared case.
   {
-    // PLAN-generic-interface-membership.md. A generic interface's [[Structure]]
+    // A generic interface's [[Structure]]
     // carries ~parameter~ records, so an application's arguments have to be
     // substituted here as they are at the membership site - these are the two
     // consumers the same erasure damaged, and fixing membership alone left an
@@ -1078,7 +1079,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     // The comment above says these are "different questions of the same record";
     // they are, and they need the same substitution to ask them of the right
     // structure.
-    // An ALIAS carrying a resolved structure compares through it (D59), as an
+    // An ALIAS carrying a resolved structure compares through it, as an
     // interface does, and for the same reason these steps come BEFORE the one
     // that separates the kinds.
     const targetAlias = AliasStructureOf(t);
@@ -1097,16 +1098,15 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     if (sourceStructure && t.Kind === 'object') {
       return IsSubtype(SubstituteTypeArguments(sourceStructure, (s as { Declaration?: unknown }).Declaration, (s as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), t, next);
     }
-    // PLAN-interface-satisfaction.md phase 1, and D-3's decided rule: AN OBJECT
-    // TYPE ASKS WHAT A VALUE HAS. A class instance has its members, so it
-    // reaches an object-typed position; what it does not reach without saying
-    // so is an INTERFACE, which asks what a class promised (phase 2).
+    // The rule: AN OBJECT TYPE ASKS WHAT A VALUE HAS. A class instance has its
+    // members, so it reaches an object-typed position; what it does not reach
+    // without saying so is an INTERFACE, which asks what a class promised.
     //
     // Without this a class could reach no structural position at all -
     // `function f(p: { x: uint8 })` refused `new Point()` while the same value
     // passed through `any` at run time, and `is` agreed with the run time. The
-    // checker and the run time disagreed, which is the shape of gap D26 exists
-    // to close.
+    // checker and the run time disagreed, which is the shape of gap this
+    // closes.
     const sourceClassShape = ClassShapeOf(s);
     if (sourceClassShape && t.Kind === 'object') {
       return IsSubtype(sourceClassShape, t, next);
@@ -1174,7 +1174,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       if (tupleMaxLength(s.Elements) > tupleMaxLength(tt.Elements)) {
         return false;
       }
-      // PLAN-rest-parameters.md phase 3, per #sec-issubtype. Where the TARGET
+      // Per #sec-issubtype. Where the TARGET
       // has more than one rest its positions are not determined by their index,
       // and the exact relation is inclusion between two regular languages - a
       // product construction, which a subtyping check cannot afford to run at
@@ -1232,7 +1232,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // only where some parameter carries a modifier - so a declaration that
       // declares no variance behaves exactly as it did, which is the default the
       // clause calls conservative.
-      // A BARE `RegExp` is the SUPERTYPE of every parameterization (D49).
+      // A BARE `RegExp` is the SUPERTYPE of every parameterization.
       // #sec-regexp: "A bare `RegExp`, the raw library type, is the supertype of
       // every such parameterization, so it holds a literal of any shape while a
       // written parameterization does not hold a value of another."
@@ -1251,7 +1251,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       if (s.Declaration === tn.Declaration && s.Arguments.length === tn.Arguments.length
         && s.Arguments.length > 0) {
         // A LIBRARY type has no Declaration to carry a variance annotation - it
-        // is a name in a set - so its declared variance is stated here (OQ18).
+        // is a name in a set - so its declared variance is stated here.
         //
         // #sec-generic-variance: "A promise's two parameters are COVARIANT ...
         // Neither type is written through a promise - a promise is settled once,
@@ -1271,7 +1271,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
             const variance = params[i]?.Variance;
             // #sec-generic-variance: a position declared covariant admits an
             // argument the position's own type is ASSIGNABLE FROM, not merely a
-            // subtype of (OQ19).
+            // subtype of.
             //
             // The two differ for `any`, which is assignable both ways while
             // being a subtype only upward. Read by `IsSubtype` alone, the same
@@ -1309,7 +1309,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // Animal` was true and `f(new Dog())` against an `Animal` parameter
       // passed, while `let a: Animal = new Dog()` was refused - the run time
       // walks a prototype chain and the checker had nothing to walk. Carried
-      // the way an enum carries its underlying type (F62), for the same reason:
+      // the way an enum carries its underlying type, for the same reason:
       // a relation the record does not hold cannot be decided.
       // An INTERFACE names a shape rather than an identity, so the declaration
       // comparison above can never admit a class that implements one: the two
@@ -1323,7 +1323,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // reflection context whose members are a superset of another's would
       // satisfy it - `Reflect.ClassField` passing where `Reflect.Class` is
       // wanted - and the design distinguishes those by kind, not by shape.
-      // PLAN-nominal-records.md v2 task A: a class EXPRESSION is a class. The
+      // A class EXPRESSION is a class. The
       // guard named only |ClassDeclaration|, so `const D = class X implements I
       // {}` satisfied nothing even once its record carried a [[Structure]] -
       // the same omission, one layer up from the one that left the record
@@ -1332,8 +1332,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
         || (s.Declaration as { type?: string } | undefined)?.type === 'ClassExpression')
         && s.LibraryName === undefined
         && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
-        // PLAN-interface-satisfaction.md phase 2, implementing D-3: AN INTERFACE
-        // ASKS WHAT A CLASS PROMISED. A class relates to an interface only where
+        // AN INTERFACE ASKS WHAT A CLASS PROMISED. A class relates to an interface only where
         // it REFINES it - #sec-issubtype, "a nominal type whose declaration
         // extends or implements that type's declaration" - and #sec-object-types
         // is explicit that a class has no structural form to be compared by.
@@ -1342,10 +1341,10 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
         // class that declared nothing, which made `implements` decorative and an
         // empty interface universal. The ergonomic objection to requiring it -
         // that a third-party class could then reach no structural position - is
-        // answered by phase 1: an object type asks what a value HAS, and a class
+        // answered by the object-type rule: an object type asks what a value HAS, and a class
         // instance reaches every object-typed position without saying anything.
         && ClassImplements(s, tn.Declaration)) {
-        // PLAN-nominal-records.md phase 1: [[Structure]] is declared on the
+        // [[Structure]] is declared on the
         // record, so these read fields rather than hoping for them. The casts
         // were what let a reader believe the relation and its callers agreed.
         const { Structure: sStructure } = s;
@@ -1353,7 +1352,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
         if (sStructure && tStructure) {
           // The interface's structure names ITS OWN parameters and the arguments
           // are on the target, so they are substituted before the comparison
-          // (D65) - the way every other arm that reads an interface structure
+          // - the way every other arm that reads an interface structure
           // already does. Without it `class C implements Box.<uint8>` compared
           // its `v: uint8` against `v: T` and was refused, so the DECLARED
           // hierarchy `sec-interfaces` promises did not carry a parameterised
@@ -1365,7 +1364,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           );
         }
       }
-      // PLAN-nominal-records.md phase 1: [[Base]] is declared on the record
+      // [[Base]] is declared on the record
       // now, so this reads a field rather than hoping for one.
       const { Base: base } = s;
       if (base) {
@@ -1379,7 +1378,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
 }
 
 /**
- * Whether an index signature's KEY type admits ordinary string keys (D85).
+ * Whether an index signature's KEY type admits ordinary string keys.
  *
  * A signature may be keyed by a union, so `string` inside one counts.
  */
@@ -1440,7 +1439,7 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
   });
   /**
    * Each of t's index signatures is covered by one of s's, OR - where s declares
-   * no signature at all - by s's own PROPERTIES (D85).
+   * no signature at all - by s's own PROPERTIES.
    *
    * The first arm was already here and is unchanged. The second is the gap it
    * left: `every(... some(...))` is vacuously false for an empty
@@ -1484,7 +1483,7 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
 /**
  * Contravariant parameters, covariant return, over paired signatures.
  *
- * PLAN-rest-parameters.md phase 5, per #sec-issignaturesubtype. Two defects
+ * Per #sec-issignaturesubtype. Two defects
  * were live here and neither needed a rest to be DECLARED to bite, since a
  * function type may carry one:
  *
@@ -1591,7 +1590,7 @@ function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, bindings
 
 /** Replaces bound ~parameter~ records throughout `t`, structurally, for the relation's own use. */
 /**
- * F-AF: a nominal whose ARGUMENTS were substituted is a different
+ * A nominal whose ARGUMENTS were substituted is a different
  * specialization from the one whose [[Constructor]] the record carried
  * (`Box.<T>`'s constructor is not `Box.<uint8>`'s), so the slot is dropped
  * and the specialization's own constructor is looked up where the record is
@@ -1637,8 +1636,8 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
 
 /**
  * #sec-issignaturesubtype, the four directions a generic signature can face,
- * decided before the concrete relation runs (PLAN-variadic-and-named-generic-arguments.md 2.11):
- * a generic source is usable where a concrete target is required by
+ * decided before the concrete relation runs: a generic source is usable where a
+ * concrete target is required by
  * INSTANTIATION - the bindings the structural match infers, then the concrete
  * relation on the substituted signature; a concrete source is NOT usable where a
  * generic target is required (`<T>(x: T) => T` promises every `T`), the untyped
@@ -1646,7 +1645,7 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
  * parameters position by position and requires the same shape. The inference
  * here runs no user code; a `where` on the source's declaration is not
  * consulted, a function type having none, and is checked at the specialization
- * the crossing performs (Phase 4's interning).
+ * the crossing performs (its interning).
  */
 function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[]): boolean {
   if ((sg as { Untyped?: boolean }).Untyped === true
@@ -1741,7 +1740,7 @@ function IsSignatureSubtypeCore(sg: SignatureRecord, tg: SignatureRecord, assump
       return false;
     }
     // `this` is contravariant "as a parameter is", so it takes the parameter
-    // rule: F136's asymmetry reached here too. `this: uint8` was refused where
+    // rule: the same asymmetry reached here too. `this: uint8` was refused where
     // `this: any` was declared while the mirror passed, for the same reason -
     // `IsSubtype` admits `any` only as the target. Found by checking whether
     // the defect was confined to the parameter loop; it was not.
@@ -1751,7 +1750,7 @@ function IsSignatureSubtypeCore(sg: SignatureRecord, tg: SignatureRecord, assump
     if (requiredArity(sg.Parameters) > maximumSupply(tg.Parameters)) {
       return false;
     }
-    // PLAN-rest-parameters.md phase 4. Where the TARGET has several rests its
+    // Where the TARGET has several rests its
     // positions are not determined by their index and the exact relation is
     // regular-language inclusion, which is the same conservative case tuples
     // have: require the lists to correspond.
@@ -1816,17 +1815,17 @@ function IsSignatureSubtypeCore(sg: SignatureRecord, tg: SignatureRecord, assump
     //
     // What this must NOT absorb is a RESOLUTION FAILURE, and nothing in the
     // value distinguishes the two: a declared return the checker could not read
-    // also arrives absent. `PLAN-checker-type-resolution.md` R1/R2 is that
-    // second meaning masquerading as this one - `(x: number) => Token`
+    // also arrives absent. An unresolvable annotation is that second meaning
+    // masquerading as this one - `(x: number) => Token`
     // satisfied `(x: number) => number` for 75 type names, because `Token` was
     // unresolvable and so indistinguishable from undeclared here.
     //
-    // Stage A removed the failures at their source. Guarding this step instead
-    // would be guarding a symptom: the resolvers agreeing is the property that
-    // matters, and stage C2 asserts it directly, over every type-node kind,
-    // where a divergence is attributable.
+    // Teaching the checker those names removed the failures at their source.
+    // Guarding this step instead would be guarding a symptom: the resolvers
+    // agreeing is the property that matters, and the parity test asserts it
+    // directly, over every type-node kind, where a divergence is attributable.
     if (sg.Return && tg.Return) {
-      // The MAIN path, and the one the earlier two do not cover (D57).
+      // The MAIN path, and the one the earlier two do not cover.
       if (returnRequiredOfNothing(tg.Return)) {
         return true;
       }
@@ -1840,7 +1839,7 @@ function IsSignatureSubtypeCore(sg: SignatureRecord, tg: SignatureRecord, assump
  * Does a parameter typed _target_ accept a function whose parameter is typed
  * _source_? Contravariant, so the target's type must reach the source's.
  *
- * PLAN-function-family-bound.md F136. This used to call `IsSubtype` directly,
+ * This used to call `IsSubtype` directly,
  * and that is one-directional on `any`: `IsSubtype(s, t)` admits `any` as the
  * TARGET (everything is a subtype of `any`) and not as the SOURCE. `IsAssignable`
  * is bidirectional - it returns true where EITHER side is `any` - which is the

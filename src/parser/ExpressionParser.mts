@@ -189,8 +189,7 @@ function exceptFromAdmitting(node: unknown, alsoFromResolution = false): void {
 }
 
 /**
- * proposal-runtime-types, PLAN-constructor-returns.md (OQ2-B, CORRECTED in
- * phase 4): is this class a TYPED class?
+ * proposal-runtime-types: is this class a TYPED class?
  *
  * #sec-typed-classes already defines the term: "A class is typed when at least
  * one of its public or private fields carries a type annotation." That
@@ -199,8 +198,7 @@ function exceptFromAdmitting(node: unknown, alsoFromResolution = false): void {
  * the engine implements it as [[SealInstances]], set from an INSTANCE field
  * annotation, public or private.
  *
- * Phase 2 decided this line independently and drew it wider: any annotation
- * anywhere, including a method's return, a constructor parameter, and a static
+ * An earlier reading drew this line wider: any annotation anywhere, including a method's return, a constructor parameter, and a static
  * field. That was wrong, and not because the wider line is indefensible - it is
  * that "typed class" was ALREADY DEFINED, so the wider reading created a second
  * meaning for one term, with the constructor rule and the sealing rule
@@ -208,7 +206,7 @@ function exceptFromAdmitting(node: unknown, alsoFromResolution = false): void {
  *
  * What the alignment costs, stated rather than discovered later: a class
  * annotated only on a method, a getter, a constructor parameter, or a static
- * field is NOT typed, so its constructor may still return an object and F122's
+ * field is NOT typed, so its constructor may still return an object and the
  * hole stays open there. That is a real residual, and it is the right residual:
  * the layout argument - the strongest one, and the one specific to this
  * proposal - is about what a construction PRODUCES, and only a field annotation
@@ -230,7 +228,7 @@ function classIsTyped(elements: readonly ParseNode.ClassElement[]): boolean {
 /**
  * The first observable WRITE in a declared zero's expression, if any.
  *
- * PLAN-type-declared-zero.md phase 4. `#sec-iscompiletimeevaluable` asks whether
+ * `#sec-iscompiletimeevaluable` asks whether
  * a binding is immutable, which needs a resolution the parser does not do - but
  * an assignment or an update writes whatever it names, so it is refusable from
  * the syntax alone. This narrows the floor rather than replacing it.
@@ -1776,7 +1774,7 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   parsePrimaryExpression(): ParseNode.PrimaryExpression {
-    // PLAN-where-on-methods.md D1. #sec-checked-contracts: "Within a
+    // #sec-checked-contracts: "Within a
     // |WhereClause| of a function declaration, `return` is a |PrimaryExpression|
     // denoting the value the function returns. It is a Syntax Error for `return`
     // to occur as an expression anywhere else, which costs nothing, since the
@@ -2217,7 +2215,7 @@ export abstract class ExpressionParser extends FunctionParser {
         const named = this.startNode<ParseNode.NamedArgument>();
         named.Name = this.parseIdentifierName().name;
         this.expect(Token.COLON);
-        // PLAN-async-generator-types.md F187. `async (a: uint8) => a` reaches
+        // `async (a: uint8) => a` reaches
         // here, because `async(...)` parses as a CALL first and `a: uint8` in a
         // call is a named argument. If this turns out to be an
         // |AsyncArrowHead|, `convertArrowParameter` needs the annotation as a
@@ -2453,7 +2451,7 @@ export abstract class ExpressionParser extends FunctionParser {
           while (this.eat(Token.SEMICOLON)) {
             // nothing
           }
-          // PLAN-type-declared-zero.md phase 2. #sec-declared-zero:
+          // #sec-declared-zero:
           //
           //   ClassElement : `static` `default` `=` AssignmentExpression `;`
           //
@@ -2470,7 +2468,7 @@ export abstract class ExpressionParser extends FunctionParser {
               && (m as { static?: boolean }).static
               && (m as { ClassElementName?: { name?: string } }).ClassElementName?.name === 'default') {
             (node as { DeclaredZero?: ParseNode }).DeclaredZero = m;
-            // PLAN-type-declared-zero.md phase 4. #sec-declared-zero: the
+            // #sec-declared-zero: the
             // |AssignmentExpression| "must be compile-time evaluable and it is a
             // type error otherwise, and it is evaluated ONCE, when the class is
             // declared".
@@ -2491,7 +2489,7 @@ export abstract class ExpressionParser extends FunctionParser {
             //
             // So `static default = (Date.now(), …)` is refused and
             // `let c = 0; static default = (c += 1, …)` is not. The check is a
-            // floor rather than the rule; see PLAN-type-declared-zero.md phase 4.
+            // floor rather than the rule.
             const initializer = (m as { Initializer?: ParseNode | null }).Initializer;
             // A WRITE inside the zero, caught syntactically. The clause's rule
             // needs a binding's MUTABILITY - "the binding is immutable and its
@@ -2500,8 +2498,8 @@ export abstract class ExpressionParser extends FunctionParser {
             // whatever it touches, so it is refusable here without knowing what
             // it names.
             //
-            // Measured before: `let c = 0; static default = (c += 1, â€¦)` and
-            // `(d++, â€¦)` were both accepted, and the zero is evaluated ONCE, so
+            // Measured before: `let c = 0; static default = (c += 1, …)` and
+            // `(d++, …)` were both accepted, and the zero is evaluated ONCE, so
             // the effect happened once at declaration and never again - a
             // silent single side effect, which is worse than an obvious one.
             const write = initializer ? firstWriteIn(initializer) : undefined;
@@ -2591,7 +2589,6 @@ export abstract class ExpressionParser extends FunctionParser {
             this.addEarlyError(Throw.SyntaxError('A class static field cannot be named as "constructor"'), m);
           }
         }
-        // PLAN-constructor-returns.md phase 1 (OQ1-E, scoped by OQ2-B).
         // Reported HERE and not at the `return`, because this is the first
         // point that knows whether the class is TYPED: an annotation may come
         // after the constructor, as in
@@ -2601,7 +2598,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // yields" and never states a rule that makes it so. JavaScript makes
         // it false: `[[Construct]]` returns the constructor's object when it
         // returns one, so `new C() instanceof C` is false, a declared field
-        // reads `undefined`, and a private-name brand check fails (F122).
+        // reads `undefined`, and a private-name brand check fails.
         //
         // A REFUSAL rather than a check, because a check cannot be written
         // where the offence is. A base class's returning constructor breaks
@@ -3329,7 +3326,7 @@ export abstract class ExpressionParser extends FunctionParser {
   // ClassElement :
   //   `abstract` ClassElementName `(` UniqueFormalParameters `)` TypeAnnotation? `;`
   /**
-   * PLAN-signature-listings.md phase 2. Shared by both spellings of an abstract
+   * Shared by both spellings of an abstract
    * member, so `abstract m(): T;` and `m(): T;` fail identically in a class that
    * is not declared `abstract` - with the rule named, rather than with a caret
    * on a token.
@@ -3586,7 +3583,7 @@ export abstract class ExpressionParser extends FunctionParser {
             inner.BindingIdentifier = this.parseBindingIdentifier();
             break;
         }
-        // proposal-runtime-types, PLAN-rest-parameters.md phase 1: an arrow's
+        // proposal-runtime-types: an arrow's
         // parameters come through this cover, so a typed rest is read here.
         // Without it `(...a: [].<uint32>) => a` never parsed at ANY position,
         // which is a gap that predates multiple rests.
@@ -3962,7 +3959,7 @@ export abstract class ExpressionParser extends FunctionParser {
     // names the rule instead of reporting an unexpected token - the reading
     // that cost a full investigation when a generic METHOD, which is a real
     // gap, was mistaken for a limitation of the call syntax.
-    /** PLAN-signature-listings.md phase 2: set where the member has no body. */
+    /** Set where the member has no body. */
     let isAbstractMember = false;
     const isSpecialMethod = isGenerator
       || ((isSetter || isGetter || isAsync) && !this.test(Token.LPAREN) && !isAsyncShorthandProperty);
@@ -4077,13 +4074,13 @@ export abstract class ExpressionParser extends FunctionParser {
       // proposal-runtime-types: MethodDefinition return TypeAnnotation; setters
       // and class constructors excluded.
       //
-      // PLAN-constructor-returns.md phase 1 (OQ1-E). A constructor has no
+      // A constructor has no
       // return annotation POSITION. #sec-typed-classes: "A constructor declares
       // no return type, since the class is the type a construction yields", and
       // #sec-annotations-on-the-remaining-function-forms calls it "the one
       // method that takes no return annotation". Three clauses IMPLIED the rule
       // and none stated it as an early error, which is the room the engine's
-      // over-permission grew in (F121): the annotation parsed, the BODY was
+      // over-permission grew in: the annotation parsed, the BODY was
       // checked against it - a rule no clause contains - and the construction
       // site then ignored it, so `let x: C = new C()` succeeded while
       // `let x: Foo = new C()` failed. An annotation enforced in one place and
@@ -4111,7 +4108,7 @@ export abstract class ExpressionParser extends FunctionParser {
         (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
-      // PLAN-where-on-methods.md D2. #sec-type-annotations, as amended: a method
+      // #sec-type-annotations, as amended: a method
       // takes |WhereClauses| the same way a function declaration does, between
       // the return annotation and the body. The rule needs no restatement -
       // "checked at each specialization once its parameters are bound" - because
@@ -4124,7 +4121,7 @@ export abstract class ExpressionParser extends FunctionParser {
           .WhereClauses = this.parseWhereClauses();
       }
 
-      // PLAN-signature-listings.md phase 2. #sec-abstract-classes: "A member is
+      // #sec-abstract-classes: "A member is
       // abstract because it has no body; the `abstract` keyword before it is
       // optional and says the same thing earlier." A `;` here rather than a `{`
       // is that absence, so the member is the abstract one and there is no body
@@ -4171,7 +4168,7 @@ export abstract class ExpressionParser extends FunctionParser {
                     || (node.ClassElementName.type === 'StringLiteral' && node.ClassElementName.value === 'constructor'))
                    && this.scope.hasSuperCall(),
       }, () => {
-        // PLAN-constructor-returns.md phase 1 (OQ1-E): ask `parseFunctionBody`
+        // Ask `parseFunctionBody`
         // to collect this constructor's own `return <expr>` statements. The
         // collector is scoped there, not here, so nesting is handled once - see
         // the note at `parseFunctionBody`.
@@ -4200,7 +4197,7 @@ export abstract class ExpressionParser extends FunctionParser {
     if (isAbstractMember) {
       const abstractNode = node as unknown as ParseNode.Unfinished<ParseNode.AbstractMethodDefinition>;
       abstractNode.static = false;
-      // PLAN-abstract-implementation.md phase 2a: which accessor form, where it
+      // Which accessor form, where it
       // is one. Both finish as this node type by design; the member registry is
       // kind-filtered, so an abstract getter recorded as a method would be
       // invisible to the walk that looks for getters.

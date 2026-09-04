@@ -44,7 +44,7 @@ import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts
  * The primitive a parameterization ultimately refines, looking through a literal
  * base and through nested parameterizations.
  *
- * PLAN-brand-layering-F.md T4. A carrier is chosen by the base's PRIMITIVE, and
+ * A carrier is chosen by the base's PRIMITIVE, and
  * a parameterization's base need not be one: `true.<{ brand }>` has a ~literal~
  * base, and `U.<{ brand }>` over an already-branded `U` has a ~parameterized~
  * one. Testing `Base.Kind === 'primitive'` directly missed both, so a branded
@@ -60,7 +60,7 @@ function underlyingPrimitiveName(t: TypeRecord): string | undefined {
       cur = cur.Base;
       continue;
     }
-    // F179. An INTERSECTION of parameterizations over one base is itself a
+    // An INTERSECTION of parameterizations over one base is itself a
     // refinement of that base, and a value crossing into it needs the base's
     // carrier - without this a layered String brand had nowhere to be recorded
     // and the boundary that declared it refused the value it had just made.
@@ -83,13 +83,13 @@ function underlyingPrimitiveName(t: TypeRecord): string | undefined {
  * type, or a non-string, is returned as-is.
  */
 function carryStringType(value: Value, t: TypeRecord): Value {
-  // PLAN-brand-layering-F.md F176. A BigInt has a carrier too -
+  // A BigInt has a carrier too -
   // `TypedBigIntValue`, recognised by `RuntimeTypeOf` already - and the crossing
   // was not using it, so a branded BigInt was a bare BigInt for the same reason
   // a branded String was. The same operation on the same shape of value.
   // And a Boolean. `ToBoolean` normalizes to the singleton, so a carried
   // boolean is truthy where it should be - the failure that ruled this out
-  // before (F177) was at that funnel rather than here.
+  // before was at that funnel rather than here.
   if (value instanceof BooleanValue && !(value instanceof TypedBooleanValue)
     && (t.Kind === 'parameterized' || t.Kind === 'intersection')
     && underlyingPrimitiveName(t) === 'boolean') {
@@ -97,7 +97,7 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   }
   // A Symbol carries one too. Unlike a Boolean it has no singleton to fail to
   // be - every `Symbol()` is already a fresh object - so the carrier that broke
-  // `boolean` (F177) is sound here.
+  // `boolean` is sound here.
   if (value instanceof SymbolValue && !(value instanceof TypedSymbolValue)
     && (t.Kind === 'parameterized' || t.Kind === 'intersection')
     && underlyingPrimitiveName(t) === 'symbol') {
@@ -123,7 +123,7 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   if (t.Kind === 'literal' && t.Value instanceof JSStringValue) {
     return TypedString(value.stringValue(), t);
   }
-  // PLAN-brand-layering-F.md F172. A PARAMETERIZATION of `string` is a
+  // A PARAMETERIZATION of `string` is a
   // refinement of it too, and the same carrier serves: a brand on a String had
   // nowhere to be recorded, so a branded string WAS a bare string, `IsOfType`
   // correctly answered false at every boundary that declared the brand, and a
@@ -248,7 +248,7 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
  * the target is `string` or `boolean`; and otherwise throw a TypeError.
  *
  * That is exactly CheckedConvertValue, which is why this operation delegates
- * rather than reimplementing. It did NOT until F51: this function was a bare
+ * rather than reimplementing. It did NOT at first: this function was a bare
  * membership test, so the two sites wired to it - the typed-property store and
  * the typed defineProperty - refused `o.x = 7` for a uint8 property while the
  * binding boundary two lines away converted the same 7, and both sites
@@ -270,7 +270,7 @@ function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
  * Validating on the way in reaches further than that fix would have. It also
  * covers the ANNOTATION path, `let s: Set.<uint8> = new Set(["a"])`, where the
  * construction carries no type arguments at all and there is nothing to thread;
- * and it gives the Phase 3 ADOPTION rule its missing half - a collection adopts
+ * and it gives the ADOPTION rule its missing half - a collection adopts
  * a target's arguments only where its contents support the claim, which is what
  * "adopting" ought to have meant.
  *
@@ -318,7 +318,7 @@ export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRe
 }
 
 /**
- * proposal-runtime-types #sec-collection-key-positions (OQ7): a KEY or ELEMENT
+ * proposal-runtime-types #sec-collection-key-positions: a KEY or ELEMENT
  * position CHECKS where a value position converts.
  *
  * `table-string-conversion-sources` admits a numeric or Boolean source at a
@@ -659,7 +659,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     }
   }
 
-  // proposal-runtime-types (PLAN-decimal.md stage F): a DECIMAL out to a binary
+  // proposal-runtime-types: a DECIMAL out to a binary
   // float or a Number is the ordinary direction of loss - the nearest double to
   // the decimal's value - and needs no rule of its own, unlike the direction in.
   //
@@ -685,14 +685,14 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // wave the raw value through either. Shedding a parameterization UPWARD to
   // its base needs no gate at all, since a parameterized type is a subtype of
   // its base, which is the branding rule.
-  // PLAN-brand-layering-F.md phase 2. THE CONSTRUCTION BOUNDARY for a layered
+  // THE CONSTRUCTION BOUNDARY for a layered
   // brand.
   //
   // `ConvertValue` had no ~intersection~ case, so calling `(Email & Verified)(x)`
   // fell past every branch. The only intersection handling lives in
   // `CheckedConvertValue`, which is the MEMBERSHIP path - and membership is what
   // a brand's absent `validate` is designed to refuse, so routing a crossing
-  // through it refused every value. That is PLAN-brand.md OQ1 one level up: the
+  // through it refused every value. That is the same question one level up: the
   // rule about BARE values applied at the boundary that exists to let a value
   // stop being bare.
   //
@@ -711,7 +711,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       (m as TypeRecord & { Kind: 'parameterized' }).Base,
       (t.Members[0] as TypeRecord & { Kind: 'parameterized' }).Base,
     ))) {
-    // PLAN-brand-layering-F.md F179. Cross from the BASE once, run every
+    // Cross from the BASE once, run every
     // member's judgments over the result, then stamp the INTERSECTION.
     //
     // Threading the value through each member in turn was the first shape and
@@ -773,7 +773,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // `let a: [].<uint8> = []` does for the empty array a few lines below. It has
   // to happen HERE rather than in the `already` branch, because membership on a
   // collection specialization now compares the type arguments against the stamp
-  // (#sec-issubtype, D12) - so an unstamped Map is NOT a `Map.<string, uint8>`,
+  // (#sec-issubtype) - so an unstamped Map is NOT a `Map.<string, uint8>`,
   // and asking first would refuse the annotation that was about to give it one.
   //
   // The previous arrangement leaned on membership being the bare prototype
@@ -781,7 +781,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // load-bearing. That is also why `new Map() is Map.<string, uint8>` answered
   // *true* - one test doing duty for two different questions, "is this value
   // already of type T" at a boundary and "does this value claim to be T" for
-  // `is`. Splitting them is what D12 is.
+  // `is`. Splitting them is what this does.
   //
   // Only an UNSTAMPED collection is adopted. One already carrying arguments
   // keeps them and is judged against the target on their merits, so
@@ -802,9 +802,9 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // array, which satisfies any element type vacuously and so always took this
     // shortcut: `let a: [].<uint8> = []` produced an array with no element
     // type, so `a.push(65)` stored a plain Number and the typed surface
-    // silently switched off for the most common way to build an array (F71).
-    // The same shape as F38's crossing, swallowed by the same provenance-blind
-    // shortcut.
+    // silently switched off for the most common way to build an array. The
+    // same shape as the numeric crossing, swallowed by the same
+    // provenance-blind shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
       StampTypedArray(value as ObjectValue, t.Element);
       if (t.Extent !== 'dynamic') {
@@ -817,7 +817,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // nothing ever gave a `Set.<uint8>` its type. Its membership test is the
     // prototype chain, which any Set passes, so this shortcut returned it
     // unstamped and every method went unchecked - `s.add(300)` was accepted and
-    // stored a plain Number (F72).
+    // stored a plain Number.
     if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
         && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
           || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
@@ -843,7 +843,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // that defines no `validate` therefore admits nothing here, which is what
     // makes a brand reachable only by construction.
     const atBase = Q(yield* ConvertValue(value, t.Base));
-    // PLAN-brand.md OQ1. The gate was `IsOfType(atBase, t)`, and IsOfType
+    // The gate was `IsOfType(atBase, t)`, and IsOfType
     // answers *false* for a meta type defining no `validate` - THAT BEING THE
     // BRAND RULE. So the rule about BARE values was applied at the boundary
     // that exists to let a value stop being bare, and a brand refused its own
@@ -869,7 +869,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
     }
-    // PLAN-brand-layering-F.md F172. THE CROSSING STAMPS THE VALUE, and it stamped
+    // THE CROSSING STAMPS THE VALUE, and it stamped
   // only a typed number - every other value came back unchanged, so a branded
   // String was a bare String and `IsOfType(bare, E)` correctly answered false at
   // every boundary that declared the brand. A value from the brand's own
@@ -976,7 +976,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // An integral Number is exactly a BigInt, so it converts. This is what
         // lets typed code write `65` where a `bigint` is wanted rather than
         // `65n`: the suffix exists because BigInt predates a type system that
-        // could take a literal's type from its context (F66). The cast rule
+        // could take a literal's type from its context. The cast rule
         // truncates toward zero, as the other integer targets do.
         if (value instanceof NumberValue) {
           return Value(BigInt(Math.trunc(R(value) as number)));
@@ -1019,7 +1019,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
           // #sec-conversions: a BigInt is a numeric family, and the float rule
           // is the one that has an answer for it — round to the width, overflow
           // to an infinity. (An INTEGER target stays refused below: exactness at
-          // the wide widths is the pinned prerequisite, F11's third divergence.)
+          // the wide widths is the pinned prerequisite.)
           const payload = Number(R(value) as bigint);
           return new TypedNumberValue(wrapToType(payload, t), t);
         }
@@ -1056,11 +1056,11 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     return value;
   }
   // #sec-check-elision: the checker proved this boundary cannot fail and cannot
-  // convert, so the check is not inserted (F81). The value is returned as it
+  // convert, so the check is not inserted. The value is returned as it
   // stands, which is what the boundary would have done anyway - the difference
   // is that no user code runs, which is how the elision is observable at all.
   if (IsCheckElided(annotation)) {
-    // ISSUES-found-while-writing-examples.md I1. The elision returns the value
+    // The elision returns the value
     // AS IT STANDS, and for an array that is not the same value the boundary
     // would have produced: the conversion is also where an array acquires its
     // [[TypedElement]], so eliding it left `let b: [].<uint8> = [(1 := uint8)]`
@@ -1111,7 +1111,7 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
         (value as { TypedExtent?: number }).TypedExtent = elided.Extent as number;
       }
     }
-    // A VALUE TYPE CLASS instance is copied on the elided path too (D104).
+    // A VALUE TYPE CLASS instance is copied on the elided path too.
     //
     // The array branch above already says the copy here rather than leaving it
     // to `CheckedConvertValue`, and gives the reason: #sec-elision-stability,
@@ -1404,7 +1404,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       // nothing of the value" - but falling through to the cast branch below
       // would APPLY the cast operator a second time to a value that has already
       // crossed. Harmless for the identity body the design writes and not for a
-      // body that computes, and PLAN-parameterized-defaults.md phase 4 made it
+      // body that computes, and the crossing model made it
       // reachable: a default now arrives at its annotation already stamped.
       return value;
     }
@@ -1445,7 +1445,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   }
   // The same adoption as at the other boundary above, and for the same reason:
   // membership on a collection specialization compares the type arguments
-  // against the stamp (D12), so an unstamped collection has to acquire the
+  // against the stamp, so an unstamped collection has to acquire the
   // target's arguments BEFORE it is asked whether it has them. This is the
   // annotation path - `let m: Map.<string, uint8> = new Map()` - and it is the
   // one a program actually writes; the site above is reached by a different
@@ -1465,9 +1465,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // array, which satisfies any element type vacuously and so always took this
     // shortcut: `let a: [].<uint8> = []` produced an array with no element
     // type, so `a.push(65)` stored a plain Number and the typed surface
-    // silently switched off for the most common way to build an array (F71).
-    // The same shape as F38's crossing, swallowed by the same provenance-blind
-    // shortcut.
+    // silently switched off for the most common way to build an array. The
+    // same shape as the numeric crossing, swallowed by the same
+    // provenance-blind shortcut.
     if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
       // #sec-value-type-copying names "storing into ... an array element" a COPY
       // position, and a typed array literal IS that store:
@@ -1526,7 +1526,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // nothing ever gave a `Set.<uint8>` its type. Its membership test is the
     // prototype chain, which any Set passes, so this shortcut returned it
     // unstamped and every method went unchecked - `s.add(300)` was accepted and
-    // stored a plain Number (F72).
+    // stored a plain Number.
     if (t.Kind === 'nominal' && t.Arguments.length > 0 && value instanceof ObjectValue
         && (t.LibraryName === 'Set' || t.LibraryName === 'Map'
           || t.LibraryName === 'WeakSet' || t.LibraryName === 'WeakMap')) {
@@ -1640,12 +1640,12 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         }
         // The checked rule for the same source: exact where the Number is an
         // integer, a RangeError where it is not, since a BigInt has no
-        // fraction to round into (F66).
+        // fraction to round into.
         if (value instanceof NumberValue) {
           const bn = R(value) as number;
           // Beyond 2**53 a Number no longer distinguishes adjacent integers, so
           // converting one would report a value the source may never have
-          // written (F67). Refuse rather than guess.
+          // written. Refuse rather than guess.
           if (!Number.isSafeInteger(bn)) {
             return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
           }
@@ -1734,7 +1734,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // type with a value-type member - `let o: { x: uint8 } = { x: 5 }` threw,
     // because the literal's `5` is a Number and nothing made it a uint8, while
     // `{ x: number }` passed. That made object types with numeric members close
-    // to unusable. It is F71's shape at a second boundary: a conversion that
+    // to unusable. It is the same shape at a second boundary: a conversion that
     // stops at the surface.
     //
     // CONVERTED IN PLACE, which is where this parts company with the array
@@ -1758,7 +1758,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       const current = Q(yield* Get(value, key));
       const converted = Q(yield* CheckedConvertValue(current, prop.type));
       if (converted !== current) {
-        // PLAN-in-place-conversion-non-writable.md phase 1, W1. CONVERTING IN
+        // CONVERTING IN
         // PLACE ASSUMES THE PROPERTY CAN BE WRITTEN, and nothing checked.
         //
         // The write faulted for any member that is not writable and holds a
@@ -1847,7 +1847,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // declared type t": the store check reads the type off the object, so the
     // object must carry it. Without this the members were converted once at the
     // boundary and every later store went unchecked - the same defect the array
-    // element type had before F49/F51.
+    // element type once had.
     const typed = (value as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties
       ?? new Map<unknown, { TypeRecord: TypeRecord }>();
     for (const prop of objectShape.Properties) {
@@ -1988,7 +1988,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // array, so the array must carry it. Without this the elements were
         // converted once at the boundary and every later store went unchecked,
         // so a `[].<uint8>` accepted a string and degraded to plain Numbers as
-        // it was written to (F49, F51).
+        // it was written to.
         // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
         // part of the type, so the array carries it as it carries the element
         // type. Without it the extent was dropped at the boundary and nothing
@@ -2007,7 +2007,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   }
   // The specification's final step: a target this rule has no conversion for
   // admits only a value already of the type, and otherwise is a TypeError.
-  // (This must NOT call RequireType, which delegates here - F51.)
+  // (This must NOT call RequireType, which delegates here.)
   return Q(yield* requireMembership(value, t));
 }
 
@@ -2016,7 +2016,7 @@ export function* IsOfTypeNode(value: Value, node: ParseNode.Type): PlainEvaluato
   return Q(yield* IsOfType(value, record));
 }
 
-// proposal-runtime-types M11: class operator tables. Operators registered at
+// proposal-runtime-types: class operator tables. Operators registered at
 // class definition are keyed by the prototype object, and binary evaluation
 // consults the table before the numeric machinery, only when the left operand
 // is an Object, keeping the untyped path unaffected.
@@ -2073,8 +2073,8 @@ function primitiveTablesForAgent(): Map<string, Map<string, PrimitiveOperatorEnt
  * So a parameterized block registers its NODES and the environment they were
  * written in, and the dispatch resolves them with the parameter bound. That is
  * the one place this proposal resolves a type at use rather than at
- * declaration, and it is not the F51 mistake: F51 was about resolving a name
- * that was already fixed, while this is a parameter whose value IS the
+ * declaration, and it is not the earlier mistake of resolving a name that was
+ * already fixed, while this is a parameter whose value IS the
  * invocation.
  */
 export interface DeferredOperatorTypes {
@@ -2235,7 +2235,7 @@ export function LookupClassOperator(value: Value, opText: string): Value | null 
  *     exception.
  *  1. Return the mathematical value of _value_."
  *
- * ISSUES-found-while-writing-examples.md I2. A COUNT is CHECKED rather than
+ * A COUNT is CHECKED rather than
  * coerced, and the clause gives the reason: "`length` and `capacity` READ at the
  * index type, so a count that could be written as a String and silently
  * converted would make the operations that accept a count disagree with the
@@ -2285,7 +2285,7 @@ export function RightOperandDeclaresOperator(lval: Value, rval: Value, opText: s
     && LookupClassOperator(rval, opText) !== null;
 }
 
-// proposal-runtime-types M13 #sec-meta-hooks: the `default` hook. A meta
+// proposal-runtime-types #sec-meta-hooks: the `default` hook. A meta
 // declaration registers the type's default, and an annotated binding without
 // an initializer takes it. The method hooks (subtype, validate, narrow,
 // conversionFactor) parse and are name-checked; their judgments join later.
@@ -2307,9 +2307,9 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
  * comparison of a portion against it cannot be defeated by a shape mismatch.
  * A getter on the default object therefore runs at declaration and never
  * again, and MetadataPortion stays synchronous, which its callers require.
- * Symbol-keyed properties are skipped (the plan's C8 pin), and a RegExp
+ * Symbol-keyed properties are skipped, and a RegExp
  * default would snapshot by its own enumerable keys rather than as the
- * pattern form, pinned beside StringPattern (F27).
+ * pattern form, pinned beside StringPattern.
  */
 export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
   if (!(value instanceof ObjectValue)) {
@@ -2363,7 +2363,7 @@ export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
 
 const metaDefaultSnapshots = new WeakMap<object, Value>();
 
-/** The declaration-time snapshot of a meta type's `default` (the plan's Phase 1). */
+/** The declaration-time snapshot of a meta type's `default`. */
 export function RegisterMetaDefaultSnapshot(typeObject: object, snapshot: Value): void {
   metaDefaultSnapshots.set(typeObject, snapshot);
 }
@@ -2375,7 +2375,7 @@ export function LookupMetaDefaultSnapshot(typeObject: object): Value | undefined
 const EMPTY_METADATA_RECORD: Value = Object.freeze(Object.create(null)) as unknown as Value;
 
 /**
- * The participation rule's predicate (METADATA-PROTOCOL-PLAN.md section 2): a
+ * The participation rule's predicate: a
  * meta type GOVERNS a metadata value when MetadataPortion of it differs from
  * the meta type's `default`, compared STRUCTURALLY via SameMetadata; identity
  * cannot be meant, since MetadataPortion returns a fresh copy every call, so
@@ -2389,7 +2389,7 @@ export function MetaTypeGoverns(metadata: MetadataRecord, metaType: object): boo
   return !SameMetadata(MetadataPortion(metadata, metaType), snapshot);
 }
 
-// proposal-runtime-types M20 #sec-meta-hooks: the meta-type method hooks are
+// proposal-runtime-types #sec-meta-hooks: the meta-type method hooks are
 // user closures registered per Type Object. `validate` is the meta type's half
 // of the validation judgment, consulted from the ~parameterized~ arm of
 // IsOfType; the remaining hooks register here for their consumers.
@@ -2397,8 +2397,8 @@ const metaHooks = new WeakMap<object, Map<string, Value>>();
 
 /**
  * Whether any meta hooks are registered against a type object. The
- * unclaimed-key adjudication uses this for the BASE-FORM WAIVER (the plan's
- * C9, F44): a meta registered against the base itself receives the whole
+ * unclaimed-key adjudication uses this for the BASE-FORM WAIVER: a meta
+ * registered against the base itself receives the whole
  * metadata, so it speaks for every key of a parameterization of that base,
  * and without the waiver the unclaimed-key sentence would outlaw the very
  * route the judgment's base fallback consults. The base-form route is an
@@ -2463,7 +2463,7 @@ const metaTypeNames = new WeakMap<object, string>();
 /**
  * The declared NAME of a meta type. #sec-primitive-metadata requires the
  * TypeError of a refused crossing to "name _M_", and nothing recorded the name
- * to give (F62).
+ * to give.
  */
 export function RegisterMetaTypeName(typeObject: object, name: string): void {
   metaTypeNames.set(typeObject, name);
@@ -2476,7 +2476,7 @@ export function LookupMetaTypeName(typeObject: object): string | undefined {
 /**
  * The NAME of a meta type's type parameter, where it declares one.
  *
- * PLAN-hook-parameter-binding.md phase 3. A type-parameter frame maps a NAME to
+ * A type-parameter frame maps a NAME to
  * a record, so binding the parameter at a hook invocation needs the name the
  * declaration wrote - and nothing kept it. #sec-meta-declarations: the parameter
  * "is bound to the base at each parameterization the meta type governs … the
@@ -2498,8 +2498,8 @@ export function LookupMetaTypeParameterName(typeObject: object): string | undefi
 /**
  * A meta type's own description of a portion, where it defines `describe`.
  * The clause asks for it in both failure messages, and the hook has been
- * declarable since cycle 37 with no consumer at all: the engine threw its
- * generic "$1 is not assignable to $2" and never called it (F62).
+ * declarable for a long time with no consumer at all: the engine threw its
+ * generic "$1 is not assignable to $2" and never called it.
  */
 export function* DescribePortion(metaType: object, portion: MetadataRecord): PlainEvaluator<string | undefined> {
   if (metaHooks.get(metaType)?.get('describe') === undefined) {
@@ -2561,7 +2561,7 @@ export function MetadataPortion(metadata: MetadataRecord, metaType: object): Met
   // sec-metadataportion, as written: start from a copy of the meta type's
   // `default` and overwrite with the metadata's own claimed keys, so every
   // judgment of the protocol sees a COMPLETE portion. The missing completion
-  // was the plan's C2, a live defect: a { min, max } meta type parameterized
+  // was a live defect: a { min, max } meta type parameterized
   // as `<{ min: 0 }>` handed `validate` a portion whose `max` was undefined,
   // and the units suite noticed nothing because undefined === undefined is
   // the right verdict for the wrong reason. A meta type with no snapshot
@@ -2586,13 +2586,13 @@ export function MetadataPortion(metadata: MetadataRecord, metaType: object): Met
 
 /** Apply a named hook of a meta type, or *undefined* where it defines none. */
 /**
- * PLAN-metadata-typing.md F159. `args` admits a `MetadataRecord` as well as a
+ * `args` admits a `MetadataRecord` as well as a
  * `Value` because a hook's arguments ARE metadata portions at four of the five
  * call shapes, and the conversion to an ECMAScript object happens below, at the
  * `Call` - not at the callers.
  *
- * F160 is why this is the widening rather than a conversion at each site: OQ4
- * decided "convert at the call sites", the callers duly wrapped their arguments
+ * This is the widening rather than a conversion at each site because the
+ * alternative was tried: the callers duly wrapped their arguments
  * in `MetadataAsObject`, and it changed nothing, because this function was
  * already mapping it over every argument. A mutation test caught the redundancy.
  * Widening here says what is true - a hook argument may be either form, and
@@ -2612,7 +2612,7 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     return undefined;
   }
   ConsumeEvaluationSteps(1);
-  // PLAN-hook-parameter-binding.md phase 1. A hook may annotate its parameters
+  // A hook may annotate its parameters
   // with the meta type's type parameter, and #sec-meta-declarations says what
   // that parameter is: "bound to the base at each parameterization the meta type
   // governs … the name of what the base IS". So it is bound HERE, per
@@ -2636,11 +2636,11 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     pushTypeParameterFrame(new Map([[parameterName, base]]));
   }
   try {
-    // PLAN-crossing-budget.md phase 1. The charge above is one step per hook
+    // The charge above is one step per hook
     // CALL; this marks the span in which the ordinary evaluator charges per
     // NODE, so a hook that loops is bounded by the work it does rather than by
     // returning to be charged again.
-    // PLAN-crossing-budget.md phase 2. The meter needs a FRAME to charge, and a
+    // The meter needs a FRAME to charge, and a
     // crossing from an unconstrained value opens none - measured `open=false`
     // there, where a constrained crossing measured `open=true`. So the two
     // failing probes had two different causes: one unmetered span, one absent
@@ -2807,7 +2807,7 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
 /**
  * The check a cast's result still faces, which a cast does not bypass.
  *
- * PLAN-parameterized-defaults.md phase 1. This asked MEMBERSHIP, and membership
+ * This asked MEMBERSHIP, and membership
  * is the wrong question here by exactly one arm. #sec-primitive-metadata's
  * ConvertParameterization runs, at its second way through, only
  * "If _M_ defines `validate` and it does not hold of _v_ and _tp_, throw" - the
@@ -2871,7 +2871,7 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
  * is the algorithm of #sec-metadata-conversion applied with a _from_ whose
  * every portion is its meta type's `default`.
  *
- * PLAN-parameterized-defaults.md phase 4 needs it separately from
+ * The crossing model needs it separately from
  * CheckedConvertValue. That operation is a BOUNDARY, and a boundary reached at
  * run time admits a value that is already of the target
  * (#table-check-sites defers to RequireType, which is membership), so a bare
@@ -2918,7 +2918,7 @@ export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord 
   // which this engine says by carrying the record, as ApplyImplicitCast does
   // for the other way through. Returning it unstamped left the caller holding a
   // bare zero that its own annotation then refused, which is the very shape of
-  // failure D22 records.
+  // failure this records.
   if (isTypedNumber(value)) {
     return new TypedNumberValue(value.value, t);
   }
@@ -2936,8 +2936,8 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     ...GoverningMetaTypes(from.Metadata).types,
     ...GoverningMetaTypes(to.Metadata).types,
   ]);
-  // The participation rule (the plan's section 2, replacing the former
-  // all-declared quantifier, its C1): a meta type takes part in the crossing
+  // The participation rule, replacing the former all-declared quantifier: a
+  // meta type takes part in the crossing
   // when it GOVERNS either side, its portion differing structurally from its
   // default. `quantize` keys on the TARGET alone, since it maps a value onto
   // the representation the target's constraint requires and a default
@@ -2958,7 +2958,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     // a meta type that does not admit the crossing refuses it - and the message
     // "names _M_ and, where _M_ defines `describe`, its descriptions of _fp_
     // and _tp_", which is the difference between a units error that says what
-    // it means and one that dumps a record (F62).
+    // it means and one that dumps a record.
     const named = LookupMetaTypeName(metaType) ?? 'a meta type';
     const fd = Q(yield* DescribePortion(metaType, fp));
     const td = Q(yield* DescribePortion(metaType, tp));
@@ -3013,7 +3013,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // then rejects for a constraint the program never wrote. A meta type whose
   // constraint IS factor-invariant, like a non-zero flag, says so by defining
   // `rescale` as the identity.
-  // PLAN-metadata-typing.md F157. Annotated as the slot's own type, not
+  // Annotated as the slot's own type, not
   // `Value`: this local is compared against `to.Metadata` by IDENTITY below, to
   // ask whether the rescale loop replaced it. An over-narrow annotation made
   // that comparison span two types and reported as TS2367, "comparison appears
@@ -3070,7 +3070,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
 }
 
 /**
- * PLAN-hook-parameter-binding.md phase 0. This looked the hook up itself and
+ * This looked the hook up itself and
  * called it, so a hook was invoked from TWO operations rather than one - and
  * `validate` is among the hooks most likely to carry an annotation, so anything
  * placed in ApplyMetaHook missed exactly the hook a reader would test with.
@@ -3085,14 +3085,14 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
  * `validate` answers a Boolean where the other hooks answer a Value.
  */
 export function* ApplyValidateHook(typeObject: object, value: Value, metadata: MetadataRecord, base: TypeRecord | undefined): PlainEvaluator<boolean | undefined> {
-  // PLAN-metadata-typing.md OQ4, CORRECTED. `ApplyMetaHook` already maps
+  // CORRECTED. `ApplyMetaHook` already maps
   // `MetadataAsObject` over every argument at its `Call` (see above), so
   // converting here as well would be a second, redundant conversion. The cast
   // is what the site actually needs: `ApplyMetaHook` takes `readonly Value[]`
   // because it serves every hook, most of which never see metadata, and the
   // record becomes an object inside it.
   //
-  // The plan's OQ4 chose "convert at the call sites" over "widen the shared
+  // An earlier reading chose "convert at the call sites" over "widen the shared
   // signature", having found `MetadataAsObject` and read it as a converter the
   // CALLERS should apply. It is one the callee already applies. A mutation test
   // caught it: removing the call-site conversion changed nothing, because the
@@ -3170,7 +3170,7 @@ export function MetadataAsObject(metadata: Value | MetadataRecord): Value {
   return obj;
 }
 
-// proposal-runtime-types M19: parameter and return boundaries. Both read the
+// proposal-runtime-types: parameter and return boundaries. Both read the
 // annotations off the function's code node and are complete no-ops when none
 // are present, so an unannotated function keeps its exact behaviour and cost.
 export interface AnnotatedFunction {
@@ -3188,7 +3188,7 @@ function returnAnnotationOf(fn: AnnotatedFunction): ParseNode.TypeAnnotation | n
 /**
  * Checks a yielded value against the enclosing generator's declared YIELD type.
  *
- * PLAN-async-generator-types.md phase 3. `sec-function-annotations`: "a
+ * `sec-function-annotations`: "a
  * generator's annotation types the values the iterator YIELDS". Nothing checked
  * them - `function* g(): uint8 { yield 'nope'; }` ran and `.next().value` was
  * the String.
@@ -3254,8 +3254,7 @@ export function functionWhereClauses(fn: AnnotatedFunction): readonly ParseNode[
 }
 
 /**
- * PLAN-variadic-and-named-generic-arguments.md Phase 8 (B.1 composition): the
- * frame of a specialized class's bindings, derived from an object that is an
+ * The frame of a specialized class's bindings, derived from an object that is an
  * INSTANCE (its run-time type is the nominal record with [[Arguments]]) or a
  * PROTOTYPE (its own `constructor` is the specialized class). A method's
  * `where`, a method's annotations, and a call through `V4.prototype.m.<…>`
@@ -3301,8 +3300,8 @@ export function classFrameOfMethod(fn: unknown): Map<string, TypeRecord> | null 
 }
 
 /**
- * PLAN-variadic-and-named-generic-arguments.md OQ-18 (B1), typeprogramming.md
- * R15, spec.emu #sec-declared-inverses: the INVERSE a builder declares - an
+ * typeprogramming.md R15, spec.emu #sec-declared-inverses: the INVERSE a
+ * builder declares - an
  * internal association from the builder's function object to the inverse
  * function, never a property, so nothing observable but reflection and no shape
  * effect. Recorded by `Reflect.declareInverse(context, inverse)`, which is not
@@ -3440,7 +3439,7 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
 /**
  * The value a contract's `return` denotes, for the innermost evaluation.
  *
- * PLAN-where-on-methods.md D1. #sec-checked-contracts: a contract "is VERIFIED:
+ * #sec-checked-contracts: a contract "is VERIFIED:
  * at every concrete evaluation of the builder, once [it] has a result, each
  * clause is evaluated with `return` bound to it". The binding is a stack rather
  * than a field on the function, because a clause may CALL the builder - or
@@ -3464,7 +3463,7 @@ export function PopContractReturn(): void {
 /**
  * The VERIFIED half of a checked contract.
  *
- * PLAN-where-on-methods.md D1. #sec-checked-contracts: "at every concrete
+ * #sec-checked-contracts: "at every concrete
  * evaluation of the builder, once [it] has a result, each clause is evaluated
  * with `return` bound to it, and a clause that is falsy is a type error naming
  * the builder, the arguments it was given, and the clause. A contract is never
@@ -3734,7 +3733,7 @@ export function withValueTypeReturn(steps: NativeSteps, typeName: string): Nativ
   return wrapped;
 }
 
-// proposal-runtime-types M21: class Type Objects. Each class constructor is
+// proposal-runtime-types: class Type Objects. Each class constructor is
 // associated at definition with the interned nominal Type Object of its class
 // type; a type reference to the class name resolves to it, and membership uses
 // the stored constructor directly.
@@ -3821,7 +3820,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   // resolved: the caller wants only what the parameter nodes say - arity, rest,
   // and optional, all syntactic - and resolving reads type bindings that are not
   // initialized yet. See MakeOverloadedFunction.
-  // PLAN-variadic-and-named-generic-arguments.md Phase 5.2 (F-G): a GENERIC
+  // A GENERIC
   // member's parameter and return annotations name its own type parameters,
   // which resolved here with no frame in scope - so `r(1)` against
   // `{ r(uint8), r<T>(T) }` died with "'T' is not defined" before the concrete
@@ -3945,7 +3944,7 @@ interface OverloadSlots {
  *
  * Deferring alone is not enough: the dispatcher is a BUILTIN, and a builtin has
  * no lexical environment for a named type to resolve against - the same thing
- * F51 recorded for a default constructor's field types. So the declaring
+ * recorded for a default constructor's field types. So the declaring
  * context is captured when the overloaded function is made and pushed around the
  * resolution, which makes a name resolve exactly as it would have where it was
  * written, only later. The result is cached: the types a signature names do not
@@ -4088,7 +4087,7 @@ export function DecoratorArgumentPlacement(parameters: readonly OverloadParamete
  * signatures reaching past the same number of defaults are AMBIGUOUS - "two
  * signatures satisfied only by defaults is a TypeError at the decorated
  * declaration". Within one number of defaults the ordinary tier ranking decides,
- * so the type rules stay in one place (F53).
+ * so the type rules stay in one place.
  */
 export function* CallDecorator(fn: Value, written: readonly Value[], context: Value): ValueEvaluator {
   const declared = (fn as unknown as OverloadSlots).OverloadFunctions !== undefined;
@@ -4113,7 +4112,7 @@ export function* CallDecorator(fn: Value, written: readonly Value[], context: Va
       // type: a position the callee's own default will fill is satisfied by
       // construction, so it contributes the PARAMETER'S type. Typing the gap as
       // `undefined` instead would make every defaulted signature non-viable,
-      // which is the whole case this cycle exists to admit.
+      // which is the whole case this exists to admit.
       const argumentTypes = placement.Arguments.map((value, i) => (
         placement.Gaps.includes(i) ? (sig.Parameters[i]?.Type ?? ({ Kind: 'any' } as TypeRecord)) : RuntimeTypeOf(value)
       ));

@@ -58,7 +58,7 @@ import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunc
  * Placeholder evaluation for the declarations introduced by the proposal: the
  * declared name is bound and initialized, and the declaration otherwise
  * evaluates to an empty completion. The type registry semantics that give the
- * bindings their values arrive with a later milestone.
+ * bindings their values are not implemented yet.
  */
 /**
  * proposal-runtime-types #sec-type-errors: the checking pass processes a source
@@ -70,8 +70,7 @@ import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunc
 export const preEvaluatedTypeDeclarations = new WeakSet<ParseNode>();
 
 /**
- * The names of TYPE declarations the pre-evaluation pass is currently defining
- * (D72).
+ * The names of TYPE declarations the pre-evaluation pass is currently defining.
  *
  * A pre-evaluated interface resolves its members while top-level `let` and
  * `const` bindings are still uninitialized, so a member naming one gets a
@@ -90,15 +89,15 @@ export const typeDeclarationNamesInPass = new Set<string>();
 
 /**
  * Whether a thrown completion is a temporal-dead-zone report rather than an
- * unresolvable type (D69).
+ * unresolvable type.
  *
  * A recursive interface reaches its own binding while that binding is still
- * initializing. That is not the failure D69 reports - the name IS a type and
+ * initializing. That is not the failure being reported - the name IS a type and
  * IS bound - so it is left unreported, as it was before the report existed.
  */
 /**
  * Whether a thrown completion is a TYPE declaration referring to itself, rather
- * than a member naming a VALUE binding (D72).
+ * than a member naming a VALUE binding.
  *
  * Both are reported identically - `"q" cannot be used before initialization` and
  * `"Node" cannot be used before initialization`, from the same site - so the
@@ -111,7 +110,7 @@ function isRecursiveTypeReference(value: ObjectValue): boolean {
   return name !== null && typeDeclarationNamesInPass.has(name);
 }
 
-/** The name a temporal-dead-zone report names, or null (D72). */
+/** The name a temporal-dead-zone report names, or null. */
 function initializationErrorName(value: ObjectValue): string | null {
   try {
     const properties = (value as unknown as {
@@ -190,7 +189,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       } else {
         value = GetTypeObject(record);
       }
-      // PLAN-declarative-checker-facts.md phase 2: publish what the alias
+      // Publish what the alias
       // resolved to, under its NAME in this realm, so a later source text's
       // checker can read an annotation whose Type node it cannot walk - a
       // |ComputedType| resolves by EVALUATING, which is what just happened.
@@ -398,10 +397,10 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // The interface's structural shape: annotated members check their type,
     // method signatures check callability, and a member whose type cannot be
     // resolved checks presence only. Operators and index signatures join with
-    // a later milestone.
+    // this later.
     // The interface's structure is a real ~object~ record now; membership
     // rides the structural IsOfType case, while identity stays nominal.
-    // PLAN-generic-interface-membership.md phase 1b (runtime half). A generic
+    // The runtime half. A generic
     // interface's members were resolved with its type parameters OUT of scope,
     // so `T` fell to ~any~ and [[Structure]] was `{ x: any }` for EVERY
     // application. Membership then admitted any argument - `o is P.<string>`
@@ -427,7 +426,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     }
     try {
     const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean, initial?: Value }[] = [];
-    // An interface's INDEX SIGNATURES (D78). The structure below hardcoded
+    // An interface's INDEX SIGNATURES. The structure below hardcoded
     // `IndexSignatures: []` and this walk skipped every non-TypeMember, so a
     // declared signature was dropped HERE as well as in the checker - which is
     // why `({ x: "s" } is I)` answered *true* for
@@ -458,8 +457,8 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       // #sec-object-types admits a CALL SIGNATURE (a member with no name); an
       // interface made of them denotes a function type, which the interface
       // record here (an object structure) cannot yet hold. Refused loudly
-      // rather than bound to a nameless key - Phase 5 gives interfaces the
-      // function-typed reading with generic-signature satisfaction.
+      // rather than bound to a nameless key; the function-typed reading with
+      // generic-signature satisfaction is not implemented.
       if (m.PropertyName === null && m.MethodSignature) {
         return Throw.TypeError('$1', Value('a call signature in an interface is not supported yet; write the function type, or an object type of call signatures'));
       }
@@ -492,7 +491,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       }
       let resolved: TypeRecord = { Kind: 'any' };
       if (m.TypeAnnotation) {
-        // A member whose type will not resolve is REPORTED (D69). The throw was
+        // A member whose type will not resolve is REPORTED. The throw was
         // discarded here, so `interface I { n: U; }` for an unbound `U` was
         // accepted in silence - and so was `const q = 5; interface I { n: q; }`,
         // where `q` is bound and is not a type.
@@ -521,19 +520,19 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
           return attempt;
         }
       } else if (m.MethodSignature) {
-        // PLAN-nominal-records.md v2 item 2.3. This was a STUB - a function type
+        // This was a STUB - a function type
         // with NO signatures - so every comparison against a method member
         // failed and `Reflect.isAssignable` answered *false* for a
         // method-bearing interface from a declaring class and from a matching
         // object type alike, while the checker accepted all of them. The same
-        // family as D26: the runtime record carrying less than the checker's.
+        // family of defect: the runtime record carrying less than the checker's.
         //
         // Resolved through the operation the ~function~ TYPE node already uses,
         // so a method member and a `(x: uint8) => uint8` member reach the same
         // record from the same code.
         const method = m.MethodSignature as ParseNode.MethodSignature;
-        // A method's OWN type parameters are in scope across its signature (D68,
-        // which did this for an OBJECT TYPE in `runtime.mts`). Needed HERE too
+        // A method's OWN type parameters are in scope across its signature
+        // (as for an OBJECT TYPE in `runtime.mts`). Needed HERE too
         // the moment the signature's failures are reported: without it
         // `interface I { m<T>(v: T): T; }` began answering `"T" is not defined`,
         // because `T` reached a binding lookup like any other name.
@@ -566,7 +565,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // contravariant, and absence is not a wildcard - so an unmarked
         // interface member refused the class that declared it.
         // A method signature whose types will not resolve is REPORTED, as a data
-        // member's are (D69 rows 3-4) - the same discard, one branch over.
+        // member's are - the same discard, one branch over.
         //
         // A bare parameter name IS a type reference: #sec-function-types gives
         // `FunctionTypeParameter : \`ref\`? Type` and
@@ -637,7 +636,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       // declaration of its own - so a merged record built here would intern as
       // a SECOND type, and every type-position reference to the name would keep
       // resolving through the ORIGINAL declaration to the unmerged one. That is
-      // cycle 104's lesson at a second site: rebinding the name is not the same
+      // the same lesson at a second site: rebinding the name is not the same
       // as changing the type, because a reference in type position reads the
       // declaration and not the binding.
       (priorRecord as { Structure?: { Kind: string, Properties: unknown[], IndexSignatures: unknown[] } }).Structure = {
@@ -780,8 +779,8 @@ export function MatchConstant(a: Value, b: Value): boolean {
 }
 
 /**
- * `sec-patternmatches`, the forms phase one of PLAN-pattern-matching.md
- * carries: combinators, `_`, literals, and the type pattern.
+ * `sec-patternmatches`, the forms carried: combinators, `_`, literals, and the
+ * type pattern.
  *
  * It returns at the FIRST failure, so "user code a pattern can reach ... runs at
  * most once and only up to the deciding test" - which is why `and` returns
@@ -1347,11 +1346,11 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   // meta type that governs it, which is how `meta Dimensions` reaches a
   // `float32.<{ m, s }>` it never names.
   const shape = record ?? (isTypeObject(typeObject) ? (typeObject as { TypeRecord?: TypeRecord }).TypeRecord : undefined);
-  // PLAN-generic-meta-evaluation.md phase 2. A GENERIC constraint shape resolves
+  // A GENERIC constraint shape resolves
   // to the alias's nominal record rather than to its body - `type G<T> = { … }`
   // binds as `Kind: 'nominal'` with `Declaration` the |TypeAliasDeclaration| -
   // so the object guard below saw no ~object~ and claimed no keys. The
-  // declaration parsed (PLAN-generic-meta-declarations.md phase 1), registered
+  // declaration parsed, registered
   // its hooks, its default and its name, and then governed nothing, because
   // claiming is what lets a metadata value FIND the meta type that governs it.
   //
@@ -1364,7 +1363,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   const aliasDeclaration = shape && shape.Kind === 'nominal'
     ? (shape as { Declaration?: ParseNode.TypeAliasDeclaration }).Declaration
     : undefined;
-  // PLAN-meta-hook-signatures.md phase 3. #sec-meta-declarations: it is an early
+  // #sec-meta-declarations: it is an early
   // error "for its constraint shape to take a number of type parameters other
   // than the number the declaration takes". The parameter names the BASE and is
   // threaded into the shape, so a shape that takes a different number has
@@ -1407,7 +1406,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
     if (hook.type === 'MetaDefaultHook') {
       const ref = Q(yield* Evaluate(hook.AssignmentExpression));
       const v = Q(yield* GetValue(ref));
-      // PLAN-meta-default-scope.md phase 1. `RegisterTypeDefault(typeObject, v)`
+      // `RegisterTypeDefault(typeObject, v)`
       // stood here and is gone.
       //
       // #table-meta-hooks scopes this hook to METADATA - "the unconstrained
@@ -1423,13 +1422,13 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
       //   meta uint8 { default = 7; ... }
       //   let y: uint8;        // 7 - the zero of a PRIMITIVE, redefined
       //
-      // The plan expected to keep the registration for a non-object shape,
+      // The registration for a non-object shape was expected to stay,
       // whose comment claimed it "keeps its scalar default for the
       // annotated-binding path". Instrumenting `LookupTypeDefault` found that
       // path to be the two ordinary default-value consumers - the checking pass
       // and the binding evaluation - and the uint8 case above is what they do
       // with it. So the registration was wrong for every shape and the split
-      // the plan reserved was not needed.
+      // that was reserved was not needed.
       //
       // What the hook IS for is below: the SNAPSHOT, which MetadataPortion
       // reads and which is the only store the metadata protocol needs.
@@ -1437,13 +1436,13 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
       // is an OBJECT type the default must be an object, and it is snapshotted
       // here, once, into the host metadata-record shape: a getter on it runs
       // at declaration and never again, and MetadataPortion starts from the
-      // snapshot (the plan's Phase 1). A declaration over a non-object shape,
+      // snapshot. A declaration over a non-object shape,
       // the suite's `meta uint8 { default = 0 }`, keeps its scalar default for
       // the annotated-binding path and registers no snapshot: it claims no
-      // keys, so no portion of it exists to complete. The full C5 rule, that
-      // the default is a VALUE OF the constraint shape, waits on the plan's
-      // P1f verdict about optional-key membership.
-      // PLAN-generic-meta-evaluation.md phase 5. The RESOLVED shape here too,
+      // keys, so no portion of it exists to complete. The full rule, that the
+      // default is a VALUE OF the constraint shape, waits on a verdict about
+      // optional-key membership.
+      // The RESOLVED shape here too,
       // for the same reason the claim loop needs it: a generic constraint shape
       // is a nominal record, so this guard saw no ~object~ and registered no
       // default snapshot - and MetadataPortion reads that snapshot to decide
@@ -1455,15 +1454,15 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         if (!(v instanceof ObjectValue)) {
           return Throw.TypeError('a meta type whose constraint shape is an object type requires an object default');
         }
-        // The full C5 rule (the plan's relocated edit 5): `default: T` means
+        // The full rule: `default: T` means
         // the default is a VALUE OF the constraint shape, checked by ordinary
         // membership so the optional-key form (NumberBounds' `default = {}`)
-        // survives, per P1f. The membership is judged over the SNAPSHOT, not
+        // survives. The membership is judged over the SNAPSHOT, not
         // the live object: the snapshot is what every portion is built from,
         // so it is the artifact the rule protects, and judging it keeps a
         // getter on the default to exactly ONE read, at declaration - the
-        // matrix's P1c caught the live-object check reading it a second time,
-        // which the pre-Phase-4 probes structurally could not see (F46).
+        // matrix caught the live-object check reading it a second time, which
+        // the earlier probes structurally could not see.
         const snapshot = Q(yield* SnapshotMetadataValue(v));
         if (!Q(yield* IsOfType(MetadataAsObject(snapshot), claimShape))) {
           return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
@@ -1484,7 +1483,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         const fn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'meta hook', params, body, 'non-lexical-this', env, privEnv);
         RegisterMetaHook(typeObject, hookName, fn);
         RegisterMetaTypeName(typeObject as object, name);
-        // PLAN-hook-parameter-binding.md phase 3: the parameter's NAME, which a
+        // The parameter's NAME, which a
         // hook invocation needs to key its frame on. Kept here because this is
         // the only place the declaration is in hand.
         const parameterName = node.TypeParameters?.TypeParameterList?.[0]?.BindingIdentifier?.name;
@@ -1511,7 +1510,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
 }
 
 /**
- * proposal-runtime-types M17: MemberExpression/CallExpression TypeArguments.
+ * proposal-runtime-types: MemberExpression/CallExpression TypeArguments.
  * A generic alias Type Object specializes; any other base keeps its Reference
  * so member calls retain their this binding.
  */
@@ -1685,7 +1684,7 @@ const classSpecializations = new Map<unknown, Map<string, Value>>();
 /**
  * The constructor a generic class's application produced, if one has been built.
  *
- * PLAN-generic-instance-membership.md phase 1. `SpecializeGenericClass` builds a
+ * `SpecializeGenericClass` builds a
  * distinct constructor per argument list and registers a record naming it; an
  * ANNOTATION resolving `Box.<uint8>` builds its own record and would otherwise
  * carry the declaration's constructor, which a specialized instance's prototype
@@ -1709,12 +1708,12 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   const args = node.TypeArguments.TypeArgumentList;
   const className = declaration.BindingIdentifier?.name ?? 'a class';
-  // Phase 4: a list with a variadic parameter, or an argument list with a
+  // A list with a variadic parameter, or an argument list with a
   // spread, binds by the engine's BindTypeArguments; the pack-free path is
   // unchanged.
   const usesPacks = params.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)
     || args.some((a) => (a as { IsSpread?: boolean }).IsSpread === true);
-  // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): order named
+  // Order named
   // arguments into parameter order before anything resolves; a hole then takes
   // the parameter's default under the same frame the positional path uses.
   const argNames = args.map((a) => typeArgumentNameOf(a));
@@ -1789,7 +1788,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     // whose other operands are `uint32` - reported that the two numeric types
     // do not mix.
     if (record.Kind === 'literal' && param.TypeParameterConstraint) {
-      // #sec-computed-constraints: resolved UNDER the frame (F-M), and a value
+      // #sec-computed-constraints: resolved UNDER the frame, and a value
       // the constraint refuses is a refusal, not a silent literal of the wrong
       // type (§2.2 step 8's check).
       pushTypeParameterFrame(frame);
@@ -1809,7 +1808,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     // must be one object, since a frame later derived from the instance's
     // [[Arguments]] (a method's `where` over the class's parameters) reads the
     // value-parameter mark off that very record. A literal is rebuilt by
-    // CanonicalizeType, so canonicalizing after binding split them (F-S).
+    // CanonicalizeType, so canonicalizing after binding split them.
     record = CanonicalizeType(record);
     if (name) {
       bindTypeParameter(frame, name, record, param);
@@ -1883,7 +1882,7 @@ function* FamilyApplicationFor(node: ParseNode.TypeArgumentsExpression): PlainEv
   return GetTypeObject(record);
 }
 
-/** F-C: one specialization per (function object, ordered bindings). */
+/** One specialization per (function object, ordered bindings). */
 const genericFunctionSpecializations = new WeakMap<object, Map<string, Value>>();
 
 /**
@@ -1902,8 +1901,8 @@ export function ClearTypeArgumentsCallee(): void {
 }
 
 /**
- * proposal-runtime-types #sec-generic-function-values (PLAN-variadic-and-named-generic-arguments.md
- * Phase 4, F-C): a generic function applied in expression position, `f.<uint8>`,
+ * proposal-runtime-types #sec-generic-function-values: a generic function
+ * applied in expression position, `f.<uint8>`,
  * denotes its SPECIALIZATION as a value - a function object interned per
  * function and ordered bindings, so `f.<uint8> === f.<uint8>` and `f.<uint8> ===
  * f.<T: uint8>`, a Map keyed on one round-trips, and `arr.map(f.<uint8>)` runs
@@ -2038,7 +2037,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   // every body in it read the parameters as this application bound them, and
   // two applications with the same arguments are one specialization.
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
-    // F-C: a GENERIC FUNCTION (a declaration or a method with its own type
+    // A GENERIC FUNCTION (a declaration or a method with its own type
     // parameters) applied in expression position is its specialization value.
     const fnDeclaration = (value as unknown as { ECMAScriptCode?: { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | null } | null }).ECMAScriptCode?.parent;
     const fnParams = fnDeclaration?.TypeParameters?.TypeParameterList;
@@ -2074,7 +2073,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
         argNames.push(typeArgumentNameOf(argNode));
         argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
       }
-      // PLAN-variadic-and-named-generic-arguments.md Phase 0 (F-A): the alias
+      // The alias
       // honoured names in TYPE position and dropped them in expression
       // position, so `G8` and `type G8 = Grid.<Cols: 8>` disagreed.
       const aliasDecl = record.Declaration as ParseNode.TypeAliasDeclaration;
