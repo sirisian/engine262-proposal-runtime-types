@@ -2,6 +2,7 @@ import {
   Assert, Parser, Throw, type ErrorObject,
 } from '../index.mts';
 import { isArray, OutOfRange } from '../utils/language.mts';
+import { surroundingAgent } from '#self';
 import type { TokenData } from './Lexer.mts';
 import type { ParseNode } from './ParseNode.mts';
 
@@ -475,7 +476,16 @@ export class Scope {
           // proposal-runtime-types: a repeat of a name ALREADY DECLARED BY A
           // FUNCTION may be an OVERLOAD; a name bound by `let`, `const` or
           // `class` never is. The DUPLICATE is caught by the checker, early.
-          if (scope.lexicals.has(d.name) && !scope.lexicalFunctions.has(d.name)) {
+          //
+          // The relaxation is GATED ON THE FEATURE. Without `runtime-types`
+          // there are no overloads, so the ECMAScript Early Error is the whole
+          // rule: #sec-block-static-semantics-early-errors makes a duplicate
+          // lexically declared name a Syntax Error, and dropping it for every
+          // realm meant `{ async function f() {} async function* f() {} }` -
+          // which every engine refuses - was accepted here.
+          const mayOverload = surroundingAgent.feature('runtime-types')
+            && scope.lexicalFunctions.has(d.name);
+          if (scope.lexicals.has(d.name) && !mayOverload) {
             this.parser.addEarlyError(Throw.SyntaxError('Function $1 already declared', d.name), d.node);
           }
           if (scope.flags.variableFunctions) {

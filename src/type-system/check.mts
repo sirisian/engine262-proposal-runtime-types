@@ -9232,6 +9232,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return inferred;
   };
 
+  /**
+   * A signature as the duplicate check reads it: what the declaration WROTE,
+   * and what the inference later published for it.
+   */
+  type OverloadSignature = {
+    Return: Known, InferredReturn?: Known, ReturnWasWritten?: boolean,
+  };
+
+  /**
+   * #sec-inferred-return-types: two declarations whose returns cannot be
+   * compared until the inference has run.
+   *
+   * A typed function HAS a return type whether or not it writes one, so
+   * `f(a: uint8): string` and `f(a: uint8) { return "s"; }` are one signature
+   * written two ways, and two bodies returning different types are two
+   * signatures even though neither wrote an annotation. Both facts arrive with
+   * `publishInferredReturns`, which is why the pair is recorded here and judged
+   * by `reportDeferredDuplicates` afterwards.
+   */
+  const deferredDuplicates: {
+    name: string, node: ParseNode, a: OverloadSignature, b: OverloadSignature,
+  }[] = [];
+
+  /** The type a signature has, declared or inferred. */
+  const effectiveReturn = (s: OverloadSignature): Known => s.Return ?? s.InferredReturn ?? null;
+
+  const reportDeferredDuplicates = (): void => {
+    if (deferredDuplicates.length === 0) {
+      return;
+    }
+    const queue = deferredDuplicates.splice(0, deferredDuplicates.length);
+    for (const { name, node, a, b } of queue) {
+      const ra = effectiveReturn(a);
+      const rb = effectiveReturn(b);
+      // An absent inference proves nothing - the same direction the parameter
+      // comparison takes, and for the same reason: under-reporting leaves the
+      // call-site ambiguity to catch it, while over-reporting refuses a pair
+      // that differs in a way this pass could not see.
+      if (!ra || !rb || !SameType(ra, rb)) {
+        continue;
+      }
+      const completion = Throw.StaticTypeError('$1 is declared twice with the same parameter types and return type', Value(name)) as ThrowCompletion;
+      void node;
+      errors.push(completion.Value as ObjectValue);
+    }
+  };
+
   const pendingInferences: {
     signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
     fn: ParseNode,
@@ -11158,9 +11205,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // annotated pair was already refused here, early; this is the same rule
         // reaching the case that declares nothing.
         if (Return === null && !returnWasWritten && e.ReturnWasWritten === false) {
+          // Both declare nothing. Whether they are the same signature depends on
+          // what each INFERS, which is not known until `publishInferredReturns`
+          // has run, so this defers to the re-check below rather than deciding
+          // here. Deciding here read two absent annotations as one type and
+          // refused `f(a: uint8) { return "s"; }` beside
+          // `f(a: uint8) { return a; }`, which are different signatures.
+          deferredDuplicates.push({ name, node: n as ParseNode, a: e, b: signature as unknown as OverloadSignature });
+          return false;
+        }
+        if (sameForOverloading(e.Return, declared)) {
           return true;
         }
-        return sameForOverloading(e.Return, declared);
+        // One side declared a return and the other did not. A TYPED function
+        // still HAS a return type - #sec-inferred-return-types infers it from
+        // the body - so `f(a: uint8): string` and `f(a: uint8) { return "s"; }`
+        // are the same signature written two ways. The inferred half is not
+        // available yet, so this defers too.
+        if ((Return === null) !== (e.Return === null)) {
+          deferredDuplicates.push({ name, node: n as ParseNode, a: e, b: signature as unknown as OverloadSignature });
+        }
+        return false;
       });
       if (duplicate) {
         const completion = Throw.StaticTypeError('$1 is declared twice with the same parameter types and return type', Value(name)) as ThrowCompletion;
@@ -11223,6 +11288,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // fixpoint saw `NULL` in both passes and never converged.
     if (publishNow) {
       publishInferredReturns();
+      reportDeferredDuplicates();
     }
     // Class instance types are recorded over the same list, so a class may be
     // named as a type anywhere in it.
@@ -12393,6 +12459,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // function g(){ return s; }` in a block published nothing before this,
       // and the same program at top level published `string`.
       publishInferredReturns();
+      reportDeferredDuplicates();
       return;
     }
     const n = node as ParseNode;
