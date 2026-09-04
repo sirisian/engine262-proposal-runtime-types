@@ -27,7 +27,7 @@ test('a match MISSING an enumerator and lacking a default is refused', () => {
   // The assertion that says the check is doing work rather than passing
   // everything - and the one the first version of this pin failed to make,
   // because it only tested the covered case.
-  expect(outcome(`${E} function f(e: E) { return match (e) { when E.A: 1; }; } f(E.A);`)).toBe('TypeError');
+  expect(outcome(`${E} function f(e: E) { return match (e) { when E.A: 1; }; } f(E.A);`)).toBe('StaticTypeError');
   expect(outcome(`${E} function f(e: E) { return match (e) { when E.A: 1; default: 0; }; } f(E.A);`)).toBe('ACCEPTED');
 });
 
@@ -35,7 +35,7 @@ test('A GUARDED ARM PROVES NOTHING', () => {
   // "Since the checker does not evaluate guards." A guarded clause does not
   // count towards coverage however exhaustive its pattern looks - which is what
   // keeps exhaustiveness a STATIC claim rather than an optimistic one.
-  expect(outcome(`${E} function f(e: E) { return match (e) { when E.A: 1; when E.B if (true): 2; }; } f(E.A);`)).toBe('TypeError');
+  expect(outcome(`${E} function f(e: E) { return match (e) { when E.A: 1; when E.B if (true): 2; }; } f(E.A);`)).toBe('StaticTypeError');
   // The same clauses with the guard removed are exhaustive.
   expect(outcome(`${E} function f(e: E) { return match (e) { when E.A: 1; when E.B: 2; }; } f(E.A);`)).toBe('ACCEPTED');
 });
@@ -44,7 +44,7 @@ test('the SWITCH machinery it extends is unchanged', () => {
   // Both forms read one enum-name table, so they cannot disagree about what an
   // enum's members are.
   expect(outcome(`${E} function f(e: E) { switch (e) { case E.A: return 1; case E.B: return 2; } } f(E.A);`)).toBe('ACCEPTED');
-  expect(outcome(`${E} function f(e: E) { switch (e) { case E.A: return 1; } } f(E.A);`)).toBe('TypeError');
+  expect(outcome(`${E} function f(e: E) { switch (e) { case E.A: return 1; } } f(E.A);`)).toBe('StaticTypeError');
 });
 
 test('the shapes an enumerator arrives in differ by position', () => {
@@ -56,7 +56,7 @@ test('the shapes an enumerator arrives in differ by position', () => {
   // correct code, which is worse than one that never fires.
   expect(outcome(`${E} function f(e: E) { return match (e) { when E.A: 1; when E.B: 2; }; } f(E.A);`)).toBe('ACCEPTED');
   // A label that is not an enumerator of the subject's enum does not count.
-  expect(outcome(`${E} enum F { C } function f(e: E) { return match (e) { when E.A: 1; when F.C: 2; }; } f(E.A);`)).toBe('TypeError');
+  expect(outcome(`${E} enum F { C } function f(e: E) { return match (e) { when E.A: 1; when F.C: 2; }; } f(E.A);`)).toBe('StaticTypeError');
 });
 
 test('what the checker half still lacks', () => {
@@ -76,11 +76,11 @@ test('a SEALED class is a closed set too', () => {
   const outcome8 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   const S = 'sealed class S {} class T extends S {} class U extends S {} ';
   expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('ACCEPTED');
-  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('TypeError');
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('StaticTypeError');
   expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; default: 0; }; } f(new T());`)).toBe('ACCEPTED');
   // A guarded arm proves nothing, for the same reason it proves nothing over an
   // enum: the checker does not evaluate guards.
-  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U if (true): 2; }; } f(new T());`)).toBe('TypeError');
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U if (true): 2; }; } f(new T());`)).toBe('StaticTypeError');
   // An UNSEALED base is not a closed set, so nothing is required of it - which
   // is what says the check reads `sealed` rather than any class hierarchy.
   expect(outcome8('class B {} class C extends B {} function f(b: B) { return match (b) { when C: 1; }; } f(new C());')).toBe('ACCEPTED');
@@ -99,7 +99,7 @@ test('the shape a class instance type carries', () => {
   // A subclass declared BEFORE its sealed base is still collected, since the
   // set is fixed when the MODULE finishes rather than when a declaration is
   // reached - which is why the linking is a second pass.
-  expect(outcome9('class T extends S {} sealed class S {} class U extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('TypeError');
+  expect(outcome9('class T extends S {} sealed class S {} class U extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('StaticTypeError');
 });
 
 // -- Atoms(t) --------------------------------------------------------------------

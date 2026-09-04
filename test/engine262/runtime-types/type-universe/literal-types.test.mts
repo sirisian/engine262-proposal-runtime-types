@@ -34,22 +34,22 @@ test('a computed key that CAN be typed is accepted', () => {
 
 test('a computed key that CANNOT be typed is refused', () => {
   // A `let` may be reassigned, so the binding names no fixed symbol.
-  expect(outcome('let k = Symbol("k"); interface I { [k]: string; }')).toBe('TypeError');
+  expect(outcome('let k = Symbol("k"); interface I { [k]: string; }')).toBe('StaticTypeError');
   // A parameter has no identity at all until the function runs.
-  expect(outcome('function f(p) { interface I { [p]: string; } } f(1);')).toBe('TypeError');
+  expect(outcome('function f(p) { interface I { [p]: string; } } f(1);')).toBe('StaticTypeError');
   // An arbitrary expression has type `number`, not a literal type - TypeScript
   // refuses this one too.
-  expect(outcome('interface I { [1 + 1]: string; }')).toBe('TypeError');
+  expect(outcome('interface I { [1 + 1]: string; }')).toBe('StaticTypeError');
   // A const that is NOT a symbol: the rule is about what can be compared, and a
   // const bound to a call that is not `Symbol` has no literal type either.
-  expect(outcome('const k = String("k"); interface I { [k]: string; }')).toBe('TypeError');
+  expect(outcome('const k = String("k"); interface I { [k]: string; }')).toBe('StaticTypeError');
 });
 
 test('the rule reaches a `partial interface`, which is where metadata lives', () => {
   // decorators.md adds metadata through `partial interface ClassMetadata {
   // [myMetadata]: string }`, so the partial form is the one that matters most.
   expect(outcome('const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; }')).toBe('ACCEPTED');
-  expect(outcome('let k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; }')).toBe('TypeError');
+  expect(outcome('let k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; }')).toBe('StaticTypeError');
 });
 
 test('an interface NOTHING REFERENCES is judged, which needed forcing', () => {
@@ -57,7 +57,7 @@ test('an interface NOTHING REFERENCES is judged, which needed forcing', () => {
   // a rule checked there fires only if something demands the interface's type.
   // Forced once per interface, as the class walk is - without it this rule
   // would hold only for interfaces that happen to be used.
-  expect(outcome('let k = Symbol("k"); interface Unused { [k]: string; } 1;')).toBe('TypeError');
+  expect(outcome('let k = Symbol("k"); interface Unused { [k]: string; } 1;')).toBe('StaticTypeError');
 });
 
 test('a symbol-keyed member is JUDGED, not merely recognized', () => {
@@ -65,13 +65,13 @@ test('a symbol-keyed member is JUDGED, not merely recognized', () => {
   // the minted key of the
   // `const` its computed name resolves to.
   const decl = 'const k = Symbol("k"); interface I { [k]: string; } ';
-  expect(outcome(`${decl} let m: I = { [k]: 5 };`)).toBe('TypeError');
+  expect(outcome(`${decl} let m: I = { [k]: 5 };`)).toBe('StaticTypeError');
   expect(outcome(`${decl} let m: I = { [k]: "ok" };`)).toBe('ACCEPTED');
-  expect(outcome(`${decl} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('TypeError');
+  expect(outcome(`${decl} let m: I = { [k]: "ok" }; m[k] = 5;`)).toBe('StaticTypeError');
   expect(outcome(`${decl} let m: I = { [k]: "ok" }; m[k] = "fine";`)).toBe('ACCEPTED');
   // IDENTITY, which is the whole of section 6.6: a DIFFERENT const is a different key,
   // so supplying it leaves the declared member missing.
-  expect(outcome('const a = Symbol("x"); const b = Symbol("x"); interface I { [a]: string; } let m: I = { [b]: "ok" };')).toBe('TypeError');
+  expect(outcome('const a = Symbol("x"); const b = Symbol("x"); interface I { [a]: string; } let m: I = { [b]: "ok" };')).toBe('StaticTypeError');
   // The string-keyed control, unchanged throughout.
-  expect(outcome('interface J { s: string; } let m: J = { s: 5 };')).toBe('TypeError');
+  expect(outcome('interface J { s: string; } let m: J = { s: 5 };')).toBe('StaticTypeError');
 });

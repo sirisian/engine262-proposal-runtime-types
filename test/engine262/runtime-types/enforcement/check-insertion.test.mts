@@ -127,16 +127,17 @@ test('row 5: a store to an element of an array of element type t', () => {
   expect(evaluated(`${a} a[0] = 7; String(a[0]) + "/" + String(a[0] is uint8);`)).toBe('7/true');
   // A LITERAL store is now rejected statically, which is what the clause asks
   // for in as many words: "a literal element store follows the literal rule
-  // and is rejected". The run-time check remains the backstop for a
-  // value whose type the checker cannot settle, and reports a RangeError
-  // there, so both paths are asserted rather than one standing for the other.
-  expect(thrownKind(`${a} a[0] = 300;`)).toBe('TypeError');
-  expect(thrownKind(`${a} a[0] = "nope";`)).toBe('TypeError');
+  // and is rejected" - so the class is `StaticTypeError`, the Early Error of
+  // #sec-type-errors. The run-time check remains the backstop for a value whose
+  // type the checker cannot settle, and reports a RangeError there, so both
+  // paths are asserted rather than one standing for the other.
+  expect(thrownKind(`${a} a[0] = 300;`)).toBe('StaticTypeError');
+  expect(thrownKind(`${a} a[0] = "nope";`)).toBe('StaticTypeError');
   expect(thrownKind(`${a} function anyv() { return 300; } a[0] = anyv();`)).toBe('RangeError');
   // Growing the array is a store like any other.
   expect(evaluated(`${a} a[3] = 4; String(a[3] is uint8) + "/" + String(a.length);`)).toBe('true/4');
   // A library push reaches the same [[Set]], so it is checked too.
-  expect(thrownKind(`${a} a.push("x");`)).toBe('TypeError');
+  expect(thrownKind(`${a} a.push("x");`)).toBe('StaticTypeError');
   // Neither `length` nor a non-index property is an element store.
   expect(evaluated(`${a} a.length = 2; String(a.length);`)).toBe('2');
   expect(evaluated(`${a} a.custom = "x"; String(a.custom);`)).toBe('x');
@@ -871,11 +872,12 @@ test('the PARAMETER boundary is a different decision, and this is why', () => {
   expect(evaluated(`${f} String(f((5 := uint8)));`)).toBe('true');
   expect(thrownKind(`${f} f.apply(null, [300]);`)).toBe('RangeError');
   // The literal `[300]` now has an element type of `number`, so the mismatch
-  // with the callback's `uint8` parameter is reported as a TYPE error before
-  // the value is examined, where it was previously a RangeError about the value
-  // 300 itself. The stricter report arrives earlier; the weaker one described
-  // the value better, which is the trade this makes.
-  expect(thrownKind(`${f} [300].map(f);`)).toBe('TypeError');
+  // with the callback's `uint8` parameter is reported as a STATIC type error
+  // before the value is examined, where it was previously a RangeError about the
+  // value 300 itself. The stricter report arrives earlier; the weaker one
+  // described the value better, which is the trade this makes. Through `eval`
+  // the checker cannot settle the argument, so the RangeError backstop stands.
+  expect(thrownKind(`${f} [300].map(f);`)).toBe('StaticTypeError');
   expect(thrownKind(`${f} eval("f(300)");`)).toBe('RangeError');
 });
 
@@ -1018,7 +1020,7 @@ test('a typed Map takes its key and value positions at their declared types', ()
   // same reason.
   expectStatic(`${m} m.set("a", 300);`);
   expect(thrownKind(`${m} function anyv() { return 300; } m.set("a", anyv());`)).toBe('RangeError');
-  expect(thrownKind(`${m} m.set("a", {});`)).toBe('TypeError');
+  expect(thrownKind(`${m} m.set("a", {});`)).toBe('StaticTypeError');
   // And the KEY position, which is the same rule at index 0.
   const k = 'let k: Map.<uint8, string> = new Map(); ';
   expect(evaluated(`${k} k.set(65, "v"); String(k.get(65));`)).toBe('v');

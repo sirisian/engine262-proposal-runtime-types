@@ -218,7 +218,7 @@ test('a qualifying chain makes a match EXHAUSTIVE without a default', () => {
 test('a MISSING arm is refused', () => {
   // The whole point: this compiled before, and silently.
   expect(outcome(`${AD}function f(a: Ad) { return match (a) { when { c: 'US' }: 1; }; } ${VAL}`))
-    .toBe('TypeError');
+    .toBe('StaticTypeError');
 });
 
 test('a default still satisfies it', () => {
@@ -231,7 +231,7 @@ test('a GUARDED arm proves nothing', () => {
   // evaluate guards, so a guarded clause carries no coverage however exhaustive
   // its pattern looks.
   expect(outcome(`${AD}function f(a: Ad) { return match (a) { when { c: 'US' }: 1; when { c: 'CA' } if (true): 2; }; } ${VAL}`))
-    .toBe('TypeError');
+    .toBe('StaticTypeError');
 });
 
 test('adding a constant breaks every such match - the stated payoff', () => {
@@ -240,7 +240,7 @@ test('adding a constant breaks every such match - the stated payoff', () => {
   const AD3 = "type Ad3 = { s: string, c: 'US'|'CA'|'MX' } "
     + "where if (this.c == 'US') { this is { p: string } } else { this is { p: string } }; ";
   expect(outcome(`${AD3}function f(a: Ad3) { return match (a) { when { c: 'US' }: 1; when { c: 'CA' }: 2; }; } f({ s: 'x', c: 'US', p: 'M' });`))
-    .toBe('TypeError');
+    .toBe('StaticTypeError');
   expect(outcome(`${AD3}function f(a: Ad3) { return match (a) { when { c: 'US' }: 1; when { c: 'CA' }: 2; when { c: 'MX' }: 3; }; } f({ s: 'x', c: 'US', p: 'M' });`))
     .toBe('ACCEPTED');
 });
@@ -260,9 +260,9 @@ test('the two pre-existing sources still work, through the same operation', () =
   // Both now source their atoms from `Atoms`, so these are the regression
   // surface for the refactor as well as their own check.
   const E = 'enum E { A, B } ';
-  expect(outcome(`${E}function f(e: E) { return match (e) { when E.A: 1; }; } f(E.A);`)).toBe('TypeError');
+  expect(outcome(`${E}function f(e: E) { return match (e) { when E.A: 1; }; } f(E.A);`)).toBe('StaticTypeError');
   expect(outcome(`${E}function f(e: E) { return match (e) { when E.A: 1; when E.B: 2; }; } f(E.A);`)).toBe('ACCEPTED');
   const S = 'sealed class S {} class T extends S {} class U extends S {} ';
-  expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('TypeError');
+  expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('StaticTypeError');
   expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('ACCEPTED');
 });

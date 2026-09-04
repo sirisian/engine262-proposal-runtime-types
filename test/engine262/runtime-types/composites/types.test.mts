@@ -37,8 +37,8 @@ test('a field holding an OBJECT records `any`, which keeps shapes stable', () =>
 
 test('`Composite` resolves in type position, and refuses a non-composite', () => {
   expect(outcome('let c: Composite = Composite({ x: 1 });')).toBe('ACCEPTED');
-  expect(outcome('let c: Composite = { x: 1 };')).toBe('TypeError');
-  expect(outcome('let c: Composite = 1;')).toBe('TypeError');
+  expect(outcome('let c: Composite = { x: 1 };')).toBe('StaticTypeError');
+  expect(outcome('let c: Composite = 1;')).toBe('StaticTypeError');
   // `Composite.<T>` is an ordinary parameterized spelling of the same family.
   // #sec-defaultvalueof refuses a binding of a type with no default, and a
   // library nominal has none, so resolution is proved with an alias.
@@ -58,7 +58,7 @@ test('a shape must be NAMED at the creation site, not inferred', () => {
   // is refused - and that is the design's OWN advice rather than a shortfall:
   // "an unannotated `Composite` call in typed code produces `number` fields,
   // and code that means anything else should say so at the creation site".
-  expect(outcome('interface I { x: uint8 } let i: I = Composite({ x: uint8(1) });')).toBe('TypeError');
+  expect(outcome('interface I { x: uint8 } let i: I = Composite({ x: uint8(1) });')).toBe('StaticTypeError');
   // The remedy is the TYPED CREATION form;
   // typed-creation.test.mts owns the assertions.
   expect(evaluated('interface I { x: uint8 } String(Reflect.typeOf(Composite.<I>({ x: 1 }).x) === (type uint8));')).toBe('true');
