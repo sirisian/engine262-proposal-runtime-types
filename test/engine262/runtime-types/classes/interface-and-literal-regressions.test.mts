@@ -1421,3 +1421,28 @@ test('a member already declared on an interface is a TypeError', () => {
   expect(accepts('let o = { n: 1, n: 2 };')).toBe(true);
   expect(accepts('interface P { n: int32 } partial interface P { u: string }')).toBe(true);
 });
+
+test('a literal member adapts to a LITERAL arm of a union', () => {
+  // A discriminated union - arms sharing a key that each type as a distinct
+  // LITERAL - offers no single wanted type for that key, so the member took its
+  // widened type and no literal arm accepted it. `IteratorResult` is that shape,
+  // which is what made a hand-written `{ next: () => ({ value: 1, done: false }) }`
+  // unable to satisfy `Iterator`.
+  //
+  // Not boolean-specific: the same held for number and string literals.
+  expect(accepts('let c: { d: true } | { d: false } = { d: true };')).toBe(true);
+  expect(accepts('let c: { n: 1 } | { n: 2 } = { n: 1 };')).toBe(true);
+  expect(accepts('let c: { s: "a" } | { s: "b" } = { s: "a" };')).toBe(true);
+  // A literal arm beside a NON-literal one, which the widened type would have
+  // reached by conversion while the literal arm was unreachable.
+  expect(accepts('let c: { d: true } | { d: string } = { d: true };')).toBe(true);
+
+  // The arm is chosen only where the member FITS it. A value matching no arm,
+  // and excess through a nested arm, are still refused - the second is why the
+  // rule tests a LITERAL arm rather than assignability to an arm of any kind:
+  // freshness does not run on an arm chosen this way, so an object arm would
+  // have admitted `{ p: { x: (1 := int32), zz: "s" } }`.
+  expect(accepts('let c: { d: true } | { d: false } = { d: 1 };')).toBe(false);
+  expect(accepts('let c: { n: 1 } | { n: 2 } = { n: "s" };')).toBe(false);
+  expect(accepts('let c: { p: { x: int32 } } | { p: { x: string } } = { p: { x: (1 := int32), zz: "s" } };')).toBe(false);
+});

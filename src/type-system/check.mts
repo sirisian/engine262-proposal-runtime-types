@@ -10059,15 +10059,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // `literalFitsNumericType` decides whether the literal belongs at the
       // wanted type.
       // Where the arms disagree, `wantedOf` has no answer and the SCALAR rule
-      // still does: the arm the literal FITS (D70b, direction A'). The union's
-      // arms are ordered and flattened by now, so this is a
-      // function of the TYPE and not of how the program spelled it.
+      // still does: the arm the literal FITS. The union's arms are ordered and
+      // flattened by now, so this is a function of the TYPE and not of how the
+      // program spelled it.
+      //
+      // An arm the member is ASSIGNABLE to counts as one it fits, not only a
+      // numeric one it converts into. `literalFitsNumericType` decides a literal
+      // reaching a numeric PRIMITIVE - `1` at `int32` - and answers false for a
+      // literal reaching a LITERAL, which is the shape a discriminated union is
+      // made of: `{ d: true } | { d: false }` offers two arms for `d` and the
+      // source fits exactly one of them. Without this the member took its
+      // widened type - `boolean`, `number`, `string` - which no literal arm
+      // accepts, so every discriminated union was unsatisfiable by a literal.
+      // `IteratorResult` is that shape, which is why a hand-written
+      // `{ next: () => ({ value: 1, done: false }) }` was refused.
       const wantedMember = wantedForMember ?? (() => {
         if (typeof key !== 'string') {
           return null;
         }
         const fits = wantedArmsFor(key).filter(
-          (c) => literalFitsNumericType(memberType as TypeRecord, c),
+          (c) => literalFitsNumericType(memberType as TypeRecord, c)
+            // Restricted to a LITERAL arm on purpose. Testing assignability
+            // against an arm of any kind admits an OBJECT member that is
+            // structurally assignable but carries an excess property - freshness
+            // is what refuses that, and it does not run on an arm chosen here -
+            // so `{ p: { x: int32 } } | { p: { x: string } }` began accepting
+            // `{ p: { x: (1 := int32), zz: "s" } }`. A literal arm has no
+            // members for freshness to be about.
+            || ((c as { Kind?: string }).Kind === 'literal'
+              && IsAssignable(memberType as TypeRecord, c)),
         );
         if (fits.length === 0) {
           return null;
