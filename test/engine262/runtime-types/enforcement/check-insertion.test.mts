@@ -388,11 +388,22 @@ test('a call to a declared function is argument-checked', () => {
   expectStatic('function f(a, b: uint8) {} function nc() { f(999, 300); }');
   // Hoisting: a call may precede the declaration, as JavaScript allows.
   expectStatic('function nc() { f(300); } function f(v: uint8) {}');
-  // Untyped parameters, rest parameters, and destructuring parameters leave
-  // the name unchecked rather than half-described.
+  // Untyped parameters and destructuring parameters leave the name unchecked
+  // rather than half-described. An UNTYPED rest does too.
   expect(evaluated('function f(v) {} function nc() { f(300); } "ok";')).toBe('ok');
-  expect(evaluated('function f(...xs: uint8) {} function nc() { f(300); } "ok";')).toBe('ok');
+  expect(evaluated('function f(...xs) {} function nc() { f(300); } "ok";')).toBe('ok');
   expect(evaluated('function d({ a }) {} function nc() { d(300); } "ok";')).toBe('ok');
+  // A TYPED rest is checked, and the row that used to stand here asserted the
+  // opposite. It wrote `...xs: uint8`, which #sec-type-annotations does not
+  // admit at all: a rest's annotation is "the type of what it collects, an
+  // ~array~ or ~tuple~ type rather than an element type", so the declaration is
+  // refused before any call. Spelled as the clause requires, the call IS
+  // checked against the element type.
+  expect(evaluated('function f(...xs: [].<uint8>) {} function nc() { f(1); } "ok";')).toBe('ok');
+  expectStatic('function f(...xs: [].<uint8>) { } function nc() { f(300); }');
+  expectStatic('function f(...xs: [].<uint8>) { } function nc() { f("s"); }');
+  // ...and the scalar spelling is refused at the DECLARATION, on its own.
+  expectStatic('function f(...xs: uint8) {}');
   // An OVERLOADED name is resolved statically, by the same ranker the
   // run time uses: the row is selected first, then its parameter is checked, so
   // a literal that cannot take the chosen row's type is reported against it.
@@ -807,9 +818,12 @@ test('a BLOCK-bodied callback\'s return type is inferred', () => {
   expect(evaluated(`${a} { let b: [].<string> = a.map(x => { return "s"; }); } "ok";`)).toBe('ok');
   // A FunctionExpression callback, not only an arrow.
   expectStatic(`${a} { let b: [].<uint8> = a.map(function (x) { return "s"; }); }`);
-  // The parameters the position supplies are visible in the body, so the
-  // `uint32` index flows into the inference too.
-  expect(evaluated(`${a} { let b: [].<uint32> = a.map((x, i) => { return i; }); } "ok";`)).toBe('ok');
+  // The parameters the position supplies are visible in the body, so the INDEX
+  // TYPE flows into the inference too. That type is `uint64` - #sec-array-types
+  // defines it, and notes that `standardlibrary.md` writes `uint32` for the
+  // callback's second parameter only because it predates the definition. This
+  // row asserted the stale spelling.
+  expect(evaluated(`${a} { let b: [].<uint64> = a.map((x, i) => { return i; }); } "ok";`)).toBe('ok');
 
   // SEVERAL returns join into a union.
   expectStatic(`${a} { let b: [].<uint8> = a.map(x => { if (x) { return x; } return "s"; }); }`);
