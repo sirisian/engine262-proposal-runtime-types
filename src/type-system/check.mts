@@ -8207,14 +8207,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         static?: boolean,
         ClassElementName?: { type?: string, name?: string, value?: string } | null,
       };
-      if (f.static || !f.TypeAnnotation) {
+      if (f.static) {
         continue;
       }
       const key = f.ClassElementName?.name ?? f.ClassElementName?.value;
       if (typeof key !== 'string' || f.ClassElementName?.type === 'PrivateIdentifier') {
         continue;
       }
-      const t = resolveType(f.TypeAnnotation.Type);
+      // A field with no annotation still declares a member: its type is the one
+      // its initializer produces, exactly as the field's own Static Type is.
+      //
+      // Skipping such a field leaves it out of the class's members altogether, so
+      // an interface the class implements is unsatisfied - and a field of the
+      // WRONG type is then refused for being absent rather than for its type.
+      //
+      // An ACCESSOR is excluded: its pair of methods is what the class exposes,
+      // and giving the backing field the initializer's type would refuse a later
+      // assignment the accessor itself admits.
+      const fieldInitializer = (f as { accessor?: boolean }).accessor === true
+        ? null
+        : (f as unknown as { Initializer?: ParseNode | null }).Initializer;
+      const t = f.TypeAnnotation
+        ? resolveType(f.TypeAnnotation.Type)
+        : (fieldInitializer ? staticType(fieldInitializer as ParseNode) : null);
       if (t) {
         Properties.push({ key, type: t, optional: false, readonly: false, protected: (f as { protected?: boolean }).protected === true });
         // An `accessor` is a FieldDefinition carrying the marker, and it is the

@@ -1370,6 +1370,34 @@ test('a class implements a GENERIC interface at its arguments', () => {
   expect(accepts('interface S { x: uint8; } class C implements S { x: uint8; } let s: S = new C();')).toBe(true);
 });
 
+test('a field with no annotation still declares a member', () => {
+  // A field's type is the one its initializer produces when no annotation is
+  // written, exactly as the field's own Static Type is. Leaving such a field out
+  // of the class's members makes the class appear to declare nothing there, so
+  // an interface it implements is unsatisfied and a field of the WRONG type is
+  // refused for being absent rather than for its type.
+  expect(accepts('interface A { a: uint32; } class C implements A { a = (1 := uint32); }')).toBe(true);
+  expect(accepts('interface A { a: string; } class C implements A { a = "s"; }')).toBe(true);
+
+  // The type is checked, and the message names it.
+  expect(accepts('interface A { a: uint32; } class C implements A { a = "s"; }')).toBe(false);
+  expect(accepts('interface A { a: uint32; } class C implements A { a = (1 := uint8); }')).toBe(false);
+
+  // An ACCESSOR with no annotation stays untyped: its pair of methods is what
+  // the class exposes, and typing the backing field would refuse an assignment
+  // the accessor itself admits.
+  expect(evaluated('class A { accessor a = 5; } const o = new A(); o.a = "s"; String(o.a);')).toBe('s');
+
+  // A STATIC field is not a member of the instance type.
+  expect(accepts('interface A { a: uint32; } class C implements A { static a = (1 := uint32); }')).toBe(false);
+
+  // An annotated field, with or without an initializer, is unchanged, and a
+  // missing member is still refused.
+  expect(accepts('interface A { a: uint32; } class C implements A { a: uint32 = (1 := uint32); }')).toBe(true);
+  expect(accepts('interface A { a: uint32; } class C implements A { a: uint32; }')).toBe(true);
+  expect(accepts('interface A { a: uint32; } class C implements A { }')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // The literal arm ended `return contextual`, GIVING the literal the
