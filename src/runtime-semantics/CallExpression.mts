@@ -1192,7 +1192,22 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           } finally {
             popTypeParameterFrame();
           }
-          if (!IsAssignable(record, declaredForType)) {
+          // #sec-the-type-type: `type` is the type of TYPES, and "because
+          // `type` is itself a type, `type` is a value of `type`" - so EVERY
+          // type record satisfies a `type` bound and there is nothing here to
+          // compare.
+          //
+          // `IsAssignable` answers the question one level down: whether the
+          // VALUES of one type are values of another. Asked of `uint8` against
+          // `type` it says no - correctly, since no `uint.<8>` is a type - and
+          // that is not what a `<T: type>` bound asks. So `f.<uint8>()` was
+          // refused for a generic value parameter while the same argument at an
+          // ordinary parameter, `f(v: type)` called as `f(uint8)`, was
+          // accepted: that path tests the Type Object as a VALUE and gets it
+          // right.
+          const boundIsTheTypeType = (declaredForType as { Kind?: string, Name?: string }).Kind === 'primitive'
+            && (declaredForType as { Name?: string }).Name === 'type';
+          if (!boundIsTheTypeType && !IsAssignable(record, declaredForType)) {
             return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(declaredForType)));
           }
         }
