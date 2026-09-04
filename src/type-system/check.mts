@@ -8253,9 +8253,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const fieldInitializer = (f as { accessor?: boolean }).accessor === true
         ? null
         : (f as unknown as { Initializer?: ParseNode | null }).Initializer;
+      // An UNANNOTATED field's type is WIDENED, the way an unannotated binding's
+      // is. Taking the initializer's type unwidened made the field a member of
+      // its initializer's LITERAL type, and a literal type has exactly one
+      // value - so `class C { y = 1; }` declared `y` as the literal `1` and
+      // refused every later store, including `c.y = 2`, with "a literal type of
+      // number is not assignable to a literal type of number". `class C { y = 1; }`
+      // is ordinary JavaScript and `c.y = 2` must work.
+      //
+      // The same reasoning the accessor exclusion just above rests on: a type
+      // that refuses a later assignment the program plainly admits is the wrong
+      // type for the member. Where the field DECLARES one, that annotation is
+      // what it means and is left exactly as written.
       const t = f.TypeAnnotation
         ? resolveType(f.TypeAnnotation.Type)
-        : (fieldInitializer ? staticType(fieldInitializer as ParseNode) : null);
+        : (fieldInitializer
+          ? ((): Known => {
+            const inferred = staticType(fieldInitializer as ParseNode);
+            return inferred ? widen(inferred as TypeRecord) as Known : null;
+          })()
+          : null);
       if (t) {
         Properties.push({ key, type: t, optional: false, readonly: false, protected: (f as { protected?: boolean }).protected === true });
         // An `accessor` is a FieldDefinition carrying the marker, and it is the

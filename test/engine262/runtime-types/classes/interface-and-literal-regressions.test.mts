@@ -1476,7 +1476,7 @@ test('a literal member adapts to a LITERAL arm of a union', () => {
 });
 
 test('parentheses are transparent to contextual typing and to freshness', () => {
-  // `( … )` is a node of its own between the target and the literal that reads
+  // `( ... )` is a node of its own between the target and the literal that reads
   // the contextual, so a parenthesized literal was recorded against nothing and
   // adapted against nothing - the same value without the parentheses being
   // accepted. Parentheses do not change what an expression means and must not
@@ -1501,4 +1501,28 @@ test('parentheses are transparent to contextual typing and to freshness', () => 
   expect(accepts('let o: { p: { x: int32 } } = ({ p: ({ x: 1, zz: 2 }) });')).toBe(false);
   expect(accepts('let o: { x: int32, y: uint8 } = ({ x: 1 });')).toBe(false);
   expect(accepts('let o: { x: int32 } = ({ x: "s" });')).toBe(false);
+});
+
+test('an unannotated field is WIDENED, so a later store is not refused', () => {
+  // A field with no annotation took its initializer's type unwidened, and a
+  // literal type has exactly one value - so `class C { y = 1; }` declared `y`
+  // as the literal `1` and refused `c.y = 2` with "a literal type of number is
+  // not assignable to a literal type of number". That is ordinary JavaScript.
+  expect(accepts('class C { y = 1; } function nc(c: C) { c.y = 2; }')).toBe(true);
+  expect(accepts('class C { y = "a"; } function nc(c: C) { c.y = "b"; }')).toBe(true);
+  // ...and the widened type is `number`, not `any`: a `uint8` is not assignable
+  // to it, exactly as at any other `number` position.
+  expect(accepts('class C { y = 1; } function nc(c: C) { c.y = (2 := uint8); }')).toBe(false);
+
+  // The member is still DECLARED, which is what the inferred type is for: an
+  // interface the class implements is satisfied, and a field of the wrong type
+  // is refused for its type rather than for being absent.
+  expect(accepts('interface A { a: uint32; } class C implements A { a = (1 := uint32); }')).toBe(true);
+  expect(accepts('interface A { a: string; } class C implements A { a = "s"; }')).toBe(true);
+  expect(accepts('interface A { a: uint32; } class C implements A { a = "s"; }')).toBe(false);
+  expect(accepts('interface A { a: uint32; } class C implements A { a = (1 := uint8); }')).toBe(false);
+
+  // An ANNOTATED field is unaffected - the annotation is what it means.
+  expect(accepts('class C { y: uint8 = 1; } function nc(c: C) { c.y = 7; }')).toBe(true);
+  expect(accepts('class C { y: uint8 = 1; } function nc(c: C) { c.y = "s"; }')).toBe(false);
 });
