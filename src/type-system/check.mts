@@ -6720,6 +6720,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : (returned.length === 1 ? returned[0] : CanonicalizeType({ Kind: 'union', Members: returned }));
         return libraryType(d.async ? 'AsyncGenerator' : 'Generator', [Y, R, voidType]);
       }
+      // A unary `+` or `-` over a numeric literal has that literal's type.
+      //
+      // `-1` parses as a minus applied to the NumericLiteral `1`, so without this
+      // the expression carries no literal type while the ANNOTATION `-1` names one.
+      // An assignment hides the difference, because it checks the VALUE against the
+      // target's range; narrowing cannot, because it compares TYPES.
+      case 'UnaryExpression': {
+        const unary = node as unknown as { operator?: string, UnaryExpression?: ParseNode };
+        const inner = unary.UnaryExpression;
+        if ((unary.operator === '-' || unary.operator === '+')
+          && inner && (inner as { type?: string }).type === 'NumericLiteral'
+          && !(inner as { Imaginary?: boolean }).Imaginary) {
+          const magnitude = (inner as unknown as { value: number | bigint }).value;
+          const signed = unary.operator === '-' ? -magnitude : magnitude;
+          return typeof signed === 'bigint'
+            ? { Kind: 'literal', Value: Value(signed), Base: makePrimitive('bigint') }
+            : { Kind: 'literal', Value: Value(signed), Base: makePrimitive('number') };
+        }
+        // Any other unary form has no literal type.
+        return null;
+      }
       case 'NumericLiteral': {
         // A BIGINT literal is a literal of `bigint`, not of `number`. It was
         // labelled `number`, which was pinned as cosmetic - it is not: with
@@ -8659,7 +8680,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return { name, type: t as TypeRecord, negated: negated !== inverted };
         }
         // `x === 5` and `x === 'a'`: the literal names a literal type.
-        if (against.type === 'NumericLiteral' || against.type === 'StringLiteral' || against.type === 'BooleanLiteral') {
+        // A SIGNED numeric literal is admitted alongside a bare one: `-1` parses as a
+        // unary minus applied to the NumericLiteral `1`, so a comparison against it
+        // produced no narrowing fact at all - `if (r === -1)` left the whole union in
+        // both arms where `if (r === 5)` narrowed correctly.
+        const signedLiteral = against.type === 'UnaryExpression'
+          && ((against as unknown as { operator?: string }).operator === '-'
+            || (against as unknown as { operator?: string }).operator === '+')
+          && (against as unknown as { UnaryExpression?: { type?: string } }).UnaryExpression?.type === 'NumericLiteral';
+        if (signedLiteral || against.type === 'NumericLiteral' || against.type === 'StringLiteral' || against.type === 'BooleanLiteral') {
           const lit = staticType(against);
           if (lit) {
             return { name, type: lit as TypeRecord, negated: negated !== inverted };

@@ -1398,6 +1398,34 @@ test('a field with no annotation still declares a member', () => {
   expect(accepts('interface A { a: uint32; } class C implements A { }')).toBe(false);
 });
 
+test('a comparison against a SIGNED numeric literal narrows', () => {
+  // `-1` parses as a unary minus applied to the NumericLiteral `1`, so it is
+  // neither a literal expression nor an operand the equality forms recognised.
+  // Two things follow and both are needed: the expression must carry the literal
+  // type its annotation names, and the comparison must admit the signed form as
+  // an operand.
+  //
+  // An assignment hides the first, because it checks the VALUE against the
+  // target's range; narrowing cannot, because it compares TYPES.
+  expect(accepts('type R = uint64 | -1; let r: R = -1;'
+    + ' if (r === -1) { "a"; } else { let n: uint64 = r; }')).toBe(true);
+  expect(accepts('type R = uint64 | -1; let r: R = -1;'
+    + ' if (r !== -1) { let n: uint64 = r; }')).toBe(true);
+
+  // A positive literal, a string arm, a null arm and `typeof` narrowed already.
+  expect(accepts('type P = uint64 | 5; let p: P = 5;'
+    + ' if (p === 5) { "a"; } else { let n: uint64 = p; }')).toBe(true);
+  expect(accepts('type S = uint8 | "none"; let s: S = "none";'
+    + ' if (s === "none") { "a"; } else { let n: uint8 = s; }')).toBe(true);
+  expect(accepts('type N = uint8 | null; let v: N = null;'
+    + ' if (v === null) { "a"; } else { let n: uint8 = v; }')).toBe(true);
+  expect(accepts('type U = uint8 | string; let s: U = "x";'
+    + ' if (typeof s === "string") { "a"; } else { let n: uint8 = s; }')).toBe(true);
+
+  // The union is still refused where it has NOT been narrowed.
+  expect(accepts('type R = uint64 | -1; let r: R = -1; let n: uint64 = r;')).toBe(false);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // The literal arm ended `return contextual`, GIVING the literal the
