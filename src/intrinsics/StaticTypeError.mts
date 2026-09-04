@@ -23,26 +23,34 @@ import type { Realm } from '#self';
  * *TypeError* for the ~any~ boundary and other genuinely dynamic checks". It
  * does not say what the rejection throws, and that is the gap this fills.
  *
- * WHY NOT `SyntaxError`: every Early Error in ECMA-262 is one, and reusing it
- * costs nothing at the loader. But the syntax is impeccable in every program
- * this refuses, and `SyntaxError: "s" is not assignable to "number"` reads as a
- * bug in the engine rather than in the program.
- *
  * WHY NOT `TypeError`: that is the one this must be distinguishable FROM. A
  * `TypeError` can be caught where it occurs; an Early Error rejects the source
  * text before any of it runs. Using one constructor for both meant a program
  * could not tell which it had, which is the split this exists for.
  *
- * WHY IT EXTENDS `SyntaxError`: a module loader, a bundler and an `eval` caller
- * all already treat a `SyntaxError` as "this source did not load", and that is
- * exactly what happens here. Subclassing keeps every such path working while
- * letting anything that cares say "this failed TYPE checking" rather than
- * "this failed to parse" - which is what `WebAssembly.CompileError` exists to
- * express for a module that decodes and fails validation.
+ * WHY NOT `SyntaxError`: every Early Error in ECMA-262 is one, so reusing it is
+ * the obvious move, and the argument for it is that a loader treating a
+ * `SyntaxError` as "this source did not load" would keep working unchanged.
+ * Measured, that argument does not hold: Node's ESM loader, its module
+ * translators and its CJS loader make no reference to `SyntaxError`; its REPL
+ * branches on `e.name === 'SyntaxError'`, which this fails under any parent;
+ * and Vite's config loader guards its `instanceof SyntaxError` with a message
+ * test no type error satisfies. Inheriting would have bought nothing real while
+ * costing something real - every existing `catch (e instanceof SyntaxError)`
+ * would silently begin catching type errors, and the syntax is impeccable in
+ * every program this refuses.
  *
- * No native ECMAScript error subclasses another, so this is novel FOR
- * JAVASCRIPT; it is ordinary elsewhere, and Python's `IndentationError` is the
- * same pattern for the same reason.
+ * WHY IT EXTENDS `Error` DIRECTLY: it is what every native ECMAScript error
+ * does - `TypeError`, `SyntaxError`, `RangeError` and the rest all sit flat
+ * under `Error`, and none subclasses another - and it is what
+ * `WebAssembly.CompileError` does, which is the same idea in a neighbouring
+ * language surface: a module that decodes cleanly and then fails VALIDATION
+ * gets its own class, directly under `Error`, rather than being folded into the
+ * decode failure.
+ *
+ * A program that wants both phases writes
+ * `e instanceof StaticTypeError || e instanceof TypeError`; both constructors
+ * are globals, and the two are disjoint by construction, which is the point.
  */
 function* StaticTypeErrorConstructor([message = Value.undefined, options = Value.undefined]: Arguments, { NewTarget }: FunctionCallContext): ValueEvaluator {
   let newTarget;
@@ -66,9 +74,8 @@ function* StaticTypeErrorConstructor([message = Value.undefined, options = Value
 
 export function bootstrapStaticTypeError(realmRec: Realm) {
   const c = bootstrapConstructor(realmRec, StaticTypeErrorConstructor, 'StaticTypeError', 1, realmRec.Intrinsics['%StaticTypeError.prototype%'] as never, []);
-  // The CONSTRUCTOR's prototype is `%SyntaxError%`, so
-  // `StaticTypeError.__proto__ === SyntaxError` and static inheritance behaves
-  // as a subclass declared in the language would.
-  c.Prototype = realmRec.Intrinsics['%SyntaxError%'];
+  // The CONSTRUCTOR's prototype is `%Error%`, matching the prototype chain of
+  // the instances and of every native error constructor.
+  c.Prototype = realmRec.Intrinsics['%Error%'];
   realmRec.Intrinsics['%StaticTypeError%'] = c;
 }

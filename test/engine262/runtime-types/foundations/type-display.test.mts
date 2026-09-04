@@ -138,24 +138,25 @@ test('an inhabitable intersection is unaffected', () => {
   expect(c.Value?.stringValue?.()).toBe('1');
 });
 
-test('StaticTypeError is a SyntaxError subclass', () => {
+test('StaticTypeError sits directly under Error', () => {
   // #sec-type-errors makes a DECIDABLE violation an Early Error and
-  // "reserves a thrown *TypeError* for the ~any~ boundary". It does not say what
-  // the rejection throws, and one constructor cannot mean both "catchable here"
-  // and "the source was rejected" - a program could not tell which it had.
+  // "reserves a thrown *TypeError* for the ~any~ boundary". One constructor
+  // cannot mean both "catchable here" and "the source was rejected" - a program
+  // could not tell which it had - so the rejection gets its own class.
   //
-  // It EXTENDS `SyntaxError` so every loader, bundler and `eval` caller that
-  // treats one as "this source did not load" keeps working, while anything that
-  // cares can say "this failed TYPE checking" rather than "this failed to
-  // parse". No native ECMAScript error subclasses another; this is ordinary
-  // elsewhere, and Python's `IndentationError` is the same pattern.
+  // It sits flat under `Error`, as every native error does and as
+  // `WebAssembly.CompileError` does for the same reason: a source that parses
+  // and then fails VALIDATION is not a parse failure.
   expect(evaluated('String(typeof StaticTypeError);')).toBe('function');
   expect(evaluated('String(StaticTypeError.name);')).toBe('StaticTypeError');
   // Both links: the constructor's and the prototype's.
-  expect(evaluated('String(Object.getPrototypeOf(StaticTypeError) === SyntaxError);')).toBe('true');
-  expect(evaluated('String(Object.getPrototypeOf(StaticTypeError.prototype) === SyntaxError.prototype);')).toBe('true');
-  expect(evaluated('const e = new StaticTypeError("x"); String((e instanceof StaticTypeError) && (e instanceof SyntaxError) && (e instanceof Error));')).toBe('true');
-  // ...and it is NOT the thing it must be distinguishable from.
+  expect(evaluated('String(Object.getPrototypeOf(StaticTypeError) === Error);')).toBe('true');
+  expect(evaluated('String(Object.getPrototypeOf(StaticTypeError.prototype) === Error.prototype);')).toBe('true');
+  expect(evaluated('const e = new StaticTypeError("x"); String((e instanceof StaticTypeError) && (e instanceof Error));')).toBe('true');
+  // ...and it is NOT either of the things it must be distinguishable from.
+  // `SyntaxError` would make a loader catching parse failures catch these; the
+  // syntax of a program this rejects is well formed.
   expect(evaluated('const e = new StaticTypeError("x"); String(e instanceof TypeError);')).toBe('false');
+  expect(evaluated('const e = new StaticTypeError("x"); String(e instanceof SyntaxError);')).toBe('false');
   expect(evaluated('String(new StaticTypeError("boom"));')).toBe('StaticTypeError: boom');
 });
