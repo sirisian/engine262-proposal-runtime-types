@@ -1345,6 +1345,31 @@ test('an array method takes the index type, not `number`', () => {
   expect(accepts(`${A}a.map((x: uint8, i: uint64) => x);`)).toBe(true);
 });
 
+test('a class implements a GENERIC interface at its arguments', () => {
+  // An interface's [[Structure]] holds its members as DECLARED, whose types are
+  // still its own type parameters. Comparing a class against that structure
+  // directly asks whether the class's `uint8` member satisfies `T`, which it
+  // cannot - so the declaration is refused before any use.
+  //
+  // The arguments are on the `implements` reference, and are bound to the
+  // interface's parameters and substituted, as at any other parameterized use.
+  expect(accepts('interface G<T> { x: T; } class C implements G.<uint8> { x: uint8; }'
+    + ' let g: G.<uint8> = new C();')).toBe(true);
+  expect(accepts('interface G<T, U> { x: T; y: U; }'
+    + ' class C implements G.<uint8, string> { x: uint8; y: string; }')).toBe(true);
+  expect(accepts('interface G<T> { x: T; } class C implements G.<string> { x: string; }')).toBe(true);
+  expect(evaluated('interface G<T> { x: T; } class C implements G.<uint8> { x: uint8; }'
+    + ' String(new C() is G.<uint8>);')).toBe('true');
+
+  // A member of the WRONG type is still refused, and the message names the
+  // SUBSTITUTED type rather than the parameter.
+  expect(accepts('interface G<T> { x: T; } class C implements G.<uint8> { x: string; }')).toBe(false);
+  // A MISSING member is still refused.
+  expect(accepts('interface G<T> { x: T; } class C implements G.<uint8> { }')).toBe(false);
+  // A non-generic interface has no arguments to bind.
+  expect(accepts('interface S { x: uint8; } class C implements S { x: uint8; } let s: S = new C();')).toBe(true);
+});
+
 test('a CLASS type is not satisfied by an object literal', () => {
   const C = 'class C { a: uint8 = (0 := uint8); } ';
   // The literal arm ended `return contextual`, GIVING the literal the

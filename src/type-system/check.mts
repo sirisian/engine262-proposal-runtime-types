@@ -8260,9 +8260,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       const it = interfaceTypeOf(nm);
-      const istruct = it && it.Kind === 'nominal'
+      const declaredStructure = it && it.Kind === 'nominal'
         ? (it as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
         : null;
+      // A GENERIC interface's members are SUBSTITUTED before the class is
+      // compared against them.
+      //
+      // [[Structure]] holds the members as DECLARED, whose types are still the
+      // interface's own parameters, so `class C implements G.<uint8>` was compared
+      // against `x: T` and refused with "uint.<8>" is not assignable to "T", at the
+      // declaration and before any use. The arguments are on the reference and are
+      // bound to the parameters here, as at any other parameterized use.
+      const ifaceDecl = interfaceNodes.get(nm) as unknown as {
+        TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+      } | undefined;
+      const ifaceParams = ifaceDecl?.TypeParameters?.TypeParameterList ?? [];
+      const ifaceArgNodes = (ref as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } | null }).TypeArguments?.TypeArgumentList ?? [];
+      let istruct = declaredStructure;
+      if (istruct && ifaceParams.length > 0 && ifaceArgNodes.length === ifaceParams.length) {
+        const ifaceBindings = new Map<string, TypeRecord>();
+        ifaceParams.forEach((prm, k) => {
+          const pname = (prm as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+          const argType = resolveType(ifaceArgNodes[k] as ParseNode.Type);
+          if (pname && argType) {
+            ifaceBindings.set(pname, argType as TypeRecord);
+          }
+        });
+        if (ifaceBindings.size === ifaceParams.length) {
+          istruct = substituteTypeParameters(istruct as Known, ifaceBindings) as typeof istruct;
+        }
+      }
       if (istruct && istruct.Kind === 'object') {
         // `implements` is VERIFIED, not merely declared. Every member the
         // interface requires must be declared by the class with an assignable
