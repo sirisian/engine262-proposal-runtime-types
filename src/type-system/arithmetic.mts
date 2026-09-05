@@ -448,6 +448,17 @@ export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue
   // The enum rule of TypedOperandType, at the unary operators: `-C.One` computes
   // in the underlying type and is a value of it.
   const t = UnderlyingOf(x.TypeRecord as TypeRecord);
+  // A WIDE integer type is read exactly, as `typedBinary` reads it. This read
+  // the payload through `payload()`, which is a double, so a `uint64` holding
+  // `2^53 + 1` was negated as `2^53`: `-(-b)` came back one short, and `-b` on
+  // an unsigned wrapped the collapsed value rather than the real one. The
+  // modular rule for an unsigned is `wrapToType`'s and is unchanged; only the
+  // operand it is applied to is now the value the type actually holds.
+  if (isWideIntegerType(t)) {
+    const exact = payloadExact(x);
+    const math = op === '-' ? -exact : ~exact;
+    return new TypedNumberValue(wrapToType(math, t), t);
+  }
   const math = op === '-' ? -payload(x) : ~payload(x);
   return new TypedNumberValue(wrapToType(math, t), t);
 }

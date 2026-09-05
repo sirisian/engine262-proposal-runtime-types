@@ -638,6 +638,23 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
       // iii. Return BigInt::lessThan(px, ny).
       return BigIntValue.lessThan(nx, py);
     }
+    // proposal-runtime-types: a WIDE integer type's payload is exact, and the
+    // ordering must be too. `ToNumeric` below turns a typed number into a
+    // Number, which for a wide type collapses `2^53 + 1` onto `2^53`, so
+    // `uint64(2^53) < uint64(2^53 + 1)` answered *false* while `===` between
+    // the same two values correctly answered *false* and `+` between them was
+    // exact. The same exact read `IsLooselyEqual` uses, and a mathematical
+    // comparison that is exact across a Number and a BigInt; a NaN orders
+    // against nothing, which is `undefined` here as it is in step e.
+    if (surroundingAgent.feature('runtime-types')
+        && (px instanceof TypedNumberValue || py instanceof TypedNumberValue)) {
+      const xm = mathematicalValueForLooseEquality(px);
+      const ym = mathematicalValueForLooseEquality(py);
+      if (xm !== undefined && ym !== undefined) {
+        const ordered = lessThanMathematical(xm, ym);
+        return ordered === undefined ? Value.undefined : (ordered ? Value.true : Value.false);
+      }
+    }
     // c. Let nx be ? ToNumeric(px). NOTE: Because px and py are primitive values evaluation order is not important.
     const nx = Q(yield* ToNumeric(px));
     // d. Let ny be ? ToNumeric(py).
@@ -676,12 +693,25 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
 /**
  * proposal-runtime-types: the mathematical value of a numeric operand for the
  * loose equality above, or undefined when the operand is not numeric (a String,
- * Boolean, or Object keeps the ordinary algorithm's coercion steps). A typed
- * number always carries a Number payload, wide integer types included, so a
- * bigint here only ever comes from a plain BigInt operand.
+ * Boolean, or Object keeps the ordinary algorithm's coercion steps).
+ *
+ * A WIDE integer type carries its payload as a BigInt, and that payload is read
+ * EXACTLY. This used to read every typed number through `numberValue()`, on the
+ * assumption - recorded in the comment that stood here - that "a typed number
+ * always carries a Number payload, wide integer types included". It does not,
+ * and had not for some time: `IsStrictlyEqual` compares wide payloads as
+ * BigInts, and the arithmetic reads them through `payloadExact`. So `===`,
+ * `+` and `String()` all saw `2^53 + 1` exactly while `==` collapsed it to a
+ * double and answered `uint64(2^53) == uint64(2^53 + 1)` with *true*.
+ * `sameMathematicalValue` below already compares a Number against a BigInt
+ * exactly, so returning the BigInt is the whole fix for `==`, `!=`, and the
+ * mixed comparisons against a plain Number or BigInt.
  */
 function mathematicalValueForLooseEquality(v: Value): number | bigint | undefined {
   if (v instanceof TypedNumberValue) {
+    if (typeof (v as TypedNumberValue).value === 'bigint') {
+      return (v as TypedNumberValue).bigintValue();
+    }
     return (v as TypedNumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value -- R asserts instanceof NumberValue, which a typed number is not
   }
   if (v instanceof NumberValue) {
@@ -691,6 +721,38 @@ function mathematicalValueForLooseEquality(v: Value): number | bigint | undefine
     return R(v as BigIntValue);
   }
   return undefined;
+}
+
+/**
+ * Exact mathematical ordering, including across a Number and a BigInt.
+ * `undefined` where either side is NaN, matching what IsLessThan returns for
+ * an unordered pair.
+ */
+function lessThanMathematical(a: number | bigint, b: number | bigint): boolean | undefined {
+  if (typeof a === 'number' && Number.isNaN(a)) {
+    return undefined;
+  }
+  if (typeof b === 'number' && Number.isNaN(b)) {
+    return undefined;
+  }
+  if (typeof a === typeof b) {
+    return a < b;
+  }
+  // One of each. An infinite Number orders past every BigInt; a finite one is
+  // compared exactly by taking its integer part to a BigInt and, where it had a
+  // fraction, breaking the tie the way the fraction does.
+  const n = typeof a === 'number' ? a : (b as number);
+  const big = typeof a === 'bigint' ? a : (b as bigint);
+  const nIsLeft = typeof a === 'number';
+  if (!Number.isFinite(n)) {
+    return nIsLeft ? n < 0 : n > 0;
+  }
+  const whole = BigInt(Math.trunc(n));
+  const frac = n - Math.trunc(n);
+  if (nIsLeft) {
+    return whole < big || (whole === big && frac < 0);
+  }
+  return big < whole || (big === whole && frac > 0);
 }
 
 /** Exact mathematical comparison, including across a Number and a BigInt. */
