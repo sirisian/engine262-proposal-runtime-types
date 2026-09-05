@@ -999,7 +999,18 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
       return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray], 1), Return: boolType, Untyped: false }] } as unknown as Known;
     case 'indexOf':
     case 'lastIndexOf':
-      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray], 1), Return: indexTypeForArray, Untyped: false }] } as unknown as Known;
+      // The RESULT is `number`, not the index type, and the specification says
+      // so in as many words: "The same reasoning covers `indexOf` and
+      // `lastIndexOf`, whose `=== -1` is the universal idiom ... Where a typed
+      // result is wanted from such a function, the program writes a
+      // conversion." The run time returns a plain Number - `-1` on a miss, on a
+      // typed array as on an untyped one - and a `uint64` is not a type `-1` can
+      // inhabit, so claiming it here was the checker disagreeing with the run
+      // time about what the value IS. `let n: number = [1].indexOf(1)` was
+      // refused; that is ordinary JavaScript.
+      //
+      // The FROM-INDEX parameter keeps the index type: it is an index.
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray], 1), Return: numberType, Untyped: false }] } as unknown as Known;
     case 'fill':
       return { Kind: 'function', Signatures: [{ Parameters: shapes([element, indexTypeForArray, indexTypeForArray], 1), Return: anyType, Untyped: false }] } as unknown as Known;
     case 'at':
@@ -1011,7 +1022,7 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
     // claiming the receiver's type would be wrong rather than merely
     // imprecise.
     // The methods that take a CALLBACK: its first parameter is the element,
-    // its second the index at `uint32`, its third the array itself. Writing
+    // its second the index at the index type, its third the array itself. Writing
     // that as a function type is what lets the call site push those types
     // into the literal's parameters.
     case 'forEach':
@@ -3876,6 +3887,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** The adopted `this` types of the literals currently being checked, innermost last. */
   const thisTypeFrames: Known[] = [];
 
+  /**
+   * The types of a conditional expression's two arms, each typed UNDER THE TEST
+   * THAT GUARDS IT - the true arm with the test's narrowing in scope, the false
+   * arm with its negation - exactly as `walkGuarded` walks the arms of an `if`.
+   *
+   * Both `staticType` and `staticTypeIn` have a `ConditionalExpression` case,
+   * and both typed the arms un-narrowed. The walk narrowed them for the ERRORS
+   * it reports, so `typeof x === 'string' ? x.length : 0` as a bare statement
+   * passed; but the moment its TYPE was read - by a `return`, a declaration, an
+   * argument - the arms were typed again from outside the guard, and
+   * `x.length` was refused with "length is not declared by every member of
+   * string | uint8". The `is` test was unaffected because its resolution is
+   * recorded against the NODE and read back wherever the member access is typed
+   * from; a `typeof` fact is scoped, so it has to be in scope when the arm is
+   * typed.
+   *
+   * The pipeline row that found this credits the topic's naming for making
+   * narrowing reach it. The topic was never the problem; a plain binding in the
+   * same ternary failed identically.
+   */
+  const conditionalArmTypes = (test: ParseNode | undefined, typeTrue: () => Known, typeFalse: () => Known): [Known, Known] => {
+    const fact = test ? narrowingFactOf(test) : undefined;
+    if (!fact) {
+      return [typeTrue(), typeFalse()];
+    }
+    const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
+    const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
+    const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+    const a = pushBlock(() => {
+      if (whenTrue !== empty && fact.sense !== 'false') {
+        declareNarrowed(fact.name, whenTrue as Known);
+      }
+      return typeTrue();
+    });
+    const b = pushBlock(() => {
+      if (whenFalse !== empty && fact.sense !== 'true') {
+        declareNarrowed(fact.name, whenFalse as Known);
+      }
+      return typeFalse();
+    });
+    return [a, b];
+  };
+
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     // PARENTHESES ARE TRANSPARENT. A contextual is recorded against the node
     // that reads it - the call, the object literal - and `( … )` is a node of
@@ -4021,9 +4075,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // As for the short-circuit operators: the contextual type applies to the
       // ARMS, since it is an arm that is produced, so `let c: uint32 = b ? 1 : 2`
       // builds both literals at `uint32`.
-      const c = node as unknown as { AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
-      const a = staticTypeIn(c.AssignmentExpression_a as ParseNode, contextual);
-      const b = staticTypeIn(c.AssignmentExpression_b as ParseNode, contextual);
+      const c = node as unknown as { ShortCircuitExpression?: ParseNode, AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
+      // ...and each arm is typed UNDER THE TEST, as the walk does. See
+      // `conditionalArmTypes`; this is the path a typed `return` and a typed
+      // declaration take, and it typed the arms un-narrowed.
+      const [a, b] = conditionalArmTypes(
+        c.ShortCircuitExpression,
+        () => staticTypeIn(c.AssignmentExpression_a as ParseNode, contextual),
+        () => staticTypeIn(c.AssignmentExpression_b as ParseNode, contextual),
+      );
       if (!a || !b) {
         return null;
       }
@@ -7455,6 +7515,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // is a prerequisite rather than part of this pass. The bounds
               // rule below does not depend on it: it reads [[Extent]] from the
               // type directly.
+              //
+              // ONLY WHERE THE ARRAY HAS AN ELEMENT TYPE - which is the
+              // specification's own scope for the index type, and what the run
+              // time does: a declared `[].<number>` or `[].<any>` reads its
+              // `length` as a `uint64`, and a bare literal reads it as a
+              // Number, because the literal carries no [[TypedElement]]. The
+              // checker inferred `[].<number>` for `[1]` and could not tell it
+              // from a declared one, so `let n: number = [1].length` was
+              // refused - ordinary JavaScript, and a disagreement with the run
+              // time about what the value IS. A binding, `let x = [1]; x.length`,
+              // was already right; only the literal used directly as a receiver
+              // was not.
+              let receiverNode = m.MemberExpression as ParseNode | undefined;
+              while (receiverNode && receiverNode.type === 'ParenthesizedExpression') {
+                receiverNode = (receiverNode as unknown as { Expression?: ParseNode }).Expression;
+              }
+              if (name === 'length' && receiverNode?.type === 'ArrayLiteral') {
+                return makePrimitive('number') as Known;
+              }
               return indexTypeRecord();
             }
             const sig = ArrayMethodSignature(name, receiver.Element, receiver);
@@ -7945,9 +8024,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // which made the most common way to write a two-valued result ~any~ -
         // and made every function whose body is one conditional uninferable,
         // since an ~any~ contribution poisons a join.
-        const c = node as unknown as { AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
-        const a = staticType(c.AssignmentExpression_a as ParseNode);
-        const b = staticType(c.AssignmentExpression_b as ParseNode);
+        const c = node as unknown as { ShortCircuitExpression?: ParseNode, AssignmentExpression_a?: ParseNode, AssignmentExpression_b?: ParseNode };
+        // EACH ARM IS TYPED UNDER THE TEST THAT GUARDS IT, exactly as the walk
+        // arm does with `walkGuarded`. The walk narrowed the arms for the
+        // ERRORS it reports, but this arm - which is what a `return`, a
+        // declaration or an argument READS - typed both arms un-narrowed, so
+        // `typeof x === 'string' ? x.length : 0` at a `number` position was
+        // refused with "length is not declared by every member of string |
+        // uint8" while the same test in an `if` narrowed. The `is` test was
+        // unaffected because its resolution is recorded against the NODE and
+        // read back by the member access wherever it is typed from; a `typeof`
+        // fact is scoped, so it has to be in scope when the arm is typed.
+        //
+        // The pipeline row that found this - `x |> (typeof % === 'string' ?
+        // %.length : %)` - credits the topic's naming for making narrowing
+        // reach it. The topic was never the problem; a plain binding in the same
+        // ternary failed identically.
+        const [a, b] = conditionalArmTypes(
+          c.ShortCircuitExpression,
+          () => staticType(c.AssignmentExpression_a as ParseNode),
+          () => staticType(c.AssignmentExpression_b as ParseNode),
+        );
         if (!a || !b) {
           return null;
         }
@@ -8681,12 +8778,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `typeof x === "string"`: the string names the type.
         if (subject.type === 'UnaryExpression' && (subject as unknown as { operator?: string }).operator === 'typeof') {
           const operand = (subject as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
-          if (operand.type !== 'IdentifierReference' || against.type !== 'StringLiteral') {
+          // Through `narrowableName`, as the `is` form already is, so the
+          // pipeline TOPIC narrows under `typeof` too. This tested for an
+          // `IdentifierReference` directly and so refused `typeof % === 'string'`
+          // a fact, while `% is string` got one - the same binding, under a name
+          // no program can write, narrowed by one test and not the other.
+          const operandName = narrowableName(operand);
+          if (operandName === null || against.type !== 'StringLiteral') {
             continue;
           }
           const t = typeofStringToType((against as unknown as { value: string }).value);
           if (t) {
-            return { name: (operand as unknown as { name: string }).name, type: t, negated: negated !== inverted };
+            return { name: operandName, type: t, negated: negated !== inverted };
           }
           continue;
         }

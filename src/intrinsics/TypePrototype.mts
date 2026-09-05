@@ -508,6 +508,8 @@ function* TypeProto_epsilonGetter(_args: Arguments, { thisValue }: FunctionCallC
 }
 
 /**
+ * https://sirisian.github.io/ecmascript-types/#sec-types-and-type-objects
+ *
  * `Type.prototype.toString` - the canonical source form of the type.
  *
  * `typeprogramming.md` §3.3 promises this
