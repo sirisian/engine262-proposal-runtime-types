@@ -238,3 +238,115 @@ test('a relational between two different numeric types is a type error, as the c
   expect(run('let a = uint64.parse("5"); a < 6n;')).toMatchObject({ Type: 'throw' });
   expect(evaluated('let a = uint64.parse("5"); let b = uint128.parse("5"); String(a == b);')).toBe('true');
 });
+
+// ---------------------------------------------------------------------------
+// A LITERAL IN ARITHMETIC IS READ BEFORE ROUNDING.
+//
+// README, "Four things remain implicit": a literal takes the type of its
+// context; a `const` of a numeric constant "behaves as if inlined" and "the
+// initializer may compute"; and "one that doesn't fit is a compile-time
+// TypeError rather than a silent truncation". Two paths lost the literal's
+// digits: a literal OPERAND beside a typed value took the type but was read as
+// the double the lexer produced, and a constant EXPRESSION at a typed position
+// was computed in Number before the type was consulted.
+//
+// The checker had no arm for any arithmetic expression, which is why neither
+// path could be right: nothing typed the operator, so nothing could hand a
+// literal its type or fold a constant. Expected values are BigInt arithmetic.
+// ---------------------------------------------------------------------------
+
+const P53 = 2n ** 53n;
+const Q53 = P53 + 1n;
+
+test('a constant arithmetic expression takes the contextual type and is exact - the report', () => {
+  const want = String(P53 + Q53);
+  expect(evaluated(`let b: uint64 = ${P53} + ${Q53}; String(b);`)).toBe(want);
+  expect(evaluated(`function f(a: uint64) { return a; } String(f(${P53} + ${Q53}));`)).toBe(want);
+  expect(evaluated(`function g(): uint64 { return ${P53} + ${Q53}; } String(g());`)).toBe(want);
+  expect(evaluated(`type O = { v: uint64 }; let o: O = { v: ${P53} + ${Q53} }; String(o.v);`)).toBe(want);
+  expect(evaluated(`const m = new Map.<string, uint64>(); m.set("k", ${P53} + ${Q53}); String(m.get("k"));`)).toBe(want);
+});
+
+test('the constant is folded FIRST and checked against the type - no silent wrap', () => {
+  // `uint8(200) + uint8(100)` wraps to 44 at run time. Had the type been
+  // propagated to each literal and the sum computed in the type, this would be
+  // a silent 44; folded first it is the compile-time error the README promises.
+  expect(run('let x: uint8 = 200 + 100;')).toMatchObject({ Type: 'throw' });
+  expect(evaluated('try { eval("let x: uint8 = 200 + 100;"); "ok"; } catch (e) { e.constructor.name; }')).toBe('StaticTypeError');
+  expect(evaluated('let x: uint8 = 1 + 2; String(x);')).toBe('3');
+  // The EXPRESSION's value is what takes the type; a subexpression that would
+  // not fit on its own is not a value of anything.
+  expect(evaluated('let x: uint8 = 300 - 100; String(x);')).toBe('200');
+  expect(evaluated('const m = new Map.<string, uint8>(); m.set("a", 300 - 299); String(m.get("a"));')).toBe('1');
+  expect(evaluated('let x: int8 = -128; String(x);')).toBe('-128');
+  expect(evaluated('let x: int8 = -(100 + 28); String(x);')).toBe('-128');
+  expect(evaluated('let x: uint8 = 2 ** 8 - 1; String(x);')).toBe('255');
+  expect(run('let x: uint8 = 2 ** 8;')).toMatchObject({ Type: 'throw' });
+  expect(evaluated('let x: uint64 = 10 ** 19; String(x);')).toBe(String(10n ** 19n));
+  expect(run('let x: uint64 = 2 ** 64;')).toMatchObject({ Type: 'throw' });
+  // An inexact quotient is not an integer and is not folded.
+  expect(evaluated('let x: uint8 = 8 / 2; String(x);')).toBe('4');
+});
+
+for (const ty of ['uint64', 'int64', 'uint128', 'int128']) {
+  test(`${ty}: a literal operand takes the other operand's type EXACTLY, every operator`, () => {
+    // "An operand of a binary operator whose other operand has a known value
+    // type -> the type of the other operand", read "before any rounding".
+    const A = 2n ** 54n + 1n;
+    const L = Q53;
+    const pre = `let a: ${ty} = ${A};`;
+    expect(evaluated(`${pre} String(a + ${L});`)).toBe(String(A + L));
+    expect(evaluated(`${pre} String(${L} + a);`)).toBe(String(L + A));
+    expect(evaluated(`${pre} String(a - ${L});`)).toBe(String(A - L));
+    expect(evaluated(`${pre} String(a % ${L});`)).toBe(String(A % L));
+    expect(evaluated(`${pre} String(a & ${L});`)).toBe(String(A & L));
+    expect(evaluated(`${pre} String(a | ${L});`)).toBe(String(A | L));
+    expect(evaluated(`${pre} String(a ^ ${L});`)).toBe(String(A ^ L));
+    expect(evaluated(`${pre} String(a >> 1);`)).toBe(String(A >> 1n));
+    // Through parentheses, and as a bare statement or an untyped call's
+    // argument - a literal's type does not depend on where its expression stands.
+    expect(evaluated(`${pre} String(a + (${L}));`)).toBe(String(A + L));
+    expect(evaluated(`${pre} let r; r = a + ${L}; String(r);`)).toBe(String(A + L));
+  });
+}
+
+test('a literal that cannot take the other operand\'s type is a compile-time error', () => {
+  // The README's own example: `a + 300` at a `uint8`.
+  expect(evaluated('try { eval("let a: uint8 = 200; a + 300;"); "ok"; } catch (e) { e.constructor.name; }')).toBe('StaticTypeError');
+  expect(evaluated('let a: uint8 = 200; String(a + 1);')).toBe('201');
+});
+
+test('typed arithmetic has a Static Type, so its result is checked where it goes', () => {
+  // With no arm for arithmetic every `a + b` was ~any~, and `let s: string =
+  // a + 1` was accepted - `s` became the STRING "2".
+  expect(run('let a: uint8 = 1; let s: string = a + 1;')).toMatchObject({ Type: 'throw' });
+  expect(run('let a: uint8 = 1; let b: uint16 = 2; let c = a + b;')).toMatchObject({ Type: 'throw' });
+  expect(evaluated('let a: uint8 = 1; let b: uint8 = 2; let c: uint8 = a + b; String(c);')).toBe('3');
+  // Untyped arithmetic is untouched.
+  expect(evaluated('let x = 1 + 2; String(x);')).toBe('3');
+  expect(evaluated('let s = "a" + 1; String(s);')).toBe('a1');
+});
+
+test('a const of a numeric constant behaves as if inlined - exactly, at any width', () => {
+  // README: "A const of a numeric constant behaves as if inlined ... The
+  // initializer may compute ... and so does a chain of such constants." The
+  // binding itself holds a Number - `typeof K` is 'number', `K` alone prints
+  // the rounded value - so a USE of it at a wide type has to fold to the exact
+  // value of the initializer rather than read the binding. It read the binding.
+  const K = Q53;
+  expect(evaluated(`const K = ${K}; let b: uint64 = K; String(b);`)).toBe(String(K));
+  expect(evaluated(`const K = ${P53} + ${Q53}; let b: uint64 = K; String(b);`)).toBe(String(P53 + Q53));
+  expect(evaluated(`const A = ${P53}; const B = ${Q53}; let b: uint64 = A + B; String(b);`)).toBe(String(P53 + Q53));
+  expect(evaluated(`const A = ${P53}; const B = A + 1; const C = A + B; let b: uint64 = C; String(b);`)).toBe(String(P53 + Q53));
+  // As the literal operand beside a typed value.
+  expect(evaluated(`const K = ${K}; let a: uint64 = 1; String(a + K);`)).toBe(String(1n + K));
+  // The README's own refusal, now the compile-time error it describes.
+  expect(evaluated('try { eval("const K = 300; let x: uint8 = K;"); "ok"; } catch (e) { e.constructor.name; }')).toBe('StaticTypeError');
+  // Nothing about the binding changes: untyped use is a Number.
+  expect(evaluated(`const K = ${K}; String(typeof K);`)).toBe('number');
+  // A narrow constant and a float constant are as they were.
+  expect(evaluated('const K = 3; let x: uint8 = K; String(x);')).toBe('3');
+  expect(evaluated('const K = 3.14; let f: float64 = K; String(f);')).toBe('3.14');
+  // A shadowing `let` is not constant.
+  expect(evaluated('const K = 5; { let K = 7; let x: uint8 = K; String(x); }')).toBe('7');
+});

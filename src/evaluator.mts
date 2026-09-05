@@ -1,6 +1,8 @@
 import { Throw } from './host-defined/error-messages.mts';
 import { InMetaHookEvaluation, CurrentMetaHookSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
+import { FoldedConstantOf } from './type-system/check.mts';
+import { TypedNumberValue } from './value.mts';
 import type {
   NormalCompletion, PlainCompletion, ThrowCompletion, YieldCompletion,
 } from './completion.mts';
@@ -237,8 +239,17 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       return CurrentContractReturn() ?? Value.undefined;
     case 'ThisExpression':
       return Evaluate_This(node);
-    case 'IdentifierReference':
+    case 'IdentifierReference': {
+      // A use of a `const` bound to a constant expression, folded by the
+      // checker at an integer contextual type: "behaves as if inlined", so the
+      // exact value is returned as a value of the type rather than the
+      // binding's Number. See `FoldedConstantOf`.
+      const foldedUse = FoldedConstantOf(node);
+      if (foldedUse !== undefined) {
+        return new TypedNumberValue(foldedUse.value, foldedUse.type as never);
+      }
       return yield* Evaluate_IdentifierReference(node);
+    }
     case 'NullLiteral':
     case 'BooleanLiteral':
     case 'NumericLiteral':
@@ -271,11 +282,26 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
     case 'TopicReference':
       return yield* Evaluate_TopicReference(node);
     case 'AdditiveExpression':
-      return yield* Evaluate_AdditiveExpression(node);
     case 'MultiplicativeExpression':
-      return yield* Evaluate_MultiplicativeExpression(node);
-    case 'ExponentiationExpression':
+    case 'ExponentiationExpression': {
+      // proposal-runtime-types: a constant arithmetic expression the checker
+      // folded at an integer contextual type evaluates to the recorded value,
+      // as a value of that type, without evaluating its operands. The README's
+      // "the initializer may compute": `9007199254740992 + 9007199254740993` at
+      // a `uint64` is `18014398509481985`, exactly, where Number arithmetic over
+      // the rounded literals gave `...984`. See `FoldedConstantOf`.
+      const folded = FoldedConstantOf(node);
+      if (folded !== undefined) {
+        return new TypedNumberValue(folded.value, folded.type as never);
+      }
+      if (node.type === 'AdditiveExpression') {
+        return yield* Evaluate_AdditiveExpression(node);
+      }
+      if (node.type === 'MultiplicativeExpression') {
+        return yield* Evaluate_MultiplicativeExpression(node);
+      }
       return yield* Evaluate_ExponentiationExpression(node);
+    }
     case 'UpdateExpression':
       return yield* Evaluate_UpdateExpression(node);
     case 'ShiftExpression':

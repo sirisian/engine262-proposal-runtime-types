@@ -441,9 +441,13 @@ test('row 6: a value of the any type reaching a typed operator', () => {
   // A literal is not an `any` value: it TAKES the type of the other operand,
   // so it never forces a conversion and never reaches this row.
   expect(evaluated('String((1 := uint8) + 1) + "/" + String(((1 := uint8) + 1) is uint8);')).toBe('2/true');
-  // A literal that cannot take that type is out of range, and the run-time
-  // backstop reports it as one.
-  expect(thrownKind('(1 := uint8) + 300;')).toBe('RangeError');
+  // A literal that cannot take that type is a COMPILE-TIME error - the README:
+  // "one that doesn't fit is a compile-time TypeError rather than a silent
+  // truncation", and its own example is `a + 300` at a `uint8`. This row
+  // expected the run-time backstop, which is what it got while the checker had
+  // no arm for arithmetic; the checker types the operator now and the literal
+  // takes the other operand's type where it is written.
+  expectStatic('(1 := uint8) + 300;');
   // The string behaviour of `+` is explicitly unchanged and applies FIRST:
   // uint8(1) + "x" is "1x" by #sec-operator-dispatch, which is why this line
   // is an assertion rather than a gap.
@@ -478,8 +482,14 @@ test('two typed operands of different types do not mix, exactly as BigInt does n
   // "`uint8(1) + uint16(1)` throws for exactly the same reason `1n + 1` does,
   // by the same step, with no rule specific to it." The alternative is silent
   // promotion at every arithmetic operator.
-  expect(thrownKind('(1 := uint8) + (1 := uint16);')).toBe('TypeError');
-  expect(thrownKind('(1 := int32) * (2 := float64);')).toBe('TypeError');
+  // A TYPE error, and a static one: "It is a type error if the Static Types of
+  // the operands of an arithmetic ... operator are numeric types that are not
+  // the same type." Both operands here are casts with known Static Types, so
+  // the checker refuses the operator before it runs. The run-time step the
+  // comment above describes still stands behind it for operands the checker
+  // cannot type.
+  expectStatic('(1 := uint8) + (1 := uint16);');
+  expectStatic('(1 := int32) * (2 := float64);');
   expect(thrownKind('(5 := uint8) + 5n;')).toBe('TypeError');
   // The same type is fine, and stays that type.
   expect(evaluated('String((1 := uint8) + (2 := uint8)) + "/" + String(((1 := uint8) + (2 := uint8)) is uint8);')).toBe('3/true');

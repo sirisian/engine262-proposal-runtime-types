@@ -470,6 +470,8 @@ interface Frame {
    * RUN TIME where `let a: uint8 = 300` reports before the program runs.
    */
   readonly constLiteralTypes: Map<string, TypeRecord>;
+  /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
+  readonly constLiteralValues: Map<string, bigint>;
 
   /** Names bound by a `let` to a numeric constant; see `letConstantUses`. */
   readonly letConstants: Set<string>;
@@ -506,7 +508,7 @@ function emptyFrame(): Frame {
   return {
     bindings: new Map(),
     constLiterals: new Set<string>(),
-    constLiteralTypes: new Map<string, TypeRecord>(),
+    constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(),
     letConstants: new Set<string>(),
     immutableNames: new Set<string>(),
     declaredNames: new Set<string>(),
@@ -532,6 +534,7 @@ function cloneFrame(frame: Frame): Frame {
     bindings: new Map(frame.bindings),
     constLiterals: new Set(frame.constLiterals),
     constLiteralTypes: new Map(frame.constLiteralTypes),
+    constLiteralValues: new Map(frame.constLiteralValues),
     immutableNames: new Set(frame.immutableNames),
     letConstants: new Set(frame.letConstants),
     declaredNames: new Set(frame.declaredNames),
@@ -733,6 +736,203 @@ function exactBigIntOf(node: ParseNode.NumericLiteral): bigint | null {
   }
 }
 
+/** The two operands of a binary arithmetic node, in source order. */
+function arithmeticOperands(node: ParseNode): [ParseNode | undefined, ParseNode | undefined] {
+  const e = node as ParseNode & Record<string, ParseNode | undefined>;
+  switch (e.type) {
+    case 'AdditiveExpression': return [e.AdditiveExpression, e.MultiplicativeExpression];
+    case 'MultiplicativeExpression': return [e.MultiplicativeExpression, e.ExponentiationExpression];
+    case 'ExponentiationExpression': return [e.UpdateExpression, e.ExponentiationExpression];
+    case 'ShiftExpression': return [e.ShiftExpression, e.AdditiveExpression];
+    // The bitwise nodes name their operands `A` and `B`, not by grammar symbol.
+    case 'BitwiseANDExpression':
+    case 'BitwiseXORExpression':
+    case 'BitwiseORExpression': return [e.A, e.B];
+    default: return [undefined, undefined];
+  }
+}
+
+/**
+ * The numeric literal an operand IS, looking through parentheses and a unary
+ * sign, or null. `-5` is a literal for this purpose, as it is everywhere else
+ * a literal takes a type.
+ */
+function literalOperand(node: ParseNode): ParseNode | null {
+  let n: ParseNode | undefined = node;
+  while (n) {
+    if (n.type === 'NumericLiteral') {
+      return node;
+    }
+    if (n.type === 'ParenthesizedExpression') {
+      n = (n as unknown as { Expression?: ParseNode }).Expression;
+      continue;
+    }
+    if (n.type === 'UnaryExpression') {
+      const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
+      if (u.operator === '-' || u.operator === '+') {
+        n = u.UnaryExpression;
+        continue;
+      }
+    }
+    return null;
+  }
+  return null;
+}
+
+/**
+ * The exact value of a literal operand as `literalOperand` accepts it - a
+ * numeric literal under any number of parentheses and unary signs - or null
+ * where it is not an integer literal.
+ */
+function signedLiteralValue(node: ParseNode): bigint | null {
+  let sign = 1n;
+  let n: ParseNode | undefined = node;
+  while (n) {
+    if (n.type === 'NumericLiteral') {
+      const v = exactBigIntOf(n as ParseNode.NumericLiteral);
+      return v === null ? null : sign * v;
+    }
+    if (n.type === 'ParenthesizedExpression') {
+      n = (n as unknown as { Expression?: ParseNode }).Expression;
+      continue;
+    }
+    if (n.type === 'UnaryExpression') {
+      const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
+      if (u.operator === '-') {
+        sign = -sign;
+      }
+      n = u.UnaryExpression;
+      continue;
+    }
+    return null;
+  }
+  return null;
+}
+
+/** The `NumericLiteral` inside any parentheses and unary signs, or the node itself. */
+function innermostLiteral(node: ParseNode): ParseNode {
+  let n: ParseNode | undefined = node;
+  while (n) {
+    if (n.type === 'NumericLiteral') {
+      return n;
+    }
+    if (n.type === 'ParenthesizedExpression') {
+      n = (n as unknown as { Expression?: ParseNode }).Expression;
+      continue;
+    }
+    if (n.type === 'UnaryExpression') {
+      const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
+      if (u.operator === '-' || u.operator === '+') {
+        n = u.UnaryExpression;
+        continue;
+      }
+    }
+    break;
+  }
+  return node;
+}
+
+/** Whether a primitive type name is a numeric VALUE type (not `number`). */
+function isNumericValueTypeName(name: string | undefined): boolean {
+  return name === 'uint' || name === 'int' || name === 'float' || name === 'decimal';
+}
+
+/** Whether a type is an integer value type - `uint` or `int` at any width. */
+function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
+  return !!t && t.Kind === 'primitive'
+    && ((t as { Name?: string }).Name === 'uint' || (t as { Name?: string }).Name === 'int');
+}
+
+/**
+ * The exact mathematical value of an integer-valued constant expression, read
+ * from the literals' source text so nothing has been rounded. Returns null
+ * where any leaf is not an integer literal, where an operator is not one this
+ * folds, or where a result would not be an integer (a `/` that does not
+ * divide, a negative shift count). `**` with a negative exponent, and shifts
+ * past 4096 bits, are refused as null rather than computed.
+ */
+function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => bigint | null): bigint | null {
+  const fold = (n: ParseNode) => foldIntegerConstant(n, resolveConst);
+  const e = node as ParseNode & {
+    Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
+    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode,
+    ShiftExpression?: ParseNode, BitwiseANDExpression?: ParseNode, EqualityExpression?: ParseNode,
+    BitwiseXORExpression?: ParseNode, BitwiseORExpression?: ParseNode,
+  };
+  switch (e.type) {
+    case 'NumericLiteral':
+      return exactBigIntOf(e as ParseNode.NumericLiteral);
+    // README: "a `const` of a numeric constant behaves as if inlined ... and so
+    // does a chain of such constants". A reference to one folds to the exact
+    // value its initializer folded to.
+    case 'IdentifierReference':
+      return resolveConst && e.name ? resolveConst(e.name) : null;
+    case 'ParenthesizedExpression':
+      return e.Expression ? fold(e.Expression) : null;
+    case 'UnaryExpression': {
+      const v = e.UnaryExpression ? fold(e.UnaryExpression) : null;
+      if (v === null) {
+        return null;
+      }
+      if (e.operator === '-') {
+        return -v;
+      }
+      if (e.operator === '+') {
+        return v;
+      }
+      if (e.operator === '~') {
+        return ~v;
+      }
+      return null;
+    }
+    case 'AdditiveExpression': {
+      const l = fold(e.AdditiveExpression!);
+      const r = fold(e.MultiplicativeExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      return e.operator === '+' ? l + r : l - r;
+    }
+    case 'MultiplicativeExpression': {
+      const l = fold(e.MultiplicativeExpression!);
+      const r = fold(e.ExponentiationExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      // The operator field is `MultiplicativeOperator` on this node, unlike
+      // the additive node's `operator`; reading the wrong one folded `3 * 3` to
+      // `3 / 3`.
+      const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
+      if (op === '*') {
+        return l * r;
+      }
+      if (r === 0n) {
+        return null;
+      }
+      if (op === '%') {
+        return l % r;
+      }
+      if (op !== '/') {
+        return null;
+      }
+      // `/` folds only where it is exact; an inexact quotient is not an
+      // integer and the expression falls through to Number arithmetic.
+      return l % r === 0n ? l / r : null;
+    }
+    case 'ExponentiationExpression': {
+      const l = fold(e.UpdateExpression!);
+      const r = fold(e.ExponentiationExpression!);
+      if (l === null || r === null || r < 0n || r > 4096n) {
+        return null;
+      }
+      return l ** r;
+    }
+    default:
+      return null;
+  }
+}
+
 /** Numeric literals the checker read at `bigint`, consulted by NumericValue. */
 const bigintLiterals = new WeakSet<object>();
 
@@ -772,6 +972,20 @@ const wideIntegerLiterals = new WeakMap<object, { value: bigint, type: TypeRecor
 
 export function WideIntegerContextLiteral(node: object): { value: bigint, type: TypeRecord } | undefined {
   return wideIntegerLiterals.get(node);
+}
+
+/**
+ * README, "a `const` of a numeric constant behaves as if inlined ... the
+ * initializer may compute": a constant arithmetic expression at an integer
+ * contextual type is folded to its mathematical value by the checker, checked
+ * against the type, and recorded here. The evaluator returns the recorded
+ * value as a value of the type instead of evaluating the operands - see the
+ * arithmetic cases in `evaluator.mts`.
+ */
+const foldedConstants = new WeakMap<object, { value: bigint, type: TypeRecord }>();
+
+export function FoldedConstantOf(node: object): { value: bigint, type: TypeRecord } | undefined {
+  return foldedConstants.get(node);
 }
 
 /**
@@ -3930,6 +4144,71 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return [a, b];
   };
 
+  /**
+   * The exact value of a `const` bound to a constant expression, resolved
+   * through the frames and stopping at the first that declares the name - so
+   * an inner `let` shadowing a constant `const` is not read as constant.
+   */
+  const constExactValue = (name: string): bigint | null => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      if (frames[i].declaredNames.has(name) || frames[i].bindings.has(name) || frames[i].constLiterals.has(name)) {
+        return frames[i].constLiteralValues.get(name) ?? null;
+      }
+    }
+    return null;
+  };
+
+  /** `foldIntegerConstant` with this scope's constants resolvable. */
+  const foldConstant = (node: ParseNode): bigint | null => foldIntegerConstant(node, constExactValue);
+
+  /**
+   * Type the ARITHMETIC nodes inside an expression, and nothing else: the
+   * outermost arithmetic node on each path is handed to `staticType`, whose
+   * arm types the operands and records a literal operand's exact value. Other
+   * node kinds are descended through without being typed, so no rule but the
+   * arithmetic ones is applied to a position that was not checked before.
+   * A nested function or class is a boundary the walk owns and is not entered.
+   */
+  const typeArithmeticWithin = (node: ParseNode | null | undefined): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    switch (node.type) {
+      case 'AdditiveExpression':
+      case 'MultiplicativeExpression':
+      case 'ExponentiationExpression':
+      case 'ShiftExpression':
+      case 'BitwiseANDExpression':
+      case 'BitwiseXORExpression':
+      case 'BitwiseORExpression':
+        staticType(node);
+        return;
+      case 'FunctionExpression':
+      case 'ArrowFunction':
+      case 'AsyncArrowFunction':
+      case 'ClassExpression':
+      case 'FunctionDeclaration':
+      case 'ClassDeclaration':
+        return;
+      default:
+        for (const key of Object.keys(node)) {
+          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+            continue;
+          }
+          const child = (node as unknown as Record<string, unknown>)[key];
+          if (Array.isArray(child)) {
+            for (const c of child) {
+              if (c && typeof c === 'object' && 'type' in (c as object)) {
+                typeArithmeticWithin(c as ParseNode);
+              }
+            }
+          } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+            typeArithmeticWithin(child as ParseNode);
+          }
+        }
+    }
+  };
+
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     // PARENTHESES ARE TRANSPARENT. A contextual is recorded against the node
     // that reads it - the call, the object literal - and `( … )` is a node of
@@ -4143,7 +4422,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (contextual && node.type === 'IdentifierReference') {
       const useName = (node as unknown as { name?: string }).name;
       if (typeof useName === 'string') {
-        for (let i = frames.length - 1; i >= 0; i -= 1) {
+        // At an INTEGER value type, the exact fold below decides: the literal
+        // type recorded for the `const` was built from the binding's Number,
+        // and for `const K = 9007199254740993` that is `...992`. Returning it
+        // here made a use of a wide constant lose its digits while a use of
+        // `const K = 9007199254740992 + 9007199254740993`, whose initializer is
+        // not a literal, was exact - the same rule reaching one spelling of a
+        // constant and not the other.
+        // ...and only where the exact value FITS. A constant that does not fit
+        // is refused by the literal-type path below, with the message that names
+        // the type, which is the contract the transparency tests hold it to.
+        const exactUse = isIntegerValueType(contextual as TypeRecord) ? constExactValue(useName) : null;
+        const cprim = contextual as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
+        const integerWanted = exactUse !== null && fitsNumericType(exactUse, cprim.Name, cprim.Arguments);
+        for (let i = frames.length - 1; i >= 0 && !integerWanted; i -= 1) {
           const literal = frames[i].constLiteralTypes.get(useName);
           if (literal) {
             return literal;
@@ -4542,6 +4834,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (exact !== null) {
         bigintLiterals.add(node);
         return { Kind: 'literal', Value: Value(exact), Base: makePrimitive('bigint') };
+      }
+    }
+    // README, "Four things remain implicit": a `const` of a numeric constant
+    // "behaves as if inlined", and "the initializer may compute: `const TAU = 2 *
+    // PI` qualifies, and so does a chain of such constants". A constant
+    // ARITHMETIC EXPRESSION therefore takes its context's type as a literal
+    // does, and "one that doesn't fit is a compile-time TypeError rather than a
+    // silent truncation". The expression is FOLDED to its mathematical value
+    // first and that value is checked against the type; only then is the type
+    // propagated to the literals. In that order because typed integer
+    // arithmetic WRAPS - `uint8(200) + uint8(100)` is 44 - so propagating first
+    // and computing in the type would turn `let x: uint8 = 200 + 100`, which is
+    // refused, into a silent 44. Folding first makes it the compile-time error
+    // the README promises. `9007199254740992 + 9007199254740993` at `uint64`
+    // folds to `18014398509481985`, which fits, and each literal then evaluates
+    // exactly, so the sum is exact where Number arithmetic gave `...984`.
+    //
+    // Integer-valued constant expressions over integer types, in this cut. A
+    // fraction, an exponent, or a non-integer type falls through to the
+    // existing behaviour.
+    if (contextual && isIntegerValueType(contextual as TypeRecord) && isNumericConstantExpression(node)
+        && node.type !== 'NumericLiteral') {
+      const folded = foldConstant(node);
+      if (folded !== null) {
+        const prim = contextual as TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] };
+        if (!fitsNumericType(folded, prim.Name, prim.Arguments)) {
+          const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(String(folded)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return contextual;
+        }
+        // The folded value is recorded ON THE EXPRESSION NODE, and the
+        // evaluator returns it directly as a value of the type without
+        // evaluating the operands. That is what makes the result exact for
+        // every operator: it is not "each literal takes the type and the run
+        // time computes" - which is exact for `+`, `-` and `*` only because
+        // modular arithmetic happens to agree, and not at all for `/` or `**`
+        // - it is the expression's mathematical value, once. It is also what
+        // lets `300 - 299` stand at a `uint8`: the EXPRESSION denotes 1, which
+        // fits, and `300` is never a value of anything.
+        foldedConstants.set(node, { value: folded, type: contextual as TypeRecord });
+        return contextual;
       }
     }
     // The same reading at a WIDE INTEGER position, and for the same reason the
@@ -6754,7 +7087,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bindings.set(TOPIC_NAME, topic);
         }
         frames.push({
-          bindings, constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings, constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         try {
           return staticType(p.Body);
@@ -7387,6 +7720,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           return null;
         }
+        // A callee this pass knows nothing about - a builtin without a typed
+        // signature, `String(...)` - still has ARGUMENTS, and typing them is
+        // not only about their types: it is where a wide literal in an
+        // arithmetic operand is recorded for exact evaluation, and where an
+        // arithmetic type error is reported. Without this,
+        // `String(a - 9007199254740993)` with `a: uint64` read the literal as
+        // a double while `let r = a - 9007199254740993; String(r)` read it
+        // exactly - the same expression, exact or not by where it stood.
+        // Only the arithmetic in them, for the reason given at the
+        // ExpressionStatement arm.
+        for (const a of (node as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
+          if ((a as { type?: string }).type === 'AssignmentRestElement') {
+            typeArithmeticWithin((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
+          } else {
+            typeArithmeticWithin(a as ParseNode);
+          }
+        }
         return null;
       }
       case 'YieldExpression': {
@@ -8018,6 +8368,87 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'LogicalORExpression':
       case 'CoalesceExpression':
         return logicalResultType(node, staticType);
+      // ARITHMETIC. The checker had no arm for any of these, so every `a + b`
+      // was ~any~ statically: a literal operand was never routed through
+      // `staticTypeIn` and so never took the other operand's type EXACTLY,
+      // `let s: string = a + 1` was accepted (and `s` became the string "2"),
+      // and the Early Error the README promises for `a + 300` at a `uint8` was
+      // a run-time RangeError.
+      //
+      // The contextual-type table: "An operand of a binary operator whose other
+      // operand has a known value type -> the type of the other operand." Where
+      // one operand is a numeric value type and the other a literal, the literal
+      // is typed IN that type, which is what records a wide literal's exact
+      // value for evaluation: `a + 9007199254740993` with `a: uint64` read the
+      // literal as the double `...992` before this. The result is the operand
+      // type. Two different value types are the type error the clause names;
+      // anything else is left as it was.
+      case 'AdditiveExpression':
+      case 'MultiplicativeExpression':
+      case 'ExponentiationExpression':
+      case 'ShiftExpression':
+      case 'BitwiseANDExpression':
+      case 'BitwiseXORExpression':
+      case 'BitwiseORExpression': {
+        const [leftNode, rightNode] = arithmeticOperands(node);
+        if (!leftNode || !rightNode) {
+          return null;
+        }
+        // A `const` bound to a constant "behaves as if inlined", so a use of
+        // one is a literal operand here: `a + K` with `const K = 9007199254740993`
+        // and `a: uint64` reads K's exact value, not the binding's double.
+        const constUse = (n: ParseNode): ParseNode | null => {
+          const inner = innermostLiteral(n);
+          return inner.type === 'IdentifierReference' && constExactValue((inner as unknown as { name: string }).name) !== null ? n : null;
+        };
+        const leftLit = literalOperand(leftNode) ?? constUse(leftNode);
+        const rightLit = literalOperand(rightNode) ?? constUse(rightNode);
+        const leftT = leftLit ? null : staticType(leftNode);
+        const rightT = rightLit ? null : staticType(rightNode);
+        const asValueType = (t: Known): TypeRecord | null => (t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null);
+        const lv = asValueType(leftT);
+        const rv = asValueType(rightT);
+        // "one that doesn't fit is a compile-time TypeError rather than a silent
+        // truncation" - the README's `a + 300` at a `uint8`. The literal takes
+        // the type here, so it is checked here; this was a RangeError at run
+        // time, which is the truncation caught late rather than the error
+        // caught early.
+        const adopt = (lit: ParseNode, t: TypeRecord): void => {
+          // The LITERAL NODE itself is what takes the type - `staticTypeIn`'s
+          // wide-literal arm matches a `NumericLiteral` and records the exact
+          // value against it - so parentheses and a unary sign are looked
+          // through here. Handing it the outer node marked nothing, and
+          // `a + (9007199254740993)` read the literal as a double while
+          // `a + 9007199254740993` beside it was exact. Parentheses do not
+          // change what an expression means.
+          staticTypeIn(innermostLiteral(lit), t);
+          if (isIntegerValueType(t)) {
+            const exact = signedLiteralValue(lit);
+            const prim = t as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
+            if (exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) {
+              const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact)), Value(displayType(t))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        };
+        if (lv && rightLit) {
+          adopt(rightLit, lv);
+          return lv;
+        }
+        if (rv && leftLit) {
+          adopt(leftLit, rv);
+          return rv;
+        }
+        if (lv && rv) {
+          if (SameType(lv, rv)) {
+            return lv;
+          }
+          const completion = Throw.StaticTypeError('$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          return lv;
+        }
+        return null;
+      }
       case 'ConditionalExpression': {
         // `t ? a : b` produces one of its ARMS, so its type is their join, the
         // same shape the short-circuit operators have. It had no case at all,
@@ -9067,7 +9498,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
       if (resolved) {
         const newFrame = () => ({
-          bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         frames.push(newFrame());
         declareNarrowed(request!.name, resolved.whenTrue);
@@ -12189,7 +12620,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null) => {
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     // A `return` is compared against
     // what the function RETURNS, and for a generator that is the _R_ of
     // `Generator.<Y, R, N>` - not the annotation, which types the values
@@ -12380,7 +12811,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A block or switch introduces a scope; a binding declared inside shadows
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     // The ~void~ form: a deferral
     // opened by an assertion statement covers the rest of ITS block and no
     // further, so the depth is restored with the frame it belongs to.
@@ -12866,6 +13297,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'ExpressionStatement': {
+        // The ARITHMETIC in the expression is typed, not only walked. The walk
+        // visits children for their own arms - a function literal, a class -
+        // and had no call to `staticType` here, so an expression statement's
+        // arithmetic was never seen by the arithmetic arm:
+        // `String(a - 9007199254740993);` with `a: uint64` read the literal as
+        // a double, while `let s = String(a - 9007199254740993);` read it
+        // exactly. A literal's type does not depend on whether its statement
+        // binds a name.
+        //
+        // Only the arithmetic, deliberately. Typing the WHOLE expression here
+        // would be right in principle - a type does not depend on position -
+        // but it exposes every rule of this pass to positions it never checked
+        // before (a member access through `L | null` in a `String(...)`
+        // argument, for one), and that is a separate change with its own
+        // consequences. Recorded as a remaining item.
+        typeArithmeticWithin((n as unknown as { Expression: ParseNode }).Expression);
         // The ~void~ form. #sec-declared-narrowing: an assertion narrows "every position the
         // call dominates" rather than a branch, so it is applied AFTER the
         // statement is walked and takes effect for its siblings - which the
@@ -13043,7 +13490,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // declarative environment per clause" at run time - so the checker
           // gives it a frame and declares the pattern's bindings in it, which is
           // what stops one arm's binding from leaking into the next.
-          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
           // The SUBJECT's static type is what a top-level binding takes.
           // Computed once for the whole `match`, since every clause matches the
           // same subject.
@@ -13338,6 +13785,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const literal = staticType(n.Initializer);
               if (literal && literal.Kind === 'literal') {
                 frame.constLiteralTypes.set(n.BindingIdentifier.name, literal);
+              }
+              // The EXACT value, read from the source text before rounding, so
+              // a use of this constant at a wide type is exact. The binding
+              // itself holds a Number - `const K = 9007199254740993` is
+              // `...992` at run time - which is what "behaves as if inlined"
+              // has to route around: a use folds to this value, not to the
+              // binding's.
+              const exact = foldConstant(n.Initializer);
+              if (exact !== null) {
+                frame.constLiteralValues.set(n.BindingIdentifier.name, exact);
               }
             }
           }
