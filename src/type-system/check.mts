@@ -8286,8 +8286,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // that refuses a later assignment the program plainly admits is the wrong
       // type for the member. Where the field DECLARES one, that annotation is
       // what it means and is left exactly as written.
-      const t = f.TypeAnnotation
-        ? resolveType(f.TypeAnnotation.Type)
+      //
+      // DECLARATION IS WHAT MAKES A MEMBER; ANNOTATION IS WHAT CONSTRAINS IT.
+      // An unannotated field's inferred type serves MEMBERSHIP - it is what lets
+      // `class C implements A { a = (1 := uint32); }` satisfy `A`, and what
+      // names a wrong-typed field for its type rather than for being absent -
+      // and it does not constrain STORES. `class C { y = 1; } c.y = "s";` is
+      // ordinary JavaScript and runs in every engine; a superset may add
+      // meanings, not remove programs. So an unannotated field's WRITE type is
+      // ~any~, through the same slot a setter uses to give a property a write
+      // type distinct from its read type.
+      const annotated = f.TypeAnnotation !== null && f.TypeAnnotation !== undefined;
+      const t = annotated
+        ? resolveType(f.TypeAnnotation!.Type)
         : (fieldInitializer
           ? ((): Known => {
             const inferred = staticType(fieldInitializer as ParseNode);
@@ -8295,7 +8306,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           })()
           : null);
       if (t) {
-        Properties.push({ key, type: t, optional: false, readonly: false, protected: (f as { protected?: boolean }).protected === true });
+        Properties.push({
+          key, type: t, optional: false, readonly: false,
+          protected: (f as { protected?: boolean }).protected === true,
+          ...(annotated ? {} : { writeType: anyTypeRecord as TypeRecord }),
+        });
         // An `accessor` is a FieldDefinition carrying the marker, and it is the
         // one member kind whose OVERRIDE is invariant - recorded here because
         // the Properties list keeps a type per key and no member kind.
@@ -8331,6 +8346,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // interface has that interface's members, and the checker could not see one
     // the class did not also declare itself. Merged UNDER both the class's
     // own declarations and its heritage, since either is more specific.
+    // The heritage is resolved BEFORE `implements` is verified, because an
+    // interface's member may be satisfied by one the class INHERITS. It was
+    // resolved after, so `class C extends B implements A {}` where `B` declared
+    // `a` was refused with "C, which declares no member a" - a member that was
+    // declared, on the base, and that the merge below would have carried.
+    // TypeScript accepts the identical program, and so does the run time here.
+    const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
+    const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
+      ? (heritage as { name: string }).name
+      : null;
+    // A class may extend a LIBRARY nominal - `class MyErr extends Error` - and
+    // `classTypeOf` finds only classes declared in source, so [[Base]] was left
+    // undefined and the chain the subtype relation walks stopped short. The run
+    // time walked it anyway: `new MyErr() is Error` and `instanceof` both
+    // answered *true* while `let e: Error = new MyErr()` was refused, which is
+    // the disagreement this record exists to end.
+    //
+    // Worse than a refusal, it disagreed with ITSELF across a module boundary:
+    // the same class imported from another module was ACCEPTED, because this
+    // pass cannot see an imported declaration and abstained, leaving the run
+    // time to answer correctly. A program's meaning depended on which file its
+    // class was written in.
+    const base = baseName ? (classTypeOf(baseName) ?? libraryType(baseName)) : null;
+    const baseStructure = base && base.Kind === 'nominal'
+      ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
+      : null;
     const implemented = (cls.ClassTail as { ImplementsClause?: readonly ParseNode[] | null } | null | undefined)?.ImplementsClause ?? [];
     for (const ref of implemented) {
       const iname = (ref as { TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } }).TypeName;
@@ -8378,7 +8419,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // may leave out.
         const className = ((cls as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name) ?? 'the class';
         for (const p of istruct.Properties) {
-          const own = Properties.find((o) => o.key === p.key);
+          // A member is DECLARED if the class or any class it extends declares
+          // it; an inherited member satisfies the interface as an own one does.
+          const own = Properties.find((o) => o.key === p.key)
+            ?? (baseStructure && baseStructure.Kind === 'object'
+              ? baseStructure.Properties.find((o) => o.key === p.key)
+              : undefined);
           if (!own) {
             if (!p.optional) {
               const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(`${nm}`)) as ThrowCompletion;
@@ -8417,26 +8463,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         report(getter.type, stype);
       }
     }
-    const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
-    const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
-      ? (heritage as { name: string }).name
-      : null;
-    // A class may extend a LIBRARY nominal - `class MyErr extends Error` - and
-    // `classTypeOf` finds only classes declared in source, so [[Base]] was left
-    // undefined and the chain the subtype relation walks stopped short. The run
-    // time walked it anyway: `new MyErr() is Error` and `instanceof` both
-    // answered *true* while `let e: Error = new MyErr()` was refused, which is
-    // the disagreement this record exists to end.
-    //
-    // Worse than a refusal, it disagreed with ITSELF across a module boundary:
-    // the same class imported from another module was ACCEPTED, because this
-    // pass cannot see an imported declaration and abstained, leaving the run
-    // time to answer correctly. A program's meaning depended on which file its
-    // class was written in.
-    const base = baseName ? (classTypeOf(baseName) ?? libraryType(baseName)) : null;
-    const baseStructure = base && base.Kind === 'nominal'
-      ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
-      : null;
     // AN ACCESSOR OVERRIDE IS INVARIANT, which README does not say and which
     // falls out of the two variance rules it does state meeting on ONE
     // declaration. A `get`/`set` pair may refine its halves separately - "a

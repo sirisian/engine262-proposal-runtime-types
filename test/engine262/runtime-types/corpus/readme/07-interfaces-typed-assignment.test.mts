@@ -64,7 +64,19 @@ test('Implementing Interfaces: a class implements an interface', () => {
   // combined with extends
   expect(evaluated('interface A { a: uint32; } class B {} class C extends B implements A { a = (1 := uint32); } typeof C;')).toBe('function');
   // an instance is created normally
-  expect(evaluated('interface A { a: uint32; } class C implements A { constructor() { this.a = (1 := uint32); } } let c = new C(); typeof c;')).toBe('object');
+  expect(evaluated('interface A { a: uint32; } class C implements A { a: uint32; } let c = new C(); typeof c;')).toBe('object');
+  // The README's own program: `C` declares `a` and inherits `b`'s host from `B`.
+  expect(evaluated('interface A { a: uint32; b(uint32): uint32; } class B {} class C extends B implements A { a: uint32; b(a) { return a; } } const x = new C(); x.a = x.b(5); String(x.a);')).toBe('5');
+  // A member is DECLARED if the class or a class it extends declares it: an
+  // inherited member satisfies the interface as an own one does.
+  expect(evaluated('interface A { a: uint32; } class B { a: uint32 = 0; } class C extends B implements A { } typeof C;')).toBe('function');
+  // What does NOT declare a member: a constructor assignment, or an assignment on
+  // the instance after construction. A class states its members; `this.a = …`
+  // creates a property on one object. The row here used to assert the
+  // constructor form was accepted, and the README's original text assigned
+  // `a` on the instance - both are refused, for the same reason, and both were
+  // rewritten to declare the field.
+  expectThrown('interface A { a: uint32; } class C implements A { constructor() { this.a = (1 := uint32); } }');
 });
 
 // -- Interface assignability is nominal ----------------------------------------

@@ -1531,16 +1531,23 @@ test('parentheses are transparent to contextual typing and to freshness', () => 
   expect(accepts('let o: { x: int32 } = ({ x: "s" });')).toBe(false);
 });
 
-test('an unannotated field is WIDENED, so a later store is not refused', () => {
-  // A field with no annotation took its initializer's type unwidened, and a
-  // literal type has exactly one value - so `class C { y = 1; }` declared `y`
-  // as the literal `1` and refused `c.y = 2` with "a literal type of number is
-  // not assignable to a literal type of number". That is ordinary JavaScript.
+test('an unannotated field declares a member and does not constrain stores', () => {
+  // DECLARATION IS WHAT MAKES A MEMBER; ANNOTATION IS WHAT CONSTRAINS IT.
+  //
+  // A field with no annotation once took its initializer's type unwidened, and a
+  // literal type has exactly one value - so `class C { y = 1; }` declared `y` as
+  // the literal `1` and refused `c.y = 2`. Widening fixed that and left a
+  // narrower version of the same problem: `c.y = "s"` was still refused, and
+  // that is ordinary JavaScript too. An unannotated field's inferred type now
+  // serves MEMBERSHIP only; a store to it is unconstrained, through the same
+  // write-type slot a setter uses.
   expect(accepts('class C { y = 1; } function nc(c: C) { c.y = 2; }')).toBe(true);
   expect(accepts('class C { y = "a"; } function nc(c: C) { c.y = "b"; }')).toBe(true);
-  // ...and the widened type is `number`, not `any`: a `uint8` is not assignable
-  // to it, exactly as at any other `number` position.
-  expect(accepts('class C { y = 1; } function nc(c: C) { c.y = (2 := uint8); }')).toBe(false);
+  expect(accepts('class C { y = 1; } function nc(c: C) { c.y = "s"; }')).toBe(true);
+  expect(accepts('class C { y = 1; } function nc(c: C) { c.y = (2 := uint8); }')).toBe(true);
+  // The READ type is still the widened inferred type, not `any`.
+  expect(accepts('class C { y = 1; } function nc(c: C) { let n: number = c.y; }')).toBe(true);
+  expect(accepts('class C { y = 1; } function nc(c: C) { let s: string = c.y; }')).toBe(false);
 
   // The member is still DECLARED, which is what the inferred type is for: an
   // interface the class implements is satisfied, and a field of the wrong type
