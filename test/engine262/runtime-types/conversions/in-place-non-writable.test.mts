@@ -135,7 +135,14 @@ test('a missing member is still refused as a missing member', () => {
   // The other refusal in the same loop, which must keep its own message: an
   // absent property is not an unwritable one, and conflating them would send a
   // reader looking for a descriptor that is not the problem.
+  //
+  // The message names the MEMBER and the type that requires it - the same
+  // wording every missing-member site uses - rather than the generic
+  // "is not assignable to" this row once expected. Both are distinct from the
+  // non-writable refusal, which is what this row exists to keep true.
   expect(message('interface I { nope: uint32 } function f(x: I) { return 1; } f({ });'))
-    .toContain('is not assignable to');
+    .toContain('is required by');
+  expect(message('interface I { nope: uint32 } function f(x: I) { return 1; } f({ });'))
+    .not.toContain('not writable');
   expectThrown('interface I { nope: uint32 } function f(x: I) { return 1; } f({ });');
 });

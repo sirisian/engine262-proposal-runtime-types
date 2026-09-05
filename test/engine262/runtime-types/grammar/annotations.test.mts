@@ -248,6 +248,13 @@ test('a destructured binding may carry a type annotation', () => {
   // Syntax Error it replaced.
   expectThrown(`${Point} let bad = {}; bad.a = "no"; const { a }: Point = bad;`);
   expectThrown(`${Point} function f({ a }: Point) { return a; } let w = {}; w.a = "no"; f(w);`);
-  // The rest form is untouched.
-  expect(ok(`${Point} function g(...{ a }: Point) { return a; }`)).toBe(true);
+  // The rest form is untouched - spelled as a rest annotation has to be. A
+  // rest's annotation is "the type of what it collects, an ~array~ or ~tuple~
+  // type rather than an element type" (#sec-type-annotations), so the row here
+  // used to write `...{ a }: Point` and assert it was accepted; the rest rule
+  // refuses that at the declaration, and correctly. The destructuring pattern on
+  // a rest is what this row is about, and it parses and types with the array
+  // spelling.
+  expect(ok(`${Point} function g(...{ a }: [].<Point>) { return a; }`)).toBe(true);
+  expect(ok(`${Point} function g(...{ a }: Point) { return a; }`)).toBe(false);
 });

@@ -217,13 +217,27 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['brand', "std.brand(uint32, 'UserId') === type uint32.<{ brand: 'UserId' }>", ''],
   ['options', 'std.reflect(std.options(type { n: uint8 }, type { inc: () => void })).properties.length === 2', ''],
   ['listeners', 'std.listeners(type { x: uint8 }) === type { onXChanged: (uint8) => void }', ''],
+  // typeprogramming.md R15 / #sec-declared-inverses: `@inverse(fn)` on a
+  // BUILDER declares the function that proposes its argument, so a pack
+  // reached only through the builder can be inferred. The decorator is
+  // `Reflect.declareInverse` applied at the declaration; the row checks that
+  // the export IS that decorator and that applying it registers the inverse.
+  ['inverse', 'typeof std.inverse === "function" && std.inverse.length === 2 && unpack(new Box.<uint8>(1)) === "uint.<8>"',
+    'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+    + 'function unboxed(Bs) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Bs).elements.map((e) => ({ type: Reflect.getReflection(e.type).generic.arguments[0] })) }); }' + NL
+    + '@std.inverse(unboxed)' + NL
+    + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); }' + NL
+    + 'function unpack<...Ts>(...bs: boxesOf(Ts)): string { return Reflect.getReflection(Ts).elements.map((e) => String(e.type)).join(","); }'],
 ];
 
 test('the table covers every export, and only exports', async () => {
   // Guards the suite against the kit growing past it. A helper added without a
   // test fails on the count here rather than passing unnoticed.
   const named = EXPORTS.map(([name]) => name);
-  expect(new Set(named).size).toBe(71);
+  // 72: the 71 of `typeprogramming.md`'s table plus `inverse`, which
+  // #sec-declared-inverses added. The guard below fired on it, as it should - an
+  // export with no row here is an export with no test.
+  expect(new Set(named).size).toBe(72);
   expect(await run(`const extra = Object.keys(std).filter(k => !${JSON.stringify(named)}.includes(k));`
     + ' if (extra.length) { throw new Error("untested exports: " + extra.join(",")); }'
     + ` if (Object.keys(std).length !== ${named.length}) { throw new Error("count " + Object.keys(std).length); }`)).toBe('ok');

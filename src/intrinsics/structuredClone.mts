@@ -160,6 +160,13 @@ function* ConstructEmpty(intrinsic: '%Map%' | '%Set%'): ValueEvaluator {
   return Q(yield* Construct(constructor as FunctionObject, []));
 }
 
+// The specification section, stated by hand. Every other built-in gets its
+// `section` from a `#sec-...` anchor in its doc comment, which the build
+// transform reads; this function is HTML's, and HTML's anchor is
+// `#dom-structuredclone`, which the transform does not recognise. `Math.mts`
+// sets the property the same way for its non-ECMA-262 functions.
+(StructuredClone as unknown as { section?: string }).section = 'https://html.spec.whatwg.org/multipage/structured-data.html#dom-structuredclone';
+
 export function bootstrapStructuredClone(realmRec: Realm) {
   realmRec.Intrinsics['%structuredClone%'] = CreateBuiltinFunction(
     StructuredClone, 1, Value('structuredClone'), [], realmRec,

@@ -94,7 +94,11 @@ test('a contextual type reaches through the pipe', () => {
 
 test('a test on the topic narrows it', () => {
   // The topic is bound under a name no program can write, so every row of the
-  // narrowing table reaches it with no new machinery.
+  // narrowing table reaches it - once the table reaches a TERNARY at all, and
+  // once the `typeof` row reads its operand through the same name resolution
+  // the `is` row does. This test found both gaps and credited neither: a plain
+  // binding in the same ternary failed identically, and `typeof %` was refused
+  // a fact while `% is string` got one.
   expect(ok(`
     function f(x: string | uint8): number { return x |> (typeof % === 'string' ? %.length : %); }
   `)).toBe(true);

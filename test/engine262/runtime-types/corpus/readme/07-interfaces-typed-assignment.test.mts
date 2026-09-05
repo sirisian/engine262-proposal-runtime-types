@@ -71,7 +71,7 @@ test('Implementing Interfaces: a class implements an interface', () => {
   // inherited member satisfies the interface as an own one does.
   expect(evaluated('interface A { a: uint32; } class B { a: uint32 = 0; } class C extends B implements A { } typeof C;')).toBe('function');
   // What does NOT declare a member: a constructor assignment, or an assignment on
-  // the instance after construction. A class states its members; `this.a = …`
+  // the instance after construction. A class states its members; `this.a = ...`
   // creates a property on one object. The row here used to assert the
   // constructor form was accepted, and the README's original text assigned
   // `a` on the instance - both are refused, for the same reason, and both were

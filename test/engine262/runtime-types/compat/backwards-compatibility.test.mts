@@ -100,3 +100,26 @@ test('an untyped program is untouched end to end', () => {
   expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => n); String(g.size) + String(typeof g.size);')).toBe('2number');
   expect(evaluated('function f(x) { return x + 1; } String(f(1)) + f("a");')).toBe('2a1');
 });
+
+test('an untyped array reads its length and indexOf as Number, as the run time does', () => {
+  // The index type belongs to an array THAT HAS AN ELEMENT TYPE, which is the
+  // clause's own scope and what the run time does: a declared `[].<uint8>` reads
+  // its `length` as a `uint64`, and a bare literal reads it as a Number, because
+  // the literal carries no [[TypedElement]]. The checker inferred `[].<number>`
+  // for `[1]` and could not tell it from a declared one, so these were refused.
+  expect(ok('let n: number = [1].length;')).toBe(true);
+  expect(ok('let n: number = ([1]).length;')).toBe(true);
+  expect(ok('let n: number = [].length;')).toBe(true);
+  // `indexOf` and `lastIndexOf` return Number on EVERY array, typed or not. The
+  // clause names them: their `=== -1` is the universal idiom, and a `uint64` is
+  // not a type `-1` can inhabit. The run time already returned a plain Number;
+  // the checker claimed otherwise.
+  expect(ok('let n: number = [1].indexOf(1);')).toBe(true);
+  expect(ok('let n: number = [1].lastIndexOf(1);')).toBe(true);
+  expect(ok('const a: [].<uint8> = [1]; let n: number = a.indexOf(1);')).toBe(true);
+  expect(ok('const a: [].<uint8> = [1]; let n: uint64 = a.indexOf(1);')).toBe(false);
+  // A DECLARED array's length is the index type, unchanged.
+  expect(ok('const a: [].<uint8> = [1]; let n: uint64 = a.length;')).toBe(true);
+  expect(ok('const a: [].<uint8> = [1]; let n: number = a.length;')).toBe(false);
+  expect(ok('const a: [].<any> = [1]; let n: uint64 = a.length;')).toBe(true);
+});

@@ -7,7 +7,8 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 // parameterization through the cast (`:=`) or the Type Object call, both of
 // which run the validation judgment; a `validate` that refuses keeps the value
 // out, and a meta type that constrains and defines no `validate` admits no
-// bare value at all, which is what makes a brand a brand. Between two
+// bare value AT AN ANNOTATION - the construction boundary is the way in, which
+// is what makes a brand a brand rather than a type nothing can inhabit. Between two
 // parameterizations the crossing is ConvertParameterization: `subtype` gates
 // each meta type independently, `conversionFactor` scales, and the result
 // carries the target so a chain still has provenance. The crossing is
@@ -67,12 +68,27 @@ test('a validate that refuses keeps the value out at the cast', () => {
   expectThrown(`${bounds} (-1 := NonNeg); "admitted";`);
 });
 
-test('a meta type with no validate admits no bare value: the brand', () => {
-  expectThrown(`
+test('a meta type with no validate admits no bare value AT AN ANNOTATION; the cast is the way in', () => {
+  // This row used to assert that the CAST refused, applying "admits no bare
+  // value" to the boundary that exists to let a value stop being bare. That
+  // contradicted this file's own header - "the cast is the way in" - and the
+  // brand tests, where `(type UserId)((7 := uint32))` must admit or a brand is
+  // a type nothing can inhabit. Measured across every meta type in this file,
+  // the rule is one rule: the CONSTRUCTION boundary (cast and Type Object call)
+  // admits a bare value, subject to `validate` where one is declared; the
+  // ANNOTATION boundary admits none; `subtype` gates crossings BETWEEN
+  // parameterizations rather than entry from bare.
+  const tag = `
     type T = { tag: string };
     meta T { default = { tag: "" }; subtype(a, b) { return a.tag === b.tag; } }
-    (1 := float32.<{ tag: "A" }>); "admitted";
-  `);
+  `;
+  // The cast admits, and the result IS the parameterization.
+  expect(evaluated(`${tag} String((1 := float32.<{ tag: "A" }>) is float32.<{ tag: "A" }>);`)).toBe('true');
+  // The annotation is where a bare value is refused - for a `subtype`-only meta
+  // exactly as for a brand.
+  expectThrown(`${tag} let v: float32.<{ tag: "A" }> = 1; "admitted";`);
+  // ...and `subtype` still governs the crossing it is for.
+  expectThrown(`${tag} let a = (1 := float32.<{ tag: "A" }>); (a := float32.<{ tag: "B" }>); "crossed";`);
 });
 
 test('the Type Object call is the same boundary: admits with validate, refuses without it', () => {
