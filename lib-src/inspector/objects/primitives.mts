@@ -1,6 +1,6 @@
 import type { Inspector } from './index.mts';
 import {
-  BigIntValue, SymbolDescriptiveString,
+  BigIntValue, SymbolDescriptiveString, canonicalTypeText,
   type BooleanValue,
   type JSStringValue,
   type NullValue,
@@ -30,8 +30,15 @@ function typeNameOf(record: unknown): string {
     if (args.length === 1 && typeof args[0] === 'number') {
       return `${t.Name}${args[0]}`;
     }
+    // Anything else parameterized is rendered by the engine's own canonical
+    // formatter - the one `String(type ...)` uses. This used to interpolate each
+    // argument with `String(a)`, which is right for a number and `[object
+    // Object]` for a TYPE RECORD, so a vector's lane type printed as
+    // `vector.<[object Object], 4>(0, 1, 2, 3)` where `String(type int32x4)`
+    // beside it printed `vector.<int.<32>, 4>`. The scalar shorthand above is kept
+    // because the snapshots and the eye both prefer `5 (uint8)` to `5 (uint.<8>)`.
     if (args.length > 0) {
-      return `${t.Name}.<${args.map((a) => globalThis.String(a)).join(', ')}>`;
+      return canonicalTypeText(record as never);
     }
     return t.Name;
   }
@@ -187,11 +194,19 @@ export const Vector: Inspector<VectorValue> = {
     };
   },
   toDescription: (value) => {
-    const lanes = value.lanes.map((lane) => {
-      const l = lane as { value?: unknown };
+    // A lane is a scalar - or, for a bit vector like `boolean32x4`, ITSELF A
+    // VECTOR of `uint1` lanes. The scalar case read `.value`; the vector case
+    // fell to `String(lane)`, which is `[object Object]` for a value record,
+    // so `boolean32x4(1, 0, 1, 0)` showed four of those. Recursing renders a
+    // nested vector as its own parenthesised lanes, as `String()` does.
+    const laneText = (lane: unknown): string => {
+      const l = lane as { value?: unknown, lanes?: readonly unknown[] };
+      if (l && globalThis.Array.isArray(l.lanes)) {
+        return `(${l.lanes.map(laneText).join(', ')})`;
+      }
       return l && l.value !== undefined ? globalThis.String(l.value) : globalThis.String(lane);
-    });
-    return `${typeNameOf(value.TypeRecord)}(${lanes.join(', ')})`;
+    };
+    return `${typeNameOf(value.TypeRecord)}(${value.lanes.map(laneText).join(', ')})`;
   },
 };
 
