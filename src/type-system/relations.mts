@@ -909,6 +909,26 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     if (t.Kind === 'object' && s.Arguments.length > 0) {
       return IsSubtype(s.Arguments[0] as TypeRecord, t, next);
     }
+    // The TUPLE kind, for the same reason. composites.md: a tuple composite's
+    // "static type is `Composite.<[T1, T2, ...]>` over this proposal's tuple
+    // types, and a homogeneous `Composite.<[].<T>>` covers the variable-length
+    // case". A tuple composite satisfies a tuple type through its shape as a
+    // record composite satisfies an object type; and it satisfies the
+    // homogeneous array type when every element type is of the element type -
+    // the variable-length shape's meaning, applied directly, since the general
+    // relation does not hold a fixed tuple to be a subtype of an array. This
+    // arm was absent, so a parsed `Composite.<{ endpoints: [].<E> }>` failed
+    // its own membership at the `endpoints` member.
+    if (s.Arguments.length > 0) {
+      const sShape = s.Arguments[0] as TypeRecord;
+      if (t.Kind === 'tuple' && sShape.Kind === 'tuple') {
+        return IsSubtype(sShape, t, next);
+      }
+      if (t.Kind === 'array' && sShape.Kind === 'tuple') {
+        const element = (t as { Element: TypeRecord }).Element;
+        return (sShape as { Elements: readonly { Type: TypeRecord }[] }).Elements.every((e) => IsSubtype(e.Type, element, next));
+      }
+    }
   }
   // #sec-enums: "An enum type is a subtype of its underlying type, so a value
   // of an enum type is usable wherever the underlying type is required and no

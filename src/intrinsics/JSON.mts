@@ -504,7 +504,20 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
           // shape to validate against."
           return jsonTypeError(path, t, value);
         }
-        return Q(yield* CompositeFromShape(t.Arguments[0] as TypeRecord, value));
+        // serialization.md: `JSON.parse.<Composite.<T>>(text)` "validates the
+        // document against T by the rules above and interns the result" - two
+        // steps, in that order. VALIDATE first, through this same coercion
+        // against the shape, which is where the range check lives: going
+        // straight to CompositeFromShape put every member through ConvertValue,
+        // which WRAPS, so `"retries":300` at a `uint8` interned silently as 44
+        // where `JSON.parse.<T>` of the same text refused it. Then INTERN the
+        // validated tree, deep: every nested object and array becomes a
+        // composite too, so two parses of equal documents are one object however
+        // nested the shape - a parsed document has no identity anyone holds, so
+        // there is nothing for a plain inner object to preserve.
+        const shape = t.Arguments[0] as TypeRecord;
+        const validated = Q(yield* CoerceJSON(value, shape, path));
+        return Q(yield* CompositeFromShape(shape, validated, true));
       }
       const name = t.Name;
       if (name === 'uint' || name === 'int' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {
@@ -563,6 +576,39 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
       for (let i = 0; i < len; i += 1) {
         const el = Q(yield* Get(value, Value(String(i))));
         elements.push(Q(yield* CoerceJSON(el, t.Element, `${path}[${i}]`)));
+      }
+      return X(CreateArrayFromList(elements));
+    }
+    // A TUPLE, which had no case here at all and fell to the type error - so
+    // `JSON.parse.<[uint8, string]>('[1,"x"]')` was refused with "expected
+    // tuple, got an object or array", and so was every tuple shape reached
+    // through `Composite.<..>` once that path began validating first. A JSON
+    // array is coerced position by position at the element types; a position
+    // past the array's length is a required absence unless the element has an
+    // initial or is a rest; elements past the declared positions are refused
+    // unless the last is a rest, whose type covers them. Mirrors the object
+    // case's treatment of required and optional members.
+    case 'tuple': {
+      if (!(value instanceof ObjectValue) || X(IsArray(value)) !== Value.true) {
+        return jsonTypeError(path, t, value);
+      }
+      const len = Q(yield* LengthOfArrayLike(value));
+      const declared = t.Elements as readonly { Type: TypeRecord, Rest?: boolean, Initial?: unknown }[];
+      const rest = declared.length > 0 && declared[declared.length - 1]!.Rest ? declared[declared.length - 1]! : undefined;
+      const fixedCount = rest ? declared.length - 1 : declared.length;
+      if (len > fixedCount && !rest) {
+        return Throw.TypeError('$1', Value(`${path === '' ? '' : `at ${path}: `}expected ${describeType(t)}, got an array of length ${len}`));
+      }
+      const elements: Value[] = [];
+      for (let i = 0; i < len; i += 1) {
+        const el = Q(yield* Get(value, Value(String(i))));
+        const position = i < fixedCount ? declared[i]! : rest!;
+        elements.push(Q(yield* CoerceJSON(el, position.Type, `${path}[${i}]`)));
+      }
+      for (let i = len; i < fixedCount; i += 1) {
+        if (declared[i]!.Initial === 'none' || declared[i]!.Initial === undefined) {
+          return Throw.TypeError('$1', Value(`${path === '' ? '' : `at ${path}: `}expected ${describeType(t)}, got an array of length ${len}`));
+        }
       }
       return X(CreateArrayFromList(elements));
     }

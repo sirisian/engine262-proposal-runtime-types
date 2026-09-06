@@ -2676,7 +2676,32 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     if (!composite) {
       return false;
     }
-    return IsSubtype(composite, t, []);
+    if (IsSubtype(composite, t, [])) {
+      return true;
+    }
+    // composites.md, "Tuple Composites": "a homogeneous `Composite.<[].<T>>`
+    // covers the variable-length case". A tuple composite records a FIXED
+    // tuple type - `[E, E]` for two elements - and the general relation does
+    // not hold a fixed tuple to be a subtype of the homogeneous array `[].<E>`,
+    // so `t is Composite.<[].<E>>` was false for every tuple composite and a
+    // parsed `Composite.<{ endpoints: [].<E> }>` failed its own membership.
+    // Here the shape's meaning is applied directly: the composite is of the
+    // variable-length shape when it is a tuple composite every element type of
+    // which is of the element type. The recorded record is not changed - the
+    // same interned object may have been made from a fixed tuple shape and is
+    // checked against that shape the ordinary way above.
+    const shape = t.Arguments[0];
+    const shapeRecord = shape && typeof shape !== 'number'
+      ? (shape.Kind === 'array' ? shape : (shape as { Structure?: TypeRecord }).Structure)
+      : undefined;
+    const compositeShape = composite.Kind === 'primitive' && composite.Name === 'Composite' && typeof composite.Arguments[0] !== 'number'
+      ? composite.Arguments[0] as TypeRecord
+      : undefined;
+    if (shapeRecord && shapeRecord.Kind === 'array' && compositeShape && compositeShape.Kind === 'tuple') {
+      const element = (shapeRecord as { Element: TypeRecord }).Element;
+      return (compositeShape as { Elements: readonly { Type: TypeRecord }[] }).Elements.every((e) => IsSubtype(e.Type, element, []));
+    }
+    return false;
   }
   switch (t.Kind) {
     case 'any':
@@ -3707,7 +3732,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // looks for it in [[Arguments]]: it found none, treated the type as the TOP
       // composite, and every composite satisfied every shape.
       if (name === 'Composite' && argRecords.length === 1
-          && (argRecords[0]!.Kind === 'object' || argRecords[0]!.Kind === 'tuple')) {
+          && (argRecords[0]!.Kind === 'object' || argRecords[0]!.Kind === 'tuple' || argRecords[0]!.Kind === 'array')) {
         // The shape's members are READONLY, whatever the annotation wrote.
         // "A composite object is frozen from its creation", and CompositeShape
         // marks every field of a stamped value readonly to match - so a mutable
@@ -3716,13 +3741,31 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // clause grants sound: "a composite type is covariant in its shape, which
         // the frozenness of every composite makes sound ... depth subtyping
         // through a `readonly` one".
-        const shape = argRecords[0]!;
-        const frozen: TypeRecord = shape.Kind === 'object'
-          ? ({
-            ...shape,
-            Properties: shape.Properties.map((prop) => ({ ...prop, readonly: true })),
-          } as unknown as TypeRecord)
-          : shape;
+        // ...and RECURSIVELY. "Nested composites are trees terminating in
+        // non-composite leaves" (composites.md), and a parsed document is
+        // re-interned all the way down, so a nested object or an array's
+        // element is frozen exactly as the top is. Freezing only the top's own
+        // members left `Composite.<{ endpoints: [].<E> }>` with a WRITABLE `E`
+        // inside, which the frozen nested composite could never satisfy - the
+        // same trap one level down. `[].<T>` is admitted as a shape here as
+        // composites.md's "a homogeneous `Composite.<[].<T>>` covers the
+        // variable-length case" says; it was refused as a shape outright.
+        const freeze = (r: TypeRecord): TypeRecord => {
+          if (r.Kind === 'object') {
+            return {
+              ...r,
+              Properties: (r as { Properties: readonly { type: TypeRecord }[] }).Properties.map((prop) => ({ ...prop, readonly: true, type: freeze(prop.type) })),
+            } as unknown as TypeRecord;
+          }
+          if (r.Kind === 'array') {
+            return { ...r, Element: freeze((r as { Element: TypeRecord }).Element) } as unknown as TypeRecord;
+          }
+          if (r.Kind === 'tuple') {
+            return { ...r, Elements: (r as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => ({ ...e, Type: freeze(e.Type) })) } as unknown as TypeRecord;
+          }
+          return r;
+        };
+        const frozen = freeze(argRecords[0]!);
         const composite = builtinTypeRecord(name, [frozen]);
         if (composite) {
           return composite;

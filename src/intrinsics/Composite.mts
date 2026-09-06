@@ -358,10 +358,34 @@ function TupleShape(elements: readonly Value[]): TypeRecord {
  * composite that already exists writes nothing, because a frozen shared object
  * is where filling at a check is not merely undesirable but impossible.
  */
-export function* CompositeFromShape(shape: TypeRecord, source: Value): ValueEvaluator {
+/**
+ * @param deep - re-intern NESTED structure too. composites.md: "nested
+ * composites are trees terminating in non-composite leaves", and
+ * serialization.md: `JSON.parse.<Composite.<T>>` "interns the result, so two
+ * parses of equal documents are the same object". A DIRECT `Composite({ v: {} })`
+ * keeps the inner object's identity - the caller holds that object and
+ * `Composite({ v: {} }) !== Composite({ v: {} })` is the stated semantics - but a
+ * PARSED document has no identity anyone holds, and leaving its inner objects
+ * plain meant two parses of any nested document never interned: each held a
+ * fresh inner object. With `deep`, a member or element whose declared type is
+ * itself structural is built through this function rather than converted.
+ */
+export function* CompositeFromShape(shape: TypeRecord, source: Value, deep = false): ValueEvaluator {
   if (!(source instanceof ObjectValue)) {
     return Throw.TypeError('$1 is not an object', source);
   }
+  /** A member's value at its declared type - a nested composite where `deep` and the type is structural. */
+  const member = function* (v: Value, t: TypeRecord): ValueEvaluator {
+    if (deep) {
+      const s = t.Kind === 'object' || t.Kind === 'tuple' || t.Kind === 'array'
+        ? t
+        : (t as { Structure?: TypeRecord }).Structure;
+      if (s && (s.Kind === 'object' || s.Kind === 'tuple' || s.Kind === 'array')) {
+        return Q(yield* CompositeFromShape(t, v, true));
+      }
+    }
+    return Q(yield* ConvertValue(v, t));
+  };
   // "the S that is T's STRUCTURAL FORM" - an interface resolves to a ~nominal~
   // record carrying its structure, and the clause is written over the structure
   // rather than the name. Reading `Kind === 'object'` alone sent every
@@ -372,16 +396,30 @@ export function* CompositeFromShape(shape: TypeRecord, source: Value): ValueEval
   // wrong path first, and then every tuple TYPE ALIAS after the tuple kind
   // landed - `type T = [uint8, uint8]` resolves to a ~tuple~ record directly
   // and has no `Structure` to read.
-  const structural = shape.Kind === 'object' || shape.Kind === 'tuple'
+  const structural = shape.Kind === 'object' || shape.Kind === 'tuple' || shape.Kind === 'array'
     ? shape
     : (shape as { Structure?: TypeRecord }).Structure;
+  // composites.md, "Tuple Composites": "a homogeneous `Composite.<[].<T>>` covers
+  // the variable-length case". A dynamic array shape is a tuple composite of
+  // however many elements the source has, each at the element type. It was
+  // refused as "not an object or tuple type".
+  if (structural && structural.Kind === 'array') {
+    const len = Q(yield* LengthOfArrayLike(source));
+    const elements: Value[] = [];
+    const elementType = (structural as { Element: TypeRecord }).Element;
+    for (let i = 0; i < len; i += 1) {
+      const v = Q(yield* Get(source, Value(String(i))));
+      elements.push(CanonicalizeCompositeValue(Q(yield* member(v, elementType))));
+    }
+    return Q(FindOrCreateTupleComposite(elements));
+  }
   if (structural && structural.Kind === 'tuple') {
     const len = Q(yield* LengthOfArrayLike(source));
     const elements: Value[] = [];
     for (let i = 0; i < len; i += 1) {
       const v = Q(yield* Get(source, Value(String(i))));
       const element = structural.Elements[i];
-      const converted = element ? Q(yield* ConvertValue(v, element.Type as TypeRecord)) : v;
+      const converted = element ? Q(yield* member(v, element.Type as TypeRecord)) : v;
       elements.push(CanonicalizeCompositeValue(converted));
     }
     // A required POSITION absent is the tuple's version of a required member
@@ -414,7 +452,7 @@ export function* CompositeFromShape(shape: TypeRecord, source: Value): ValueEval
         return Throw.TypeError('$1 is not a member of this type', key);
       }
       const v = Q(yield* Get(source, key));
-      const converted = Q(yield* ConvertValue(v, declared.type as TypeRecord));
+      const converted = Q(yield* member(v, declared.type as TypeRecord));
       entries.push({ Key: key, Value: CanonicalizeCompositeValue(converted) });
     }
   }
