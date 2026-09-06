@@ -916,6 +916,76 @@ function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => D
   }
 }
 
+/**
+ * README, "Weak References": `class WeakMap<K extends object | symbol, V>`,
+ * `class WeakSet<T extends object | symbol>`, `class WeakRef<T extends object |
+ * symbol>`. The constraint on the type parameter that must be weakly
+ * referenceable, by library name; `FinalizationRegistry`'s T is the HELD value
+ * and is unconstrained, so it is not here. Nothing recorded these constraints
+ * before - the library generics had parameter NAMES and an ARITY - so
+ * `WeakMap.<string, uint8>` was accepted at every position and the program
+ * learned at its first `set`, from the run time's own TypeError, that no key
+ * could ever satisfy it.
+ */
+const WEAK_KEY_PARAMETER: Record<string, number> = { WeakMap: 0, WeakSet: 0, WeakRef: 0 };
+
+/**
+ * Static counterpart of CanBeHeldWeakly, over a TYPE: whether every value of
+ * the type can be held weakly.
+ *
+ * #sec-weak-references-and-typed-objects: "An instance of a typed class cannot
+ * be held weakly ... A class becomes ineligible exactly when it becomes a typed,
+ * sealed class." The run time derives "sealed" as: a non-`dynamic` class with a
+ * typed instance field (`ClassDefinitionEvaluation`, `SealInstances`). The same
+ * derivation is made here from the declaration, so the two agree by
+ * construction. A composite is refused in the same positions (the clause merges
+ * both into one predicate).
+ *
+ * Answers: `object` and any object, array, tuple, function or library nominal
+ * type - yes; `symbol` - yes (a registered symbol is the run time's, as the
+ * README says); `any` - yes (unknown, so the run time decides); a union - only
+ * if every arm is; a value type, a literal, `null`, `undefined`, `string`,
+ * `number`, `boolean`, `bigint` - no; a typed sealed class - no, and so its
+ * nullable union `A | null`, which the clause does not carve out.
+ */
+function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
+  if (!t) {
+    return true;
+  }
+  switch (t.Kind) {
+    case 'any': return true;
+    case 'object': case 'array': case 'tuple': case 'function': return true;
+    case 'primitive': {
+      const name = (t as { Name?: string }).Name;
+      if (name === 'object' || name === 'symbol') {
+        return true;
+      }
+      return false;
+    }
+    case 'union': return (t as { Members: readonly TypeRecord[] }).Members.every((m) => typeCanBeHeldWeakly(m));
+    case 'intersection': return (t as { Members: readonly TypeRecord[] }).Members.some((m) => typeCanBeHeldWeakly(m));
+    case 'nominal': {
+      const decl = (t as { Declaration?: ParseNode | null }).Declaration as (ParseNode & { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null, ClassModifiers?: readonly string[] | null }) | null | undefined;
+      if (!decl || (decl.type !== 'ClassDeclaration' && decl.type !== 'ClassExpression')) {
+        // A library nominal - Map, Promise, Date - is an ordinary object.
+        return true;
+      }
+      const body = decl.ClassTail?.ClassBody ?? [];
+      // `ClassModifiers` on the declaration, which is where the run time reads
+      // `dynamic` from (through the tail's parent) - a `dynamic` typed class is
+      // not sealed and IS holdable.
+      const isDynamic = (decl.ClassModifiers ?? []).includes('dynamic');
+      const hasTypedInstanceField = body.some((el) => (el as { type?: string }).type === 'FieldDefinition'
+        && !(el as { static?: boolean }).static
+        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
+        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== null);
+      return !(hasTypedInstanceField && !isDynamic);
+    }
+    default:
+      return false;
+  }
+}
+
 /** Whether a type is an integer value type - `uint` or `int` at any width. */
 function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
   return !!t && t.Kind === 'primitive'
@@ -4236,6 +4306,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
+   * README, "Weak References": the type argument of the parameter a weak
+   * generic holds weakly must be assignable to `object | symbol`. One check for
+   * both the annotation path and the `new` path.
+   */
+  const checkWeakKeyConstraint = (libraryName: string, args: readonly (TypeRecord | number)[]): void => {
+    const slot = WEAK_KEY_PARAMETER[libraryName];
+    if (slot === undefined || args.length <= slot) {
+      return;
+    }
+    const key = args[slot];
+    // A numeric literal argument arrives as a NUMBER here (the extent form,
+    // `[4].<T>`); as a key type it is a literal type, and no number is held
+    // weakly.
+    if (typeof key !== 'number' && typeCanBeHeldWeakly(key)) {
+      return;
+    }
+    const held = libraryName === 'WeakMap' ? 'keys' : libraryName === 'WeakSet' ? 'values' : 'target';
+    const shown = typeof key === 'number' ? `a literal type of number` : displayType(key);
+    const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(shown), Value(libraryName), Value(held)) as ThrowCompletion;
+    errors.push(completion.Value as ObjectValue);
+  };
+
+  /**
    * The exact value of a `const` bound to a constant expression, resolved
    * through the frames and stopping at the first that declares the name - so
    * an inner `let` shadowing a constant `const` is not read as constant.
@@ -4290,6 +4383,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'BitwiseORExpression':
         staticType(node);
         return;
+      // `new WeakRef(x)` as a statement - the README's own example is written
+      // that way - is typed for the static weak-reference check, and so is a
+      // `new` that WRITES TYPE ARGUMENTS, `new WeakMap.<string, uint8>()`,
+      // since the arguments are what the check is about. A `new` of anything
+      // else in statement position is left as it was.
+      case 'NewExpression': {
+        const callee = (node as unknown as { MemberExpression?: { type?: string, name?: string } }).MemberExpression;
+        if ((callee?.type === 'IdentifierReference' && callee.name === 'WeakRef') || callee?.type === 'TypeArgumentsExpression') {
+          staticType(node);
+          return;
+        }
+        for (const a of (node as unknown as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
+          typeArithmeticWithin(a);
+        }
+        return;
+      }
       case 'FunctionExpression':
       case 'ArrowFunction':
       case 'AsyncArrowFunction':
@@ -6090,6 +6199,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return reduced;
             }
           }
+          // The weak generics' key constraint, checked AT THE APPLICATION so
+          // that every position - an annotation, an alias, a parameter, a
+          // return, a field, an interface member - is refused at the type and
+          // not at the first `set`. README: "Passing one is a TypeError,
+          // statically when the type is known". `new X.<..>()` resolves its
+          // arguments on its own path and calls the same check there.
+          checkWeakKeyConstraint(parameterizedName, args);
           const builtinOrLibrary = builtinTypeRecord(parameterizedName, args)
             ?? iterationInterfaceRecord(parameterizedName, args)
             ?? libraryTypeRecord(parameterizedName, args);
@@ -8123,7 +8239,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // nominal its annotation resolved to, carrying its type arguments.
           if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
               && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map'
-                || receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
+                || receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap'
+                || receiver.LibraryName === 'FinalizationRegistry')) {
             const name = (m.IdentifierName as { name: string }).name;
             // #index-type, widened from arrays to containers: a typed
             // collection's `size` reads at the index type, as an array's
@@ -8358,6 +8475,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // constructor here whose argument decides the answer.
               const args = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
               const referent = args[0] ? staticType(args[0]) : null;
+              // README: "Passing one is a TypeError, statically when the type
+              // is known and at run time otherwise." The referent's static type
+              // is known here; a value type, a literal, or a typed class is
+              // refused at the `new` rather than when it runs.
+              if (referent && !typeCanBeHeldWeakly(widen(referent) as TypeRecord)) {
+                const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(widen(referent) as TypeRecord)), Value('WeakRef'), Value('target')) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+              }
               return referent
                 ? libraryTypeRecord('WeakRef', [widen(referent) as TypeRecord]) ?? null
                 : null;
@@ -8434,6 +8559,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // `SoA.<P>` is `SoA.<P, 0>`, so a binding could not hold the
                 // value its own annotation named. Routed back through the
                 // builder, which is the one place those defaults are stated.
+                // The weak generics' key constraint, at the `new` as at an
+                // annotation: `new WeakMap.<string, uint8>()` was the one
+                // position of seven the annotation-side check did not reach.
+                checkWeakKeyConstraint(specName, valueArgs);
                 const asLibrary = libraryTypeRecord(specName, valueArgs);
                 if (asLibrary) {
                   return CanonicalizeType(asLibrary as TypeRecord) as Known;
@@ -11609,6 +11738,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (library === 'WeakMap') {
       return null;
+    }
+    // README, "Weak References": `register(target: object | symbol, heldValue:
+    // T, unregisterToken?: object | symbol): void` and `unregister(token:
+    // object | symbol): boolean`. The HELD value is the type argument and is
+    // unconstrained; the TARGET and the token must be weakly referenceable, and
+    // a literal or value-typed argument is refused here rather than at run
+    // time. `FinalizationRegistry` had no signatures at all before this, so
+    // `register("s", 1)` was the run time's TypeError.
+    if (library === 'FinalizationRegistry') {
+      const weaklyHeld = joinTypes(makePrimitive('object') as TypeRecord, makePrimitive('symbol') as TypeRecord) as TypeRecord;
+      const held = arg(0);
+      switch (name) {
+        case 'register': return sig([weaklyHeld, held, weaklyHeld], voidTypeRecord, 2);
+        case 'unregister': return sig([weaklyHeld], boolType);
+        default: return null;
+      }
     }
     switch (name) {
       case 'clear': return sig([], voidTypeRecord);

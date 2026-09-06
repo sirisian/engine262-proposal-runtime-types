@@ -17,7 +17,12 @@ test('a composite is refused in EVERY weak position', () => {
   // could watch.
   expect(outcome('new WeakSet().add(Composite({ x: 1 }));')).toBe('TypeError');
   expect(outcome('new WeakMap().set(Composite({ x: 1 }), 1);')).toBe('TypeError');
-  expect(outcome('new WeakRef(Composite({ x: 1 }));')).toBe('TypeError');
+  // `new WeakRef(x)` checks its argument's STATIC type where it has one, and
+  // a composite's is known - so this row is the same refusal one step earlier,
+  // as the README's "statically when the type is known" asks. The untyped
+  // collections above have no static signature to check against, and stay the
+  // run time's TypeError.
+  expect(outcome('new WeakRef(Composite({ x: 1 }));')).toBe('StaticTypeError');
   expect(outcome('new FinalizationRegistry(() => {}).register(Composite({ x: 1 }), 1);')).toBe('TypeError');
   // A TUPLE composite too - the refusal is about being a composite, not about
   // the kind.

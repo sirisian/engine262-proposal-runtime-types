@@ -592,6 +592,7 @@ export interface Throw {
   | '$1 cannot be used as an index'
   | '$1 cannot be used before initialization'
   | '$1 cannot be weakly referenced'
+  | '$1 cannot be held weakly, and $2 holds its $3 weakly'
   | '$1 could not be appended'
   | '$1 does not look like a TemporalTimeLike object'
   | "$1 does not match the pattern's length"
