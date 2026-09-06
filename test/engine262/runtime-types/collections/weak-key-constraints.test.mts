@@ -112,3 +112,58 @@ test('FinalizationRegistry: the held value is unconstrained; the target and toke
   // The held value takes T.
   expectStaticTypeError('const r = new FinalizationRegistry.<uint32>((h) => {}); r.register({}, "not a uint32");');
 });
+
+// ---------------------------------------------------------------------------
+// THE ARGUMENT SITES: "statically when the type is known".
+//
+// The element-taking methods were checked by ASSIGNABILITY of the argument to
+// the element type. That is right for `s.add(5)` at a `WeakSet.<object>` - `5`
+// is not an object - and wrong for an instance of a typed class, which IS
+// assignable to `object` and is not holdable: `s.add(new A())` passed the
+// checker and was refused at run time, one step later than `new WeakRef(new A())`
+// beside it. The constructor's iterable argument was not checked at all.
+// ---------------------------------------------------------------------------
+
+test('a typed-class instance passed to add/set/has/delete is refused statically, not at run time', () => {
+  const A = 'class A { a: uint8 = 0; } ';
+  expectStaticTypeError(`${A} const s = new WeakSet.<object>(); s.add(new A());`);
+  expectStaticTypeError(`${A} const s = new WeakSet.<object>(); s.has(new A());`);
+  expectStaticTypeError(`${A} const s = new WeakSet.<object>(); s.delete(new A());`);
+  expectStaticTypeError(`${A} const m = new WeakMap.<object, uint8>(); m.set(new A(), 1);`);
+  expectStaticTypeError(`${A} const m = new WeakMap.<object, uint8>(); m.get(new A());`);
+  expectStaticTypeError(`${A} const b = new A(); const s = new WeakSet.<object>(); s.add(b);`);
+  // A value type through a binding, likewise.
+  expectStaticTypeError('let v: uint8 = 3; const s = new WeakSet.<object>(); s.add(v);');
+  // Holdable arguments run - an object, a reference class, a dynamic typed class.
+  expect(ok('const s = new WeakSet.<object>(); s.add({});')).toBe(true);
+  expect(ok('class R { x = 1; } const s = new WeakSet.<object>(); s.add(new R());')).toBe(true);
+  expect(ok('dynamic class D { a: uint8 = 0; } const s = new WeakSet.<object>(); s.add(new D());')).toBe(true);
+  // An `any` argument is the run time's, as before.
+  expectThrownKind('function f(x) { const s = new WeakSet.<object>(); s.add(x); } f(5);', 'TypeError');
+});
+
+test('FinalizationRegistry.register and unregister check their target and token the same way', () => {
+  const A = 'class A { a: uint8 = 0; } const r = new FinalizationRegistry.<uint32>((h) => {}); ';
+  expectStaticTypeError(`${A} r.register(new A(), 1);`);
+  expectStaticTypeError(`${A} r.register({}, 1, new A());`);
+  expectStaticTypeError(`${A} r.unregister(new A());`);
+});
+
+test('the constructor\'s iterable argument is checked where its element type is known', () => {
+  const A = 'class A { a: uint8 = 0; } ';
+  expectStaticTypeError('new WeakSet.<object>([5]);');
+  expectStaticTypeError('new WeakSet.<object>(["x", "y"]);');
+  expectStaticTypeError(`${A} new WeakSet.<object>([new A()]);`);
+  expect(ok('new WeakSet.<object>([{}, {}]);')).toBe(true);
+  expect(ok('const a: [].<object> = [{}]; new WeakSet.<object>(a);')).toBe(true);
+  // A WeakMap's pair separates its KEY only as a TUPLE. A typed tuple source is
+  // checked; a pair LITERAL is inferred as an array with a joined element type
+  // (`[{}, 1]` is `[].<{} | number>`), so the key is not separable and the check
+  // abstains to the run time rather than refuse on the join.
+  expectStaticTypeError('const pairs: [].<[uint8, uint8]> = [[1, 2]]; new WeakMap.<object, uint8>(pairs);');
+  expect(ok('const pairs: [].<[object, uint8]> = [[{}, 1]]; new WeakMap.<object, uint8>(pairs);')).toBe(true);
+  expect(ok('new WeakMap.<object, uint8>([[{}, 1]]);')).toBe(true);
+  expectThrownKind('new WeakMap.<object, uint8>([[5, 1]]);', 'TypeError');
+  // An UNTYPED constructor is plain JavaScript and stays a run-time TypeError.
+  expectThrownKind('new WeakSet([5]);', 'TypeError');
+});

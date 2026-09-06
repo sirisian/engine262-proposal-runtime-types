@@ -4388,6 +4388,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // `new` that WRITES TYPE ARGUMENTS, `new WeakMap.<string, uint8>()`,
       // since the arguments are what the check is about. A `new` of anything
       // else in statement position is left as it was.
+      // A CALL of a weak collection's element-taking method is typed in
+      // statement position, because that is where `s.add(x)`, `m.set(k, v)` and
+      // `r.register(t, h)` are almost always written - a fix that reached only
+      // `const r = s.add(x)` would be theoretical. Only those methods, by name,
+      // and only after the receiver is confirmed to be one of the three weak
+      // libraries; a call of anything else in statement position is left as it
+      // was. The static-vs-run-time gap this closes is the same one
+      // `new WeakRef(x)` had.
+      case 'CallExpression': {
+        const callee = (node as unknown as { CallExpression?: { type?: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null } }).CallExpression;
+        const methodName = callee?.IdentifierName?.name;
+        if (callee?.type === 'MemberExpression' && callee.MemberExpression && methodName
+            && ['add', 'set', 'get', 'has', 'delete', 'register', 'unregister'].includes(methodName)) {
+          const recv = staticType(callee.MemberExpression);
+          const lib = recv && recv.Kind === 'nominal' ? (recv as { LibraryName?: string }).LibraryName : undefined;
+          if (lib === 'WeakSet' || lib === 'WeakMap' || lib === 'FinalizationRegistry') {
+            staticType(node);
+            return;
+          }
+        }
+        for (const a of (node as unknown as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
+          typeArithmeticWithin(a);
+        }
+        return;
+      }
       case 'NewExpression': {
         const callee = (node as unknown as { MemberExpression?: { type?: string, name?: string } }).MemberExpression;
         if ((callee?.type === 'IdentifierReference' && callee.name === 'WeakRef') || callee?.type === 'TypeArgumentsExpression') {
@@ -7541,6 +7566,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const parseCallee = (node as { CallExpression?: ParseNode }).CallExpression as {
           type?: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null,
         } | undefined;
+        // README, "Weak References": "Passing one is a TypeError, statically when
+        // the type is known and at run time otherwise." The weak collections'
+        // element-taking methods are checked by ASSIGNABILITY of the argument to
+        // the element type, and that is the right test for `s.add(5)` at a
+        // `WeakSet.<object>` - `5` is not an object - and the wrong one for an
+        // instance of a typed class, which IS assignable to `object` and is not
+        // holdable. So `s.add(new A())` passed the checker and was refused at
+        // run time, one step later than `new WeakRef(new A())` beside it. The
+        // same predicate the type application and the WeakRef constructor use,
+        // applied to the ARGUMENT's static type here.
+        if (parseCallee?.type === 'MemberExpression' && parseCallee.MemberExpression) {
+          const weakMethod = parseCallee.IdentifierName?.name;
+          const weakRecv = staticType(parseCallee.MemberExpression);
+          const lib = weakRecv && weakRecv.Kind === 'nominal' ? (weakRecv as { LibraryName?: string }).LibraryName : undefined;
+          const elementTaking = (lib === 'WeakSet' && (weakMethod === 'add' || weakMethod === 'has' || weakMethod === 'delete'))
+            || (lib === 'WeakMap' && (weakMethod === 'set' || weakMethod === 'get' || weakMethod === 'has' || weakMethod === 'delete'))
+            || (lib === 'FinalizationRegistry' && (weakMethod === 'register' || weakMethod === 'unregister'));
+          if (elementTaking) {
+            const weakArgs = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
+            // `register`'s token is its third argument; every other checked
+            // position is the first.
+            const positions = lib === 'FinalizationRegistry' && weakMethod === 'register' ? [0, 2] : [0];
+            for (const at of positions) {
+              const a = weakArgs[at];
+              if (!a || (a as { type?: string }).type === 'AssignmentRestElement') {
+                continue;
+              }
+              const argType = staticType(a);
+              if (argType && argType.Kind !== 'any' && !typeCanBeHeldWeakly(argType as TypeRecord)) {
+                const held = lib === 'WeakMap' ? 'keys' : lib === 'WeakSet' ? 'values' : 'target';
+                const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(argType as TypeRecord)), Value(lib!), Value(held)) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+              }
+            }
+          }
+        }
         if (parseCallee?.type === 'MemberExpression'
           && (parseCallee.IdentifierName?.name === 'parse' || parseCallee.IdentifierName?.name === 'tryParse')
           && parseCallee.MemberExpression) {
@@ -8563,6 +8624,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // annotation: `new WeakMap.<string, uint8>()` was the one
                 // position of seven the annotation-side check did not reach.
                 checkWeakKeyConstraint(specName, valueArgs);
+                // The constructor's ITERABLE argument. `new WeakSet.<T>(iter)` adds
+                // each element and `new WeakMap.<K, V>(iter)` sets each pair, so an
+                // element (or a pair's key) that could not be passed to `add`/`set`
+                // cannot be passed here either - and a literal argument's element
+                // type is statically known. Nothing checked it: `new
+                // WeakSet.<object>([5])` was the run time's TypeError, while
+                // `s.add(5)` beside it was static. The same holdability test the
+                // methods now apply, on the iterable's element (or the pair's
+                // first member), where that type is known and not `any`.
+                if (specName === 'WeakSet' || specName === 'WeakMap') {
+                  const ctorArgs = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
+                  const iter = ctorArgs[0];
+                  if (iter && (iter as { type?: string }).type !== 'AssignmentRestElement') {
+                    const iterType = staticType(iter);
+                    const element = iterType ? elementTypeOfIterable(iterType) : null;
+                    // For a WeakMap the element is a pair and the KEY is its first
+                    // member. Only a TUPLE separates the key: a pair literal the
+                    // checker infers as an ARRAY - `[{}, 1]` is `[].<{} | number>` -
+                    // joins key and value into one element type, and refusing on the
+                    // join would refuse `[[{}, 1]]`, whose key is an object. Where the
+                    // key cannot be separated the check abstains and the run time
+                    // decides, as it does for `any`.
+                    const keyOfPair = (e: Known): Known => {
+                      if (!e || specName === 'WeakSet') {
+                        return e;
+                      }
+                      if (e.Kind === 'tuple') {
+                        const first = (e as { Elements: readonly { Type: TypeRecord }[] }).Elements[0];
+                        return first ? first.Type : null;
+                      }
+                      return null;
+                    };
+                    const checked = keyOfPair(element);
+                    if (checked && checked.Kind !== 'any' && !typeCanBeHeldWeakly(checked as TypeRecord)) {
+                      const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(checked as TypeRecord)), Value(specName), Value(specName === 'WeakMap' ? 'keys' : 'values')) as ThrowCompletion;
+                      errors.push(completion.Value as ObjectValue);
+                    }
+                  }
+                }
                 const asLibrary = libraryTypeRecord(specName, valueArgs);
                 if (asLibrary) {
                   return CanonicalizeType(asLibrary as TypeRecord) as Known;
