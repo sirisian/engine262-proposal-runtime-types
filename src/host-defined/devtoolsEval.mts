@@ -200,6 +200,20 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
   evalContext.Function = Value.null;
   evalContext.Realm = evalRealm;
   evalContext.ScriptOrModule = runningContext.ScriptOrModule;
+  // proposal-runtime-types #sec-type-names: the console's entry is a source text
+  // of its own, and this context is where it runs; the type names resolve only
+  // where the running text ADMITS them (they moved off the global object into a
+  // per-source-text environment). `PerformEval` sets this and the console's
+  // non-REPL branch sets it on the ScriptRecord, but this REPL path - which the
+  // devtools console takes for every entry - set neither, so every type-name
+  // VALUE was undefined in the console: `uint8(5)`, `complex64(1)`,
+  // `float32x4(1, 2, 3, 4)` all "is not defined", while the same text run as a
+  // file worked. The union `PerformEval` uses: the entry admits on its own
+  // syntax, or because the session it belongs to already did (the caller latches
+  // that onto `AdmitsTypeNames` before this runs).
+  (evalContext as { AdmitsTypeNames?: boolean }).AdmitsTypeNames =
+    (script as { admitsTypeNames?: boolean }).admitsTypeNames === true
+    || (runningContext.ScriptOrModule as { AdmitsTypeNames?: boolean } | null)?.AdmitsTypeNames === true;
   evalContext.VariableEnvironment = varEnv;
   evalContext.LexicalEnvironment = lexEnv;
   evalContext.PrivateEnvironment = privateEnv;
