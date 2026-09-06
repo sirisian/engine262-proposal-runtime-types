@@ -4442,22 +4442,9 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // call signatures with named members is refused: a callable value has a
       // function type and a keyed value an object type, and the design writes
       // no shape that is both.
-      const callSignatures = node.TypeMemberList.filter((m) => m.type === 'TypeMember' && (m as ParseNode.TypeMember).PropertyName === null) as ParseNode.TypeMember[];
-      if (callSignatures.length > 0) {
-        if (callSignatures.length !== node.TypeMemberList.length) {
-          return Throw.TypeError('$1', Value('call signatures do not mix with named members in one object type'));
-        }
-        const Signatures: SignatureRecord[] = [];
-        for (const m of callSignatures) {
-          const sig = m.MethodSignature!;
-          const built = Q(yield* functionRecordFromSignature(
-            sig.FunctionTypeParameterList,
-            sig.TypeAnnotation,
-            sig.TypeParameters?.TypeParameterList,
-          ));
-          Signatures.push(...(built as unknown as { Signatures: readonly SignatureRecord[] }).Signatures);
-        }
-        return CanonicalizeType({ Kind: 'function', Signatures } as TypeRecord);
+      const asFunction = Q(yield* functionRecordFromCallSignatures(node.TypeMemberList));
+      if (asFunction !== undefined) {
+        return asFunction;
       }
       const Properties = [];
       const IndexSignatures = [];
@@ -4989,6 +4976,39 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
   // binary64 in both significand and exponent, so nothing a double can hold
   // falls outside it.
   return name === 'float16' || name === 'float32' || name === 'float64' || name === 'float128';
+}
+
+/**
+ * #sec-object-types: "An object type or interface whose members are all call
+ * signatures denotes the ~function~ Type Record whose [[Signatures]] are those
+ * signatures in declaration order", and "it is a type error for an object type
+ * to mix call signatures with named members or an index signature". Answers
+ * undefined where the list has no call signature (the caller builds its object
+ * structure), the function record where every member is one, and the mixing
+ * TypeError otherwise. One builder for the object-type and the interface
+ * spellings, so `interface I { (uint32): uint32 }` and `{ (uint32): uint32 }`
+ * are one type - the interface had refused a call signature outright, "not
+ * supported yet", while the object type beside it built this record.
+ */
+export function* functionRecordFromCallSignatures(members: readonly ParseNode[]): PlainEvaluator<TypeRecord | undefined> {
+  const callSignatures = members.filter((m) => m.type === 'TypeMember' && (m as ParseNode.TypeMember).PropertyName === null) as ParseNode.TypeMember[];
+  if (callSignatures.length === 0) {
+    return undefined;
+  }
+  if (callSignatures.length !== members.length) {
+    return Throw.TypeError('$1', Value('call signatures do not mix with named members in one object type'));
+  }
+  const Signatures: SignatureRecord[] = [];
+  for (const m of callSignatures) {
+    const sig = m.MethodSignature!;
+    const built = Q(yield* functionRecordFromSignature(
+      sig.FunctionTypeParameterList,
+      sig.TypeAnnotation,
+      sig.TypeParameters?.TypeParameterList,
+    ));
+    Signatures.push(...(built as unknown as { Signatures: readonly SignatureRecord[] }).Signatures);
+  }
+  return CanonicalizeType({ Kind: 'function', Signatures } as TypeRecord);
 }
 
 export function* functionRecordFromSignature(params: readonly ParseNode.FunctionTypeParameter[], returnAnnotation: ParseNode.TypeAnnotation | null, typeParameters?: readonly ParseNode.TypeParameter[] | null): PlainEvaluator<TypeRecord> {

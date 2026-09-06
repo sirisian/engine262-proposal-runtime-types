@@ -1355,7 +1355,16 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       const signature = (s: SignatureRecord): string => {
         // `ref` on a parameter, distributed over a rest (#sec-function-types),
         // prints where it was written.
-        const params = s.Parameters.map((p) => `${(p as { Reference?: boolean }).Reference ? 'ref ' : ''}${p.Rest ? '...' : ''}${p.Name}${p.Optional ? '?' : ''}: ${displayType(p.Type)}`);
+        // An UNNAMED parameter - `(uint32) => uint32`, or a call signature's
+        // bare type - has no name to print, and printing `: T` with nothing
+        // before the colon showed `(: uint.<32>) => uint.<32>`. The type alone is
+        // the spelling the grammar admits for it.
+        const params = s.Parameters.map((p) => {
+          const prefix = `${(p as { Reference?: boolean }).Reference ? 'ref ' : ''}${p.Rest ? '...' : ''}`;
+          return p.Name
+            ? `${prefix}${p.Name}${p.Optional ? '?' : ''}: ${displayType(p.Type)}`
+            : `${prefix}${displayType(p.Type)}`;
+        });
         // A GENERIC signature prints its type parameter list - names and the
         // pack marker; a constraint is a Parse Node here and does not print.
         const generic = s.TypeParameters && s.TypeParameters.length > 0

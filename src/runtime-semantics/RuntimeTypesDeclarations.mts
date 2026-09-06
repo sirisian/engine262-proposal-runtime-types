@@ -26,7 +26,7 @@ import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
-  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, RegisterSpecializedFunctionType } from '../type-system/runtime.mts';
+  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
@@ -436,6 +436,27 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // Both sides are needed: a checker that enforced a signature the run time
     // did not would make `is` and an annotation disagree the other way.
     const IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[] = [];
+    // #sec-object-types: "An object type OR INTERFACE whose members are all call
+    // signatures denotes the ~function~ Type Record whose [[Signatures]] are
+    // those signatures in declaration order." README, "Function Interfaces":
+    // `interface IExample { ({ a: uint32 }): uint32 }` and a call `a({ a: 1 })`
+    // through a parameter of that type. The member walk below builds an object
+    // structure and refused a call signature - "not supported yet" - so the
+    // interface spelling of a function type did not exist while the object-type
+    // spelling beside it did. The same builder answers both; the Structure is
+    // the function record, and everything reading a Structure - the parameter
+    // boundary, `is`, satisfaction - sees a function type, which is what the
+    // clause says the interface denotes. A mix gets the clause's error.
+    const callable = Q(yield* functionRecordFromCallSignatures(node.InterfaceMemberList as readonly ParseNode[]));
+    if (callable !== undefined) {
+      const fnRecord: TypeRecord = {
+        Kind: 'nominal',
+        Declaration: node,
+        Arguments: [],
+        Structure: callable,
+      } as unknown as TypeRecord;
+      value = GetTypeObject(fnRecord);
+    } else {
     for (const member of node.InterfaceMemberList) {
       if (member.type === 'IndexSignature') {
         const ix = member as unknown as {
@@ -459,8 +480,11 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       // record here (an object structure) cannot yet hold. Refused loudly
       // rather than bound to a nameless key; the function-typed reading with
       // generic-signature satisfaction is not implemented.
+      // A call signature among named members reached here only if the mix
+      // check above did not fire, which it always does for one; kept as an
+      // assertion of that.
       if (m.PropertyName === null && m.MethodSignature) {
-        return Throw.TypeError('$1', Value('a call signature in an interface is not supported yet; write the function type, or an object type of call signatures'));
+        return Throw.TypeError('$1', Value('call signatures do not mix with named members in one object type'));
       }
       // A SYMBOL-KEYED member is written `[k]: T`, a COMPUTED property name -
       // an index signature needs an identifier and a `:` inside the brackets,
@@ -654,6 +678,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       Structure: { Kind: 'object', Properties, IndexSignatures },
     };
     value = GetTypeObject(record);
+    }
     } finally {
       if (ifaceFrame.size > 0) {
         popTypeParameterFrame();

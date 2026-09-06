@@ -1111,12 +1111,20 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     if (sourceAlias && t.Kind === 'object') {
       return IsSubtype(sourceAlias, t, next);
     }
+    // #sec-interfaces: an interface "may also type an object, an array, or a
+    // function structurally", and #sec-object-types: an interface of call
+    // signatures denotes a ~function~ record. So the structural form is
+    // consulted for a ~function~ source or target where the form IS a function,
+    // as it is for an ~object~ one. Gated on ~object~ alone, a function value
+    // reaching a callable interface - `f((x) => {})` at `f(a: V)` for
+    // `interface V { (uint32) }` - was refused, and the interface and object-type
+    // spellings of one function type were not interchangeable.
     const targetStructure = InterfaceStructureOf(t);
-    if (targetStructure && s.Kind === 'object') {
+    if (targetStructure && (s.Kind === 'object' || (s.Kind === 'function' && targetStructure.Kind === 'function'))) {
       return IsSubtype(s, SubstituteTypeArguments(targetStructure, (t as { Declaration?: unknown }).Declaration, (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), next);
     }
     const sourceStructure = InterfaceStructureOf(s);
-    if (sourceStructure && t.Kind === 'object') {
+    if (sourceStructure && (t.Kind === 'object' || (t.Kind === 'function' && sourceStructure.Kind === 'function'))) {
       return IsSubtype(SubstituteTypeArguments(sourceStructure, (s as { Declaration?: unknown }).Declaration, (s as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), t, next);
     }
     // The rule: AN OBJECT TYPE ASKS WHAT A VALUE HAS. A class instance has its

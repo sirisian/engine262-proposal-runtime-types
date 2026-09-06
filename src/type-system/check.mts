@@ -5554,6 +5554,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const memberSources = declarations.flatMap((d, declarationIndex) => ((d as unknown as {
       InterfaceMemberList?: readonly ParseNode[],
     }).InterfaceMemberList ?? []).map((m) => ({ member: m, declarationIndex })));
+    // #sec-object-types: an interface whose members are all call signatures
+    // denotes the ~function~ Type Record - the checker half of what the run
+    // time's interface declaration now builds. The memoized record above was
+    // made with an object Structure so a recursive reference resolves; for a
+    // callable interface that Structure is REPLACED by the function record, in
+    // the type-parameter scope so a generic call signature resolves its
+    // parameters, and the member walk below (which builds an object) is
+    // skipped. Before this the checker had no reading of the interface's call
+    // signatures at all, so a parameter of the interface type was ~any~ and a
+    // call through it with the wrong arguments was checked nowhere.
+    const callable = callSignaturesOf(memberSources.map(({ member }) => member));
+    if (callable !== undefined) {
+      (inProgress as unknown as { Structure: Known }).Structure = callable;
+      return inProgress;
+    }
     const declaredIn = new Map<string, number>();
     for (const { member, declarationIndex } of memberSources) {
       if (member.type === 'IndexSignature') {
@@ -6031,6 +6046,114 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // in the program. An unresolvable type is unknown, and unknown is ~any~.
   /** Nodes already reported by the empty-intersection Early Error. */
   const reportedEmptyIntersections = new Set<object>();
+
+  /**
+   * The ~function~ Type Record for one signature's parts - its type parameters,
+   * parameter list and return node - shared by the arrow form `(a: T) => R`, a
+   * call signature `(a: T): R` in an object type, and one in an interface. A
+   * call signature with no return annotation returns `void`, as the README's
+   * "void is the default return type" says. Factored out of the FunctionType
+   * arm so the three spellings cannot drift.
+   */
+  const functionTypeFromParts = (typeParams: readonly ParseNode.TypeParameter[] | undefined, paramList: readonly ParseNode.FunctionTypeParameter[], returnNode: ParseNode.Type | null | undefined): Known => {
+          const fnTypeParameters = typeParams;
+          if (fnTypeParameters && fnTypeParameters.length > 0) {
+            const fnScope = new Map<string, Known | null>();
+            typeParameterScopes.push(fnScope);
+            for (const tp of fnTypeParameters) {
+              const tpName = tp.BindingIdentifier?.name;
+              if (tpName) {
+                fnScope.set(tpName, tp.TypeParameterConstraint
+                  ? resolveType(tp.TypeParameterConstraint)
+                  : (tp.IsVariadic ? ({ Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as Known) : null));
+              }
+            }
+          }
+          try {
+          const Parameters: ParameterRecord[] = [];
+          for (const p of paramList) {
+            const pn = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Type?: ParseNode.Type | null, Rest?: boolean, Optional?: boolean, BindingIdentifier?: { name?: string } };
+            // An unnamed parameter stores its type in [[Type]] and a named one
+            // behind [[TypeAnnotation]]; `...[].<uint8>` is the unnamed form, so
+            // reading only the annotation lost its type and made it `any`.
+            const pt = pn.TypeAnnotation ?? (pn.Type ? ({ Type: pn.Type } as ParseNode.TypeAnnotation) : null);
+            const r = pt ? resolveType(pt.Type) : { Kind: 'any' as const };
+            if (!r) {
+              return null;
+            }
+            // A function TYPE's parameters carry
+            // the same record a declaration's do, which is what lets a rest be
+            // written in a type at all.
+            Parameters.push(parameter(r, {
+              Name: pn.BindingIdentifier?.name ?? '', Rest: pn.Rest === true, Optional: pn.Optional === true,
+            }));
+          }
+          const Return = (returnNode ? resolveType(returnNode) : voidType);
+          return {
+            Kind: 'function',
+            Signatures: [{
+              Parameters,
+              Return,
+              ...(fnTypeParameters && fnTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(fnTypeParameters) } : {}),
+            }],
+          };
+          } finally {
+            if (fnTypeParameters && fnTypeParameters.length > 0) {
+              typeParameterScopes.pop();
+            }
+          }
+  };
+
+  /**
+   * #sec-object-types, for a member list: undefined where it has no call
+   * signature; the ~function~ Type Record where every member is one; and a
+   * recorded type error where they are mixed - "it is a type error for an object
+   * type to mix call signatures with named members or an index signature".
+   * Shared by the object-type and interface spellings.
+   */
+  const callSignaturesOf = (members: readonly ParseNode[]): Known | undefined => {
+    const sigs = members.filter((m) => m.type === 'TypeMember' && (m as ParseNode.TypeMember).PropertyName === null) as ParseNode.TypeMember[];
+    if (sigs.length === 0) {
+      return undefined;
+    }
+    if (sigs.length !== members.length) {
+      const completion = Throw.StaticTypeError('$1', Value('call signatures do not mix with named members in one object type')) as ThrowCompletion;
+      errors.push(completion.Value as ObjectValue);
+      return null;
+    }
+    const Signatures: SignatureRecord[] = [];
+    for (const m of sigs) {
+      const sig = m.MethodSignature!;
+      const one = functionTypeFromParts(
+        sig.TypeParameters?.TypeParameterList,
+        sig.FunctionTypeParameterList,
+        sig.TypeAnnotation?.Type ?? null,
+      );
+      if (!one || one.Kind !== 'function') {
+        return null;
+      }
+      Signatures.push(...(one as { Signatures: readonly SignatureRecord[] }).Signatures);
+    }
+    return { Kind: 'function', Signatures } as unknown as Known;
+  };
+
+  /**
+   * The type a value is CALLED at. A ~nominal~ interface whose [[Structure]] is a
+   * ~function~ record - an interface of call signatures - is called as that
+   * function: #sec-object-types says such an interface "denotes the ~function~
+   * Type Record", and #sec-interfaces that an interface "may also type ... a
+   * function structurally". Both call-checking sites tested `Kind === 'function'`
+   * on the raw type and so saw an interface-typed callee as uncallable-unknown.
+   */
+  const callableForm = (t: Known): Known => {
+    if (t && t.Kind === 'nominal') {
+      const structure = (t as { Structure?: Known }).Structure;
+      if (structure && structure.Kind === 'function') {
+        return structure;
+      }
+    }
+    return t;
+  };
 
   const resolveType = (node: ParseNode.Type): Known => {
     // table-metadata-values: a RANGE in type position. This resolver "mirrors
@@ -6714,61 +6837,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // carries their Type Parameter Records. Answering null here instead
         // would leave a binding annotated with such a type UNCHECKED - the
         // `let` boundary is the checker's - so the checker reads it itself.
-        const fnTypeParameters = (node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList;
-        if (fnTypeParameters && fnTypeParameters.length > 0) {
-          const fnScope = new Map<string, Known | null>();
-          typeParameterScopes.push(fnScope);
-          for (const tp of fnTypeParameters) {
-            const tpName = tp.BindingIdentifier?.name;
-            if (tpName) {
-              fnScope.set(tpName, tp.TypeParameterConstraint
-                ? resolveType(tp.TypeParameterConstraint)
-                : (tp.IsVariadic ? ({ Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as Known) : null));
-            }
-          }
-        }
-        try {
-        const Parameters: ParameterRecord[] = [];
-        for (const p of node.FunctionTypeParameterList) {
-          const pn = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Type?: ParseNode.Type | null, Rest?: boolean, Optional?: boolean, BindingIdentifier?: { name?: string } };
-          // An unnamed parameter stores its type in [[Type]] and a named one
-          // behind [[TypeAnnotation]]; `...[].<uint8>` is the unnamed form, so
-          // reading only the annotation lost its type and made it `any`.
-          const pt = pn.TypeAnnotation ?? (pn.Type ? ({ Type: pn.Type } as ParseNode.TypeAnnotation) : null);
-          const r = pt ? resolveType(pt.Type) : { Kind: 'any' as const };
-          if (!r) {
-            return null;
-          }
-          // A function TYPE's parameters carry
-          // the same record a declaration's do, which is what lets a rest be
-          // written in a type at all.
-          Parameters.push(parameter(r, {
-            Name: pn.BindingIdentifier?.name ?? '', Rest: pn.Rest === true, Optional: pn.Optional === true,
-          }));
-        }
-        const Return = resolveType(node.ReturnType);
-        return {
-          Kind: 'function',
-          Signatures: [{
-            Parameters,
-            Return,
-            ...(fnTypeParameters && fnTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(fnTypeParameters) } : {}),
-          }],
-        };
-        } finally {
-          if (fnTypeParameters && fnTypeParameters.length > 0) {
-            typeParameterScopes.pop();
-          }
-        }
+        return functionTypeFromParts(
+          (node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList,
+          node.FunctionTypeParameterList,
+          node.ReturnType,
+        );
       }
       case 'ObjectType': {
         // #sec-object-types: a CALL SIGNATURE (a member with no name) makes
-        // this a function type. The checker answers null - this pass does not
-        // know - and the runtime resolver builds the function record, so the
-        // two never disagree about it (the checker has its own
-        // reading alongside generic-signature subtyping).
-        if (node.TypeMemberList.some((m) => m.type === 'TypeMember' && (m as ParseNode.TypeMember).PropertyName === null)) {
-          return null;
+        // this a function type - "`{ (uint32): uint32 }` is `(uint32) =>
+        // uint32` written with braces". The checker had answered null here,
+        // leaving the type unknown, so a parameter of `{ (string, uint32);
+        // (uint32) }` was ~any~ and `a("a")` through it was checked nowhere -
+        // where the same call through `(uint32) => void` is a StaticTypeError.
+        // Each signature is built by the same closure the arrow form uses.
+        const callSigs = callSignaturesOf(node.TypeMemberList);
+        if (callSigs !== undefined) {
+          return callSigs;
         }
         const Properties = [];
         const IndexSignatures = [];
@@ -7756,7 +7841,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // A call's static type is the callee function type's return, when
         // known; the argument check happens in the walk.
-        const callee = staticType((node as { CallExpression: ParseNode }).CallExpression);
+        const callee = callableForm(staticType((node as { CallExpression: ParseNode }).CallExpression));
         // `a.map(cb)` returns an array of the CALLBACK'S return type, which is
         // why it is left ~any~ rather than guessed at. The inference happens
         // HERE rather than through a channel: a declaration asks for its
@@ -14265,7 +14350,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // literal beside a typed argument) apply at every call site.
         checkNumericCall(n, null);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
-        const callee = staticType(c.CallExpression);
+        const callee = callableForm(staticType(c.CallExpression));
         if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
           let sig: { Parameters: readonly ParameterRecord[] } | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
           if (!sig && callee.Signatures.length > 1) {
