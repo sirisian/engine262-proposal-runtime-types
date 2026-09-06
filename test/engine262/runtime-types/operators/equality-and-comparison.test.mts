@@ -350,3 +350,48 @@ test('a const of a numeric constant behaves as if inlined - exactly, at any widt
   // A shadowing `let` is not constant.
   expect(evaluated('const K = 5; { let K = 7; let x: uint8 = K; String(x); }')).toBe('7');
 });
+
+// ---------------------------------------------------------------------------
+// A LITERAL BESIDE A DECIMAL TAKES THE DECIMAL TYPE, ON ITS SOURCE DIGITS.
+//
+// decimal.md: "a decimal literal is read from its source digits directly, not
+// routed through a binary float64", "in a decimal context the literal 0.1 is
+// the decimal one tenth", and "the literal 3 takes the decimal type". Two things
+// stood in the way. The decimal type records carry the width IN the name -
+// `decimal64`, where the integer records are `uint` AT 64 - so the value-type
+// predicate never matched them and `a + 0.2` beside a decimal was refused with
+// "a decimal operand requires a decimal on both sides". And there was no decimal
+// constant fold, so `0.1 + 0.2` at a decimal type was computed in Number and
+// `0.30000000000000004` was refused at the boundary.
+// ---------------------------------------------------------------------------
+
+for (const ty of ['decimal64', 'decimal128']) {
+  test(`${ty}: a literal operand takes the decimal type and is exact`, () => {
+    expect(evaluated(`let a: ${ty} = 0.1; String(a + 0.2);`)).toBe('0.3');
+    expect(evaluated(`let a: ${ty} = 0.1; String(0.2 + a);`)).toBe('0.3');
+    expect(evaluated(`let a: ${ty} = 1.1; String(a * 3);`)).toBe('3.3');
+    expect(evaluated(`let a: ${ty} = 1.0; String(a - 0.9);`)).toBe('0.1');
+    expect(evaluated(`let a: ${ty} = 0.1; String((a + 0.2) is ${ty});`)).toBe('true');
+    // A value of another type still does not convert on its own (decimal.md).
+    expect(run(`let a: ${ty} = 0.1; let n: uint8 = 2; a + n;`)).toMatchObject({ Type: 'throw' });
+  });
+
+  test(`${ty}: a constant expression at the type is folded on its digits`, () => {
+    expect(evaluated(`let b: ${ty} = 0.1 + 0.2; String(b);`)).toBe('0.3');
+    expect(evaluated(`let b: ${ty} = 1.1 * 3; String(b);`)).toBe('3.3');
+    expect(evaluated(`let b: ${ty} = -(0.1 + 0.2); String(b);`)).toBe('-0.3');
+    expect(evaluated(`function f(v: ${ty}) { return v; } String(f(0.1 + 0.2));`)).toBe('0.3');
+    expect(evaluated(`function g(): ${ty} { return 0.1 + 0.2; } String(g());`)).toBe('0.3');
+    // A `const` of a decimal constant behaves as if inlined, and a chain does.
+    expect(evaluated(`const K = 0.1; let b: ${ty} = K; String(b);`)).toBe('0.1');
+    expect(evaluated(`const K = 0.2; let a: ${ty} = 0.1; String(a + K);`)).toBe('0.3');
+    expect(evaluated(`const A = 0.1; const B = A + 0.2; let b: ${ty} = B; String(b);`)).toBe('0.3');
+    // An integer constant serves as a decimal too.
+    expect(evaluated(`const K = 3; let a: ${ty} = 1.1; String(a * K);`)).toBe('3.3');
+  });
+}
+
+test('decimal128 keeps 34 digits through a literal and a fold', () => {
+  expect(evaluated('let a: decimal128 = 1.234567890123456789012345678901234; String(a);')).toBe('1.234567890123456789012345678901234');
+  expect(evaluated('let a: decimal128 = 1.234567890123456789012345678901234 + 0; String(a);')).toBe('1.234567890123456789012345678901234');
+});

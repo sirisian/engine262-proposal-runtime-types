@@ -1,8 +1,9 @@
 import { Throw } from './host-defined/error-messages.mts';
 import { InMetaHookEvaluation, CurrentMetaHookSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
-import { FoldedConstantOf } from './type-system/check.mts';
+import { FoldedConstantOf, FoldedDecimalOf } from './type-system/check.mts';
 import { TypedNumberValue } from './value.mts';
+import { CreateDecimalValue } from './intrinsics/Decimal.mts';
 import type {
   NormalCompletion, PlainCompletion, ThrowCompletion, YieldCompletion,
 } from './completion.mts';
@@ -248,6 +249,10 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       if (foldedUse !== undefined) {
         return new TypedNumberValue(foldedUse.value, foldedUse.type as never);
       }
+      const foldedDecUse = FoldedDecimalOf(node);
+      if (foldedDecUse !== undefined) {
+        return CreateDecimalValue(foldedDecUse.sig, foldedDecUse.exp, foldedDecUse.width, surroundingAgent.currentRealmRecord, foldedDecUse.type);
+      }
       return yield* Evaluate_IdentifierReference(node);
     }
     case 'NullLiteral':
@@ -293,6 +298,10 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       const folded = FoldedConstantOf(node);
       if (folded !== undefined) {
         return new TypedNumberValue(folded.value, folded.type as never);
+      }
+      const foldedDec = FoldedDecimalOf(node);
+      if (foldedDec !== undefined) {
+        return CreateDecimalValue(foldedDec.sig, foldedDec.exp, foldedDec.width, surroundingAgent.currentRealmRecord, foldedDec.type);
       }
       if (node.type === 'AdditiveExpression') {
         return yield* Evaluate_AdditiveExpression(node);
@@ -369,8 +378,22 @@ export function* Evaluate(node: ParseNode): Evaluator<unknown> {
       return yield* Evaluate_YieldExpression(node);
     case 'AwaitExpression':
       return yield* Evaluate_AwaitExpression(node);
-    case 'UnaryExpression':
+    case 'UnaryExpression': {
+      // A signed constant expression folded by the checker - `-(0.1 + 0.2)` at
+      // a decimal, `-(100 + 28)` at an `int8` - is recorded on THIS node, the
+      // sign being part of the constant. Without the consult here the fold was
+      // recorded and then ignored, and the integer case only appeared to work
+      // because a double happens to hold -128 exactly.
+      const foldedUnary = FoldedConstantOf(node);
+      if (foldedUnary !== undefined) {
+        return new TypedNumberValue(foldedUnary.value, foldedUnary.type as never);
+      }
+      const foldedDecUnary = FoldedDecimalOf(node);
+      if (foldedDecUnary !== undefined) {
+        return CreateDecimalValue(foldedDecUnary.sig, foldedDecUnary.exp, foldedDecUnary.width, surroundingAgent.currentRealmRecord, foldedDecUnary.type);
+      }
       return yield* Evaluate_UnaryExpression(node);
+    }
     case 'RefExpression':
       return yield* Evaluate_RefExpression(node);
     case 'RefRebindingStatement':

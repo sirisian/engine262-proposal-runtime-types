@@ -30,6 +30,7 @@ import {
 } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments } from './runtime.mts';
 import { isWideIntegerType } from './arithmetic.mts';
+import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { resolveOverloadByTypes, assignArguments } from './overloads.mts';
 import { slotReceiving } from './sequence-assignment.mts';
 import { wrapToType } from './arithmetic.mts';
@@ -472,6 +473,8 @@ interface Frame {
   readonly constLiteralTypes: Map<string, TypeRecord>;
   /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
   readonly constLiteralValues: Map<string, bigint>;
+  /** The EXACT decimal value of a `const` whose initializer is a constant expression. */
+  readonly constDecimalValues: Map<string, Dec>;
 
   /** Names bound by a `let` to a numeric constant; see `letConstantUses`. */
   readonly letConstants: Set<string>;
@@ -508,7 +511,7 @@ function emptyFrame(): Frame {
   return {
     bindings: new Map(),
     constLiterals: new Set<string>(),
-    constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(),
+    constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(),
     letConstants: new Set<string>(),
     immutableNames: new Set<string>(),
     declaredNames: new Set<string>(),
@@ -535,6 +538,7 @@ function cloneFrame(frame: Frame): Frame {
     constLiterals: new Set(frame.constLiterals),
     constLiteralTypes: new Map(frame.constLiteralTypes),
     constLiteralValues: new Map(frame.constLiteralValues),
+    constDecimalValues: new Map(frame.constDecimalValues),
     immutableNames: new Set(frame.immutableNames),
     letConstants: new Set(frame.letConstants),
     declaredNames: new Set(frame.declaredNames),
@@ -832,9 +836,84 @@ function innermostLiteral(node: ParseNode): ParseNode {
   return node;
 }
 
-/** Whether a primitive type name is a numeric VALUE type (not `number`). */
+/**
+ * Whether a primitive type name is a numeric VALUE type (not `number`). The
+ * integer and float records are named by family with the width as an argument
+ * (`uint` at 64); the decimal records carry the width IN the name
+ * (`decimal64`), which is why `decimal` alone matched nothing and a literal
+ * beside a decimal was never adopted - "a decimal operand requires a decimal on
+ * both sides" where decimal.md says "the literal 3 takes the decimal type".
+ */
 function isNumericValueTypeName(name: string | undefined): boolean {
-  return name === 'uint' || name === 'int' || name === 'float' || name === 'decimal';
+  return name === 'uint' || name === 'int' || name === 'float'
+    || name === 'decimal' || name === 'decimal32' || name === 'decimal64' || name === 'decimal128';
+}
+
+/** An exact decimal: significand * 10^exponent. */
+type Dec = { sig: bigint, exp: number };
+
+/**
+ * The exact decimal value of a constant expression, read from the literals'
+ * source digits - decimal.md: "a decimal literal is read from its source digits
+ * directly, not routed through a binary float64". `+`, `-` and `*` are exact in
+ * this representation; `/` is not in general and is not folded. A constant
+ * `const` reference resolves to its exact decimal, or to its exact integer as a
+ * decimal with exponent 0.
+ */
+function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => Dec | null): Dec | null {
+  const fold = (n: ParseNode) => foldDecimalConstant(n, resolveConst);
+  const e = node as ParseNode & {
+    Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
+    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode, SourceText?: string,
+  };
+  const align = (a: Dec, b: Dec): [bigint, bigint, number] => {
+    const exp = Math.min(a.exp, b.exp);
+    return [a.sig * 10n ** BigInt(a.exp - exp), b.sig * 10n ** BigInt(b.exp - exp), exp];
+  };
+  switch (e.type) {
+    case 'NumericLiteral': {
+      if (typeof e.SourceText !== 'string') {
+        return null;
+      }
+      const d = ParseDecimalDigits(e.SourceText.replace(/_/g, ''));
+      return d ? { sig: d.significand, exp: d.exponent } : null;
+    }
+    case 'IdentifierReference':
+      return resolveConst && e.name ? resolveConst(e.name) : null;
+    case 'ParenthesizedExpression':
+      return e.Expression ? fold(e.Expression) : null;
+    case 'UnaryExpression': {
+      const v = e.UnaryExpression ? fold(e.UnaryExpression) : null;
+      if (v === null) {
+        return null;
+      }
+      if (e.operator === '-') {
+        return { sig: -v.sig, exp: v.exp };
+      }
+      return e.operator === '+' ? v : null;
+    }
+    case 'AdditiveExpression': {
+      const l = fold(e.AdditiveExpression!);
+      const r = fold(e.MultiplicativeExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      const [a, b, exp] = align(l, r);
+      return { sig: e.operator === '+' ? a + b : a - b, exp };
+    }
+    case 'MultiplicativeExpression': {
+      const l = fold(e.MultiplicativeExpression!);
+      const r = fold(e.ExponentiationExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
+      return op === '*' ? { sig: l.sig * r.sig, exp: l.exp + r.exp } : null;
+    }
+    default:
+      return null;
+  }
 }
 
 /** Whether a type is an integer value type - `uint` or `int` at any width. */
@@ -986,6 +1065,18 @@ const foldedConstants = new WeakMap<object, { value: bigint, type: TypeRecord }>
 
 export function FoldedConstantOf(node: object): { value: bigint, type: TypeRecord } | undefined {
   return foldedConstants.get(node);
+}
+
+/**
+ * The decimal counterpart: a constant expression at a DECIMAL contextual type,
+ * folded exactly on its source digits (decimal.md: "in a decimal context the
+ * literal `0.1` is the decimal one tenth"). The evaluator builds the decimal
+ * value from the significand and exponent.
+ */
+const foldedDecimals = new WeakMap<object, { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord }>();
+
+export function FoldedDecimalOf(node: object): { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord } | undefined {
+  return foldedDecimals.get(node);
 }
 
 /**
@@ -4161,6 +4252,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** `foldIntegerConstant` with this scope's constants resolvable. */
   const foldConstant = (node: ParseNode): bigint | null => foldIntegerConstant(node, constExactValue);
 
+  /** The exact decimal of a constant `const`, an integer constant serving as a decimal of exponent 0. */
+  const constDecimalValue = (name: string): Dec | null => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      if (frames[i].declaredNames.has(name) || frames[i].bindings.has(name) || frames[i].constLiterals.has(name)) {
+        const d = frames[i].constDecimalValues.get(name);
+        if (d) {
+          return d;
+        }
+        const v = frames[i].constLiteralValues.get(name);
+        return v === undefined ? null : { sig: v, exp: 0 };
+      }
+    }
+    return null;
+  };
+  const foldDecimal = (node: ParseNode): Dec | null => foldDecimalConstant(node, constDecimalValue);
+
   /**
    * Type the ARITHMETIC nodes inside an expression, and nothing else: the
    * outermost arithmetic node on each path is handed to `staticType`, whose
@@ -4434,7 +4541,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the type, which is the contract the transparency tests hold it to.
         const exactUse = isIntegerValueType(contextual as TypeRecord) ? constExactValue(useName) : null;
         const cprim = contextual as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
-        const integerWanted = exactUse !== null && fitsNumericType(exactUse, cprim.Name, cprim.Arguments);
+        const decimalWanted = decimalWidthOf(contextual as TypeRecord) !== undefined && constDecimalValue(useName) !== null;
+        const integerWanted = decimalWanted || (exactUse !== null && fitsNumericType(exactUse, cprim.Name, cprim.Arguments));
         for (let i = frames.length - 1; i >= 0 && !integerWanted; i -= 1) {
           const literal = frames[i].constLiteralTypes.get(useName);
           if (literal) {
@@ -4874,6 +4982,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // lets `300 - 299` stand at a `uint8`: the EXPRESSION denotes 1, which
         // fits, and `300` is never a value of anything.
         foldedConstants.set(node, { value: folded, type: contextual as TypeRecord });
+        return contextual;
+      }
+    }
+    // ...and at a DECIMAL contextual type, on the source digits: decimal.md,
+    // "in a decimal context the literal `0.1` is the decimal one tenth". A
+    // constant `0.1 + 0.2` at a `decimal128` is the decimal `0.3`, where Number
+    // arithmetic gave `0.30000000000000004` and refused it. The same fold-first
+    // shape as the integer case; a `const` use of a decimal constant is one too.
+    if (contextual && decimalWidthOf(contextual as TypeRecord) !== undefined && isNumericConstantExpression(node)
+        && node.type !== 'NumericLiteral') {
+      const dec = foldDecimal(node);
+      if (dec !== null) {
+        foldedDecimals.set(node, { ...dec, width: decimalWidthOf(contextual as TypeRecord)!, type: contextual as TypeRecord });
         return contextual;
       }
     }
@@ -7087,7 +7208,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bindings.set(TOPIC_NAME, topic);
         }
         frames.push({
-          bindings, constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings, constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         try {
           return staticType(p.Body);
@@ -8345,6 +8466,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const operandNodes = ['RelationalExpression', 'ShiftExpression', 'EqualityExpression']
           .map((k) => (node as unknown as Record<string, ParseNode | undefined>)[k])
           .filter((x): x is ParseNode => !!x && typeof x === 'object' && 'type' in x);
+        // NOT YET: a literal operand does not take the other operand's type
+        // here, although the clause's row - "an operand of a binary operator
+        // whose other operand has a known value type" - covers `==` and `<`, and
+        // `a == 18446744073709551614` with `a: uint64` holding that value is
+        // *false* for want of it. Adopting here was tried and withdrawn: the
+        // checker types several builtins' results as typed arrays that the run
+        // time returns untyped - `Object.keys(o).length` is `uint64` to the
+        // checker and a Number at run time - so the literal in
+        // `Object.keys(m).length === 1` took `uint64`, and a Number `===` a typed
+        // value is *false*. That disagreement is the defect to fix first; with
+        // it in place the adoption here turns a wrong static type into a wrong
+        // run-time answer. Recorded in TEST-FAILURE-PLAN.md.
         const operandTypes = operandNodes.map((x) => staticType(x));
         // An operand whose type is not known could be a vector, so the answer is
         // withheld rather than guessed: an unknown operand keeps the comparison
@@ -8399,7 +8532,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // and `a: uint64` reads K's exact value, not the binding's double.
         const constUse = (n: ParseNode): ParseNode | null => {
           const inner = innermostLiteral(n);
-          return inner.type === 'IdentifierReference' && constExactValue((inner as unknown as { name: string }).name) !== null ? n : null;
+          if (inner.type !== 'IdentifierReference') {
+            return null;
+          }
+          const nm = (inner as unknown as { name: string }).name;
+          return constExactValue(nm) !== null || constDecimalValue(nm) !== null ? n : null;
         };
         const leftLit = literalOperand(leftNode) ?? constUse(leftNode);
         const rightLit = literalOperand(rightNode) ?? constUse(rightNode);
@@ -9498,7 +9635,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
       if (resolved) {
         const newFrame = () => ({
-          bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
+          bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
         });
         frames.push(newFrame());
         declareNarrowed(request!.name, resolved.whenTrue);
@@ -12620,7 +12757,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null) => {
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     // A `return` is compared against
     // what the function RETURNS, and for a generator that is the _R_ of
     // `Generator.<Y, R, N>` - not the annotation, which types the values
@@ -12811,7 +12948,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A block or switch introduces a scope; a binding declared inside shadows
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
     // The ~void~ form: a deferral
     // opened by an assertion statement covers the rest of ITS block and no
     // further, so the depth is restored with the frame it belongs to.
@@ -13490,7 +13627,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // declarative environment per clause" at run time - so the checker
           // gives it a frame and declares the pattern's bindings in it, which is
           // what stops one arm's binding from leaking into the next.
-          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
           // The SUBJECT's static type is what a top-level binding takes.
           // Computed once for the whole `match`, since every clause matches the
           // same subject.
@@ -13795,6 +13932,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const exact = foldConstant(n.Initializer);
               if (exact !== null) {
                 frame.constLiteralValues.set(n.BindingIdentifier.name, exact);
+              }
+              const dec = foldDecimal(n.Initializer);
+              if (dec !== null) {
+                frame.constDecimalValues.set(n.BindingIdentifier.name, dec);
               }
             }
           }
