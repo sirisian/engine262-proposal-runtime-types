@@ -65,6 +65,7 @@ export {
 export { createBuiltinModuleLoader, type BuiltinModuleSource, type BuiltinModuleLoaderOptions } from './utils/module-loaders/builtin-loader.mts';
 
 export { isBoundFunctionObject, type BoundFunctionObject } from './intrinsics/FunctionPrototype.mts';
+export { IsComposite, CompositeFromShape } from './intrinsics/Composite.mts';
 export { isMapObject, type MapObject } from './intrinsics/Map.mts';
 export { isSetObject, type SetObject } from './intrinsics/Set.mts';
 export { isRegExpObject, type RegExpObject } from './intrinsics/RegExp.mts';

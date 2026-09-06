@@ -2676,32 +2676,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     if (!composite) {
       return false;
     }
-    if (IsSubtype(composite, t, [])) {
-      return true;
-    }
-    // composites.md, "Tuple Composites": "a homogeneous `Composite.<[].<T>>`
-    // covers the variable-length case". A tuple composite records a FIXED
-    // tuple type - `[E, E]` for two elements - and the general relation does
-    // not hold a fixed tuple to be a subtype of the homogeneous array `[].<E>`,
-    // so `t is Composite.<[].<E>>` was false for every tuple composite and a
-    // parsed `Composite.<{ endpoints: [].<E> }>` failed its own membership.
-    // Here the shape's meaning is applied directly: the composite is of the
-    // variable-length shape when it is a tuple composite every element type of
-    // which is of the element type. The recorded record is not changed - the
-    // same interned object may have been made from a fixed tuple shape and is
-    // checked against that shape the ordinary way above.
-    const shape = t.Arguments[0];
-    const shapeRecord = shape && typeof shape !== 'number'
-      ? (shape.Kind === 'array' ? shape : (shape as { Structure?: TypeRecord }).Structure)
-      : undefined;
-    const compositeShape = composite.Kind === 'primitive' && composite.Name === 'Composite' && typeof composite.Arguments[0] !== 'number'
-      ? composite.Arguments[0] as TypeRecord
-      : undefined;
-    if (shapeRecord && shapeRecord.Kind === 'array' && compositeShape && compositeShape.Kind === 'tuple') {
-      const element = (shapeRecord as { Element: TypeRecord }).Element;
-      return (compositeShape as { Elements: readonly { Type: TypeRecord }[] }).Elements.every((e) => IsSubtype(e.Type, element, []));
-    }
-    return false;
+    return IsSubtype(composite, t, []);
   }
   switch (t.Kind) {
     case 'any':
@@ -2812,6 +2787,18 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // undone. Keeping the layout in the type means every call site knows which
       // it has."
       if (t.Kind === 'array' && SoAStorageOf(value as unknown as object) !== undefined) {
+        return false;
+      }
+      // #sec-composite-types, the same refusal for the same reason: a composite
+      // "is a subtype of no ~array~ type, because an ~array~ type describes a
+      // mutable container and every mutating operation on a composite throws".
+      // The judgment below reads a tuple composite as the exotic array it is, so
+      // one reached a `[].<uint8>` parameter and the function's first `push`
+      // threw where the clause says the binding itself is the error. The
+      // checker refuses it where the type is known; this is the run time's half.
+      // A ~tuple~ target is not refused here: the clause says a tuple composite
+      // IS a subtype of the tuple types its shape is a subtype of.
+      if (t.Kind === 'array' && CompositeTypeRecordOf(value) !== undefined) {
         return false;
       }
       const lenValue = Q(yield* Get(value, Value('length')));
@@ -3741,32 +3728,22 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // clause grants sound: "a composite type is covariant in its shape, which
         // the frozenness of every composite makes sound ... depth subtyping
         // through a `readonly` one".
-        // ...and RECURSIVELY. "Nested composites are trees terminating in
-        // non-composite leaves" (composites.md), and a parsed document is
-        // re-interned all the way down, so a nested object or an array's
-        // element is frozen exactly as the top is. Freezing only the top's own
-        // members left `Composite.<{ endpoints: [].<E> }>` with a WRITABLE `E`
-        // inside, which the frozen nested composite could never satisfy - the
-        // same trap one level down. `[].<T>` is admitted as a shape here as
-        // composites.md's "a homogeneous `Composite.<[].<T>>` covers the
+        // ...and the shape is read as a COMPOSITE TREE. "Nested composites are
+        // trees terminating in non-composite leaves" (composites.md): the values
+        // a composite holds at its structural positions are themselves
+        // composites, so a structural member type in the shape - an ~object~,
+        // ~tuple~ or ~array~ type - denotes the composite type over it, and the
+        // top's own members are readonly. Reading `Composite.<{ endpoints:
+        // [].<E> }>` with a plain, writable `[].<E>` inside described a type no
+        // composite tree could satisfy - the same trap one level down - and is
+        // also what let a nested `[].<E>` be a mutable array to the checker where
+        // the value is a frozen tuple composite. `[].<T>` is admitted as a shape
+        // as composites.md's "a homogeneous `Composite.<[].<T>>` covers the
         // variable-length case" says; it was refused as a shape outright.
-        const freeze = (r: TypeRecord): TypeRecord => {
-          if (r.Kind === 'object') {
-            return {
-              ...r,
-              Properties: (r as { Properties: readonly { type: TypeRecord }[] }).Properties.map((prop) => ({ ...prop, readonly: true, type: freeze(prop.type) })),
-            } as unknown as TypeRecord;
-          }
-          if (r.Kind === 'array') {
-            return { ...r, Element: freeze((r as { Element: TypeRecord }).Element) } as unknown as TypeRecord;
-          }
-          if (r.Kind === 'tuple') {
-            return { ...r, Elements: (r as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => ({ ...e, Type: freeze(e.Type) })) } as unknown as TypeRecord;
-          }
-          return r;
-        };
-        const frozen = freeze(argRecords[0]!);
-        const composite = builtinTypeRecord(name, [frozen]);
+        // The tree reading itself lives in `builtinTypeRecord`'s Composite case,
+        // so every construction of the type agrees; this arm only routes the
+        // shape there.
+        const composite = builtinTypeRecord(name, [argRecords[0]!]);
         if (composite) {
           return composite;
         }

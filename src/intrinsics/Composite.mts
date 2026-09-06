@@ -359,31 +359,19 @@ function TupleShape(elements: readonly Value[]): TypeRecord {
  * is where filling at a check is not merely undesirable but impossible.
  */
 /**
- * @param deep - re-intern NESTED structure too. composites.md: "nested
- * composites are trees terminating in non-composite leaves", and
- * serialization.md: `JSON.parse.<Composite.<T>>` "interns the result, so two
- * parses of equal documents are the same object". A DIRECT `Composite({ v: {} })`
- * keeps the inner object's identity - the caller holds that object and
- * `Composite({ v: {} }) !== Composite({ v: {} })` is the stated semantics - but a
- * PARSED document has no identity anyone holds, and leaving its inner objects
- * plain meant two parses of any nested document never interned: each held a
- * fresh inner object. With `deep`, a member or element whose declared type is
- * itself structural is built through this function rather than converted.
+ * The shape reaches here already read as a composite tree (see the composite
+ * arm of the type resolver in `runtime.mts`): a structural member type is the
+ * composite type over it. So a nested object or array in `source` is converted
+ * at a COMPOSITE type, and that conversion is the typed creation - which is
+ * what makes "nested composites are trees" (composites.md) and "interns the
+ * result" (serialization.md) hold with no second mechanism. A member's value is
+ * converted at its declared type, whatever that type is.
  */
-export function* CompositeFromShape(shape: TypeRecord, source: Value, deep = false): ValueEvaluator {
+export function* CompositeFromShape(shape: TypeRecord, source: Value): ValueEvaluator {
   if (!(source instanceof ObjectValue)) {
     return Throw.TypeError('$1 is not an object', source);
   }
-  /** A member's value at its declared type - a nested composite where `deep` and the type is structural. */
   const member = function* (v: Value, t: TypeRecord): ValueEvaluator {
-    if (deep) {
-      const s = t.Kind === 'object' || t.Kind === 'tuple' || t.Kind === 'array'
-        ? t
-        : (t as { Structure?: TypeRecord }).Structure;
-      if (s && (s.Kind === 'object' || s.Kind === 'tuple' || s.Kind === 'array')) {
-        return Q(yield* CompositeFromShape(t, v, true));
-      }
-    }
     return Q(yield* ConvertValue(v, t));
   };
   // "the S that is T's STRUCTURAL FORM" - an interface resolves to a ~nominal~

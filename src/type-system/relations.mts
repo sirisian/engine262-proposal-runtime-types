@@ -899,7 +899,20 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       return true;
     }
     if (tComposite && s.Arguments.length > 0) {
-      return IsSubtype(s.Arguments[0] as TypeRecord, t.Arguments[0] as TypeRecord, next);
+      const sShape = s.Arguments[0] as TypeRecord;
+      const tShape = t.Arguments[0] as TypeRecord;
+      // composites.md: "a homogeneous `Composite.<[].<T>>` covers the
+      // variable-length case". A tuple composite records a fixed ~tuple~ shape,
+      // and between two COMPOSITE shapes - both frozen, so the container
+      // argument against tuple-to-array subtyping does not arise - a tuple shape
+      // is of the variable-length array shape when every element type is of the
+      // element type. This is a rule about composite shapes only: a tuple
+      // composite remains a subtype of no bare ~array~ TYPE, as the clause says.
+      if (sShape.Kind === 'tuple' && tShape.Kind === 'array') {
+        const element = (tShape as { Element: TypeRecord }).Element;
+        return (sShape as { Elements: readonly { Type: TypeRecord }[] }).Elements.every((e) => IsSubtype(e.Type, element, next));
+      }
+      return IsSubtype(sShape, tShape, next);
     }
     // A composite also satisfies an ordinary object type through its shape,
     // which is what makes "a composite satisfies the interface" a CHECK - the
@@ -909,25 +922,13 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     if (t.Kind === 'object' && s.Arguments.length > 0) {
       return IsSubtype(s.Arguments[0] as TypeRecord, t, next);
     }
-    // The TUPLE kind, for the same reason. composites.md: a tuple composite's
-    // "static type is `Composite.<[T1, T2, ...]>` over this proposal's tuple
-    // types, and a homogeneous `Composite.<[].<T>>` covers the variable-length
-    // case". A tuple composite satisfies a tuple type through its shape as a
-    // record composite satisfies an object type; and it satisfies the
-    // homogeneous array type when every element type is of the element type -
-    // the variable-length shape's meaning, applied directly, since the general
-    // relation does not hold a fixed tuple to be a subtype of an array. This
-    // arm was absent, so a parsed `Composite.<{ endpoints: [].<E> }>` failed
-    // its own membership at the `endpoints` member.
-    if (s.Arguments.length > 0) {
-      const sShape = s.Arguments[0] as TypeRecord;
-      if (t.Kind === 'tuple' && sShape.Kind === 'tuple') {
-        return IsSubtype(sShape, t, next);
-      }
-      if (t.Kind === 'array' && sShape.Kind === 'tuple') {
-        const element = (t as { Element: TypeRecord }).Element;
-        return (sShape as { Elements: readonly { Type: TypeRecord }[] }).Elements.every((e) => IsSubtype(e.Type, element, next));
-      }
+    // The TUPLE kind, as the clause's IsSubtype steps state: "If t.[[Kind]] is
+    // ~tuple~ and sShape.[[Kind]] is ~tuple~, return IsSubtype(sShape, t)". The
+    // step was absent here. NOT the ~array~ kind: "it is a subtype of no ~array~
+    // type, because an ~array~ type describes a mutable container and every
+    // mutating operation on a composite throws".
+    if (t.Kind === 'tuple' && s.Arguments.length > 0 && (s.Arguments[0] as TypeRecord).Kind === 'tuple') {
+      return IsSubtype(s.Arguments[0] as TypeRecord, t, next);
     }
   }
   // #sec-enums: "An enum type is a subtype of its underlying type, so a value

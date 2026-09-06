@@ -21,7 +21,7 @@ import { CreateSoAView, SoAWithCapacity } from '../intrinsics/SoA.mts';
 import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { anyType, type TypeRecord } from '../type-system/records.mts';
+import { anyType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
@@ -377,7 +377,17 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
     const compositeFn = surroundingAgent.currentRealmRecord.Intrinsics['%Composite%'];
     if (compositeFn !== undefined && SameValue(func, compositeFn)) {
-      const shape = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      const written = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
+      // The shape is read THROUGH the composite type over it, so that
+      // `Composite.<S>(source)` builds at exactly the type the annotation
+      // `Composite.<S>` denotes (#sec-composite-types: the shape read as a
+      // composite tree, its structural members composite types). Handing the
+      // written shape straight to CompositeFromShape skipped that reading, and
+      // a nested object in `source` was converted at a plain object type and
+      // stored plain - so the typed creation did not intern with the parse of
+      // the same data, and `Reflect.typeOf` on it reported the member `any`.
+      const composite = builtinTypeRecord('Composite', [written]) as (TypeRecord & { Arguments?: readonly (TypeRecord | number)[] }) | null;
+      const shape = composite?.Arguments && composite.Arguments.length > 0 ? composite.Arguments[0] as TypeRecord : written;
       const argList = Q(yield* ArgumentListEvaluation(args));
       return Q(yield* CompositeFromShape(shape, argList.length > 0 ? argList[0]! : Value.undefined));
     }

@@ -28,7 +28,8 @@ import { currentContextualType } from '../type-system/runtime.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
   wellKnownSymbols,
-  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate } from '#self';
+  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
+  IsComposite, CompositeFromShape } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
@@ -620,6 +621,22 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
 }
 
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  // #sec-composite-typeobject-call: the typed creation "is the CONSTRUCTION
+  // BOUNDARY of the composite types, as calling any parameterized Type Object is
+  // its type's". A conversion to a composite type over a shape is that boundary:
+  // an ordinary object or array reaching a composite position is built into the
+  // composite by CompositeFromShape, and a value that is already a composite is
+  // passed through (the typed creation is idempotent on one). This is what makes
+  // the composite-tree reading of a shape (#sec-composite-types) an operation
+  // and not only a type: `Composite.<S>(source)` with a nested object in
+  // `source` builds the nested composite here, at the member's type, so the
+  // direct typed creation interns with the parse of the same data. Before this
+  // the conversion left the inner object plain and recorded its member as
+  // `any`.
+  if (t.Kind === 'primitive' && t.Name === 'Composite' && t.Arguments.length > 0
+      && value instanceof ObjectValue && !IsComposite(value)) {
+    return Q(yield* CompositeFromShape(t.Arguments[0] as TypeRecord, value));
+  }
   // proposal-runtime-types #sec-span-coercion: a coercion to `Span.<T>`
   // MATERIALIZES. The window is a value distinct from the array coerced, so
   // that one static type does not stand for two different kinds of value —

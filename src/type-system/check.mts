@@ -2434,6 +2434,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * one filed, and closing this half needs no new mechanism.
    */
   const builtinStaticTypeArgumentSignature = (callee: ParseNode | undefined): ((args: readonly TypeRecord[]) => Known) | undefined => {
+    // #sec-composite-types: "The Static Type of a call of the Composite function
+    // is ... the composite type over T's structural form for the typed creation
+    // `Composite.<T>(source)`". The callee is the bare identifier with type
+    // arguments, not a member, so it is answered before the member test. It was
+    // unanswered, so the typed creation was ~any~ to the checker and
+    // `let a: [].<uint8> = Composite.<[uint8, uint8]>([1, 2])` passed the
+    // checker - a composite bound as a mutable array, which the clause says is
+    // a subtype of no ~array~ type - to be admitted by the run time's structural
+    // read of the exotic array. `builtinTypeRecord` supplies the composite-tree
+    // reading of the shape, the same one every other spelling gets.
+    const bare = callee as unknown as { type?: string, name?: string } | undefined;
+    if (bare?.type === 'IdentifierReference' && bare.name === 'Composite' && !shadowedByProgram('Composite')) {
+      return (args) => (args.length === 1 ? builtinTypeRecord('Composite', [args[0]!]) ?? null : null);
+    }
     const member = callee as unknown as {
       type?: string, MemberExpression?: { type?: string, name?: string }, IdentifierName?: { name?: string },
     } | undefined;
@@ -2444,6 +2458,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const method = member.IdentifierName?.name;
     if (base?.type !== 'IdentifierReference' || !base.name || !method || shadowedByProgram(base.name)) {
       return undefined;
+    }
+    // #sec-typed-json-parsing: `JSON.parse.<T>(text)` "converts the resulting
+    // value against T", so its value IS a T and its Static Type is T. There was
+    // no entry, so the call was ~any~ to the checker and `let s: string =
+    // JSON.parse.<uint8>("1")` passed it. The two-argument reviver form is the
+    // untyped overload and is not this.
+    if (base.name === 'JSON' && method === 'parse') {
+      return (args) => (args.length === 1 ? args[0]! : null);
     }
     if (base.name === 'Promise' && method === 'withResolvers') {
       return (args) => {
@@ -14212,8 +14234,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // as nullable, and testing a cast copy left the original nullable at
           // the `staticType` call below.
           const newInit = n.Initializer as ParseNode | null | undefined;
+          // A CALL WITH WRITTEN TYPE ARGUMENTS is a construction in the same
+          // sense: `Composite.<[uint8, uint8]>([1, 2])`, `JSON.parse.<T>(text)`
+          // name their type at the call, so the type is something the program
+          // wrote, not something inferred from a literal. Left out, the binding
+          // was ~any~ to the checker while the same call inline was typed - so
+          // `let a: [].<uint8> = t` for such a `t` passed the checker and the
+          // composite was bound as a mutable array, which the clause says is a
+          // subtype of no ~array~ type, to be admitted by the run time's
+          // structural read of the exotic array.
+          const writesTypeArguments = newInit?.type === 'CallExpression'
+            && (newInit as { CallExpression?: { type?: string } }).CallExpression?.type === 'TypeArgumentsExpression';
           if (!declared && !n.TypeAnnotation && isConstDeclaration
-              && newInit?.type === 'NewExpression') {
+              && (newInit?.type === 'NewExpression' || writesTypeArguments)) {
             const inferred = staticType(newInit);
             if (inferred) {
               declare(n.BindingIdentifier.name, widen(inferred));

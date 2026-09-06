@@ -504,20 +504,17 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
           // shape to validate against."
           return jsonTypeError(path, t, value);
         }
-        // serialization.md: `JSON.parse.<Composite.<T>>(text)` "validates the
-        // document against T by the rules above and interns the result" - two
-        // steps, in that order. VALIDATE first, through this same coercion
-        // against the shape, which is where the range check lives: going
-        // straight to CompositeFromShape put every member through ConvertValue,
-        // which WRAPS, so `"retries":300` at a `uint8` interned silently as 44
-        // where `JSON.parse.<T>` of the same text refused it. Then INTERN the
-        // validated tree, deep: every nested object and array becomes a
-        // composite too, so two parses of equal documents are one object however
-        // nested the shape - a parsed document has no identity anyone holds, so
-        // there is nothing for a plain inner object to preserve.
+        // The clause's two steps, in order: "coerces the parsed value against the
+        // shape" - which is where the range check lives, so `"retries":300` at a
+        // `uint8` is refused here as `JSON.parse.<T>` refuses it, where going
+        // straight to CompositeFromShape had let ConvertValue WRAP it to 44 -
+        // and then interns. The shape is the composite tree (its structural
+        // members are composite types), so this coercion already interns every
+        // nested object and array through its own composite case; the final
+        // step interns the top over values that are already composites.
         const shape = t.Arguments[0] as TypeRecord;
         const validated = Q(yield* CoerceJSON(value, shape, path));
-        return Q(yield* CompositeFromShape(shape, validated, true));
+        return Q(yield* CompositeFromShape(shape, validated));
       }
       const name = t.Name;
       if (name === 'uint' || name === 'int' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {

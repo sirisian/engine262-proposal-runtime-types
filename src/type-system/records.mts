@@ -871,6 +871,34 @@ export function namedNumericLiteralRecord(name: string): TypeRecord | null {
   return null;
 }
 
+/** Whether a Type Record is a shape a composite type may be over: an ~object~, ~tuple~ or ~array~ record. */
+export function isCompositeShapeKind(r: TypeRecord): boolean {
+  return r.Kind === 'object' || r.Kind === 'tuple' || r.Kind === 'array';
+}
+
+/**
+ * The composite-tree reading of a shape (#sec-composite-types): the shape with
+ * every structural member or element type replaced by the composite type over
+ * it, recursively, and every property readonly. Idempotent, since a composite
+ * type is not itself structural and is left as it is.
+ */
+export function compositeTreeShape(shape: TypeRecord): TypeRecord {
+  const position = (r: TypeRecord): TypeRecord => (isCompositeShapeKind(r) ? makePrimitive('Composite', [compositeTreeShape(r)]) : r);
+  switch (shape.Kind) {
+    case 'object':
+      return {
+        ...shape,
+        Properties: (shape as { Properties: readonly { type: TypeRecord }[] }).Properties.map((p) => ({ ...p, readonly: true, type: position(p.type) })),
+      } as unknown as TypeRecord;
+    case 'array':
+      return { ...shape, Element: position((shape as { Element: TypeRecord }).Element) } as unknown as TypeRecord;
+    case 'tuple':
+      return { ...shape, Elements: (shape as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => ({ ...e, Type: position(e.Type) })) } as unknown as TypeRecord;
+    default:
+      return shape;
+  }
+}
+
 export function builtinTypeRecord(name: string, args: readonly (TypeRecord | number)[] = []): TypeRecord | null {
   const m = /^(u?int)(8|16|32|64|128)$/.exec(name);
   if (m) {
@@ -884,7 +912,18 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     // `Composite.<T>` is an ordinary parameterized spelling of the same family.
     // The top composite type states no shape and is the type of every
     // composite.
-    case 'Composite': return makePrimitive('Composite', args);
+    // #sec-composite-types: the composite type over a shape S. The shape is
+    // read as a COMPOSITE TREE, here and nowhere else, so that every spelling of
+    // `Composite.<S>` - an annotation, the typed creation `Composite.<S>(source)`,
+    // the parse target, the record `Reflect.typeOf` reports - is the same type:
+    // "nested composites are trees terminating in non-composite leaves", so the
+    // value at a structural position of the shape is a composite and the type at
+    // that position is the composite type over it; and "a composite object is
+    // frozen from its creation", so the top's own members are readonly. A
+    // structural member left plain described a mutable array or object at a
+    // position where the value is a frozen composite - a type no composite could
+    // satisfy, which is a trap and not a distinction.
+    case 'Composite': return makePrimitive('Composite', args.length === 1 && typeof args[0] !== 'number' && isCompositeShapeKind(args[0]) ? [compositeTreeShape(args[0])] : args);
     case 'any': return anyType;
     case 'never': return neverType;
     // proposal-runtime-types #sec-null-and-undefined-types: `undefined` is the

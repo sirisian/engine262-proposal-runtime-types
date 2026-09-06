@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 // ---------------------------------------------------------------------------
 // `JSON.parse.<Composite.<T>>(text)` VALIDATES AGAINST T AND INTERNS THE RESULT,
@@ -74,13 +74,79 @@ test('a top-level tuple or homogeneous array document interns', () => {
   expectThrownKind('JSON.parse.<[uint8, string]>(\'[1]\');', 'TypeError');
 });
 
-test('a DIRECT Composite still keeps a nested plain object\'s identity - the deep re-intern is the parse\'s', () => {
-  // composites.md: "Composite({ v: {} }) !== Composite({ v: {} })" - the inner
-  // object is the caller's, with an identity the caller holds.
+test('the shape of Composite.<S> is read as a composite tree, every spelling alike', () => {
+  // #sec-composite-types: a structural member of the shape denotes the
+  // composite type over it, and the top's members are readonly. This is ONE
+  // rule in builtinTypeRecord, so the annotation, the typed creation and the
+  // parse target all denote the same type - and the typed creation builds
+  // nested composites at that type, interning with the parse of the same data.
+  expect(evaluated(`${TYPES} String(type Composite.<S>);`)).toBe('Composite.<{ endpoints: Composite.<[].<Composite.<{ host: string, port: uint.<16> }>>>, name: string, retries: uint.<8> }>');
+  expect(evaluated(`${TYPES} const c = Composite.<S>({ name: "api", endpoints: [{ host: "a", port: 443 }, { host: "b", port: 8443 }], retries: 3 }); String(Composite.isComposite(c.endpoints)) + " " + String(Composite.isComposite(c.endpoints[0]));`)).toBe('true true');
+  expect(evaluated(`${TYPES} const c = Composite.<S>({ name: "api", endpoints: [{ host: "a", port: 443 }, { host: "b", port: 8443 }], retries: 3 }); String(c === ${parse()});`)).toBe('true');
+  expect(evaluated(`${TYPES} const c = Composite.<S>({ name: "api", endpoints: [{ host: "a", port: 443 }, { host: "b", port: 8443 }], retries: 3 }); String(c is Composite.<S>);`)).toBe('true');
+});
+
+test('the UNTYPED Composite keeps a nested plain object\'s identity - only a shape says the member is data', () => {
+  // composites.md: "Composite({ v: {} }) !== Composite({ v: {} })" - with no
+  // shape, the inner object is the caller's, with an identity the caller holds.
   expect(evaluated('String(Composite({ v: {} }) === Composite({ v: {} }));')).toBe('false');
   expect(evaluated('const inner = {}; String(Composite({ v: inner }) === Composite({ v: inner }));')).toBe('true');
 });
 
+test('a tuple composite is of the variable-length array SHAPE when every element is of the element type', () => {
+  // `Composite.<[].<E>>` is a composite shape - frozen on both sides, so the
+  // clause's argument against tuple-to-array subtyping ("an ~array~ type
+  // describes a mutable container") does not arise between two composite
+  // shapes - and a tuple composite is of it when every element is an E.
+  expect(evaluated('const t = JSON.parse.<Composite.<[].<uint8>>>("[1, 2]"); String(t is Composite.<[].<uint8>>) + " " + String(t is Composite.<[uint8, uint8]>);')).toBe('true true');
+  expect(evaluated('const t = JSON.parse.<Composite.<[].<uint8>>>("[1, 2]"); String(t is Composite.<[].<string>>);')).toBe('false');
+  expect(evaluated('const t = JSON.parse.<Composite.<[].<uint8>>>("[1, 2]"); String(t is Composite.<[uint8]>);')).toBe('false');
+});
+
 test('a bare Composite target states no shape and is refused', () => {
   expectThrownKind('JSON.parse.<Composite>(\'{"a":1}\');', 'TypeError');
+});
+
+// ---------------------------------------------------------------------------
+// A COMPOSITE IS A SUBTYPE OF NO ARRAY TYPE - AND THE CHECKER CAN NOW SEE IT.
+//
+// "it is a subtype of no ~array~ type, because an ~array~ type describes a
+// mutable container and every mutating operation on a composite throws". The
+// relation said so, but `const t = Composite.<[uint8, uint8]>([1, 2]); let a:
+// [].<uint8> = t;` passed the checker, because a `const` recorded its
+// initializer's type only for a `new` - and the typed creation, which writes
+// its type at the call exactly as a construction does, was ~any~ to it. The run
+// time then admitted the exotic array structurally, and the function's first
+// `push` threw where the binding itself was the error.
+// ---------------------------------------------------------------------------
+
+test('the typed creation has a Static Type, and a const binding keeps it', () => {
+  expectStaticTypeError('let a: [].<uint8> = Composite.<[uint8, uint8]>([1, 2]);');
+  expectStaticTypeError('const t = Composite.<[uint8, uint8]>([1, 2]); let a: [].<uint8> = t;');
+  expectStaticTypeError('const t = Composite.<[uint8, uint8]>([1, 2]); let s: string = t;');
+  // ...a tuple type, which the clause allows, and its own type, are fine.
+  expect(evaluated('const t = Composite.<[uint8, uint8]>([1, 2]); let u: [uint8, uint8] = t; String(u === t);')).toBe('true');
+  expect(evaluated('const t = Composite.<[uint8, uint8]>([1, 2]); let c: Composite.<[uint8, uint8]> = t; String(c === t);')).toBe('true');
+  // A `let` is not fixed by its initializer - it may be reassigned.
+  expect(evaluated('let t = Composite.<[uint8, uint8]>([1, 2]); t = 5; String(t);')).toBe('5');
+});
+
+test('JSON.parse.<T> has the Static Type T, and a const binding keeps it', () => {
+  expectStaticTypeError('let s: string = JSON.parse.<uint8>("1");');
+  expectStaticTypeError('const j = JSON.parse.<uint8>("1"); let s: string = j;');
+  expectStaticTypeError('const c = JSON.parse.<Composite.<[uint8, uint8]>>("[1,2]"); let a: [].<uint8> = c;');
+  expect(evaluated('const j = JSON.parse.<uint8>("1"); let u: uint8 = j; String(u is uint8);')).toBe('true');
+  expect(evaluated('type P = { x: uint8 }; const p = JSON.parse.<P>(\'{"x":1}\'); let q: P = p; String(q.x);')).toBe('1');
+});
+
+test('at run time a composite is not OF an array type, and reaching one is converted as an array-like', () => {
+  // `is` says what the subtyping rule says.
+  expect(evaluated('const t = Composite.<[uint8, uint8]>([1, 2]); String(t is [].<uint8>) + " " + String(t is [uint8, uint8]);')).toBe('false true');
+  // Where the checker cannot see the type, the boundary builds a NEW array of
+  // the type from the array-like, as it does for any array-like source; the
+  // composite is neither bound nor modified.
+  expect(evaluated('function f(x) { let a: [].<uint8> = x; return String(a === x) + " " + String(Composite.isComposite(a)); } f(Composite.<[uint8, uint8]>([1, 2]));')).toBe('false false');
+  expect(evaluated('function f(x) { let a: [].<uint8> = x; a.push(3); return String(a.length) + " " + String(x.length); } f(Composite.<[uint8, uint8]>([1, 2]));')).toBe('3 2');
+  // A plain array is unaffected.
+  expect(evaluated('const a: [].<uint8> = [1, 2]; String(a is [].<uint8>);')).toBe('true');
 });
