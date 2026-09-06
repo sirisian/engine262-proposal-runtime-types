@@ -952,6 +952,23 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
       }
       // 5. Let result be the result of evaluating module.[[ECMAScriptCode]].
       const result = EnsureCompletion(yield* (Evaluate(module.ECMAScriptCode)));
+      // The body's COMPLETION VALUE - the value of its last statement, the same
+      // thing a Script's evaluation yields. It is discarded by `Evaluate`, which
+      // answers a promise, but the console wants it: an entry `... ; Expr;` that
+      // happens to be module code because it imports should echo `Expr`, not the
+      // namespace object. Stashed on the record so `evaluateModule`'s caller can
+      // read it; nothing else consults it, and a non-console module is
+      // unaffected because its caller does not look.
+      // The engine's `Value.undefined` is a truthy JS object, so `!== undefined`
+      // is not the test: an EMPTY module completes normally with it, and stashing
+      // it would echo `undefined` where the console should show the namespace.
+      // Only a value the last statement actually PRODUCED is stashed - an
+      // ExpressionStatement leaves one, a declaration or an empty body does not,
+      // which is exactly `result.Value` being a defined Value that is not
+      // `undefined`.
+      if (result.Type === 'normal' && result.Value !== undefined && !(result.Value instanceof UndefinedValue)) {
+        (module as { HostDefinedLastValue?: Value }).HostDefinedLastValue = result.Value as Value;
+      }
       // 6. Suspend moduleContext and remove it from the execution context stack.
       // 7. Resume the context that is now on the top of the execution context stack as the running execution context.
       surroundingAgent.executionContextStack.pop(moduleContext);

@@ -492,7 +492,15 @@ function evaluate(options: {
         if (completion instanceof ThrowCompletion) {
           resolve(context.createEvaluationResult(completion));
         } else {
-          resolve(context.createEvaluationResult(NormalCompletion(GetModuleNamespace(toBeEvaluated, 'evaluation'))));
+          // A console entry that is module code because it imports still ends,
+          // usually, in an expression the developer wants to SEE - `PartialVector;`
+          // after the `import` and the `type` declarations. `ExecuteModule` stashes
+          // that last value; echo it, as a script entry echoes its trailing
+          // expression, and fall back to the namespace object only for an entry
+          // that produced no value (one that is all imports and declarations).
+          const lastValue = (toBeEvaluated as { HostDefinedLastValue?: import('#self').Value }).HostDefinedLastValue;
+          const shown = lastValue ?? GetModuleNamespace(toBeEvaluated, 'evaluation');
+          resolve(context.createEvaluationResult(NormalCompletion(shown)));
         }
       });
     } else if (toBeEvaluated instanceof ScriptRecord) {
