@@ -4,6 +4,7 @@ import { getInspector, type Inspector } from './index.mts';
 import {
   Descriptor,
   isTypedArrayObject, JSStringValue, ObjectValue, PrivateName, SymbolDescriptiveString, SymbolValue, UndefinedValue, Value, type MapObject, type PrivateElementRecord, type PropertyKeyValue, type SetObject,
+  type NullValue, type OrdinaryObject,
   DataBlock,
   TypedArrayGetElement,
   TypedArrayLength,
@@ -50,8 +51,51 @@ export class ObjectInspector<T extends ObjectValue> implements Inspector<T> {
     this.toEntries = additionalOptions?.entries;
     this.additionalProperties = additionalOptions?.additionalProperties;
     this.internalProperties = additionalOptions?.internalProperties;
-    this.exoticProperties = additionalOptions?.exoticProperties;
     this.toCustomPreview = additionalOptions?.customPreview;
+    // THE PREVIEW AND THE EXPANSION MUST AGREE. `additionalProperties` fed the
+    // collapsed preview only; the expansion (`Runtime.getProperties`) consulted
+    // `exoticProperties` and the object's own property table, and nothing
+    // else. So a Type Object previewed as `{kind: 'object', properties:
+    // Array(2)}` and then, opened, showed only `Type.prototype`'s getters -
+    // `kind` and `properties` were nowhere. `Module` had worked around this by
+    // writing the same list twice, once under each name.
+    //
+    // Where an inspector gives `additionalProperties` and no `exoticProperties`
+    // of its own, the additional properties ARE the exotic properties: each
+    // becomes an own, enumerable, read-only entry rendered through its value's
+    // inspector - so a member that is itself a Type Object opens again. A name
+    // the object or its prototype chain already answers is skipped, so a
+    // synthesised `size` does not sit beside the real `Map.prototype.size`.
+    this.exoticProperties = additionalOptions?.exoticProperties
+      ?? (this.additionalProperties ? this.additionalPropertiesAsExotic.bind(this) : undefined);
+  }
+
+  private additionalPropertiesAsExotic(value: T, getObjectId: (val: ObjectValue | SymbolValue) => string, context: InspectorContext, generatePreview: boolean | undefined): Protocol.Runtime.PropertyDescriptor[] {
+    const out: Protocol.Runtime.PropertyDescriptor[] = [];
+    const answered = new Set<string>();
+    let p: ObjectValue | NullValue = value;
+    while (p instanceof ObjectValue) {
+      for (const key of p.properties.keys()) {
+        if (key instanceof JSStringValue) {
+          answered.add(key.stringValue());
+        }
+      }
+      p = 'Prototype' in p ? (p as OrdinaryObject).Prototype : Value.null;
+    }
+    for (const [name, val] of this.additionalProperties!(value, context)) {
+      if (answered.has(name)) {
+        continue;
+      }
+      out.push({
+        name,
+        value: getInspector(val).toRemoteObject(val, getObjectId, context, generatePreview),
+        writable: false,
+        configurable: false,
+        enumerable: true,
+        isOwn: true,
+      });
+    }
+    return out;
   }
 
   toRemoteObject(value: T, getObjectId: (val: ObjectValue | SymbolValue) => string, context: InspectorContext): Protocol.Runtime.RemoteObject {

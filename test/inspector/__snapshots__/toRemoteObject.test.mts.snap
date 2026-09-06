@@ -8022,7 +8022,7 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
 {
   "className": "Type",
   "description": "{ x: int.<32> } & { x: null }",
-  "objectId": "default:38",
+  "objectId": "default:45",
   "preview": {
     "description": "{ x: int.<32> } & { x: null }",
     "overflow": false,
@@ -8051,7 +8051,53 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
 
 exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() non-indexed owned properties (private) 1`] = `""`;
 
-exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() non-indexed owned properties 1`] = `[]`;
+exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() non-indexed owned properties 1`] = `
+[
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "kind",
+    "value": {
+      "type": "string",
+      "value": "intersection",
+    },
+    "writable": false,
+  },
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "members",
+    "value": {
+      "className": "Array",
+      "description": "Array(2)",
+      "objectId": "default:47",
+      "preview": {
+        "description": "Array(2)",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "0",
+            "type": "object",
+            "value": "{ x: int.<32> }",
+          },
+          {
+            "name": "1",
+            "type": "object",
+            "value": "{ x: null }",
+          },
+        ],
+        "subtype": "array",
+        "type": "object",
+      },
+      "subtype": "array",
+      "type": "object",
+    },
+    "writable": false,
+  },
+]
+`;
 
 exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = { x: null }; return type A & B; })() non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
@@ -8059,7 +8105,51 @@ exports[`runtime-types type objects > (() => { type A = { x: int32 }; type B = {
 {
   "internalProperties": [],
   "privateProperties": [],
-  "result": [],
+  "result": [
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "kind",
+      "value": {
+        "type": "string",
+        "value": "intersection",
+      },
+      "writable": false,
+    },
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "members",
+      "value": {
+        "className": "Array",
+        "description": "Array(2)",
+        "objectId": "default:46",
+        "preview": {
+          "description": "Array(2)",
+          "overflow": false,
+          "properties": [
+            {
+              "name": "0",
+              "type": "object",
+              "value": "{ x: int.<32> }",
+            },
+            {
+              "name": "1",
+              "type": "object",
+              "value": "{ x: null }",
+            },
+          ],
+          "subtype": "array",
+          "type": "object",
+        },
+        "subtype": "array",
+        "type": "object",
+      },
+      "writable": false,
+    },
+  ],
 }
 `;
 
@@ -8067,7 +8157,7 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
 {
   "className": "Type",
   "description": "{ next: { next: ... | null } | null }",
-  "objectId": "default:39",
+  "objectId": "default:48",
   "preview": {
     "description": "{ next: { next: ... | null } | null }",
     "overflow": false,
@@ -8079,9 +8169,8 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
       },
       {
         "name": "properties",
-        "subtype": "array",
         "type": "object",
-        "value": "Array(1)",
+        "value": "Object",
       },
     ],
     "type": "object",
@@ -8096,7 +8185,46 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
 
 exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() non-indexed owned properties (private) 1`] = `""`;
 
-exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() non-indexed owned properties 1`] = `[]`;
+exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() non-indexed owned properties 1`] = `
+[
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "kind",
+    "value": {
+      "type": "string",
+      "value": "object",
+    },
+    "writable": false,
+  },
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "properties",
+    "value": {
+      "className": "Object",
+      "description": "Object",
+      "objectId": "default:50",
+      "preview": {
+        "description": "Object",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "next",
+            "type": "object",
+            "value": "{ next: ... | null } | null",
+          },
+        ],
+        "type": "object",
+      },
+      "type": "object",
+    },
+    "writable": false,
+  },
+]
+`;
 
 exports[`runtime-types type objects > (() => { type Node = { next: Node | null }; return Node; })() non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
@@ -8104,7 +8232,44 @@ exports[`runtime-types type objects > (() => { type Node = { next: Node | null }
 {
   "internalProperties": [],
   "privateProperties": [],
-  "result": [],
+  "result": [
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "kind",
+      "value": {
+        "type": "string",
+        "value": "object",
+      },
+      "writable": false,
+    },
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "properties",
+      "value": {
+        "className": "Object",
+        "description": "Object",
+        "objectId": "default:49",
+        "preview": {
+          "description": "Object",
+          "overflow": false,
+          "properties": [
+            {
+              "name": "next",
+              "type": "object",
+              "value": "{ next: ... | null } | null",
+            },
+          ],
+          "type": "object",
+        },
+        "type": "object",
+      },
+      "writable": false,
+    },
+  ],
 }
 `;
 
@@ -8112,7 +8277,7 @@ exports[`runtime-types type objects > type 'a' | 'b' 1`] = `
 {
   "className": "Type",
   "description": "'a' | 'b'",
-  "objectId": "default:31",
+  "objectId": "default:33",
   "preview": {
     "description": "'a' | 'b'",
     "overflow": false,
@@ -8141,7 +8306,53 @@ exports[`runtime-types type objects > type 'a' | 'b' accessor properties 1`] = `
 
 exports[`runtime-types type objects > type 'a' | 'b' non-indexed owned properties (private) 1`] = `""`;
 
-exports[`runtime-types type objects > type 'a' | 'b' non-indexed owned properties 1`] = `[]`;
+exports[`runtime-types type objects > type 'a' | 'b' non-indexed owned properties 1`] = `
+[
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "kind",
+    "value": {
+      "type": "string",
+      "value": "union",
+    },
+    "writable": false,
+  },
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "members",
+    "value": {
+      "className": "Array",
+      "description": "Array(2)",
+      "objectId": "default:35",
+      "preview": {
+        "description": "Array(2)",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "0",
+            "type": "object",
+            "value": "'a'",
+          },
+          {
+            "name": "1",
+            "type": "object",
+            "value": "'b'",
+          },
+        ],
+        "subtype": "array",
+        "type": "object",
+      },
+      "subtype": "array",
+      "type": "object",
+    },
+    "writable": false,
+  },
+]
+`;
 
 exports[`runtime-types type objects > type 'a' | 'b' non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
@@ -8149,7 +8360,51 @@ exports[`runtime-types type objects > type 'a' | 'b' properties 1`] = `
 {
   "internalProperties": [],
   "privateProperties": [],
-  "result": [],
+  "result": [
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "kind",
+      "value": {
+        "type": "string",
+        "value": "union",
+      },
+      "writable": false,
+    },
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "members",
+      "value": {
+        "className": "Array",
+        "description": "Array(2)",
+        "objectId": "default:34",
+        "preview": {
+          "description": "Array(2)",
+          "overflow": false,
+          "properties": [
+            {
+              "name": "0",
+              "type": "object",
+              "value": "'a'",
+            },
+            {
+              "name": "1",
+              "type": "object",
+              "value": "'b'",
+            },
+          ],
+          "subtype": "array",
+          "type": "object",
+        },
+        "subtype": "array",
+        "type": "object",
+      },
+      "writable": false,
+    },
+  ],
 }
 `;
 
@@ -8157,7 +8412,7 @@ exports[`runtime-types type objects > type [].<uint8> 1`] = `
 {
   "className": "Type",
   "description": "[].<uint.<8>>",
-  "objectId": "default:32",
+  "objectId": "default:36",
   "preview": {
     "description": "[].<uint.<8>>",
     "overflow": false,
@@ -8185,7 +8440,46 @@ exports[`runtime-types type objects > type [].<uint8> accessor properties 1`] = 
 
 exports[`runtime-types type objects > type [].<uint8> non-indexed owned properties (private) 1`] = `""`;
 
-exports[`runtime-types type objects > type [].<uint8> non-indexed owned properties 1`] = `[]`;
+exports[`runtime-types type objects > type [].<uint8> non-indexed owned properties 1`] = `
+[
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "kind",
+    "value": {
+      "type": "string",
+      "value": "array",
+    },
+    "writable": false,
+  },
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "element",
+    "value": {
+      "className": "Type",
+      "description": "uint.<8>",
+      "objectId": "default:37",
+      "preview": {
+        "description": "uint.<8>",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "kind",
+            "type": "string",
+            "value": "primitive",
+          },
+        ],
+        "type": "object",
+      },
+      "type": "object",
+    },
+    "writable": false,
+  },
+]
+`;
 
 exports[`runtime-types type objects > type [].<uint8> non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
@@ -8193,7 +8487,44 @@ exports[`runtime-types type objects > type [].<uint8> properties 1`] = `
 {
   "internalProperties": [],
   "privateProperties": [],
-  "result": [],
+  "result": [
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "kind",
+      "value": {
+        "type": "string",
+        "value": "array",
+      },
+      "writable": false,
+    },
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "element",
+      "value": {
+        "className": "Type",
+        "description": "uint.<8>",
+        "objectId": "default:37",
+        "preview": {
+          "description": "uint.<8>",
+          "overflow": false,
+          "properties": [
+            {
+              "name": "kind",
+              "type": "string",
+              "value": "primitive",
+            },
+          ],
+          "type": "object",
+        },
+        "type": "object",
+      },
+      "writable": false,
+    },
+  ],
 }
 `;
 
@@ -8201,7 +8532,7 @@ exports[`runtime-types type objects > type [uint8, string] 1`] = `
 {
   "className": "Type",
   "description": "[uint.<8>, string]",
-  "objectId": "default:33",
+  "objectId": "default:38",
   "preview": {
     "description": "[uint.<8>, string]",
     "overflow": false,
@@ -8230,7 +8561,53 @@ exports[`runtime-types type objects > type [uint8, string] accessor properties 1
 
 exports[`runtime-types type objects > type [uint8, string] non-indexed owned properties (private) 1`] = `""`;
 
-exports[`runtime-types type objects > type [uint8, string] non-indexed owned properties 1`] = `[]`;
+exports[`runtime-types type objects > type [uint8, string] non-indexed owned properties 1`] = `
+[
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "kind",
+    "value": {
+      "type": "string",
+      "value": "tuple",
+    },
+    "writable": false,
+  },
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "elements",
+    "value": {
+      "className": "Array",
+      "description": "Array(2)",
+      "objectId": "default:40",
+      "preview": {
+        "description": "Array(2)",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "0",
+            "type": "object",
+            "value": "uint.<8>",
+          },
+          {
+            "name": "1",
+            "type": "object",
+            "value": "string",
+          },
+        ],
+        "subtype": "array",
+        "type": "object",
+      },
+      "subtype": "array",
+      "type": "object",
+    },
+    "writable": false,
+  },
+]
+`;
 
 exports[`runtime-types type objects > type [uint8, string] non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
@@ -8238,7 +8615,51 @@ exports[`runtime-types type objects > type [uint8, string] properties 1`] = `
 {
   "internalProperties": [],
   "privateProperties": [],
-  "result": [],
+  "result": [
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "kind",
+      "value": {
+        "type": "string",
+        "value": "tuple",
+      },
+      "writable": false,
+    },
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "elements",
+      "value": {
+        "className": "Array",
+        "description": "Array(2)",
+        "objectId": "default:39",
+        "preview": {
+          "description": "Array(2)",
+          "overflow": false,
+          "properties": [
+            {
+              "name": "0",
+              "type": "object",
+              "value": "uint.<8>",
+            },
+            {
+              "name": "1",
+              "type": "object",
+              "value": "string",
+            },
+          ],
+          "subtype": "array",
+          "type": "object",
+        },
+        "subtype": "array",
+        "type": "object",
+      },
+      "writable": false,
+    },
+  ],
 }
 `;
 
@@ -8258,9 +8679,8 @@ exports[`runtime-types type objects > type { x: int32 } 1`] = `
       },
       {
         "name": "properties",
-        "subtype": "array",
         "type": "object",
-        "value": "Array(1)",
+        "value": "Object",
       },
     ],
     "type": "object",
@@ -8275,7 +8695,46 @@ exports[`runtime-types type objects > type { x: int32 } accessor properties 1`] 
 
 exports[`runtime-types type objects > type { x: int32 } non-indexed owned properties (private) 1`] = `""`;
 
-exports[`runtime-types type objects > type { x: int32 } non-indexed owned properties 1`] = `[]`;
+exports[`runtime-types type objects > type { x: int32 } non-indexed owned properties 1`] = `
+[
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "kind",
+    "value": {
+      "type": "string",
+      "value": "object",
+    },
+    "writable": false,
+  },
+  {
+    "configurable": false,
+    "enumerable": true,
+    "isOwn": true,
+    "name": "properties",
+    "value": {
+      "className": "Object",
+      "description": "Object",
+      "objectId": "default:15",
+      "preview": {
+        "description": "Object",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "x",
+            "type": "object",
+            "value": "int.<32>",
+          },
+        ],
+        "type": "object",
+      },
+      "type": "object",
+    },
+    "writable": false,
+  },
+]
+`;
 
 exports[`runtime-types type objects > type { x: int32 } non-indexed properties (prototype) 1`] = `"Symbol(Symbol.hasInstance), toString, parse, tryParse, bitLength, elementByteLength, byteLength, alignment, family, min, max, minPositive, epsilon, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
 
@@ -8283,7 +8742,44 @@ exports[`runtime-types type objects > type { x: int32 } properties 1`] = `
 {
   "internalProperties": [],
   "privateProperties": [],
-  "result": [],
+  "result": [
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "kind",
+      "value": {
+        "type": "string",
+        "value": "object",
+      },
+      "writable": false,
+    },
+    {
+      "configurable": false,
+      "enumerable": true,
+      "isOwn": true,
+      "name": "properties",
+      "value": {
+        "className": "Object",
+        "description": "Object",
+        "objectId": "default:2",
+        "preview": {
+          "description": "Object",
+          "overflow": false,
+          "properties": [
+            {
+              "name": "x",
+              "type": "object",
+              "value": "int.<32>",
+            },
+          ],
+          "type": "object",
+        },
+        "type": "object",
+      },
+      "writable": false,
+    },
+  ],
 }
 `;
 
@@ -8296,7 +8792,7 @@ exports[`runtime-types type objects > type never 1`] = `
       "description": "SyntaxError: Unexpected token
 type never
           ^",
-      "objectId": "default:37",
+      "objectId": "default:44",
       "preview": {
         "description": "SyntaxError: Unexpected token
 type never
@@ -8315,7 +8811,7 @@ type never
       "subtype": "error",
       "type": "object",
     },
-    "exceptionId": 36,
+    "exceptionId": 43,
     "lineNumber": 0,
     "scriptId": "6",
     "stackTrace": {
@@ -8347,7 +8843,7 @@ exports[`runtime-types type objects > type string.<{ brand: 'B' }> 1`] = `
       "description": "SyntaxError: Unexpected token
 type string.<{ brand: 'B' }>
            ^^",
-      "objectId": "default:35",
+      "objectId": "default:42",
       "preview": {
         "description": "SyntaxError: Unexpected token
 type string.<{ brand: 'B' }>
@@ -8366,7 +8862,7 @@ type string.<{ brand: 'B' }>
       "subtype": "error",
       "type": "object",
     },
-    "exceptionId": 34,
+    "exceptionId": 41,
     "lineNumber": 0,
     "scriptId": "5",
     "stackTrace": {
