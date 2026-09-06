@@ -6084,8 +6084,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A function TYPE's parameters carry
             // the same record a declaration's do, which is what lets a rest be
             // written in a type at all.
+            // A parameter with a DEFAULT in the type - `(a: uint8 = 1) => void` -
+            // may be omitted, as one marked `?` may; the run time fills it from
+            // the signature in view (ArgumentListEvaluation).
+            const hasDefault = (pn as { Initializer?: unknown }).Initializer !== undefined && (pn as { Initializer?: unknown }).Initializer !== null;
             Parameters.push(parameter(r, {
-              Name: pn.BindingIdentifier?.name ?? '', Rest: pn.Rest === true, Optional: pn.Optional === true,
+              Name: pn.BindingIdentifier?.name ?? '', Rest: pn.Rest === true, Optional: pn.Optional === true || hasDefault,
             }));
           }
           const Return = (returnNode ? resolveType(returnNode) : voidType);

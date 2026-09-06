@@ -6,6 +6,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { TakeStaticCallResolution } from '../type-system/check.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
+import { signatureInView } from './ArgumentListEvaluation.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -98,7 +99,26 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     return Throw.TypeError('$1 is not a function', func);
   }
   if (argsIsNamed) {
-    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func));
+    // #sec-call-argument-binding: a named call binds against the SIGNATURE IN
+    // VIEW. Where the callee was reached through a reference to a binding whose
+    // declared type is a function type or a callable interface, that type's
+    // signature is the declaration the call reads - `a(named: 10)` for
+    // `a: IExample` maps `named` by the interface's names and fills the skipped
+    // position with the interface's default, so `(a, b) => b` receives
+    // `('5', 10)`. Without a declared type in view, the callee's own parameter
+    // list is read, as before.
+    let signature;
+    if (ref instanceof ReferenceRecord && ref.Base instanceof EnvironmentRecord) {
+      const holder = ref.Base as unknown as { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined }, DeclarativeRecord?: { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined } } };
+      const binding = holder.bindings?.get(ref.ReferencedName) ?? holder.DeclarativeRecord?.bindings?.get(ref.ReferencedName);
+        if (binding?.declaredType !== undefined) {
+        const named = (args as ParseNode.Arguments)
+          .filter((a) => (a as { type?: string }).type === 'NamedArgument')
+          .map((a) => (a as unknown as { Name: string }).Name);
+        signature = signatureInView(binding.declaredType, named);
+      }
+    }
+    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func, signature));
   }
   // 6. If tailPosition is true, perform PrepareForTailCall().
   if (tailPosition) {

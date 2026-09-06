@@ -938,6 +938,7 @@ export abstract class TypeParser extends ExpressionParser {
       node.Optional = false;
       node.TypeAnnotation = this.parseTypeAnnotation();
       node.Type = null;
+      node.Initializer = null;
       return this.finishNode(node, 'FunctionTypeParameter');
     }
     node.IsThis = false;
@@ -962,6 +963,13 @@ export abstract class TypeParser extends ExpressionParser {
       node.TypeAnnotation = null;
       node.Type = this.parseType();
     }
+    // FunctionTypeParameter ... Initializer? - a parameter default in a function
+    // TYPE, as a tuple element carries one (`[uint8, uint32 = 10]`): README,
+    // "Function Interfaces", `(string = '5', named: uint32)`. A named argument
+    // through a value of the type skips the parameter and the type's default
+    // fills the position. Not on a rest, whose default would be an array of
+    // nothing. Parsed as the tuple element's is.
+    node.Initializer = !node.Rest && this.eat(Token.ASSIGN) ? this.parseAssignmentExpression() : null;
     return this.finishNode(node, 'FunctionTypeParameter');
   }
 

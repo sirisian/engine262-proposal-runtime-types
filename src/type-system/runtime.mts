@@ -5057,6 +5057,23 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
     if (t) {
       paramType = Q(yield* TypeNodeToTypeRecord(t.Type));
     }
+    // A parameter DEFAULT in the type - `(string = '5', named: uint32)` - is
+    // evaluated once for the type, as a tuple element's is (`[uint8, uint32 =
+    // 10]`), and converted at the parameter's type so the value a call receives
+    // for a skipped position is of that type. It is what a named-argument call
+    // through a value of this type fills the skipped position with
+    // (#sec-call-argument-binding, reading the signature in view). A parameter
+    // with a default may be omitted.
+    let Initial: Value | undefined;
+    const initializer = (p as { Initializer?: ParseNode.Expression | null }).Initializer;
+    if (initializer) {
+      const raw = Q(yield* GetValue(Q(yield* Evaluate(initializer))));
+      if (paramType.Kind === 'any') {
+        Initial = raw;
+      } else {
+        Initial = Q(yield* ConvertValue(raw, paramType));
+      }
+    }
     // A signature's parameters are records.
     Parameters.push(parameter(paramType, {
       Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
@@ -5064,7 +5081,8 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
       // from the ELLIPSIS); a declaration's rest is a BindingRestElement node.
       // Both spellings reach here, so both are read.
       Rest: (p as { Rest?: boolean }).Rest === true || (p as { type?: string }).type === 'BindingRestElement',
-      Optional: (p as { Optional?: boolean }).Optional === true,
+      Optional: (p as { Optional?: boolean }).Optional === true || Initial !== undefined,
+      ...(Initial !== undefined ? { Initial } : {}),
     }));
   }
   let Return: TypeRecord | null = null;

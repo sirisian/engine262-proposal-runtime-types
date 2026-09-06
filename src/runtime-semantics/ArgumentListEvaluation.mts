@@ -4,6 +4,7 @@ import {
 } from '../value.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
+import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import { OutOfRange, isArray } from '../utils/language.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -253,6 +254,50 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
 }
 
 /**
+ * The same, read off a SIGNATURE in view rather than the callee's own parameter
+ * list. #sec-call-argument-binding: a call is bound "to the parameters of the
+ * selected signature"; where the callee is reached through a binding whose
+ * declared type is a function type or an interface of call signatures, that type's
+ * signature is the declaration the call site reads - the callee's own names are
+ * not in view and need not agree (README, "Function Interfaces": "if an interface
+ * is used then the name can be changed in the passed in function"). Its defaults
+ * are what fill a skipped position, so the callee receives a full positional
+ * list and its own defaults never engage. With several signatures, the first
+ * whose names cover every named argument is selected.
+ */
+type SignatureInView = { Parameters: readonly { Name: string, Type?: unknown, Optional: boolean, Rest: boolean, Initial?: Value }[] };
+
+function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omittable: boolean[], restIndex: number, initials: (Value | undefined)[], types: unknown[] } {
+  const names: string[] = [];
+  const omittable: boolean[] = [];
+  const initials: (Value | undefined)[] = [];
+  const types: unknown[] = [];
+  let restIndex = -1;
+  sig.Parameters.forEach((p, i) => {
+    names.push(p.Name);
+    if (p.Rest) {
+      restIndex = i;
+    }
+    omittable.push(p.Rest || p.Optional || p.Initial !== undefined);
+    initials.push(p.Initial);
+    types.push(p.Type);
+  });
+  return { names, omittable, restIndex, initials, types };
+}
+
+/** The signature in view for a callee reference, or undefined where its binding declares no callable type. */
+export function signatureInView(declaredType: unknown, namedArguments: readonly string[]): SignatureInView | undefined {
+  let t = declaredType as { Kind?: string, Structure?: unknown, Signatures?: readonly SignatureInView[] } | undefined;
+  if (t && t.Kind === 'nominal') {
+    t = t.Structure as typeof t;
+  }
+  if (!t || t.Kind !== 'function' || !t.Signatures || t.Signatures.length === 0) {
+    return undefined;
+  }
+  return t.Signatures.find((s) => namedArguments.every((n) => s.Parameters.some((p) => p.Name === n))) ?? t.Signatures[0];
+}
+
+/**
  * Evaluates an argument list that uses by-name forms and returns the positional
  * argument list to pass to the call, using the called function's parameter names.
  * A positional argument fills the next position. A named argument `name: expr`
@@ -263,8 +308,9 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
  * is left absent for the callee's own default to fill; a named argument that
  * matches no parameter is a TypeError.
  */
-export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value): PlainEvaluator<Arguments> {
-  const { names, omittable, restIndex } = parameterInfo(func);
+export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signature?: SignatureInView): PlainEvaluator<Arguments> {
+  const info = signature ? parameterInfoOfSignature(signature) : { ...parameterInfo(func), initials: [] as (Value | undefined)[], types: [] as unknown[] };
+  const { names, omittable, restIndex, initials, types } = info;
   const fixedCount = restIndex === -1 ? names.length : restIndex;
   const positioned: Value[] = [];
   const restCollected: Value[] = [];
@@ -349,9 +395,22 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
     } else if (byName.has(names[i])) {
       result.push(byName.get(names[i])!);
     } else if (omittable[i]) {
-      result.push(Value.undefined);
+      // The signature in view supplies its default; otherwise the position is
+      // left undefined for the callee's own default.
+      result.push(initials[i] ?? Value.undefined);
     } else {
       return Throw.TypeError('no argument for the required parameter $1', Value(names[i] || String(i)));
+    }
+    // With a signature in view, an UNTYPED PRIMITIVE argument takes the
+    // parameter's type by conversion - literal propagation at an argument
+    // position, as a declared parameter performs at its own binding
+    // (IteratorBindingInitialization). The implementer may be untyped and
+    // convert nothing itself; without this, `g(x: 2)` at `(x: uint8, y: uint8 =
+    // 9)` handed it a Number beside a `uint8` default and the two did not mix.
+    const t = types[i] as { Kind?: string } | undefined;
+    const v = result[i];
+    if (signature && t && t.Kind !== undefined && t.Kind !== 'any' && v !== undefined && !(v instanceof ObjectValue) && v !== Value.undefined) {
+      result[i] = Q(yield* ConvertValue(v, t as never));
     }
   }
   for (const v of restCollected) {

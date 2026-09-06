@@ -3345,6 +3345,8 @@ export namespace ParseNode {
     readonly type: 'FunctionTypeParameter';
     readonly Ref: boolean;
     readonly Rest: boolean;
+    /** proposal-runtime-types: a parameter default in a function type, `(a: uint8 = 1) => void`. */
+    readonly Initializer: Expression | null;
     // proposal-runtime-types: true when this is a leading `this` parameter, whose
     // annotation supplies the signature's [[ThisType]] and is not an ordinary
     // parameter of the type.

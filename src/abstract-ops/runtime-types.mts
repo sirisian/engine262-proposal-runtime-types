@@ -3438,16 +3438,40 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
     if (!holder) {
       continue;
     }
+    // #sec-typed-bindings: a parameter IS a typed binding, "checked against its
+    // initializer and against every later assignment". This is the boundary
+    // that enforces the annotation on entry, so this is where the binding is
+    // STAMPED with its declared type - after the write below, so the write is
+    // not itself re-checked (the value it writes was converted at exactly that
+    // type, and the one-read invariant on a Proxy argument holds). From here on
+    // an assignment in the body is checked as one to a `let` is; before this
+    // `a = g()` in `function f(a: uint8)` with an untyped `g` was enforced
+    // nowhere at run time. The declared type is also what a CALL through the
+    // parameter reads as the signature in view (#sec-call-argument-binding).
+    // A type that cannot resolve here - a generic parameter whose substitution
+    // is not in scope - leaves the binding unstamped, as it was.
+    const stamp = function* (): PlainEvaluator {
+      const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(sb.TypeAnnotation!.Type));
+      if (resolved.Type === 'normal') {
+        const binding = (holder as unknown as { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined } }).bindings?.get(name);
+        if (binding) {
+          binding.declaredType = resolved.Value;
+        }
+      }
+      return undefined;
+    };
     const current = Q(yield* holder.GetBindingValue(name, Value.true));
     // proposal-runtime-types: an optional parameter whose argument was omitted
     // holds undefined and is not checked against its type (README "Optional
     // Parameters": `function f(a: uint32, b?: uint32)` may be called `f(1)`). A
     // provided argument, even to an optional parameter, is still enforced.
     if (sb.Optional && current === Value.undefined) {
+      yield* stamp();
       continue;
     }
     const converted = Q(yield* EnforceAnnotation(sb.TypeAnnotation, current));
     Q(yield* holder.SetMutableBinding(name, converted, Value.false));
+    yield* stamp();
   }
   return undefined;
 }
