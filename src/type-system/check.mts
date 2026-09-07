@@ -11555,13 +11555,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 TypeAnnotation?: ParseNode.TypeAnnotation | null,
                 Initializer?: ParseNode | null,
               };
-              // An annotated element says its own type, and a defaulted one is
-              // this phase's exclusion.
-              if (el.TypeAnnotation || el.Initializer) {
-                return;
-              }
               const name = el.BindingIdentifier?.name;
               if (!name || !(kind === 'const' || !assignedNames.has(name))) {
+                return;
+              }
+              // AN ANNOTATED ELEMENT SAYS ITS OWN TYPE - and that type is what
+              // the binding holds, so it is recorded rather than skipped. The
+              // annotation is enforced at the binding either way (a wrong-typed
+              // value is refused there, and `v is uint8` holds afterwards), but
+              // the checker had no type for the name, so
+              // `let { (v: uint8) } = { v: 1 }; let s: string = v;` was accepted
+              // where the same annotation on a plain `let` is refused. Taken
+              // unwidened, as the annotation is written: it is a declared type,
+              // not a type inferred from a value.
+              if (el.TypeAnnotation) {
+                const declaredHere = resolveType(el.TypeAnnotation.Type);
+                if (declaredHere) {
+                  declare(name, declaredHere);
+                }
+                return;
+              }
+              // A DEFAULTED element is still this phase's exclusion: the binding
+              // holds the default where the property is absent, so its type is
+              // the join of the two and that is not computed here.
+              if (el.Initializer) {
                 return;
               }
               declare(name, widen(positionType));
@@ -12667,6 +12684,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return first as Known;
     }
     return null;
+  };
+
+  /**
+   * Record the written annotation of every member of a binding pattern as its
+   * bound name's declared type, at any depth. A member with no annotation is
+   * left alone - inferring one from the source's shape is a separate rule -
+   * and so is a rest, whose annotation is the type of what it collects.
+   */
+  const declarePatternAnnotations = (pattern: ParseNode | null | undefined): void => {
+    if (!pattern || typeof pattern !== 'object') {
+      return;
+    }
+    const visit = (node: ParseNode | null | undefined): void => {
+      if (!node || typeof node !== 'object') {
+        return;
+      }
+      const el = node as unknown as {
+        type?: string,
+        BindingIdentifier?: { name?: string } | null,
+        TypeAnnotation?: ParseNode.TypeAnnotation | null,
+        BindingPattern?: ParseNode | null,
+      };
+      if (el.type !== 'BindingRestElement' && el.BindingIdentifier?.name && el.TypeAnnotation) {
+        const t = resolveType(el.TypeAnnotation.Type);
+        if (t) {
+          declare(el.BindingIdentifier.name, t);
+        }
+      }
+      for (const key of Object.keys(node)) {
+        if (key === 'parent' || key === 'location' || key === 'sourceText' || key === 'TypeAnnotation') {
+          continue;
+        }
+        const child = (node as unknown as Record<string, unknown>)[key];
+        if (Array.isArray(child)) {
+          for (const c of child) {
+            if (c && typeof c === 'object' && 'type' in (c as object)) {
+              visit(c as ParseNode);
+            }
+          }
+        } else if (child && typeof child === 'object' && 'type' in (child as object)) {
+          visit(child as ParseNode);
+        }
+      }
+    };
+    visit(pattern);
   };
 
   const declare = (name: string, t: Known) => {
@@ -14367,6 +14429,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           declare(n.BindingIdentifier.name, declared);
           return;
         }
+        // A BINDING PATTERN declares names too, and each member may write its
+        // own annotation - `let { (v: uint8) } = o`. `#sec-typed-destructuring`:
+        // "without a rename the parenthesized name is both the property read and
+        // the binding introduced, so `{ (a: uint8) }` binds `a` to the value of
+        // property `a`, ENFORCED AT THAT BINDING AS AN ANNOTATED DECLARATION
+        // IS". It is so enforced at run time - a wrong-typed value is refused
+        // there and `v is uint8` holds afterwards - but the checker recorded no
+        // type for the name, so `let s: string = v` was accepted where the same
+        // annotation on a plain `let` is refused. The written annotation is the
+        // binding's declared type, taken unwidened for the reason a plain
+        // annotation is: it is declared, not inferred from a value.
+        declarePatternAnnotations((n as { BindingPattern?: ParseNode | null }).BindingPattern);
         walk(n.Initializer);
         return;
       }

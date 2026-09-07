@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectError, expectThrown } from '../harness.mts';
+import { evaluated, expectError, expectThrown, expectStaticTypeError, expectThrownKind, ok } from '../harness.mts';
 
 /**
  * Spec: #sec-typed-destructuring (Typed Destructuring) - the optional
@@ -96,4 +96,42 @@ test('the declaration form and plain destructuring are unchanged', () => {
   expect(evaluated('let a; ({ a } = { a: 1 }); String(a);')).toBe('1');
   expect(evaluated('let a, b; [a, b] = [1, 2]; String(a) + "," + String(b);')).toBe('1,2');
   expect(evaluated('const o = { a: 1, b: 2 }; String(o.a + o.b);')).toBe('3');
+});
+
+// ---------------------------------------------------------------------------
+// A DESTRUCTURING MEMBER'S ANNOTATION IS THE BOUND NAME'S STATIC TYPE.
+//
+// `#sec-typed-destructuring`: "`{ (a: uint8) }` binds `a` to the value of
+// property `a`, ENFORCED AT THAT BINDING AS AN ANNOTATED DECLARATION IS". It was
+// so enforced at run time - a wrong-typed value is refused at the binding, and
+// `v is uint8` holds afterwards - but the checker recorded no type for the name,
+// so `let s: string = v` was accepted where the same annotation on a plain `let`
+// is refused. The declaration arm handled a BindingIdentifier and fell through
+// for a BindingPattern, declaring nothing.
+//
+// Found while fixing the ref-binding gap, and initially mis-scoped as a `ref`
+// issue: the `ref` is irrelevant, and a plain `{ (v: uint8) }` had it too.
+// ---------------------------------------------------------------------------
+
+test('an annotated destructuring member is checked like an annotated declaration', () => {
+  expectStaticTypeError('let { (v: uint8) } = { v: 1 }; let s: string = v;');
+  // The rename form binds the name after the colon.
+  expectStaticTypeError('let { (v: uint8): b } = { v: 1 }; let s: string = b;');
+  // An optional member, and a `ref` member, carry their annotations the same way.
+  expectStaticTypeError('let { (v?: uint8) } = { v: 1 }; let s: string = v;');
+  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); let { (ref v: uint8) } = c; let s: string = v;');
+  // At any depth.
+  expectStaticTypeError('let { a: { (v: uint8) } } = { a: { v: 1 } }; let s: string = v;');
+  // The control the rule is stated against.
+  expectStaticTypeError('let v: uint8 = 1; let s: string = v;');
+});
+
+test('what the annotation does not change', () => {
+  // A use that fits goes through, and the value is of the annotated type - the
+  // run-time half, which was already right.
+  expect(evaluated('let { (v: uint8) } = { v: 1 }; let u: uint8 = v; String(u) + " " + String(v is uint8);')).toBe('1 true');
+  // A member with no annotation is left to the source's shape, as before.
+  expect(ok('let { v } = { v: 1 }; let s: string = v;')).toBe(true);
+  // The run-time enforcement at the binding is unchanged.
+  expectThrownKind('function g() { return "s"; } let { (v: uint8) } = { v: g() };', 'TypeError');
 });
