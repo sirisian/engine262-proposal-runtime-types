@@ -1435,6 +1435,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         : null;
       const classControls = readClassControls((ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators);
       const laidOut: { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[] = [];
+      const laidOutUnbound: { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[] = [];
       let complete = true;
       for (const field of instanceFields) {
         const typeObject = (field as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject;
@@ -1464,12 +1465,19 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // two are different cases and only one of them was ever written to be
         // reached by name.
         const layoutKey = (field as { LayoutName?: Value }).LayoutName ?? name;
-        laidOut.push({
-          key: typeof (layoutKey as { stringValue?: unknown })?.stringValue === 'function'
-            ? (layoutKey as { stringValue(): string }).stringValue()
-            : (layoutKey as PrivateName),
-          type: typeObject.TypeRecord,
-          controls: (field as { LayoutControls?: FieldControls }).LayoutControls,
+        const layoutFieldKey = typeof (layoutKey as { stringValue?: unknown })?.stringValue === 'function'
+          ? (layoutKey as { stringValue(): string }).stringValue()
+          : (layoutKey as PrivateName);
+        const fieldControls = (field as { LayoutControls?: FieldControls }).LayoutControls;
+        laidOut.push({ key: layoutFieldKey, type: typeObject.TypeRecord, controls: fieldControls });
+        // The same field with its type parameters UNBOUND, which is what a
+        // per-application layout substitutes into. Where the class is not
+        // generic the two are the same record.
+        const unbound = (field as { TypeObjectUnbound?: { TypeRecord?: TypeRecord } }).TypeObjectUnbound;
+        laidOutUnbound.push({
+          key: layoutFieldKey,
+          type: unbound?.TypeRecord ?? typeObject.TypeRecord,
+          controls: fieldControls,
         });
       }
       const computed = complete ? ComputeClassLayout(baseLayout, laidOut, classControls, (ClassTail as { parent?: unknown }).parent) : null;
@@ -1483,7 +1491,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // application (LayoutOf's nominal arm). The answer computed here has the
       // parameters unbound and is the layout of no instantiation.
       (F as { LayoutInputs?: unknown }).LayoutInputs = {
-        baseLayout, fields: laidOut, controls: classControls, parent: (ClassTail as { parent?: unknown }).parent,
+        baseLayout, fields: laidOutUnbound, controls: classControls, parent: (ClassTail as { parent?: unknown }).parent,
       };
     }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {

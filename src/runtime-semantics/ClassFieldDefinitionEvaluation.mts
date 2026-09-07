@@ -67,6 +67,8 @@ export interface ClassFieldDefinitionRecord {
   // also what the store check needs, since a field's declared type must be
   // recorded on the instance for #table-check-sites to enforce it.
   readonly TypeObject?: object;
+  /** The same annotation resolved with every type parameter UNBOUND, which is what a per-application layout substitutes into. */
+  readonly TypeObjectUnbound?: object;
   // proposal-runtime-types: whether the field is declared `readonly`, so it may
   // be assigned only in its own initializer and in the declaring class's
   // constructors (spec sec-typed-classes).
@@ -116,6 +118,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
   // 5. Return the ClassFieldDefinition Record { [[Name]]: name, [[Initializer]]: initializer }.
   const typeAnnotation = (FieldDefinition as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
   let typeObject;
+  let typeObjectUnbound;
   if (typeAnnotation && surroundingAgent.feature('runtime-types')) {
     // proposal-runtime-types: a field annotation inside a GENERIC class names
     // the class's type parameters, and nothing bound them here - so
@@ -158,6 +161,33 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       try {
         const record = Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type));
         typeObject = GetTypeObject(record);
+      } finally {
+        popTypeParameterFrame();
+      }
+      // A SECOND resolution with every parameter unbound, kept for the LAYOUT.
+      //
+      // The frame above may bind a parameter to a concrete type, and for a class
+      // all of whose parameters have defaults it always does: such a class "has a
+      // well-defined meaning with no arguments, so the declaration binds those
+      // defaults and the class is built over them" (ClassDeclaration). That is
+      // right for the field's own type - `new C()` needs it - and wrong for the
+      // layout, which must be recomputed per application: with the default baked
+      // in there is no parameter left to substitute, and `F.<8>` reported the
+      // size of `F.<4>`.
+      //
+      // Resolved once per field at the declaration, not per read, and only where
+      // the class is generic.
+      const unboundFrame = new Map<string, TypeRecord>();
+      for (const p of params) {
+        const name = (p as unknown as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name;
+        if (name) {
+          const arity = (p as unknown as { Arity?: number }).Arity ?? 0;
+          unboundFrame.set(name, parameterTypeRecord(name, undefined, arity));
+        }
+      }
+      pushTypeParameterFrame(unboundFrame);
+      try {
+        typeObjectUnbound = GetTypeObject(Q(yield* TypeNodeToTypeRecord(typeAnnotation.Type)));
       } finally {
         popTypeParameterFrame();
       }
@@ -262,6 +292,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
       Initializer: initializer,
       TypeAnnotation: typeAnnotation,
       TypeObject: typeObject,
+      TypeObjectUnbound: typeObjectUnbound,
       Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
     Access: (FieldDefinition as { protected?: boolean }).protected === true ? 'protected' : undefined,
     });
@@ -271,6 +302,7 @@ export function* ClassFieldDefinitionEvaluation(FieldDefinition: ParseNode.Field
     Initializer: initializer,
     TypeAnnotation: typeAnnotation,
     TypeObject: typeObject,
+    TypeObjectUnbound: typeObjectUnbound,
     Readonly: (FieldDefinition as { readonly?: boolean }).readonly === true,
     Access: (FieldDefinition as { protected?: boolean }).protected === true ? 'protected' : undefined,
   });

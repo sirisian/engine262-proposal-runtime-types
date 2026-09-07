@@ -393,6 +393,24 @@ test('a generic class is laid out PER APPLICATION', () => {
   expect(evaluated(`${G} String(new G.<8>().b.length) + "/" + String(new G.<2>().b.length);`)).toBe('8/2');
 });
 
+test('a DEFAULT does not consume its parameter', () => {
+  // A class all of whose parameters have defaults "has a well-defined meaning
+  // with no arguments, so the declaration binds those defaults and the class is
+  // built over them" - `new F()` is `new F.<4>()`. That is right for the field's
+  // own type and wrong for the layout, which must still be recomputed per
+  // application: with the default baked in there was no parameter left to
+  // substitute, and `F.<8>` reported the size of `F.<4>` with nothing raised.
+  //
+  // The field is therefore resolved twice at the declaration - once bound, for
+  // the field itself, and once UNBOUND, for the layout to substitute into.
+  const F = 'class F<N: uint32 = 4> { b: [N].<uint8>; } ';
+  expect(evaluated(`${F} String((type F.<8>).byteLength);`)).toBe('8');
+  expect(evaluated(`${F} String((type F.<2>).byteLength);`)).toBe('2');
+  // ...and with no argument the default still applies, which is what the
+  // defaults frame is for.
+  expect(evaluated(`${F} String((type F.<>).byteLength);`)).toBe('4');
+});
+
 test('the per-application layout keeps the layout controls', () => {
   // Recomputed from the INPUTS rather than from the placements: a FieldPlacement
   // carries a type and an offset but not its `controls`, so recomputing from
