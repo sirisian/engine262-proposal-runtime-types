@@ -614,10 +614,13 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       let initial;
       const memberInitializer = (m as { Initializer?: ParseNode | null }).Initializer;
       if (memberInitializer) {
-        const attempt = EnsureCompletion(yield* Evaluate(memberInitializer));
-        if (attempt.Type === 'normal') {
-          initial = Q(yield* GetValue(attempt.Value as never));
-        }
+        // #sec-object-types: "The |Initializer| must be compile-time evaluable
+        // ... and it is a type error otherwise." The failure was SWALLOWED, so a
+        // member whose default could not be evaluated silently had none - the
+        // author wrote a default, got no default, and was told nothing. The
+        // originating error is propagated rather than replaced, because WHY it
+        // was not evaluable is the useful half of the diagnostic.
+        initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer))) as never));
       }
       Properties.push({ key, type: resolved, optional: !!m.Optional, readonly: !!m.Readonly, initial });
     }

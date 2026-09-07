@@ -4591,10 +4591,11 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         let initial;
         const memberInitializer = (member as { Initializer?: ParseNode | null }).Initializer;
         if (memberInitializer) {
-          const attempt = EnsureCompletion(yield* Evaluate(memberInitializer as never));
-          if (attempt.Type === 'normal') {
-            initial = Q(yield* GetValue(attempt.Value as never));
-          }
+          // Refused rather than dropped, and for the same reason the interface
+          // walk refuses it: #sec-object-types requires the |Initializer| to be
+          // compile-time evaluable "and it is a type error otherwise", and the
+          // two spellings mean one thing.
+          initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer as never))) as never));
         }
         Properties.push({ key, type, optional: member.Optional, readonly: member.Readonly, initial });
       }
