@@ -310,6 +310,25 @@ const boundsProvenAccesses = new WeakMap<object, Set<object>>();
  * The resolved contextual type of each `new.(...)`, recorded by the checker
  * because only it knows what a position requires.
  */
+/**
+ * Was an annotation WRITTEN on the declaration this node initializes?
+ *
+ * Asked of the Parse Node's parents rather than threaded through the walk,
+ * because the arm that needs it sees only the resolved contextual type - and an
+ * annotation naming an unresolved binding and no annotation at all both arrive
+ * there as absent.
+ */
+function writtenAnnotationAbove(node: object): boolean {
+  let cursor = (node as { parent?: unknown }).parent;
+  for (let depth = 0; depth < 6 && cursor && typeof cursor === 'object'; depth += 1) {
+    if ((cursor as { TypeAnnotation?: unknown }).TypeAnnotation) {
+      return true;
+    }
+    cursor = (cursor as { parent?: unknown }).parent;
+  }
+  return false;
+}
+
 const targetTypedNewTypes = new WeakMap<object, TypeRecord>();
 
 export function TargetTypedNewType(node: object): TypeRecord | undefined {
@@ -4647,7 +4666,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // "a position that requires no type gives nothing to construct" - a
         // Syntax Error rather than an inference, because inferring the type
         // would be the binding-type inference this proposal does not perform.
-        errors.push((Throw.SyntaxError('$1 requires a contextual type', Value('new.()')) as ThrowCompletion).Value as ObjectValue);
+        //
+        // Only where NO annotation was written. A type may be named by an
+        // ordinary binding holding a type object - `const MyT = C` - which this
+        // walk does not resolve, so an annotation naming one arrives here as
+        // absent and a valid program was refused STATICALLY. The binding
+        // boundary resolves such an annotation when the declaration evaluates,
+        // and the runtime arm now reads it from the contextual stack the
+        // declaration already pushes; reporting here would refuse the program
+        // before that could happen.
+        //
+        // `const x = new.()` is the case the Syntax Error is about, and it still
+        // reports: nothing was written for the runtime to resolve.
+        if (!writtenAnnotationAbove(node)) {
+          errors.push((Throw.SyntaxError('$1 requires a contextual type', Value('new.()')) as ThrowCompletion).Value as ObjectValue);
+        }
         return null;
       }
       // #sec-new-expressions: "It is a type error where the contextual type is

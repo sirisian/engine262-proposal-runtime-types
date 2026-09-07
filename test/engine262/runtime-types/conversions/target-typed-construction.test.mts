@@ -84,3 +84,30 @@ test('a target that is NOT constructible says so', () => {
   // different mistake and keeps its own message.
   expectThrown('const x = new.();', 'requires a contextual type');
 });
+
+test('a type named by a BINDING is a target too', () => {
+  // A type may be named by an ordinary binding holding a type object, and the
+  // checker does not resolve those - `const MyT = uint8; let a: MyT = "s"` is a
+  // runtime TypeError where `let a: uint8 = "s"` is a static one. Every other
+  // spelling copes, because the binding boundary resolves the annotation when
+  // the declaration evaluates. `new.()` did not, being the one construct that
+  // needs its type BEFORE the value exists, so a valid program was refused
+  // statically with a message about a contextual type the position HAD.
+  expect(evaluated('class C { x: uint8 = 0; } const MyT = C;'
+    + ' let a: MyT = new.(); String(Number(a.x));')).toBe('0');
+  // Including one introduced at runtime, which is why absence can never be
+  // proved at check time and why the refusal could not have been made correct by
+  // resolving harder.
+  expect(evaluated('class C { x: uint8 = 0; } globalThis.MyT = C;'
+    + ' let a: MyT = new.(); String(Number(a.x));')).toBe('0');
+  // A `type` alias resolves statically and always worked; it is the pair with
+  // the line above that shows the two kinds of name apart.
+  expect(evaluated('class C { x: uint8 = 0; } type MyT = C;'
+    + ' let a: MyT = new.(); String(Number(a.x));')).toBe('0');
+
+  // The Syntax Error is kept for what it is about: nothing written for the
+  // runtime to resolve.
+  expectThrown('const x = new.();', 'requires a contextual type');
+  // ...and a written annotation that IS resolvable still decides constructibility.
+  expectThrown('let n: uint8 = new.(1);', 'is not constructible');
+});

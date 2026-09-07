@@ -9,7 +9,7 @@ import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { currentContextualType, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { StampTypedCollection } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
@@ -233,7 +233,23 @@ export function* Evaluate_NewExpression(node: ParseNode.NewExpression): ValueEva
  * declaration introduces, which is live by the time this evaluates.
  */
 export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueEvaluator {
-  const t = TargetTypedNewType(node as object);
+  // The checker's record where it has one, and the RUNTIME contextual type where
+  // it has not.
+  //
+  // A type may be named by an ordinary BINDING holding a type object -
+  // `const MyT = C` - and the checker does not resolve those: `const MyT =
+  // uint8; let a: MyT = "s"` is a runtime TypeError where `let a: uint8 = "s"`
+  // is a static one. Every other spelling copes, because the binding boundary
+  // resolves the annotation when the declaration evaluates; `new.()` did not,
+  // being the one construct that needs its type BEFORE the value exists, so a
+  // valid program was refused STATICALLY:
+  //
+  //   class C { x: uint8 = 0; } const MyT = C; let a: MyT = new.();
+  //
+  // The declaration already resolves its annotation and pushes it for exactly
+  // this reason - "the type has to be in scope WHILE the initializer runs" - so
+  // the answer was on the stack and was not being read.
+  const t = TargetTypedNewType(node as object) ?? currentContextualType();
   if (!t) {
     return Throw.SyntaxError('$1 requires a contextual type', Value('new.()'));
   }
