@@ -3931,6 +3931,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if ((el as ParseNode).type === 'SpreadElement') {
         spread = true;
+        // A spread's ARITY is unknowable, which is why the length checks skip
+        // it - but its ELEMENT TYPE is not, and was checked nowhere: `const b:
+        // [].<string> = [...a]` for an `a: [].<uint8>` was admitted whole, so
+        // the binding held `uint8`s at a `string` element type. Every element
+        // the spread contributes goes to this target's element type, so the
+        // source's element type must be assignable to it.
+        const spreadInner = (el as unknown as { AssignmentExpression?: ParseNode }).AssignmentExpression;
+        const spreadSource = spreadInner ? staticType(spreadInner) : null;
+        const spreadElement = spreadSource ? elementTypeOfIterable(spreadSource) : null;
+        if (spreadElement && spreadElement.Kind !== 'any') {
+          requireAssignable(spreadElement, target.Element);
+        }
         walk(el as ParseNode);
         continue;
       }
