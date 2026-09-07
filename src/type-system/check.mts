@@ -7627,6 +7627,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the expression carries no literal type while the ANNOTATION `-1` names one.
       // An assignment hides the difference, because it checks the VALUE against the
       // target's range; narrowing cannot, because it compares TYPES.
+      // `await p` HAS THE PROMISE'S RESOLVED TYPE. There was no arm, so an await
+      // was ~any~ and nothing downstream of one was checked: `let s: string =
+      // await f()` was accepted for an `f(): Promise.<uint8, never>` while
+      // `let s: string = f()` - the same call without the await - was refused.
+      // The unwrapping already existed as `awaitedElementType`, used by the
+      // for-await element rule and by inferred return types; it had simply never
+      // been applied to the expression that names the operation. A non-promise
+      // operand awaits to itself, as `await 1` does, and an operand whose type
+      // is unknown stays unknown.
+      case 'AwaitExpression': {
+        const operand = (node as unknown as { UnaryExpression?: ParseNode }).UnaryExpression;
+        const awaited = operand ? staticType(operand) : null;
+        if (!awaited) {
+          return null;
+        }
+        return awaitedElementType(awaited) ?? awaited;
+      }
       case 'UnaryExpression': {
         const unary = node as unknown as { operator?: string, UnaryExpression?: ParseNode };
         const inner = unary.UnaryExpression;

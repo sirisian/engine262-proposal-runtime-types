@@ -220,3 +220,33 @@ test('what a `void` return still admits', () => {
   // and never reaches this arm.
   expect(ok('if (false) { let f: () => void = () => { return undefined; }; } 1;')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// `await p` HAS THE PROMISE'S RESOLVED TYPE.
+//
+// There was no `AwaitExpression` arm, so an await was ~any~ and NOTHING
+// DOWNSTREAM OF ONE WAS CHECKED:
+//
+//     async function f(): Promise.<uint8, never> { return 1; }
+//     let s: string = await f();   // accepted
+//     let s: string = f();         // refused - the same call, without the await
+//
+// The unwrapping already existed as `awaitedElementType`, used by the for-await
+// element rule and by inferred return types. It had never been applied to the
+// expression that names the operation - the fourth binding-or-expression form
+// found dropping a type the checker already knew.
+// ---------------------------------------------------------------------------
+
+test('an await carries the resolved type into what follows', () => {
+  expectStaticTypeError('async function f(): Promise.<uint8, never> { return 1; } async function g() { let s: string = await f(); } g();');
+  expectStaticTypeError('async function g(p: Promise.<uint8, never>) { let s: string = await p; }');
+  // A use that fits is unaffected.
+  expect(ok('async function g(p: Promise.<uint8, never>) { let u: uint8 = await p; }')).toBe(true);
+});
+
+test('what an await does not change', () => {
+  // A non-promise operand awaits to itself, as `await 1` does.
+  expect(ok('async function g() { let u: uint8 = await (1 := uint8); }')).toBe(true);
+  // An operand whose type is unknown stays unknown.
+  expect(ok('async function g(p) { let s: string = await p; }')).toBe(true);
+});
