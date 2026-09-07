@@ -316,6 +316,26 @@ export function TargetTypedNewType(node: object): TypeRecord | undefined {
   return targetTypedNewTypes.get(node);
 }
 
+/**
+ * #sec-object-types: an object literal written AT a position of object type is
+ * FRESH and is being built there, so "the type supplies what the literal omits"
+ * - a declared default reaches it, where a value that arrived through a binding
+ * is only read and nothing is written onto it.
+ *
+ * Freshness is syntactic and the fill is a run-time write, so the two halves sit
+ * on opposite sides of the phase boundary. The checker knows which literals are
+ * fresh and records the type here; `Evaluate_ObjectLiteral` reads it. This is
+ * the channel `TargetTypedNewType` above already uses, for the same reason: the
+ * mark is keyed on the LITERAL node, so one record and one read cover every
+ * position a literal can occupy - a binding, an argument, a return, a nested
+ * property - rather than one change per coercion site.
+ */
+const freshObjectLiteralTargets = new WeakMap<object, TypeRecord>();
+
+export function FreshObjectLiteralTarget(node: object): TypeRecord | undefined {
+  return freshObjectLiteralTargets.get(node);
+}
+
 const constLiteralUses = new WeakSet<object>();
 
 export function IsConstLiteralUse(node: object): boolean {
@@ -5185,6 +5205,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         checkObjectLiteralAgainst(inner as ParseNode.ObjectLiteral, shape, structural, requiresMembers);
+        // Only a FRESH literal takes the type's defaults; `structural` is the
+        // freshness this pass already computed for the excess-member rule, so
+        // the two agree by construction rather than by a second judgement.
+        if (structural && shape.Kind === 'object' && shape.Properties.some((p) => (p as { initial?: unknown }).initial !== undefined)) {
+          freshObjectLiteralTargets.set(inner as object, shape as TypeRecord);
+        }
         return contextual;
       }
     }
@@ -5761,7 +5787,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // identity, depth covariance, and the write refusal. Dropping it here
           // made `interface I { readonly x: uint8 }` accept a write that the
           // inline spelling refused.
-          Properties.push({ key: key as unknown as string, type: memberType, optional: !!tm.Optional, readonly: !!(tm as { Readonly?: boolean }).Readonly });
+          // The member's declared default, folded as the object-type case does,
+          // so an interface and its inline form agree about what a fresh literal
+          // at the type is filled with (#sec-object-types).
+          const tmInit = (tm as { Initializer?: ParseNode | null }).Initializer;
+          let tmInitial;
+          if (tmInit) {
+            const it = staticType(tmInit as ParseNode);
+            if (it && it.Kind === 'literal') {
+              tmInitial = it.Value;
+            }
+          }
+          Properties.push({ key: key as unknown as string, type: memberType, optional: !!tm.Optional, readonly: !!(tm as { Readonly?: boolean }).Readonly, initial: tmInitial });
         }
         continue;
       }
@@ -5833,7 +5870,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const t = tm.TypeAnnotation ? resolveType(tm.TypeAnnotation.Type) : null;
       if (t) {
-        Properties.push({ key, type: t, optional: tm.Optional === true, readonly: !!(tm as { Readonly?: boolean }).Readonly });
+          // The member's declared default, folded as the object-type case does,
+        // so an interface and its inline form agree about what a fresh literal
+        // at the type is filled with (#sec-object-types).
+        const tmInit = (tm as { Initializer?: ParseNode | null }).Initializer;
+        let tmInitial;
+        if (tmInit) {
+          const it = staticType(tmInit as ParseNode);
+          if (it && it.Kind === 'literal') {
+            tmInitial = it.Value;
+          }
+        }
+        Properties.push({ key, type: t, optional: tm.Optional === true, readonly: !!(tm as { Readonly?: boolean }).Readonly, initial: tmInitial });
       }
     }
     } finally {
@@ -7238,7 +7286,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!r) {
             return null;
           }
-          Properties.push({ key, type: r, optional: member.Optional, readonly: member.Readonly });
+          // The member's DECLARED DEFAULT (#sec-object-types), folded from the
+          // initializer's literal type - the same route an enum member's value
+          // takes. The checker needs it for one purpose: deciding whether a
+          // FRESH object literal at this type has anything to be filled with.
+          // The interned record the run time builds carries the authoritative
+          // value; this is the check-time view of the same declaration.
+          //
+          // Folded rather than evaluated because `resolveType` is synchronous,
+          // and that is the right restriction independently: #sec-object-types
+          // requires the |Initializer| to be compile-time evaluable, "an object
+          // type is interned, so a member's default is one value shared by every
+          // use of the type rather than a computation performed per
+          // construction".
+          let initial;
+          const memberInitializer = (member as { Initializer?: ParseNode | null }).Initializer;
+          if (memberInitializer) {
+            const initializerType = staticType(memberInitializer as ParseNode);
+            if (initializerType && initializerType.Kind === 'literal') {
+              initial = initializerType.Value;
+            }
+          }
+          Properties.push({ key, type: r, optional: member.Optional, readonly: member.Readonly, initial });
         }
         return { Kind: 'object', Properties, IndexSignatures };
       }

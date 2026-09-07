@@ -66,3 +66,18 @@ test('the default survives reflection and a builder that rebuilds the type', () 
   // Emitted uniformly, so the record has one shape.
   expect(evaluated("type N = { a?: uint8 }; String('initial' in Reflect.getReflection(N).properties[0]);")).toBe('true');
 });
+
+test('an object literal AT the type is filled; a bound value is not', () => {
+  // #sec-object-types: "an object literal written AT the position is fresh and
+  // is being built there, so the type supplies what the literal omits; a value
+  // that reached the position through a binding is not fresh and is only read".
+  // The line is #sec-literal-freshness's, not a second rule.
+  expect(evaluated(`${S} let v: S = { id: 1 }; String(v.page);`)).toBe('9');
+  expect(evaluated(`${I} let v: I = { id: 1 }; String(v.page);`)).toBe('9');
+  expect(evaluated(`${S} let v: S = { id: 1, page: 3 }; String(v.page);`)).toBe('3');
+  expect(evaluated(`${S} let v: S = { id: 1 }; String(Reflect.typeOf(v.page) === uint8);`)).toBe('true');
+  // Not fresh: nothing is written onto an object the program can already observe.
+  expect(evaluated(`${S} let o = { id: 1 }; let v: S = o; String('page' in v);`)).toBe('false');
+  // And an untyped literal is untouched.
+  expect(evaluated("let v = { id: 1 }; String('page' in v);")).toBe('false');
+});
