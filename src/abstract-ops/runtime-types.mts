@@ -9,7 +9,7 @@ import { CopyValueClassInstance } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
-import { Construct, IsCallable, IsConstructor, ToLength } from './all.mts';
+import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateGet, ToLength } from './all.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -403,7 +403,22 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): Plain
   const copy = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (const field of layout.fields) {
+    // A PRIVATE field is copied too. Its key is a Private Name rather than a
+    // string, and skipping those left the copy without the field at all: a value
+    // type class with private state lost it at every typed boundary, so
+    // `function f(o: C) { return o.v; }` raised "does not exist" for a getter
+    // that reads `this.#v`, while the same class passed to an untyped parameter
+    // was fine.
+    //
+    // The layout already places it - a private typed field is laid out like any
+    // other, which is why `hasLayout` is *true* for a class whose only field is
+    // private - so the copy was dropping a field the type says it has.
     if (typeof field.key !== 'string') {
+      let heldPrivate = Q(yield* PrivateGet(value, field.key));
+      if (heldPrivate instanceof ObjectValue && field.type.Kind === 'nominal' && LayoutOf(field.type) !== null) {
+        heldPrivate = Q(yield* CopyValueTypeInstance(heldPrivate, field.type));
+      }
+      Q(yield* PrivateFieldAdd(copy, field.key, heldPrivate));
       continue;
     }
     const key = Value(field.key);

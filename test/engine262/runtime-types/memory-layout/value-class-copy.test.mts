@@ -149,3 +149,41 @@ test('an untyped destination does NOT copy', () => {
   // A program that wants a copy into untyped storage writes one.
   expect(evaluated(`${V} const o = {}; o.p = (a := P); o.p.x = 9; String(a.x);`)).toBe('1');
 });
+
+test('a copy carries PRIVATE fields', () => {
+  // The copy walks the layout, and a private field's key is a Private Name
+  // rather than a string. Skipping those left the copy without the field at
+  // all, so a value type class with private state lost it at every typed
+  // boundary - and a private field IS laid out, which is why `hasLayout` is
+  // *true* for a class whose only field is private. The copy was dropping a
+  // field the type says it has.
+  const C = 'class C { #v: uint8 = 7; pub: uint8 = 9; get v(): uint8 { return this.#v; } } ';
+  expect(evaluated(`${C} String((type C).hasLayout);`)).toBe('true');
+  // A typed PARAMETER is the boundary that copies.
+  expect(evaluated(`${C} function f(o: C) { return o.v; } String(Number(f(new C())));`)).toBe('7');
+  // ...and the public field was never the problem, which is what made the loss
+  // look like a scoping bug rather than a copy bug.
+  expect(evaluated(`${C} function f(o: C) { return o.pub; } String(Number(f(new C())));`)).toBe('9');
+  // A returned copy carries it too.
+  expect(evaluated(`${C} function f(o: C) { return o; } const r = f(new C()); String(Number(r.v));`)).toBe('7');
+  // A method parameter is the same boundary.
+  expect(evaluated(`${C} class D { m(o: C) { return o.v; } } String(Number(new D().m(new C())));`)).toBe('7');
+});
+
+test('a binary operator can read the other operand\'s private field', () => {
+  // How the copy bug was found, and the case that matters most in practice: an
+  // `operator ==` over a value type class reads its operand's private state,
+  // and the operand arrives across a typed parameter boundary.
+  //
+  // `this.#v` always worked and `o.#v` did not, which is the signature of a
+  // copy losing the field rather than of an operator losing its scope.
+  expect(evaluated('class C { #v: uint8 = 7; operator ==(o: C) { return this.#v === o.#v; } }'
+    + ' String(new C() == new C());')).toBe('true');
+  expect(evaluated('class C { #v: uint8 = 1; constructor(n: uint8) { this.#v = n; }'
+    + ' operator ==(o: C) { return this.#v === o.#v; } }'
+    + ' String(new C(1) == new C(2));')).toBe('false');
+  // A private METHOD was unaffected throughout - it lives on the prototype, not
+  // in the layout, so no copy touches it.
+  expect(evaluated('class C { #m() { return 7; } operator ==(o: C) { return this.#m() === o.#m(); } }'
+    + ' String(new C() == new C());')).toBe('true');
+});
