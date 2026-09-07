@@ -522,3 +522,37 @@ test('the tuple store rule leaves the neighbouring stores alone', () => {
   // An untyped literal still ADAPTS at a position, as it does everywhere.
   expect(ok('if (false) { type T = [uint8, string]; let t: T = [1, "s"]; t[0] = 2; } 1;')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// A TUPLE'S POSITIONS BOUND ITS INDICES, AS A FIXED EXTENT BOUNDS AN ARRAY'S.
+//
+// `#sec-array-and-tuple-types`: a fixed extent "is part of the type and is a
+// compile-time constant, so an index written as a literal is decidable" - and a
+// tuple states its positions just as exactly. The array half was already
+// judged; the tuple half was not, so `t[5]` on a `[uint8, string]` was ~any~
+// where `a[9]` on a `[4].<uint8>` was refused.
+//
+// A tuple WITH A REST has no fixed upper bound, so only the positions before the
+// rest are decided.
+// ---------------------------------------------------------------------------
+
+test('a literal index outside a tuple\'s positions is refused', () => {
+  expectStaticTypeError('let t: [uint8, string] = [1, "a"]; let u: uint8 = t[5];');
+  // A NEGATIVE index is written `-1`, a unary expression rather than a literal,
+  // so it is not among the indices this decides - the array half does not decide
+  // it either, and one rule reaching both types is what this is for.
+  expectStaticTypeError('let t: [uint8, string] = [1, "a"]; let u: uint8 = t[1.5];');
+  // The array spelling, for comparison: one rule, both types that carry a
+  // compile-time length.
+  expectStaticTypeError('const a: [4].<uint8> = new [4].<uint8>(); let u: uint8 = a[9];');
+});
+
+test('an in-range index reads that position\'s type', () => {
+  expect(evaluated('let t: [uint8, string] = [1, "a"]; let u: uint8 = t[0]; let s: string = t[1]; String(u) + s;')).toBe('1a');
+  // ...and the position's type is enforced, not merely known.
+  expectStaticTypeError('let t: [uint8, string] = [1, "a"]; let s: string = t[0];');
+  // A rest leaves the tail undecided, so an index past the fixed positions is
+  // the run time's - it reads what is there, and refuses `undefined` where
+  // nothing is, which is the boundary's answer rather than this rule's.
+  expect(evaluated('let t: [uint8, ...[].<uint8>] = [1, 2, 3]; let u: uint8 = t[2]; String(u);')).toBe('3');
+});

@@ -8745,6 +8745,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             return receiver.Element;
           }
+          // A TUPLE states its positions as exactly as a fixed extent states its
+          // length, so the same judgment applies. A tuple WITH A REST has no
+          // fixed upper bound, so only the positions before the rest are
+          // decided, and reading one of them gives that position's type.
+          if (receiver && receiver.Kind === 'tuple') {
+            const index = m.Expression as { type?: string, value?: number };
+            const positions = receiver.Elements ?? [];
+            const restAt = positions.findIndex((e) => e.Rest);
+            const fixed = restAt === -1 ? positions.length : restAt;
+            if (index.type === 'NumericLiteral' && typeof index.value === 'number') {
+              if (!Number.isInteger(index.value) || index.value < 0
+                  || (restAt === -1 && index.value >= fixed)) {
+                const completion = Throw.StaticTypeError(
+                  '$1 is not an index of $2',
+                  Value(String(index.value)),
+                  Value(displayType(receiver)),
+                ) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+              } else if (index.value < fixed) {
+                return positions[index.value]!.Type as Known;
+              }
+            }
+          }
           // The third arm. A computed access
           // with a String LITERAL key reads a declared property, and is the same
           // operation the annotation `T["n"]` denotes - so both call
