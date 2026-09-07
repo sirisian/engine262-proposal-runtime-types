@@ -269,3 +269,37 @@ test('an access through `super` is checked against the base class', () => {
   // Correct uses are unaffected, and reach the base's member.
   expect(evaluated(`${B} class D extends B { go() { super.v = 1; return super.m(2); } } String(new D().go());`)).toBe('2');
 });
+
+// ---------------------------------------------------------------------------
+// ...AND THE `this` EXEMPTION IS THE CONSTRUCTOR'S ALONE.
+//
+// Typing `this` made the readonly rule reach a class's own body for the first
+// time, which broke the form the modifier exists for -
+// `constructor() { this.v = 7; }` - so a `this` base was exempted. That
+// exemption covered EVERY method, which is the rule's whole subject: a class
+// that may rewrite its own `readonly` field from any method has not got one.
+// It is now the constructor's alone. A field initializer needs no exemption,
+// carrying no assignment to judge.
+//
+// This was a hole THAT SAME PASS OPENED: before `this` had a type the receiver
+// was ~any~, the member was never found readonly, and the question could not
+// arise. A change that enables a rule for the first time introduces every case
+// that rule now reaches.
+// ---------------------------------------------------------------------------
+
+test('a readonly field is filled by the constructor and by nothing else', () => {
+  expect(evaluated('class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
+  expect(evaluated('class C { readonly v: uint8 = 3; } String(new C().v);')).toBe('3');
+  // The hole the coarse exemption left.
+  expectStaticTypeError('class C { readonly v: uint8 = 0; m() { this.v = 1; } }');
+  // A user still cannot write it, from outside or through a compound operator.
+  expectStaticTypeError('class C { readonly v: uint8 = 0; } const c = new C(); c.v = 1;');
+  expectStaticTypeError('class C { readonly v: uint8 = 0; } const c = new C(); c.v += 1;');
+});
+
+test('the exemption is only about writability, not about the type', () => {
+  // A field WITHOUT the modifier is writable from a method, as before.
+  expect(evaluated('class C { v: uint8 = 0; m() { this.v = 1; return this.v; } } String(new C().m());')).toBe('1');
+  // ...and the constructor's own store is still checked against the type.
+  expectStaticTypeError('class C { v: uint8; constructor() { this.v = "s"; } }');
+});

@@ -2139,7 +2139,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Coarser than it could be: it exempts any method, where only the
     // constructor and the field's own initializer need it. Narrowing that wants
     // the walk to know which method it is inside, which it does not track today.
-    if ((m.MemberExpression as { type?: string } | undefined)?.type === 'ThisExpression') {
+    if ((m.MemberExpression as { type?: string } | undefined)?.type === 'ThisExpression' && constructorDepth > 0) {
       return;
     }
     const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
@@ -13383,6 +13383,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const classContext: string[] = [];
 
+  /**
+   * How many CONSTRUCTORS enclose the node being walked. A `readonly` member may
+   * be written through `this` where the class fills it - which is the
+   * constructor - and nowhere else; without this the exemption covered every
+   * method, so `class C { readonly v: uint8 = 0; m() { this.v = 1; } }` was
+   * admitted, which is the rule's whole subject.
+   */
+  let constructorDepth = 0;
+
   /** The declared name of a nominal receiver, which is what the context holds. */
   const ownerNameOf = (t: TypeRecord): string | undefined => {
     if (t.Kind !== 'nominal') {
@@ -15484,10 +15493,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }));
         enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true, contextualParameterTypes.get(n));
         return;
-      case 'MethodDefinition':
-        enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
-          undefined, undefined, undefined, contextualMethodReturns.get(n as ParseNode) ?? null);
+      case 'MethodDefinition': {
+        const methodName = (n as unknown as { ClassElementName?: { name?: string, value?: string } | null })
+          .ClassElementName;
+        const isConstructor = (methodName?.name ?? methodName?.value) === 'constructor';
+        if (isConstructor) {
+          constructorDepth += 1;
+        }
+        try {
+          enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
+            undefined, undefined, undefined, contextualMethodReturns.get(n as ParseNode) ?? null);
+        } finally {
+          if (isConstructor) {
+            constructorDepth -= 1;
+          }
+        }
         return;
+      }
       case 'ClassDeclaration':
       case 'ClassExpression': {
         // A class DECLARATION is registered
