@@ -99,7 +99,11 @@ test('the kinds that already rendered are unchanged', () => {
   expect(message('let x: [uint8, uint8] = 5;')).toContain('[uint.<8>, uint.<8>]');
   expect(message('let x: [3].<uint8> = 5;')).toContain('[3].<uint.<8>>');
   expect(message('let x: never = 5;')).toContain('never');
-  expect(message('class K { } class L { } type C = K & L; let c: C = new K();')).toContain('K & L');
+  // An INTERSECTION that stands. Two unrelated classes no longer do - no value
+  // is an instance of both, so #sec-intersection-type-early-errors reports the
+  // annotation - and an intersection with a non-~object~ arm is what survives
+  // canonicalization's distribution as an intersection at all.
+  expect(message('type C = [].<uint8> & { length: uint32 }; let c: C = 5;')).toContain('[].<uint.<8>> & { length: uint.<32> }');
   // `literal` and `any`. The literal form appears on the SOURCE side of almost
   // every message, and `any` renders where it is nested inside another type.
   expect(message('type L = 5; let x: L = 6;')).toContain('a literal type of number');

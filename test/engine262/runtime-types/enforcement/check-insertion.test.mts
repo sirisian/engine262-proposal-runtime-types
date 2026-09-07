@@ -1500,3 +1500,47 @@ test('a boundary whose conversion has an effect is never elided', () => {
   expect(evaluated('let a: [].<uint32> = [1, 2]; let b: [].<uint32> = a; String(b === a);')).toBe('true');
   expect(evaluated('let a: [4].<uint8> = [1, 2, 3, 4]; let b: [4].<uint8> = a; String(b === a);')).toBe('true');
 });
+
+// ---------------------------------------------------------------------------
+// `a OP= b` IS `a = a OP b`, AND IS JUDGED AS ONE.
+//
+// The arm's type check was guarded on `AssignmentOperator === '='`, so every
+// compound and logical assignment was left to the run time while its own
+// desugaring was an Early Error: `a = a + 300` was refused and `a += 300` was
+// not. `requireWritableMember` in the same arm already sat outside that guard,
+// with the comment "every assignment operator writes" - so the arm knew the
+// distinction and the check had simply not been extended.
+//
+// SCOPE, deliberately: the arithmetic compounds are judged where the target is a
+// NUMERIC value type, which is where "no implicit conversion" plainly applies.
+// A `string` target is left alone, because `s += n` is `s = s + n` and whether a
+// typed number may concatenate is an open question of the design - refusing it
+// here would decide that question by accident, and in the opposite direction
+// from the `=` spelling, which accepts it today.
+// ---------------------------------------------------------------------------
+
+test('a compound assignment is refused where its desugaring is', () => {
+  expectStatic('let a: uint8 = 0; a += 300;');
+  expectStatic('let a: uint8 = 0; a += "s";');
+  expectStatic('let a: uint8 = 0; a -= "s";');
+  // A member and an element target, through the same paths `=` uses.
+  expectStatic('class C { v: uint8 = 0; } const c = new C(); c.v += 300;');
+  expectStatic('const arr: [4].<uint8> = new [4].<uint8>(); arr[0] += 300;');
+});
+
+test('the logical compounds assign the right operand, so their check is the same as `=`', () => {
+  expectStatic('let a: uint8 = 0; a ||= "s";');
+  expectStatic('let a: uint8 = 1; a &&= "s";');
+  expectStatic('let a: uint8 | null = null; a ??= "s";');
+  expect(run('let a: uint8 | null = null; a ??= 1;').Type).toBe('normal');
+});
+
+test('what stays as it was', () => {
+  // A value the target admits is not refused - the wrap of a typed integer is
+  // the run time's, exactly as it is for `a = a * 2`.
+  expect(run('let a: uint8 = 200; a = a * 2;').Type).toBe('normal');
+  // An untyped binding is untouched.
+  expect(run('let a = 0; a += "s";').Type).toBe('normal');
+  // A `string` target is left to design question A, as `=` leaves it.
+  expect(run('let s: string = ""; let n: uint8 = 1; s = s + n;').Type).toBe('normal');
+});

@@ -6818,6 +6818,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
           }
+          // Two unrelated nominal CLASSES have no common value, and the judgment
+          // is made HERE rather than in AreDisjoint.
+          //
+          // It is sound because JavaScript has single inheritance and
+          // #sec-runtimetypeof gives a value the ~nominal~ Type Record of ONE
+          // class, so no value is an instance of two classes neither of which
+          // extends the other. `Symbol.hasInstance` can be overridden to make
+          // `instanceof` answer otherwise, but it does not reach `Reflect.typeOf`
+          // or `is`, which are what the type system reads.
+          //
+          // #sec-aredisjoint declines this deliberately - "there being no need of
+          // it and a subtyping cost to deciding it" - and the cost is structural
+          // rather than a chain walk: that operation runs from CanonicalizeType,
+          // which runs on interning, while IsSubtype's ~nominal~ arm recurses
+          // into type arguments and back into canonicalization. This pass is
+          // already running IsSubtype, so the judgment costs nothing here and
+          // the interning path keeps the conservative answer.
+          //
+          // Restricted to CLASS declarations. ~nominal~ also covers an interface
+          // and an enum, and both must keep overlapping: a value satisfies any
+          // number of interfaces, and a class may implement them.
+          const classDeclarationOf = (m: TypeRecord): unknown => ((m.Kind === 'nominal'
+            && (m as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration')
+            ? (m as { Declaration?: unknown }).Declaration
+            : undefined);
+          for (let i = 0; i < Members.length && !reportedEmptyIntersections.has(node); i += 1) {
+            for (let j = i + 1; j < Members.length && !reportedEmptyIntersections.has(node); j += 1) {
+              if (classDeclarationOf(Members[i]) === undefined || classDeclarationOf(Members[j]) === undefined) {
+                continue;
+              }
+              // A base and its subclass share every value of the subclass, and a
+              // class and itself share all of them, so a related pair is not
+              // reported. A written `never` is exempt as it is for the other two
+              // rules.
+              if (isNever(Members[i]) || isNever(Members[j])
+                || IsSubtype(Members[i], Members[j], []) || IsSubtype(Members[j], Members[i], [])) {
+                continue;
+              }
+              reportedEmptyIntersections.add(node);
+              const completion = Throw.StaticTypeError(
+                'no value is an instance of both $1 and $2, so their intersection is never',
+                Value(displayType(Members[i])),
+                Value(displayType(Members[j])),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
           for (let i = 0; i < Members.length && !reportedEmptyIntersections.has(node); i += 1) {
             for (let j = i + 1; j < Members.length; j += 1) {
               if (AreDisjoint(Members[i], Members[j])) {
@@ -12687,6 +12734,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Record a NARROWING of a name, which an assignment may later invalidate. */
+  /**
+   * `a OP= b` is `a = a OP b`, and the check it was given was the one for `=`
+   * ALONE - the arm's type check is guarded on `AssignmentOperator === '='`, so
+   * every compound and logical assignment was left to the run time while its own
+   * desugaring was an Early Error. `requireWritableMember` in the same arm is
+   * deliberately outside that guard ("every assignment operator writes"), so the
+   * arm already knew the distinction it needed.
+   *
+   * The LOGICAL compounds (`||=`, `&&=`, `??=`) assign the right operand's value
+   * unchanged, so their check IS `=`'s.
+   *
+   * The ARITHMETIC compounds are checked where the target is a numeric value
+   * type, which is where "no implicit conversion" plainly applies: `a += 300` at
+   * a `uint8` is refused as `a = a + 300` is. They are NOT checked at a `string`
+   * target, because `s += n` is `s = s + n` and whether a typed number may
+   * concatenate is an open question of the design - refusing it here would
+   * decide that question by accident, and in the opposite direction from the
+   * `=` spelling, which accepts it today.
+   */
+  const compoundChecksLikeAssignment = (operator: string, target: Known): boolean => {
+    if (operator === '=' || operator === '||=' || operator === '&&=' || operator === '??=') {
+      return true;
+    }
+    if (!target || target.Kind !== 'primitive') {
+      return false;
+    }
+    const name = (target as { Name?: string }).Name;
+    return name === 'uint' || name === 'int' || name === 'float' || name === 'number'
+      || (typeof name === 'string' && (name.startsWith('float') || name.startsWith('decimal')));
+  };
+
+  /** The operators whose store this arm judges at all. */
+  const judgedAssignmentOperator = (operator: string): boolean => operator === '='
+    || operator === '||=' || operator === '&&=' || operator === '??='
+    || operator === '+=' || operator === '-=' || operator === '*=' || operator === '/='
+    || operator === '%=' || operator === '**=' || operator === '<<=' || operator === '>>='
+    || operator === '>>>=' || operator === '&=' || operator === '|=' || operator === '^=';
+
   const declareNarrowed = (name: string, t: Known) => {
     if (!t) {
       return;
@@ -15056,16 +15141,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
-        if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'IdentifierReference') {
+        if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'IdentifierReference') {
           // Checked against the DECLARED type, not the narrowed one: a binding
           // of `uint8 | string` may be assigned a string inside a branch that
           // narrowed it to `uint8`, and doing so ENDS the narrowing rather than
           // being an error.
           const name = (a.LeftHandSideExpression as { name: string }).name;
           const target = lookupDeclared(name);
-          requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+          if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
+            requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+          }
           invalidateNarrowing(name);
-        } else if (a.AssignmentOperator === '=' && a.LeftHandSideExpression.type === 'MemberExpression') {
+        } else if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'MemberExpression') {
           // #table-check-sites rows 4 and 5, statically: a store whose target
           // has a known typed property or element type is the same shape as a
           // store to an annotated binding, so it is an Early Error where the
@@ -15124,7 +15211,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
           }
-          if (target) {
+          if (target && compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
             requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
           }
         }
