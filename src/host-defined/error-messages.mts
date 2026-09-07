@@ -531,7 +531,7 @@ export interface Throw {
   | 'the buffer does not hold this SoA view'
   | 'the bytes beneath this array are specified but not implemented in this engine'
   | 'the call is ambiguous between two declared signatures'
-  | 'the comparison is ambiguous among its result forms; write the result type'
+  | 'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)'
   | 'the complex numbers are not ordered, so this operator is not defined for a complex'
   | 'the default of a meta type must be a value of its constraint shape'
   | 'the first placement argument must be an ArrayBuffer'

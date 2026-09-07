@@ -480,6 +480,85 @@ export function* vectorBinaryOperator(
 }
 
 /** The mask type for a vector of N lanes: `vector.<uint.<1>, N>`. */
+/**
+ * The name a program WRITES for a vector type, where the shorthand spells it:
+ * `int32x4`, `float32x4`, and `boolean32x4` for the wide mask, whose lane is
+ * itself a bit vector (`#sec-vector-widths`). Falls back to the canonical text
+ * for anything the shorthand does not name - a compact mask `vector.<uint1, 4>`
+ * has no shorthand, since its width fills no register.
+ *
+ * This exists for diagnostics: a message that lists a result form is telling the
+ * program what to write, so it should print what the program would write, not
+ * `vector.<vector.<uint.<1>, 32>, 4>` for `boolean32x4`.
+ */
+export function vectorTypeName(t: TypeRecord): string {
+  const r = t as { Kind?: string, Name?: string, Arguments?: readonly unknown[] };
+  if (r?.Kind !== 'primitive' || r.Name !== 'vector' || r.Arguments?.length !== 2) {
+    return displayType(t);
+  }
+  const [lane, count] = r.Arguments as [TypeRecord, unknown];
+  if (typeof count !== 'number') {
+    return displayType(t);
+  }
+  const l = lane as { Kind?: string, Name?: string, Arguments?: readonly unknown[] };
+  // A lane that is itself a bit vector is the wide mask: `boolean<W>x<N>`.
+  if (l?.Kind === 'primitive' && l.Name === 'vector' && l.Arguments?.length === 2) {
+    const inner = l.Arguments[0] as { Name?: string, Arguments?: readonly unknown[] };
+    const innerWidth = l.Arguments[1];
+    if (inner?.Name === 'uint' && inner.Arguments?.[0] === 1 && typeof innerWidth === 'number' && SHORTHAND_WIDTHS.has(innerWidth)) {
+      return `boolean${innerWidth}x${count}`;
+    }
+  }
+  const width = laneBitWidth(lane);
+  // ONLY where the shorthand actually names it. `uint1x4` is not a type - the
+  // compact mask's lane is one bit and no shorthand covers a width that fills no
+  // register - and printing a name the program cannot write is worse than
+  // printing the canonical text, which it can.
+  if (width !== null && SHORTHAND_WIDTHS.has(width)) {
+    const family = l?.Name === 'uint' || l?.Name === 'int' ? l.Name : (typeof l?.Name === 'string' && l.Name.startsWith('float') ? 'float' : null);
+    if (family) {
+      return `${family}${width}x${count}`;
+    }
+  }
+  return displayType(t);
+}
+
+/** The widths the vector shorthands name; a lane of any other width has only the canonical spelling. */
+const SHORTHAND_WIDTHS = new Set([8, 16, 32, 64, 128]);
+
+/**
+ * A lane's width in bits. The integer families carry it as a type ARGUMENT
+ * (`uint` at 32) and the float families carry it IN THE NAME (`float32`), which
+ * is the same split the decimal types have - reading only the argument reported
+ * no width for every float lane, so a `float32x4` comparison could not name its
+ * own wide mask.
+ */
+function laneBitWidth(laneType: TypeRecord): number | null {
+  const l = laneType as { Kind?: string, Name?: string, Arguments?: readonly unknown[] };
+  if (l?.Kind !== 'primitive' || typeof l.Name !== 'string') {
+    return null;
+  }
+  const arg = l.Arguments?.[0];
+  if (typeof arg === 'number') {
+    return arg;
+  }
+  const suffix = /^[a-z]+(\d+)$/.exec(l.Name);
+  return suffix ? Number(suffix[1]) : null;
+}
+
+/** The WIDE MASK form of a comparison: a boolean vector of the compared lane's width. */
+function wideMaskTypeFor(laneType: TypeRecord, laneCount: number): TypeRecord | null {
+  const width = laneBitWidth(laneType);
+  if (width === null) {
+    return null;
+  }
+  return CanonicalizeType({
+    Kind: 'primitive',
+    Name: 'vector',
+    Arguments: [maskTypeFor(width), laneCount],
+  } as unknown as TypeRecord);
+}
+
 function maskTypeFor(laneCount: number): TypeRecord {
   return CanonicalizeType({
     Kind: 'primitive',
@@ -576,8 +655,17 @@ export function* vectorComparison(
   // contextual type exists - not which of three to build.
   const expected = currentContextualType();
   if (!expected) {
+    // The three forms NAMED. The clause defines them - the wide mask, the
+    // compact mask, and the compared vector type itself - and the remedy is to
+    // write one of them, so the message says which three rather than leaving
+    // the program to find them in the specification.
+    const compared = ((leftShape ? lval : rval) as VectorValue).TypeRecord as TypeRecord;
+    const wide = wideMaskTypeFor(shape.laneType, shape.laneCount);
     return Q(Throw.TypeError(
-      'the comparison is ambiguous among its result forms; write the result type',
+      'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)',
+      Value(wide ? vectorTypeName(wide) : 'the wide mask'),
+      Value(vectorTypeName(maskTypeFor(shape.laneCount))),
+      Value(vectorTypeName(compared)),
     )) as Value;
   }
   // #sec-vector-comparisons: the third result form is "the compared vector type

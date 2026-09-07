@@ -492,3 +492,41 @@ test('the approximate reciprocal square root carries a stated bound', () => {
     + ' String(Math.abs(r - Math.rsqrt(2)) / Math.rsqrt(2) <= Math.pow(2, -12));')).toBe('true');
   expect(evaluated('String(Math.rsqrtApprox(float32x4(4, 16, 64, 256)).x);')).toBe('0.5');
 });
+
+// ---------------------------------------------------------------------------
+// THE AMBIGUITY MESSAGE NAMES THE THREE RESULT FORMS.
+//
+// `#sec-vector-comparisons` defines three results - "the wide mask ... the
+// compact mask ... and the compared vector type itself" - and says that "left
+// with no expected type the expression is ambiguous among them and is a type
+// error, so the result's type is written". The message said to write the type
+// without saying which types were available, so the remedy was in the
+// specification rather than in the diagnostic.
+//
+// Each name it prints must be one the program can WRITE: the shorthand where a
+// shorthand names the type, the canonical text otherwise. `uint1x4` is not a
+// type - no shorthand covers a lane width that fills no register - so the
+// compact mask prints as `vector.<uint.<1>, 4>`, which is writable.
+// ---------------------------------------------------------------------------
+
+test('the ambiguity message lists the three forms, in spellings a program can write', () => {
+  const message = (source: string) => evaluated(`try { ${source} } catch (e) { e.message; }`);
+  expect(message('int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2);')).toBe(
+    'the comparison is ambiguous among its result forms; write the result type: "boolean32x4" (the wide mask), "vector.<uint.<1>, 4>" (the compact mask), or "int32x4" (the compared type)',
+  );
+  // A FLOAT lane carries its width in its NAME rather than as a type argument,
+  // as the decimal types do; reading only the argument left the wide mask
+  // unnamed and the compared type spelled `vector.<float32, 4>`.
+  expect(message('float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1);')).toContain('"boolean32x4" (the wide mask)');
+  expect(message('float32x4(1, 2, 3, 4) < float32x4(4, 3, 2, 1);')).toContain('"float32x4" (the compared type)');
+  // The width and lane count come from the compared vectors.
+  expect(message('uint8x16(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15) == uint8x16(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);')).toContain('"boolean8x16" (the wide mask), "vector.<uint.<1>, 16>" (the compact mask), or "uint8x16" (the compared type)');
+});
+
+test('every form the message names is writable and selects that form', () => {
+  expect(evaluated('let m: boolean32x4 = int32x4(0,1,2,3) == int32x4(0,1,3,2); String(m is boolean32x4);')).toBe('true');
+  expect(evaluated('let m: vector.<uint.<1>, 4> = int32x4(0,1,2,3) == int32x4(0,1,3,2); String(m is vector.<uint.<1>, 4>);')).toBe('true');
+  expect(evaluated('let m: int32x4 = int32x4(0,1,2,3) == int32x4(0,1,3,2); String(m is int32x4);')).toBe('true');
+  expect(evaluated('let m: boolean32x4 = float32x4(1,2,3,4) < float32x4(4,3,2,1); String(m is boolean32x4);')).toBe('true');
+  expect(evaluated('let m: float32x4 = float32x4(1,2,3,4) < float32x4(4,3,2,1); String(m is float32x4);')).toBe('true');
+});
