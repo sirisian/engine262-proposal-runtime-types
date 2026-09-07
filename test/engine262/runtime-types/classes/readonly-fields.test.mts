@@ -212,3 +212,33 @@ test('what stays writable', () => {
   // The constructor is where a `readonly` field is filled.
   expect(evaluated('class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
 });
+
+// ---------------------------------------------------------------------------
+// WITHIN A CLASS BODY, `this` IS AN INSTANCE OF THE CLASS.
+//
+// The `ThisExpression` arm reads the innermost `this` frame, and a class body
+// pushed none - so `this` was ~any~ and EVERY access through it was unchecked:
+// `this.v = "s"` on a `uint8` field, `this.m("s")` against `m(a: uint8)`,
+// `let s: string = this.v` - while the same accesses through a binding were all
+// refused. Since a method body is where a class's own members are used, this was
+// the widest of the gaps found in this pass: the rules existed and the receiver
+// they needed had no type.
+// ---------------------------------------------------------------------------
+
+test('an access through `this` is checked as one through a binding is', () => {
+  expectStaticTypeError('class B { v: uint8 = 0; m() { this.v = "s"; } }');
+  expectStaticTypeError('class B { v: uint8 = 0; m() { let s: string = this.v; } }');
+  expectStaticTypeError('class B { m(a: uint8) {} go() { this.m("s"); } }');
+  // Correct uses are unaffected.
+  expect(evaluated('class B { v: uint8 = 0; m(a: uint8) { this.v = a; } go() { this.m(3); return this.v; } } String(new B().go());')).toBe('3');
+});
+
+test('the readonly rule is about a class\'s USERS, so `this` is exempt', () => {
+  // The form the modifier exists for. This only arose once `this` had a type:
+  // before, the receiver was ~any~ and the member was never found readonly.
+  expect(evaluated('class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
+  // A user still cannot write it, and the field's TYPE is still enforced
+  // through `this`.
+  expectStaticTypeError('class C { readonly v: uint8 = 0; } const c = new C(); c.v = 1;');
+  expectStaticTypeError('class C { v: uint8 = 0; m() { this.v = "s"; } }');
+});

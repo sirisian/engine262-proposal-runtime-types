@@ -2129,6 +2129,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     const m = lhs as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
+    // A WRITE THROUGH `this` IS EXEMPT FROM THE READONLY RULE. A `readonly`
+    // field is filled by the class itself - `class C { readonly v: uint8;
+    // constructor() { this.v = 7; } }` is the form the modifier exists for - and
+    // until `this` had a type this never arose, because the receiver was ~any~
+    // and the member was not found to be readonly at all. The rule is about what
+    // a class's USERS may write, which is every base but this one.
+    //
+    // Coarser than it could be: it exempts any method, where only the
+    // constructor and the field's own initializer need it. Narrowing that wants
+    // the walk to know which method it is inside, which it does not track today.
+    if ((m.MemberExpression as { type?: string } | undefined)?.type === 'ThisExpression') {
+      return;
+    }
     const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
     if (!objType || objType.Kind !== 'object') {
       return;
@@ -15464,8 +15477,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // reading a protected member is INSIDE and a program outside is not.
         const named = (n as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
         classContext.push(named ?? '');
+        // WITHIN A CLASS BODY, `this` IS AN INSTANCE OF THE CLASS. The
+        // `ThisExpression` arm reads the innermost `this` frame and there was
+        // none here, so `this` was ~any~ and EVERY access through it was
+        // unchecked - `this.v = "s"` on a `uint8` field, `this.m("s")` against
+        // `m(a: uint8)`, `let s: string = this.v` - while the same accesses
+        // through a binding were all refused. Since a method body is where a
+        // class's own members are used, this was the widest of the gaps: the
+        // rules existed and the receiver they needed had no type.
+        //
+        // Pushed for the body only, and popped with the class context, so a
+        // nested function's `this` is unaffected and an adopting literal's frame
+        // still wins by being innermost.
+        const instanceType = classInstanceType(n);
+        if (instanceType) {
+          thisTypeFrames.push(instanceType);
+        }
         for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
           walk(el);
+        }
+        if (instanceType) {
+          thisTypeFrames.pop();
         }
         classContext.pop();
         // #sec-abstract-classes: "a type error if a class not declared
