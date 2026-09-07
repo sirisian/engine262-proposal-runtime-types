@@ -711,3 +711,61 @@ test('ref runtime: the `for (const ref p of a)` form binds each element by refer
   // body writes into the array in place.
   expect(evaluated('let a = [1, 2, 3]; for (let ref p of a) { p = p * 10; } a[0] + "," + a[1] + "," + a[2];')).toBe('10,20,30');
 });
+
+// ---------------------------------------------------------------------------
+// A WRITE THROUGH A REF BINDING IS CHECKED AGAINST THE REFERENT'S TYPE.
+//
+// `#sec-ref-bindings`: "A read of b reads through to the location ... `b = v`
+// writes v to the location", and an annotation on a `ref` binding "is checked
+// against the referent without conversion, as for a `ref` parameter". So a
+// write through the alias meets the same boundary the direct write meets.
+//
+// This pins a report that it did not: `let a: uint8 = 0; let ref b = a; b = 300;`
+// was said to leave 300 in a `uint8` while `a = 300` was refused. Every form
+// below is refused now - the aliased LET BINDING among them, which the other
+// tests in this file do not cover (they borrow array elements and SoA columns).
+// ---------------------------------------------------------------------------
+
+test('a write through a ref binding is refused exactly as the direct write is', () => {
+  // The reported shape: a ref to a plain typed binding. Refused at the CHECK
+  // now that a ref binding takes its referent's Static Type; it was the
+  // run-time boundary that caught these when the report was verified.
+  expectStaticTypeError('let a: uint8 = 0; let ref b = a; b = 300;');
+  expectStaticTypeError('let a: uint8 = 0; let ref b = a; b = "s";');
+  // ...and the referent is untouched by a write the type refuses. Written
+  // through a value the checker cannot see, so the refusal is the run-time
+  // boundary's and the binding still holds what it held.
+  expect(evaluated('function g() { return 300; } let a: uint8 = 7; let ref b = a; try { b = g(); } catch (e) {} String(a) + " " + String(a is uint8);')).toBe('7 true');
+  // A value the type does admit goes through and reaches the referent.
+  expect(evaluated('let a: uint8 = 0; let ref b = a; b = 7; String(a) + " " + String(a is uint8);')).toBe('7 true');
+  // The same for the other things a ref may alias.
+  expectStaticTypeError('const arr: [4].<uint8> = new [4].<uint8>(); let ref e = arr[0]; e = 300;');
+  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); let ref f = c.v; f = 300;');
+  expectStaticTypeError('function f(ref x: uint8) { x = 300; } let a: uint8 = 0; f(ref a);');
+  // A run-time value the checker cannot see is refused at the boundary.
+  expectThrown('function g() { return 300; } let a: uint8 = 0; let ref b = a; b = g();');
+});
+
+test('a ref binding has the Static Type of the location it aliases', () => {
+  // A borrow reads and writes through to the location, so a read of the binding
+  // has the location's type - which three forms already had (a `ref` parameter
+  // and a `ref` return carry their written types, and `for (let ref p of arr)`
+  // takes the element type) and an unannotated `let ref b = a` did not. A READ
+  // into an incompatible binding is refused for every spelling now.
+  expectStaticTypeError('let a: uint8 = 0; let ref b = a; let s: string = b;');
+  expectStaticTypeError('let a: uint8 = 0; const ref b = a; let s: string = b;');
+  expectStaticTypeError('const arr: [4].<uint8> = new [4].<uint8>(); let ref e = arr[0]; let s: string = e;');
+  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); let ref f = c.v; let s: string = f;');
+  // The forms that already worked, unchanged.
+  expectStaticTypeError('function f(ref x: uint8) { let s: string = x; } let a: uint8 = 0; f(ref a);');
+  expectStaticTypeError('let a: uint8 = 0; let ref b: uint8 = a; let s: string = b;');
+  expectStaticTypeError('const arr: [4].<uint8> = new [4].<uint8>(); for (let ref p of arr) { let s: string = p; }');
+  // The type is NOT widened: a borrow aliases the location rather than copying
+  // out of it, so a store the location refuses is refused through the alias.
+  expectStaticTypeError('let a: uint8 = 0; let ref b = a; b = 300;');
+  // A borrow of an UNTYPED location stays untyped and the run time decides.
+  expect(evaluated('let a = 0; let ref b = a; b = "anything"; String(a);')).toBe('anything');
+  // Reads and writes that fit still work, and reach the referent.
+  expect(evaluated('let a: uint8 = 0; let ref b = a; b = 7; String(a) + " " + String(a is uint8);')).toBe('7 true');
+  expect(evaluated('const arr: [4].<uint8> = new [4].<uint8>(); let ref b = arr[0]; ref b = arr[1]; b = 5; String(arr[1]);')).toBe('5');
+});

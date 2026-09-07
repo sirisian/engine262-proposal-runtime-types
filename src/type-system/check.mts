@@ -14342,6 +14342,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return;
             }
           }
+          // A `ref` BINDING ALIASES A LOCATION, so its Static Type is the
+          // location's: `#sec-ref-bindings` says "a read of _b_ reads through to
+          // the location" and "`b = v` writes _v_ to the location", and a read
+          // of a location has the location's type. Three forms already do this -
+          // a `ref` parameter and a `ref` return carry their written types, and
+          // `for (let ref p of arr)` takes the element type - and an unannotated
+          // `let ref b = a` was the one that did not, so `let s: string = b` was
+          // accepted where `let s: string = a` is refused and `b = 300` fell to
+          // the run-time boundary where `a = 300` is an Early Error.
+          //
+          // NOT widened. A borrow is not a copy: widening a `uint8` location to
+          // `number` would admit a store the location itself refuses, which is
+          // exactly the write this binding exists to perform. Where the
+          // initializer's type is unknown - a borrow of an untyped location -
+          // the binding stays untyped and the run time decides, as before.
+          if (!declared && !n.TypeAnnotation && (n as { Ref?: boolean }).Ref === true && newInit) {
+            const referent = staticType(newInit);
+            if (referent) {
+              declare(n.BindingIdentifier.name, referent);
+              return;
+            }
+          }
           declare(n.BindingIdentifier.name, declared);
           return;
         }
