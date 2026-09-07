@@ -261,6 +261,23 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   }
   if (t.Kind === 'array') {
     const Element = CanonicalizeType(t.Element, copies);
+    // [[Extent]] is canonically a NUMBER or ~dynamic~, and may arrive as a Type
+    // Record: a value type parameter is carried until an application binds it,
+    // and the binding substitutes the ARGUMENT'S record - for `F.<8>` the
+    // literal type of 8 rather than the number 8. Everything downstream reads a
+    // number, so left alone the type has neither a layout nor a default: the
+    // substitution having happened and not having finished.
+    if (t.Extent !== null && typeof t.Extent === 'object') {
+      const extent = CanonicalizeType(t.Extent as TypeRecord, copies);
+      const held = (extent as { Kind?: string }).Kind === 'literal'
+        ? (extent as { Value?: unknown }).Value as { numberValue?(): number, value?: unknown } | undefined
+        : undefined;
+      // eslint-disable-next-line @engine262/mathematical-value
+      const n = held === undefined ? undefined : Number(held.numberValue?.() ?? held.value);
+      return (typeof n === 'number' && Number.isInteger(n) && n >= 0)
+        ? { Kind: 'array', Element, Extent: n }
+        : { Kind: 'array', Element, Extent: extent };
+    }
     // A FIXED array of a non-zero extent is the same product as a tuple of that
     // many positions, so it empties for the same reason.
     //

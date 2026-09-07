@@ -35,7 +35,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { IsSharableValueType } from './layout.mts';
+import { IsSharableValueType, setLayoutSubstituter } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -4360,6 +4360,27 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         if (node.ArrayExtent.type === 'NumericLiteral') {
           Extent = (node.ArrayExtent as { value: number }).value;
         } else {
+          // An extent naming an UNBOUND type parameter is carried as that
+          // parameter and substituted at the application, not evaluated here.
+          // Evaluating it is too early in a class or interface FIELD, where the
+          // annotation resolves when the declaration does and the arguments
+          // arrive later; the checker's ArrayType arm already carries it, and
+          // its own comment says why the two must agree - "a rule enforced in
+          // one and not the other is a rule that holds in some positions".
+          //
+          // Only where the parameter is UNBOUND. Where a frame has bound it -
+          // which is every specialization, `f.<4, 2>` binding `N` to 4 - the
+          // extent evaluates as it always did, and carrying the binding instead
+          // broke exactly that case. [[Extent]] is
+          // `number | ~dynamic~ | a Type Record`, so the unbound form needs no
+          // new representation.
+          if (node.ArrayExtent.type === 'IdentifierReference') {
+            const extentName = (node.ArrayExtent as { name?: string }).name;
+            const bound = extentName === undefined ? null : lookupTypeParameter(extentName);
+            if (bound !== null && bound.Kind === 'parameter') {
+              return { Kind: 'array', Element, Extent: bound };
+            }
+          }
           // A computed extent evaluates; #sec-compile-time-evaluability's
           // budget joins later.
           const ref = Q(yield* Evaluate(node.ArrayExtent));
@@ -5183,3 +5204,9 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
   }
   return Q(yield* Call(callee as never, Value.undefined, args));
 }
+
+// CANONICALIZED, not merely substituted. A value argument arrives as the
+// argument's ~literal~ record and [[Extent]] is canonically a number; the layout
+// walk reads a number, so an uncanonicalized substitution produces a field with
+// no layout and therefore a class with none.
+setLayoutSubstituter((structure, declaration, args) => CanonicalizeType(SubstituteTypeArguments(structure, declaration, args)));

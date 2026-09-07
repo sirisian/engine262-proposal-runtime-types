@@ -1479,6 +1479,12 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', className as Value, Value(computed.cycle));
       }
       (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = computed;
+      // The INPUTS as well as the answer, so a generic class can be laid out per
+      // application (LayoutOf's nominal arm). The answer computed here has the
+      // parameters unbound and is the layout of no instantiation.
+      (F as { LayoutInputs?: unknown }).LayoutInputs = {
+        baseLayout, fields: laidOut, controls: classControls, parent: (ClassTail as { parent?: unknown }).parent,
+      };
     }
     if ((F as { SealInstances?: boolean }).SealInstances === true) {
       Q(yield* SetIntegrityLevel(proto, 'frozen'));

@@ -370,3 +370,40 @@ test('`hasLayout` and the three it guards agree', () => {
   expectThrown('any.bitLength;', 'this type has no layout');
   expect(evaluated('String(any.hasLayout);')).toBe('false');
 });
+
+test('a generic class is laid out PER APPLICATION', () => {
+  // A value type parameter may be an array extent in a field, and the layout
+  // depends on the argument: `G.<8>` and `G.<2>` are different sizes. The layout
+  // computed at the DECLARATION, with the parameters unbound, is the layout of
+  // neither - and is *null*, an unbound extent being a Type Record rather than a
+  // number - so LayoutOf recomputes per application from the inputs the
+  // declaration stashed.
+  //
+  // Before this the declaration itself was refused, the extent being evaluated
+  // while the parameter was still unbound.
+  const G = 'class G<N: uint32> { b: [N].<uint8>; id: uint32 = 0; } ';
+  expect(evaluated(`${G} String((type G.<8>).byteLength);`)).toBe('12');
+  expect(evaluated(`${G} String((type G.<2>).byteLength);`)).toBe('8');
+  // Not the same type, and not the same size - which is the pair the bug made
+  // indistinguishable.
+  expect(evaluated(`${G} String((type G.<8>) === (type G.<2>));`)).toBe('false');
+  // An array of them strides by the instantiation's size.
+  expect(evaluated(`${G} String((type [10].<G.<8>>).byteLength);`)).toBe('120');
+  // The instances were always right; it is the TYPE that was not.
+  expect(evaluated(`${G} String(new G.<8>().b.length) + "/" + String(new G.<2>().b.length);`)).toBe('8/2');
+});
+
+test('the per-application layout keeps the layout controls', () => {
+  // Recomputed from the INPUTS rather than from the placements: a FieldPlacement
+  // carries a type and an offset but not its `controls`, so recomputing from
+  // placements alone would silently drop `@offset`, `@align` and bit-field
+  // widths - a layout that looks plausible and is wrong.
+  expect(evaluated('class P { @offset(2) x: float32 = 0; } String((type P).byteLength);')).toBe('8');
+  // A non-generic class is untouched by any of this.
+  expect(evaluated('class V { x: float32 = 0; y: float32 = 0; z: float32 = 0; }'
+    + ' String((type V).byteLength);')).toBe('12');
+  // ...and so is a specialization whose extent is a bound parameter, which
+  // evaluates as it always did rather than being carried.
+  expect(evaluated('function f<N: uint32, I: uint32>(a: [N].<uint8>): uint8 { return a[I]; }'
+    + ' let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4, 2>(a)));')).toBe('9');
+});

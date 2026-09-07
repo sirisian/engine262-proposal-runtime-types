@@ -144,8 +144,33 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // generator's work, and #sec-layout-properties calls these compile-time
     // constants - so the walk runs once, where the field types are already
     // resolved, and this reads the answer.
-    const constructor = t.Constructor as { InstanceLayout?: Layout | null } | undefined;
-    return constructor?.InstanceLayout ?? null;
+    const constructor = t.Constructor as { InstanceLayout?: ClassLayout | null, LayoutInputs?: LayoutInputs } | undefined;
+    const declared = constructor?.InstanceLayout ?? null;
+    // A GENERIC class's layout depends on its ARGUMENTS: `G.<8>` and `G.<2>` are
+    // different sizes, and the layout computed at the declaration - with the
+    // parameters unbound - is the layout of neither. It is usually *null* there,
+    // and expectedly so: an unbound extent is a Type Record rather than a
+    // number, so the declaration-time walk has no size to give.
+    //
+    // The comment this replaces said computing a layout here "would mean
+    // resolving each field's type at every read, which is a generator's work".
+    // That is true of RESOLVING a field's type and not of substituting into one
+    // already resolved: the substituter is an ordinary function, so the walk
+    // stays synchronous and a compile-time constant stays one.
+    const args = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+    const inputs = constructor?.LayoutInputs;
+    if (!args || args.length === 0 || !inputs || substituteForLayout === null) {
+      return declared;
+    }
+    // The INPUTS rather than the placements. A FieldPlacement carries a type and
+    // an offset but not its `controls`, so recomputing from the placements alone
+    // would silently drop `@offset`, `@align` and the bit-field widths.
+    const declaration = (t as { Declaration?: unknown }).Declaration;
+    const fields = inputs.fields.map((f) => ({
+      key: f.key, type: substituteForLayout!(f.type, declaration, args), controls: f.controls,
+    }));
+    const recomputed = ComputeClassLayout(inputs.baseLayout, fields, inputs.controls, inputs.parent);
+    return (recomputed !== null && 'cycle' in recomputed) ? null : recomputed;
   }
   if (t.Kind === 'union') {
     // #sec-memory-layout's table, row "a reference type, INCLUDING A NULLABLE
@@ -249,6 +274,21 @@ export interface FieldPlacement {
 
 export interface ClassLayout extends Layout {
   readonly fields: readonly FieldPlacement[];
+}
+
+export interface LayoutInputs {
+  readonly baseLayout: ClassLayout | null;
+  readonly fields: readonly { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[];
+  readonly controls: ClassControls;
+  readonly parent: unknown;
+}
+
+let substituteForLayout:
+  | ((structure: TypeRecord, declaration: unknown, args: readonly (TypeRecord | number)[]) => TypeRecord)
+  | null = null;
+
+export function setLayoutSubstituter(fn: typeof substituteForLayout): void {
+  substituteForLayout = fn;
 }
 
 /**
