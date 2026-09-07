@@ -13,6 +13,7 @@ import {
   DefaultValueOf,
   fitsNumericType,
 } from '../type-system/runtime.mts';
+import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
   CodePointsToString,
@@ -650,9 +651,25 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
           const coerced = Q(yield* CoerceJSON(pv, p.type, `${path}.${p.key}`));
           X(CreateDataPropertyOrThrow(result, key, coerced));
         } else if (p.optional) {
-          const def = Q(yield* DefaultValueOf(p.type));
-          if (def !== undefined) {
-            X(CreateDataPropertyOrThrow(result, key, def));
+          // #sec-coercejsonvalue: "If _p_'s [[Initial]] is not ~none~, perform !
+          // CreateDataPropertyOrThrow(_result_, _p_'s key, _p_'s [[Initial]])."
+          // The member's DECLARED DEFAULT, and nothing where it declares none.
+          //
+          // This wrote DefaultValueOf(p.type) - the member TYPE's zero - which
+          // was wrong twice. A member declaring `= 9` parsed as 0, a plausible
+          // number nobody wrote, which is worse than an absent one; and a member
+          // declaring no default was filled with a zero where the clause leaves
+          // it absent, so a parsed object and the same object built any other
+          // way disagreed about which keys it had.
+          //
+          // CONVERTED to the member's type, as #sec-composite-typeobject-call
+          // requires of the same default on the same record, so a parsed default
+          // and a supplied value are the same type rather than a Number beside a
+          // `uint8`.
+          const initial = (p as { initial?: Value }).initial;
+          if (initial !== undefined) {
+            const converted = Q(yield* ConvertValue(initial, p.type));
+            X(CreateDataPropertyOrThrow(result, key, converted));
           }
         } else {
           return Throw.TypeError('$1', Value(`${path === '' ? '' : `at ${path}: `}missing required key "${p.key}"`));

@@ -60,10 +60,24 @@ test('typed json: nested object targets are filled', () => {
   expect(evaluated('let o = JSON.parse.<{ p: { q: uint8 } }>(\'{"p":{"q":7}}\'); String(o.p.q);')).toBe('7');
 });
 
-test('typed json: an absent optional field takes the type default; present is used', () => {
+test('typed json: an absent optional field takes its DECLARED default, or stays absent', () => {
   expect(evaluated('let o = JSON.parse.<{ a: uint8, b?: uint8 }>(\'{"a":1,"b":9}\'); String(o.b);')).toBe('9');
-  // uint8 has a materialized default of 0, so an absent optional uint8 is 0
-  expect(evaluated('let o = JSON.parse.<{ a: uint8, b?: uint8 }>(\'{"a":1}\'); String(o.b);')).toBe('0');
+  // #sec-coercejsonvalue's optional branch is exhaustive and has no type-default
+  // arm: "Else if _p_ is optional, then: If _p_'s [[Initial]] is not ~none~,
+  // perform ! CreateDataPropertyOrThrow(_result_, _p_'s key, _p_'s [[Initial]])."
+  // A member declaring no default therefore stays ABSENT, matching what the same
+  // member does at a typed composite creation, where "an optional member with no
+  // declared default simply stays absent".
+  //
+  // This asserted 0, on the reasoning that `uint8` has a materialized default.
+  // It does, and that default fills a LAYOUT; it is not a value a parse invents
+  // for a key the JSON did not carry and the type did not default. Filling it
+  // made a parsed object disagree with every other spelling about which keys it
+  // has.
+  expect(evaluated('let o = JSON.parse.<{ a: uint8, b?: uint8 }>(\'{"a":1}\'); String("b" in o);')).toBe('false');
+  // And a member that DOES declare one gets it, converted to the member's type.
+  expect(evaluated('interface I { a: uint8; b?: uint8 = 9 } let o = JSON.parse.<I>(\'{"a":1}\'); String(o.b);')).toBe('9');
+  expect(evaluated('interface I { a: uint8; b?: uint8 = 9 } let o = JSON.parse.<I>(\'{"a":1}\'); String(Reflect.typeOf(o.b) === uint8);')).toBe('true');
 });
 
 test('typed json: an absent required field is a TypeError', () => {
