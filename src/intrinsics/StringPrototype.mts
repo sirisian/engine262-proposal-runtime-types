@@ -20,6 +20,7 @@ import {
 } from '../static-semantics/all.mts';
 import { Q, X } from '../completion.mts';
 import type { ValueEvaluator, YieldEvaluator } from '../evaluator.mts';
+import { UNPAIRED_SURROGATE, Utf8Encode, Utf8Length } from '../abstract-ops/utf8.mts';
 import { assignProps } from './bootstrap.mts';
 import {
   surroundingAgent,
@@ -34,8 +35,11 @@ import {
   IsCallable,
   IsRegExp,
   RegExpCreate,
+  LengthOfArrayLike,
   RequireObjectCoercible,
+  Set,
   ToIntegerOrInfinity,
+  ToObject,
   ToNumber,
   ToString,
   ToUint32,
@@ -818,6 +822,68 @@ function* StringProto_at([index = Value.undefined]: Arguments, { thisValue }: Fu
 export function bootstrapStringPrototype(realmRec: Realm) {
   const proto = StringCreate(Value(''), realmRec.Intrinsics['%Object.prototype%']);
 
+/**
+ * proposal-runtime-types: encode this string as UTF-8 into _into_, and answer
+ * how many bytes it wrote.
+ *
+ * The target is a PARAMETER rather than the receiver, and that is forced: a
+ * `[N].<uint8>` coerces to a `Span.<uint8>` at a boundary, and a parameter is a
+ * boundary while a method's receiver is not. It also makes this and
+ * `String.fromUtf8` read as the inverse pair they are.
+ *
+ * REFUSES rather than truncates. A value whose encoding does not fit is a
+ * TypeError and nothing is written, which is the rule #sec-literal-propagation
+ * states for a literal its type cannot represent - "a type error rather than a
+ * silent truncation" - and which is what keeps a fixed-width string away from
+ * `strncpy` and `CHAR(n)`.
+ *
+ * Nothing is written on refusal. A partial write would leave a record holding
+ * half of one value and half of another, which is worse than either.
+ */
+function* StringProto_toUtf8([into = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = thisValue;
+  Q(RequireObjectCoercible(O));
+  const text = Q(yield* ToString(O)).stringValue();
+  const bytes = Utf8Encode(text);
+  if (bytes === UNPAIRED_SURROGATE) {
+    return Throw.TypeError('this string has an unpaired surrogate, which has no UTF-8 encoding');
+  }
+  const target = Q(ToObject(into));
+  const capacity = Q(yield* LengthOfArrayLike(target));
+  if (bytes.length > capacity) {
+    return Throw.TypeError('$1 bytes of UTF-8 do not fit in $2', Value(String(bytes.length)), Value(String(capacity)));
+  }
+  for (let i = 0; i < bytes.length; i += 1) {
+    Q(yield* Set(target, Value(String(i)), Value(bytes[i]), Value.true));
+  }
+  return Value(bytes.length);
+}
+
+/**
+ * proposal-runtime-types: the number of BYTES this string's UTF-8 encoding
+ * takes.
+ *
+ * Not `length`, which counts UTF-16 code units: `'e\u0301'.length` is 2 and its
+ * `utf8Length` is 3, and `'\u{1F600}'.length` is 2 while its `utf8Length` is 4.
+ * A layout needs the byte count, so this is what sizes a slot and what decides
+ * whether a value fits one.
+ *
+ * Throws for an unpaired surrogate, which has no UTF-8 encoding and therefore no
+ * byte count. `String.prototype.isWellFormed` is the question to ask first, and
+ * the pair is the one #sec-layout-properties draws between `hasLayout` and
+ * `byteLength`: the property that ANSWERS guards the property that ASSERTS.
+ */
+function* StringProto_utf8LengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  const O = thisValue;
+  Q(RequireObjectCoercible(O));
+  const text = Q(yield* ToString(O)).stringValue();
+  const length = Utf8Length(text);
+  if (length === UNPAIRED_SURROGATE) {
+    return Throw.TypeError('this string has an unpaired surrogate, which has no UTF-8 encoding');
+  }
+  return Value(length);
+}
+
   assignProps(realmRec, proto, [
     ['charAt', StringProto_charAt, 1],
     ['charCodeAt', StringProto_charCodeAt, 1],
@@ -828,6 +894,8 @@ export function bootstrapStringPrototype(realmRec: Realm) {
     ['indexOf', StringProto_indexOf, 1],
     ['isWellFormed', StringProto_isWellFormed, 0],
     ['at', StringProto_at, 1],
+    ['toUtf8', StringProto_toUtf8, 1],
+    ['utf8Length', [StringProto_utf8LengthGetter]],
     ['lastIndexOf', StringProto_lastIndexOf, 1],
     ['localeCompare', StringProto_localeCompare, 1],
     ['match', StringProto_match, 1],

@@ -531,7 +531,6 @@ export interface Throw {
   | 'the buffer does not hold this SoA view'
   | 'the bytes beneath this array are specified but not implemented in this engine'
   | 'the call is ambiguous between two declared signatures'
-  | 'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)'
   | 'the complex numbers are not ordered, so this operator is not defined for a complex'
   | 'the default of a meta type must be a value of its constraint shape'
   | 'the first placement argument must be an ArrayBuffer'
@@ -561,6 +560,7 @@ export interface Throw {
   | 'this reference is into an SoA element that has since been removed'
   | 'this reference is into an SoA that has since grown'
   | 'this reference is into an array that has since grown'
+  | 'this string has an unpaired surrogate, which has no UTF-8 encoding'
   | 'this view is over a buffer that no longer covers it'
   | 'this view is over a detached buffer'
   | 'this window is into an array that has since grown'
@@ -619,6 +619,7 @@ export interface Throw {
   | '$1 is not a Promise constructor'
   | '$1 is not a RegExp object'
   | '$1 is not a TemporalTimeLike object'
+  | '$1 is not a byte'
   | '$1 is not a class and cannot be extended by a partial class'
   | '$1 is not a constructor'
   | '$1 is not a decimal'
@@ -841,6 +842,7 @@ export interface Throw {
   | 'targetOffset ($1) cannot be negative'
   | 'temporalCalendarLike must be a string or a Temporal object, but got $1'
   | 'the argument bound by ref to $1 does not satisfy its type annotation'
+  | 'the bytes are not well-formed UTF-8 ($1)'
   | 'the call to $1 is ambiguous between overloads'
   | 'the replacement decorator $1 did not return tokens'
   | 'the replacement decorator $1 rejected what it decorates'
@@ -857,6 +859,7 @@ export interface Throw {
 '"add" property ($1) of object $2 is not a function'
   | '"set" property ($1) of object $2 is not a function'
   | '$1 and $2 are different numeric types and do not mix; convert one of them'
+  | '$1 bytes of UTF-8 do not fit in $2'
   | '$1 called on incompatible receiver $2'
   | '$1 called on invalid receiver: $2'
   | '$1 cannot be converted to $2 in place, because it is not writable'
@@ -920,6 +923,7 @@ export interface Throw {
   | 'Duration($1, $2, $3, $4) is not a valid duration'
   | "a $1 holds a $2 rather than taking this position's $3; declare it $4 if it is never reassigned, or annotate it"
   | 'option $1 does not accept value $2 (only $3 accepted)'
+  | 'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)'
   | 'the contract of $1 is not satisfied by $2: $3'
   , $1: Formattable, $2: Formattable, $3: Formattable): ThrowCompletion;
   // auto-generate end
