@@ -200,7 +200,7 @@ test('a recursive type is not driven to `never` by this', () => {
 
 test('a computation reaching an empty intersection gets `never` and does not throw', () => {
   // The Early Error is on the SYNTAX. Canonicalization stays total, which the
-  // kit's `exclude(T, T)` and `union(«»)` need, and a generic body is not
+  // kit's `exclude(T, T)` and `union([])` need, and a generic body is not
   // rejected for an instantiation that may never happen.
   expect(evaluated(
     "String(Reflect.makeType({ kind: 'intersection', members: [type number, type bigint] }) === never);",

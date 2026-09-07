@@ -168,3 +168,50 @@ test('StaticTypeError sits directly under Error', () => {
   expect(evaluated('const e = new StaticTypeError("x"); String(e instanceof SyntaxError);')).toBe('false');
   expect(evaluated('String(new StaticTypeError("boom"));')).toBe('StaticTypeError: boom');
 });
+
+test('the four refusals an intersection target gives are distinct', () => {
+  // Pinned side by side because they were once ONE message, and because the two
+  // that matter most are now raised in different places.
+  //
+  // A CONFLICT is a property of the TYPE - no value has both member types - so
+  // #sec-intersection-type-early-errors reports it at the `&`, where both types
+  // are written and before any use of the annotation. The other three are
+  // properties of a VALUE, so they are reported where the value is.
+  //
+  // The conflict message once read "does not satisfy" and named an ARM. It
+  // cannot now: #sec-canonicalizetype distributes an all-object intersection,
+  // so there is no arm left to name, and the walk that re-derived one was the
+  // defect that refused `{ a: number } & { a: 5 }` - a type its own direct
+  // spelling accepts. Naming the MEMBER is what replaced it.
+  const AB = 'type A = { x: int32 }; type B = { y: int32 }; type C = A & B;';
+
+  // 1. Conflict: at the `&`, naming both types and the member.
+  expect(message('type A = { x: int32 }; type B = { x: float64 }; type C = A & B;'))
+    .toContain('no value is of both "int.<32>" and "float64" at member "x"');
+
+  // 2. Missing: at the value, naming the key and the DISTRIBUTED shape. The
+  //    shape is what the program's type is, and naming an arm would send the
+  //    reader looking for a declaration the type no longer has.
+  expect(message(`${AB} let c: C = { x: 1 };`))
+    .toContain('"y" is required by "{ x: int.<32>, y: int.<32> }" and is not supplied');
+  expect(message(`${AB} let c: C = { y: 1 };`))
+    .toContain('"x" is required by "{ x: int.<32>, y: int.<32> }" and is not supplied');
+
+  // 3. Wrong type: the member's own assignability failure, naming the two types
+  //    and neither the shape nor the arm - the mismatch is at the member.
+  expect(message(`${AB} let c: C = { x: 1, y: "s" };`))
+    .toContain('"a literal type of string" is not assignable to "int.<32>"');
+
+  // 4. Excess: freshness, against the distributed shape. An intersection
+  //    DECLARES the union of its arms' keys, so the shape here is the same one
+  //    the missing-member rule reads, and the two must agree on it.
+  expect(message(`${AB} let c: C = { x: 1, y: 2, z: 3 };`))
+    .toContain('"z" is not declared by "{ x: int.<32>, y: int.<32> }"');
+
+  // None of the four is any of the others.
+  const conflict = message('type A = { x: int32 }; type B = { x: float64 }; type C = A & B;');
+  expect(conflict).not.toContain('is required by');
+  expect(conflict).not.toContain('is not declared by');
+  expect(message(`${AB} let c: C = { x: 1 };`)).not.toContain('no value is of both');
+  expect(message(`${AB} let c: C = { x: 1, y: 2, z: 3 };`)).not.toContain('is required by');
+});
