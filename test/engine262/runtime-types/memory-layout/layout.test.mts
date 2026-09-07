@@ -324,3 +324,49 @@ test('memory layout: a placement binds before construction, so no property is cr
   // An unplaced instance is untouched.
   expect(evaluated('class U { x: float32; } String(Object.getOwnPropertyNames(new U()).join(","));')).toBe('x');
 });
+
+test('`hasLayout` answers the question the other three assert', () => {
+  // #sec-layout-properties: "A Type Object has a `hasLayout` property, *true*
+  // where the type has a layout and *false* where it has none."
+  //
+  // It exists because asking is not asserting. `byteLength`, `bitLength` and
+  // `alignment` throw for a type with no layout, which is right for a program
+  // that has made a mistake and wrong for a serializer walking a heterogeneous
+  // structure, which is asking. There is no cheaper test either: `'byteLength'
+  // in string` is *true*, the property being on the prototype and throwing on
+  // read, so a `catch` was the only spelling - and it also swallows a typo in a
+  // type name.
+  expect(evaluated("String('byteLength' in string);")).toBe('true');
+  expectThrown('string.byteLength;', 'this type has no layout');
+  expect(evaluated('String(string.hasLayout);')).toBe('false');
+
+  // The rows of memorylayout.md's own table, in its order.
+  expect(evaluated('String(uint8.hasLayout);')).toBe('true');
+  expect(evaluated('String(boolean.hasLayout);')).toBe('true');
+  expect(evaluated('enum E: uint8 { A = 1 } String(E.hasLayout);')).toBe('true');
+  expect(evaluated('class V { x: float32 = 0; } String((type V).hasLayout);')).toBe('true');
+  expect(evaluated('String((type [4].<uint8>).hasLayout);')).toBe('true');
+  expect(evaluated('String(bigint.hasLayout);')).toBe('false');
+  expect(evaluated('String(any.hasLayout);')).toBe('false');
+  // "`[].<T>` without a length: No as a type. Its instances have a byteLength."
+  expect(evaluated('String((type [].<uint8>).hasLayout);')).toBe('false');
+  // "A class with an untyped field: No."
+  expect(evaluated('class U { x; } String((type U).hasLayout);')).toBe('false');
+  // "A union of value types: No. It has no single layout."
+  expect(evaluated('class A { x: uint8 = 0; } class B { y: uint8 = 0; }'
+    + ' String((type A | B).hasLayout);')).toBe('false');
+});
+
+test('`hasLayout` and the three it guards agree', () => {
+  // The pair has to be consistent or the guard is worthless: wherever
+  // `hasLayout` is *true* the other three answer, and wherever it is *false*
+  // they throw. Asserted together rather than separately, since a divergence
+  // between them is the failure this property exists to prevent.
+  expect(evaluated('class V { x: float32 = 0; y: float32 = 0; z: float32 = 0; }'
+    + ' String((type V).hasLayout) + "/" + String((type V).byteLength)'
+    + ' + "/" + String((type V).alignment);')).toBe('true/12/4');
+  expectThrown('any.byteLength;', 'this type has no layout');
+  expectThrown('any.alignment;', 'this type has no layout');
+  expectThrown('any.bitLength;', 'this type has no layout');
+  expect(evaluated('String(any.hasLayout);')).toBe('false');
+});

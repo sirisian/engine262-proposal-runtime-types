@@ -363,6 +363,30 @@ function* TypeProto_alignmentGetter(_args: Arguments, { thisValue }: FunctionCal
 }
 
 /**
+ * proposal-runtime-types #sec-layout-properties: "A Type Object has a
+ * `hasLayout` property, *true* where the type has a layout and *false* where it
+ * has none."
+ *
+ * Asking WHETHER a type has a layout is a different act from asserting that it
+ * does, and the three properties beside this one are for the assertion: each
+ * throws for a type with no layout, "which is the point: a program that asks for
+ * the size of a `string` has made a mistake a returned number would hide".
+ *
+ * Without this the only way to ask is to read one and catch, which is control
+ * flow by exception for a question that is not a mistake - and the cheaper test
+ * does not exist either, since `'byteLength' in string` is *true*, the property
+ * being present on the prototype and throwing on read. A serializer walking a
+ * heterogeneous structure is asking rather than asserting, and the `catch` that
+ * stands in for it also swallows a typo in a type name.
+ */
+function* TypeProto_hasLayoutGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  return Value(LayoutOf(thisValue.TypeRecord) !== null);
+}
+
+/**
  * proposal-runtime-types #sec-memory-layout: the least and greatest value a type
  * admits, answering the question a range check asks and a saturating operation
  * obeys - both of which the engine already computes and neither of which a
@@ -535,6 +559,7 @@ export function bootstrapTypePrototype(realmRec: Realm) {
     ['elementByteLength', [TypeProto_elementByteLengthGetter]],
     ['byteLength', [TypeProto_byteLengthGetter]],
     ['alignment', [TypeProto_alignmentGetter]],
+    ['hasLayout', [TypeProto_hasLayoutGetter]],
     ['family', [TypeProto_familyGetter]],
     ['min', [TypeProto_minGetter]],
     ['max', [TypeProto_maxGetter]],
