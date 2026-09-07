@@ -269,6 +269,25 @@ test('a primitive block may declare an implicit cast into a parameterization', (
   // boundary. The declared type names what the result BECOMES; the body
   // computes, the target converts.
   expect(evaluated(`${dim}${cast} let v: Velocity = 10; String(Reflect.typeOf(v) === Velocity);`)).toBe('true');
+  // The BOUNDS spelling, which is the one primitivemetadata.md and ranges.md
+  // actually write - `uint8.<{ bounds: 1..=6 }>` - and which reaches a boundary
+  // the dimensions case above cannot: a singleton range is a type with one
+  // value, so it is where "a cast is a way IN, not a way PAST" is sharpest.
+  const nb = 'type NB = { bounds?: Range }; '
+    + 'meta NB { default = {}; '
+    + 'subtype(a, b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
+    + 'validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); } } ';
+  const dieCast = 'primitive uint32 { operator uint32.<{ bounds: 1..=6 }>(): uint32.<{ bounds: 1..=6 }> { return this; } } ';
+  expect(evaluated(`${nb}${dieCast} type Die = uint32.<{ bounds: 1..=6 }>; let v: Die = 3; String(Number(v));`)).toBe('3');
+  expectThrown(`${nb}${dieCast} type Die = uint32.<{ bounds: 1..=6 }>; let v: Die = 9;`);
+  // A singleton range narrows a member of the base, which is what the design
+  // reached for when it wrote `{ a: uint32 } & { a: 5 }` - a written numeric
+  // literal keeps base `number` (#sec-literal-types), so the range is the
+  // spelling that works.
+  const fiveCast = 'primitive uint32 { operator uint32.<{ bounds: 5..=5 }>(): uint32.<{ bounds: 5..=5 }> { return this; } } ';
+  expect(evaluated(`${nb}${fiveCast} type Five = uint32.<{ bounds: 5..=5 }>;`
+    + ' type T = { a: uint32 } & { a: Five }; let v: T = { a: 5 }; String(Number(v.a));')).toBe('5');
+
   // A body that COMPUTES rather than returning `this` is unaffected by the
   // unwrapping the plain form needs.
   const computing = 'type D2 = { m: number }; '

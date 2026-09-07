@@ -168,9 +168,19 @@ test('one spelling is one type, and differing bounds are different types', () =>
  *    total default lets them not. Design-side this is a real question: the
  *    total default was adopted precisely to delete those absence checks.
  *
- * 2. Metadata is consulted on the CONVERSION path (`:=`) and not on a plain
- *    annotation: `const a: A = 3` is rejected by static assignability before a
- *    hook runs. Pre-existing, and why every test above casts.
+ * 2. Every test below CASTS, and the reason is a rule rather than a limit. A
+ *    bare number reaches a parameterization only through an implicit cast the
+ *    primitive declares, and this file declares none:
+ *    #sec-primitive-operator-blocks says a cast's "absence is why such a
+ *    boundary is otherwise a type error", so `const a: A = 3` here is the
+ *    specified refusal and not a hook that failed to run. Declaring one makes
+ *    the annotation work and still runs `validate` - a cast is how a value gets
+ *    in, not a way past what the metadata requires - which
+ *    operators/user-defined.test.mts asserts in both directions.
+ *
+ *    An earlier revision of this note called it a pre-existing limit of the
+ *    engine. It is not, and reading it that way cost a cycle of work on a gap
+ *    that does not exist.
  *
  * 3. NARROWING is not exercised, and cannot be. The engine invokes five of the
  *    protocol's hooks -- `subtype`, `validate`, `conversionFactor`, `quantize`,
