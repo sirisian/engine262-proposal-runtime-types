@@ -130,3 +130,33 @@ test('a value-parameter extent leaves the neighbouring extents alone', () => {
   // And an unbound name is still no extent at all.
   expect(ok('if (false) { function h(x: [Q].<uint8>) { return 1; } } 1;')).toBe(true);
 });
+
+test('a ZERO extent has a default whatever its element type', () => {
+  // #sec-defaultvalueof derives a fixed array's default by filling it with the
+  // element's default, and returns ~none~ where the element has none. At extent
+  // zero there is nothing to fill, so the element's default is not needed and
+  // its absence is not a reason for the array to have none.
+  //
+  // The probe is `never`, the one element type with no default at all. Asking it
+  // first made `[0].<never>` refuse a declaration that `[0].<uint8>` accepts,
+  // which is a zero-length array of one element type behaving differently from a
+  // zero-length array of another - a difference no value of either can observe,
+  // both being the empty array.
+  expect(evaluated('let a: [0].<never>; String(a.length);')).toBe('0');
+  expect(evaluated('let a: [0].<uint8>; String(a.length);')).toBe('0');
+  // The value it takes is the one the dynamic extent already took.
+  expect(evaluated('let a: [].<never> = []; String(a.length);')).toBe('0');
+
+  // Reached through a parameter as well, which is where a generic body hits it:
+  // the body is checked once for every instantiation, so an element type that
+  // has no default must not make the declaration unwritable.
+  expect(evaluated('function f<T>() { let a: [0].<T>; return a.length; } String(f.<never>());')).toBe('0');
+
+  // The boundary holds: an extent with anything to fill still needs an element
+  // default, and the array type is not itself empty either way.
+  // Refused before the script runs: a declaration whose type has no default is
+  // a statically-determinable violation, which #sec-type-errors realizes as an
+  // Early Error rather than as a thrown TypeError.
+  expectStaticTypeError('let a: [2].<never>;');
+  expect(evaluated('type T = [0].<never>; String(T === never);')).toBe('false');
+});

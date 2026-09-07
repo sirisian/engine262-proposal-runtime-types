@@ -2177,6 +2177,15 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       if (typeof t.Extent !== 'number') {
         return undefined;
       }
+      // A ZERO extent has nothing to fill, so the element's default is not
+      // consulted and its absence is not a reason to have none. `[0].<never>`
+      // is the array of no elements, which exists and is the same value
+      // `[].<never>` defaults to; asking `never` for a default first made a
+      // zero-length array of an element type that has one behave differently
+      // from a zero-length array of one that does not.
+      if (t.Extent === 0) {
+        return out;
+      }
       const element = Q(yield* DefaultValueOf(t.Element));
       if (element === undefined) {
         return undefined;
