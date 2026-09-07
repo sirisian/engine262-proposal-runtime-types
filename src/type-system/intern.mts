@@ -348,7 +348,22 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     // module load order ... A reflected object type lists its properties in key
     // order whatever order the source wrote."
     copy.Properties = propertiesInKeyOrder(
-      t.Properties.map((p) => ({ key: p.key, type: CanonicalizeType(p.type, copies), optional: p.optional, readonly: p.readonly })),
+      // The record is REBUILT here, so every field it carries must be listed or
+      // canonicalization silently drops it. `initial` - a member's declared
+      // default (#sec-object-types) - and `protected` were dropped, which is why
+      // storing a default where the type is resolved had no effect at all: the
+      // value reached this map and did not leave it. `initial` is deliberately
+      // NOT part of the order key below, so it does not affect identity; it
+      // travels with the canonical record because a typed composite creation and
+      // a typed parse read it off the interned type.
+      t.Properties.map((p) => ({
+        key: p.key,
+        type: CanonicalizeType(p.type, copies),
+        optional: p.optional,
+        readonly: p.readonly,
+        ...(p.protected !== undefined ? { protected: p.protected } : {}),
+        ...(p.initial !== undefined ? { initial: p.initial } : {}),
+      })),
     );
     copy.IndexSignatures = t.IndexSignatures
       .map((ix) => ({ Key: CanonicalizeType(ix.Key, copies), Value: CanonicalizeType(ix.Value, copies) }))

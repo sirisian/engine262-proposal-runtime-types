@@ -4581,7 +4581,22 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         } else {
           type = anyType;
         }
-        Properties.push({ key, type, optional: member.Optional, readonly: member.Readonly });
+        // The DECLARED DEFAULT of `page?: uint8 = 0` (#sec-object-types), read
+        // the same way and at the same point an INTERFACE member's is, because
+        // an object type "is the inline form of an interface" and the two
+        // spellings must mean one thing. Without it a structural type parsed a
+        // default and dropped it, so `Composite.<S>({id: 7})` and
+        // `Composite.<S>({id: 7, page: 0})` were two objects where the clause
+        // promises one, and a typed parse filled nothing.
+        let initial;
+        const memberInitializer = (member as { Initializer?: ParseNode | null }).Initializer;
+        if (memberInitializer) {
+          const attempt = EnsureCompletion(yield* Evaluate(memberInitializer as never));
+          if (attempt.Type === 'normal') {
+            initial = Q(yield* GetValue(attempt.Value as never));
+          }
+        }
+        Properties.push({ key, type, optional: member.Optional, readonly: member.Readonly, initial });
       }
       return { Kind: 'object', Properties, IndexSignatures };
     }

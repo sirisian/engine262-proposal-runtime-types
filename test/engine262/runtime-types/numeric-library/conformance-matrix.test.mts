@@ -303,39 +303,31 @@ test('inventory: provenance is a host channel and not a program-visible property
 });
 
 /**
- * A BUG PIN rather than a gap pin, and the distinction is the point: the
- * deferrals above are choices, and this is not one.
+ * The bug this pinned is fixed; what remains of it is one gap, kept here.
  *
- * #table-reflection-nodes gives an object node's property record an `initial`,
- * the declared default of `page?: uint8 = 0`, and the engine does not emit one.
- * The reason it cannot is upstream of reflection: a default written in a
- * STRUCTURAL object type is parsed and then dropped, so there is nothing to
- * emit. The same default on an `interface` survives, which is what
- * composites/typed-creation.test.mts asserts.
+ * A default written in a STRUCTURAL object type was parsed and dropped, so only
+ * the `interface` spelling honoured one and `Composite.<S>({id: 7})` and
+ * `Composite.<S>({id: 7, page: 0})` were two objects where
+ * #sec-composite-typeobject-call promises one. The drop was in CANONICALIZATION:
+ * intern.mts rebuilds every property record from an explicit field list, so the
+ * default reached that map and did not leave it.
  *
- * The visible cost is the one #sec-composite-typed-creation says the default
- * exists to prevent: the two spellings of one key stop interning together, so
- * a composite keyed on a structural shape has two identities where the clause
- * promises one. The downstream cost is that every kit builder written over
- * `mapProperties` spreads a record that never carried the default, so
- * `partial(T)` and `readonly(T)` strip it silently - the failure mode
- * typeprogramming.md §3.1 names for `readonly` and does not name for `initial`.
- *
- * Fixing it is not a plumb. `resolveType` is synchronous and an initializer's
- * evaluation is a generator step, which is the constraint TupleElementRecord's
- * [[Initial]] already records; either object-type defaults are evaluated
- * somewhere the checker can reach them, or the structural form should refuse
- * the syntax rather than accept and discard it. Pinned so the next inventory
- * pass does not rediscover it, and so that fixing it fails here.
+ * Still open is the REFLECTION half. #table-reflection-nodes gives a property
+ * record an `initial` and neither side carries it - `getReflection` does not
+ * emit it and `makeType` does not read it - so a builder that rebuilds an object
+ * type drops every default it had. That is the failure mode typeprogramming.md
+ * names for `readonly` and does not name for `initial`, and it is what
+ * `partial(T)` and `readonly(T)` would do to a default today. Pinned so closing
+ * it fails here.
  */
-test('inventory: a default in a structural object type is dropped, and its default is not reflected', () => {
-  const S = 'type S = { id: uint32, page?: uint8 = 0 }; ';
-  // the syntax is accepted
+test('inventory: a structural default is honoured; reflection still drops it', () => {
+  const S = 'type S = { id: uint32, page?: uint8 = 7 }; ';
   expect(ok(S)).toBe(true);
-  // ...and then discarded: the interface spelling of the same shape answers 0
-  expect(evaluated(`${S} String(Composite.<S>({ id: 7 }).page);`)).toBe('undefined');
-  // so the two spellings of one key do not intern together
-  expect(evaluated(`${S} String(Composite.<S>({ id: 7 }) === Composite.<S>({ id: 7, page: 0 }));`)).toBe('false');
-  // and the property record has no `initial` for reflection to emit
+  // The construction sites of #sec-object-types agree with the interface spelling.
+  expect(evaluated(`${S} String(Composite.<S>({ id: 7 }).page);`)).toBe('7');
+  expect(evaluated(`${S} String(JSON.parse.<S>('{"id":7}').page);`)).toBe('7');
+  // ...so the two spellings of one key intern together.
+  expect(evaluated(`${S} String(Composite.<S>({ id: 7 }) === Composite.<S>({ id: 7, page: 7 }));`)).toBe('true');
+  // THE REMAINING GAP: the record is not reflected, so it cannot round-trip.
   expect(evaluated(`${S} String('initial' in Reflect.getReflection(S).properties[1]);`)).toBe('false');
 });
