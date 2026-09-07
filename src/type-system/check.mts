@@ -13722,10 +13722,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // counter over a literal range getting both its bound and its type.
       const element = f.AssignmentExpression ? iteratedElementType(f.AssignmentExpression) : null;
       walk(f.AssignmentExpression);
+      // ...and the binding's own ANNOTATION, where it writes one. It was
+      // dropped: `for (const x: string of arr)` on a `[].<uint8>` ran the loop
+      // and reported nothing, the binding taking the element type above or no
+      // type at all, so a written annotation was neither honoured nor checked.
+      // The annotation wins as the binding's type - it is declared, where the
+      // element type is inferred - and the element type must be assignable to
+      // it, since that is what the loop will put there.
+      const annotationNode = ((f.ForDeclaration ?? f.ForBinding) as unknown as {
+        ForBinding?: { TypeAnnotation?: ParseNode.TypeAnnotation | null },
+        TypeAnnotation?: ParseNode.TypeAnnotation | null,
+      } | undefined);
+      const loopAnnotation = annotationNode?.ForBinding?.TypeAnnotation ?? annotationNode?.TypeAnnotation;
+      const declaredLoopType = loopAnnotation ? resolveType(loopAnnotation.Type) : null;
+      if (declaredLoopType && element && element.Kind !== 'any'
+          && !IsAssignable(element as TypeRecord, declaredLoopType as TypeRecord)) {
+        const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(element as TypeRecord)), Value(displayType(declaredLoopType as TypeRecord))) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+      }
+      const bindingType = declaredLoopType ?? element;
       const walkBody = () => {
-        if (typeof name === 'string' && element) {
+        if (typeof name === 'string' && bindingType) {
           pushBlock(() => {
-            declare(name, element);
+            declare(name, bindingType);
             walk(f.Statement);
           });
           return;
