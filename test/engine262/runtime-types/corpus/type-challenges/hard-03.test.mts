@@ -15,11 +15,20 @@ import { expectBuilderTrue, kit } from './harness.mts';
 // `never` has no arms, so `.every(...)` is vacuously true and it is dropped; a
 // union survives unless all of its arms are in the set (the third case pins
 // this: number|null|undefined is kept though two of its three arms match).
+//
+// The INPUT is an array of types rather than a tuple TYPE, and it has to be: a
+// tuple with a `never` position is `never` (#sec-canonicalizetype), so
+// `[1, never, 'a']` is not a type this program could receive. The kit's own
+// currency is the array - `elementTypes` returns one and `tupleOf` consumes one
+// - so the function takes what `elementTypes` would have handed it and the
+// exercise is unchanged. The RESULT still builds as a tuple, the filter having
+// removed every `never` before `tupleOf` sees it, which is what the assertions
+// compare.
 test('hard 399 - Tuple Filter', () => {
-  const f = ` function filterOut(T, F) { const drop = new Set(arms(F)); return tupleOf(elementTypes(T).filter(t => !arms(t).every(arm => drop.has(arm)))); }`;
-  expectBuilderTrue(kit(`${f}\n type T = [1, never, 'a']; type Expected = [1, 'a']; String(filterOut(T, never) === Expected);`));
-  expectBuilderTrue(kit(`${f}\n type T = [never, 1, 'a', undefined, false, null]; type F = never | null | undefined; type Expected = [1, 'a', false]; String(filterOut(T, F) === Expected);`));
-  expectBuilderTrue(kit(`${f}\n type T = [float64 | null | undefined, never]; type F = never | null | undefined; type Expected = [float64 | null | undefined]; String(filterOut(T, F) === Expected);`));
+  const f = ` function filterOut(types, F) { const drop = new Set(arms(F)); return tupleOf(types.filter(t => !arms(t).every(arm => drop.has(arm)))); }`;
+  expectBuilderTrue(kit(`${f}\n const T = [type 1, never, type 'a']; type Expected = [1, 'a']; String(filterOut(T, never) === Expected);`));
+  expectBuilderTrue(kit(`${f}\n const T = [never, type 1, type 'a', type undefined, type false, type null]; type F = never | null | undefined; type Expected = [1, 'a', false]; String(filterOut(T, F) === Expected);`));
+  expectBuilderTrue(kit(`${f}\n const T = [type float64 | null | undefined, never]; type F = never | null | undefined; type Expected = [float64 | null | undefined]; String(filterOut(T, F) === Expected);`));
 });
 
 // 2059 - Drop String - remove every occurrence of the given characters.

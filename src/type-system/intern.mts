@@ -219,21 +219,20 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
         Elements.push({ Type: c, Rest: e.Rest, Initial: e.Initial });
       }
     }
-    // A tuple is a product, and a required position of `never` does leave it
-    // with no values - but it is NOT reduced, and the reason is that a tuple has
-    // a second role an object type does not.
+    // #sec-canonicalizetype: a tuple is a product, so a REQUIRED position of
+    // `never` empties it, for the reason an object's required property does - a
+    // value would have to hold a value of a type that has none.
     //
-    // The type-programming kit reads a tuple as a heterogeneous LIST
-    // (typeprogramming.md: `elementTypes`, `tupleOf`), and `never` is ordinary
-    // data in one: `[1, never, 'a']` is the input to a filter that drops it.
-    // Reducing the list to `never` destroys the program's ability to compute
-    // over it, and the kit has no other list structure to move to. An object
-    // type carries no such second reading, so it reduces (see the object arm)
-    // while this does not.
+    // A REST position does not: it supplies no element, so `[...[].<never>]` is
+    // satisfied by the empty tuple.
     //
-    // TypeScript agrees for the same practical reason; Rust does not, `(i32, !,
-    // char)` being uninhabited there - but Rust has no type-level list built on
-    // the tuple, so the cost that decides it here does not arise.
+    // The rule is the object arm's applied to the other product, and the two
+    // must agree because a program can write the same shape either way. Where
+    // they disagreed, `Pair.<uint8, never>` stood while
+    // `Result.<uint8, never>` reduced - one shape, two spellings, two answers.
+    if (Elements.some((e) => !e.Rest && isNeverRecord(e.Type))) {
+      return neverType;
+    }
     return { Kind: 'tuple', Elements };
   }
   if (t.Kind === 'application') {
@@ -262,11 +261,16 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   }
   if (t.Kind === 'array') {
     const Element = CanonicalizeType(t.Element, copies);
-    // Not reduced, for the reason the tuple arm gives: an array of a fixed
-    // extent is a product, but the element type is also read as data by the
-    // kit, and the two must agree on what `[N].<never>` denotes. The emptiness
-    // is reachable by trying to store an element, which is where it is
-    // reported.
+    // A FIXED array of a non-zero extent is the same product as a tuple of that
+    // many positions, so it empties for the same reason.
+    //
+    // A VARIABLE-length `[].<never>` does NOT, and neither does `[0].<never>`:
+    // both are inhabited by the empty array, there being no element to supply.
+    // That boundary is the one #sec-defaultvalueof also draws, where a zero
+    // extent is answered before the element is consulted.
+    if (typeof t.Extent === 'number' && t.Extent > 0 && isNeverRecord(Element)) {
+      return neverType;
+    }
     return { Kind: 'array', Element, Extent: t.Extent };
   }
   if (t.Kind === 'reference') {

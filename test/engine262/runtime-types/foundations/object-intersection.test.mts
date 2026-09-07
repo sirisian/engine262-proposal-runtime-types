@@ -123,19 +123,42 @@ test('a REQUIRED member of `never` empties the object', () => {
   expect(evaluated('type F<T, U> = { a: T & U }; type G = F.<uint32, string>; String(G === never);')).toBe('true');
 });
 
-test('a TUPLE is NOT reduced, though a required position of `never` empties it', () => {
-  // The one place propagation is deliberately withheld, and the reason is a
-  // second role the tuple has: the type-programming kit reads it as a
-  // heterogeneous LIST, where `never` is ordinary data - `[1, never, 'a']` is
-  // the input to a filter that drops it (corpus/type-challenges, 399 Tuple
-  // Filter). Reducing the list destroys the program that computes over it, and
-  // the kit has no other list structure. An object type carries no second
-  // reading, so it reduces and this does not.
-  expect(isNever('type T = [uint8, never];')).toBe('false');
-  expect(isNever('type T = [never];')).toBe('false');
-  expect(isNever('type T = [4].<never>;')).toBe('false');
-  // The emptiness is still reachable: storing an element is refused.
-  expectStaticTypeError('type T = [uint8, never]; let v: T = [1, 2];');
+test('a required position of `never` empties a TUPLE, as it does an object', () => {
+  // The case that decided it. A product is a product however its positions are
+  // named, so a generic instantiated at the empty type must answer the same way
+  // whether the shape is positional or keyed - it once did not, and
+  // `Pair.<uint8, never>` stood while `Result.<uint8, never>` reduced.
+  const PAIR = 'type Pair<A, B> = [A, B]; type Result<T, E> = { value: T, error: E };';
+  expect(evaluated(`${PAIR} String((type Pair.<uint8, never>) === never);`)).toBe('true');
+  expect(evaluated(`${PAIR} String((type Result.<uint8, never>) === never);`)).toBe('true');
+
+  expect(isNever('type T = [uint8, never];')).toBe('true');
+  expect(isNever('type T = [never];')).toBe('true');
+  // A fixed array of a non-zero extent is the same product.
+  expect(isNever('type T = [4].<never>;')).toBe('true');
+  expect(isNever('type T = [1].<never>;')).toBe('true');
+});
+
+test('a REST position does not empty a tuple', () => {
+  // It supplies no element, so the empty tuple satisfies it - the same reason
+  // `[].<never>` and `[0].<never>` are inhabited.
+  expect(isNever('type T = [...[].<never>];')).toBe('false');
+  expect(isNever('type T = [].<never>;')).toBe('false');
+  expect(isNever('type T = [0].<never>;')).toBe('false');
+  expect(ok('let a: [].<never> = [];')).toBe(true);
+  expect(ok('let a: [0].<never>;')).toBe(true);
+});
+
+test('the type-programming kit carries a list as an array of types', () => {
+  // What the reduction costs, and why it costs nothing. A tuple type cannot hold
+  // a `never` position, so a type-level list that wants one is an ARRAY of
+  // types - which is the kit's own currency: `elementTypes` returns one and
+  // `tupleOf` consumes one (src/type-system/std-types.mts). The corpus's Tuple
+  // Filter (399) reads its input that way for exactly this reason.
+  expect(evaluated(
+    "const list = [type 1, never, type 'a'];"
+    + ' String(list.length) + "/" + String(list[1] === never);',
+  )).toBe('3/true');
 });
 
 test('`never` propagates out of the reference positions', () => {
