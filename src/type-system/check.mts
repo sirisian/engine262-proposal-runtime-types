@@ -5662,7 +5662,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Identity is by [[Declaration]], so the record handed out here is the
     // same type the completed one denotes; only its members are filled in
     // later, and they are filled into the array this record already holds.
-    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
     // An interface's INDEX SIGNATURES, filled beside its members. The
     // structure below hardcoded `IndexSignatures: []` and the walk skipped every
     // non-TypeMember, so a declared signature was PARSED and then dropped -
@@ -9525,7 +9525,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       BindingIdentifier?: { name: string } | null,
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
-    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean }[] = [];
+    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
     // Methods, accumulated per name because a method may be OVERLOADED exactly
     // as a function may. A getter contributes its return type as the
     // property's type, since that is what reading the property yields; a setter
