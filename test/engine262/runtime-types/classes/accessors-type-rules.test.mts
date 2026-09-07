@@ -195,10 +195,19 @@ test('a readonly accessor installs a GETTER ONLY', () => {
 });
 
 test('assignment is refused, and the initializer still reaches the backing', () => {
-  expect(outcome('"use strict"; class A { readonly accessor a: uint8 = 1; } const x = new A(); x.a = 2;')).toBe('TypeError');
-  // Sloppy mode fails silently, as it does for any getter-only property - so
-  // the VALUE is the assertion there, not the throw.
-  expect(evaluated('class A { readonly accessor a: uint8 = 3; } const x = new A(); x.a = 9; String(x.a);')).toBe('3');
+  // #sec-object-types: a write to a `readonly` member is a type error "at
+  // compile time where the type of the base is known", and `x`'s type is. This
+  // was the RUN TIME's refusal until a `readonly` class field began carrying its
+  // modifier into the member's Property Type Record; the accessor form inherits
+  // the earlier moment with it.
+  expect(outcome('"use strict"; class A { readonly accessor a: uint8 = 1; } const x = new A(); x.a = 2;')).toBe('StaticTypeError');
+  // ...and the sloppy-mode case is the one this most improves: a getter-only
+  // property fails a write SILENTLY there, so before the static refusal the
+  // program was simply wrong with no signal at all.
+  expect(outcome('class A { readonly accessor a: uint8 = 3; } const x = new A(); x.a = 9;')).toBe('StaticTypeError');
+  // The backing store is unaffected by the refused write - asserted through a
+  // program that does not contain one.
+  expect(evaluated('class A { readonly accessor a: uint8 = 3; } const x = new A(); String(x.a);')).toBe('3');
   // The INITIALIZER still works: DefineField writes the Private Name directly
   // and never goes through the setter, which is why removing the setter costs
   // nothing.

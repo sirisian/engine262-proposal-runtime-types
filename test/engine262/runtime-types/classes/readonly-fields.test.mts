@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
+import { evaluated, expectThrown, runFlagOff, expectStaticTypeError, ok } from '../harness.mts';
 
 /**
  * The `readonly` class-field modifier.
@@ -176,4 +176,39 @@ test('a method still satisfies an interface and an object type', () => {
     + ' let i: I = new C(); String(i.read());')).toBe('5');
   expect(evaluated('class C { x: uint8 = (5 := uint8); read(): uint8 { return this.x; } }'
     + ' type Shape = { read(): uint8 }; let o: Shape = new C(); String(o.read());')).toBe('5');
+});
+
+// ---------------------------------------------------------------------------
+// ...AND THE REFUSAL IS AN EARLY ERROR WHERE THE BASE'S TYPE IS KNOWN.
+//
+// `#sec-object-types`: "A write to a `readonly` member is a type error, AT
+// COMPILE TIME WHERE THE TYPE OF THE BASE IS KNOWN and at run time otherwise."
+// The rule and the operation that applies it were both correct and reached - a
+// `readonly` member of an OBJECT TYPE or an INTERFACE was already refused
+// statically. What was missing was the flag: a class field's Property Type
+// Record hardcoded `readonly: false`, so the modifier never arrived from the
+// declaration and only the run time refused. A divergence in the moment, not in
+// the answer - which is why the tests above, all written against the run time,
+// went on passing.
+// ---------------------------------------------------------------------------
+
+test('a write through a known base is an Early Error', () => {
+  const C = 'class C { readonly v: uint8 = 0; } const c = new C(); ';
+  expectStaticTypeError(`${C} c.v = 1;`);
+  // "every assignment form is a write": a compound assignment and an update are
+  // writes, and the operation that refuses them already sat outside the `=`
+  // guard - so these follow from the flag alone.
+  expectStaticTypeError(`${C} c.v += 1;`);
+  expectStaticTypeError(`${C} c.v++;`);
+  expectStaticTypeError(`${C} c.v--;`);
+  // The object-type and interface spellings are unchanged.
+  expectStaticTypeError('type T = { readonly v: uint8 }; let o: T = { v: 1 }; o.v = 2;');
+  expectStaticTypeError('interface I { readonly v: uint8 } function f(i: I) { i.v = 2; }');
+});
+
+test('what stays writable', () => {
+  expect(ok('class C { v: uint8 = 0; } const c = new C(); c.v = 1;')).toBe(true);
+  expect(evaluated('class C { readonly v: uint8 = 3; } const c = new C(); let u: uint8 = c.v; String(u);')).toBe('3');
+  // The constructor is where a `readonly` field is filled.
+  expect(evaluated('class C { readonly v: uint8; constructor() { this.v = 7; } } String(new C().v);')).toBe('7');
 });

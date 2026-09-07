@@ -9400,7 +9400,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : null);
       if (t) {
         Properties.push({
-          key, type: t, optional: false, readonly: false,
+          // #sec-object-types: "A write to a `readonly` member is a type error,
+          // AT COMPILE TIME WHERE THE TYPE OF THE BASE IS KNOWN and at run time
+          // otherwise." This was hardcoded *false*, so a `readonly` class FIELD
+          // was a compile-time error nowhere while the same member on an object
+          // type or an interface was refused - the rule and the operation that
+          // applies it (`requireWritableMember`) were both right and reached; the
+          // flag they read simply never arrived from the declaration. The run
+          // time refused the write, so the divergence was in the moment only.
+          key, type: t, optional: false, readonly: (f as { readonly?: boolean }).readonly === true,
           protected: (f as { protected?: boolean }).protected === true,
           ...(annotated ? {} : { writeType: anyTypeRecord as TypeRecord }),
         });
