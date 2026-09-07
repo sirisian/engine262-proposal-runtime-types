@@ -601,7 +601,17 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
         const type = Q(yield* nodeToTypeRecord(Q(yield* Get(p, Value('type')))));
         const optionalV = Q(yield* Get(p, Value('optional')));
         const readonlyV = Q(yield* Get(p, Value('readonly')));
-        Properties.push({ key: nameV.stringValue(), type, optional: optionalV === Value.true, readonly: readonlyV === Value.true });
+        // The other half of the round trip: a default read back is a default
+        // written back, or #sec-reflect-maketype's identity fails for every
+        // object type carrying one.
+        const initialV = Q(yield* Get(p, Value('initial')));
+        Properties.push({
+          key: nameV.stringValue(),
+          type,
+          optional: optionalV === Value.true,
+          readonly: readonlyV === Value.true,
+          ...(initialV === Value.undefined ? {} : { initial: initialV }),
+        });
       }
       const IndexSignatures: IndexSignatureRecord[] = [];
       const ixV = Q(yield* Get(node, Value('indexSignatures')));
@@ -922,6 +932,16 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
         X(CreateDataProperty(pr, Value('type'), typeObj(p.type)));
         X(CreateDataProperty(pr, Value('optional'), p.optional ? Value.true : Value.false));
         X(CreateDataProperty(pr, Value('readonly'), p.readonly ? Value.true : Value.false));
+        // #table-reflection-nodes gives a property record an `initial`, the
+        // member's declared default (#sec-object-types). Emitted uniformly, so
+        // the record has one shape, with *undefined* where none is declared.
+        //
+        // Without it a builder that rebuilds an object type dropped every
+        // default it carried, since `mapProperties` spreads what reflection
+        // emitted: `partial(T)` and `readonly(T)` would strip a default while
+        // appearing to preserve the member - the failure mode typeprogramming.md
+        // names for `readonly`, on the same record.
+        X(CreateDataProperty(pr, Value('initial'), (p as { initial?: Value }).initial ?? Value.undefined));
         return pr as Value;
       });
       set('properties', CreateArrayFromList(properties));

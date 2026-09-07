@@ -53,3 +53,16 @@ test('a required member is still required, default or not', () => {
   // is "a type error if a |TypeMember|'s |Initializer| appears without `?`".
   expect(evaluated(`${S} let threw = 'no'; try { Composite.<S>({}); } catch (e) { threw = e.constructor.name; } threw;`)).toBe('TypeError');
 });
+
+test('the default survives reflection and a builder that rebuilds the type', () => {
+  // #table-reflection-nodes lists `initial` on a property record. Without it a
+  // builder spreading what reflection emitted stripped the default while
+  // appearing to preserve the member.
+  expect(evaluated(`${S} String(Reflect.getReflection(S).properties[1].initial);`)).toBe('9');
+  expect(evaluated(`${S} String(Reflect.makeType(Reflect.getReflection(S)) === S);`)).toBe('true');
+  expect(evaluated(`${S} let R = Reflect.makeType({ ...Reflect.getReflection(S),
+    properties: Reflect.getReflection(S).properties.map(p => ({ ...p, readonly: true })) });
+    String(Composite.<R>({ id: 1 }).page);`)).toBe('9');
+  // Emitted uniformly, so the record has one shape.
+  expect(evaluated("type N = { a?: uint8 }; String('initial' in Reflect.getReflection(N).properties[0]);")).toBe('true');
+});

@@ -303,24 +303,19 @@ test('inventory: provenance is a host channel and not a program-visible property
 });
 
 /**
- * The bug this pinned is fixed; what remains of it is one gap, kept here.
+ * Closed, and kept as the assertion the pin was written to become.
  *
  * A default written in a STRUCTURAL object type was parsed and dropped, so only
- * the `interface` spelling honoured one and `Composite.<S>({id: 7})` and
- * `Composite.<S>({id: 7, page: 0})` were two objects where
- * #sec-composite-typeobject-call promises one. The drop was in CANONICALIZATION:
- * intern.mts rebuilds every property record from an explicit field list, so the
- * default reached that map and did not leave it.
+ * the `interface` spelling honoured one and the two spellings of a composite key
+ * were two objects where #sec-composite-typeobject-call promises one. The drop
+ * was in CANONICALIZATION: intern.mts rebuilds every property record from an
+ * explicit field list, so the default reached that map and did not leave it.
  *
- * Still open is the REFLECTION half. #table-reflection-nodes gives a property
- * record an `initial` and neither side carries it - `getReflection` does not
- * emit it and `makeType` does not read it - so a builder that rebuilds an object
- * type drops every default it had. That is the failure mode typeprogramming.md
- * names for `readonly` and does not name for `initial`, and it is what
- * `partial(T)` and `readonly(T)` would do to a default today. Pinned so closing
- * it fails here.
+ * The reflection half followed: #table-reflection-nodes gives a property record
+ * an `initial`, neither side carried it, and a builder rebuilding an object type
+ * dropped every default it had.
  */
-test('inventory: a structural default is honoured; reflection still drops it', () => {
+test('inventory: a member default survives construction, interning, and the round trip', () => {
   const S = 'type S = { id: uint32, page?: uint8 = 7 }; ';
   expect(ok(S)).toBe(true);
   // The construction sites of #sec-object-types agree with the interface spelling.
@@ -328,6 +323,7 @@ test('inventory: a structural default is honoured; reflection still drops it', (
   expect(evaluated(`${S} String(JSON.parse.<S>('{"id":7}').page);`)).toBe('7');
   // ...so the two spellings of one key intern together.
   expect(evaluated(`${S} String(Composite.<S>({ id: 7 }) === Composite.<S>({ id: 7, page: 7 }));`)).toBe('true');
-  // THE REMAINING GAP: the record is not reflected, so it cannot round-trip.
-  expect(evaluated(`${S} String('initial' in Reflect.getReflection(S).properties[1]);`)).toBe('false');
+  // And reflection carries it, so a rebuilt type is the same type.
+  expect(evaluated(`${S} String(Reflect.getReflection(S).properties[1].initial);`)).toBe('7');
+  expect(evaluated(`${S} String(Reflect.makeType(Reflect.getReflection(S)) === S);`)).toBe('true');
 });
