@@ -242,3 +242,30 @@ test('the readonly rule is about a class\'s USERS, so `this` is exempt', () => {
   expectStaticTypeError('class C { readonly v: uint8 = 0; } const c = new C(); c.v = 1;');
   expectStaticTypeError('class C { v: uint8 = 0; m() { this.v = "s"; } }');
 });
+
+// ---------------------------------------------------------------------------
+// `super.x` NAMES A MEMBER OF THE BASE CLASS.
+//
+// `super.x` is its own node - not a member access with a `super` receiver - so
+// no arm reached it, and `super.m("s")` against `m(a: uint8)` and
+// `super.v = "s"` on a `uint8` field were run-time only where the same accesses
+// through a binding are Early Errors. The receiver is the innermost `this`
+// frame's [[Base]]: that frame is the class being walked, and `super` is its
+// base. A computed `super[e]` names no member statically and is left alone.
+//
+// The STORE needed its own branch: `super.v = e`'s target is not a
+// |MemberExpression|, so the assignment arm's member branch never saw it - the
+// same shape as everything else in this pass, a rule reached from one spelling
+// and not the one beside it.
+// ---------------------------------------------------------------------------
+
+test('an access through `super` is checked against the base class', () => {
+  const B = 'class B { v: uint8 = 0; m(a: uint8) { return a; } } ';
+  expectStaticTypeError(`${B} class D extends B { go() { super.v = "s"; } }`);
+  expectStaticTypeError(`${B} class D extends B { go() { super.m("s"); } }`);
+  expectStaticTypeError(`${B} class D extends B { go() { let s: string = super.v; } }`);
+  // The compound spelling follows, as it does for every other target.
+  expectStaticTypeError(`${B} class D extends B { go() { super.v += "s"; } }`);
+  // Correct uses are unaffected, and reach the base's member.
+  expect(evaluated(`${B} class D extends B { go() { super.v = 1; return super.m(2); } } String(new D().go());`)).toBe('2');
+});

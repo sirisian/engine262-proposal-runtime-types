@@ -7758,6 +7758,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return lookup(referenced);
       }
+      // `super.x` NAMES A MEMBER OF THE BASE CLASS. It is its own node - not a
+      // member access with a `super` receiver - so no arm reached it, and
+      // `super.m("s")` against an `m(a: uint8)` and `super.v = "s"` on a `uint8`
+      // field were run-time only where the same accesses through a binding are
+      // Early Errors. The receiver is the innermost `this` frame's [[Base]]: the
+      // frame is the class currently being walked, and `super` is its base.
+      // A COMPUTED `super[e]` names no member statically and is left alone.
+      case 'SuperProperty': {
+        const sp = node as unknown as { IdentifierName?: { name?: string } | null };
+        const name = sp.IdentifierName?.name;
+        const self = thisTypeFrames.length > 0 ? thisTypeFrames[thisTypeFrames.length - 1]! : null;
+        const base = (self as unknown as { Base?: TypeRecord } | null)?.Base;
+        if (!name || !base) {
+          return null;
+        }
+        const baseStructure = structureOf(base as Known);
+        if (baseStructure && baseStructure.Kind === 'object') {
+          const prop = baseStructure.Properties.find((p) => p.key === name);
+          if (prop) {
+            return prop.type as Known;
+          }
+        }
+        return null;
+      }
       case 'ThisExpression':
         // #sec-this-adoption: within
         // an adopting literal's body, "`this` has that type". Outside one there
@@ -15226,6 +15250,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
           }
           invalidateNarrowing(name);
+        } else if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'SuperProperty') {
+          // `super.v = e` STORES TO A MEMBER OF THE BASE CLASS. Its target is
+          // not a |MemberExpression| - `super.v` is its own node - so the branch
+          // below never saw it, and the store went unchecked even once
+          // `staticType` could name the member's type. The target IS that type.
+          const target = staticType(a.LeftHandSideExpression);
+          if (target && compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
+            requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+          }
         } else if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'MemberExpression') {
           // #table-check-sites rows 4 and 5, statically: a store whose target
           // has a known typed property or element type is the same shape as a
