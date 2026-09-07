@@ -28,6 +28,20 @@ function run(source: string) {
   return realm.evaluateScriptSkipDebugger(source);
 }
 
+/**
+ * Did _source_ run to a normal completion?
+ *
+ * `evaluateScriptSkipDebugger` returns a union whose non-completion arms have no
+ * [[Type]], so reading `.Type` off it does not type-check even though every call
+ * here is correct at run time - `build:dts` reported four of them while
+ * `build:engine` said nothing, rollup not being a type checker. This is the cast
+ * `harness.mts`'s own `ok` makes, kept local because this file builds its realm
+ * itself rather than importing the harness.
+ */
+function ran(source: string): boolean {
+  return (run(source) as { Type: string }).Type === 'normal';
+}
+
 function evaluated(source: string): string {
   const completion = run(source);
   expect(completion).toMatchObject({ Type: 'normal' });
@@ -1532,15 +1546,15 @@ test('the logical compounds assign the right operand, so their check is the same
   expectStatic('let a: uint8 = 0; a ||= "s";');
   expectStatic('let a: uint8 = 1; a &&= "s";');
   expectStatic('let a: uint8 | null = null; a ??= "s";');
-  expect(run('let a: uint8 | null = null; a ??= 1;').Type).toBe('normal');
+  expect(ran('let a: uint8 | null = null; a ??= 1;')).toBe(true);
 });
 
 test('what stays as it was', () => {
   // A value the target admits is not refused - the wrap of a typed integer is
   // the run time's, exactly as it is for `a = a * 2`.
-  expect(run('let a: uint8 = 200; a = a * 2;').Type).toBe('normal');
+  expect(ran('let a: uint8 = 200; a = a * 2;')).toBe(true);
   // An untyped binding is untouched.
-  expect(run('let a = 0; a += "s";').Type).toBe('normal');
+  expect(ran('let a = 0; a += "s";')).toBe(true);
   // A `string` target is left to design question A, as `=` leaves it.
-  expect(run('let s: string = ""; let n: uint8 = 1; s = s + n;').Type).toBe('normal');
+  expect(ran('let s: string = ""; let n: uint8 = 1; s = s + n;')).toBe(true);
 });
