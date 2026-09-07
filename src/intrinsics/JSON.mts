@@ -10,7 +10,6 @@ import {
   Value, isTypedNumber, unwrapToNumber } from '../value.mts';
 import {
   IsOfType,
-  DefaultValueOf,
   fitsNumericType,
 } from '../type-system/runtime.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';

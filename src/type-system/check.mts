@@ -4609,8 +4609,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         errors.push((Throw.SyntaxError('$1 requires a contextual type', Value('new.()')) as ThrowCompletion).Value as ObjectValue);
         return null;
       }
-      if (contextual.Kind !== 'nominal') {
-        report(contextual, contextual);
+      // #sec-new-expressions: "It is a type error where the contextual type is
+      // not CONSTRUCTIBLE, as in `let n: uint8 = new.(1)`" - constructible, not
+      // nominal. A class is one, and so is an array type and a vector type, both
+      // of which the design's own examples build this way: "Since this works for
+      // any type the following works as well", over `[].<float32x4>`.
+      //
+      // The test was `Kind !== 'nominal'` and the report was
+      // `report(contextual, contextual)`, which said that a type was not
+      // assignable to ITSELF - `"vector.<float32, 4>" is not assignable to
+      // "vector.<float32, 4>"` - for every target the form did not yet support.
+      // A type failing to be assignable to itself is a claim the reader has to
+      // disprove before they can see what the message meant.
+      // A VECTOR's [[Kind]] is ~primitive~ - it is `vector` with a lane type and
+      // a lane count - so it is recognised by name rather than by kind.
+      const asRecord = contextual as unknown as { Kind?: string, Name?: string, Arguments?: readonly unknown[] };
+      const isVector = asRecord.Kind === 'primitive' && asRecord.Name === 'vector' && asRecord.Arguments?.length === 2;
+      if (contextual.Kind !== 'nominal' && contextual.Kind !== 'array' && !isVector) {
+        errors.push((Throw.TypeError('$1 is not constructible', Value(displayType(contextual))) as ThrowCompletion).Value as ObjectValue);
         return null;
       }
       targetTypedNewTypes.set(node as object, contextual);

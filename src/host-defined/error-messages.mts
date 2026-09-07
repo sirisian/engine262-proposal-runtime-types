@@ -670,6 +670,7 @@ export interface Throw {
   | '$1 is not an object'
   | '$1 is not an object or a symbol'
   | '$1 is not an object or tuple type'
+  | '$1 is not constructible'
   | '$1 is not defined'
   | '$1 is not iterable'
   | '$1 is not object or null'

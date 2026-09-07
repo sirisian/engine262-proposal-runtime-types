@@ -50,3 +50,37 @@ test('an argument position carries a contextual type', () => {
   expect(evaluated('class A { constructor(x, y) { this.v = x + y; } } function f(p: A) { return p.v; } String(f(new.(1, 2)));')).toBe('3');
   expect(evaluated('class A { constructor(x) { this.v = x; } } function f(p: A) { return p.v; } String(f(new.(7)));')).toBe('7');
 });
+
+test('the target may be any CONSTRUCTIBLE type, not only a class', () => {
+  // #sec-new-expressions: "It is a type error where the contextual type is not
+  // CONSTRUCTIBLE, as in `let n: uint8 = new.(1)`" - constructible, not nominal.
+  // The form was class-only, and the design's own examples build an array and a
+  // vector this way: "Since this works for any type the following works as
+  // well", over `[].<float32x4>`.
+  expect(evaluated('let a: float32x4 = new.(1, 2, 3, 4); String(a[0]);')).toBe('1');
+  expect(evaluated('let a: [].<float32x4> = [new.(1,2,3,4), new.(1,2,3,4)]; String(a.length);')).toBe('2');
+  expect(evaluated('function g(v: float32x4) { return 1; } String(g(new.(1, 2, 3, 4)));')).toBe('1');
+  // A class target is unchanged.
+  expect(evaluated('class C { x: uint8 = 0; } let c: C = new.(); String(Number(c.x));')).toBe('0');
+
+  // An ARRAY is filled with its element's default, which is what the written
+  // form does: `new [4].<uint8>()` and `new [4].<uint8>(1,2,3,4)` both give
+  // `0,0,0,0`, the same value a bare declaration holds. The two spellings of one
+  // construction must not differ.
+  expect(evaluated('let a: [4].<uint8> = new.(); String(a.join(","));')).toBe('0,0,0,0');
+  expect(evaluated('const a = new [4].<uint8>(); String(a.join(","));')).toBe('0,0,0,0');
+  expect(evaluated('let a: [4].<uint8>; String(a.join(","));')).toBe('0,0,0,0');
+});
+
+test('a target that is NOT constructible says so', () => {
+  // The message used to be `report(contextual, contextual)`, which claimed a type
+  // was not assignable to ITSELF - `"vector.<float32, 4>" is not assignable to
+  // "vector.<float32, 4>"` - for every target the form did not support. A type
+  // failing to be assignable to itself is a claim a reader has to disprove
+  // before they can see what was meant.
+  expectThrown('let n: uint8 = new.(1);', 'is not constructible');
+  expectThrown('let s: string = new.();', 'is not constructible');
+  // And a position with no contextual type at all still says THAT, which is a
+  // different mistake and keeps its own message.
+  expectThrown('const x = new.();', 'requires a contextual type');
+});

@@ -4,11 +4,12 @@ import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
 import { SetPendingThreadLocalTypeArguments } from '../intrinsics/Synchronization.mts';
 import { Q } from '../completion.mts';
 import { TargetTypedNewType } from '../type-system/check.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
 import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { StampTypedCollection } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
@@ -16,8 +17,10 @@ import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
   Assert,
+  Call,
   Construct,
   GetValue,
+  IsCallable,
   IsConstructor,
   Throw,
 } from '#self';
@@ -231,8 +234,41 @@ export function* Evaluate_NewExpression(node: ParseNode.NewExpression): ValueEva
  */
 export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueEvaluator {
   const t = TargetTypedNewType(node as object);
-  if (!t || t.Kind !== 'nominal') {
+  if (!t) {
     return Throw.SyntaxError('$1 requires a contextual type', Value('new.()'));
+  }
+  // A target that is not a class is built through its TYPE OBJECT, which is how
+  // every one of them is built when written out: `[4].<uint8>` is constructed
+  // and a vector is called. The form was nominal-only and reported a
+  // non-nominal target as though the contextual type were missing, which sent a
+  // reader looking at the annotation rather than at the feature.
+  if (t.Kind === 'array') {
+    // An ARRAY is built by filling it with its element's default, which is what
+    // the written form does: `new [4].<uint8>()` and `new [4].<uint8>(1,2,3,4)`
+    // both give `0,0,0,0`, the same value a bare `let a: [4].<uint8>` holds. The
+    // arguments are ignored here because they are ignored there, and the two
+    // spellings of one construction must not differ.
+    const args = Q(yield* ArgumentListEvaluation(node.Arguments)) as readonly Value[];
+    void args;
+    const filled = Q(yield* DefaultValueOf(t));
+    if (filled === undefined) {
+      return Throw.TypeError('$1 is not constructible', Value(displayType(t)));
+    }
+    return filled;
+  }
+  if (t.Kind !== 'nominal') {
+    // A VECTOR is built by CALLING its Type Object - `float32x4(1, 2, 3, 4)` -
+    // which is also how it is written out. It is not a constructor: `new
+    // float32x4(...)` is refused.
+    const typeObject = GetTypeObject(t) as unknown as Value;
+    const args = Q(yield* ArgumentListEvaluation(node.Arguments)) as readonly Value[];
+    if (IsConstructor(typeObject)) {
+      return Q(yield* Construct(typeObject as never, args));
+    }
+    if (IsCallable(typeObject)) {
+      return Q(yield* Call(typeObject, Value.undefined, args));
+    }
+    return Throw.TypeError('$1 is not constructible', Value(displayType(t)));
   }
   let ctor = (t as unknown as { Constructor?: Value }).Constructor;
   if (!ctor || !IsConstructor(ctor)) {
