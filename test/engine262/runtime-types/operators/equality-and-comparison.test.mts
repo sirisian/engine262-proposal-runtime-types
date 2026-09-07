@@ -395,3 +395,43 @@ test('decimal128 keeps 34 digits through a literal and a fold', () => {
   expect(evaluated('let a: decimal128 = 1.234567890123456789012345678901234; String(a);')).toBe('1.234567890123456789012345678901234');
   expect(evaluated('let a: decimal128 = 1.234567890123456789012345678901234 + 0; String(a);')).toBe('1.234567890123456789012345678901234');
 });
+
+// ---------------------------------------------------------------------------
+// A COMPOUND ASSIGNMENT'S UNTYPED OPERAND TAKES THE TARGET'S TYPE.
+//
+// "An operand of a binary operator whose other operand has a known value type"
+// takes that type. The DESUGARED spelling had it - `a = a + 1` at a `uint8`
+// propagates the literal and yields 1 - and the compound spelling did not:
+//
+//     let a: uint8 = 0; a += 1;
+//     TypeError: a value of the "number" type and a "uint.<8>" are different
+//     numeric types and do not mix
+//
+// Not a missing error but a CORRECT PROGRAM REFUSED, in the form a typed counter
+// is written with. Found by checking the static compound-assignment fix against
+// its own desugaring rather than against the report that prompted it.
+// ---------------------------------------------------------------------------
+
+test('a compound assignment on a typed target accepts an untyped operand', () => {
+  expect(evaluated('let a: uint8 = 0; a += 1; String(a) + " " + String(a is uint8);')).toBe('1 true');
+  expect(evaluated('let a: uint8 = 5; a -= 1; String(a);')).toBe('4');
+  expect(evaluated('let f: float32 = 1.5; f += 0.5; String(f);')).toBe('2');
+  // The desugaring, for comparison: the two spellings now agree.
+  expect(evaluated('let a: uint8 = 0; a = a + 1; String(a);')).toBe('1');
+});
+
+test('the conversion is CHECKED, and the arithmetic is the type\'s', () => {
+  // A value the target cannot hold is a RangeError, not a silent wrap - the
+  // plain conversion took this to 44, which is the truncation the design
+  // refuses everywhere else.
+  expect(evaluated('function g() { return 300; } let a: uint8 = 0; try { a += g(); } catch (e) { e.constructor.name; }')).toBe('RangeError');
+  // Wrapping that belongs to the TYPE's arithmetic still happens, exactly as it
+  // does for the desugared spelling.
+  expect(evaluated('let a: uint8 = 200; a *= 2; String(a);')).toBe('144');
+  expect(evaluated('let a: uint8 = 200; a = a * 2; String(a);')).toBe('144');
+});
+
+test('untyped and string targets are untouched', () => {
+  expect(evaluated('let a = 1; a += 1; String(a);')).toBe('2');
+  expect(evaluated('let s: string = "a"; s += "b"; s;')).toBe('ab');
+});

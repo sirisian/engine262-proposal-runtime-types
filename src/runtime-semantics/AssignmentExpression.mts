@@ -1,5 +1,6 @@
 import { copiesOnBinding } from './LexicalDeclaration.mts';
-import { JSStringValue, ObjectValue, ReferenceRecord, Value } from '../value.mts';
+import { JSStringValue, NumberValue, ObjectValue, ReferenceRecord, TypedNumberValue, Value } from '../value.mts';
+import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { Q, X } from '../completion.mts';
 import {
   IsAnonymousFunctionDefinition,
@@ -392,8 +393,31 @@ export function* Evaluate_AssignmentExpression({
       '^=': '^',
       '|=': '|',
     } as const)[assignmentOpText];
+    // #sec-vector-comparisons' sibling rule for scalars: "an operand of a binary
+    // operator whose other operand has a known value type" takes that type. The
+    // DESUGARED spelling gets this - `a = a + 1` at a `uint8` propagates the
+    // literal and yields 1 - and the compound spelling did not, so `a += 1` was
+    // a TypeError, "a value of the number type and a uint.<8> are different
+    // numeric types". Not a missing error: a CORRECT PROGRAM REFUSED, and the
+    // form is the one a typed counter is written with.
+    //
+    // The conversion is the ordinary one, so it range-checks: `a += 300` at a
+    // `uint8` is still refused, and now for the reason the desugaring gives
+    // rather than for the operands failing to mix.
+    let operand = rval;
+    if (lval instanceof TypedNumberValue && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)) {
+      // CHECKED, so a value the type cannot hold is a RangeError rather than a
+      // silent wrap: the plain conversion took `a += 300` at a `uint8` to 44,
+      // which is the truncation the design refuses everywhere else.
+      operand = Q(yield* CheckedConvertValue(rval, (lval as { TypeRecord: unknown }).TypeRecord as never));
+    } else if (rval instanceof TypedNumberValue && lval instanceof NumberValue && !(lval instanceof TypedNumberValue)) {
+      // The mirror, for an operator whose left operand is the untyped one. A
+      // compound assignment's target is the left operand, so this arises only
+      // where the target itself is untyped and holds a Number.
+      operand = rval;
+    }
     // 7. Let r be ApplyStringOrNumericBinaryOperator(lval, opText, rval).
-    const r = Q(yield* ApplyStringOrNumericBinaryOperator(lval, opText, rval));
+    const r = Q(yield* ApplyStringOrNumericBinaryOperator(lval, opText, operand));
     // 8. Perform ? PutValue(lref, r).
     Q(yield* PutValue(lref, r));
     // 9. Return r.
