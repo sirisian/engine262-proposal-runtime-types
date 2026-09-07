@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { expectStaticTypeError, ok } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -65,4 +66,66 @@ test('the default hook does NOT supply a binding of the constraint shape', () =>
   // And the metadata half, which is what the hook is for: an unparameterized
   // value carries the unconstrained constraint.
   expect(evaluated('meta uint8 { subtype(a, b) { return true; } default = 7; } let y: uint8.<7> = (7 := uint8.<7>); String(y);')).toBe('7');
+});
+
+test('`meet` answers what two constraints have in common', () => {
+  // #table-meta-hooks `meet`. The question AreDisjoint cannot ask: it decides on
+  // the BASE and never on metadata - deliberately, since two brands over one
+  // string share values - so two parameterizations of one base were left
+  // standing however their constraints related, and an empty one was reported
+  // nowhere.
+  const NB = 'type NB = { bounds?: Range }; meta NB { default = {}; '
+    + 'subtype(a,b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
+    + 'meet(a,b) { if (a.bounds === undefined) return b; if (b.bounds === undefined) return a;'
+    + ' const r = a.bounds.intersect(b.bounds); return r.isEmpty ? null : { bounds: r }; } } ';
+
+  // Reported: nothing is both.
+  expectStaticTypeError(`${NB} type T = uint8.<{ bounds: 1..=3 }> & uint8.<{ bounds: 8..=9 }>;`);
+  // Adjacent integer ranges are disjoint too - `..=` is inclusive, and 3 < 4.
+  expectStaticTypeError(`${NB} type T = uint8.<{ bounds: 1..=3 }> & uint8.<{ bounds: 4..=6 }>;`);
+
+  // Not reported: these have a meet, and a single point is a meet rather than an
+  // emptiness.
+  expect(ok(`${NB} type T = uint8.<{ bounds: 1..=10 }> & uint8.<{ bounds: 5..=20 }>;`)).toBe(true);
+  expect(ok(`${NB} type T = uint8.<{ bounds: 1..=3 }> & uint8.<{ bounds: 1..=10 }>;`)).toBe(true);
+  expect(ok(`${NB} type T = uint8.<{ bounds: 1..=3 }> & uint8.<{ bounds: 3..=5 }>;`)).toBe(true);
+  expect(ok(`${NB} type T = uint8.<{ bounds: 1..=3 }> & uint8.<{ bounds: 1..=3 }>;`)).toBe(true);
+
+  // Through Q1's object distribution, which is what routes a shared member here
+  // rather than to the arm rule - so without a deferral at the member, the object
+  // form of the same mistake went unreported.
+  expectStaticTypeError(`${NB} type T = { a: uint8.<{ bounds: 1..=3 }> } & { a: uint8.<{ bounds: 8..=9 }> };`);
+  expect(ok(`${NB} type T = { a: uint8.<{ bounds: 1..=10 }> } & { a: uint8.<{ bounds: 5..=20 }> };`)).toBe(true);
+});
+
+test('the three answers of `meet` are distinguished', () => {
+  const decl = (body: string) => `type Tag = { tag?: string }; meta Tag { default = {};`
+    + ` subtype(a,b) { return true; }${body} } `;
+  const pair = "type T = string.<{ tag: 'A' }> & string.<{ tag: 'C' }>;";
+
+  // A meta type declaring NO `meet` declines, and the intersection stands.
+  expect(ok(decl('') + pair)).toBe(true);
+  // *undefined* is the same answer written out - a pattern-constrained meta type
+  // cannot generally decide whether two patterns share a string, and must be
+  // able to say so without claiming emptiness.
+  expect(ok(decl(' meet(a,b) { return undefined; }') + pair)).toBe(true);
+  // *null* is a PROOF, and only it is reported.
+  expectStaticTypeError(decl(' meet(a,b) { return a.tag === b.tag ? a : null; }') + pair);
+  // ...and the same hook says nothing about an equal pair.
+  expect(ok(decl(' meet(a,b) { return a.tag === b.tag ? a : null; }')
+    + "type T = string.<{ tag: 'A' }> & string.<{ tag: 'A' }>;")).toBe(true);
+});
+
+test('`meet` is declarable and its signature is checked', () => {
+  // Declarable and CONSUMED in one change: a hook that can be written and is
+  // never called is the state `rescale` is in, and the parser table's own
+  // comment records what that cost.
+  expect(ok('type M = { k?: uint8 }; meta M { default = {}; subtype(a,b) { return true; }'
+    + ' meet(a,b) { return a; } }')).toBe(true);
+  // Refused as EARLY errors, so the script never runs and a `try` cannot see
+  // them - the same treatment the other seven hooks get from the table.
+  expect(ok('type M = { k?: uint8 }; meta M { default = {}; subtype(a,b) { return true; }'
+    + ' meet(a) { return a; } }')).toBe(false);
+  expect(ok('type M = { k?: uint8 }; meta M { default = {}; subtype(a,b) { return true; }'
+    + ' meet = 5; }')).toBe(false);
 });

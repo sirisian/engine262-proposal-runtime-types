@@ -7,9 +7,11 @@ import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isClassTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';
+import type { DeferredMetadataCheck } from '../type-system/check.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
-import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord } from '../type-system/records.mts';
+import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord, displayType } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
@@ -1082,13 +1084,38 @@ function* Reflect_makeType([node = Value.undefined]: Arguments): ValueEvaluator 
   return GetTypeObject(record);
 }
 
-function Reflect_isAssignable([source = Value.undefined, target = Value.undefined]: Arguments) {
+function* Reflect_isAssignable([source = Value.undefined, target = Value.undefined]: Arguments): ValueEvaluator {
   // proposal-runtime-types #sec-reflect-isassignable: the checker's own
-  // assignability judgment, exposed unchanged.
+  // assignability judgment, exposed unchanged - "so what a builder branches on
+  // and what the checker enforces cannot disagree".
+  //
+  // They disagreed. IsAssignable is SYNCHRONOUS and a `subtype` hook is USER
+  // CODE, so the checker answers the structural half here and DEFERS the
+  // metadata half to a pass; a reflection call never reached that pass and this
+  // operation returned the structural answer alone. A narrower bounded type was
+  // reported as unassignable to a wider one that an ordinary assignment accepts,
+  // and a builder written on this - which the same clause says is how "the
+  // conditional types of an erased system are written" - took the wrong branch
+  // for every metadata-bearing type.
+  //
+  // The deferral is mirrored rather than reimplemented: the condition below is
+  // the checker's own, and the judgment is the one its pass runs.
   if (!isTypeObject(source) || !isTypeObject(target)) {
     return Throw.TypeError('$1 is not a type', isTypeObject(source) ? target : source);
   }
-  return IsAssignable(source.TypeRecord, target.TypeRecord) ? Value.true : Value.false;
+  const s = source.TypeRecord;
+  const t = target.TypeRecord;
+  if (IsAssignable(s, t)) {
+    return Value.true;
+  }
+  // A parameterization meeting its BARE base is the construction boundary and
+  // stays outside this, which is what the checker's condition says too.
+  if (s.Kind === 'parameterized' && t.Kind === 'parameterized'
+    && displayType(s.Base) === displayType(t.Base)) {
+    const admits = Q(yield* MetadataSubtypeJudgment({ source: s, target: t } as DeferredMetadataCheck));
+    return admits ? Value.true : Value.false;
+  }
+  return Value.false;
 }
 
 export function bootstrapReflect(realmRec: Realm) {

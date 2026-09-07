@@ -14,7 +14,7 @@ import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
 import {
   CheckScript,
-  TakeDeferredMetadataChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
+  TakeDeferredMetadataChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   TakeDefaultRequirements,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
@@ -380,6 +380,53 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       return Throw(errors[0]!);
     }
   }
+  // #table-meta-hooks `meet`: what two constraints have in common, or a PROOF
+  // that nothing does.
+  //
+  // The three answers are distinguished on purpose. A constraint is the meet; a
+  // *null* says nothing satisfies both, and is reported here; anything else -
+  // including a meta type that declares no `meet` at all - means the meta type
+  // DECLINES to say, and the intersection stands as it does today. A regular
+  // expression cannot generally decide whether two patterns share a string, and
+  // a hook forced to choose between a meet and an emptiness would have to answer
+  // one of them wrongly.
+  //
+  // Every governing meta type is asked, and one empty conjunct empties the
+  // whole: a value satisfies a parameterized type when it satisfies EVERY
+  // governing meta type's constraint, so nothing satisfying `Dimensions` means
+  // nothing at all, whatever the bounds agree about.
+  for (const pair of TakeDeferredMeetChecks(root)) {
+    const a = pair.left.Metadata;
+    const b = pair.right.Metadata;
+    const governing = new Set<object>([...GoverningMetaTypes(a).types, ...GoverningMetaTypes(b).types]);
+    for (const metaType of governing) {
+      if (!MetaTypeGoverns(a, metaType) && !MetaTypeGoverns(b, metaType)) {
+        continue;
+      }
+      const met = Q(yield* ApplyMetaHook(metaType, 'meet', [
+        MetadataPortion(a, metaType),
+        MetadataPortion(b, metaType),
+      ], pair.left.Base));
+      if (met === Value.null) {
+        // Named where the pair was written at a member, as the synchronous
+        // member rule names it: a reader given two constraints still has to find
+        // which of the arms' members they came from.
+        if (pair.member !== undefined) {
+          return Throw.TypeError(
+            'no value is of both $1 and $2 at member $3, so their intersection is never',
+            Value(displayType(pair.left)),
+            Value(displayType(pair.right)),
+            Value(pair.member),
+          );
+        }
+        return Throw.TypeError(
+          'no value is of both $1 and $2, so their intersection is never',
+          Value(displayType(pair.left)),
+          Value(displayType(pair.right)),
+        );
+      }
+    }
+  }
   for (const pair of TakeDeferredMetadataChecks(root)) {
     const admits = Q(yield* MetadataSubtypeJudgment(pair));
     if (!admits) {
@@ -536,7 +583,16 @@ function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Valu
   } as unknown as TypeRecord;
 }
 
-function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEvaluator<boolean> {
+/**
+ * Does the source's metadata admit it into the target?
+ *
+ * Exported because `Reflect.isAssignable` needs the same answer: the operation
+ * is specified as "the checker's own judgment exposed unchanged, so what a
+ * builder branches on and what the checker enforces cannot disagree"
+ * (#sec-reflect-isassignable), and a synchronous IsAssignable cannot reach a
+ * `subtype` hook, which is user code.
+ */
+export function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEvaluator<boolean> {
   const s = pair.source.Metadata;
   const t = pair.target.Metadata;
   const governing = new Set<object>([

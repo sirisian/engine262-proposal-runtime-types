@@ -69,6 +69,26 @@ export interface DeferredMetadataCheck {
 }
 const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataCheck[]>();
 
+/**
+ * Two parameterizations of one base, written in one intersection.
+ *
+ * Deferred for the reason a DeferredMetadataCheck is: the answer needs a `meet`
+ * hook, which is user code, and AreDisjoint is synchronous and runs on the
+ * interning path. Whether anything satisfies both constraints is a question only
+ * the meta type can answer, and it is asked where the checking pass can call it.
+ */
+export interface DeferredMeetCheck {
+  readonly left: TypeRecord & { readonly Kind: 'parameterized' };
+  readonly right: TypeRecord & { readonly Kind: 'parameterized' };
+  /** The member the pair was written at, where it was, so the report can name it. */
+  readonly member?: string;
+}
+const deferredMeetChecks = new WeakMap<object, readonly DeferredMeetCheck[]>();
+
+export function TakeDeferredMeetChecks(root: object): readonly DeferredMeetCheck[] {
+  return deferredMeetChecks.get(root) ?? [];
+}
+
 /** Identity of the self type a method's [[ThisType]] uses (#sec-this-adoption). */
 const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
 
@@ -1529,6 +1549,7 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
+  const meets: DeferredMeetCheck[] = [];
   const unclaimed: UnclaimedKeyCheck[] = [];
   /** Declarations the pass must answer for. */
   const defaultsNeeded: DefaultRequirement[] = [];
@@ -6857,6 +6878,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 if (isNever(left.type) || isNever(right.type)) {
                   continue;
                 }
+                // A shared member that is two parameterizations of one base is
+                // DEFERRED, exactly as the arm-level pair is: whether the two
+                // constraints share a value is the `meet` hook's question and
+                // this walk cannot call one. Q1's distribution routes the pair
+                // here rather than to the arm loop, so without this the object
+                // form of the same mistake goes unreported.
+                const lp = left.type as TypeRecord & { Kind: string, Base?: TypeRecord };
+                const rp = right.type as TypeRecord & { Kind: string, Base?: TypeRecord };
+                if (lp.Kind === 'parameterized' && rp.Kind === 'parameterized'
+                  && lp.Base !== undefined && rp.Base !== undefined
+                  && displayType(lp.Base) === displayType(rp.Base)) {
+                  meets.push({ left: lp, right: rp, member: left.key } as unknown as DeferredMeetCheck);
+                }
                 if (AreDisjoint(left.type, right.type)) {
                   reportedEmptyIntersections.add(node);
                   const completion = Throw.StaticTypeError(
@@ -6916,6 +6950,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 Value(displayType(Members[j])),
               ) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
+            }
+          }
+          // Two parameterizations of ONE base are deferred rather than judged:
+          // whether their constraints share a value is the `meet` hook's
+          // question, and a hook is user code that this synchronous walk cannot
+          // call. AreDisjoint decides on the BASE and so answers *false* for the
+          // pair - correctly, since it is not the operation that knows.
+          for (let i = 0; i < Members.length; i += 1) {
+            for (let j = i + 1; j < Members.length; j += 1) {
+              const a = Members[i] as TypeRecord & { Kind: string, Base?: TypeRecord };
+              const b = Members[j] as TypeRecord & { Kind: string, Base?: TypeRecord };
+              if (a.Kind === 'parameterized' && b.Kind === 'parameterized'
+                && a.Base !== undefined && b.Base !== undefined
+                && displayType(a.Base) === displayType(b.Base)) {
+                meets.push({ left: a, right: b } as DeferredMeetCheck);
+              }
             }
           }
           for (let i = 0; i < Members.length && !reportedEmptyIntersections.has(node); i += 1) {
@@ -15895,6 +15945,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   collectMutations(statementList);
   walk(statementList);
   deferredMetadataChecks.set(root, deferred);
+  deferredMeetChecks.set(root, meets);
   // A3.1: the SECOND walk re-derives the same requests, and its resolutions
   // already exist keyed by node - so it must not replace the list the sweep was
   // built from, which is also what keeps a third walk from ever looking needed.

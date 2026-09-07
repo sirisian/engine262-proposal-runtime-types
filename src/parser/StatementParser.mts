@@ -367,6 +367,10 @@ export abstract class StatementParser extends TypeParser {
           // stay pinned-unconsumed: rescale's consumer is the operator-block
           // conversion path that does not exist yet, describe's is reflection.
           quantize: 2, rescale: 2, describe: 1,
+          // `meet` answers what two constraints have in common. Declarable and
+          // CONSUMED in the same change, unlike `rescale` above: a hook that can
+          // be written and is never called is a promise nothing keeps.
+          meet: 2,
         };
         // #sec-meta-declarations
         // gives a MetaHook exactly two forms:

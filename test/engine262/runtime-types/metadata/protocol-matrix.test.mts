@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { expectStaticTypeError } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 // Spec: #sec-primitive-metadata (Primitive Metadata) - a verification matrix
@@ -341,4 +342,43 @@ test('completion, participation, and adjudication compose over one program', () 
     const km = (2 := Kilometer);
     String(paid is float64.<{ min: 10 }>) + "/" + String(sat) + "/" + String((km := Meter));
   `)).toBe('true/true/2000');
+});
+
+test('`Reflect.isAssignable` agrees with the checker on METADATA', () => {
+  // #sec-reflect-isassignable: "the checker's own judgment exposed unchanged, so
+  // what a builder branches on and what the checker enforces cannot disagree".
+  //
+  // They disagreed. `IsAssignable` is synchronous and a `subtype` hook is user
+  // code, so the checker answers the structural half and DEFERS the metadata
+  // half to a pass; a reflection call never reached that pass and the operation
+  // returned the structural answer alone. A narrower bounded type was reported
+  // unassignable to a wider one that an ordinary assignment accepts - and the
+  // hook was never called at all, which is how the two answers could differ.
+  const NB = 'type NB = { bounds?: Range }; '
+    + 'meta NB { default = {}; '
+    + 'subtype(a, b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
+    + 'validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); } } ';
+  const narrow = 'uint8.<{ bounds: 1..=3 }>';
+  const wide = 'uint8.<{ bounds: 1..=10 }>';
+
+  // The relation, and the assignment it must agree with.
+  expect(evaluated(`${NB} String(Reflect.isAssignable(type ${narrow}, type ${wide}));`)).toBe('true');
+  expect(evaluated(`${NB} let a: ${narrow} = (2 := ${narrow}); let b: ${wide} = a; String(Number(b));`)).toBe('2');
+
+  // ...and in the direction that must stay false, where the assignment is also
+  // refused. Asserted as a pair, since a fix that answered *true* everywhere
+  // would satisfy the row above on its own.
+  expect(evaluated(`${NB} String(Reflect.isAssignable(type ${wide}, type ${narrow}));`)).toBe('false');
+  // Refused STATICALLY, so the script never runs and a `try` cannot see it.
+  expectStaticTypeError(`${NB} let a: ${wide} = (2 := ${wide}); let b: ${narrow} = a;`);
+
+  // Disjoint constraints are not assignable either way.
+  expect(evaluated(`${NB} String(Reflect.isAssignable(type uint8.<{ bounds: 1..=3 }>, type uint8.<{ bounds: 8..=9 }>));`)).toBe('false');
+
+  // What was already right and must stay so: a parameterization meeting its BARE
+  // base is the construction boundary and stays outside the deferral, and two
+  // unrelated types need no hook to be told apart.
+  expect(evaluated(`${NB} String(Reflect.isAssignable(type ${narrow}, type uint8));`)).toBe('true');
+  expect(evaluated('String(Reflect.isAssignable(type uint8, type string));')).toBe('false');
+  expect(evaluated('String(Reflect.isAssignable(type uint8, type uint8));')).toBe('true');
 });

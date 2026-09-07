@@ -253,15 +253,22 @@ const CLAIMS = 'type Keys = { a: any, q: any, u: any, p: any };'
   + ' meta Keys { subtype(x, y) { return true; } default = { a: 0, q: 0, u: 0, p: 0 };'
   + ' validate(v, m) { return true; } } ';
 
+// These probe metadata COMPARISON, and the instrument is type identity rather
+// than assignability. `CLAIMS` declares `subtype(x, y) { return true; }` - a hook
+// that admits everything - so once `Reflect.isAssignable` consults the hook (as
+// #sec-reflect-isassignable requires, the judgment being "the checker's own
+// exposed unchanged") it answers *true* for every pair here and shows nothing
+// about how the metadata compared. Identity is not overridable by a hook, and
+// discrimination is what these tests are named for.
 test('meta: nested metadata discriminates types', () => {
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type float32.<{ q: { a: 1 } }>, type float32.<{ q: { a: 2 } }>));')).toBe('false');
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type float32.<{ q: { a: 1 } }>, type float32.<{ q: { a: 1 } }>));')).toBe('true');
+  expect(evaluated(CLAIMS + 'String((type float32.<{ q: { a: 1 } }>) === (type float32.<{ q: { a: 2 } }>));')).toBe('false');
+  expect(evaluated(CLAIMS + 'String((type float32.<{ q: { a: 1 } }>) === (type float32.<{ q: { a: 1 } }>));')).toBe('true');
 });
 
 test('meta: a list is compared by length and by index in order', () => {
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type float32.<{ u: [1, 2] }>, type float32.<{ u: [1, 2] }>));')).toBe('true');
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type float32.<{ u: [1, 2] }>, type float32.<{ u: [2, 1] }>));')).toBe('false');
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type float32.<{ u: [1] }>, type float32.<{ u: [1, 2] }>));')).toBe('false');
+  expect(evaluated(CLAIMS + 'String((type float32.<{ u: [1, 2] }>) === (type float32.<{ u: [1, 2] }>));')).toBe('true');
+  expect(evaluated(CLAIMS + 'String((type float32.<{ u: [1, 2] }>) === (type float32.<{ u: [2, 1] }>));')).toBe('false');
+  expect(evaluated(CLAIMS + 'String((type float32.<{ u: [1] }>) === (type float32.<{ u: [1, 2] }>));')).toBe('false');
 });
 
 test('meta: a hook receives nested metadata as ordinary values', () => {
@@ -280,8 +287,8 @@ test('meta: a hook receives nested metadata as ordinary values', () => {
 });
 
 test('meta: flat metadata is unchanged', () => {
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type float32.<{ a: 1 }>, type float32.<{ a: 2 }>));')).toBe('false');
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type float32.<{ a: 1 }>, type float32.<{ a: 1 }>));')).toBe('true');
+  expect(evaluated(CLAIMS + 'String((type float32.<{ a: 1 }>) === (type float32.<{ a: 2 }>));')).toBe('false');
+  expect(evaluated(CLAIMS + 'String((type float32.<{ a: 1 }>) === (type float32.<{ a: 1 }>));')).toBe('true');
 });
 
 // -- The pattern form of the metadata value language --------------------------
@@ -296,9 +303,9 @@ test('meta: a pattern is a metadata value', () => {
 test('meta: a pattern is compared by source and flags, not by object identity', () => {
   // this is the reason it is carried structurally. Two RegExp objects are never
   // equal, so one pattern written twice would otherwise be two types.
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type string.<{ p: /^a/ }>, type string.<{ p: /^a/ }>));')).toBe('true');
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type string.<{ p: /^a/ }>, type string.<{ p: /^b/ }>));')).toBe('false');
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type string.<{ p: /^a/ }>, type string.<{ p: /^a/i }>));')).toBe('false');
+  expect(evaluated(CLAIMS + 'String((type string.<{ p: /^a/ }>) === (type string.<{ p: /^a/ }>));')).toBe('true');
+  expect(evaluated(CLAIMS + 'String((type string.<{ p: /^a/ }>) === (type string.<{ p: /^b/ }>));')).toBe('false');
+  expect(evaluated(CLAIMS + 'String((type string.<{ p: /^a/ }>) === (type string.<{ p: /^a/i }>));')).toBe('false');
 });
 
 test('meta: a hook is handed a RegExp built from the carried pattern', () => {
@@ -320,8 +327,8 @@ test('meta: the whole-string match a StringPattern meta type would perform', () 
 });
 
 test('meta: a pattern nests with the other forms', () => {
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type string.<{ q: { p: /^a/ } }>, type string.<{ q: { p: /^a/ } }>));')).toBe('true');
-  expect(evaluated(CLAIMS + 'String(Reflect.isAssignable(type string.<{ q: { p: /^a/ } }>, type string.<{ q: { p: /^b/ } }>));')).toBe('false');
+  expect(evaluated(CLAIMS + 'String((type string.<{ q: { p: /^a/ } }>) === (type string.<{ q: { p: /^a/ } }>));')).toBe('true');
+  expect(evaluated(CLAIMS + 'String((type string.<{ q: { p: /^a/ } }>) === (type string.<{ q: { p: /^b/ } }>));')).toBe('false');
 });
 
 // -- StringPattern: a meta type the specification declares --------------------
