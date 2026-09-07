@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrownKind } from '../harness.mts';
+import { evaluated, ok, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * CONSTRUCTION: the seed and the subclassed specialization.
@@ -159,4 +159,39 @@ test('a collection type still has no default value', () => {
   expect(ok('class C { m: Map.<string, uint8>; } new C();')).toBe(false);
   expect(ok('class C { m: Map.<string, uint8>; }')).toBe(true);
   expect(evaluated('class C { m: Map.<string, uint8> = new Map(); } const c = new C(); String(c.m.size);')).toBe('0');
+});
+
+// ---------------------------------------------------------------------------
+// A SET'S ARRAY-LITERAL SEED IS CHECKED AGAINST ITS ELEMENT TYPE, STATICALLY.
+//
+// `new Set.<string>([1])` was the run time's TypeError while the literal says so
+// at the seed. The check is the seed typed IN CONTEXT of `[].<T>`, not a
+// comparison of inferred types - which matters, because the seed is CONVERTED:
+// `new Set.<uint8>([1, 2])` is accepted for the same reason
+// `const a: [].<uint8> = [1, 2]` is, the literals adopting the element type.
+//
+// A first attempt compared the inferred element type against the declared one
+// and refused exactly that, breaking three tests in this file and one in
+// `set-operations`. Their names said what was wrong: "a seeded entry is
+// CONVERTED, not merely checked".
+//
+// Only an ARRAY LITERAL seed is checked this way. Any other iterable - another
+// `Set.<uint8>`, a generator - is not assignable to `[].<T>` even when its
+// elements are right, so checking it that way would refuse a correct program.
+// `Map` is left to the run time: a pair literal the checker infers as an array
+// joins key and value into one element type, the same reason the weak
+// collections' check abstains there.
+// ---------------------------------------------------------------------------
+
+test('a Set\'s array-literal seed is checked against the element type', () => {
+  expectStaticTypeError('const s = new Set.<string>([1]);');
+  expectStaticTypeError('const s = new Set.<uint8>(["a"]);');
+});
+
+test('...and the seed is still CONVERTED, not merely compared', () => {
+  expect(evaluated('const s = new Set.<uint8>([1, 2]); String(s.size);')).toBe('2');
+  expect(evaluated('const s = new Set.<uint8>([1]); String(Reflect.typeOf([...s][0]) === (type uint8));')).toBe('true');
+  // A non-literal iterable is not checked this way and is not refused.
+  expect(evaluated('const a = new Set.<uint8>([1]); const b = new Set.<uint8>(a); String(b.size);')).toBe('1');
+  expect(evaluated('const s = new Set.<uint8>(); String(s.size);')).toBe('0');
 });

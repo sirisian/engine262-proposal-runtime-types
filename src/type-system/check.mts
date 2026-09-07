@@ -9031,6 +9031,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // `s.add(5)` beside it was static. The same holdability test the
                 // methods now apply, on the iterable's element (or the pair's
                 // first member), where that type is known and not `any`.
+                // The NON-WEAK family asks a different question from the weak
+                // one below: not whether the element can be held weakly, but
+                // whether it fits the DECLARED type - and that is answered by
+                // the seed's CONVERSION, not by comparing inferred types.
+                // `new Set.<uint8>([1, 2])` is accepted because the literals
+                // adopt `uint8`, exactly as `const a: [].<uint8> = [1, 2]` does,
+                // so the seed is typed IN CONTEXT of `[].<T>` and the existing
+                // array-literal machinery does the propagation and the element
+                // check.
+                //
+                // Only for an ARRAY LITERAL seed. Any other iterable - another
+                // `Set.<uint8>`, a generator - is not assignable to `[].<T>`
+                // even when its elements are perfectly fine, so checking it that
+                // way would refuse `new Set.<uint8>(a)` for a `Set.<uint8>` a.
+                // `Map` is left alone entirely: a pair literal the checker
+                // infers as an ARRAY joins key and value into one element type,
+                // the same reason the weak branch below gives for abstaining.
+                if (specName === 'Set') {
+                  const seed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])[0];
+                  const declared = args[0];
+                  if (seed && (seed as { type?: string }).type === 'ArrayLiteral'
+                      && declared && typeof declared !== 'number') {
+                    const seedType = CanonicalizeType({
+                      Kind: 'array', Element: declared as TypeRecord, Extent: 'dynamic',
+                    } as unknown as TypeRecord) as Known;
+                    requireAssignable(staticTypeIn(seed, seedType), seedType);
+                  }
+                }
                 if (specName === 'WeakSet' || specName === 'WeakMap') {
                   const ctorArgs = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
                   const iter = ctorArgs[0];
