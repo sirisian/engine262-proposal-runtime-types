@@ -233,3 +233,63 @@ test('what the bigint fix must not disturb', () => {
   // "stop converting for unions" passes every row above and breaks this one.
   expect(evaluated('let a: uint8 | string = 5; String(a is uint8);')).toBe('true');
 });
+
+test('a literal reaches a literal type over a NUMERIC VALUE TYPE', () => {
+  // #sec-literal-types names a type this proposal has and could not fill: "a
+  // literal type over another numeric type, the `uint8` 3 as a type, is
+  // expressible through construction but not through syntax". Its [[Value]] is
+  // a value OF the base, and #sec-isoftype decides a ~literal~ by SameValue
+  // against that value - so a plain Number was never a member, and the only way
+  // into such a type was a cast. It was nameable and not fillable.
+  //
+  // Propagation now reaches it: the literal is converted at the BASE and then
+  // asked for membership, which is the unwrap the `shared` arm of the same
+  // operation already performs for the same reason.
+  const L = "const L = Reflect.makeType({ kind: 'literal', value: (5 := uint32), base: type uint32 });";
+  expect(evaluated(`${L} let v: L = 5; String(Number(v));`)).toBe('5');
+  // The value that arrives is a value of the base, not a bare Number.
+  expect(evaluated(`${L} let v: L = 5; String(v is uint32);`)).toBe('true');
+  // Every position the boundary reaches, not only a binding.
+  expect(evaluated(`${L} function f(x: L) { return Number(x); } String(f(5));`)).toBe('5');
+  // A value already of the base is unaffected.
+  expect(evaluated(`${L} let v: L = (5 := uint32); String(Number(v));`)).toBe('5');
+  // A float base is the same rule.
+  expect(evaluated(
+    "const F = Reflect.makeType({ kind: 'literal', value: (1.5 := float32), base: type float32 });"
+    + ' let v: F = 1.5; String(Number(v));',
+  )).toBe('1.5');
+
+  // A literal of the wrong VALUE is refused by this type...
+  expectThrown(`${L} let v: L = 6;`, 'is not assignable to "a literal type of uint.<32>"');
+  // ...and one the BASE cannot represent is refused by the base's own range
+  // rule, which is what makes the conversion the base's rather than a second
+  // rule stated here.
+  expectThrown(
+    "const M = Reflect.makeType({ kind: 'literal', value: (5 := uint8), base: type uint8 }); let v: M = 300;",
+    'is not in the range of "uint.<8>"',
+  );
+});
+
+test('the reach is ONE layer: a written numeric literal still has base `number`', () => {
+  // The guard on the direction NOT taken. #sec-literal-types fixes the base of a
+  // written numeric literal - "the base of a numeric literal is `number` however
+  // the literal will be used" - so nothing above gives `5` a base it was not
+  // constructed with, and a sized numeric intersected with a written literal
+  // stays empty.
+  //
+  // Reading a sibling member to re-base the literal would make that pair
+  // inhabited, and is refused elsewhere: `&` is order-insignificant and
+  // canonicalization sorts its members, so a rule that typed one member from
+  // another would depend on an order the design does not have.
+  expectThrown('type T = { a: uint32 } & { a: 5 };', 'no value is of both');
+  expectThrown('type T = uint8 & 5;', 'no value is of both');
+  // The written literal keeps behaving as it did.
+  expect(evaluated('type F = 5; let v: F = 5; String(v);')).toBe('5');
+  expect(evaluated("type S = 'a'; let v: S = 'a'; String(v);")).toBe('a');
+  expect(evaluated('let a: uint32 = 5; String(Number(a));')).toBe('5');
+
+  // ...and a CONSTRUCTED literal over the sized numeric is what narrows such a
+  // member, which is the case the design reached for and could not spell.
+  const L = "const L = Reflect.makeType({ kind: 'literal', value: (5 := uint32), base: type uint32 });";
+  expect(evaluated(`${L} type T = { a: uint32 } & { a: L }; let v: T = { a: 5 }; String(Number(v.a));`)).toBe('5');
+});

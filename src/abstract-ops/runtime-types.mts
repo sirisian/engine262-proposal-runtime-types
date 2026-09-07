@@ -1303,6 +1303,39 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   if (t.Kind === 'shared') {
     return Q(yield* CheckedConvertValue(value, t.Target));
   }
+  // #sec-literal-propagation, reaching one layer further in: a bare numeric
+  // literal at a ~literal~ position whose [[Base]] is a numeric value type is
+  // CONVERTED AT THAT BASE before membership is asked.
+  //
+  // #sec-literal-types gives such a type - "a literal type over another numeric
+  // type, the `uint8` 3 as a type" - a [[Value]] that is a value OF the base,
+  // and #sec-isoftype decides a ~literal~ by SameValue against it. A plain
+  // Number is never SameValue with a `uint8` 3, so no literal a program could
+  // write satisfied such a type: it was nameable and not fillable, and only a
+  // cast reached it.
+  //
+  // This is the reasoning the `shared` arm above gives for its own unwrap - "a
+  // plain Number is not a MEMBER of uint32 - it converts to one" - applied at
+  // the other refinement of a numeric type.
+  //
+  // The reach is ONE LAYER and deliberately so. A literal whose base is `number`
+  // is untouched, its [[Value]] already being a plain Number, and nothing here
+  // gives a literal a base it was not constructed with: `{ a: uint32 } & { a: 5 }`
+  // stays empty, because the type `5` still has base `number`
+  // (#sec-literal-types, "the base of a numeric literal is `number` however the
+  // literal will be used").
+  if (t.Kind === 'literal' && t.Base !== undefined && t.Base.Kind === 'primitive'
+      && (isIntegerTypeName(t.Base.Name) || isFloatTypeName(t.Base.Name))
+      && value instanceof NumberValue && !isTypedNumber(value)) {
+    // The conversion is the BASE's, so a literal the base cannot represent is
+    // refused by the base's own range rule rather than by one stated here.
+    const atBase = Q(yield* CheckedConvertValue(value, t.Base));
+    const ok = Q(yield* IsOfType(atBase, t));
+    if (ok) {
+      return atBase;
+    }
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
   // proposal-runtime-types #sec-vector-lanes: "`vector.<T, N>` declares a cast
   // operator from T, so a value of the lane type converts to a vector by
   // filling every lane with it." The broadcast is one of the user-defined casts
