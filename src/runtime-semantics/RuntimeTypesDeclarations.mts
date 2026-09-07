@@ -1604,6 +1604,26 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
         X(CreateDataProperty(array, Value(String(i)), dflt));
       }
     }
+    // A subclass constructs through here with itself as NewTarget, so the
+    // instance takes the subclass prototype and its methods.
+    //
+    // BEFORE the stamp, which is what makes the two agree. `StampTypedArray`
+    // gives an array "its element type AND the prototype that carries the
+    // capacity operations", swapping only where the array still has the
+    // ordinary `%Array.prototype%` - a guard written so that a class deriving
+    // from an array type keeps its own. Stamping FIRST and setting the prototype
+    // after inverted that: the swap happened and was then overwritten, because a
+    // direct `new [4].<uint32>()` has the constructor itself as NewTarget and
+    // the constructor's own `prototype` is `%Array.prototype%`. The array was
+    // left with its element type and the ordinary prototype - typed for every
+    // purpose except the members that describe its allocation, which is exactly
+    // the drift the helper's comment says routing through one place prevents.
+    //
+    // In this order the guard does the work it was written for: a direct
+    // construction has the ordinary prototype here and is swapped, a subclass
+    // has its own and is left alone.
+    const proto = Q(yield* GetPrototypeFromConstructor(NewTarget as never, '%Array.prototype%'));
+    X(array.SetPrototypeOf(proto));
     StampTypedArray(array as unknown as ObjectValue, element);
     // #sec-array-and-tuple-types: a fixed extent is part of the type, so a
     // constructed array carries it exactly as a converted one does - otherwise
@@ -1612,10 +1632,6 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     if (extent !== 'dynamic') {
       (array as { TypedExtent?: number }).TypedExtent = extent;
     }
-    // A subclass constructs through here with itself as NewTarget, so the
-    // instance takes the subclass prototype and its methods.
-    const proto = Q(yield* GetPrototypeFromConstructor(NewTarget as never, '%Array.prototype%'));
-    X(array.SetPrototypeOf(proto));
     return array;
   }), 0, displayType(record as never), [], realm) as ObjectValue;
   // The prototype a subclass inherits from: array instances are Arrays, so the

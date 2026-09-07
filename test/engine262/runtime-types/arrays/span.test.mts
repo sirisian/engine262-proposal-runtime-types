@@ -912,3 +912,39 @@ test('the design README example works as written', () => {
   expect(evaluated('const rows: [64].<uint32> = new [64].<uint32>();'
     + ' const row = rows.window.<8>(2 * 8); row[0] = (1 := uint32); String(rows[16]);')).toBe('1');
 });
+
+// ---------------------------------------------------------------------------
+// A CONSTRUCTED ARRAY IS FULLY STAMPED.
+//
+// `StampTypedArray` gives an array "its element type AND the prototype that
+// carries the capacity operations", swapping only where the array still has the
+// ordinary `%Array.prototype%` - a guard written so a class deriving from an
+// array type keeps its own prototype.
+//
+// `ArrayTypeConstructor` stamped FIRST and set the prototype after, which
+// inverted that: the swap happened and was immediately overwritten, because a
+// direct `new [4].<uint32>()` has the constructor itself as NewTarget and the
+// constructor's own `prototype` is `%Array.prototype%`. The array was left
+// HALF-STAMPED - its element type set, the allocation members absent - which is
+// exactly the drift the helper's comment says routing every stamp through one
+// place prevents.
+//
+// Invisible until something skipped the later conversion that re-stamped it,
+// which is what an elided boundary does. Found that way.
+// ---------------------------------------------------------------------------
+
+test('a constructed array carries the allocation members, not just the element type', () => {
+  expect(evaluated('const r = new [4].<uint32>(); typeof r.window;')).toBe('function');
+  expect(evaluated('const r = new [4].<uint32>(); typeof r.capacity;')).toBe('number');
+  expect(evaluated('const r = new [4].<uint32>(); String(Reflect.typeOf(r));')).toBe('[4].<uint.<32>>');
+  // A DYNAMIC extent constructs the same way.
+  expect(evaluated('const d = new [].<uint8>(); typeof d.window;')).toBe('function');
+  // The converted spelling was always right; the two now agree.
+  expect(evaluated('const c: [4].<uint32> = [1, 2, 3, 4]; typeof c.window;')).toBe('function');
+});
+
+test('a class deriving from an array type keeps its own prototype', () => {
+  // The guard the reorder relies on: the stamp declines to swap where the
+  // prototype is not the ordinary one, which is the subclass case.
+  expect(evaluated('class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
+});
