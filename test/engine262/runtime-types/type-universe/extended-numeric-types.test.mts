@@ -422,8 +422,10 @@ test('memory layout: a field reports its offset through the ClassField reflectio
   expect(evaluated('class U { a: uint8; b; } Reflect.getReflection.<Reflect.ClassField, U>("a").kind;')).toBe('ClassField');
   expect(evaluated('class U { a: uint8; b; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, U>("a").offset);')).toBe('undefined');
   expectThrownKind('class V2 { x: float32; } Reflect.getReflection.<Reflect.ClassField, V2>("nope");', 'TypeError');
-  // The one-argument form is untouched.
-  expect(evaluated('class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type');
+  // The one-argument form is untouched. `family` joined the primitive node when
+  // #table-reflection-nodes' "It also carries `family`" was implemented; the
+  // node is still the opaque leaf, with the Type Object as its payload.
+  expect(evaluated('class V3 { x: float32; } Object.keys(Reflect.getReflection(type V3)).join(",");')).toBe('kind,type,family');
 });
 
 test('memory layout: a fixed array and a value type class hold zero-filled defaults', () => {

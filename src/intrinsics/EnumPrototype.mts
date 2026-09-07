@@ -1,8 +1,8 @@
 import { Descriptor, Value, wellKnownSymbols, type Arguments, type FunctionCallContext } from '../value.mts';
 import { Q, X, type ValueCompletion } from '../completion.mts';
-import type { TypeObject } from '../type-system/intern.mts';
+import { GetTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { SameValue, Throw, CreateArrayFromList, CreateArrayIterator } from '#self';
+import { SameValue, Throw, CreateArrayFromList, CreateArrayIterator, surroundingAgent } from '#self';
 import type { Realm } from '#self';
 
 /**
@@ -116,12 +116,39 @@ function EnumProto_entries(_args: Arguments, { thisValue }: FunctionCallContext)
   return Q(CreateArrayIterator(array, 'value'));
 }
 
+/**
+ * `Count.underlying` is the type an enumerator's value is of.
+ *
+ * An ACCESSOR rather than a method, following `family`, `min`, `max` and the
+ * layout properties on %Type.prototype%: it reports something the type IS,
+ * where `keys` and `values` perform an enumeration. C# spells the same thing
+ * `Enum.GetUnderlyingType` and Java has no analog; the accessor is this
+ * proposal's own idiom for a property of a type.
+ *
+ * It answers *undefined* where the declaration names no underlying type, which
+ * is what the reflection node reported before this accessor existed, so nothing
+ * a program could read has changed shape.
+ *
+ * https://sirisian.github.io/proposal-runtime-types/#sec-enums
+ */
+function EnumProto_underlyingGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
+  const record = (thisValue as TypeObject).TypeRecord;
+  if (!record || record.Kind !== 'nominal' || record.EnumMembers === undefined) {
+    return Throw.TypeError('$1 called on incompatible receiver $2', 'get Enum.prototype.underlying', thisValue);
+  }
+  if (record.Underlying === undefined) {
+    return Value.undefined;
+  }
+  return GetTypeObject(record.Underlying, surroundingAgent.currentRealmRecord);
+}
+
 export function bootstrapEnumPrototype(realmRec: Realm) {
   const proto = bootstrapPrototype(realmRec, [
     ['toString', EnumProto_toString, 1],
     ['keys', EnumProto_keys, 0],
     ['values', EnumProto_values, 0],
     ['entries', EnumProto_entries, 0],
+    ['underlying', [EnumProto_underlyingGetter]],
   ], realmRec.Intrinsics['%Type.prototype%'], 'Enum');
   // @@iterator is `entries`, not `values`: iterating an ENUMERATION yields what
   // the enumeration is, which is a set of named values, and a bare value loses

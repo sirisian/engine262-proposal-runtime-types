@@ -17,6 +17,7 @@ import type {
   IndexSignatureRecord, PropertyTypeRecord, SignatureRecord, TupleElementRecord, TypeRecord,
 } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
+import { familyOfRecord } from './TypePrototype.mts';
 import {
   Call,
   Construct,
@@ -818,18 +819,24 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       // Type Object itself, so a leaf stays opaque to a walker.
       set('kind', Value('primitive'));
       set('type', typeObj(t));
-      // ...except an ENUM, which reflected as an indistinguishable "primitive"
-      // leaf, so the enum-ness was erased and a reflection walker could not see
-      // its members or its underlying type at all. The design leans on
-      // that member count being readable.
-      if (t.Kind === 'nominal' && t.EnumMembers !== undefined) {
-        set('kind', Value('enum'));
-        set('members', CreateArrayFromList([...t.EnumMembers]));
-        set('size', Value(t.EnumMembers.length));
-        if (t.Underlying !== undefined) {
-          set('underlying', recordToNode(t.Underlying, realm));
-        }
-      }
+      // #table-reflection-nodes: the node "also carries `family`, the String the
+      // Type Object's own `family` reports ... so a walker holding a node need
+      // not return to the Type Object to ask which of those a leaf is". It is
+      // the same `familyOfRecord` the Type Object's getter answers with, so the
+      // two cannot disagree.
+      set('family', Value(familyOfRecord(t)));
+      // An enum needs no node kind of its own. #table-reflection-nodes lists ten
+      // kinds and says the "primitive" node covers "the built-in primitives,
+      // classes, interfaces, enums", and `family` above answers ~enum~ for one,
+      // which is the distinction a walker needs. The enumeration itself is read
+      // from the Type Object - `keys`, `values`, `entries`, and `underlying`
+      // (#sec-enums) - which is where a nominal type's surface belongs and what
+      // keeps the leaf opaque (#sec-type-object-opacity).
+      //
+      // An "enum" kind was emitted here instead, before `family` existed. It
+      // was a kind no specification defined, so a walker written from the table
+      // met a kind it could not handle, and `makeType` had no case for it, so
+      // #sec-reflect-maketype's round-trip law threw on every enum.
       // proposal-runtime-types: a generic instantiation additionally exposes its
       // base (the bare declaration's type) and arguments, so a builder can read
       // `node.generic.base` and `node.generic.arguments` (spec ~nominal~

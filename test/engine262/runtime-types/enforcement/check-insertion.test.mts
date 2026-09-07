@@ -282,7 +282,7 @@ test('a refused crossing names the meta type and uses its describe hook', () => 
   expect(evaluated(`${dims} String((2 := float32.<{ m: 1 }>) := float32.<{ m: 1, s: 0 }>);`)).toBe('2');
 });
 
-test('an enum is a subtype of its underlying type, and reflects as an enum', () => {
+test('an enum is a subtype of its underlying type, and is identifiable as an enum', () => {
   // #sec-enums says an enum type is a subtype of its underlying type, which
   // holds only where the enum's record carries the underlying type to relate
   // it to.
@@ -300,9 +300,14 @@ test('an enum is a subtype of its underlying type, and reflects as an enum', () 
   // A member is still a value of its own enum, and flows to the underlying.
   expect(evaluated('enum C: uint8 { A, B }; String(C.B is C);')).toBe('true');
   expect(evaluated('enum C: uint8 { A, B }; let x: uint8 = C.B; String(x);')).toBe('1');
-  // And an enum reflects AS an enum rather than as an indistinguishable
-  // primitive leaf, so a walker can read its members and its underlying type.
-  expect(evaluated('enum C: uint8 { A, B, E }; const r = Reflect.getReflection(C); String(r.kind) + "/" + String(r.size) + "/" + String(r.underlying.kind);')).toBe('enum/3/primitive');
+  // And an enum is distinguishable from any other named leaf, which is what a
+  // walker needs. It reflects as the `primitive` node #table-reflection-nodes
+  // assigns every named type - so `makeType` can consume what `getReflection`
+  // produced - and `family` on that node carries the enum-ness. The members and
+  // the underlying type are read from the Type Object (#sec-enums), which is
+  // where a nominal type's surface belongs.
+  expect(evaluated('enum C: uint8 { A, B, E }; const r = Reflect.getReflection(C); String(r.kind) + "/" + String(r.family);')).toBe('primitive/enum');
+  expect(evaluated('enum C: uint8 { A, B, E }; String([...C.keys()].length) + "/" + String(C.underlying === uint8);')).toBe('3/true');
 });
 
 test('an interface is a type, and a class picks up what it implements', () => {

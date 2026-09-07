@@ -358,9 +358,14 @@ test('agreement: the round trip, over every kind the READ side emits', async () 
   // fix handling one leaf kind and not the mix.
   expect(await holds('Reflect.makeType(Reflect.getReflection(M)) === M',
     "type M = string.<{ brand: 'Name', pattern: /^a$/ }>;")).toBe('ok');
-  // `enum` remains the one exception, and for a different reason: the write
-  // side has no `enum` case at all.
-  expect(await run('enum E { a, b } Reflect.makeType(Reflect.getReflection(type E));')).toBe('threw');
+  // `enum` was the last exception, and it closed by removing the kind rather
+  // than by adding a write-side case. An enum reflects as the `primitive` leaf
+  // #table-reflection-nodes assigns it, so it round-trips by the first row of
+  // the list above and needs no case of its own; `family` carries the enum-ness
+  // a walker would otherwise have needed a kind for.
+  expect(await holds('Reflect.makeType(Reflect.getReflection(type E)) === (type E)',
+    'enum E { a, b }')).toBe('ok');
+  expect(await holds("Reflect.getReflection(type E).family === 'enum'", 'enum E { a, b }')).toBe('ok');
 });
 
 test('a struct CONTAINING a parameterized field round-trips, and walks preserve it', async () => {

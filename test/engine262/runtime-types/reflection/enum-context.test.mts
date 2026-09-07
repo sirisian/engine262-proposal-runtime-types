@@ -38,8 +38,12 @@ test('the routes that already worked still do', () => {
   // The class family, which was the only family implemented.
   expect(evaluated('class K { } String(Reflect.getReflection.<Reflect.Class, K>().kind);')).toBe('Class');
   expect(evaluated('class K { x: uint8 = 1; } String(typeof Reflect.getReflection.<Reflect.ClassField, K>("x"));')).toBe('object');
-  // And the type-level node, the workaround this does not yet remove.
-  expect(evaluated(`${E}String(Reflect.getReflection(Component).kind);`)).toBe('enum');
+  // And the type-level node, whose workaround IS now removed: it reflects as the
+  // `primitive` leaf #table-reflection-nodes assigns every named type, and the
+  // enum-ness a walker needs is `family` on the same node. The declaration
+  // context above is the route to the enumerators.
+  expect(evaluated(`${E}String(Reflect.getReflection(Component).kind);`)).toBe('primitive');
+  expect(evaluated(`${E}String(Reflect.getReflection(Component).family);`)).toBe('enum');
 });
 
 // `EnumEnumerator` completes the family. decorators.md gives it TWO forms:

@@ -147,21 +147,29 @@ test('the entry check refuses a metadata node that is not a plain record', () =>
 });
 
 // ---------------------------------------------------------------------------
-// The one remaining exception
+// The exception that was closed
 // ---------------------------------------------------------------------------
 
-test('`enum` is the one kind that still does not round-trip, for its own reason', () => {
-  // Not the same problem. `parameterized` HAD a write-side case that was
-  // incomplete; `enum` has none at all - "a type node of kind enum is not
-  // supported yet". The read side emits `kind: 'enum'` with five fields, so the
-  // node exists and nothing consumes it.
+test('`enum` round-trips, and `sec-reflect-maketype` keeps its two exceptions', () => {
+  // This pin used to assert the opposite, and said why: the read side emitted
+  // `kind: 'enum'` with five fields, the write side had no case for it, and the
+  // round-trip law threw on every enum. It was asserted "so that closing it
+  // breaks a test that explains why", which is what happened.
   //
-  // Asserted as an exception so that closing it breaks a test that explains
-  // why, and so that `sec-reflect-maketype`'s two named exceptions - the opaque
-  // `primitive` leaf and `application` having no node - are not quietly joined
-  // by a third.
-  expect(evaluated("enum E { a, b } String(Reflect.getReflection(type E).kind);")).toBe('enum');
-  expectThrown('enum E { a, b } Reflect.makeType(Reflect.getReflection(type E));');
+  // It closed by DELETING the kind rather than by adding a write-side case.
+  // #table-reflection-nodes lists ten kinds and says the `primitive` node covers
+  // "the built-in primitives, classes, interfaces, enums"; the enum-ness a
+  // walker needs is `family`, which that table specifies on the same node and
+  // which nothing emitted. The kind had been invented to fill a gap the field
+  // was written to fill.
+  expect(evaluated('enum E { a, b } String(Reflect.getReflection(type E).kind);')).toBe('primitive');
+  expect(evaluated('enum E { a, b } String(Reflect.getReflection(type E).family);')).toBe('enum');
+  expect(evaluated('enum E { a, b } String(Reflect.makeType(Reflect.getReflection(type E)) === (type E));')).toBe('true');
+  // Nothing became unreachable in the trade: the enumeration and the underlying
+  // type are read from the Type Object, which is where a nominal type's surface
+  // belongs (#sec-enums).
+  expect(evaluated('enum E: uint8 { a = 1, b = 2 } [...E.keys()].join(",");')).toBe('a,b');
+  expect(evaluated('enum E: uint8 { a = 1 } String(E.underlying === uint8);')).toBe('true');
 });
 
 // ---------------------------------------------------------------------------
