@@ -4421,6 +4421,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'BitwiseORExpression':
         staticType(node);
         return;
+      // A COMPUTED MEMBER ACCESS in a statement position, `a[9];`. Its index
+      // judgment - #sec-array-and-tuple-types, "an index written as a literal is
+      // decidable" for a fixed extent and for a tuple's positions - runs from
+      // `staticType`, which a bare statement never calls. So `let u: uint8 =
+      // a[9]` was refused and `a[9];` was not, the rule reaching one spelling of
+      // one read. Typed here for the same reason the arithmetic above is: the
+      // check belongs to the expression, not to the position it sits in.
+      case 'MemberExpression':
+        if ((node as { Expression?: ParseNode | null }).Expression) {
+          staticType(node);
+        }
+        return;
       // `new WeakRef(x)` as a statement - the README's own example is written
       // that way - is typed for the static weak-reference check, and so is a
       // `new` that WRITES TYPE ARGUMENTS, `new WeakMap.<string, uint8>()`,
@@ -8691,6 +8703,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return named ? named.Value as Known : null;
           }
         }
+        // The index judgments below decide a READ. The operand of a `delete` is
+        // not one: the engine's rule there is the opposite way round - deleting a
+        // POSITION of a tuple is refused ("`0` is a position of a tuple and
+        // cannot be deleted") and deleting a non-position is allowed, which is
+        // what `typed-storage`'s "the rule reaches only positions" asserts. So an
+        // index outside the positions is exactly the legal case for a delete, and
+        // refusing it as "not an index" would conflate two operations.
+        const isDeleteOperand = ((node as unknown as { parent?: { type?: string, operator?: string } }).parent?.type === 'UnaryExpression')
+          && ((node as unknown as { parent?: { operator?: string } }).parent?.operator === 'delete');
         // A COMPUTED access, `a[i]`. This fell through to ~any~, so indexing a
         // typed array was untyped: `let b: boolean = a[0]` type-checked on a
         // `[4].<uint32>`. Element WRITES were checked all along, which made the
@@ -8733,7 +8754,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Only a literal is decided: anything computed keeps the run-time
             // check, which stays the backstop for every other index.
             const index = m.Expression as { type?: string, value?: number };
-            if (index.type === 'NumericLiteral' && typeof receiver.Extent === 'number'
+            if (!isDeleteOperand && index.type === 'NumericLiteral' && typeof receiver.Extent === 'number'
                 && typeof index.value === 'number'
                 && (!Number.isInteger(index.value) || index.value < 0 || index.value >= receiver.Extent)) {
               const completion = Throw.StaticTypeError(
@@ -8754,7 +8775,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const positions = receiver.Elements ?? [];
             const restAt = positions.findIndex((e) => e.Rest);
             const fixed = restAt === -1 ? positions.length : restAt;
-            if (index.type === 'NumericLiteral' && typeof index.value === 'number') {
+            if (!isDeleteOperand && index.type === 'NumericLiteral' && typeof index.value === 'number') {
               if (!Number.isInteger(index.value) || index.value < 0
                   || (restAt === -1 && index.value >= fixed)) {
                 const completion = Throw.StaticTypeError(

@@ -16,7 +16,11 @@ import { evaluated, expectThrownKind, expectStaticTypeError, ok } from '../harne
 test('a fixed-extent array cannot be grown', () => {
   expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a.push(5);', 'TypeError');
   expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a.length = 9;', 'TypeError');
-  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[7] = 1;', 'TypeError');
+  // A store past the extent is attempted GROWTH. Written with a LITERAL index it
+  // is now decided before the program runs - `#sec-array-and-tuple-types`: a
+  // fixed extent "is a compile-time constant, so an index written as a literal
+  // is decidable" - which is the moment the bounds-check elision depends on.
+  expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[7] = 1;');
   expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a.unshift(0);', 'TypeError');
   // the constructed form behaves as the annotated one does
   expectThrownKind('const a = new [4].<float32>(); a.push(5);', 'TypeError');
@@ -28,17 +32,21 @@ test('an out-of-bounds READ is a RangeError', () => {
   // bounds checks the array sections describe". It returned *undefined* - the
   // ordinary JavaScript answer for a missing property, and the wrong one for a
   // value whose type says how many elements it has.
-  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[9];', 'RangeError');
-  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[4];', 'RangeError');
+  // A LITERAL index against a FIXED extent is decided at compile time; the
+  // run-time RangeError remains the answer for every index that is not.
+  expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[9];');
+  expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[4];');
+  // `-1` is a unary expression rather than a literal, so it is not among the
+  // indices this decides and stays the run time's.
   expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[-1];', 'RangeError');
   // A DYNAMIC extent is bounds-checked too: its length is what it is, even
   // though it may grow.
   expectThrownKind('const a: [].<float32> = [1, 2, 3]; a[9];', 'RangeError');
 
-  // A WRITE past a fixed extent stays a TypeError, because that is attempted
-  // GROWTH rather than an out-of-bounds access - the same rule as `push` and
-  // `length =` above, and the extent is part of the type.
-  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[7] = 1;', 'TypeError');
+  // A WRITE past a fixed extent is attempted GROWTH rather than an
+  // out-of-bounds access - the same rule as `push` and `length =` above - and
+  // with a literal index it is decided at compile time.
+  expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[7] = 1;');
 
   // A plain array keeps JavaScript's behaviour: nothing about it says what its
   // length ought to be.
