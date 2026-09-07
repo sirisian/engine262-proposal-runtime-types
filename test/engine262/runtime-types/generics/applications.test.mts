@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, run, ok } from '../harness.mts';
+import { evaluated, expectThrown, run, ok, expectStaticTypeError } from '../harness.mts';
 
 // -- A deferred application as a binding's type (#sec-deferred-applications) --
 //
@@ -242,4 +242,45 @@ test('an alias where clause is an EARLY error and costs nothing per call', () =>
   // `Pos.<0>`.
   expectThrown(`${Pos} let a: Pos.<3> = (1 := uint32); let b: Pos.<0> = (1 := uint32);`);
   expect(evaluated(`${Pos} let a: Pos.<3> = (1 := uint32); String(a);`)).toBe('1');
+});
+
+// ---------------------------------------------------------------------------
+// A WRITTEN TYPE ARGUMENT MUST SATISFY ITS PARAMETER'S CONSTRAINT.
+//
+// `function f<T extends object>(x: T) {}` called `f.<uint8>(1)` was the run
+// time's TypeError, though both sides are written down: the constraint at the
+// declaration and the argument at the call.
+//
+// The constraint is kept UNRESOLVED on the Type Parameter Record, as
+// `ConstraintNode` - a resolved field would have to be built at declaration
+// time, and a constraint may name a type declared later - so it is resolved at
+// the call, where every name is in scope.
+//
+// THREE THINGS THAT LOOK LIKE ONE FEATURE AND ARE NOT, each found by the corpus
+// rather than by probing:
+//   - a TYPE parameter, `<T extends object>`, judged here;
+//   - a VALUE parameter, `<N: uint32>` applied `f.<4>`, whose argument is a
+//     value that ADOPTS its type rather than a type that must be assignable to
+//     it - comparing the two refused correct programs;
+//   - a type PACK, `<...Cs extends [].<any>>` applied by name, where the i-th
+//     argument is not the i-th parameter at all.
+// Only the first is judged; the other two are left to the run time.
+// ---------------------------------------------------------------------------
+
+test('a written type argument is checked against its constraint', () => {
+  expectStaticTypeError('function f<T extends object>(x: T) {} f.<uint8>(1);');
+  expectStaticTypeError('class Base {} function h<T extends Base>(x: T) {} h.<uint8>(1);');
+  // A satisfying argument, and an unconstrained parameter, are unaffected.
+  expect(ok('function f<T extends object>(x: T) { return x; } f.<object>({});')).toBe(true);
+  expect(evaluated('function f<T>(x: T) { return x; } String(f.<uint8>(1));')).toBe('1');
+  expect(ok('class Base {} class D extends Base {} function h<T extends Base>(x: T) { return x; } h.<D>(new D());')).toBe(true);
+});
+
+test('the applications this does NOT judge', () => {
+  // A VALUE parameter: the argument adopts the type rather than being
+  // assignable to it.
+  expect(evaluated('function f<N: uint32, I: uint32>(a: [N].<uint8>): uint8 { return a[I]; } let a: [4].<uint8> = [7,8,9,10]; String(Number(f.<4, 2>(a)));')).toBe('9');
+  // An INFERRED argument: reporting a constraint failure against a type the
+  // program never wrote needs the inference to say what it bound and where.
+  expect(ok('function f<T extends object>(x: T) { return x; } f({});')).toBe(true);
 });

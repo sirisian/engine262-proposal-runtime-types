@@ -15070,6 +15070,62 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkNumericCall(n, null);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = callableForm(staticType(c.CallExpression));
+        // A WRITTEN TYPE ARGUMENT MUST SATISFY ITS PARAMETER'S CONSTRAINT.
+        // `function f<T extends object>(x: T) {}` called `f.<uint8>(1)` was the
+        // run time's TypeError, though both sides are written down: the
+        // constraint at the declaration and the argument at the call. The
+        // signature's Type Parameter Records already carry the constraint - it
+        // is what `displayType` prints for a `parameter` kind - and nothing read
+        // it here.
+        //
+        // Only a WRITTEN argument. An INFERRED one is a different question: the
+        // inference would have to report which parameter it bound and to what,
+        // and reporting a constraint failure against a type the program never
+        // wrote needs that provenance to say anything useful.
+        if (callee && callee.Kind === 'function' && c.CallExpression.type === 'TypeArgumentsExpression') {
+          const writtenArgs = (c.CallExpression as unknown as {
+            TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
+          }).TypeArguments?.TypeArgumentList ?? [];
+          // The Type Parameter Record keeps its constraint UNRESOLVED, as
+          // `ConstraintNode` - a `Constraint` field would have to be resolved at
+          // declaration time, and a constraint may name a type declared later.
+          // So it is resolved here, at the call, where every name is in scope.
+          const params = (callee.Signatures[0] as unknown as {
+            TypeParameters?: readonly { Name?: string, Kind?: string, ConstraintNode?: ParseNode.Type | null }[],
+          } | undefined)?.TypeParameters ?? [];
+          // POSITIONAL, NON-VARIADIC applications only. A type PACK absorbs an
+          // unknown number of arguments - `each<...Cs extends [].<any>, ...Not
+          // extends [].<any>>` applied `each.<Cs: Transform, Not: Frozen>` - so
+          // the i-th argument is not the i-th parameter, and a NAMED argument is
+          // not positional at all. Judging those needs the same binding the
+          // application itself performs, which is a larger piece of work than
+          // this check.
+          const positional = params.every((p) => (p as unknown as { Variadic?: boolean }).Variadic !== true)
+            && writtenArgs.every((a) => (a as { type?: string }).type !== 'NamedTypeArgument');
+          writtenArgs.forEach((argNode, i) => {
+            if (!positional) {
+              return;
+            }
+            // A VALUE parameter - `f<N: uint32>`, applied `f.<4>` - carries its
+            // value's TYPE in the same slot, and its argument is a VALUE rather
+            // than a type. Comparing the two as types refuses `f.<4, 2>` for an
+            // `N: uint32`, since the literal has to ADOPT the type rather than
+            // be assignable to it. Only a `type` parameter is judged here.
+            if (params[i]?.Kind !== 'type') {
+              return;
+            }
+            const constraintNode = params[i]?.ConstraintNode;
+            const constraint = constraintNode ? resolveType(constraintNode) : null;
+            if (!constraint) {
+              return;
+            }
+            const supplied = resolveType(argNode as unknown as ParseNode.Type);
+            if (supplied && !IsAssignable(supplied as TypeRecord, constraint)) {
+              const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(supplied as TypeRecord)), Value(displayType(constraint))) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          });
+        }
         if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
           let sig: { Parameters: readonly ParameterRecord[] } | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
           if (!sig && callee.Signatures.length > 1) {
