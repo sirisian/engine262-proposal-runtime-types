@@ -75,7 +75,11 @@ test('a written intersection with disjoint members is reported at the annotation
 });
 
 test('an intersection whose members can share a value is untouched', () => {
-  expect(kind('type U = { a: uint8 } & { b: string };')).toBe('intersection');
+  // An all-~object~ intersection is DISTRIBUTED into one object type
+  // (#sec-canonicalizetype), so the kind here is `object` rather than
+  // `intersection`. It is not reduced away: the type has every member of both
+  // arms and is inhabited by the literal below, which is what this test is for.
+  expect(kind('type U = { a: uint8 } & { b: string };')).toBe('object');
   expect(evaluated('interface A { a: uint8 } interface B { b: string } type C = A & B;'
     + ' let v: C = { a: 1, b: "s" }; String(v.b);')).toBe('s');
   // A keyless OBJECT member is not disjoint from a keyed one.

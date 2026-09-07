@@ -110,24 +110,32 @@ test('the kinds that already rendered are unchanged', () => {
 test('the display is not an identity', () => {
   // Two distinct types may render alike; rendering is for reading, and the
   // records remain distinct. `getReflection` is the inspection surface.
-  expect(message('type A = { x: int32 }; type B = { x: float64 }; type C = A & B; let c: C = { x: 1 };')).toContain('is not assignable to');
-  const c = run('type A = { x: int32 }; type B = { x: float64 }; type C = A & B; const r = Reflect.getReflection(C); String(r.kind);') as { Value?: { stringValue?: () => string } };
+  //
+  // The pair this once used, `{ x: int32 } & { x: float64 }`, is now reported at
+  // the `&` (#sec-intersection-type-early-errors) because no value is both, so
+  // the display point is made with an INHABITED intersection instead. The two
+  // arms are not distributed away, an array not being an ~object~ arm.
+  expect(message('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { x: 1 };')).toContain('is required by');
+  const c = run('type A = [].<uint8>; type B = { length: uint32 }; type C = A & B; const r = Reflect.getReflection(C); String(r.kind);') as { Value?: { stringValue?: () => string } };
   expect(c.Value?.stringValue?.()).toBe('intersection');
 });
 
-test('an intersection refusal names the intersection AND the member', () => {
-  // The member's own error names the member and not the intersection it came
-  // from, so `A & B` reported only that the value did not fit `B` and left the
-  // reader to work out where `B` came from. The loop knows which member
-  // rejected, so it says both.
-  const conflict = message('type A = { x: int32 }; type B = { x: float64 }; type C = A & B; let c: C = { x: 1 };');
-  expect(conflict).toContain('{ x: float64 } & { x: int.<32> }');
-  expect(conflict).toContain('does not satisfy');
+test('an intersection refusal names the member, and a conflict is reported at the `&`', () => {
+  // Two refusals that once shared a message are now separated, because
+  // #sec-canonicalizetype distributes an all-object intersection and there is no
+  // longer an "arm that rejected" to name.
+  //
+  // A CONFLICTING member pair empties the type, so it is reported where both
+  // types are written rather than at a use of the annotation.
+  const conflict = message('type A = { x: int32 }; type B = { x: float64 }; type C = A & B;');
+  expect(conflict).toContain('no value is of both');
+  expect(conflict).toContain('at member "x"');
 
-  // The member NAMED is the one that rejected, in either direction - not a
-  // fixed one that happens to look right in the common case.
-  expect(message('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { x: 1 };')).toContain('does not satisfy "{ y: int.<32> }"');
-  expect(message('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { y: 1 };')).toContain('does not satisfy "{ x: int.<32> }"');
+  // A MISSING member is a member of the distributed shape that was not supplied,
+  // and the message names the key and that shape - which is strictly more than
+  // naming the arm, the arm being one the reader must still locate.
+  expect(message('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { x: 1 };')).toContain('"y" is required by "{ x: int.<32>, y: int.<32> }"');
+  expect(message('type A = { x: int32 }; type B = { y: int32 }; type C = A & B; let c: C = { y: 1 };')).toContain('"x" is required by "{ x: int.<32>, y: int.<32> }"');
 });
 
 test('an inhabitable intersection is unaffected', () => {

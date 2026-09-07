@@ -62,7 +62,14 @@ test('reduction does not over-collapse', () => {
 test('the other union identities are unchanged', () => {
   expect(kind('type U = uint8 | never;')).toBe('primitive');
   expect(kind('type U = (uint8 | string) | boolean;')).toBe('union[3]');
-  expect(kind('type A = { a: uint8 }; type B = { b: uint8 }; type C = { c: uint8 }; type U = (A & B) & C;')).toBe('intersection{3}');
+  // An all-~object~ intersection DISTRIBUTES into one object type
+  // (#sec-canonicalizetype), so three object arms are one three-member
+  // object rather than a three-member intersection. Flattening is still
+  // what makes `(A & B) & C` and `A & (B & C)` one type; the kind it
+  // flattens into changed.
+  expect(kind('type A = { a: uint8 }; type B = { b: uint8 }; type C = { c: uint8 }; type U = (A & B) & C;')).toBe('object');
+  expect(evaluated('type A = { a: uint8 }; type B = { b: uint8 }; type C = { c: uint8 };'
+    + ' type U = (A & B) & C; type V = A & (B & C); String(U === V);')).toBe('true');
   expect(evaluated('type U = uint8 | string; let x: U = "s"; String(x);')).toBe('s');
 });
 
@@ -84,7 +91,12 @@ test('absorption terminates and stays order-independent on RECURSIVE members', (
   expect(kindOf(`${REC} type U = B | A;`)).toBe('union');
   expect(kindOf(`${REC} type U = A | B;`)).toBe('union');
   expect(evaluated(`${REC} type U = B | A; type V = A | B; String(U === V);`)).toBe('true');
-  expect(kindOf(`${REC} type U = B & A;`)).toBe('intersection');
+  // Distribution runs on RECURSIVE object arms too, and terminates for the
+  // reason absorption does: it merges members the loop above has already
+  // canonicalized. The merged member `next` is the intersection of the two
+  // nullable unions, which is left standing - only an ALL-object
+  // intersection distributes.
+  expect(kindOf(`${REC} type U = B & A;`)).toBe('object');
   const MUT = 'interface A { b: B | null } interface B { a: A | null }';
   expect(kindOf(`${MUT} type U = A | B;`)).toBe('union');
   expect(evaluated(`${MUT} type U = A | B; type V = B | A; String(U === V);`)).toBe('true');

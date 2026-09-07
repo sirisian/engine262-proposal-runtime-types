@@ -4078,7 +4078,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const wantedForMethod = target.Properties.find((prop) => prop.key === methodKey);
           const wantedKind = (wantedForMethod?.type as { Kind?: string, Members?: readonly unknown[] } | undefined);
           const wantedIsNever = wantedKind?.Kind === 'union' && (wantedKind.Members ?? []).length === 0;
-          if (wantedForMethod && wantedIsNever) {
+          // An INTERSECTION is refused for the same reason `never` is. Method
+          // shorthand writes ONE signature, and an intersection requires every
+          // member; canonicalization has already deduplicated identical members
+          // and subsumed a subtype pair, so a surviving multi-member
+          // intersection means the members genuinely differ and no single
+          // written signature is a subtype of them all.
+          //
+          // This replaces a test for `never`, which held while an intersection
+          // target collapsed a disagreeing member to the empty type. It now
+          // takes the intersection of what the arms give the member
+          // (#sec-canonicalizetype), so the member of
+          // `{ m(): int32 } & { m(): string }` is `() => int32 & () => string` -
+          // which the DATA and ARROW spellings already refuse by ordinary
+          // assignability, and which the method spelling must refuse too.
+          const wantedIsIntersection = wantedKind?.Kind === 'intersection'
+            && (wantedKind.Members ?? []).length > 1;
+          if (wantedForMethod && (wantedIsNever || wantedIsIntersection)) {
             errors.push((Throw.StaticTypeError(
               '$1 is not assignable to $2',
               Value('a method'),
@@ -4881,7 +4897,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!already) {
               mergedProperties.push({ ...property });
             } else if (!SameType(already.type, property.type)) {
-              already.type = neverType;
+              // The INTERSECTION of the two, not `never`. Collapsing every
+              // disagreement to the empty type refused `{ a: number } & { a: 5 }`,
+              // which is inhabited and which canonicalization interns as
+              // `{ a: 5 }` - so the walk here disagreed with the type's own
+              // identity, `T === U` holding while one annotation accepted a
+              // literal the other refused. Asking CanonicalizeType gives the
+              // three answers it already defines: a duplicate deduplicates, a
+              // subtype pair subsumes, and a disjoint pair IS `never`.
+              already.type = CanonicalizeType({
+                Kind: 'intersection',
+                Members: [already.type, property.type],
+              } as TypeRecord);
             }
           }
         }
@@ -5046,7 +5073,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // merged shape, and reuses that message string. It reports nothing the
         // walk below would not have reported - it names it better - so the
         // refusal set is unchanged.
-        if (intersectionArms.length > 1) {
+        // Gated on the MERGED shape refusing the literal. The walk reports over
+        // the arms AS WRITTEN, which names the refusing arm well but answers a
+        // different question from the one the type asks: an arm may refuse a
+        // literal that the intersection admits, because a member type is the
+        // intersection of what the arms give it and a literal reaches it by
+        // propagation. Ungated, `{ a: number } & { a: 5 }` was refused by the
+        // `{ a: number }` arm while `{ a: 5 }` - the same interned type - took it.
+        // Reported only where the merged shape is EMPTY. The walk answers "which
+        // arm refused", which is worth saying when no arm can be satisfied at
+        // once; where the intersection is inhabited, a refusal is an ordinary
+        // member mismatch and `checkObjectLiteralAgainst` reports it against the
+        // merged shape, with the literal propagation this walk does not do. The
+        // walk reads a literal's members at their WIDENED types, so gating it on
+        // assignability refused `{ a: string } & { a: "x" }`, whose merged shape
+        // is `{ a: "x" }` and which the same annotation written directly takes.
+        const mergedIsEmpty = mergeableArms && mergedProperties.some(
+          (q) => q.type.Kind === 'union' && (q.type as { Members: readonly TypeRecord[] }).Members.length === 0,
+        );
+        if (intersectionArms.length > 1 && (!mergeableArms || mergedIsEmpty)) {
           const literalHere = objectLiteralMembers(inner as unknown as ParseNode);
           if (literalHere) {
             const offending = intersectionArms.find((arm) => !IsAssignable(literalHere as TypeRecord, arm));
@@ -6730,7 +6775,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const isNever = (m: TypeRecord): boolean => m.Kind === 'union' && (m as { Members: readonly TypeRecord[] }).Members.length === 0;
         if (node.type === 'IntersectionType' && !reportedEmptyIntersections.has(node)
             && !Members.some(isNever)) {
-          for (let i = 0; i < Members.length; i += 1) {
+          // A member name two ~object~ arms declare with DISJOINT types empties
+          // the intersection exactly as two disjoint arms do - canonicalization
+          // reduces both - so it is reported in the same place and for the same
+          // reason: at the `&`, where both types are written, rather than as a
+          // refusal at every use of the annotation.
+          //
+          // Reported before the whole-arm loop below, since the whole-arm test
+          // answers *false* for two object types (#sec-aredisjoint leaves them
+          // overlapping) and would let this case through to the use site.
+          const propertiesOf = (m: TypeRecord) => (m.Kind === 'object'
+            ? ((m as unknown as { Properties?: readonly { key: string, type: TypeRecord, optional?: boolean }[] }).Properties ?? [])
+            : []);
+          for (let i = 0; i < Members.length && !reportedEmptyIntersections.has(node); i += 1) {
+            for (let j = i + 1; j < Members.length && !reportedEmptyIntersections.has(node); j += 1) {
+              for (const left of propertiesOf(Members[i])) {
+                const right = propertiesOf(Members[j]).find((q) => q.key === left.key);
+                // An OPTIONAL member on either side does not empty the type: a
+                // value omitting it satisfies both arms.
+                if (!right || left.optional === true || right.optional === true) {
+                  continue;
+                }
+                // A member written `never` is EXEMPT, as a written `never` ARM
+                // is: the diagnostic exists to catch an author who did not
+                // realise the intersection was empty, and writing `never` states
+                // that it is. `{ a: never } & { a: never }` is the annihilation
+                // identity of #sec-never-type at a member.
+                if (isNever(left.type) || isNever(right.type)) {
+                  continue;
+                }
+                if (AreDisjoint(left.type, right.type)) {
+                  reportedEmptyIntersections.add(node);
+                  const completion = Throw.StaticTypeError(
+                    'no value is of both $1 and $2 at member $3, so their intersection is never',
+                    Value(displayType(left.type)),
+                    Value(displayType(right.type)),
+                    Value(left.key),
+                  ) as ThrowCompletion;
+                  errors.push(completion.Value as ObjectValue);
+                  break;
+                }
+              }
+            }
+          }
+          for (let i = 0; i < Members.length && !reportedEmptyIntersections.has(node); i += 1) {
             for (let j = i + 1; j < Members.length; j += 1) {
               if (AreDisjoint(Members[i], Members[j])) {
                 reportedEmptyIntersections.add(node);

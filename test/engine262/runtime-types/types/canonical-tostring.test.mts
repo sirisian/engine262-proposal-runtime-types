@@ -23,8 +23,15 @@ test('the canonical form is the source text, for every kind', () => {
 });
 
 test('the reported program shows its type', () => {
-  expect(evaluated('type A = { x: int32 }; type B = { x: null }; type C = A & B;'
-    + ' String(C);')).toBe('{ x: int.<32> } & { x: null }');
+  // An all-~object~ intersection is DISTRIBUTED (#sec-canonicalizetype), so what
+  // prints is the one object type it denotes rather than the two arms as
+  // written. The pair this once used, `{ x: int32 } & { x: null }`, no value is
+  // of both, so it is now an error at the `&` rather than a type to print.
+  expect(evaluated('type A = { x: int32 }; type B = { y: null };'
+    + ' type C = A & B; String(C);')).toBe('{ x: int.<32>, y: null }');
+  // An arm that is not an object still prints as an intersection.
+  expect(evaluated('type A = [].<uint8>; type B = { length: uint32 };'
+    + ' type C = A & B; String(C);')).toBe('[].<uint.<8>> & { length: uint.<32> }');
 });
 
 test('the canonical form is valid source that names the same type', () => {

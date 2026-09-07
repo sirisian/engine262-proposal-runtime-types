@@ -55,6 +55,16 @@ export function isTypeObject(value: unknown): value is TypeObject {
  * each branch that builds a new record for a compound kind allocates it empty,
  * records it, then fills it.
  */
+/**
+ * Is _t_ the empty type?
+ *
+ * #sec-never-type: `never` is the empty union, so the test is on the Record's
+ * shape rather than on a name.
+ */
+function isNeverRecord(t: TypeRecord): boolean {
+  return t.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0;
+}
+
 export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeRecord> = new Map()): TypeRecord {
   const started = copies.get(t);
   if (started !== undefined) {
@@ -132,6 +142,58 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
       && members.some((m, i) => members.some((other, j) => i !== j && AreDisjoint(m.canonical, other.canonical)))) {
       return neverType;
     }
+    // #sec-canonicalizetype: an intersection every member of which is an
+    // ~object~ Type Record is ONE object type, and a member name more than one
+    // of them declares takes the INTERSECTION of the types they give it. An
+    // intersection requires every member, so a value's property must satisfy
+    // every arm that declares it, and an intersection of those types is what
+    // that means.
+    //
+    // Distribution reaches what whole-object subsumption cannot. `{ a: number }
+    // & { a: 5 }` folds already, `{ a: 5 }` being a subtype of `{ a: number }`;
+    // in `{ a: uint32 } & { a: string }` neither object is a subtype of the
+    // other, so the pair survived as an intersection whose emptiness was
+    // discovered at every use rather than stated once in the type.
+    //
+    // A member REQUIRED by any arm is required, an intersection requiring all
+    // of them, and one `readonly` in any arm is readonly for the same reason.
+    // Index signatures are carried across and re-sorted by the object arm.
+    if (t.Kind === 'intersection' && members.length > 1
+      && members.every((m) => m.canonical.Kind === 'object')) {
+      type ObjectRecord = {
+        Properties: readonly { key: string, type: TypeRecord, optional?: boolean, readonly?: boolean }[],
+        IndexSignatures: readonly { Key: TypeRecord, Value: TypeRecord }[],
+      };
+      const arms = members.map((m) => m.canonical as unknown as ObjectRecord);
+      const Properties: { key: string, type: TypeRecord, optional?: boolean, readonly?: boolean }[] = [];
+      const IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[] = [];
+      for (const arm of arms) {
+        for (const property of arm.Properties) {
+          const already = Properties.find((q) => q.key === property.key);
+          if (!already) {
+            Properties.push({ ...property });
+            continue;
+          }
+          already.optional = already.optional === true && property.optional === true;
+          already.readonly = already.readonly === true || property.readonly === true;
+          // Built as an intersection and handed back to this operation rather
+          // than compared here: two identical types deduplicate, a subtype pair
+          // subsumes, and a disjoint pair reduces to `never` - the three answers
+          // this operation already gives, reached by asking it.
+          already.type = CanonicalizeType(
+            { Kind: 'intersection', Members: [already.type, property.type] } as TypeRecord,
+            copies,
+          );
+        }
+        for (const ix of arm.IndexSignatures) {
+          IndexSignatures.push({ Key: ix.Key, Value: ix.Value });
+        }
+      }
+      return CanonicalizeType(
+        { Kind: 'object', Properties, IndexSignatures } as unknown as TypeRecord,
+        copies,
+      );
+    }
     if (members.length === 1) {
       return members[0].canonical;
     }
@@ -157,6 +219,21 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
         Elements.push({ Type: c, Rest: e.Rest, Initial: e.Initial });
       }
     }
+    // A tuple is a product, and a required position of `never` does leave it
+    // with no values - but it is NOT reduced, and the reason is that a tuple has
+    // a second role an object type does not.
+    //
+    // The type-programming kit reads a tuple as a heterogeneous LIST
+    // (typeprogramming.md: `elementTypes`, `tupleOf`), and `never` is ordinary
+    // data in one: `[1, never, 'a']` is the input to a filter that drops it.
+    // Reducing the list to `never` destroys the program's ability to compute
+    // over it, and the kit has no other list structure to move to. An object
+    // type carries no such second reading, so it reduces (see the object arm)
+    // while this does not.
+    //
+    // TypeScript agrees for the same practical reason; Rust does not, `(i32, !,
+    // char)` being uninhabited there - but Rust has no type-level list built on
+    // the tuple, so the cost that decides it here does not arise.
     return { Kind: 'tuple', Elements };
   }
   if (t.Kind === 'application') {
@@ -184,19 +261,34 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     } as TypeRecord;
   }
   if (t.Kind === 'array') {
-    return { Kind: 'array', Element: CanonicalizeType(t.Element, copies), Extent: t.Extent };
+    const Element = CanonicalizeType(t.Element, copies);
+    // Not reduced, for the reason the tuple arm gives: an array of a fixed
+    // extent is a product, but the element type is also read as data by the
+    // kit, and the two must agree on what `[N].<never>` denotes. The emptiness
+    // is reachable by trying to store an element, which is where it is
+    // reported.
+    return { Kind: 'array', Element, Extent: t.Extent };
   }
   if (t.Kind === 'reference') {
-    return { Kind: 'reference', Target: CanonicalizeType(t.Target, copies) };
+    // A `ref` is a borrow of a location (references.md), so a reference to a
+    // location of the empty type is itself empty: there is no location it could
+    // name. `shared` is the same, its marker not being observable in the value.
+    const Target = CanonicalizeType(t.Target, copies);
+    return isNeverRecord(Target) ? neverType : { Kind: 'reference', Target };
   }
   if (t.Kind === 'shared') {
-    return { Kind: 'shared', Target: CanonicalizeType(t.Target, copies) };
+    const Target = CanonicalizeType(t.Target, copies);
+    return isNeverRecord(Target) ? neverType : { Kind: 'shared', Target };
   }
   if (t.Kind === 'literal') {
     return { Kind: 'literal', Value: t.Value, Base: CanonicalizeType(t.Base, copies) };
   }
   if (t.Kind === 'parameterized') {
-    return { Kind: 'parameterized', Base: CanonicalizeType(t.Base, copies), Metadata: t.Metadata };
+    // #sec-aredisjoint decides a parameterization on its BASE, so a refinement
+    // of the empty type is empty: metadata narrows a type's values and cannot
+    // add one.
+    const Base = CanonicalizeType(t.Base, copies);
+    return isNeverRecord(Base) ? neverType : { Kind: 'parameterized', Base, Metadata: t.Metadata };
   }
   if (t.Kind === 'primitive') {
     return { Kind: 'primitive', Name: t.Name, Arguments: t.Arguments.map((a) => (typeof a === 'number' ? a : CanonicalizeType(a, copies))) };
@@ -244,6 +336,22 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
         const kb = orderKey(b.Key);
         return ka < kb ? -1 : ka > kb ? 1 : 0;
       });
+    // #sec-layout-finiteness: an ~object~ Type Record a REQUIRED property of
+    // which is `never` has no values, a value of it having to hold a value of a
+    // type that has none. An OPTIONAL property of `never` does NOT empty the
+    // type: it declares a member that may never be present, which every value
+    // omitting it satisfies.
+    //
+    // The test is one level deep and on the CANONICAL property types, which is
+    // what makes it terminate: canonicalization is bottom-up, so
+    // `{ a: { b: never } }` reduces because the inner record reduced first, and
+    // no separate inhabitation walk or fixpoint is needed. A recursive type
+    // closes its cycle through a reference position - an array, a nullable
+    // union - and neither propagates, so a cycle cannot drive this to `never`.
+    if ((copy.Properties as readonly { type: TypeRecord, optional?: boolean }[])
+      .some((p) => p.optional !== true && isNeverRecord(p.type))) {
+      return neverType;
+    }
     return copy as unknown as TypeRecord;
   }
   // A function's parameter, return, and this types are canonicalized for the same
