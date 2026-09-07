@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
+import { evaluated, ok, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-numeric-library (The Numeric Library),
@@ -291,8 +291,51 @@ test('inventory: the specified-but-absent operations are the deferrals they shou
  * type change when a stranger declared the same shape.
  */
 test('inventory: provenance is a host channel and not a program-visible property', () => {
-  expect(evaluated('let r = Reflect.getReflection(type uint8); String("origin" in r);')).toBe('false');
+  // Probed on an OBJECT node's property record, which is where the reflected
+  // `origin` was claimed. This assertion read `Reflect.getReflection(type uint8)`
+  // - a `primitive` node, which no version of the table ever gave an `origin` -
+  // so it passed without touching the thing it names.
+  expect(evaluated('type T = { a: uint8 }; let p = Reflect.getReflection(T).properties[0]; String("origin" in p);')).toBe('false');
+  expect(evaluated('type T = { a: uint8 }; String("origin" in Reflect.getReflection(T));')).toBe('false');
   expect(evaluated('String(typeof Reflect.getOrigin);')).toBe('undefined');
   // the expansion artifact of the same clause group is still absent
   expect(evaluated('String(typeof Reflect.expansionArtifact);')).toBe('undefined');
+});
+
+/**
+ * A BUG PIN rather than a gap pin, and the distinction is the point: the
+ * deferrals above are choices, and this is not one.
+ *
+ * #table-reflection-nodes gives an object node's property record an `initial`,
+ * the declared default of `page?: uint8 = 0`, and the engine does not emit one.
+ * The reason it cannot is upstream of reflection: a default written in a
+ * STRUCTURAL object type is parsed and then dropped, so there is nothing to
+ * emit. The same default on an `interface` survives, which is what
+ * composites/typed-creation.test.mts asserts.
+ *
+ * The visible cost is the one #sec-composite-typed-creation says the default
+ * exists to prevent: the two spellings of one key stop interning together, so
+ * a composite keyed on a structural shape has two identities where the clause
+ * promises one. The downstream cost is that every kit builder written over
+ * `mapProperties` spreads a record that never carried the default, so
+ * `partial(T)` and `readonly(T)` strip it silently - the failure mode
+ * typeprogramming.md §3.1 names for `readonly` and does not name for `initial`.
+ *
+ * Fixing it is not a plumb. `resolveType` is synchronous and an initializer's
+ * evaluation is a generator step, which is the constraint TupleElementRecord's
+ * [[Initial]] already records; either object-type defaults are evaluated
+ * somewhere the checker can reach them, or the structural form should refuse
+ * the syntax rather than accept and discard it. Pinned so the next inventory
+ * pass does not rediscover it, and so that fixing it fails here.
+ */
+test('inventory: a default in a structural object type is dropped, and its default is not reflected', () => {
+  const S = 'type S = { id: uint32, page?: uint8 = 0 }; ';
+  // the syntax is accepted
+  expect(ok(S)).toBe(true);
+  // ...and then discarded: the interface spelling of the same shape answers 0
+  expect(evaluated(`${S} String(Composite.<S>({ id: 7 }).page);`)).toBe('undefined');
+  // so the two spellings of one key do not intern together
+  expect(evaluated(`${S} String(Composite.<S>({ id: 7 }) === Composite.<S>({ id: 7, page: 0 }));`)).toBe('false');
+  // and the property record has no `initial` for reflection to emit
+  expect(evaluated(`${S} String('initial' in Reflect.getReflection(S).properties[1]);`)).toBe('false');
 });
