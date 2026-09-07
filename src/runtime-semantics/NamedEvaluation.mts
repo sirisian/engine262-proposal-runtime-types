@@ -1,6 +1,8 @@
 import { GetTypeObject } from '../type-system/intern.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
+import { InstallTypeObjectSurface } from '../intrinsics/TypePrototype.mts';
+import { RegisterStampedClass } from '../type-system/intern.mts';
 import { ObjectValue, Value } from '../value.mts';
 import { Q } from '../completion.mts';
 import { OutOfRange } from '../utils/language.mts';
@@ -77,7 +79,7 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
   // evaluation path taken by `const C = class {}` and property definitions.
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
     const published = PublishedClassTypeOf(ClassExpression as unknown as object);
-    AssociateClassType(value, GetTypeObject({
+    const typeObject = GetTypeObject({
       Kind: 'nominal',
       Declaration: ClassExpression,
       Arguments: [],
@@ -86,7 +88,31 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       // reads these two and this record carried neither.
       Base: published?.Kind === 'nominal' ? published.Base : undefined,
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
-    }));
+    });
+    // "A class's type object IS its constructor" (README, and the specification
+    // twice). The record is stamped onto the constructor and the type-object
+    // surface installed on it, so `V === type V` and a class name is the type
+    // wherever a type is a value.
+    //
+    // Stamped on EVERY class, generic or not: the stamp is what makes the
+    // accessors answer, while whether the bare NAME resolves to the constructor
+    // is GetTypeObject's decision and excludes a generic one.
+    // Only a NON-GENERIC class is stamped. An unapplied generic class is a type
+    // CONSTRUCTOR rather than a type, and it is what a higher-kinded position
+    // binds; giving its constructor a [[TypeRecord]] makes `isTypeObject` answer
+    // *true* for it, and the kinded machinery tells a type object from a bare
+    // generic declaration by exactly that test.
+    const genericParameters = (typeObject as unknown as {
+      TypeRecord?: { Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } },
+    }).TypeRecord?.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
+    if (genericParameters === 0) {
+      (value as unknown as { TypeRecord?: unknown }).TypeRecord = (typeObject as unknown as { TypeRecord: unknown }).TypeRecord;
+      InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue);
+      AssociateClassType(value, value);
+      RegisterStampedClass((typeObject as unknown as { TypeRecord: { Declaration: object } }).TypeRecord.Declaration, value as unknown as ObjectValue);
+    } else {
+      AssociateClassType(value, typeObject);
+    }
   }
   // 4. Return value.
   return value;

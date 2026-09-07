@@ -6,7 +6,7 @@ import { PublishedReturnTypeOf } from '../type-system/check.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
-import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { GetTypeObject, isClassTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
 import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord } from '../type-system/records.mts';
@@ -289,7 +289,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
   // read. The `declared` filter was silently doing this job as well; removing
   // it made the second job visible.
   const fallThrough = surroundingAgent.feature('runtime-types')
-    && IsCallable(value) && !isTypeObject(value)
+    && IsCallable(value) && (!isTypeObject(value) || isClassTypeObject(value))
     ? RuntimeTypeOf(value)
     : undefined;
   if (fallThrough !== undefined && (fallThrough as { Kind?: string }).Kind === 'object') {
@@ -359,7 +359,9 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     // constructor declares none. That rule is about what was WRITTEN and lives
     // in the class-member reflection path; this is about what a VALUE is. The
     // two answers differ on purpose and a test asserts both.
-    const classType = value instanceof ObjectValue && !isTypeObject(value)
+    // A class type object is admitted: it is the one type object that is also a
+    // function, so what it IS and what it DENOTES differ and this asks the first.
+    const classType = value instanceof ObjectValue && (!isTypeObject(value) || isClassTypeObject(value))
       ? LookupClassType(value as unknown as object)
       : undefined;
     const constructedType = classType !== undefined

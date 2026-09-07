@@ -1,5 +1,5 @@
 import { EnsureCompletion, Q } from '../completion.mts';
-import { Value, JSStringValue, NumberValue, TypedNumberValue, type Arguments, type FunctionCallContext } from '../value.mts';
+import { Value, JSStringValue, NumberValue, TypedNumberValue, ObjectValue, Descriptor, type Arguments, type FunctionCallContext, type NativeSteps } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -7,7 +7,7 @@ import { LayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { CreateComplexValue } from './Complex.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { Realm, Throw, R, wellKnownSymbols } from '#self';
+import { Realm, Throw, R, wellKnownSymbols, CreateBuiltinFunction, X } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue } from './Decimal.mts';
 import { Float128FromNumber } from './Float128.mts';
 import { surroundingAgent } from '#self';
@@ -547,6 +547,36 @@ function TypeProto_toString(this: unknown, _args: Arguments, { thisValue }: Func
     return Throw.TypeError('$1 is not a type', Value('the receiver of Type.prototype.toString'));
   }
   return Value(canonicalTypeText((thisValue as { TypeRecord: TypeRecord }).TypeRecord));
+}
+
+/**
+ * Gives a class CONSTRUCTOR the type-object surface. It cannot INHERIT it -
+ * ECMA-262 fixes its prototype to %Function.prototype% or the superclass - so
+ * the members are installed as own properties.
+ *
+ * Five of thirteen. `toString` is omitted because Function.prototype's returns
+ * the class's source text and ECMA-262 fixes that; the numeric bounds have no
+ * answer for a class; and `parse`/`tryParse` read a string into a value of the
+ * type, which a class has no general answer for.
+ *
+ * Installed on EVERY class, including one declaring no fields. A subclass
+ * constructor's prototype IS its base constructor and statics inherit, so a
+ * subclass left unstamped would report the BASE's layout.
+ */
+export function InstallTypeObjectSurface(realmRec: Realm, target: ObjectValue): void {
+  const members: [string, NativeSteps][] = [
+    ['byteLength', TypeProto_byteLengthGetter],
+    ['bitLength', TypeProto_bitLengthGetter],
+    ['alignment', TypeProto_alignmentGetter],
+    ['hasLayout', TypeProto_hasLayoutGetter],
+    ['family', TypeProto_familyGetter],
+  ];
+  for (const [name, steps] of members) {
+    const getter = CreateBuiltinFunction(steps, 0, Value(name), [], realmRec, undefined, Value('get'));
+    X(target.DefineOwnProperty(Value(name), Descriptor({
+      Getter: getter, Setter: Value.undefined, Enumerable: Value.false, Configurable: Value.true,
+    })));
+  }
 }
 
 export function bootstrapTypePrototype(realmRec: Realm) {

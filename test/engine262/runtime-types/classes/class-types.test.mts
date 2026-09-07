@@ -26,7 +26,16 @@ function expectThrown(source: string) {
 }
 
 test('a class name denotes its class type', () => {
-  expect(evaluated('class A {} const T = type A; typeof T === "object" ? "ok" : "no";')).toBe('ok');
+  // `typeof` is *"function"*, and that is the class EXCEPTION the specification
+  // states: "a class's type object is its constructor, and a constructor is a
+  // function whose `typeof` ECMA-262 fixes as *function*". Every other type
+  // object reports *"object"*; a class is the one that is also a callable value,
+  // so `type A` and `A` are one object and it answers as the function it is.
+  expect(evaluated('class A {} const T = type A; typeof T === "function" ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('class A {} String((type A) === A);')).toBe('true');
+  // An unapplied GENERIC class is not unified: it is a type constructor rather
+  // than a type, and a higher-kinded position binds it as one.
+  expect(evaluated('class G<T> {} String((type G) === G);')).toBe('false');
   // The class type is stable: the same class yields the same Type Object.
   expect(evaluated('class A {} type A1 = A; type A2 = A; A1 === A2 ? "same" : "different";')).toBe('same');
   // Distinct classes are distinct types even when structurally identical.

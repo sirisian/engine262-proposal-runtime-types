@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectThrown } from '../harness.mts';
 
 /**
  * Spec: #sec-decimal-floating-point-types (Decimal Floating-Point Types) -
@@ -288,18 +288,30 @@ test('a decimal field stores and reads, cohort intact', () => {
     + 'try { c.d = decimal128("2.5"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
 });
 
-test('buffer round-trip is not a DECIMAL question', () => {
-  // A placement view does not read another view's write - and NEITHER DOES A
-  // `float64`, measured. So the buffer round-trip is a pre-existing limitation
-  // of placement in this engine rather than something decimals lack, and
-  // fixing it belongs to whatever owns placement.
+test('the buffer round-trip claim was measuring a DEFAULT', () => {
+  // This test asserted that a placement view does not read another view's write,
+  // and recorded it as a pre-existing limitation of placement rather than
+  // something decimals lack. It was measuring neither: there was no placement
+  // view and no round trip.
   //
-  // Recorded with its BASELINE beside it, because without the baseline this
-  // reads as a decimal gap and would be chased as one.
-  expect(evaluated('class C { f: float64 = 1; } const b = new ArrayBuffer(64); '
-    + 'const c1 = new C.<placement>(b, 0); c1.f = 7.25; const c2 = new C.<placement>(b, 0); String(c2.f);')).toBe('1');
-  expect(evaluated('class C { d: decimal64 = 1.0; } const b = new ArrayBuffer(64); '
-    + 'const c1 = new C.<placement>(b, 0); c1.d = decimal64("7.25"); const c2 = new C.<placement>(b, 0); c2.d.toString();')).toBe('1.0');
+  // `new C.<placement>(b, 0)` is not placement syntax - the parser spells that
+  // `new (b, 0) C` - so it was a class construction with a TYPE ARGUMENT named
+  // `placement`, which is not a type. The argument was discarded, `C` declares no
+  // constructor so `b` and `0` were discarded too, and what came back was a fresh
+  // instance holding the field's default. `new C(b, 0)` and `new C()` answer the
+  // same, which is what shows the reading was of a default.
+  const C = 'class C { f: float64 = 1; } const b = new ArrayBuffer(64); ';
+  expect(evaluated(`${C}const c1 = new C(b, 0); c1.f = 7.25;`
+    + ' const c2 = new C(b, 0); String(c2.f);')).toBe('1');
+  expect(evaluated(`${C}String(new C().f);`)).toBe('1');
+
+  // The type argument was DISCARDED, including one naming nothing - which is how
+  // a form doing no placement could look as though it did. Both are refused now
+  // that a class name is its own Type Object and an argument on it resolves like
+  // any other.
+  expectThrown(`${C}const c = new C.<placement>(b, 0); String(c.f);`, 'is not defined');
+  expectThrown(`${C}const c = new C.<garbage>(b, 0); String(c.f);`, 'is not defined');
+  expectThrown('type P = placement;', 'is not defined');
 });
 
 test('`parse` reads the DIGITS, like the constructor call', () => {

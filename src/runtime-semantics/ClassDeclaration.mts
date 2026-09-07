@@ -9,6 +9,8 @@ import {
 } from '../type-system/runtime.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
+import { InstallTypeObjectSurface } from '../intrinsics/TypePrototype.mts';
+import { RegisterStampedClass } from '../type-system/intern.mts';
 import {
   InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
   ApplyDecorators, ClassDecoratorContext,
@@ -90,7 +92,30 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       Base: published?.Kind === 'nominal' ? published.Base : undefined,
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
     });
-    AssociateClassType(value, typeObject);
+    // "A class's type object IS its constructor" (README, and the specification
+    // twice). The record is stamped onto the constructor and the type-object
+    // surface installed on it, so `V === type V` and a class name is the type
+    // wherever a type is a value.
+    //
+    // Stamped on EVERY class, generic or not: the stamp is what makes the
+    // accessors answer, while whether the bare NAME resolves to the constructor
+    // is GetTypeObject's decision and excludes a generic one.
+    // Only a NON-GENERIC class is stamped. An unapplied generic class is a type
+    // CONSTRUCTOR rather than a type, and it is what a higher-kinded position
+    // binds; giving its constructor a [[TypeRecord]] makes `isTypeObject` answer
+    // *true* for it, and the kinded machinery tells a type object from a bare
+    // generic declaration by exactly that test.
+    const genericParameters = (typeObject as unknown as {
+      TypeRecord?: { Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } },
+    }).TypeRecord?.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
+    if (genericParameters === 0) {
+      (value as unknown as { TypeRecord?: unknown }).TypeRecord = (typeObject as unknown as { TypeRecord: unknown }).TypeRecord;
+      InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue);
+      AssociateClassType(value, value);
+      RegisterStampedClass((typeObject as unknown as { TypeRecord: { Declaration: object } }).TypeRecord.Declaration, value as unknown as ObjectValue);
+    } else {
+      AssociateClassType(value, typeObject);
+    }
   }
   // 4. Let env be the running execution context's LexicalEnvironment.
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;

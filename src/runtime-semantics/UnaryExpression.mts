@@ -11,7 +11,7 @@ import {
   ReferenceValue,
 } from '../value.mts';
 import { typedUnary } from '../type-system/arithmetic.mts';
-import { isTypeObject } from '../type-system/intern.mts';
+import { isClassTypeObject, isTypeObject } from '../type-system/intern.mts';
 import { __ts_cast__, OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent, EnvironmentRecord } from '#self';
@@ -213,7 +213,12 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
     // "object", since a Type Object is an Object and `typeof uint8 === "object"`
     // is the feature detection for this proposal. So a Type Object is "object"
     // even though it is callable.
-    if (surroundingAgent.feature('runtime-types') && isTypeObject(val)) {
+    // A CLASS is the exception, and the specification says so: "a constructor is
+    // a function whose `typeof` ECMA-262 fixes as *function*". The test is that
+    // the type object IS its own [[Constructor]] - true of a class and nothing
+    // else. Testing constructor-ness was too broad: an array type object is a
+    // constructor too, so `typeof [].<uint32>` became *"function"*.
+    if (surroundingAgent.feature('runtime-types') && isTypeObject(val) && !isClassTypeObject(val)) {
       return Value('object');
     }
     if (IsCallable(val)) {

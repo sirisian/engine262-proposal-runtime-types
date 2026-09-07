@@ -413,8 +413,73 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
 const internTables = new WeakMap<object, TypeObject[]>();
 
 /** #sec-gettypeobject */
+/**
+ * Is _value_ a class's Type Object - which is to say, its CONSTRUCTOR?
+ *
+ * A class is the one type object that is also a value of another kind, so two
+ * questions that are the same for every other type come apart for it: what a
+ * class DENOTES is its class type, and what a class IS is a function.
+ * `Reflect.typeOf` and `typeof` ask the second.
+ */
+/**
+ * Declaration -> the stamped constructor, for records that name a class without
+ * carrying it.
+ *
+ * A nominal record built by the CHECKER - an inferred return type, say - names
+ * its declaration and has no [[Constructor]], while the one built where the
+ * class was declared has both. Both denote the same type and must reach the same
+ * object, or `Reflect.typeOf(make).signatures[0].return.type === type K` is
+ * *false* for a factory returning a `K`.
+ */
+const stampedClasses = new WeakMap<object, ObjectValue>();
+
+export function RegisterStampedClass(declaration: object, constructor: ObjectValue): void {
+  stampedClasses.set(declaration, constructor);
+}
+
+export function isClassTypeObject(value: unknown): boolean {
+  if (!isTypeObject(value)) {
+    return false;
+  }
+  const record = value.TypeRecord as { Kind?: string, Constructor?: unknown };
+  return record.Kind === 'nominal' && record.Constructor === value;
+}
+
 export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { readonly '%Type.prototype%': ObjectValue } }): TypeObject {
   const canonical = CanonicalizeType(t);
+  // A bare NON-GENERIC class type IS its constructor.
+  //
+  // Not an application: `G.<8>` and `G.<2>` share a constructor and are
+  // different types, so returning the constructor for either would collapse
+  // them into one object.
+  //
+  // And not a GENERIC class's bare name either. `class One<T> {}` unapplied is a
+  // type CONSTRUCTOR rather than a type - "a bare generic alias is still not a
+  // type" - and it is what a higher-kinded position binds, so `B.<One>` needs it
+  // to stay the record the kinded machinery compares rather than become the
+  // constructor object.
+  if (canonical.Kind === 'nominal') {
+    const nominal = canonical as unknown as {
+      Arguments?: readonly unknown[],
+      Constructor?: ObjectValue,
+      Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null },
+    };
+    const parameters = nominal.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
+    if ((nominal.Arguments?.length ?? 0) === 0
+      && parameters === 0
+      && nominal.Declaration !== undefined) {
+      // The record's own [[Constructor]] where it has one, and the stamped
+      // constructor for the declaration otherwise - a checker-built record names
+      // the declaration and carries no constructor.
+      const own = nominal.Constructor;
+      const stamped = (own !== undefined && (own as unknown as { TypeRecord?: unknown }).TypeRecord !== undefined)
+        ? own
+        : stampedClasses.get(nominal.Declaration as unknown as object);
+      if (stamped !== undefined) {
+        return stamped as TypeObject;
+      }
+    }
+  }
   const agent = surroundingAgent as unknown as object;
   let table = internTables.get(agent);
   if (!table) {
