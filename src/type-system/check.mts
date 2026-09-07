@@ -8939,6 +8939,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const spec = target as unknown as {
             Expression: ParseNode, TypeArguments: { TypeArgumentList: readonly ParseNode[] },
           };
+          // AN ARRAY CONSTRUCTION, `new [4].<uint8>()`. Its callee is a
+          // TypeArgumentsExpression too, but over the ARRAY LITERAL that spells
+          // the extent - `[4]` - rather than over a name, so the name branch
+          // below never saw it and the construction had no Static Type. The
+          // library and user-class spellings beside it did, which is why
+          // `size-and-counts`' marker asserted all three: the type is what the
+          // syntax already says, `[extent].<element>`.
+          if (spec.Expression.type === 'ArrayLiteral') {
+            const written = spec.TypeArguments.TypeArgumentList;
+            const element = written.length === 1 ? resolveType(written[0] as unknown as ParseNode.Type) : null;
+            if (!element) {
+              return null;
+            }
+            // The extent is the literal's single element where it is a numeric
+            // literal, and ~dynamic~ for `new [].<T>()`.
+            const extentElements = (spec.Expression as unknown as { ElementList?: readonly ParseNode[] }).ElementList ?? [];
+            const extentNode = extentElements.length === 1
+              ? extentElements[0] as { type?: string, value?: unknown }
+              : undefined;
+            const extent = extentNode?.type === 'NumericLiteral' && typeof extentNode.value === 'number'
+              ? extentNode.value
+              : 'dynamic';
+            return CanonicalizeType({
+              Kind: 'array', Element: element as TypeRecord, Extent: extent,
+            } as unknown as TypeRecord) as Known;
+          }
           if (spec.Expression.type === 'IdentifierReference') {
             const specName = (spec.Expression as unknown as { name: string }).name;
             // The library half. A LIBRARY generic is constructed the same way

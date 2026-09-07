@@ -61,11 +61,14 @@ test('the checker gives size the index type too', () => {
   expect(ok('let s: Set.<uint8> = new Set(); let n: uint64 = s.size;')).toBe(true);
 });
 
-test.fails('a `new T.<Args>()` expression has no Static Type (general, not collections)', () => {
-  // The checker sees a collection member only through an annotation. Through the
-  // construction spelling the receiver is ~any~, so every signature
-  // `collectionMethodSignature` provides is unreachable that way - `size`, and
-  // `get` and `set` long before it.
+test('a `new T.<Args>()` expression has a Static Type (general, not collections)', () => {
+  // Was a `test.fails` marker: through the construction spelling the receiver
+  // was ~any~, so every signature `collectionMethodSignature` provides was
+  // unreachable that way. The library and user-class spellings closed when a
+  // `const` began taking its initializer's type from a construction; the ARRAY
+  // spelling was last, because `new [4].<uint8>()`'s callee is a
+  // TypeArgumentsExpression over the ARRAY LITERAL that spells the extent rather
+  // than over a name, so the name branch never saw it.
   //
   // NOT a collections defect. The array and the user generic behave identically,
   // which is why all three are asserted here: a fix belongs wherever a

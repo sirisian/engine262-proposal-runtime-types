@@ -556,3 +556,16 @@ test('an in-range index reads that position\'s type', () => {
   // nothing is, which is the boundary's answer rather than this rule's.
   expect(evaluated('let t: [uint8, ...[].<uint8>] = [1, 2, 3]; let u: uint8 = t[2]; String(u);')).toBe('3');
 });
+
+test('an array construction has the Static Type its syntax spells', () => {
+  // `new [4].<uint8>()`'s callee is a TypeArgumentsExpression over the ARRAY
+  // LITERAL that spells the extent, not over a name, so the branch that types
+  // `new Map.<K, V>()` and `new G.<T>()` never saw it and the construction was
+  // ~any~. The type is what the syntax already says.
+  expectStaticTypeError('const a = new [4].<uint8>(); let n: string = a.length;');
+  expectStaticTypeError('const a = new [4].<uint8>(); let s: string = a[0];');
+  // ...so the fixed extent's index judgment reaches it too.
+  expectStaticTypeError('const a = new [4].<uint8>(); let u: uint8 = a[9];');
+  // A use that fits still runs, and the value is what it was.
+  expect(evaluated('const a = new [4].<uint8>(); let u: uint8 = a[0]; String(u) + " " + String(a.length);')).toBe('0 4');
+});
