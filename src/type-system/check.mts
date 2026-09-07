@@ -14342,6 +14342,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             continue;
           }
           const child = (n as unknown as Record<string, unknown>)[key];
+          if (key === 'Catch') {
+            continue;
+          }
+          if (key === 'CatchClauses' && Array.isArray(child)) {
+            for (const clause of child as readonly ParseNode[]) {
+              const cl = clause as unknown as {
+                CatchParameter?: (ParseNode & { name?: string, BindingIdentifier?: { name?: string } | null }) | null,
+                TypeAnnotation?: ParseNode.TypeAnnotation | null,
+              };
+              const caught = cl.TypeAnnotation ? resolveType(cl.TypeAnnotation.Type) : null;
+              // A |CatchParameter| that is a single name IS the BindingIdentifier
+              // - its name is on the node itself - rather than a node carrying
+              // one. Reading `.BindingIdentifier.name` found nothing and the
+              // clause was walked untyped, which is what made two earlier
+              // attempts look like a scoping problem when the type had resolved
+              // correctly all along.
+              const caughtName = cl.CatchParameter?.name ?? cl.CatchParameter?.BindingIdentifier?.name;
+              if (caught && caughtName) {
+                pushBlock(() => {
+                  declare(caughtName, caught);
+                  walk(clause);
+                });
+                continue;
+              }
+              // A destructuring parameter carries its members' annotations.
+              declarePatternAnnotations(cl.CatchParameter as ParseNode | null | undefined);
+              walk(clause);
+            }
+            continue;
+          }
           if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
             walk(child as ParseNode);
           }
