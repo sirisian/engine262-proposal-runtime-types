@@ -650,8 +650,10 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
         if (returnV instanceof ObjectValue) {
           Return = Q(yield* nodeToTypeRecord(Q(yield* Get(returnV, Value('type')))));
         }
-        // An optional `this` node on the signature supplies its [[ThisType]].
-        const thisV = Q(yield* Get(sig, Value('this')));
+        // The signature's `thisType` supplies its [[ThisType]]. *undefined*
+        // there is the absence, which is why the slot may be emitted uniformly
+        // (#table-reflection-nodes types it "a Type Object or *undefined*").
+        const thisV = Q(yield* Get(sig, Value('thisType')));
         let ThisType: TypeRecord | null = null;
         if (thisV instanceof ObjectValue) {
           ThisType = Q(yield* nodeToTypeRecord(thisV));
@@ -970,17 +972,27 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
         const ret = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
         X(CreateDataProperty(ret, Value('type'), typeObj(sig.Return ?? { Kind: 'void' })));
         X(CreateDataProperty(sr, Value('return'), ret));
-        // Emit a `this` node only where the signature declares a this type, so a
-        // signature without one reflects with no `this` property (round-tripping
-        // to [[ThisType]] null).
-        if (sig.ThisType) {
-          X(CreateDataProperty(sr, Value('this'), recordToNode(sig.ThisType, realm)));
-        }
-        if (sig.Narrows?.length) {
-          const entries = sig.Narrows.map((nw) => {
+        // `thisType` and `narrows` are the declarative checker facts of
+        // #sec-declarative-checker-facts, and they hold TYPE OBJECTS like every
+        // other type-valued slot on a node: "Every property of a node that
+        // denotes a type holds a Type Object, so a walker recurses by reflecting
+        // it in turn" (#sec-reflect-getreflection). They were emitted as nodes,
+        // which made `sig.thisType === (type string)` answer *false* for a
+        // signature declaring `string` - a silently wrong answer to the one
+        // comparison this proposal's interning exists to make meaningful.
+        //
+        // Both are emitted UNCONDITIONALLY. #table-reflection-nodes types
+        // `thisType` as "a Type Object or *undefined*", a property that is
+        // present and may hold *undefined*, and `narrows` as "a List" with no
+        // absent alternative. Emitting them only when populated also gave a
+        // signature record two hidden shapes, varying with a property of the
+        // type being reflected.
+        X(CreateDataProperty(sr, Value('thisType'), sig.ThisType ? typeObj(sig.ThisType) : Value.undefined));
+        {
+          const entries = (sig.Narrows ?? []).map((nw) => {
             const e = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
             X(CreateDataProperty(e, Value('target'), Value(nw.Target)));
-            X(CreateDataProperty(e, Value('type'), recordToNode(nw.Type, realm)));
+            X(CreateDataProperty(e, Value('type'), typeObj(nw.Type)));
             return e as Value;
           });
           X(CreateDataProperty(sr, Value('narrows'), X(CreateArrayFromList(entries))));

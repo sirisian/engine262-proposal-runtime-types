@@ -88,7 +88,7 @@ test('the bound reaches `this` too, which is contravariant "as a parameter is"',
   // `this: any` was declared, while the mirror passed, for exactly the reason
   // the parameter step failed.
   const withThis = (t: string) => 'Reflect.makeType({ kind: "function", signatures: ['
-    + `{ parameters: [], return: { type: type void }, this: ${t} }] })`;
+    + `{ parameters: [], return: { type: type void }, thisType: ${t} }] })`;
   expect(evaluated(`String(Reflect.isAssignable(${withThis('uint8')}, ${withThis('any')}));`)).toBe('true');
   // the mirror already held
   expect(evaluated(`String(Reflect.isAssignable(${withThis('any')}, ${withThis('uint8')}));`)).toBe('true');
@@ -111,7 +111,7 @@ test('the family splits on `this`, and that is #sec-this-adoption working', () =
   // design rather than a gap. Asserted in both directions so neither half
   // silently absorbs the other.
   const sig = (self: string | null, params: string) => 'Reflect.makeType({ kind: "function", signatures: [{'
-    + ` parameters: ${params}, return: { type: any }${self ? `, this: ${self}` : ''} }] })`;
+    + ` parameters: ${params}, return: { type: any }${self ? `, thisType: ${self}` : ''} }] })`;
   const thisBound = sig('any', '[{ type: any, name: "a", rest: true, index: 0 }]');
   const plainBound = 'type (...a: [].<any>) => any';
 

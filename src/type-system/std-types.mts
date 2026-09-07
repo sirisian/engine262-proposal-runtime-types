@@ -389,18 +389,19 @@ export function routeParams(path: string): type {
 export function noInfer(T: type): type { return T; }
 export function withThisType(F: type, Self: type): type {
   const node = reflect(F);
-  return Reflect.makeType({ ...node, signatures: node.signatures.map(s => ({ ...s, this: Self })) });
+  return Reflect.makeType({ ...node, signatures: node.signatures.map(s => ({ ...s, thisType: Self })) });
 }
 export function thisParameterType(F: type): type {
-  // The \`this\` slot holds a reflection NODE, where every other
-  // type-valued slot on a signature holds a Type Object. \`makeType\` normalises
-  // it. §6.3 writes \`?? any\` against the Type Object the model promises.
-  const thisNode = reflect(F).signatures[0].this;
-  return thisNode === undefined ? any : Reflect.makeType(thisNode);
+  // \`never\`, not \`any\`. #sec-this-adoption: a signature with none "supplies
+  // no \`this\` rather than accepting any, so it is usable nowhere a \`this\` is
+  // required at all" - an empty set of admissible receivers, which is \`never\`.
+  // §6.3 read \`any\` off TypeScript's \`unknown\` without checking it against a
+  // contravariance rule TypeScript does not have.
+  return reflect(F).signatures[0].thisType ?? never;
 }
 export function omitThisParameter(F: type): type {
   const node = reflect(F);
-  return Reflect.makeType({ ...node, signatures: node.signatures.map(({ this: _t, ...s }) => s) });
+  return Reflect.makeType({ ...node, signatures: node.signatures.map(({ thisType: _t, ...s }) => s) });
 }
 export function options(Data: type, Methods: type): type {
   const self = Reflect.makeType({ kind: 'intersection', members: [Data, Methods] });

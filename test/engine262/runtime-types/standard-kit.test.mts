@@ -180,9 +180,13 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['firstParameter', 'std.firstParameter(type (uint8, string) => void) === uint8', ''],
   ['returnType', 'std.returnType(type (uint8) => string) === string', ''],
   ['constructorParameters', 'std.constructorParameters(type K) === type [uint8, string]', 'class K { x: uint8 = 1; constructor(a: uint8, b: string) {} }'],
-  ['thisParameterType', 'std.thisParameterType(std.withThisType(type () => string, type { a: uint8 })) === type { a: uint8 }', ''],
+  // The absent case is `never`, not `any`: #sec-this-adoption says a signature
+  // with none "supplies no `this` rather than accepting any", so the set of
+  // receivers it admits is empty.
+  ['thisParameterType', 'std.thisParameterType(std.withThisType(type () => string, type { a: uint8 })) === type { a: uint8 }'
+    + ' && std.thisParameterType(type () => string) === (type never)', ''],
   ['omitThisParameter', 'std.omitThisParameter(std.withThisType(type () => string, type { a: uint8 })) === type () => string', ''],
-  ['withThisType', 'std.reflect(std.withThisType(type () => string, type { a: uint8 })).signatures[0].this !== undefined', ''],
+  ['withThisType', 'std.reflect(std.withThisType(type () => string, type { a: uint8 })).signatures[0].thisType === (type { a: uint8 })', ''],
 
   // tuples and arrays (8)
   ['head', 'std.head(TU) === uint8', TU],

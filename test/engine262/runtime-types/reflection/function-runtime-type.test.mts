@@ -162,11 +162,15 @@ test('function runtime type: the cases the step sits between are unaffected', ()
 // absent measured a SOURCE-written type, which has no spelling for it - so what
 // this covers is the rule that gives it meaning.
 
-const mkThis = (t: string) => `Reflect.makeType({ kind: "function", signatures: [{ parameters: [], return: { type: uint8 }${t ? `, this: ${t}` : ''} }] })`;
+// The slots are emitted UNIFORMLY now (#table-reflection-nodes types `thisType`
+// as "a Type Object or *undefined*" and `narrows` as "a List"), so every
+// signature reflects both keys and the key lists below name both. They also hold
+// TYPE OBJECTS rather than nodes, so `thisType === (type S)` is the comparison.
+const mkThis = (t: string) => `Reflect.makeType({ kind: "function", signatures: [{ parameters: [], return: { type: uint8 }${t ? `, thisType: ${t}` : ''} }] })`;
 
 test('a signature carries and reflects its expected this type', () => {
   expect(evaluated(`type S = { x: uint8 }; const F = ${mkThis('S')};`
-    + ' Object.keys(Reflect.getReflection(F).signatures[0]).join(",");')).toBe('parameters,return,this');
+    + ' Object.keys(Reflect.getReflection(F).signatures[0]).join(",");')).toBe('parameters,return,thisType,narrows');
   // Part of identity: the same signature with and without one are two types.
   expect(evaluated(`type S = { x: uint8 }; String(${mkThis('S')} !== ${mkThis('')});`)).toBe('true');
 });
@@ -206,7 +210,7 @@ const plain = 'Reflect.makeType({ kind: "function", signatures: [{ parameters: [
 
 test('a signature carries and reflects its declared narrowings', () => {
   expect(evaluated(`const G = ${guard};`
-    + ' Object.keys(Reflect.getReflection(G).signatures[0]).join(",");')).toBe('parameters,return,narrows');
+    + ' Object.keys(Reflect.getReflection(G).signatures[0]).join(",");')).toBe('parameters,return,thisType,narrows');
   expect(evaluated(`const G = ${guard};`
     + ' const n = Reflect.getReflection(G).signatures[0].narrows;'
     + ' `${n.length}:${n[0].target}`;')).toBe('1:v');

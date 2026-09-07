@@ -104,7 +104,7 @@ test('hard 6 - Simple Vue', () => {
   const f = `
     function withThisType(F, Self) {
       const sig = Reflect.getReflection(F).signatures[0];
-      return Reflect.makeType({ kind: 'function', signatures: [{ parameters: sig.parameters, return: sig.return, this: Reflect.getReflection(Self) }] });
+      return Reflect.makeType({ kind: 'function', signatures: [{ parameters: sig.parameters, return: sig.return, thisType: Self }] });
     }
     function computedResults(C) { return mapProperties(C, p => ({ ...p, type: returnType(p.type) })); }
     function withThisOnMethods(O, Self) { return mapProperties(O, p => ({ ...p, type: withThisType(p.type, Self) })); }
@@ -144,7 +144,7 @@ test('hard 1290 - Pinia', () => {
   const f = `
     function withThisType(F, Self) {
       const sig = Reflect.getReflection(F).signatures[0];
-      return Reflect.makeType({ kind: 'function', signatures: [{ parameters: sig.parameters, return: sig.return, this: Reflect.getReflection(Self) }] });
+      return Reflect.makeType({ kind: 'function', signatures: [{ parameters: sig.parameters, return: sig.return, thisType: Self }] });
     }
     function computedResults(G) { return mapProperties(G, p => ({ ...p, type: returnType(p.type) })); }
     function withThisOnMethods(O, Self) { return mapProperties(O, p => ({ ...p, type: withThisType(p.type, Self) })); }
