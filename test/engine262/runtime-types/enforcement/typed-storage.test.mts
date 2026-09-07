@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
+import { evaluated, expectThrown, runFlagOff, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-typed-storage (Typed Storage) - typed own properties via
@@ -272,4 +272,36 @@ test('a redefinition is checked against the type the position already has', () =
   // An accessor over a typed property is refused: the declared type is a
   // promise about what a read answers, and a getter can answer anything.
   expectThrown(`${cls} Object.defineProperty(c, "n", { get() { return "no"; } });`);
+});
+
+// ---------------------------------------------------------------------------
+// DELETING A DECLARED MEMBER IS AN EARLY ERROR WHERE THE BASE'S TYPE IS KNOWN.
+//
+// The run time already refuses it - `"v" is a typed property and cannot be
+// deleted` - and the base's type is known at the site, which is the condition
+// the object-type rules use for deciding a member question at compile time. The
+// `delete` operator had no arm at all, so the judgment was the run time's alone.
+//
+// Only a NAMED member of a type that declares it. An undeclared name, an untyped
+// base and a computed key are left alone - and the TUPLE rule keeps its own
+// meaning, where a non-position IS deletable, which is why that judgment lives
+// with the index check rather than here.
+// ---------------------------------------------------------------------------
+
+test('deleting a declared member is refused at the check', () => {
+  expectStaticTypeError('class C { v: uint8 = 0; } const c = new C(); delete c.v;');
+  expectStaticTypeError('type T = { a: uint8 }; let o: T = { a: 1 }; delete o.a;');
+  // Through `this`, now that a class body's receiver has a type.
+  expectStaticTypeError('class C { v: uint8 = 0; m() { delete this.v; } }');
+});
+
+test('what delete still allows', () => {
+  // A member the type does not declare, on a plain object.
+  expect(evaluated('const o = { a: 1 }; String(delete o.b);')).toBe('true');
+  // An untyped base has nothing to judge.
+  expect(evaluated('function f(x) { return delete x.a; } String(f({ a: 1 }));')).toBe('true');
+  // The tuple rule is unchanged in both directions: a non-position is
+  // deletable, a position is not.
+  expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"]; String(delete t[9]);')).toBe('true');
+  expectThrownKind('type T = [uint8, string]; let t: T = [1, "s"]; delete t[0];', 'TypeError');
 });

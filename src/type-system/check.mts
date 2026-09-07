@@ -14886,6 +14886,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(rb.Expression);
         return;
       }
+      // `delete o.a` WHERE THE BASE'S TYPE DECLARES `a`. The run time refuses
+      // it - "$1 is a typed property and cannot be deleted" - and the base's
+      // type is known here, which is the condition the object-type rules use for
+      // deciding a member question at compile time. Only a NAMED member of a
+      // type that declares it: an undeclared name, an untyped base, and a
+      // computed key are all left alone, and the tuple rule keeps its own
+      // meaning (a non-position IS deletable, which is why that judgment lives
+      // with the index check and not here).
+      case 'UnaryExpression': {
+        const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
+        if (u.operator === 'delete' && u.UnaryExpression?.type === 'MemberExpression') {
+          const target = u.UnaryExpression as unknown as {
+            MemberExpression?: ParseNode, IdentifierName?: { name: string } | null,
+          };
+          const named = target.IdentifierName?.name;
+          const structure = target.MemberExpression ? structureOf(staticType(target.MemberExpression)) : null;
+          if (named && structure && structure.Kind === 'object'
+              && structure.Properties.some((p) => p.key === named)) {
+            const completion = Throw.StaticTypeError('$1 is a typed property and cannot be deleted', Value(`"${named}"`)) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+        walk(u.UnaryExpression);
+        return;
+      }
       case 'CallExpression': {
         // With no context from the position: the diagnostics of the numeric
         // resolution (mixed families, a family with no row, an unfitting
