@@ -769,3 +769,23 @@ test('a ref binding has the Static Type of the location it aliases', () => {
   expect(evaluated('let a: uint8 = 0; let ref b = a; b = 7; String(a) + " " + String(a is uint8);')).toBe('7 true');
   expect(evaluated('const arr: [4].<uint8> = new [4].<uint8>(); let ref b = arr[0]; ref b = arr[1]; b = 5; String(arr[1]);')).toBe('5');
 });
+
+test('a rebinding must be to a location of the binding\'s type', () => {
+  // `#sec-ref-bindings`: "b is redirected to the location e denotes", and a
+  // binding's type is fixed at its declaration - re-typing it at each rebinding
+  // would make its type depend on the control flow that reached it, which no
+  // other binding here does. The checker had no arm for this statement, which
+  // did not show while a ref binding had no Static Type; with one, an unchecked
+  // rebinding leaves the recorded type describing a location the binding no
+  // longer aliases.
+  expectStaticTypeError('let a: uint8 = 0; let z: string = "x"; let ref b = a; ref b = z;');
+  // Not merely a different KIND: a narrower numeric location is refused too,
+  // since a store through the alias would be at the binding's wider type.
+  expectStaticTypeError('let a: uint32 = 0; let w: uint8 = 1; let ref b = a; ref b = w;');
+  // A rebinding to a location of the same type is what the form is for, and the
+  // write through it reaches the new location and not the old.
+  expect(evaluated('const arr: [4].<uint8> = new [4].<uint8>(); let ref b = arr[0]; ref b = arr[1]; b = 5; String(arr[1]) + " " + String(arr[0]);')).toBe('5 0');
+  // A borrow of an untyped location has no type, so the rebinding is the run
+  // time's to judge, as the borrow itself is.
+  expect(evaluated('let a = 0; let z = "x"; let ref b = a; ref b = z; b = "y"; String(z);')).toBe('y');
+});

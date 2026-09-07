@@ -14444,6 +14444,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(n.Initializer);
         return;
       }
+      // `ref b = e` REBINDS: "b is redirected to the location e denotes"
+      // (#sec-ref-bindings). A binding's type is fixed at its declaration, so
+      // the rebinding must be to a location of that type - re-typing the
+      // binding at each rebinding would make its type depend on the control
+      // flow that reached it, which no other binding here does. The checker had
+      // no arm for this statement at all, which did not show while a `ref`
+      // binding had no Static Type: now that it has one, an unchecked rebinding
+      // would leave the recorded type describing the location the binding no
+      // longer aliases, and a store judged against the wrong one.
+      case 'RefRebindingStatement': {
+        const rb = n as unknown as { BindingIdentifier?: { name?: string }, Expression?: ParseNode };
+        const name = rb.BindingIdentifier?.name;
+        const target = name ? lookup(name) : null;
+        const source = rb.Expression ? staticType(rb.Expression) : null;
+        // Where either side's type is unknown the judgment is the run time's,
+        // as it is for the borrow itself.
+        if (target && source && !IsAssignable(source as TypeRecord, target as TypeRecord)) {
+          const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(source as TypeRecord)), Value(displayType(target as TypeRecord))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        }
+        walk(rb.Expression);
+        return;
+      }
       case 'CallExpression': {
         // With no context from the position: the diagnostics of the numeric
         // resolution (mixed families, a family with no row, an unfitting
