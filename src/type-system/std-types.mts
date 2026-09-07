@@ -159,19 +159,31 @@ export function genericApplication(base: type, args: [].<any>): type {
 
 /** typeprogramming.md R15: @inverse(fn) on a builder declares the function that proposes its argument. */
 export function inverse(fn: any, c: any): void { Reflect.declareInverse(c, fn); }
-export function partial(T: type): type  { return mapProperties(T, p => ({ ...p, optional: true  })); }
-export function required(T: type): type { return mapProperties(T, p => ({ ...p, optional: false })); }
-export function readonly(T: type): type { return mapProperties(T, p => ({ ...p, readonly: true  })); }
-export function mutable(T: type): type  { return mapProperties(T, p => ({ ...p, readonly: false })); }
+// typeprogramming.md 6.2: contracts belong ON THE KIT, so downstream generic
+// code has a reasoned surface and the mechanism has a user. Each bound below is
+// the variance the builder actually has, checked in both directions before it
+// was written: a homomorphic widening (partial, readonly) makes the argument
+// assignable to the result, a narrowing (required, mutable) makes the result
+// assignable to the argument, and dropping members (pick, omit) leaves the
+// argument assignable to the result because an object type with more members
+// satisfies one with fewer.
+//
+// #sec-checked-contracts verifies these at every concrete evaluation, which is
+// the half that crosses a module boundary - so a wrong bound here fails at the
+// call sites of every consumer, not only inside this module.
+export function partial(T: type): type where Reflect.isAssignable(T, return)  { return mapProperties(T, p => ({ ...p, optional: true  })); }
+export function required(T: type): type where Reflect.isAssignable(return, T) { return mapProperties(T, p => ({ ...p, optional: false })); }
+export function readonly(T: type): type where Reflect.isAssignable(T, return) { return mapProperties(T, p => ({ ...p, readonly: true  })); }
+export function mutable(T: type): type  where Reflect.isAssignable(return, T) { return mapProperties(T, p => ({ ...p, readonly: false })); }
 
-export function pick(T: type, K): type {
+export function pick(T: type, K): type where Reflect.isAssignable(T, return) {
   const wanted = new Set(Array.isArray(K) ? K : literalValues(K));
   const have = new Set(literalValues(type keyof T));
   for (const key of wanted) if (!have.has(key))
     throw new TypeError(\`pick: \${String(T)} has no property '\${String(key)}'\`);
   return mapProperties(T, p => wanted.has(p.name) ? p : null);
 }
-export function omit(T: type, K): type {
+export function omit(T: type, K): type where Reflect.isAssignable(T, return) {
   const dropped = new Set(Array.isArray(K) ? K : literalValues(K));
   return mapProperties(T, p => dropped.has(p.name) ? null : p);
 }

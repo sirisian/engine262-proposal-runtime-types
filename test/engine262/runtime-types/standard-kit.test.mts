@@ -424,3 +424,21 @@ test('the polyfill claim: the same source loads as an ordinary user module', asy
     + 'if (poly.deepPartial(type { a: { b: uint8 } }) !== builtin.deepPartial(type { a: { b: uint8 } })) { throw new Error("deepPartial disagrees"); }';
   expect(await runWith('polyfill', STD_TYPES_SOURCE, main)).toBe('ok');
 });
+
+// typeprogramming.md 6.2: the kit carries its own contracts, so the mechanism
+// has a user and downstream generic code has a reasoned surface. The bounds are
+// the variance each builder actually has - a widening makes the argument
+// assignable to the result, a narrowing the reverse - and #sec-checked-contracts
+// verifies them at every concrete evaluation, which is the half that crosses a
+// module boundary.
+test('the kit states its own bounds, and they hold', async () => {
+  const T = 'type T = { a: uint8, b: string }; ';
+  // Widenings: the argument is assignable to the result.
+  expect(await holds('Reflect.isAssignable(T, std.partial(T))', T)).toBe('ok');
+  expect(await holds('Reflect.isAssignable(T, std.readonly(T))', T)).toBe('ok');
+  expect(await holds('Reflect.isAssignable(T, std.pick(T, type "a"))', T)).toBe('ok');
+  expect(await holds('Reflect.isAssignable(T, std.omit(T, type "b"))', T)).toBe('ok');
+  // Narrowings: the result is assignable to the argument.
+  expect(await holds('Reflect.isAssignable(std.required(std.partial(T)), std.partial(T))', T)).toBe('ok');
+  expect(await holds('Reflect.isAssignable(std.mutable(std.readonly(T)), std.readonly(T))', T)).toBe('ok');
+});
