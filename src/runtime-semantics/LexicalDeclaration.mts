@@ -109,11 +109,34 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       // stack standing for the next evaluation.
       let contextual: TypeRecord | null = null;
       if (TypeAnnotation) {
-        // A malformed annotation is the binding boundary's error to report, not
-        // this one's, so a failure here simply leaves the call uncontextualized.
-        const resolvedContext = yield* TypeNodeToTypeRecord(TypeAnnotation.Type);
-        contextual = (resolvedContext as { Value?: TypeRecord })?.Value
-          ?? (resolvedContext as TypeRecord | null) ?? null;
+        // An annotation that does not resolve is reported HERE, with its own
+        // error.
+        //
+        // `TypeNodeToTypeRecord` returns a COMPLETION, and this took `.Value`
+        // from it unconditionally - which on a throw completion is the ERROR
+        // OBJECT. The comment that stood here said "a failure here simply leaves
+        // the call uncontextualized"; it did not. It pushed a `ReferenceError` as
+        // the contextual type, and `let a: `Nope` = new.()` then reported
+        // "undefined is not assignable to undefined", a message naming neither
+        // the annotation nor the construct.
+        //
+        // Propagating rather than nulling, because the annotation naming nothing
+        // is the error the programmer has to fix, and it is what every other
+        // spelling of this mistake already reports: `let a: `Nope` = 5` and
+        // `let a: `Nope` = float32x4(1, 2, 3, 4)` both say `"Nope" is not
+        // defined`. The binding boundary below would reach the same error a few
+        // steps later; reporting it here only means the readers of the
+        // contextual type are never handed a value that is not a type.
+        const resolvedContext = EnsureCompletion(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
+        if (resolvedContext.Type !== 'normal') {
+          return resolvedContext as never;
+        }
+        const resolved = (resolvedContext as { Value?: TypeRecord }).Value ?? null;
+        // Defence in depth: only a Type Record reaches the stack. A reader that
+        // merely CONSULTS the contextual type survives a wrong value by ignoring
+        // it, so the two readers that behave today do so by luck rather than by
+        // being defended.
+        contextual = (resolved && typeof resolved === 'object' && 'Kind' in resolved) ? resolved : null;
       }
       pushContextualType(contextual);
       let rhs;

@@ -111,3 +111,43 @@ test('a type named by a BINDING is a target too', () => {
   // ...and a written annotation that IS resolvable still decides constructibility.
   expectThrown('let n: uint8 = new.(1);', 'is not constructible');
 });
+
+test('an annotation that names nothing reports the NAME', () => {
+  // A regression, and its cause was not where the change that exposed it was
+  // made. `LexicalDeclaration` resolves the annotation to give the initializer a
+  // contextual type, and took `.Value` from the completion unconditionally -
+  // which on a THROW completion is the error object. A `ReferenceError` was
+  // pushed as the contextual type, and `new.()` read it and reported
+  // "undefined is not assignable to undefined": a message naming neither the
+  // annotation nor the construct.
+  //
+  // Every other spelling of this mistake already reported the name, which is the
+  // agreement this restores rather than a phase chosen for `new.()`.
+  expectThrown('let a: Nope = new.();', '"Nope" is not defined');
+  expectThrown('let a: Nope = 5;', '"Nope" is not defined');
+  expectThrown('let a: Nope = float32x4(1, 2, 3, 4);', '"Nope" is not defined');
+  expectThrown('let a: Nope;', '"Nope" is not defined');
+  expectThrown('function f(x: Nope) { return 1; } f(1);', '"Nope" is not defined');
+});
+
+test('the genuinely contextless form keeps its own message', () => {
+  // The Syntax Error is about a position that requires NO type, and propagating
+  // an annotation's failure must not swallow it: here nothing was written for the
+  // runtime to resolve.
+  expectThrown('const x = new.();', 'requires a contextual type');
+});
+
+test('a resolvable annotation still constructs, however the type is named', () => {
+  // The four rows the change that caused the regression existed for. They must
+  // pass UNEDITED - if propagating the annotation's error reached these, it went
+  // further than intended.
+  const C = 'class C { x: uint8 = 0; } ';
+  expect(evaluated(`${C} let a: C = new.(); String(Number(a.x));`)).toBe('0');
+  expect(evaluated(`${C} const MyT = C; let a: MyT = new.(); String(Number(a.x));`)).toBe('0');
+  expect(evaluated(`${C} globalThis.MyT2 = C; let a: MyT2 = new.(); String(Number(a.x));`)).toBe('0');
+  expect(evaluated(`${C} type Alias = C; let a: Alias = new.(); String(Number(a.x));`)).toBe('0');
+  // ...and the constructibility rule is orthogonal to all of it.
+  expectThrown('let n: uint8 = new.(1);', 'is not constructible');
+  expect(evaluated('let a: [4].<uint8> = new.(); String(a.join(","));')).toBe('0,0,0,0');
+  expect(evaluated('let v: float32x4 = new.(1, 2, 3, 4); String(v[0]);')).toBe('1');
+});
