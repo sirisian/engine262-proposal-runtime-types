@@ -9349,6 +9349,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rightLit = literalOperand(rightNode) ?? constUse(rightNode);
         const leftT = leftLit ? null : staticType(leftNode);
         const rightT = rightLit ? null : staticType(rightNode);
+        // AN OPERATOR OVERLOAD DECLARES ITS OPERAND'S TYPE, and that was
+        // checked only at the run time - `v + 5` for a `class V { operator+(o:
+        // V) }` was "5 is not assignable to \"V\"" when the program ran, though
+        // the declaration says so and the operand is right there. The result
+        // type stays whatever the arm computes below; this judges the OPERAND.
+        //
+        // Uses `leftT`, which the arm has ALREADY computed. An earlier version
+        // called `staticType(leftNode)` for itself, above this point, and the
+        // suite stopped finishing: the arm is computing `staticType(node)` and
+        // recomputing an operand doubles the work at every nesting level, so a
+        // deeply nested arithmetic expression went exponential. A check can be
+        // correct and still unshippable for where it sits.
+        //
+        // Only where the LEFT operand is a class instance declaring an operator
+        // for this token: a class with no overload is ordinary arithmetic, and a
+        // right-hand overload is a different resolution this does not attempt.
+        if (leftT && leftT.Kind === 'nominal') {
+          const token = ({
+            AdditiveExpression: (node as unknown as { operator?: string }).operator,
+            MultiplicativeExpression: (node as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator,
+            ExponentiationExpression: '**',
+            ShiftExpression: (node as unknown as { operator?: string }).operator,
+            BitwiseANDExpression: '&',
+            BitwiseXORExpression: '^',
+            BitwiseORExpression: '|',
+          } as Record<string, string | undefined>)[node.type];
+          const body = ((leftT as { Declaration?: ParseNode | null }).Declaration as unknown as {
+            ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
+          } | null)?.ClassTail?.ClassBody ?? [];
+          for (const el of body) {
+            const op = el as unknown as {
+              type?: string, OperatorName?: string | null, static?: boolean,
+              FormalParameters?: readonly ParseNode[] | null,
+            };
+            if (op.type === 'OperatorDefinition' && token && op.OperatorName === token && op.static !== true) {
+              const first = (op.FormalParameters ?? [])[0] as unknown as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
+              const declaredOperand = first?.TypeAnnotation ? resolveType(first.TypeAnnotation.Type) : null;
+              if (declaredOperand) {
+                requireAssignable(staticTypeIn(rightNode, declaredOperand), declaredOperand);
+              }
+              break;
+            }
+          }
+        }
         const asValueType = (t: Known): TypeRecord | null => (t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null);
         const lv = asValueType(leftT);
         const rv = asValueType(rightT);

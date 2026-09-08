@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
  * What each operator yields, and of what type, family by family.
@@ -152,4 +152,39 @@ test('the other unary operators were already right', () => {
   expect(evaluated('const a = (7 := uint8); `${typeof !a}:${typeof a}`;')).toBe('boolean:number');
   expect(evaluated('let a: uint8 = 7; a++; ++a; `${a}:${Reflect.typeOf(a) === uint8}`;')).toBe('9:true');
   expect(evaluated('let b: uint8 = 0; b--; String(b);')).toBe('255');
+});
+
+// ---------------------------------------------------------------------------
+// AN OPERATOR OVERLOAD DECLARES ITS OPERAND'S TYPE, AND THE OPERAND IS CHECKED.
+//
+// `v + 5` for a `class V { operator+(o: V): V }` was "5 is not assignable to
+// \"V\"" when the program ran, though the declaration says so and the operand is
+// right there. The result type is unchanged; this judges the OPERAND.
+//
+// Only where the LEFT operand is a class instance declaring an operator for
+// this token. A class with no overload is ordinary arithmetic, and a right-hand
+// overload - declared on the OTHER operand - is a different resolution that this
+// does not attempt.
+//
+// WHERE the check sits is load-bearing. A first version asked
+// `staticType(leftNode)` for itself, above the point the arm computes it, and
+// the suite stopped finishing: the arm is computing `staticType(node)` and
+// recomputing an operand doubles the work at every nesting level, so deeply
+// nested arithmetic went exponential. It reuses the arm's own `leftT` now.
+// ---------------------------------------------------------------------------
+
+test('an overloaded operator checks its operand against the declaration', () => {
+  const V = 'class V { x: uint8 = 0; operator+(o: V): V { return this; } } const v = new V(); ';
+  expectStaticTypeError(`${V} v + 5;`);
+  expectStaticTypeError(`${V} v + "s";`);
+  // The declared operand type is accepted.
+  expect(ok(`${V} const w = v + v;`)).toBe(true);
+});
+
+test('what the overload check leaves alone', () => {
+  // A class with no overload for the token, and ordinary arithmetic.
+  expect(ok('class W { x: uint8 = 0; } const w = new W(); let a: uint8 = 1; let b: uint8 = 2; a + b;')).toBe(true);
+  expect(ok('let s: string = "a"; s + "b";')).toBe(true);
+  // Deep nesting terminates - the regression the placement guards against.
+  expect(ok('let a: uint8 = 1; a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a;')).toBe(true);
 });
