@@ -12,7 +12,7 @@ import type { TypeRecord } from './records.mts';
 import {
   anyType, makePrimitive, parameter, iterationArguments,
 } from './records.mts';
-import { wellKnownSymbols, Value } from '#self';
+import { wellKnownSymbols, Value, surroundingAgent } from '#self';
 
 const BUILTIN_INTERFACES = new Set([
   'IteratorResult',
@@ -57,7 +57,7 @@ export function identityRecord(args: readonly (TypeRecord | number)[]): TypeReco
  * carries a synthesized single-parameter alias declaration, which is what
  * `type Identity<T> = T` produces and what declarationParameterCount counts.
  */
-let parsedIdentityDeclaration: TypeRecord | null = null;
+const parsedIdentityDeclarations = new WeakMap<object, TypeRecord>();
 
 /**
  * Record the `Identity` declaration a prelude parsed, so the global binding can
@@ -68,12 +68,42 @@ let parsedIdentityDeclaration: TypeRecord | null = null;
  * annotation. The parser produces the node every consumer expects.
  */
 export function setParsedIdentityDeclaration(record: TypeRecord): void {
-  parsedIdentityDeclaration = record;
+  const realm = currentRealmOrUndefined();
+  if (realm) {
+    parsedIdentityDeclarations.set(realm, record);
+  }
 }
 
-/** The parsed `Identity` declaration, or null before a prelude has run. */
-export function getParsedIdentityDeclaration(): TypeRecord | null {
-  return parsedIdentityDeclaration;
+/**
+ * The running realm, or *undefined* where there is none.
+ *
+ * `currentRealmRecord` reads the top of the execution context stack and throws
+ * when it is empty, which it is while a realm is being CONSTRUCTED - exactly
+ * when this registry is first written. Asking safely is the difference between
+ * a per-realm registry and a crash during realm setup.
+ */
+function currentRealmOrUndefined(): object | undefined {
+  const stack = (surroundingAgent as { executionContextStack?: { length: number } }).executionContextStack;
+  if (!stack || stack.length === 0) {
+    return undefined;
+  }
+  return surroundingAgent.currentRealmRecord as object | undefined;
+}
+
+/**
+ * The parsed `Identity` declaration for a realm, or null before its prelude has
+ * run.
+ *
+ * Kept PER REALM. It was one module-level binding, so the first realm in a
+ * process left its parsed node behind for every realm after it - measured,
+ * `typeof Identity` was *undefined* in the first realm and "object" in the rest,
+ * and the ones that worked were holding another realm's node. Two realms in one
+ * agent are independent, and a declaration parsed in one is not a declaration of
+ * the other.
+ */
+export function getParsedIdentityDeclaration(realm?: object): TypeRecord | null {
+  const key = realm ?? currentRealmOrUndefined();
+  return (key && parsedIdentityDeclarations.get(key)) ?? null;
 }
 
 export function identityDeclarationRecord(): TypeRecord {

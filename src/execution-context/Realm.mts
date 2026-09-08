@@ -353,7 +353,7 @@ export function CreateIntrinsics(realmRec: Realm) {
  * shared across realms at all is the second half and is not addressed here.
  */
 export function BindParsedIdentityGlobal(realmRec: Realm) {
-  const record = getParsedIdentityDeclaration();
+  const record = getParsedIdentityDeclaration(realmRec as object);
   if (!record) {
     return;
   }
