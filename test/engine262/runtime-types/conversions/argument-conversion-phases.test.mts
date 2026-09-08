@@ -89,8 +89,13 @@ test('the two refusals differ in PHASE, and the static one reaches a dead branch
   // cannot, because no boundary is crossed.
   expectStaticTypeError(`${F} if (false) { f(Object.freeze({ n: 1 })); }`);
   expect(evaluated(`${F} if (false) { const o = Object.freeze({ n: 1 }); f(o); } "reached";`)).toBe('reached');
-  // So the frozen-behind-an-unannotated-binding case is the only one of the seven
-  // that a program can carry without being told. Recorded as a limit rather than
-  // hidden: deciding it statically would mean tracking frozen-ness through a
-  // binding, which nothing else in the proposal does.
+  // So the frozen-behind-an-unannotated-binding case is the only refusal here a
+  // program can carry without being told. The gap is easy to OVERSTATE: the
+  // inline form is rejected statically, but for an unrelated reason - a declared
+  // return type puts it on the assignability path - so only a binding with no
+  // annotation escapes both.
+  //
+  // Recorded as a limit rather than hidden. Deciding it earlier would mean
+  // tracking frozen-ness through a binding, and frozen-ness is a property of a
+  // VALUE rather than of its type: the checker has no notion of it anywhere.
 });
