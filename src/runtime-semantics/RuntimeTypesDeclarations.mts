@@ -28,7 +28,7 @@ import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
-  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType } from '../type-system/runtime.mts';
+  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
@@ -1984,7 +1984,16 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     pushTypeParameterFrame(frame);
     let record;
     try {
-      record = Q(yield* TypeNodeToTypeRecord(argNode));
+      // An argument naming a generic DECLARATION resolves as one.
+      //
+      // `B.<Identity>` passes a declaration, not a type: resolving `Identity` as
+      // a type applies it with no arguments and fails the arity check for its
+      // own `T`. The annotation path has always recovered from that, which is
+      // why `let b: B.<Identity>;` works; this propagated the failure, so a
+      // class with a higher-kinded parameter was excluded from specialization
+      // altogether and `Reflect.typeOf(new B.<Id>())` reported bare `B`.
+      const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode))) as TypeRecord | undefined;
+      record = asDecl ?? Q(yield* TypeNodeToTypeRecord(argNode));
     } finally {
       popTypeParameterFrame();
     }
@@ -2230,12 +2239,11 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       ? classType.TypeRecord.Declaration as unknown as { type?: string, TypeParameters?: { TypeParameterList?: readonly unknown[] }, ClassTail?: unknown, BindingIdentifier?: { name?: string } }
       : undefined;
     const params = declaration?.TypeParameters?.TypeParameterList;
-    // A HIGHER-KINDED parameter stands for a generic declaration rather than a
-    // type (#sec-higher-kinded-parameters), so its argument is not resolvable
-    // as one and specializing over it is not this path's business; the nominal
-    // instantiation below carries such arguments as it always has.
-    const kinded = params?.some((p) => ((p as { Arity?: number }).Arity ?? 0) > 0);
-    if (params && params.length > 0 && declaration.ClassTail && !kinded) {
+    // A kinded parameter no longer excludes specialization: its argument
+    // resolves as a declaration above, and `#sec-higher-kinded-parameters`
+    // requires that two applications binding different declarations be distinct
+    // types.
+    if (params && params.length > 0 && declaration.ClassTail) {
       return Q(yield* SpecializeGenericClass(declaration as never, node));
     }
   }

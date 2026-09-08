@@ -3552,6 +3552,47 @@ function declarationNamed(from: ParseNode, name: string): ParseNode | null {
   return null;
 }
 
+/**
+ * An argument that names a generic DECLARATION rather than a type, or *undefined*
+ * where it is an ordinary type argument.
+ *
+ * `B.<Identity>` passes a declaration: `Identity` is generic, so resolving it as
+ * a type applies it with no arguments and fails the arity check for its own `T`.
+ * The annotation path has always recovered from that by resolving the NAME
+ * instead - which is why `let _b_: B.<Identity>;` works - and the recovery lived
+ * inline where only that path could reach it.
+ *
+ * Extracted so the runtime specializer can use it too. `new B.<Identity>()` took
+ * the same argument node through `Q(TypeNodeToTypeRecord(...))`, propagated the
+ * arity failure the annotation path swallows, and was therefore excluded from
+ * specialization altogether - which is why a kinded application was never
+ * specialized and `Reflect.typeOf(new B.<Id>())` reported bare `B`.
+ */
+export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type): PlainEvaluator<TypeRecord | undefined> {
+  const asType = EnsureCompletion(yield* TypeNodeToTypeRecord(argNode));
+  if (asType.Type !== 'throw') {
+    return undefined;
+  }
+  const ref = argNode as unknown as {
+    type?: string,
+    TypeName?: { MemberNames?: readonly unknown[], IdentifierReference?: { name?: string } },
+    TypeArguments?: unknown,
+  };
+  if (ref.type !== 'TypeReference' || (ref.TypeName?.MemberNames?.length ?? 0) !== 0
+    || ref.TypeArguments || !ref.TypeName?.IdentifierReference?.name) {
+    return undefined;
+  }
+  const declRef = EnsureCompletion(yield* ResolveTypeName(Value(ref.TypeName.IdentifierReference.name)));
+  if (declRef.Type !== 'normal') {
+    return undefined;
+  }
+  const declValue = EnsureCompletion(yield* GetValue(declRef.Value as never));
+  if (declValue.Type !== 'normal' || !isTypeObject(declValue.Value)) {
+    return undefined;
+  }
+  return (declValue.Value as { TypeRecord: TypeRecord }).TypeRecord;
+}
+
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
   switch (node.type) {
     case 'TypeReference': {
@@ -3729,19 +3770,12 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // generic declaration resolves to that declaration unapplied, and the
           // validation below refuses it where the parameter was not kinded. The
           // check follows the resolution rather than gating it.
-          const argAsType = EnsureCompletion(yield* TypeNodeToTypeRecord(argNode));
-          if (argAsType.Type === 'throw' && argNode.type === 'TypeReference'
-              && (argNode.TypeName?.MemberNames?.length ?? 0) === 0 && !argNode.TypeArguments) {
-            const declRef = EnsureCompletion(yield* ResolveTypeName(Value(argNode.TypeName.IdentifierReference.name)));
-            if (declRef.Type === 'normal') {
-              const declValue = EnsureCompletion(yield* GetValue(declRef.Value as never));
-              if (declValue.Type === 'normal' && isTypeObject(declValue.Value)) {
-                argRecords.push((declValue.Value as { TypeRecord: TypeRecord }).TypeRecord);
-                continue;
-              }
-            }
+          const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode))) as TypeRecord | undefined;
+          if (asDecl !== undefined) {
+            argRecords.push(asDecl);
+            continue;
           }
-          argRecords.push(Q(argAsType) as TypeRecord);
+          argRecords.push(Q(EnsureCompletion(yield* TypeNodeToTypeRecord(argNode))) as TypeRecord);
         }
       }
       // proposal-runtime-types (primitivemetadata.md, the metadata protocol): a
