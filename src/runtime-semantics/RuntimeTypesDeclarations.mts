@@ -1981,21 +1981,23 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     if (!argNode) {
       return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(name ?? String(i)), Value(className));
     }
-    pushTypeParameterFrame(frame);
+    // The declaration attempt happens OUTSIDE the frame.
+    //
+    // The frame binds this application's parameters for substituting into the
+    // class BODY. An argument is read before any substitution, and reading it
+    // under the frame is what stopped the recovery working here: the same
+    // helper recovers on the annotation path, which has no frame pushed.
+    const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode))) as TypeRecord | undefined;
     let record;
-    try {
-      // An argument naming a generic DECLARATION resolves as one.
-      //
-      // `B.<Identity>` passes a declaration, not a type: resolving `Identity` as
-      // a type applies it with no arguments and fails the arity check for its
-      // own `T`. The annotation path has always recovered from that, which is
-      // why `let b: B.<Identity>;` works; this propagated the failure, so a
-      // class with a higher-kinded parameter was excluded from specialization
-      // altogether and `Reflect.typeOf(new B.<Id>())` reported bare `B`.
-      const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode))) as TypeRecord | undefined;
-      record = asDecl ?? Q(yield* TypeNodeToTypeRecord(argNode));
-    } finally {
-      popTypeParameterFrame();
+    if (asDecl !== undefined) {
+      record = asDecl;
+    } else {
+      pushTypeParameterFrame(frame);
+      try {
+        record = Q(yield* TypeNodeToTypeRecord(argNode));
+      } finally {
+        popTypeParameterFrame();
+      }
     }
     // #sec-type-parameters: a VALUE parameter's argument "is a value of the
     // named type", so the literal type it binds carries a value OF that type.
