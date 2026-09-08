@@ -15786,6 +15786,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The narrowing operations themselves already existed; nothing
         // consulted them for a BINDING.
         const s = n as unknown as { Expression: ParseNode, Statement_a: ParseNode, Statement_b?: ParseNode | null };
+        // A CONDITION IS AN EXPRESSION, and its judgments run from `staticType`
+        // - which walking does not call for it, so `if (a === b)` for disjoint
+        // `a` and `b` reached no judgment while `let c: boolean = a === b` did.
+        // The same statement-position gap a bare `a[9];` had, and what an
+        // unreachable-`case` rule needs before it can be written at all.
+        //
+        // ONE traversal of the condition, not a second one inside an arm that
+        // is already computing it: the exponential failure earlier in this batch
+        // came from the latter, and this is the former.
+        staticType(s.Expression);
         walkGuarded(s.Expression, s.Statement_a, s.Statement_b ?? null);
         return;
       }

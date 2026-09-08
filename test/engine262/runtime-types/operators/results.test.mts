@@ -263,7 +263,15 @@ test('what the disjointness rule leaves alone', () => {
   expect(ok('let x: uint32 = 5; const b: boolean = x === 5;')).toBe(true);
   // An `any` operand overlaps with everything - AreDisjoint is conservative.
   expect(ok('function g() { return 1; } let b: string = "s"; let c: boolean = g() === b;')).toBe(true);
-  // An `if` CONDITION is not typed at all, so this reaches no judgment - the
-  // same statement-position gap a bare `a[9];` had, and what 4.6 needs first.
-  expect(ok('let a: uint8 = 1; let b: string = "s"; if (a === b) { }')).toBe(true);
+  // An `if` CONDITION now reaches the judgment too. A condition is an
+  // expression whose judgments run from `staticType`, and walking never called
+  // it for one - the same statement-position gap a bare `a[9];` had. One call in
+  // the `IfStatement` arm, and ONE traversal of the condition rather than a
+  // second inside an arm already computing it, which is the distinction the
+  // exponential failure in the operator-overload work turned on.
+  expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; if (a === b) { }');
+  // A condition that is fine is untouched, narrowing included.
+  expect(ok('let a: uint8 = 1; let b: uint8 = 2; if (a === b) { }')).toBe(true);
+  expect(ok('let a: uint8 | string = 1; if (a is uint8) { let u: uint8 = a; }')).toBe(true);
+  expect(ok('let a: uint8 = 1; if (a+a+a+a+a+a+a+a+a+a+a+a === 12) { }')).toBe(true);
 });
