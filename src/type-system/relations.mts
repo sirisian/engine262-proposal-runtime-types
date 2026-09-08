@@ -210,8 +210,21 @@ export function SameType(s: TypeRecord, t: TypeRecord): boolean {
  * the relation the exported `SameType` used to be, kept under a name that says
  * what it does.
  */
+/**
+ * Set while the intern table is asking whether two records ARE the same, as
+ * opposed to whether either refines the other. Dynamic rather than threaded
+ * because the question is asked at one place and answered many levels down.
+ */
+let structuralOnly = false;
+
 export function SameTypeStructural(s: TypeRecord, t: TypeRecord): boolean {
-  return SameTypeWithAssumptions(s, t, []);
+  const outer = structuralOnly;
+  structuralOnly = true;
+  try {
+    return SameTypeWithAssumptions(s, t, []);
+  } finally {
+    structuralOnly = outer;
+  }
 }
 
 function sameArgument(a: TypeRecord | number, b: TypeRecord | number, assumptions: readonly Assumption[]): boolean {
@@ -258,7 +271,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   }
   // A literal refines its base and a parameterized type its [[Base]]; the
   // refinement steps of the specification fold those subtype paths in here.
-  if (s.Kind === 'literal' && t.Kind !== 'literal') {
+  if (!structuralOnly && s.Kind === 'literal' && t.Kind !== 'literal') {
     // proposal-runtime-types #sec-literal-propagation: a numeric literal takes
     // the type of the position it is written in, and for a complex position
     // that is "the literal as its real component and zero as its imaginary
@@ -306,7 +319,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     }
     return IsSubtype(s.Base, t, assumptions);
   }
-  if (s.Kind === 'parameterized' && t.Kind !== 'parameterized') {
+  if (!structuralOnly && s.Kind === 'parameterized' && t.Kind !== 'parameterized') {
     return IsSubtype(s.Base, t, assumptions);
   }
   // proposal-runtime-types #sec-iteration-types: a built-in nominal may DECLARE
