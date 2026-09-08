@@ -55,14 +55,22 @@ test('a function type renders its signature', () => {
   // A `void` return, which must not print as `null`.
   expect(message('let f: (x: uint8) => void = 5;')).toContain('=> void');
   // Overloads join with `&`, as an overloaded function type is written.
-  expect(message('type F = ((x: uint8) => uint8) & ((x: float64) => float64); let f: F = 5;')).toContain('(x: uint.<8>) => uint.<8> & (x: float64) => float64');
+  // In CANONICAL member order (#sec-canonical-total-order), not written order:
+  // the arms of an intersection sort, so the display does not depend on which
+  // spelling reached the type first.
+  expect(message('type F = ((x: uint8) => uint8) & ((x: float64) => float64); let f: F = 5;')).toContain('(x: float64) => float64 & (x: uint.<8>) => uint.<8>');
 });
 
 test('the display nests through other kinds', () => {
   // Each of these had the inner type swallowed even when the outer one rendered.
   expect(message('type A = { p: { x: int32 } }; let a: A = 5;')).toContain('{ p: { x: int.<32> } }');
   expect(message('let a: [].<{ x: int32 }> = 5;')).toContain('[].<{ x: int.<32> }>');
-  expect(message('type A = { x: int32 }; type B = { y: float64 }; type C = A & B; let c: C = 5;')).toContain('{ x: int.<32> } & { y: float64 }');
+  // An ALL-OBJECT intersection displays as what it is. #sec-canonicalizetype
+  // merges one - a shared member takes the intersection of the arms' types - so
+  // `A & B` here IS `{ x: int.<32>, y: float64 }`, and naming the arms would name
+  // a type record this specification does not keep. The message below at "is
+  // required by" already named the merged form.
+  expect(message('type A = { x: int32 }; type B = { y: float64 }; type C = A & B; let c: C = 5;')).toContain('{ x: int.<32>, y: float64 }');
   expect(message('type A = { x: int32 }; type B = { y: float64 }; type C = A | B; let c: C = 5;')).toContain('{ x: int.<32> } | { y: float64 }');
 });
 
@@ -89,7 +97,7 @@ test('a shared type renders its target', () => {
   // no value being both an object and a `uint32`, so the display it was reached
   // through is unreachable from that spelling. An inhabited intersection carrying a
   // `shared` member exercises the same case.
-  expect(message('type A = { a: uint8 }; type C = A & { s: shared uint32 }; let c: C = 5;')).toContain('{ s: shared uint.<32> }');
+  expect(message('type A = { a: uint8 }; type C = A & { s: shared uint32 }; let c: C = 5;')).toContain('{ a: uint.<8>, s: shared uint.<32> }');
 });
 
 test('the kinds that already rendered are unchanged', () => {

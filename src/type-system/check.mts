@@ -7130,7 +7130,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
-        return { Kind: node.type === 'UnionType' ? 'union' : 'intersection', Members };
+        // #sec-canonicalizetype merges an all-object intersection: a shared
+        // member's type becomes CanonicalizeType of the intersection of the
+        // arms' types, so `{ a: number } & { a: 5 }` IS `{ a: 5 }` and no
+        // all-object intersection survives canonicalization.
+        //
+        // Returned raw, the record reached IsSubtype's intersection rule -
+        // `t.Members.every(m => IsSubtype(s, m))` - which asks whether the
+        // source is a subtype of each arm AS A WHOLE OBJECT. The merge never
+        // asks that, and with writable members invariant it is false for the
+        // arm the merge subsumes, so the annotation refused a value of exactly
+        // the type it denotes while the interned Type Object accepted it.
+        //
+        // The diagnostics above read `Members` and have already run.
+        if (node.type !== 'UnionType') {
+          return CanonicalizeType({ Kind: 'intersection', Members } as TypeRecord) as Known;
+        }
+        return { Kind: 'union', Members };
       }
       case 'ArrayType': {
         // A VALUE PARAMETER may fix the extent - `[N].<uint8>` for an

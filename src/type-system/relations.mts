@@ -217,6 +217,16 @@ export function SameType(s: TypeRecord, t: TypeRecord): boolean {
  */
 let structuralOnly = false;
 
+export function SameTypeStrict(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {
+  const outer = structuralOnly;
+  structuralOnly = true;
+  try {
+    return SameTypeWithAssumptions(s, t, assumptions);
+  } finally {
+    structuralOnly = outer;
+  }
+}
+
 export function SameTypeStructural(s: TypeRecord, t: TypeRecord): boolean {
   const outer = structuralOnly;
   structuralOnly = true;
@@ -498,7 +508,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
           return q !== undefined
             && p.optional === q.optional
             && p.readonly === q.readonly
-            && SameTypeWithAssumptions(p.type, q.type, next);
+            && SameTypeStrict(p.type, q.type, next);
         })
         && s.IndexSignatures.length === to.IndexSignatures.length
         && s.IndexSignatures.every((ix, i) => SameTypeWithAssumptions(ix.Key, to.IndexSignatures[i].Key, next)
@@ -1475,7 +1485,7 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
       if (sp.type.Kind === 'any' || tp.type.Kind === 'any') {
         return true;
       }
-      return SameTypeWithAssumptions(sp.type, tp.type, assumptions);
+      return SameTypeStrict(sp.type, tp.type, assumptions);
     }
     return IsSubtype(sp.type, tp.type, assumptions);
   });
