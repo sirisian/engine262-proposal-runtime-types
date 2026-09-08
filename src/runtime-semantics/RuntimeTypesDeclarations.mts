@@ -16,6 +16,7 @@ import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from '../type-system/evaluable-fragment.mts';
+import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/fragment-library.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
@@ -644,7 +645,14 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // author wrote a default, got no default, and was told nothing. The
         // originating error is propagated rather than replaced, because WHY it
         // was not evaluable is the useful half of the diagnostic.
-        initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer))) as never));
+        // The same scope as the object-type walk: the two spellings mean one
+        // thing, so an excluded built-in is refused in both.
+        BeginFragmentEvaluation();
+        try {
+          initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer))) as never));
+        } finally {
+          EndFragmentEvaluation();
+        }
       }
       Properties.push({ key, type: resolved, optional: !!m.Optional, readonly: !!m.Readonly, initial });
     }

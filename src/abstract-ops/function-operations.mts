@@ -78,6 +78,7 @@ import {
   isEvaluator,
   surroundingAgent,
 } from '#self';
+import { IsExcludedFromFragment } from '../type-system/fragment-library.mts';
 
 export interface BaseFunctionObject extends OrdinaryObject {
   readonly Realm: Realm;
@@ -818,6 +819,17 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
   calleeContext.Realm = calleeRealm;
   calleeContext.ScriptOrModule = Value.null;
   surroundingAgent.executionContextStack.push(calleeContext);
+
+  // proposal-runtime-types #annex-evaluable-fragment, the library half: "A
+  // built-in is within the fragment when its result is determined by its
+  // arguments ... and it depends on no host or ambient state." Checked on the
+  // FUNCTION rather than on the call syntax, so a binding holding `Math.random`
+  // and a computed member access reach the same refusal as the plain spelling.
+  // Outside a fragment evaluation this is a depth test that returns at once.
+  if (IsExcludedFromFragment(F)) {
+    surroundingAgent.executionContextStack.pop(calleeContext);
+    return Throw.TypeError('$1 is outside the compile-time-evaluable fragment, so a type cannot be computed from it', F);
+  }
 
   const isNew = thisArgument === 'uninitialized';
   const thisValue = thisArgument === 'uninitialized' ? Value.undefined : thisArgument;

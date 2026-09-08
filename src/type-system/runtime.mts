@@ -24,6 +24,7 @@ import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
+import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
@@ -4653,7 +4654,15 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // walk refuses it: #sec-object-types requires the |Initializer| to be
           // compile-time evaluable "and it is a type error otherwise", and the
           // two spellings mean one thing.
-          initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer as never))) as never));
+          // The library half of the fragment applies to what this evaluation
+          // REACHES, so the scope is opened around it: an excluded built-in is
+          // refused at the call, wherever the call came from.
+          BeginFragmentEvaluation();
+          try {
+            initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer as never))) as never));
+          } finally {
+            EndFragmentEvaluation();
+          }
         }
         Properties.push({ key, type, optional: member.Optional, readonly: member.Readonly, initial });
       }
