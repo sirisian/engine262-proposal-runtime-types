@@ -32,6 +32,7 @@ import {
   IsCallable,
   IsConstructor,
   LengthOfArrayLike,
+  IsArray,
   PrepareForTailCall,
   OrdinaryObjectCreate,
   R,
@@ -272,6 +273,34 @@ function* Reflect_declareExemplars([context = Value.undefined, types = Value.und
   }
   DeclareExemplars(metadata, list);
   X(CreateDataProperty(metadata, Value('exemplars'), types));
+  // ...and FORCE the specialization the clause names: "forces specialization of
+  // the declaration at those arguments during compile-time evaluation, so that a
+  // builder's contracts are evaluated where the declaration is rather than only
+  // where a caller reaches it."
+  //
+  // A contract is verified at every concrete evaluation, so calling the builder
+  // here is the whole of it - VerifyContracts runs from EvaluateBody and needs
+  // no help. A clause that is false at an exemplar therefore fails AT THE
+  // DECLARATION, which is what closes the gap: a false contract on a builder
+  // nobody applies, or one used only in a generic signature, was caught nowhere.
+  //
+  // An entry that is a LIST is one argument set, for a builder of several
+  // parameters; anything else is a single argument. The clause says "naming
+  // types", which is the common shape.
+  const fn = Q(yield* Get(context as ObjectValue, Value('type')));
+  if (IsCallable(fn)) {
+    for (const exemplar of list) {
+      let args: Value[] = [exemplar];
+      if (exemplar instanceof ObjectValue && IsArray(exemplar) === Value.true) {
+        args = [];
+        const count = Q(yield* LengthOfArrayLike(exemplar));
+        for (let i = 0; i < count; i += 1) {
+          args.push(Q(yield* Get(exemplar, Value(String(i)))));
+        }
+      }
+      Q(yield* Call(fn, Value.undefined, args));
+    }
+  }
   return Value.undefined;
 }
 
