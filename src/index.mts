@@ -38,6 +38,7 @@ export * from './evaluator.mts';
 // declarations and a program observing that would see its own type change
 // because an unrelated module declared the same shape.
 export { TypeOrigins, MemberOrigins, type TypeOrigin } from './type-system/provenance.mts';
+export { InspectPattern } from './type-system/pattern-fragment.mts';
 
 
 export {
