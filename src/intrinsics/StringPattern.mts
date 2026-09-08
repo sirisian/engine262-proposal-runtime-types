@@ -1,4 +1,6 @@
 import { Value, JSStringValue, ObjectValue, type Arguments } from '../value.mts';
+import { InspectPattern } from '../type-system/pattern-fragment.mts';
+import { DecidesInclusion } from '../type-system/pattern-inclusion.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import {  type TypeRecord, anyType } from '../type-system/records.mts';
@@ -94,6 +96,29 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
  * `subtype(default, default)`), and a crossing that carries a pattern one way
  * only is decided by the branding rule above it.
  */
+/**
+ * The size bound for the exact tier, summed over both patterns.
+ *
+ * #sec-metadata leaves it open: "the size constant is among the design's open
+ * budget numbers". Chosen by measuring what real patterns cost, in node counts
+ * under this construction:
+ *
+ *   ^a$ 9, ^a|b$ 13, ^(ab)+$ 17, ^ab(ab)*$ 21, suffixed("Id") 15,
+ *   prefixed("get") 17, suffixed(".js") 19, an identifier 24, a date 29,
+ *   an eight-way alternation 43, an email 54.
+ *
+ * 100 admits every pair of those but the widest - two emails is 108 - and a
+ * pattern that large is one where an exact answer matters least.
+ *
+ * It is conservative on purpose. The syntactic size bounds the NFA and NOT the
+ * determinized product, so it is not a proof that the walk is cheap; it is a
+ * bound that is the same on every host, which is the property the clause
+ * requires. A tighter guarantee would need a bound on the product, and a guard
+ * that gave up mid-walk would decide the tier by fuel, which is what the clause
+ * forbids.
+ */
+const EXACT_TIER_SIZE = 100;
+
 function* StringPattern_subtype([a = Value.undefined, b = Value.undefined]: Arguments): ValueEvaluator {
   if (!(a instanceof ObjectValue) || !(b instanceof ObjectValue)) {
     return Value.false;
@@ -111,9 +136,37 @@ function* StringPattern_subtype([a = Value.undefined, b = Value.undefined]: Argu
       || !(leftFlags instanceof JSStringValue) || !(rightFlags instanceof JSStringValue)) {
     return Value.false;
   }
-  const same = leftSource.stringValue() === rightSource.stringValue()
-    && leftFlags.stringValue() === rightFlags.stringValue();
-  return same ? Value.true : Value.false;
+  const aSource = leftSource.stringValue();
+  const bSource = rightSource.stringValue();
+  const aFlags = leftFlags.stringValue();
+  const bFlags = rightFlags.stringValue();
+  if (aSource === bSource && aFlags === bFlags) {
+    // The floor, and the fast path: structural equivalence already makes these
+    // one type.
+    return Value.true;
+  }
+  // #sec-metadata's sanctioned sharpening: "pattern pairs free of backreferences
+  // and lookaround, within a fixed automaton size, get the exact
+  // language-inclusion answer, and pairs beyond the bound get the syntactic one.
+  // The tier is decided by syntactic size and never by remaining fuel."
+  //
+  // FLAGS must match for the exact tier. They change what a pattern matches, so
+  // two patterns under different flags are different languages and this
+  // construction does not model the difference. Sound, weak, sharpenable.
+  if (aFlags !== bFlags) {
+    return Value.false;
+  }
+  const leftReport = InspectPattern(aSource, aFlags);
+  const rightReport = InspectPattern(bSource, bFlags);
+  if (leftReport.outside !== undefined || rightReport.outside !== undefined
+      || leftReport.size + rightReport.size > EXACT_TIER_SIZE) {
+    return Value.false;
+  }
+  const exact = DecidesInclusion({ source: aSource, flags: aFlags, ast: leftReport.ast },
+    { source: bSource, flags: bFlags, ast: rightReport.ast });
+  // `undefined` is a form the construction does not model, which takes the
+  // syntactic answer like anything else outside the exact tier.
+  return exact === true ? Value.true : Value.false;
 }
 
 export function bootstrapStringPattern(realmRec: Realm) {

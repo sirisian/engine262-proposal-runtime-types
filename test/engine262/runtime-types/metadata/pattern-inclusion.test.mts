@@ -2,6 +2,7 @@ import { test, expect } from 'vitest';
 import {
   Agent, ManagedRealm, setSurroundingAgent, InspectPattern, DecidesInclusion,
 } from '#self';
+import { evaluated } from '../harness.mts';
 
 /**
  * R18's decision procedure, from #sec-metadata: "pattern pairs free of
@@ -51,6 +52,25 @@ test('two spellings of one language include each other', () => {
   // This is the answer reflexivity cannot give, and the reason R18 exists.
   expect(decide('^(ab)+$', '^ab(ab)*$')).toBe(true);
   expect(decide('^ab(ab)*$', '^(ab)+$')).toBe(true);
+});
+
+test('the judgment itself is sharpened, which is what R18 is', () => {
+  // The row reflexivity could not give. Measured false before this landed.
+  const P = (r: string) => `string.<{ pattern: ${r} }>`;
+  const assignable = (x: string, y: string) => evaluated(`String(Reflect.isAssignable(type ${P(x)}, type ${P(y)}));`);
+  expect(assignable('/^a$/', '/^a|b$/')).toBe('true');
+  expect(assignable('/^a|b$/', '/^a$/')).toBe('false');
+  // Two spellings of one language, both directions.
+  expect(assignable('/^(ab)+$/', '/^ab(ab)*$/')).toBe('true');
+  expect(assignable('/^ab(ab)*$/', '/^(ab)+$/')).toBe('true');
+  // Outside the fragment: the syntactic answer, which is still reflexivity.
+  expect(assignable('/^(a)\\1$/', '/^(a)\\1$/')).toBe('true');
+  expect(assignable('/^(?=a)a$/', '/^a$/')).toBe('false');
+  // Flags are part of the language, so a differing pair is not sharpened.
+  expect(assignable('/^a$/i', '/^a$/')).toBe('false');
+  // And the mark can still be dropped, never gained.
+  expect(evaluated(`String(Reflect.isAssignable(type ${P('/^a$/')}, type string));`)).toBe('true');
+  expect(evaluated(`String(Reflect.isAssignable(type string, type ${P('/^a$/')}));`)).toBe('false');
 });
 
 test('a form the construction does not model gives no answer, not a wrong one', () => {
