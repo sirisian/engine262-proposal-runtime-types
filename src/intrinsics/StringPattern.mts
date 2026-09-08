@@ -77,6 +77,45 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
  * Declare the meta type. It runs after %Type.prototype% exists, for the same
  * reason the `never` Type Object does: a Type Object needs that prototype.
  */
+/**
+ * `subtype(a, b)` - #sec-metadata: the judgment "holds only of patterns whose
+ * `source` and `flags` are identical, which structural equivalence already makes
+ * one type, so the floor is reflexivity and the conservatism is intentional."
+ *
+ * Declared rather than left to fall out of interning. It agreed with interning
+ * before and still does, so this changes no answer - what it changes is that the
+ * judgment is now CONSULTED, which the clause's own sharpening needs somewhere to
+ * live. R18 replaces the body: "pattern pairs free of backreferences and
+ * lookaround, within a fixed automaton size, get the exact language-inclusion
+ * answer, and pairs beyond the bound get the syntactic one."
+ *
+ * A missing pattern on either side is not this judgment's business. The hook is
+ * never asked about a default (#sec-metadata-subtype-judgment skips
+ * `subtype(default, default)`), and a crossing that carries a pattern one way
+ * only is decided by the branding rule above it.
+ */
+function* StringPattern_subtype([a = Value.undefined, b = Value.undefined]: Arguments): ValueEvaluator {
+  if (!(a instanceof ObjectValue) || !(b instanceof ObjectValue)) {
+    return Value.false;
+  }
+  const left = Q(yield* Get(a, Value('pattern')));
+  const right = Q(yield* Get(b, Value('pattern')));
+  if (!(left instanceof ObjectValue) || !(right instanceof ObjectValue)) {
+    return Value.false;
+  }
+  const leftSource = Q(yield* Get(left, Value('source')));
+  const rightSource = Q(yield* Get(right, Value('source')));
+  const leftFlags = Q(yield* Get(left, Value('flags')));
+  const rightFlags = Q(yield* Get(right, Value('flags')));
+  if (!(leftSource instanceof JSStringValue) || !(rightSource instanceof JSStringValue)
+      || !(leftFlags instanceof JSStringValue) || !(rightFlags instanceof JSStringValue)) {
+    return Value.false;
+  }
+  const same = leftSource.stringValue() === rightSource.stringValue()
+    && leftFlags.stringValue() === rightFlags.stringValue();
+  return same ? Value.true : Value.false;
+}
+
 export function bootstrapStringPattern(realmRec: Realm) {
   if (!surroundingAgent.feature('runtime-types')) {
     return;
@@ -92,5 +131,10 @@ export function bootstrapStringPattern(realmRec: Realm) {
     metaType,
     'validate',
     X(CreateBuiltinFunction(StringPattern_validate, 2, Value('validate'), [], realmRec)),
+  );
+  RegisterMetaHook(
+    metaType,
+    'subtype',
+    X(CreateBuiltinFunction(StringPattern_subtype, 2, Value('subtype'), [], realmRec)),
   );
 }
