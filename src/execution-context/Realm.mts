@@ -340,6 +340,35 @@ export function CreateIntrinsics(realmRec: Realm) {
 }
 
 /** https://tc39.es/ecma262/#sec-setdefaultglobalbindings */
+/**
+ * Bind `Identity` for a realm whose prelude has just run.
+ *
+ * `SetDefaultGlobalBindings` binds it from the parsed-declaration registry, but
+ * runs BEFORE the prelude that fills the registry, so the first realm in a
+ * process bound nothing. Every later realm worked only because the first realm's
+ * prelude had left the registry populated - the realm that paid did not benefit,
+ * and the ones that benefited were reading another realm's parsed node.
+ *
+ * Re-binding after the prelude fixes the first half of that. The registry being
+ * shared across realms at all is the second half and is not addressed here.
+ */
+export function BindParsedIdentityGlobal(realmRec: Realm) {
+  const record = getParsedIdentityDeclaration();
+  if (!record) {
+    return;
+  }
+  const global = realmRec.GlobalObject;
+  if (!global) {
+    return;
+  }
+  X(global.DefineOwnProperty(Value('Identity'), Descriptor({
+    Value: GetTypeObject(record, realmRec),
+    Writable: Value.false,
+    Enumerable: Value.false,
+    Configurable: Value.true,
+  })));
+}
+
 export function SetDefaultGlobalBindings(realmRec: Realm) {
   const global = realmRec.GlobalObject;
 
@@ -473,8 +502,17 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       // `Identity` binds the PARSED declaration the prelude captured. It is the
       // one built-in type name passed AS an argument rather than only used as a
       // type, and a kinded position asks whether its argument is a generic
-      // declaration - which a stand-in is not. Before a prelude has run it
-      // falls through, so realm setup order does not matter.
+      // declaration - which a stand-in is not.
+      //
+      // Before a prelude has run it falls through to the stand-in, and the
+      // comment here used to add "so realm setup order does not matter". It
+      // does. This runs BEFORE the realm's prelude, so the FIRST realm in a
+      // process built its globals against an empty registry and never bound
+      // `Identity` at all - `typeof Identity` was *undefined* in realm A and
+      // "object" in every realm after it, and a program using `Identity` threw
+      // in the first realm only. `BindParsedIdentityGlobal` below is called once
+      // the prelude has run, so the realm that captures the declaration is the
+      // realm that gets it.
       const record = name === 'Identity'
         ? getParsedIdentityDeclaration() ?? iterationInterfaceRecord(name)
         : iterationInterfaceRecord(name);

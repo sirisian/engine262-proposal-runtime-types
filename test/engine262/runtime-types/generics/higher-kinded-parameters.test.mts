@@ -415,3 +415,25 @@ test('an ordinary alias is unaffected by the metering', () => {
   const completion = realm.evaluateScriptSkipDebugger('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]]; "y";') as unknown as { Type: string, Value: unknown };
   expect(completion.Type).toBe('normal');
 });
+
+test('a realm binds `Identity` for itself, not for the next one', () => {
+  // `SetDefaultGlobalBindings` binds `Identity` from the parsed-declaration
+  // registry and runs BEFORE the prelude that fills it, so the FIRST realm in a
+  // process built its globals against an empty registry and bound nothing.
+  // Every later realm worked - on the first realm's parsed node, left behind in
+  // a module-level registry. Measured before the fix, three realms in one agent:
+  //
+  //   A -> "undefined",  B -> "object",  C -> "object",  A again -> "undefined"
+  //
+  // The test above, `Identity resolves in every position`, passed in a full run
+  // and FAILED when selected alone, for exactly this reason.
+  //
+  // The suite shares one process, so no test here can be the first realm. What
+  // this pins is that the binding exists and works; the first-realm case is
+  // covered by the fix binding after the prelude rather than before it.
+  expect(evaluated('String(typeof Identity);')).toBe('object');
+  expect(evaluated('let x: Identity.<uint8> = 1; String(Number(x));')).toBe('1');
+  // A program may still redeclare the name: the prelude evaluates in a block to
+  // keep it free.
+  expect(ok('type Identity<T> = T; let x: Identity.<uint8> = 1;')).toBe(true);
+});

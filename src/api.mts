@@ -35,6 +35,7 @@ import {
   surroundingAgent, type GCMarker,
   CreateIntrinsics,
   SetDefaultGlobalBindings,
+  BindParsedIdentityGlobal,
   OrdinaryObjectCreate,
   Assert,
   CreateTextModule,
@@ -261,6 +262,11 @@ export class ManagedRealm extends Realm {
       // is a library type a program may legitimately redeclare, so the prelude
       // must leave the NAME free while making the declaration reachable.
       this.evaluateScriptSkipDebugger('{ type Identity<T> = T; }');
+      // ...and bind it NOW. The global binding is made during
+      // `SetDefaultGlobalBindings`, which ran before this line, so without this
+      // the realm that just captured the declaration is the one realm that
+      // cannot see it.
+      BindParsedIdentityGlobal(this);
     }
 
     surroundingAgent.hostDefinedOptions.onRealmCreated?.(this);
