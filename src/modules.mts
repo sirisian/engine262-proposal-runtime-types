@@ -11,7 +11,7 @@ import {
   type ImportEntry,
   type ExportEntry,
 } from './static-semantics/all.mts';
-import { CheckModuleWithImports, ExportedTypesOf } from './type-system/check.mts';
+import { CheckModuleWithImports, ExportedTypesOf, ExportedBuilderNodesOf } from './type-system/check.mts';
 import { InstantiateFunctionObject } from './runtime-semantics/all.mts';
 import { collectOverloadGroups, MakeOverloadedFunction } from './abstract-ops/runtime-types.mts';
 import { skipDebugger } from './evaluator.mts';
@@ -707,6 +707,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // Accumulates each imported name's type, for the import-aware check that
     // follows the loop.
     const importedTypes = new Map<string, unknown>();
+    const importedBuilders = new Map<string, ParseNode>();
     // 7. For each ImportEntry Record in in module.[[ImportEntries]], do
     for (const ie of module.ImportEntries) {
       // a. Let importedModule be GetImportedModule(module, in.[[ModuleRequest]]).
@@ -786,10 +787,17 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
           // of it was ~any~.
           if (surroundingAgent.feature('runtime-types')
               && resolution.Module instanceof SourceTextModuleRecord) {
+            const bindingName = (resolution.BindingName as JSStringValue).stringValue?.() ?? String(resolution.BindingName);
             const exported = ExportedTypesOf(resolution.Module.ECMAScriptCode);
-            const t = exported?.get((resolution.BindingName as JSStringValue).stringValue?.() ?? String(resolution.BindingName));
+            const t = exported?.get(bindingName);
             if (t !== undefined) {
               importedTypes.set(ie.LocalName.stringValue(), t);
+            }
+            // ...and the DECLARATION, where the name is a builder, so its
+            // `where` clauses reach a generic body here (#sec-checked-contracts).
+            const builder = ExportedBuilderNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
+            if (builder !== undefined) {
+              importedBuilders.set(ie.LocalName.stringValue(), builder);
             }
           }
         }
@@ -804,7 +812,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // reported twice: a module whose parse-time check failed never reaches
     // linking, so every error found here is one that needed an import to see.
     if (surroundingAgent.feature('runtime-types') && importedTypes.size > 0) {
-      const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes);
+      const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders);
       if (typeErrors.length > 0) {
         return ThrowCompletion(typeErrors[0]);
       }

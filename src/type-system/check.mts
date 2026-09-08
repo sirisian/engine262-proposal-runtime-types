@@ -1343,6 +1343,41 @@ function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: Pars
  */
 const moduleExportedTypes = new WeakMap<object, Map<string, Known>>();
 
+/**
+ * A module's top-level function declarations, keyed by LOCAL name, recorded when
+ * the module is checked and read by an importer.
+ *
+ * #sec-checked-contracts has two halves and they behaved differently across a
+ * module boundary. The VERIFIED half fires at every concrete evaluation of an
+ * imported builder. The ASSUMED half - what lets a generic body reason about a
+ * deferred application before specialization - reads the builder's DECLARATION
+ * to find its `where` clauses, and the only declarations in reach were those in
+ * the caller's own compilation. So a body checked against a locally declared
+ * `omit` and not against the same `omit` imported from 'std:types', which is the
+ * case typeprogramming.md 6.2 is written for.
+ *
+ * Recorded here rather than resolved on demand because the importer already has
+ * this channel: `moduleExportedTypes` above carries what a name IS across the
+ * same boundary, for the same reason and at the same moment.
+ */
+const moduleBuilderNodes = new WeakMap<object, Map<string, ParseNode>>();
+
+export function ExportedBuilderNodesOf(module: ParseNode.Module): Map<string, ParseNode> | undefined {
+  return moduleBuilderNodes.get(module as unknown as object);
+}
+
+/** The imported builders visible to the check now running, if any. */
+let importedBuilderNodes: ReadonlyMap<string, ParseNode> | undefined;
+
+/**
+ * The declaration of a builder the current module IMPORTED, for the contract
+ * lookup. Consulted only when the caller's own compilation has no declaration of
+ * that name, so a local one always wins.
+ */
+export function ImportedBuilderNode(name: string): ParseNode | undefined {
+  return importedBuilderNodes?.get(name);
+}
+
 export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
   return moduleExportedTypes.get(module as unknown as object) as Map<string, unknown> | undefined;
 }
@@ -1363,6 +1398,21 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   // a re-export or a renamed export resolves through the same lookup.
   const exported = new Map<string, Known>(session.frame.bindings);
   moduleExportedTypes.set(module as unknown as object, exported);
+  // The same list, for the declarations an importer's contract lookup needs.
+  // `export function f() {}` puts the declaration in [[HoistableDeclaration]];
+  // [[Declaration]] is null for that form.
+  const builders = new Map<string, ParseNode>();
+  for (const item of module.ModuleBody?.ModuleItemList ?? []) {
+    const wrapper = item as { type?: string, HoistableDeclaration?: ParseNode, Declaration?: ParseNode };
+    const declaration = wrapper.type === 'ExportDeclaration'
+      ? (wrapper.HoistableDeclaration ?? wrapper.Declaration)
+      : (item as ParseNode);
+    const named = declaration as { type?: string, BindingIdentifier?: { name?: string } } | undefined;
+    if (named?.type === 'FunctionDeclaration' && typeof named.BindingIdentifier?.name === 'string') {
+      builders.set(named.BindingIdentifier.name, declaration as ParseNode);
+    }
+  }
+  moduleBuilderNodes.set(module as unknown as object, builders);
   return errors;
 }
 
@@ -1391,7 +1441,7 @@ const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
   'size', 'clear', 'keys', 'values', 'entries', 'forEach',
 ]);
 
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>): ObjectValue[] {
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>): ObjectValue[] {
   if (imported.size === 0) {
     return [];
   }
@@ -1404,7 +1454,13 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
     // stability rule there judges, and this pass does not see it.
     session.frame.immutableNames.add(name);
   }
-  return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+  const outerBuilders = importedBuilderNodes;
+  importedBuilderNodes = builders;
+  try {
+    return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+  } finally {
+    importedBuilderNodes = outerBuilders;
+  }
 }
 
 /**
@@ -6866,7 +6922,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           TypeName?: { IdentifierReference?: { name?: string } }, name?: string,
         };
         const calleeName = calleeRef?.TypeName?.IdentifierReference?.name ?? calleeRef?.name;
-        const builderNode = typeof calleeName === 'string' ? functionNodes.get(calleeName) : undefined;
+        const builderNode = typeof calleeName === 'string'
+          ? (functionNodes.get(calleeName) ?? ImportedBuilderNode(calleeName))
+          : undefined;
         if (!builderNode) {
           return null as unknown as Known;
         }
