@@ -54,7 +54,11 @@ test('a VALUE argument displays as it was written', () => {
   expect(evaluated(`${G} String((type G.<4>) === (type G.<8>));`)).toBe('false');
   expect(evaluated(`${G} String((type G.<4>).byteLength);`)).toBe('4');
   // It reaches every message naming such a type.
-  expectThrown(`${G} let g: G.<4>;`, '"G.<4>" has no default value');
+  // The class here holds a field that genuinely has no default, since a generic
+  // class whose fields are all defaultable now HAS one - which is what this
+  // assertion used to rely on.
+  expectThrown('class D<N: uint32> { u: uint8 | string; b: [N].<uint8>; } let d: D.<4>;',
+    '"D.<4>" has no default value');
 
   // A TYPE argument is unchanged, and so is a mixed list.
   expect(evaluated('class B<T> { v: T; } String(type B.<uint8>);')).toBe('B.<uint.<8>>');

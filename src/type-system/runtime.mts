@@ -10,8 +10,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf } from '../abstract-ops/array-vi
 import {
   BigIntValue, BooleanValue, JSStringValue, NumberValue, ObjectValue, SymbolValue, Value,
   TypedNumberValue, TypedStringValue, TypedBigIntValue, TypedSymbolValue, TypedBooleanValue, ReferenceValue, isTypedNumber, unwrapToNumber,
-  type Descriptor, type PropertyKeyValue,
-} from '../value.mts';
+  type Descriptor, type PropertyKeyValue, type PrivateName } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { CreateDecimalValue, isDecimalObject } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
@@ -19,7 +18,7 @@ import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mt
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X , ThrowCompletion } from '../completion.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
-import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel } from '../abstract-ops/all.mts';
+import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf } from '../abstract-ops/runtime-types.mts';
@@ -2322,10 +2321,22 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         .properties?.get(Value('prototype'))?.Value;
       const instance = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
       const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
+      // A field type mentioning a type PARAMETER is substituted with this
+      // application's arguments before its default is taken.
+      //
+      // `G.<4>`'s field `b: [N].<uint8>` is read from the DECLARATION, where the
+      // extent is still `N` - a Type Record rather than a number - so the array
+      // had no default and the class inherited none. The layout path already
+      // recomputes per application for exactly this reason; this arm read the
+      // declaration's fields directly and did not.
+      const applied = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+      const declaration = (t as { Declaration?: unknown }).Declaration;
       for (const field of constructor.Fields) {
-        const record = field.TypeObject?.TypeRecord;
-        const name = field.Name as { stringValue?: () => string } | undefined;
-        if (!record || typeof name?.stringValue !== 'function') {
+        let record = field.TypeObject?.TypeRecord;
+        if (record && applied.length > 0 && declaration !== undefined) {
+          record = CanonicalizeType(SubstituteTypeArguments(record, declaration, applied));
+        }
+        if (!record) {
           // An untyped field has no declared default to fill.
           return undefined;
         }
@@ -2333,8 +2344,29 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         if (value === undefined) {
           return undefined;
         }
-        X(CreateDataPropertyOrThrow(instance, Value(name.stringValue()), value));
-        typed.set(name.stringValue(), { TypeRecord: record });
+        const name = field.Name as { stringValue?: () => string } | undefined;
+        if (typeof name?.stringValue === 'function') {
+          X(CreateDataPropertyOrThrow(instance, Value(name.stringValue()), value));
+          typed.set(name.stringValue(), { TypeRecord: record });
+          continue;
+        }
+        // A PRIVATE field is filled too. Its [[Name]] is a Private Name rather
+        // than a String, and the guard above used to test `stringValue` and
+        // return ~none~ for anything without one - so a single `#x: uint8` gave
+        // its whole class no default, and `class P { #x: uint8 = 0; }` could not
+        // be declared without an initializer.
+        //
+        // This is the conflation ClassDefinitionEvaluation already records making
+        // and fixing for the LAYOUT: a private typed field "used to be the same
+        // branch as an untyped one - so a single `#x: uint8` gave its whole class
+        // no layout", against the README's "Private fields participate in the
+        // memory layout EXACTLY AS PUBLIC FIELDS DO". Only the absence of a TYPE
+        // disqualifies, which is why the type check above now stands alone.
+        if (field.Name !== undefined) {
+          Q(yield* PrivateFieldAdd(instance, field.Name as PrivateName, value));
+          continue;
+        }
+        return undefined;
       }
       // The instance carries its field types, so a store into a defaulted
       // instance is checked exactly as one into a constructed instance is.

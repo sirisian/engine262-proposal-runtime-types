@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectThrown } from '../harness.mts';
 
 /**
  * #sec-value-type-copying, over a VALUE TYPE CLASS.
@@ -215,4 +215,44 @@ test('a GENERIC class keeps its private field through a copy', () => {
   expect(evaluated('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return this.b.length; } }'
     + ' class K { a: S.<4> = new S.<4>(); b: S.<8> = new S.<8>(); }'
     + ' const k = new K(); String(Number(k.a.len)) + "/" + String(Number(k.b.len));')).toBe('4/8');
+});
+
+test('a class with a PRIVATE field has a default', () => {
+  // #sec-defaultvalueof fills a value type class field-wise. Its walk bailed on
+  // any field whose [[Name]] had no `stringValue` - which a Private Name does
+  // not - and reported the class as having no default, with a comment saying the
+  // field was untyped. So `class P { #x: uint8 = 0; }` could not be declared
+  // without an initializer.
+  //
+  // The same conflation is recorded in ClassDefinitionEvaluation as one already
+  // made and fixed for the LAYOUT: "a single `#x: uint8` gave its whole class no
+  // layout". Only the absence of a TYPE disqualifies.
+  expect(evaluated('class P { #x: uint8 = 0; get v(): uint8 { return this.#x; } }'
+    + ' let p: P; String(Number(p.v));')).toBe('0');
+  expect(evaluated('class P { a: uint8 = 0; #x: uint8 = 0; get v(): uint8 { return this.#x; } }'
+    + ' let p: P; String(Number(p.a)) + "/" + String(Number(p.v));')).toBe('0/0');
+  // A private field whose type genuinely has no default still disqualifies, so
+  // the fix fills fields rather than manufacturing defaults for them.
+  expectThrown('class P { #u: uint8 | string; } let p: P;', 'has no default value');
+  // ...as does an untyped field, which is what the guard was always for.
+  expectThrown('class P { x; } let p: P;', 'has no default value');
+});
+
+test('a GENERIC class has a default, per application', () => {
+  // A field mentioning a type parameter was read from the DECLARATION, where the
+  // extent is still `N` - a Type Record rather than a number - so the array had
+  // no default and the class inherited none. The layout path already recomputes
+  // per application; this arm read the declaration's fields directly.
+  const G = 'class G<N: uint32> { b: [N].<uint8>; } ';
+  expect(evaluated(`${G} let g: G.<4>; String(g.b.length);`)).toBe('4');
+  // Each application gets its own, which is the point of substituting rather
+  // than defaulting once.
+  expect(evaluated(`${G} let a: G.<4>; let b: G.<8>;`
+    + ' String(a.b.length) + "/" + String(b.b.length);')).toBe('4/8');
+  // Both gaps at once - a private field whose type mentions the parameter, which
+  // is the shape `FixedString` has and why it hit both independently.
+  expect(evaluated('class F<N: uint32> { #b: [N].<uint8>; get len(): uint32 { return this.#b.length; } }'
+    + ' let f: F.<4>; String(Number(f.len));')).toBe('4');
+  // A generic whose fields do not mention the parameter always worked, and still does.
+  expect(evaluated('class G2<N: uint32> { x: uint8 = 0; } let g: G2.<4>; String(Number(g.x));')).toBe('0');
 });
