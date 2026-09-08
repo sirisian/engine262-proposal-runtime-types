@@ -8,6 +8,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isClassTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
+import { SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
 import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';
 import type { DeferredMetadataCheck } from '../type-system/check.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
@@ -466,7 +467,17 @@ function isCanonicalMetadata(record: unknown): boolean {
     return false;
   }
   return Object.values(record as Record<string, unknown>).every(
-    (v) => v instanceof Value || isCanonicalMetadata(v),
+    // A PRIMITIVE is a leaf too. The markers this form carries for a pattern and
+    // a range - `{ __pattern: true, source, flags }` and `{ __range: true, ... }`
+    // - hold JS primitives, because that is what `metadataValueFromType` and
+    // `SnapshotMetadataValue` both build. Requiring every leaf to be a `Value`
+    // refused them, so a metadata value that had been through the canonical
+    // producer failed the check meant to catch values that had NOT.
+    //
+    // What the check is for is unchanged: "a container left as an `ObjectValue`
+    // fails here rather than surviving to make `makeType(getReflection(T)) === T`
+    // false much later", and an ObjectValue is still refused.
+    (v) => v instanceof Value || (v !== null && typeof v === 'object' ? isCanonicalMetadata(v) : true),
   );
 }
 
@@ -782,7 +793,17 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       if (!(metadataV instanceof ObjectValue)) {
         return Throw.TypeError('$1 is not a valid type node', Value('a parameterized type node without metadata'));
       }
-      const record = Q(yield* metadataFromValue(metadataV));
+      // SnapshotMetadataValue, not a second walk of the same shape. It is the
+      // producer of the canonical metadata form the declaration path uses, and
+      // it knows the LEAVES: #sec-metadata says the `StringPattern` meta type
+      // "carries a pattern as metadata, a source and flags rather than a RegExp
+      // object", and a range likewise. Walked as an ordinary object instead, a
+      // RegExp flattened to its own properties, so
+      // `makeType({ kind: 'parameterized', base: string, metadata: { pattern:
+      // /^a+$/ } })` produced `string.<{ pattern: { lastIndex: 0 } }>` and was
+      // not the type the annotation produces - the round trip this operation
+      // exists to keep.
+      const record = Q(yield* SnapshotMetadataValue(metadataV));
       // The entry check. The slot's canonical form is a plain record with
       // plain containers (see `MetadataRecord` in records.mts), and nothing in
       // the type system enforces it - the slot is declared `Value` and holds
