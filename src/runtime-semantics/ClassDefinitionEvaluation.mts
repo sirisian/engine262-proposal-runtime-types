@@ -1296,7 +1296,30 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         && !(el as { static?: boolean }).static
         && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
         && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== null);
-      (F as { SealInstances?: boolean }).SealInstances = hasTypedInstanceField && !isDynamic;
+      // INHERITED typed fields count, not only declared ones.
+      //
+      // `#sec-typed-classes` defines a class as typed "when at least one of its
+      // public or private fields carries a type annotation", and this read "its"
+      // as "the ones it declares". So `class X extends V { }` - a subclass adding
+      // nothing - was not typed, got no layout, and its instances stayed
+      // EXTENSIBLE while its base's were not:
+      //
+      //   let v: V = new X();   Object.isExtensible(v)   was *true*
+      //   v.extra = 1;                                   succeeded
+      //
+      // A subclass is a subtype, so every guarantee the base makes of its
+      // instances has to hold of the subclass's; a `V`-typed binding holding an
+      // extensible object is that guarantee broken. The layout consequence -
+      // `(type X).byteLength` throwing where `(type V).byteLength` is 12 - is the
+      // visible symptom of one cause.
+      //
+      // The BASE's own flag is the test, so this composes up a chain without
+      // walking it: `V` is typed, so `X` is, so a fieldless subclass of `X` is.
+      // A class whose base is untyped is untouched, which keeps
+      // `class B { } class C extends B { }` untyped with no annotation anywhere,
+      // and `dynamic` still disqualifies either way.
+      const baseIsTyped = (constructorParent as { SealInstances?: boolean } | undefined)?.SealInstances === true;
+      (F as { SealInstances?: boolean }).SealInstances = (hasTypedInstanceField || baseIsTyped) && !isDynamic;
       // proposal-runtime-types (spec sec-abstract-classes): an abstract class
       // cannot be instantiated - its constructor's [[Construct]] throws a
       // TypeError when NewTarget is that constructor itself, while super() from a
