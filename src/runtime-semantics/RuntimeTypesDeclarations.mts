@@ -25,7 +25,7 @@ import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
-import { OriginOfNode, RecordTypeOrigin } from '../type-system/provenance.mts';
+import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType } from '../type-system/runtime.mts';
@@ -727,6 +727,17 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   // type's identity reads this, and no program can: it is the host's channel.
   if (value !== Value.undefined) {
     RecordTypeOrigin(value as object, OriginOfNode(node, node.type, name.stringValue()));
+    // ...and the members, which is the half #sec-provenance also specifies - "A
+    // Property Type Record and a Type Record may carry an [[Origin]]" - and the
+    // half the clause's own motivation needs: "`partial(User)` should not cost an
+    // editor its memory of where `name` came from" is a question about a MEMBER.
+    //
+    // Walked from the declaration's own member nodes, so each member's origin is
+    // its own source position rather than the type's. A member the declaration
+    // does not write - one a spread brought in, or one a builder minted - gets
+    // none here, which is the correct answer for the same reason a minted record
+    // has none.
+    RecordDeclaredMemberOrigins(value as object, node);
   }
   if (rebind) {
     // The binding exists and is initialized; give it the rebuilt Type Object.

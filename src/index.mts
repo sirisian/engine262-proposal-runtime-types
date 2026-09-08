@@ -37,7 +37,7 @@ export * from './evaluator.mts';
 // it, deliberately, because origins union across structurally identical
 // declarations and a program observing that would see its own type change
 // because an unrelated module declared the same shape.
-export { TypeOrigins, type TypeOrigin } from './type-system/provenance.mts';
+export { TypeOrigins, MemberOrigins, type TypeOrigin } from './type-system/provenance.mts';
 
 
 export {

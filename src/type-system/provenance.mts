@@ -62,6 +62,25 @@ export interface TypeOrigin {
  */
 const originsByAgent = new WeakMap<object, WeakMap<object, TypeOrigin[]>>();
 
+/**
+ * Per-MEMBER origins, keyed by the interned Type Object and then by member key.
+ *
+ * #sec-provenance: "A Property Type Record and a Type Record may carry an
+ * [[Origin]]". Only the Type Record half was recorded, so a tool could say where
+ * a TYPE was declared and not where any of its members was - and the reason the
+ * clause gives for wanting provenance at all is a member: "`partial(User)`
+ * should not cost an editor its memory of where `name` came from."
+ *
+ * Keyed on the interned Type Object rather than on the property record, because
+ * canonicalization REBUILDS property records: the record a declaration produced
+ * is not the record the interned type holds, so a table keyed on it would be
+ * empty by the time a tool asked. Keying on the interned type also makes the
+ * union fall out for free, exactly as it does for a Type Record - two structurally
+ * identical declarations intern to one Type Object, so appending here is the
+ * union canonicalization is specified to perform.
+ */
+const memberOriginsByAgent = new WeakMap<object, WeakMap<object, Map<string, TypeOrigin[]>>>();
+
 function tableForAgent(): WeakMap<object, TypeOrigin[]> {
   const agent = surroundingAgent as unknown as object;
   let table = originsByAgent.get(agent);
@@ -113,4 +132,94 @@ export function RecordTypeOrigin(typeObject: object, origin: TypeOrigin): void {
  */
 export function TypeOrigins(typeObject: object): readonly TypeOrigin[] {
   return tableForAgent().get(typeObject) ?? [];
+}
+
+function memberTableForAgent(): WeakMap<object, Map<string, TypeOrigin[]>> {
+  const agent = surroundingAgent as unknown as object;
+  let table = memberOriginsByAgent.get(agent);
+  if (!table) {
+    table = new WeakMap();
+    memberOriginsByAgent.set(agent, table);
+  }
+  return table;
+}
+
+/**
+ * Record that a member of an interned Type Object came from a declaration site.
+ * Recorded once per site, as a Type Record's is: re-evaluating one declaration
+ * does not grow the list.
+ */
+export function RecordMemberOrigin(typeObject: object, key: string, origin: TypeOrigin): void {
+  const table = memberTableForAgent();
+  let byKey = table.get(typeObject);
+  if (!byKey) {
+    byKey = new Map();
+    table.set(typeObject, byKey);
+  }
+  let list = byKey.get(key);
+  if (!list) {
+    list = [];
+    byKey.set(key, list);
+  }
+  if (list.some((o) => o.startIndex === origin.startIndex && o.endIndex === origin.endIndex && o.source === origin.source)) {
+    return;
+  }
+  list.push(origin);
+}
+
+/**
+ * The declaration sites a member came from, in the order they were seen. The
+ * host-facing channel for a member, as `TypeOrigins` is for a type: an embedder
+ * or a language server calls it, and no program can.
+ *
+ * A member a BUILDER minted has none, for the reason a minted record has none -
+ * "nothing declared it" - and the fallback #sec-provenance names is the
+ * application that produced it.
+ */
+export function MemberOrigins(typeObject: object, key: string): readonly TypeOrigin[] {
+  return memberTableForAgent().get(typeObject)?.get(key) ?? [];
+}
+
+/**
+ * Record an origin for each member a declaration WRITES, from the member's own
+ * position rather than the declaration's.
+ *
+ * The object type is found by walking past the forms that wrap one - a type
+ * alias holds it under its annotation, an interface holds its members directly -
+ * and anything else records nothing, since a member origin is only meaningful
+ * where a member was written down.
+ */
+export function RecordDeclaredMemberOrigins(typeObject: object, declaration: ParseNode): void {
+  const node = declaration as unknown as {
+    type?: string,
+    TypeMemberList?: readonly object[],
+    // An interface holds its members under its own name, not the object type's.
+    InterfaceMemberList?: readonly object[],
+    Type?: { type?: string, TypeMemberList?: readonly object[] },
+    TypeAnnotation?: { Type?: { type?: string, TypeMemberList?: readonly object[] } },
+  };
+  const members = node.TypeMemberList
+    ?? node.InterfaceMemberList
+    ?? node.Type?.TypeMemberList
+    ?? node.TypeAnnotation?.Type?.TypeMemberList;
+  if (!members) {
+    return;
+  }
+  for (const raw of members) {
+    const member = raw as {
+      type?: string,
+      PropertyName?: { name?: string, value?: string | number | bigint },
+    };
+    if (member.type === 'IndexSignature') {
+      // No key to record one against: an index signature declares a rule, not a
+      // member.
+      continue;
+    }
+    const named = member.PropertyName;
+    const key = named?.name ?? (named?.value === undefined ? undefined : String(named.value));
+    if (key === undefined) {
+      continue;
+    }
+    RecordMemberOrigin(typeObject, key, OriginOfNode(raw as ParseNode, member.type ?? 'TypeMember', key));
+  }
 }
