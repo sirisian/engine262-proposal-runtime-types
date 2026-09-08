@@ -308,3 +308,16 @@ test('a while condition is typed as an if condition is', () => {
   expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; while (a === b) { }');
   expect(ok('let a: uint8 = 1; let b: uint8 = 2; while (a === b) { break; }')).toBe(true);
 });
+
+test('a `do` and a `for` condition are typed as an `if` condition is', () => {
+  // `while` shares the `if` arm's shape; `do` and `for` had NO arm at all, so
+  // each walks its own children. A `for`'s TEST is its second clause - the
+  // initializer and update are ordinary statement-position expressions and are
+  // left to the walk.
+  expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; do { } while (a === b);');
+  expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; for (;a === b;) { }');
+  // Ordinary loops are untouched, and the BODY is still descended into - which
+  // an arm that takes over the walk has to do for itself.
+  expect(evaluated('let n: uint8 = 0; for (let i = 0; i < 3; i++) { n = 1; } String(n);')).toBe('1');
+  expectStaticTypeError('let a: uint8 = 1; for (let i = 0; i < 1; i++) { let s: string = a; }');
+});

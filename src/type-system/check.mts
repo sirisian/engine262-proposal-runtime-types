@@ -15803,6 +15803,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
         return;
       }
+      // The remaining CONDITION sites, for the reason the `if` and `while` arms
+      // give: a condition is an expression whose judgments run from
+      // `staticType`, and walking does not call it for one. A `for`'s test is
+      // its SECOND clause, `Expression_b`; its initializer and update are
+      // ordinary expressions in statement position and are left to the walk.
+      //
+      // Neither node type had an arm at all, so the children are walked here
+      // explicitly - `parent` excluded, which is the recursion an earlier arm in
+      // this file fell into.
+      case 'DoWhileStatement':
+      case 'ForStatement': {
+        const condition = n.type === 'ForStatement'
+          ? (n as unknown as { Expression_b?: ParseNode | null }).Expression_b
+          : (n as unknown as { Expression?: ParseNode | null }).Expression;
+        if (condition) {
+          staticType(condition);
+        }
+        for (const key of Object.keys(n)) {
+          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+            continue;
+          }
+          const child = (n as unknown as Record<string, unknown>)[key];
+          if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
+            walk(child as ParseNode);
+          }
+        }
+        return;
+      }
       case 'WhileStatement': {
         // A `while` test guards its body on every iteration.
         const w = n as unknown as { Expression: ParseNode, Statement: ParseNode };
