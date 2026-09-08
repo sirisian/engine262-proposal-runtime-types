@@ -456,3 +456,24 @@ test('the kit states its own bounds, and they hold', async () => {
   expect(await holds('Reflect.isAssignable(std.merge(A, B), B)',
     'type A = { a: uint8 }; type B = { a: string, b: string }; ')).toBe('ok');
 });
+
+// A KIND FACT is what a builder states when no subtyping bound exists: the
+// result of `parameters(F)` is not related to `F` by assignability, but a
+// downstream builder that walks it needs to know it walks a tuple. Measured
+// stable at the edges - an empty tuple still reflects as `tuple`, an object with
+// only an index signature still as `object`.
+test('the kit states the kind it produces where it can', async () => {
+  const kind = (expr: string, want: string, decl = '') =>
+    holds(`Reflect.getReflection(${expr}).kind === "${want}"`, decl);
+  const T = 'type T = { a: uint8, b: string }; ';
+  const F = 'type F = (uint8, string) => void; ';
+  expect(await kind('std.parameters(F)', 'tuple', F)).toBe('ok');
+  expect(await kind('std.concat(type [uint8], type [string])', 'tuple')).toBe('ok');
+  expect(await kind('std.reverse(type [uint8, string])', 'tuple')).toBe('ok');
+  expect(await kind('std.zip(type [uint8], type [string])', 'tuple')).toBe('ok');
+  expect(await kind('std.getters(T)', 'object', T)).toBe('ok');
+  expect(await kind('std.record(type string, uint8)', 'object')).toBe('ok');
+  // And where none is true it states none: `flatten` unwraps an array to its
+  // element, so its result is whatever the element was.
+  expect(await kind('std.flatten(type [].<uint8>)', 'primitive')).toBe('ok');
+});

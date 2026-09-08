@@ -187,7 +187,13 @@ export function omit(T: type, K): type where Reflect.isAssignable(T, return) {
   const dropped = new Set(Array.isArray(K) ? K : literalValues(K));
   return mapProperties(T, p => dropped.has(p.name) ? null : p);
 }
-export function record(K: type, V: type): type {
+// A KIND FACT where no subtyping bound exists. These builders are not related to
+// their arguments by assignability - the result of parameters(F) has nothing to
+// do with F as a value - but what KIND they produce is worth stating, since a
+// downstream builder that walks the result needs it and would otherwise learn it
+// by failing. Measured stable at the edges: an empty tuple still reflects as
+// tuple, and an object with only an index signature still reflects as object.
+export function record(K: type, V: type): type where Reflect.getReflection(return).kind === 'object' {
   const node = reflect(K);
   if (node.kind === 'literal' || node.kind === 'union' && node.members.every(a => reflect(a).kind === 'literal'))
     return objectOf(literalValues(K).map(name => prop(name, V)));
@@ -242,7 +248,7 @@ export function discriminants(T: type, tag: string = 'kind') {
 export function byKind(T: type, k: string, tag: string = 'kind'): type {
   return extract(T, objectOf([prop(tag, literal(k))]));
 }
-export function handlers(T: type, R: type, tag: string = 'kind'): type {
+export function handlers(T: type, R: type, tag: string = 'kind'): type where Reflect.getReflection(return).kind === 'object' {
   return objectOf(discriminants(T, tag).map(k => prop(k, fn([byKind(T, k, tag)], R))));
 }
 
@@ -254,6 +260,10 @@ export function fn(parameterTypes: [].<type>, returnType: type): type {
     return: { type: returnType, metadata: {} }
   }] });
 }
+// No kind fact: flatten UNWRAPS an array to its element type and passes anything
+// else through, so its result is whatever the element was. Grouped with the
+// sequence builders by name, it took a tuple bound that the corpus refused at
+// once - challenge 10 flattens to a union.
 export function flatten(T: type): type {
   const node = reflect(T);
   return node.kind === 'array' ? node.element : T;
@@ -269,7 +279,7 @@ export function returnType(F: type): type {
   const returns = node.signatures.map(s => s.return.type);
   return returns.length === 1 ? returns[0] : union(returns);
 }
-export function parameters(F: type): type {
+export function parameters(F: type): type where Reflect.getReflection(return).kind === 'tuple' {
   const [signature] = reflect(F).signatures;
   return Reflect.makeType({ kind: 'tuple',
     elements: signature.parameters.map(p => ({ type: p.type, rest: p.rest, initial: p.initial })) });
@@ -288,7 +298,7 @@ export function capitalized(T: type): type { return mapLiterals(T, capitalizeFir
 export function uncapitalized(T: type): type {
   return mapLiterals(T, s => s.charAt(0).toLowerCase() + s.slice(1));
 }
-export function getters(T: type): type {
+export function getters(T: type): type where Reflect.getReflection(return).kind === 'object' {
   return mapProperties(T, p => typeof p.name !== 'string' ? p
     : prop(\`get\${capitalizeFirst(p.name)}\`, fn([], p.type), { readonly: true }));
 }
@@ -309,9 +319,9 @@ export function head(T: type): type {
   return elements.length === 0 ? never : elements[0];
 }
 export function tail(T: type): type    { return tupleOf(elementTypes(T).slice(1)); }
-export function concat(A: type, B: type): type { return tupleOf([...elementTypes(A), ...elementTypes(B)]); }
-export function reverse(T: type): type { return tupleOf(elementTypes(T).toReversed()); }
-export function zip(A: type, B: type): type {
+export function concat(A: type, B: type): type where Reflect.getReflection(return).kind === 'tuple' { return tupleOf([...elementTypes(A), ...elementTypes(B)]); }
+export function reverse(T: type): type where Reflect.getReflection(return).kind === 'tuple' { return tupleOf(elementTypes(T).toReversed()); }
+export function zip(A: type, B: type): type where Reflect.getReflection(return).kind === 'tuple' {
   const a = elementTypes(A), b = elementTypes(B);
   return tupleOf(a.slice(0, Math.min(a.length, b.length)).map((t, i) => tupleOf([t, b[i]])));
 }
@@ -425,7 +435,7 @@ export function omitThisParameter(F: type): type {
   const node = reflect(F);
   return Reflect.makeType({ ...node, signatures: node.signatures.map(({ thisType: _t, ...s }) => s) });
 }
-export function options(Data: type, Methods: type): type {
+export function options(Data: type, Methods: type): type where Reflect.getReflection(return).kind === 'object' {
   const self = Reflect.makeType({ kind: 'intersection', members: [Data, Methods] });
   return objectOf([
     prop('data', fn([], Data)),
