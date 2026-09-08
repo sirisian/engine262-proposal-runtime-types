@@ -477,16 +477,29 @@ export function options(Data: type, Methods: type): type where (Reflect.getRefle
 export function brand(T: type, tag: string | symbol): type where (Reflect.getReflection(return).kind === 'parameterized' || return === never) {
   return Reflect.makeType({ kind: 'parameterized', base: T, metadata: { brand: tag } });
 }
-// NOT EXPORTED. Written and kept so the choice is reversible in one word, but
-// withheld while the \`pattern\` claim is provisional. \`StringPattern\`
-// is a hardcoded intrinsic claiming a good name out of a flat, first-come
-// namespace, and its \`subtype\` judgment is at the floor of reflexivity and not
-// consulted anywhere yet - so the reservation currently buys nothing over
-// interning. Export both when §6.4's exact automaton subtyping lands, or sooner
-// if a scoping design for claims arrives.
-function suffixed(suffix: string): type {
+// EXPORTED. Withheld while the pattern claim looked provisional, on the ground
+// that a shipped export cements a name taken from a flat, first-come meta
+// namespace. That ground is gone: StringPattern is a hardcoded intrinsic that
+// ALREADY claims the key in every realm, and a user meta block claiming it is
+// refused - so withholding these preserved nothing, and the name cannot be
+// returned either way.
+//
+// The other half is what stays reversible. StringPattern's validation is live,
+// so these do real work now, while its subtype judgment is the floor of
+// reflexivity - and a weak subtype judgment can be strengthened later without
+// breaking anyone, which is what R18's automaton procedure would do.
+//
+// Being unexported is also what hid a defect: all three build their type
+// through makeType with a RegExp, which flattened it to its own properties
+// until the metadata round trip was fixed, so none of them worked and nothing
+// ran them.
+export function suffixed(suffix: string): type {
   return Reflect.makeType({ kind: 'parameterized', base: string,
     metadata: { pattern: new RegExp(\`^.*\${RegExp.escape(suffix)}$\`) } });
+}
+export function prefixed(prefix: string): type {
+  return Reflect.makeType({ kind: 'parameterized', base: string,
+    metadata: { pattern: new RegExp(\`^\${RegExp.escape(prefix)}.*$\`) } });
 }
 
 export function constructorParameters(C: type): type {
@@ -506,8 +519,7 @@ export function constructorParameters(C: type): type {
 // deliberately does not have, which is the reasoning §4.12 used to decline
 // \`isEqual\`. Use \`returnType\` for the factory case.
 
-// NOT EXPORTED, see \`suffixed\` above.
-function stringPattern(pattern, ...holes) {
+export function stringPattern(pattern, ...holes) {
   // §6.4. Callable with a RegExp, or as a template tag where each hole
   // contributes the sub-pattern its type matches. Builds a \`parameterized\`
   // node, as \`brand\` and \`suffixed\` do.
