@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok } from '../harness.mts';
+import { evaluated } from '../harness.mts';
 
 // ---------------------------------------------------------------------------
 // `new.target` HAS THE ~any~ TYPE, DELIBERATELY.
