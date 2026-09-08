@@ -476,4 +476,12 @@ test('the kit states the kind it produces where it can', async () => {
   // And where none is true it states none: `flatten` unwraps an array to its
   // element, so its result is whatever the element was.
   expect(await kind('std.flatten(type [].<uint8>)', 'primitive')).toBe('ok');
+  // The facts are stated as a disjunction with `never` because canonicalization
+  // collapses a composite whose required component is uninhabited. Both of these
+  // reach the builder and come back `never`, and the contract holds.
+  expect(await holds('std.tupleOf([uint8, never]) === never')).toBe('ok');
+  expect(await holds('std.objectOf([std.prop("a", never)]) === never')).toBe('ok');
+  // An OPTIONAL never member does not collapse it, nor does an array of never.
+  expect(await kind('std.objectOf([std.prop("a", never, { optional: true })])', 'object')).toBe('ok');
+  expect(await kind('std.arrayOf(never)', 'array')).toBe('ok');
 });

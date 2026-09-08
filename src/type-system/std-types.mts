@@ -70,7 +70,7 @@ export const STD_TYPES_SOURCE = `
 export function reflect(T: type) {
   return Reflect.getReflection(T);
 }
-export function literal(value: string | number | boolean | bigint): type {
+export function literal(value: string | number | boolean | bigint): type where (Reflect.getReflection(return).kind === 'literal' || return === never) {
   return Reflect.makeType({ kind: 'literal', value, base: Reflect.typeOf(value) });
 }
 export function union(armList: [].<type>): type {
@@ -99,13 +99,13 @@ export function prop(name: string | symbol, type: type,
     { optional = false, readonly = false, initial = undefined } = {}) {
   return { name, type, optional, readonly, initial };
 }
-export function objectOf(properties: [].<any>, indexSignatures: [].<any> = []): type {
+export function objectOf(properties: [].<any>, indexSignatures: [].<any> = []): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   return Reflect.makeType({ kind: 'object', properties, indexSignatures });
 }
-export function tupleOf(types: [].<type>): type {
+export function tupleOf(types: [].<type>): type where (Reflect.getReflection(return).kind === 'tuple' || return === never) {
   return Reflect.makeType({ kind: 'tuple', elements: types.map(type => ({ type, rest: false, initial: undefined })) });
 }
-export function arrayOf(element: type, extent: uint32 | undefined = undefined): type {
+export function arrayOf(element: type, extent: uint32 | undefined = undefined): type where (Reflect.getReflection(return).kind === 'array' || return === never) {
   return Reflect.makeType({ kind: 'array', element, extent });
 }
 export function tupleElements(T: type): [].<any> {
@@ -119,7 +119,11 @@ export function elementTypes(T: type): [].<type> {
 
 // ---- property and element mapping — §4.0 -----------------------
 
-export function mapProperties(T: type, f): type {
+// A homomorphic map over an OBJECT rebuilds an object, whatever the mapping
+// does to the members - including dropping all of them, which leaves an empty
+// object rather than something else. A non-object argument throws in the walk,
+// so the fact holds wherever the builder returns at all.
+export function mapProperties(T: type, f): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   const node = reflect(T);
   if (node.kind === 'union') return union(node.members.map(arm => mapProperties(arm, f)));
   if (node.kind === 'intersection')
@@ -127,7 +131,7 @@ export function mapProperties(T: type, f): type {
   if (node.kind !== 'object') throw new TypeError(\`mapProperties expects an object type, got \${String(T)}\`);
   return objectOf(node.properties.map(f).filter(p => p !== null), node.indexSignatures);
 }
-export function mapPropertyTypes(T: type, f): type {
+export function mapPropertyTypes(T: type, f): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   return mapProperties(T, p => ({ ...p, type: f(p.type) }));
 }
 export function mapElements(T: type, f): type {
@@ -191,9 +195,14 @@ export function omit(T: type, K): type where Reflect.isAssignable(T, return) {
 // their arguments by assignability - the result of parameters(F) has nothing to
 // do with F as a value - but what KIND they produce is worth stating, since a
 // downstream builder that walks the result needs it and would otherwise learn it
-// by failing. Measured stable at the edges: an empty tuple still reflects as
-// tuple, and an object with only an index signature still reflects as object.
-export function record(K: type, V: type): type where Reflect.getReflection(return).kind === 'object' {
+// by failing.
+//
+// Stated as a DISJUNCTION with never, because canonicalization collapses a
+// composite whose required component is uninhabited: a tuple with a never
+// element is never, and so is an object with a required never member. The kind
+// alone reads better and is false, which the corpus showed on a tuple built from
+// a filter that kept nothing.
+export function record(K: type, V: type): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   const node = reflect(K);
   if (node.kind === 'literal' || node.kind === 'union' && node.members.every(a => reflect(a).kind === 'literal'))
     return objectOf(literalValues(K).map(name => prop(name, V)));
@@ -217,7 +226,7 @@ export function merge(A: type, B: type): type where Reflect.isAssignable(return,
     [...a.properties.filter(p => !b.properties.some(q => q.name === p.name)), ...b.properties],
     [...a.indexSignatures.filter(s => !b.indexSignatures.some(h => h.key === s.key)), ...b.indexSignatures]);
 }
-export function renameProperties(T: type, f): type {
+export function renameProperties(T: type, f): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   return mapProperties(T, p => ({ ...p, name: typeof p.name === 'string' ? f(p.name) : p.name }));
 }
 
@@ -248,13 +257,13 @@ export function discriminants(T: type, tag: string = 'kind') {
 export function byKind(T: type, k: string, tag: string = 'kind'): type {
   return extract(T, objectOf([prop(tag, literal(k))]));
 }
-export function handlers(T: type, R: type, tag: string = 'kind'): type where Reflect.getReflection(return).kind === 'object' {
+export function handlers(T: type, R: type, tag: string = 'kind'): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   return objectOf(discriminants(T, tag).map(k => prop(k, fn([byKind(T, k, tag)], R))));
 }
 
 // ---- functions — §4.0, §4.3 ------------------------------------
 
-export function fn(parameterTypes: [].<type>, returnType: type): type {
+export function fn(parameterTypes: [].<type>, returnType: type): type where (Reflect.getReflection(return).kind === 'function' || return === never) {
   return Reflect.makeType({ kind: 'function', signatures: [{
     parameters: parameterTypes.map((type, index) => ({ type, name: \`p\${index}\`, index, rest: false, initial: undefined, metadata: {} })),
     return: { type: returnType, metadata: {} }
@@ -279,7 +288,7 @@ export function returnType(F: type): type {
   const returns = node.signatures.map(s => s.return.type);
   return returns.length === 1 ? returns[0] : union(returns);
 }
-export function parameters(F: type): type where Reflect.getReflection(return).kind === 'tuple' {
+export function parameters(F: type): type where (Reflect.getReflection(return).kind === 'tuple' || return === never) {
   const [signature] = reflect(F).signatures;
   return Reflect.makeType({ kind: 'tuple',
     elements: signature.parameters.map(p => ({ type: p.type, rest: p.rest, initial: p.initial })) });
@@ -298,11 +307,11 @@ export function capitalized(T: type): type { return mapLiterals(T, capitalizeFir
 export function uncapitalized(T: type): type {
   return mapLiterals(T, s => s.charAt(0).toLowerCase() + s.slice(1));
 }
-export function getters(T: type): type where Reflect.getReflection(return).kind === 'object' {
+export function getters(T: type): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   return mapProperties(T, p => typeof p.name !== 'string' ? p
     : prop(\`get\${capitalizeFirst(p.name)}\`, fn([], p.type), { readonly: true }));
 }
-export function listeners(T: type): type {
+export function listeners(T: type): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   return mapProperties(T, p => typeof p.name !== 'string' ? p
     : prop(\`on\${capitalizeFirst(p.name)}Changed\`, fn([p.type], type void)));
 }
@@ -318,10 +327,10 @@ export function head(T: type): type {
   const elements = elementTypes(T);
   return elements.length === 0 ? never : elements[0];
 }
-export function tail(T: type): type    { return tupleOf(elementTypes(T).slice(1)); }
-export function concat(A: type, B: type): type where Reflect.getReflection(return).kind === 'tuple' { return tupleOf([...elementTypes(A), ...elementTypes(B)]); }
-export function reverse(T: type): type where Reflect.getReflection(return).kind === 'tuple' { return tupleOf(elementTypes(T).toReversed()); }
-export function zip(A: type, B: type): type where Reflect.getReflection(return).kind === 'tuple' {
+export function tail(T: type): type where (Reflect.getReflection(return).kind === 'tuple' || return === never)    { return tupleOf(elementTypes(T).slice(1)); }
+export function concat(A: type, B: type): type where (Reflect.getReflection(return).kind === 'tuple' || return === never) { return tupleOf([...elementTypes(A), ...elementTypes(B)]); }
+export function reverse(T: type): type where (Reflect.getReflection(return).kind === 'tuple' || return === never) { return tupleOf(elementTypes(T).toReversed()); }
+export function zip(A: type, B: type): type where (Reflect.getReflection(return).kind === 'tuple' || return === never) {
   const a = elementTypes(A), b = elementTypes(B);
   return tupleOf(a.slice(0, Math.min(a.length, b.length)).map((t, i) => tupleOf([t, b[i]])));
 }
@@ -418,8 +427,10 @@ export function routeParams(path: string): type {
     .filter(segment => segment.startsWith(':'))
     .map(segment => prop(segment.slice(1), string)));
 }
-export function noInfer(T: type): type { return T; }
-export function withThisType(F: type, Self: type): type {
+// The strongest statement in the kit, and the only one that is an identity:
+// noInfer is a marker for the inference pass and returns its argument unchanged.
+export function noInfer(T: type): type where return === T { return T; }
+export function withThisType(F: type, Self: type): type where (Reflect.getReflection(return).kind === 'function' || return === never) {
   const node = reflect(F);
   return Reflect.makeType({ ...node, signatures: node.signatures.map(s => ({ ...s, thisType: Self })) });
 }
@@ -431,18 +442,18 @@ export function thisParameterType(F: type): type {
   // contravariance rule TypeScript does not have.
   return reflect(F).signatures[0].thisType ?? never;
 }
-export function omitThisParameter(F: type): type {
+export function omitThisParameter(F: type): type where (Reflect.getReflection(return).kind === 'function' || return === never) {
   const node = reflect(F);
   return Reflect.makeType({ ...node, signatures: node.signatures.map(({ thisType: _t, ...s }) => s) });
 }
-export function options(Data: type, Methods: type): type where Reflect.getReflection(return).kind === 'object' {
+export function options(Data: type, Methods: type): type where (Reflect.getReflection(return).kind === 'object' || return === never) {
   const self = Reflect.makeType({ kind: 'intersection', members: [Data, Methods] });
   return objectOf([
     prop('data', fn([], Data)),
     ...reflect(Methods).properties.map(p => prop(p.name, withThisType(p.type, self))),
   ]);
 }
-export function brand(T: type, tag: string | symbol): type {
+export function brand(T: type, tag: string | symbol): type where (Reflect.getReflection(return).kind === 'parameterized' || return === never) {
   return Reflect.makeType({ kind: 'parameterized', base: T, metadata: { brand: tag } });
 }
 // NOT EXPORTED. Written and kept so the choice is reversible in one word, but
