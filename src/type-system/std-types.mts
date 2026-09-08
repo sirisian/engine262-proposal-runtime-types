@@ -193,11 +193,18 @@ export function record(K: type, V: type): type {
     return objectOf(literalValues(K).map(name => prop(name, V)));
   return objectOf([], [{ key: K, value: V }]);
 }
-export function pickByValue(T: type, V: type): type {
+// Dropping members leaves a SUPERTYPE: an object type with more members
+// satisfies one with fewer, so the argument is assignable to the result.
+export function pickByValue(T: type, V: type): type where Reflect.isAssignable(T, return) {
   return mapProperties(T, p => Reflect.isAssignable(p.type, V) ? p : null);
 }
-export function removeKind(T: type): type { return omit(T, ['kind']); }
-export function merge(A: type, B: type): type {
+export function removeKind(T: type): type where Reflect.isAssignable(T, return) { return omit(T, ['kind']); }
+// B wins a shared key, so the result satisfies B and NOT, in general, A: with
+// overlapping keys the result carries B's member type, and a writable member is
+// invariant. The bound is stated on B alone for that reason - the stronger form
+// over both arms holds only for disjoint keys, which is a fact about a call and
+// not about the builder.
+export function merge(A: type, B: type): type where Reflect.isAssignable(return, B) {
   const a = reflect(A), b = reflect(B);
   if (a.kind !== 'object' || b.kind !== 'object') throw new TypeError('merge expects object types');
   return objectOf(
@@ -210,13 +217,16 @@ export function renameProperties(T: type, f): type {
 
 // ---- unions and discriminated unions — §4.3, §4.7 --------------
 
-export function exclude(T: type, U: type): type {
+// Filtering ARMS leaves a subtype of the union filtered: every arm of the
+// result was an arm of T, so the result is assignable to T. The reverse does not
+// hold, which is the point of the operation.
+export function exclude(T: type, U: type): type where Reflect.isAssignable(return, T) {
   return union(arms(T).filter(arm => !Reflect.isAssignable(arm, U)));
 }
-export function extract(T: type, U: type): type {
+export function extract(T: type, U: type): type where Reflect.isAssignable(return, T) {
   return union(arms(T).filter(arm => Reflect.isAssignable(arm, U)));
 }
-export function nonNullable(T: type): type {
+export function nonNullable(T: type): type where Reflect.isAssignable(return, T) {
   return exclude(T, type null | undefined);
 }
 export function mapUnion(T: type, f): type { return union(arms(T).map(f)); }

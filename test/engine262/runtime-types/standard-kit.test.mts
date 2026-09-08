@@ -441,4 +441,18 @@ test('the kit states its own bounds, and they hold', async () => {
   // Narrowings: the result is assignable to the argument.
   expect(await holds('Reflect.isAssignable(std.required(std.partial(T)), std.partial(T))', T)).toBe('ok');
   expect(await holds('Reflect.isAssignable(std.mutable(std.readonly(T)), std.readonly(T))', T)).toBe('ok');
+  // Filtering arms leaves a subtype of the union filtered.
+  const U = 'type U = uint8 | string | void; ';
+  expect(await holds('Reflect.isAssignable(std.exclude(U, type void), U)', U)).toBe('ok');
+  expect(await holds('Reflect.isAssignable(std.extract(U, type uint8 | string), U)', U)).toBe('ok');
+  expect(await holds('Reflect.isAssignable(std.nonNullable(U), U)', U)).toBe('ok');
+  // Dropping members leaves a supertype.
+  expect(await holds('Reflect.isAssignable(T, std.pickByValue(T, uint8))', T)).toBe('ok');
+  expect(await holds("Reflect.isAssignable(K, std.removeKind(K))", 'type K = { kind: "x", a: uint8 }; ')).toBe('ok');
+  // merge states its bound on B ALONE. With overlapping keys B wins the shared
+  // member, so the result carries B's type and a writable member is invariant -
+  // the result is not assignable to A. Measured on a favourable example the
+  // stronger bound looked true; the corpus found the overlap.
+  expect(await holds('Reflect.isAssignable(std.merge(A, B), B)',
+    'type A = { a: uint8 }; type B = { a: string, b: string }; ')).toBe('ok');
 });
