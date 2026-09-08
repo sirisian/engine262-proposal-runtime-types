@@ -1264,6 +1264,33 @@ export function canonicalTypeText(t: TypeRecord, seen: readonly TypeRecord[] = [
 }
 
 /** A readable rendering of a Type Record for error messages. */
+/**
+ * A type ARGUMENT as written, so `G.<4>` reads as `G.<4>`.
+ *
+ * A value argument arrives as the argument's ~literal~ Type Record rather than as
+ * a number - `G.<4>` binds its parameter to the literal type of 4 - and rendering
+ * that record generically gave `G.<a literal type of number>`, which a reader has
+ * to decode before they can read the complaint attached to it. The record itself
+ * is right: `(type G.<4>) === (type G.<4>)` and `!== (type G.<8>)`, and the layout
+ * is correct. Only the rendering was wrong.
+ */
+function displayTypeArgument(a: TypeRecord | number, seen: readonly TypeRecord[]): string {
+  if (typeof a === 'number') {
+    return String(a);
+  }
+  if ((a as { Kind?: string }).Kind === 'literal') {
+    const held = (a as { Value?: { value?: unknown, numberValue?(): number } }).Value;
+    if (held !== undefined) {
+      // eslint-disable-next-line @engine262/mathematical-value
+      const n = held.numberValue?.() ?? held.value;
+      if (typeof n === 'number' || typeof n === 'bigint') {
+        return String(n);
+      }
+    }
+  }
+  return displayType(a, seen);
+}
+
 export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): string {
   // An ABSENT record renders rather than crashing. A diagnostic is built on the
   // failure path, so it is the last place that should raise: a type that could
@@ -1284,7 +1311,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
   switch (t.Kind) {
     case 'any': return 'any';
     case 'void': return 'void';
-    case 'primitive': return t.Arguments.length > 0 ? `${t.Name}.<${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : displayType(a))).join(', ')}>` : t.Name;
+    case 'primitive': return t.Arguments.length > 0 ? `${t.Name}.<${t.Arguments.map((a) => displayTypeArgument(a, seen)).join(', ')}>` : t.Name;
     case 'literal': return `a literal type of ${displayType(t.Base)}`;
     case 'union': return t.Members.length === 0 ? 'never' : t.Members.map(displayType).join(' | ');
     case 'intersection': return t.Members.map(displayType).join(' & ');
@@ -1326,7 +1353,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
         }
       }
       const name = t.LibraryName ?? declared?.BindingIdentifier?.name ?? declared?.TypeName?.IdentifierReference?.name;
-      const args = t.Arguments.length > 0 ? `.<${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : displayType(a))).join(', ')}>` : '';
+      const args = t.Arguments.length > 0 ? `.<${t.Arguments.map((a) => displayTypeArgument(a, seen)).join(', ')}>` : '';
       return name ? `${name}${args}` : `nominal${args}`;
     }
     // These four rendered as their KIND NAME, because the default below returns

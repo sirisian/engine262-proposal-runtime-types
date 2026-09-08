@@ -41,3 +41,26 @@ test('typeof reads a type parameter', () => {
   expect(evaluated('function g<V: uint32>(): string { return typeof V; } g.<3>();')).toBe('number');
   expect(evaluated('function h<...I: [].<uint32>>(): string { return typeof I; } h.<1, 2>();')).toBe('object');
 });
+
+test('a VALUE argument displays as it was written', () => {
+  // `G.<4>` binds its parameter to the LITERAL TYPE of 4, not to the number, so
+  // rendering the argument generically gave `G.<a literal type of number>` - a
+  // reader had to decode the type before reading the complaint attached to it.
+  const G = 'class G<N: uint32> { b: [N].<uint8>; } ';
+  expect(evaluated(`${G} String(type G.<4>);`)).toBe('G.<4>');
+  // The record was never wrong, which is what made this a rendering fix rather
+  // than a canonicalization one.
+  expect(evaluated(`${G} String((type G.<4>) === (type G.<4>));`)).toBe('true');
+  expect(evaluated(`${G} String((type G.<4>) === (type G.<8>));`)).toBe('false');
+  expect(evaluated(`${G} String((type G.<4>).byteLength);`)).toBe('4');
+  // It reaches every message naming such a type.
+  expectThrown(`${G} let g: G.<4>;`, '"G.<4>" has no default value');
+
+  // A TYPE argument is unchanged, and so is a mixed list.
+  expect(evaluated('class B<T> { v: T; } String(type B.<uint8>);')).toBe('B.<uint.<8>>');
+  expect(evaluated('class M<A, B> { a: A; b: B; } String(type M.<uint8, string>);')).toBe('M.<uint.<8>, string>');
+  // ...as are the other places an argument list is rendered.
+  expect(evaluated('String(type [4].<uint8>);')).toBe('[4].<uint.<8>>');
+  expect(evaluated('String(type uint.<7>);')).toBe('uint.<7>');
+  expect(evaluated('String(type float32x4);')).toBe('vector.<float32, 4>');
+});
