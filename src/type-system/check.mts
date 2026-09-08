@@ -15108,6 +15108,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        // A CASE LABEL that cannot match the discriminant is the `switch`
+        // spelling of a test that cannot succeed, which the design refuses
+        // elsewhere - `a is string` for a `uint8`, a disjoint intersection, a
+        // narrowing that reaches nothing, and now a strict `===`. A `case` is
+        // compared to the discriminant by strict equality, so the same
+        // judgment applies: `switch (a) { case "s": }` for a `uint8` `a`.
+        //
+        // The label and the discriminant are typed here because neither is
+        // typed by walking - the same statement-position gap the `if` condition
+        // had. A LITERAL label is excluded for the reason the `===` rule
+        // excludes one: `case 5` for a `uint32` compares against a literal whose
+        // Base is `number`, and the literal adopts.
+        const subject = staticType(n.Expression);
+        if (subject && subject.Kind !== 'literal') {
+          const clauses = [
+            ...((n.CaseBlock as unknown as { CaseClauses_a?: readonly ParseNode[] | null }).CaseClauses_a ?? []),
+            ...((n.CaseBlock as unknown as { CaseClauses_b?: readonly ParseNode[] | null }).CaseClauses_b ?? []),
+          ];
+          for (const clause of clauses) {
+            const label = (clause as unknown as { Expression?: ParseNode | null }).Expression;
+            if (!label) {
+              continue;
+            }
+            const labelType = staticType(label);
+            if (labelType && labelType.Kind !== 'literal' && labelType.Kind !== 'void'
+                && AreDisjoint(subject as TypeRecord, labelType as TypeRecord)) {
+              const completion = Throw.StaticTypeError('$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(subject as TypeRecord)), Value(displayType(labelType as TypeRecord)), Value('false')) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
         // Walk the discriminant and case bodies as usual.
         walk(n.Expression);
         walk(n.CaseBlock);
@@ -15775,6 +15806,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'WhileStatement': {
         // A `while` test guards its body on every iteration.
         const w = n as unknown as { Expression: ParseNode, Statement: ParseNode };
+        // Typed for the same reason an `if` condition is: a condition is an
+        // expression whose judgments run from `staticType`, and walking does not
+        // call it for one.
+        staticType(w.Expression);
         walkGuarded(w.Expression, w.Statement, null);
         return;
       }

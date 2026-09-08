@@ -275,3 +275,36 @@ test('what the disjointness rule leaves alone', () => {
   expect(ok('let a: uint8 | string = 1; if (a is uint8) { let u: uint8 = a; }')).toBe(true);
   expect(ok('let a: uint8 = 1; if (a+a+a+a+a+a+a+a+a+a+a+a === 12) { }')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// A `case` LABEL THAT CANNOT MATCH IS THE SWITCH SPELLING OF THE SAME MISTAKE.
+//
+// A `case` is compared to the discriminant by strict equality, so the rule that
+// refuses `a === b` for disjoint `a` and `b` applies here too - completing the
+// set the design already refuses elsewhere: `a is string` for a `uint8`, a
+// disjoint intersection, a narrowing that reaches nothing, and a strict `===`.
+//
+// The label and the discriminant are typed at the `switch` arm because neither
+// is typed by walking - the same statement-position gap the `if` condition had,
+// which is why this rule could not be written until that was closed. A LITERAL
+// label is excluded for the reason the `===` rule excludes one: `case 5` for a
+// `uint32` compares against a literal whose Base is `number`, and it adopts.
+// ---------------------------------------------------------------------------
+
+test('a case label disjoint from the discriminant is refused', () => {
+  expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; switch (a) { case b: break; }');
+});
+
+test('what the case rule leaves alone', () => {
+  // A literal label adopts the discriminant's type.
+  expect(ok('let a: uint32 = 5; switch (a) { case 5: break; }')).toBe(true);
+  // A label of the same type, and an enum switch, are untouched.
+  expect(ok('let a: uint8 = 1; let b: uint8 = 2; switch (a) { case b: break; }')).toBe(true);
+  expect(ok('enum E { A, B } let e: E = E.A; switch (e) { case E.A: break; case E.B: break; }')).toBe(true);
+  expect(ok('let a: uint8 = 1; switch (a) { default: break; }')).toBe(true);
+});
+
+test('a while condition is typed as an if condition is', () => {
+  expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; while (a === b) { }');
+  expect(ok('let a: uint8 = 1; let b: uint8 = 2; while (a === b) { break; }')).toBe(true);
+});
