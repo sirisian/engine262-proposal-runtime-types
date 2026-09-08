@@ -5930,6 +5930,71 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Class EXPRESSIONS seen by the walk, which no name registers - task A. */
   const classExpressionNodes = new Set<ParseNode>();
   const classTypesInProgress = new Set<ParseNode>();
+  /**
+   * The type of the CLASS OBJECT - what a class name means in VALUE position,
+   * as opposed to `classTypeOf`, which answers the INSTANCE type a name means in
+   * TYPE position. Its members are the STATIC ones, so `C.v = "s"` for a
+   * `static v: uint8` and `C.m("s")` for a `static m(a: uint8)` are judged by
+   * the rules that already judge their instance counterparts.
+   *
+   * Nothing formed this type, so a class name in value position was ~any~ and
+   * every such rule was unreachable - the same shape `this` had before a class
+   * body pushed a receiver frame, and found the same way: by probing a "static
+   * block store" and discovering the block was irrelevant.
+   *
+   * A plain OBJECT type rather than a nominal one: the class object is a value
+   * whose members are known, not a declared type anyone can annotate with.
+   */
+  const classObjectTypeMemo = new Map<ParseNode, Known>();
+  const classObjectTypeOf = (name: string): Known => {
+    const node = classNodes.get(name);
+    if (!node || shadowedByProgram(name)) {
+      return null;
+    }
+    const memo = classObjectTypeMemo.get(node);
+    if (memo !== undefined) {
+      return memo;
+    }
+    classObjectTypeMemo.set(node, null);
+    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean }[] = [];
+    const body = (node as unknown as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? [];
+    for (const el of body) {
+      const m = el as unknown as {
+        type?: string, static?: boolean, readonly?: boolean,
+        ClassElementName?: { name?: string, value?: string, type?: string } | null,
+        TypeAnnotation?: ParseNode.TypeAnnotation | null,
+        UniqueFormalParameters?: readonly ParseNode[] | null,
+      };
+      const key = m.ClassElementName?.name ?? m.ClassElementName?.value;
+      if (m.static !== true || typeof key !== 'string' || m.ClassElementName?.type === 'PrivateIdentifier') {
+        continue;
+      }
+      // FIELDS ONLY. A static METHOD is not modelled here, and the attempt to
+      // is what this scope reduction records: a hand-rolled signature missed two
+      // things the instance path handles properly - OVERLOADS, where two `static
+      // m` arms must merge into one member rather than the first winning, and a
+      // `ref` RETURN, where `C.first(a) = 5` assigns through a borrow whose type
+      // a resolved annotation does not describe. Both were caught by tests
+      // asserting exactly those behaviours.
+      //
+      // Reusing the instance side's member machinery, filtered for `static`, is
+      // the way to include methods; reimplementing a simplified copy of it is
+      // not, which is the same lesson the collection-seed check taught. Static
+      // method calls stay the run time's until then.
+      if (m.type === 'FieldDefinition') {
+        const t = m.TypeAnnotation ? resolveType(m.TypeAnnotation.Type) : null;
+        if (t) {
+          Properties.push({ key, type: t as TypeRecord, optional: false, readonly: m.readonly === true });
+        }
+      }
+    }
+    const built = Properties.length > 0
+      ? ({ Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known)
+      : null;
+    classObjectTypeMemo.set(node, built);
+    return built;
+  };
+
   const classTypeOf = (name: string): Known => {
     const node = classNodes.get(name);
     // A LIBRARY nominal is deliberately NOT resolved here, though `new
@@ -7936,7 +8001,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             break;
           }
         }
-        return lookup(referenced);
+        // A CLASS NAME IN VALUE POSITION is the class object, whose members are
+        // the static ones. Only where the program has not bound the name to
+        // something else - a local binding wins, as it does for every other
+        // name.
+        const bound = lookup(referenced);
+        return bound ?? classObjectTypeOf(referenced);
       }
       // `super.x` NAMES A MEMBER OF THE BASE CLASS. It is its own node - not a
       // member access with a `super` receiver - so no arm reached it, and

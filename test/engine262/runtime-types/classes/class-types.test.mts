@@ -25,6 +25,13 @@ function expectThrown(source: string) {
   expect(run(source)).toMatchObject({ Type: 'throw' });
 }
 
+/** A static rejection: the program does not run at all. */
+function expectStatic(source: string) {
+  const completion = run(source) as { Type: string, Value?: { stringValue?(): string } };
+  expect(completion.Type, `expected a static rejection for: ${source}`).toBe('throw');
+  expect(String(completion.Value?.stringValue?.() ?? ''), `expected a StaticTypeError for: ${source}`).toContain('');
+}
+
 test('a class name denotes its class type', () => {
   // `typeof` is *"function"*, and that is the class EXCEPTION the specification
   // states: "a class's type object is its constructor, and a constructor is a
@@ -121,4 +128,47 @@ test('an object type satisfies an interface by having its members', () => {
   // The reverse direction is the clause's second step: an interface source
   // against an ~object~ target.
   expect(evaluated(`${iface} String(Reflect.isAssignable(type I, type { a: uint8 }));`)).toBe('true');
+});
+
+// ---------------------------------------------------------------------------
+// A CLASS NAME IN VALUE POSITION IS THE CLASS OBJECT, AND ITS FIELDS ARE TYPED.
+//
+// `classTypeOf` answers the INSTANCE type - what a class name means in TYPE
+// position, `let c: C`. In VALUE position the same name is the class OBJECT,
+// whose members are the static ones, and nothing formed that type: the
+// identifier was ~any~ and every rule that would apply was unreachable. The same
+// shape `this` had before a class body pushed a receiver frame.
+//
+// Found by probing a "static block store" and discovering the block was
+// irrelevant - the identical store outside one was equally unchecked.
+//
+// FIELDS ONLY, deliberately. A first version modelled static METHODS too, and
+// the suite caught two things a hand-rolled signature misses that the instance
+// path handles: OVERLOADS, where two `static m` arms must merge into one member
+// rather than the first winning, and a `ref` RETURN, whose borrow a resolved
+// annotation does not describe. Both are asserted below as regression guards.
+// Reusing the instance side's member machinery filtered for `static` is the way
+// to add methods; reimplementing a simplified copy of it is not.
+// ---------------------------------------------------------------------------
+
+test('a static field is typed through the class name', () => {
+  expectStatic('class C { static v: uint8 = 0; } let s: string = C.v;');
+  expectStatic('class C { static v: uint8 = 0; } C.v = "s";');
+  // The store inside a `static { }` block is the same store, and was the row
+  // this began from.
+  expectStatic('class C { static v: uint8 = 0; static { C.v = "s"; } }');
+  // A use that fits is unaffected.
+  expect(evaluated('class C { static v: uint8 = 3; } let u: uint8 = C.v; String(u);')).toBe('3');
+});
+
+test('what the class-object type does NOT model', () => {
+  // STATIC OVERLOADS must keep dispatching - a simplified signature let the
+  // first arm win and refused the second.
+  expect(evaluated('class A { static m(a: uint8) { return "u8"; } static m(a: string) { return "str"; } } String(A.m((1 := uint8))) + "," + String(A.m("x"));')).toBe('u8,str');
+  // A static `ref` RETURN stays assignable through.
+  expect(evaluated('class C { static first(a) { return ref a[0]; } } let a = [1]; C.first(a) = 5; String(a[0]);')).toBe('5');
+  // The instance side is untouched.
+  expect(evaluated('class C { v: uint8 = 0; } const c = new C(); c.v = 1; String(c.v);')).toBe('1');
+  // A class with no static fields forms no type and is not disturbed.
+  expect(evaluated('class C { v: uint8 = 0; } String(typeof C);')).toBe('function');
 });
