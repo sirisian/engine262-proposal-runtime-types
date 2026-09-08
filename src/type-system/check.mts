@@ -9463,6 +9463,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        // A `+` WITH A STRING OPERAND IS A CONCATENATION, and its type is
+        // `string`. #sec-conversions gives a value of a numeric type a
+        // conversion to `string` - ToString - because "ToString of a number is
+        // total and lossless, while ToNumber of a string is partial and lossy,
+        // so the direction that cannot fail is admitted and the direction that
+        // can is written as a parse". So `s + n` is a `string` and always was;
+        // what was missing is that the checker SAID so. `literalOperand`
+        // recognises numeric literals only, so a string operand left the
+        // expression ~any~ and `let r: uint8 = n + s` was the run time's, as
+        // was `a = a + "s"` at a `uint8`.
+        //
+        // `+` only. For the other operators a string operand would have to
+        // convert TO a numeric type, which is the parse the same clause refuses
+        // to admit implicitly - a separate judgment, and not one this arm makes
+        // yet.
+        const isStringType = (t: Known): boolean => !!t && t.Kind === 'primitive' && (t as { Name?: string }).Name === 'string';
+        const stringLiteralOperand = (nd: ParseNode | undefined): boolean => (nd as { type?: string } | undefined)?.type === 'StringLiteral';
+        if (node.type === 'AdditiveExpression' && (node as unknown as { operator?: string }).operator === '+'
+            && (isStringType(leftT) || isStringType(rightT)
+              || stringLiteralOperand(leftNode) || stringLiteralOperand(rightNode))) {
+          return makePrimitive('string') as Known;
+        }
         const asValueType = (t: Known): TypeRecord | null => (t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null);
         const lv = asValueType(leftT);
         const rv = asValueType(rightT);

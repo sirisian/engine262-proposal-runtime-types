@@ -188,3 +188,38 @@ test('what the overload check leaves alone', () => {
   // Deep nesting terminates - the regression the placement guards against.
   expect(ok('let a: uint8 = 1; a+a+a+a+a+a+a+a+a+a+a+a+a+a+a+a;')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// A `+` WITH A STRING OPERAND IS A CONCATENATION, AND ITS TYPE IS `string`.
+//
+// `#sec-conversions` gives a value of a numeric type a conversion to `string` -
+// ToString - because "ToString of a number is total and lossless, while
+// ToNumber of a string is partial and lossy, so the direction that cannot fail
+// is admitted and the direction that can is written as a parse". So `s + n` is a
+// `string` and always was at run time; what was missing is that the CHECKER said
+// so. `literalOperand` recognises numeric literals only, so a string operand
+// left the expression ~any~ and nothing downstream of it was judged.
+//
+// This was recorded as an open design question - "what is `string + uint8`?" -
+// with three directions for a committee. Two of the three were positions the
+// clause above explicitly argues against; the answer had been specified all
+// along.
+//
+// `+` only. For the other operators a string operand would have to convert TO a
+// numeric type, which is the parse the same clause refuses to admit implicitly.
+// ---------------------------------------------------------------------------
+
+test('a concatenation types as a string, in both operand orders', () => {
+  expect(evaluated('let s: string = "a"; let n: uint8 = 1; let r: string = s + n; r;')).toBe('a1');
+  expect(evaluated('let s: string = "a"; let n: uint8 = 1; let r: string = n + s; r;')).toBe('1a');
+  // ...so a concatenation reaching a NUMERIC binding is refused at the check.
+  expectStaticTypeError('let s: string = "a"; let n: uint8 = 1; let r: uint8 = n + s;');
+  expectStaticTypeError('let a: uint8 = 0; a = a + "s";');
+});
+
+test('what the concatenation type does not disturb', () => {
+  expect(evaluated('let s: string = "a"; let r: string = s + "b"; r;')).toBe('ab');
+  expect(evaluated('let a: uint8 = 1; let b: uint8 = 2; let c: uint8 = a + b; String(c);')).toBe('3');
+  // The out-of-range literal rule still applies to a numeric `+`.
+  expectStaticTypeError('let a: uint8 = 0; a = a + 300;');
+});
