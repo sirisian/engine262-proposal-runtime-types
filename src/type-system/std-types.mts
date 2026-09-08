@@ -73,6 +73,10 @@ export function reflect(T: type) {
 export function literal(value: string | number | boolean | bigint): type where (Reflect.getReflection(return).kind === 'literal' || return === never) {
   return Reflect.makeType({ kind: 'literal', value, base: Reflect.typeOf(value) });
 }
+// NO CONTRACT, deliberately. union and intersection do not produce the kind
+// their names suggest: canonicalization collapses a one-member union to that
+// member and merges an all-object intersection into an object, so neither can
+// state a kind, and neither is related to its argument LIST by assignability.
 export function union(armList: [].<type>): type {
   return Reflect.makeType({ kind: 'union', members: armList });
 }
@@ -298,6 +302,10 @@ export function parameters(F: type): type where (Reflect.getReflection(return).k
 
 const capitalizeFirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
+// NO CONTRACT for the string builders - mapLiterals, uppercase, lowercase,
+// capitalized, uncapitalized. They map a union of literals to a union of
+// literals, and a union of ONE canonicalizes to that literal, so neither ~union~
+// nor ~literal~ is true of every result.
 export function mapLiterals(T: type, f): type {
   return union(literalValues(T).map(v => literal(f(String(v)))));
 }
@@ -318,6 +326,12 @@ export function listeners(T: type): type where (Reflect.getReflection(return).ki
 
 // ---- tuples and arrays — §4.5 ----------------------------------
 
+// NO CONTRACT for the extractors below - head, firstParameter, returnType,
+// indexed, awaited, thisParameterType, keys. Each returns a type taken OUT of
+// its argument, so the result is whatever was extracted: no kind is common to
+// them, and no assignability relation holds between a component and the whole
+// it came from. A vacuous contract would cost a check at every evaluation and
+// teach a reader that the kit's bounds mean something when this one does not.
 export function head(T: type): type {
   // \`elementTypes(T)[0] ?? never\`, as §4.5 writes it, does not work. The
   // \`[].<type>\` return annotation makes the result a CHECKED array, so the
@@ -337,6 +351,13 @@ export function zip(A: type, B: type): type where (Reflect.getReflection(return)
 
 // ---- recursion and composition — §4.6, §4.9 --------------------
 
+// NO CONTRACT for the deep walkers - deepPartial, deepMap, traverse, paths.
+// traverse's default arm returns the LEAF, so deepPartial of a primitive is that
+// primitive rather than an object, and no kind is common to the results. Nor is
+// the subtyping bound their shallow siblings carry available: rewriting a nested
+// member's type is refused by writable-member invariance
+// (#sec-isobjectsubtype): an object of nested required members is not assignable
+// to the same shape made optional in depth - true of readonly members only.
 export function deepPartial(T: type): type {
   const node = reflect(T);
   switch (node.kind) {
