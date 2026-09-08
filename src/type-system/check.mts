@@ -9727,21 +9727,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return patternType ? IsSubtype(atom, patternType, []) : false;
   };
 
+  /**
+   * The record handed to a SELF-REFERENCE while a class is still being built.
+   *
+   * The in-progress guard below answers `null` to stop a heritage cycle hanging
+   * the checker, and that is right for a cycle - but a class's own members are
+   * resolved while it is in progress, so `class B { m(): B { ... } }` hit the
+   * guard too and its return annotation resolved to NOTHING. `let s: string =
+   * b.m()` was accepted while the same method annotated `A2` was refused.
+   *
+   * The INTERFACE path in this file already solves this: it memoizes an
+   * in-progress RECORD before walking members and fills its [[Structure]]
+   * afterwards, so a self-reference gets the record everyone else will get. The
+   * same device here, filled by copying the built record's own fields onto the
+   * shell, so the object a self-reference captured IS the finished type.
+   */
+  const classShells = new Map<ParseNode, Record<string, unknown>>();
+
   const instanceTypeOf = (n: ParseNode): Known => {
     const memo = classTypeMemo.get(n);
     if (memo !== undefined) {
       return memo;
     }
     if (classTypesInProgress.has(n)) {
-      return null;
+      return (classShells.get(n) ?? null) as Known;
     }
     classTypesInProgress.add(n);
+    const shell: Record<string, unknown> = { Kind: 'nominal', Declaration: n, Arguments: [] };
+    classShells.set(n, shell);
     try {
       const built = classInstanceType(n);
+      if (built && (built as { Kind?: string }).Kind === 'nominal') {
+        // The shell IS the type: whatever a self-reference captured must end up
+        // with the built record's fields, not merely equal ones.
+        Object.assign(shell, built as unknown as Record<string, unknown>);
+        classTypeMemo.set(n, shell as unknown as Known);
+        return shell as unknown as Known;
+      }
       classTypeMemo.set(n, built);
       return built;
     } finally {
       classTypesInProgress.delete(n);
+      classShells.delete(n);
     }
   };
 

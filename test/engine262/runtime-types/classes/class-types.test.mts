@@ -233,3 +233,37 @@ test('the rules downstream of the walk still see a mutable Properties', () => {
   expect(evaluated(`${ACC} d.v = 3; String(d.v);`)).toBe('3');
   expectStatic(`${ACC} d.v = "s";`);
 });
+
+// ---------------------------------------------------------------------------
+// A CLASS'S OWN NAME RESOLVES INSIDE ITS OWN BODY.
+//
+// `instanceTypeOf` answers null while a class is IN PROGRESS, which is right for
+// a heritage cycle and wrong for a self-reference - and a class's members are
+// resolved while it is in progress, so `class B { m(): B { ... } }` hit the
+// guard and its return annotation resolved to NOTHING. `let s: string = b.m()`
+// was accepted, while the same method annotated with ANOTHER class was refused.
+//
+// It is not about `this`: `m(): B { return new B(); }` failed identically, which
+// is what ruled out an earlier theory that a `SelfThisMarker` return was going
+// unresolved.
+//
+// The fix is the device the INTERFACE path already uses - memoize an in-progress
+// RECORD before walking members and fill it afterwards - so the object a
+// self-reference captures IS the finished type.
+// ---------------------------------------------------------------------------
+
+test('a method annotated with its own class is checked', () => {
+  expectStatic('class B { m(): B { return this; } } const b = new B(); let s: string = b.m();');
+  expectStatic('class B { m(): B { return new B(); } } const b = new B(); let s: string = b.m();');
+  // A correct use is unaffected, and reaches the class's members.
+  expect(evaluated('class B { v: uint8 = 1; m(): B { return this; } } const b = new B(); let x: B = b.m(); String(x.v);')).toBe('1');
+});
+
+test('the guard still does the job it was written for', () => {
+  // Another class was always checked; this is the control that showed the gap
+  // was about SELF-reference specifically.
+  expectStatic('class A2 {} class B { m(): A2 { return new A2(); } } const b = new B(); let s: string = b.m();');
+  // A heritage cycle still TERMINATES - it is a ReferenceError at run time, as
+  // it is in ECMAScript, rather than hanging the checker.
+  expectThrown('class X extends Y {} class Y extends X {}');
+});
