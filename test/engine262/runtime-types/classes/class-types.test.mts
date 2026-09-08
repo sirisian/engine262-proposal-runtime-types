@@ -172,3 +172,64 @@ test('what the class-object type does NOT model', () => {
   // A class with no static fields forms no type and is not disturbed.
   expect(evaluated('class C { v: uint8 = 0; } String(typeof C);')).toBe('function');
 });
+
+// ---------------------------------------------------------------------------
+// THE CLASS OBJECT'S MEMBERS COME FROM THE SAME WALK THE INSTANCE SIDE USES.
+//
+// `classObjectTypeOf` had its own field loop and could not model a static
+// METHOD. A hand-rolled builder lost two things the shared walk handles:
+// OVERLOADS, because arms accumulate into a `methods` map keyed by name and a
+// builder pushing a Property per method lets the first arm win; and `ref`
+// RETURNS, whose borrow a resolved return annotation does not describe.
+//
+// The walk is now `classMemberWalk(node, want)`, and the whole instance/static
+// distinction is two filters inside it. The extraction returns the accumulators
+// MUTABLE and unfolded, because `classInstanceType`'s tail merges base and
+// interface members into `Properties` and re-reads `setterTypes` for the
+// accessor-variance rules - a finished list would have broken both silently.
+// ---------------------------------------------------------------------------
+
+test('a static method is checked through the class name', () => {
+  expectStatic('class C { static m(a: uint8) {} } C.m("s");');
+  expect(evaluated('class C { static m(a: uint8) { return a; } } String(C.m(1));')).toBe('1');
+});
+
+test('the two things a hand-rolled static builder lost', () => {
+  // OVERLOADS keep dispatching.
+  expect(evaluated('class A { static m(a: uint8) { return "u8"; } static m(a: string) { return "str"; } } String(A.m((1 := uint8))) + "," + String(A.m("x"));')).toBe('u8,str');
+  // A `ref` RETURN stays assignable through.
+  expect(evaluated('class C { static first(a) { return ref a[0]; } } let a = [1]; C.first(a) = 5; String(a[0]);')).toBe('5');
+});
+
+test('the instance side is unchanged by the extraction', () => {
+  // The refactor moved the code every class type depends on, so these assert
+  // the extraction was faithful rather than that any feature works.
+  expectStatic('class C { v: uint8 = 0; } const c = new C(); c.v = "s";');
+  expectStatic('class C { m(a: uint8) {} } const c = new C(); c.m("s");');
+  expect(evaluated('class A { m(a: uint8) { return "u8"; } m(a: string) { return "str"; } } const a = new A(); String(a.m((1 := uint8))) + "," + String(a.m("x"));')).toBe('u8,str');
+  expect(evaluated('class B { v: uint8 = 1; } class D extends B { } const d = new D(); String(d.v);')).toBe('1');
+});
+
+test('what the static side does not claim', () => {
+  // Private and computed statics contribute nothing, as they do for instances.
+  expect(evaluated('class C { static #p: uint8 = 1; static v: uint8 = 2; } String(typeof C);')).toBe('function');
+  // INHERITED statics are out of scope: the instance path's base merge is
+  // written against instance shapes and a nominal Base, so pointing it at
+  // statics is a separate change. This pins the current behaviour so that
+  // change is deliberate.
+  expect(evaluated('class B { static b: uint8 = 1; } class D extends B { } String(D.b);')).toBe('1');
+});
+
+test('the rules downstream of the walk still see a mutable Properties', () => {
+  // These are what the extraction boundary protects. `classInstanceType`'s tail
+  // merges `implements` members into `Properties` and re-reads `setterTypes`
+  // for the accessor-variance checks, both AFTER the folds - so returning a
+  // finished list would have broken them, and silently, by giving the tail
+  // nothing to merge into. An earlier draft of the plan cut there.
+  const I = 'interface I { v: uint8 } class C implements I { v: uint8 = 1; } const c = new C(); ';
+  expect(evaluated(`${I} let u: uint8 = c.v; String(u);`)).toBe('1');
+  expectStatic(`${I} let s: string = c.v;`);
+  const ACC = 'class D { #x: uint8 = 0; get v(): uint8 { return this.#x; } set v(n: uint8) { this.#x = n; } } const d = new D(); ';
+  expect(evaluated(`${ACC} d.v = 3; String(d.v);`)).toBe('3');
+  expectStatic(`${ACC} d.v = "s";`);
+});

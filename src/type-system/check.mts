@@ -6021,38 +6021,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return memo;
     }
     classObjectTypeMemo.set(node, null);
-    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean }[] = [];
-    const body = (node as unknown as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? [];
-    for (const el of body) {
-      const m = el as unknown as {
-        type?: string, static?: boolean, readonly?: boolean,
-        ClassElementName?: { name?: string, value?: string, type?: string } | null,
-        TypeAnnotation?: ParseNode.TypeAnnotation | null,
-        UniqueFormalParameters?: readonly ParseNode[] | null,
-      };
-      const key = m.ClassElementName?.name ?? m.ClassElementName?.value;
-      if (m.static !== true || typeof key !== 'string' || m.ClassElementName?.type === 'PrivateIdentifier') {
-        continue;
-      }
-      // FIELDS ONLY. A static METHOD is not modelled here, and the attempt to
-      // is what this scope reduction records: a hand-rolled signature missed two
-      // things the instance path handles properly - OVERLOADS, where two `static
-      // m` arms must merge into one member rather than the first winning, and a
-      // `ref` RETURN, where `C.first(a) = 5` assigns through a borrow whose type
-      // a resolved annotation does not describe. Both were caught by tests
-      // asserting exactly those behaviours.
-      //
-      // Reusing the instance side's member machinery, filtered for `static`, is
-      // the way to include methods; reimplementing a simplified copy of it is
-      // not, which is the same lesson the collection-seed check taught. Static
-      // method calls stay the run time's until then.
-      if (m.type === 'FieldDefinition') {
-        const t = m.TypeAnnotation ? resolveType(m.TypeAnnotation.Type) : null;
-        if (t) {
-          Properties.push({ key, type: t as TypeRecord, optional: false, readonly: m.readonly === true });
-        }
-      }
-    }
+    // THE SHARED WALK, filtered for statics. Its own field loop used to live
+    // here and could not model a static METHOD: overload arms accumulate into a
+    // `methods` map keyed by name, and a builder pushing a Property per method
+    // let the first arm win, while a `ref` return's borrow is not what a
+    // resolved return annotation describes. Both were caught by tests asserting
+    // exactly those behaviours, and both come free from reusing the walk.
+    const acc = classMemberWalk(node, 'static');
+    classMemberFolds(acc);
+    const { Properties } = acc;
     const built = Properties.length > 0
       ? ({ Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known)
       : null;
@@ -9794,11 +9771,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const selfThisType = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
 
-  const classInstanceType = (n: ParseNode): Known => {
+  /**
+   * The class MEMBER WALK, shared by the instance and static sides.
+   *
+   * The only difference between them is which members it keeps: two filters, one
+   * for methods and one for fields. A hand-rolled static builder beside this one
+   * lost OVERLOADS - the arms accumulate into `methods` keyed by name, and a
+   * builder pushing a Property per method lets the first arm win - and `ref`
+   * RETURNS, whose borrow a resolved annotation does not describe.
+   *
+   * Returns the accumulators MUTABLE and unfolded. The instance caller goes on to
+   * merge base and interface members into `Properties` and to re-read
+   * `setterTypes` for the accessor-variance rules, so handing back a finished list
+   * would break both - silently, by giving the tail nothing to merge into.
+   */
+  const classMemberWalk = (n: ParseNode, want: 'instance' | 'static') => {
     const cls = n as unknown as {
       BindingIdentifier?: { name: string } | null,
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
+    const wantStatic = want === 'static';
     const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
     // Methods, accumulated per name because a method may be OVERLOADED exactly
     // as a function may. A getter contributes its return type as the
@@ -9848,7 +9840,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           PropertySetParameterList?: readonly ParseNode[] | null,
         };
         const key = md.ClassElementName?.name ?? md.ClassElementName?.value;
-        if (md.static || typeof key !== 'string' || md.ClassElementName?.type === 'PrivateIdentifier') {
+        // Coerced: `static` is OPTIONAL on the node, so an absent one is
+        // `undefined` and `undefined !== false` would skip every instance
+        // method.
+        if (!!md.static !== wantStatic || typeof key !== 'string' || md.ClassElementName?.type === 'PrivateIdentifier') {
           continue;
         }
         if (key === 'constructor') {
@@ -10000,7 +9995,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         static?: boolean,
         ClassElementName?: { type?: string, name?: string, value?: string } | null,
       };
-      if (f.static) {
+      if (!!f.static !== wantStatic) {
         continue;
       }
       const key = f.ClassElementName?.name ?? f.ClassElementName?.value;
@@ -10073,6 +10068,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    // `construct` is set by the constructor branch and read by the tail's
+    // nominal record, so it travels with the rest.
+    return { Properties, methods, abstractMembers, unusable, accessorKeys, getterKeys, setterTypes, construct };
+  };
+
+  /** Fold the walk's setters and methods into its Properties. Both callers need it. */
+  const classMemberFolds = (acc: ReturnType<typeof classMemberWalk>) => {
+    const {
+      Properties, methods, unusable, setterTypes,
+    } = acc;
     for (const [key, writeType] of setterTypes) {
       const existing = Properties.find((p) => p.key === key);
       if (existing) {
@@ -10090,6 +10095,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const selfSignatures = Signatures.map((sig) => ({ ...sig, ThisType: selfThisType }));
       Properties.push({ key, type: { Kind: 'function', Signatures: selfSignatures } as unknown as TypeRecord, optional: false });
     }
+  };
+
+  const classInstanceType = (n: ParseNode): Known => {
+    const acc = classMemberWalk(n, 'instance');
+    classMemberFolds(acc);
+    const {
+      Properties, abstractMembers, accessorKeys, getterKeys, setterTypes, construct,
+    } = acc;
+    const cls = n as unknown as {
+      BindingIdentifier?: { name: string } | null,
+      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
+    };
     // #sec-typed-classes: a subclass's instances have their superclass's
     // members too, so the inherited shape is merged UNDER the class's own
     // declarations - an override wins, which is what the prototype chain does
