@@ -39,6 +39,7 @@ export * from './evaluator.mts';
 // because an unrelated module declared the same shape.
 export { TypeOrigins, MemberOrigins, type TypeOrigin } from './type-system/provenance.mts';
 export { InspectPattern } from './type-system/pattern-fragment.mts';
+export { DecidesInclusion } from './type-system/pattern-inclusion.mts';
 
 
 export {

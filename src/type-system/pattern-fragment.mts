@@ -25,7 +25,7 @@ import { RegExpParser } from '../parser/RegExpParser.mts';
 /** What put a pattern outside the fragment, for a caller that wants to say. */
 export type OutsideFragment = 'a backreference' | 'lookaround' | 'an unparseable pattern';
 
-interface FragmentReport {
+export interface FragmentReport {
   /** *undefined* when the pattern is within the regular fragment. */
   readonly outside: OutsideFragment | undefined;
   /**
@@ -34,6 +34,8 @@ interface FragmentReport {
    * so it is the same number on every host.
    */
   readonly size: number;
+  /** The parsed pattern, so a caller deciding inclusion need not parse twice. */
+  readonly ast: unknown;
 }
 
 function parsePattern(source: string, flags: string): object | undefined {
@@ -62,7 +64,7 @@ const BACKREFERENCE = new Set(['DecimalEscape', 'CaptureGroupName']);
 export function InspectPattern(source: string, flags: string): FragmentReport {
   const root = parsePattern(source, flags);
   if (root === undefined) {
-    return { outside: 'an unparseable pattern', size: 0 };
+    return { outside: 'an unparseable pattern', size: 0, ast: undefined };
   }
   let outside: OutsideFragment | undefined;
   let size = 0;
@@ -100,5 +102,5 @@ export function InspectPattern(source: string, flags: string): FragmentReport {
     }
   };
   walk(root);
-  return { outside, size };
+  return { outside, size, ast: root };
 }
