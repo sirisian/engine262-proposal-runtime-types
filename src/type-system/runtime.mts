@@ -24,6 +24,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
@@ -4591,6 +4592,15 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         let initial;
         const memberInitializer = (member as { Initializer?: ParseNode | null }).Initializer;
         if (memberInitializer) {
+        // #sec-object-types: "The |Initializer| must be compile-time evaluable
+          // (#sec-compile-time-evaluability) and it is a type error otherwise."
+          // The syntactic half of that, checked before evaluating: a form outside
+          // #annex-evaluable-fragment is refused by name rather than by whatever
+          // its evaluation happens to do.
+          const outsideMember = FirstNonEvaluableForm(memberInitializer as never);
+          if (outsideMember !== undefined) {
+            return Throw.TypeError('a member default must be compile-time evaluable, and $1 is not', Value(outsideMember));
+          }
           // Refused rather than dropped, and for the same reason the interface
           // walk refuses it: #sec-object-types requires the |Initializer| to be
           // compile-time evaluable "and it is a type error otherwise", and the

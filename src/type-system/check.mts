@@ -11,6 +11,7 @@ import { type SignatureRecord, type PropertyTypeRecord, type MetadataRecord,
   typeParameterRecordsOf, type TypeParameterRecord,
 } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
+import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
@@ -5826,6 +5827,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const tmInit = (tm as { Initializer?: ParseNode | null }).Initializer;
           let tmInitial;
           if (tmInit) {
+            // The same evaluability requirement, on the interface spelling.
+            const outsideTm = FirstNonEvaluableForm(tmInit as ParseNode);
+            if (outsideTm !== undefined) {
+              errors.push((Throw.StaticTypeError(
+                'a member default must be compile-time evaluable, and $1 is not',
+                Value(outsideTm),
+              ) as ThrowCompletion).Value as ObjectValue);
+            }
             const it = staticType(tmInit as ParseNode);
             if (it && it.Kind === 'literal') {
               tmInitial = it.Value;
@@ -7416,6 +7425,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let initial;
           const memberInitializer = (member as { Initializer?: ParseNode | null }).Initializer;
           if (memberInitializer) {
+            // #sec-object-types requires the |Initializer| to be compile-time
+            // evaluable "and it is a type error otherwise". Reported HERE as
+            // well as at the two resolution walks, because a type error the
+            // clause states belongs to this pass: reported only where the type
+            // is built, it arrives as an ordinary throw when the declaration
+            // runs rather than as an early error against the source.
+            const outside = FirstNonEvaluableForm(memberInitializer as ParseNode);
+            if (outside !== undefined) {
+              const completion = Throw.StaticTypeError(
+                'a member default must be compile-time evaluable, and $1 is not',
+                Value(outside),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
             const initializerType = staticType(memberInitializer as ParseNode);
             if (initializerType && initializerType.Kind === 'literal') {
               initial = initializerType.Value;

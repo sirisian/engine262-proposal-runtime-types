@@ -15,6 +15,7 @@ import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { FirstNonEvaluableForm } from '../type-system/evaluable-fragment.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
@@ -628,6 +629,15 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       let initial;
       const memberInitializer = (m as { Initializer?: ParseNode | null }).Initializer;
       if (memberInitializer) {
+        // The syntactic half of that requirement, checked before evaluating: a
+        // form outside #annex-evaluable-fragment is refused by name rather than
+        // by whatever its evaluation happens to do. An interface member and the
+        // same member written in an object type are one thing, so both walks
+        // apply it.
+        const outsideMember = FirstNonEvaluableForm(memberInitializer as never);
+        if (outsideMember !== undefined) {
+          return Throw.TypeError('a member default must be compile-time evaluable, and $1 is not', Value(outsideMember));
+        }
         // #sec-object-types: "The |Initializer| must be compile-time evaluable
         // ... and it is a type error otherwise." The failure was SWALLOWED, so a
         // member whose default could not be evaluated silently had none - the
