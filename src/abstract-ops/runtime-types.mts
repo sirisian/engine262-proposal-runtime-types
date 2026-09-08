@@ -3672,9 +3672,24 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
   }
   for (const clause of clauses) {
     const predicate = (clause as unknown as { RefinementPredicate?: object }).RefinementPredicate;
-    if (!predicate || !mentionsContractReturn(predicate)) {
+    if (!predicate) {
       continue;
     }
+    // EVERY clause, with `return` bound for every one. #sec-checked-contracts:
+    // "at every concrete evaluation of the builder ... each clause is evaluated
+    // with `return` bound to it, and a clause that is falsy is a type error".
+    //
+    // A clause that did not mention `return` was skipped, so one constraining
+    // only the arguments - `where by > 0`, the ordinary shape of a precondition
+    // and the one Eiffel's `require`, Dafny's `requires` and Ada's `Pre` all
+    // take - was accepted at every application and checked nowhere. It read as a
+    // guarantee and was inert.
+    //
+    // The guard decided TWO things and should have decided one: when to push the
+    // binding, which is cheap enough to do unconditionally, and whether to
+    // evaluate, which was never its business. EvaluateAliasApplicationClauses
+    // already evaluates every clause without such a guard, so a builder's
+    // clauses and an alias's now behave alike.
     PushContractReturn(result);
     let verdict;
     try {
@@ -3703,36 +3718,6 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
   }
   return Value.undefined;
 }
-
-function mentionsContractReturn(node: object, seen = new Set<object>()): boolean {
-  if (!node || typeof node !== 'object' || seen.has(node)) {
-    return false;
-  }
-  seen.add(node);
-  if ((node as { type?: string }).type === 'ContractReturn') {
-    return true;
-  }
-  // Own enumerable keys only, and read through a guard: a Parse Node carries
-  // accessors - `source` among them - that throw when read outside the context
-  // that defined them, and Object.values reads every one.
-  for (const key of Object.keys(node)) {
-    let value;
-    try {
-      value = (node as Record<string, unknown>)[key];
-    } catch {
-      continue;
-    }
-    if (Array.isArray(value)) {
-      if (value.some((v) => mentionsContractReturn(v as object, seen))) {
-        return true;
-      }
-    } else if (value && typeof value === 'object' && mentionsContractReturn(value as object, seen)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEvaluator {
   // An IMPLICIT CAST's declared type names what its result BECOMES, not a
   // boundary its body must already satisfy: the body computes a raw value -
