@@ -3426,6 +3426,32 @@ export function IsDecorationContextOpen(context: Value): boolean {
 export function DeclareInverse(builder: Value, inverse: Value): void {
   declaredInverses.set(builder as unknown as object, inverse);
 }
+
+/**
+ * #sec-checked-contracts: "A generic declaration may carry an `exemplars`
+ * decorator naming types, which forces specialization of the declaration at
+ * those arguments during compile-time evaluation, so that a builder's contracts
+ * are evaluated where the declaration is rather than only where a caller reaches
+ * it."
+ *
+ * A contract is verified at every concrete evaluation, so a builder nobody
+ * applies has its contracts checked nowhere - measured: a false contract on a
+ * builder that is never applied, or used only in a generic signature, is not
+ * caught. An exemplar is a concrete argument, so forcing an evaluation at the
+ * declaration puts the check where the author is.
+ *
+ * Keyed on the metadata object, and recorded through the open decoration context
+ * like an inverse, so it is a declaration-site fact rather than a registry
+ * something could add to later.
+ */
+const declaredExemplars = new WeakMap<object, readonly Value[]>();
+
+export function DeclareExemplars(builder: Value, exemplars: readonly Value[]): void {
+  declaredExemplars.set(builder as unknown as object, exemplars);
+}
+export function DeclaredExemplarsOf(builder: Value): readonly Value[] | undefined {
+  return declaredExemplars.get(builder as unknown as object);
+}
 export function DeclaredInverseOf(builder: Value): Value | undefined {
   return declaredInverses.get(builder as unknown as object);
 }

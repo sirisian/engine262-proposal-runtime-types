@@ -167,6 +167,10 @@ export function genericApplication(base: type, args: [].<any>): type {
 
 /** typeprogramming.md R15: @inverse(fn) on a builder declares the function that proposes its argument. */
 export function inverse(fn: any, c: any): void { Reflect.declareInverse(c, fn); }
+/** #sec-checked-contracts: @exemplars([T, ...]) forces specialization at those
+ *  arguments, so a builder's contracts are verified where the declaration is
+ *  rather than only where a caller happens to reach it. */
+export function exemplars(types: any, c: any): void { Reflect.declareExemplars(c, types); }
 // typeprogramming.md 6.2: contracts belong ON THE KIT, so downstream generic
 // code has a reasoned surface and the mechanism has a user. Each bound below is
 // the variance the builder actually has, checked in both directions before it

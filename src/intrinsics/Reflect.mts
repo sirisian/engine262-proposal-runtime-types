@@ -1,7 +1,7 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
 import {
-  LookupClassType, SignaturesOf, OverloadSignatureOf, IsDecorationContextOpen, DeclareInverse } from '../abstract-ops/runtime-types.mts';
+  LookupClassType, SignaturesOf, OverloadSignatureOf, IsDecorationContextOpen, DeclareInverse, DeclareExemplars } from '../abstract-ops/runtime-types.mts';
 import { PublishedReturnTypeOf } from '../type-system/check.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -244,6 +244,34 @@ function* Reflect_declareInverse([context = Value.undefined, inverse = Value.und
   }
   DeclareInverse(metadata, inverse);
   X(CreateDataProperty(metadata, Value('inverse'), inverse));
+  return Value.undefined;
+}
+
+/**
+ * `Reflect.declareExemplars(context, types)` - the primitive the `exemplars`
+ * decorator of #sec-checked-contracts calls. Takes the open decoration context,
+ * so the exemplars are a fact of the declaration rather than a registration
+ * anything can make afterwards, exactly as `declareInverse` above.
+ */
+function* Reflect_declareExemplars([context = Value.undefined, types = Value.undefined]: Arguments): ValueEvaluator {
+  if (!IsDecorationContextOpen(context)) {
+    return Throw.TypeError('$1', Value('Reflect.declareExemplars accepts only the decoration context of the declaration being decorated'));
+  }
+  const list: Value[] = [];
+  if (types instanceof ObjectValue) {
+    const length = Q(yield* LengthOfArrayLike(types));
+    for (let i = 0; i < length; i += 1) {
+      list.push(Q(yield* Get(types, Value(String(i)))));
+    }
+  } else {
+    return Throw.TypeError('$1', Value('exemplars takes a list of types'));
+  }
+  const metadata = Q(yield* Get(context as ObjectValue, Value('metadata')));
+  if (!(metadata instanceof ObjectValue)) {
+    return Throw.TypeError('$1', Value('exemplars are declared on a function'));
+  }
+  DeclareExemplars(metadata, list);
+  X(CreateDataProperty(metadata, Value('exemplars'), types));
   return Value.undefined;
 }
 
@@ -1137,6 +1165,7 @@ export function bootstrapReflect(realmRec: Realm) {
     ...(surroundingAgent.feature('runtime-types') ? [
       ['typeOf', Reflect_typeOf, 1] as [string, typeof Reflect_typeOf, number],
       ['declareInverse', Reflect_declareInverse, 2] as [string, typeof Reflect_declareInverse, number],
+      ['declareExemplars', Reflect_declareExemplars, 2] as [string, typeof Reflect_declareExemplars, number],
       ['getReflection', Reflect_getReflection, 1] as [string, typeof Reflect_getReflection, number],
       ['getMetadata', Reflect_getMetadata, 1] as [string, typeof Reflect_getMetadata, number],
       ['getReflectionByIndex', Reflect_getReflectionByIndex, 1] as [string, typeof Reflect_getReflectionByIndex, number],
