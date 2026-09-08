@@ -105,6 +105,15 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     // wider member, `"a" | string` being `string`; an INTERSECTION keeps the
     // narrower, `"a" & string` being `"a"`. A single "keep the wider" rule would
     // fix unions and break intersections, which today are right by accident.
+    // #table-meta-hooks `meet`. BEFORE the subsumption filter, which would
+    // otherwise collapse a containment pair to one member and exit without
+    // asking.
+    if (t.Kind === 'intersection' && members.length === 2) {
+      const met = metResolutions.get(metKey(members[0].canonical, members[1].canonical));
+      if (met !== undefined) {
+        return CanonicalizeType(met, copies);
+      }
+    }
     const subsumes = (keep: TypeRecord, drop: TypeRecord): boolean => (t.Kind === 'union'
       ? IsSubtype(drop, keep, [])
       : IsSubtype(keep, drop, []));
@@ -450,6 +459,19 @@ const stampedClasses = new WeakMap<object, ObjectValue>();
 
 export function RegisterStampedClass(declaration: object, constructor: ObjectValue): void {
   stampedClasses.set(declaration, constructor);
+}
+
+const metResolutions = new Map<string, TypeRecord>();
+
+function metKey(x: TypeRecord, y: TypeRecord): string {
+  const a1 = displayType(x);
+  const b1 = displayType(y);
+  return a1 < b1 ? `${a1}\u0000${b1}` : `${b1}\u0000${a1}`;
+}
+
+/** A meet the checking pass computed, keyed by DISPLAY: a canonical record is computed structurally and is not identity-stable. */
+export function SetMetResolution(left: TypeRecord, right: TypeRecord, met: TypeRecord): void {
+  metResolutions.set(metKey(left, right), met);
 }
 
 export function isClassTypeObject(value: unknown): boolean {

@@ -131,8 +131,22 @@ function initializationErrorName(value: ObjectValue): string | null {
   return null;
 }
 
-export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration): PlainEvaluator {
-  if (preEvaluatedTypeDeclarations.has(node)) {
+/**
+ * @param rebind Rebuild the Type Object for a declaration already evaluated, and
+ *   UPDATE its binding rather than initializing one.
+ *
+ *   The checking pass needs this because of an ordering it cannot avoid: a `meta`
+ *   declaration names its constraint shape, so aliases must be evaluated BEFORE
+ *   metas; and a `meet` hook is registered BY a meta, so an alias whose type is a
+ *   metadata intersection must be built AFTER them. The two are different
+ *   declarations, so the cycle breaks - but only if the alias loop can run twice.
+ *
+ *   Without this the second run asserted, the operation building the Type Object
+ *   and initializing the binding together: `binding !== undefined &&
+ *   binding.initialized === false`.
+ */
+export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration, rebind = false): PlainEvaluator {
+  if (preEvaluatedTypeDeclarations.has(node) && !rebind) {
     return undefined;
   }
   const name = StringValue(node.BindingIdentifier);
@@ -696,7 +710,18 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   if (value !== Value.undefined) {
     RecordTypeOrigin(value as object, OriginOfNode(node, node.type, name.stringValue()));
   }
-  Q(yield* InitializeBoundName(name, value, env));
+  if (rebind) {
+    // The binding exists and is initialized; give it the rebuilt Type Object.
+    // Tolerant of an environment that refuses, because a rebind is an
+    // improvement on the first answer rather than a correctness requirement:
+    // where it cannot be applied the type stays as it was.
+    const set = EnsureCompletion(yield* env.SetMutableBinding(name, value, Value.false));
+    if (set.Type !== 'normal') {
+      return undefined;
+    }
+  } else {
+    Q(yield* InitializeBoundName(name, value, env));
+  }
   // proposal-runtime-types decorators.md: `@f enum Count { @f Zero, ... }`.
   // decorators.md "Order" puts members before their container, so the
   // ENUMERATORS run first and the enum's own decorators last - the same rule a

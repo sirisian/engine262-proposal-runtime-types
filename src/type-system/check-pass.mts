@@ -10,6 +10,7 @@ import {
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { Value } from '../value.mts';
+import { SetMetResolution } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType } from './records.mts';
 import {
@@ -380,6 +381,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       return Throw(errors[0]!);
     }
   }
+  let recordedAMeet = false;
   // #table-meta-hooks `meet`: what two constraints have in common, or a PROOF
   // that nothing does.
   //
@@ -407,6 +409,17 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         MetadataPortion(a, metaType),
         MetadataPortion(b, metaType),
       ], pair.left.Base));
+      if (met !== undefined && met !== Value.null && met !== Value.undefined) {
+        // A CONSTRAINT: the pair reduces to it. Recorded for CanonicalizeType,
+        // which is synchronous and cannot call the hook that produced this.
+        const snapshot = EnsureCompletion(yield* SnapshotMetadataValue(met as Value));
+        if (snapshot.Type === 'normal') {
+          SetMetResolution(pair.left, pair.right, {
+            Kind: 'parameterized', Base: pair.left.Base, Metadata: snapshot.Value as unknown as Value,
+          } as unknown as TypeRecord);
+          recordedAMeet = true;
+        }
+      }
       if (met === Value.null) {
         // Named where the pair was written at a member, as the synchronous
         // member rule names it: a reader given two constraints still has to find
@@ -424,6 +437,18 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           Value(displayType(pair.left)),
           Value(displayType(pair.right)),
         );
+      }
+    }
+  }
+  // Aliases rebuilt now that the meets are known. The loop far above built them
+  // before any `meta` had registered a `meet`, which is an ordering the pass
+  // cannot avoid - a meta names its constraint shape, so aliases come first.
+  // Only where a meet was recorded, so a text with no metadata intersection
+  // rebuilds nothing.
+  if (recordedAMeet) {
+    for (const item of items ?? []) {
+      if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
+        EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item, true));
       }
     }
   }

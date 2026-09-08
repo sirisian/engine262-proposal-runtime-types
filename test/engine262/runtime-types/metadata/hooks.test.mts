@@ -129,3 +129,46 @@ test('`meet` is declarable and its signature is checked', () => {
   expect(ok('type M = { k?: uint8 }; meta M { default = {}; subtype(a,b) { return true; }'
     + ' meet = 5; }')).toBe(false);
 });
+
+test('a non-empty `meet` becomes the TYPE', () => {
+  // Stage 2 reported an empty meet; a non-empty one was computed and discarded,
+  // so `1..=10 & 5..=20` was diagnosed as fine and then stood as an unreduced
+  // intersection, which is neither range.
+  //
+  // The ordering this needed is the whole of why it took three attempts. A type
+  // alias is canonicalized by the pass's pre-evaluation loop; a `meet` hook is
+  // registered by a `meta` declaration, which that same loop evaluates AFTER the
+  // aliases, because a meta names its constraint shape and needs the alias. So
+  // the alias is built before the hook exists, and the only way through is to
+  // build it twice.
+  const NB = 'type NB = { bounds?: Range }; meta NB { default = {}; '
+    + 'subtype(a,b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
+    + 'meet(a,b) { if (a.bounds === undefined) return b; if (b.bounds === undefined) return a;'
+    + ' const r = a.bounds.intersect(b.bounds); return r.isEmpty ? null : { bounds: r }; } } ';
+
+  // The reduction itself.
+  expect(evaluated(`${NB} type T = uint8.<{bounds: 1..=10}> & uint8.<{bounds: 5..=20}>; String(T);`))
+    .toBe('uint.<8>.<{ bounds: 5..=10 }>');
+  // ...and it is ONE type, not two spellings of one: the interning invariant this
+  // exists to satisfy.
+  expect(evaluated(`${NB} type A = uint8.<{bounds: 1..=10}> & uint8.<{bounds: 5..=20}>;`
+    + ' type B = uint8.<{bounds: 5..=10}>; String(A === B);')).toBe('true');
+  // Containment reduces to the narrower.
+  expect(evaluated(`${NB} type T = uint8.<{bounds: 1..=3}> & uint8.<{bounds: 1..=10}>; String(T);`))
+    .toBe('uint.<8>.<{ bounds: 1..=3 }>');
+  // The same at a shared member, which Q1's distribution routes here rather than
+  // to the arm rule - one rule, one answer.
+  expect(evaluated(`${NB} type T = { a: uint8.<{bounds: 1..=10}> } & { a: uint8.<{bounds: 5..=20}> }; String(T);`))
+    .toBe('{ a: uint.<8>.<{ bounds: 5..=10 }> }');
+  // Reflection reports the reduced type, not the pair. Stage 0 restored this
+  // invariant for the subtype judgment and the reduction must not break it.
+  expect(evaluated(`${NB} type T = uint8.<{bounds: 1..=10}> & uint8.<{bounds: 5..=20}>;`
+    + ' String(Reflect.getReflection(T).kind);')).toBe('parameterized');
+
+  // The empty case still reports rather than reducing.
+  expectStaticTypeError(`${NB} type T = uint8.<{bounds: 1..=3}> & uint8.<{bounds: 8..=9}>;`);
+  // A meta type that declines still leaves the intersection standing.
+  expect(evaluated('type Tag = { tag?: string }; meta Tag { default = {}; subtype(a,b) { return true; } }'
+    + " type T = string.<{tag: 'A'}> & string.<{tag: 'C'}>;"
+    + ' String(Reflect.getReflection(T).kind);')).toBe('intersection');
+});
