@@ -7,6 +7,7 @@ import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isClassTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
 import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';
 import type { DeferredMetadataCheck } from '../type-system/check.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
@@ -32,6 +33,7 @@ import {
   IsCallable,
   IsConstructor,
   LengthOfArrayLike,
+  ToString,
   IsArray,
   PrepareForTailCall,
   OrdinaryObjectCreate,
@@ -246,6 +248,54 @@ function* Reflect_declareInverse([context = Value.undefined, inverse = Value.und
   DeclareInverse(metadata, inverse);
   X(CreateDataProperty(metadata, Value('inverse'), inverse));
   return Value.undefined;
+}
+
+/**
+ * `Reflect.inferSlot(name)` - #sec-structural-matching: "returns a fresh slot, a
+ * Type Object standing for a position a match is to bind."
+ *
+ * A slot is a ~parameter~ record, which is what the unification walk already
+ * binds, so a slot and a generic signature's parameter are one thing rather than
+ * two that behave alike. Interned by name, so a slot used twice in one pattern
+ * IS one slot - "a slot occurring twice binds once and must bind alike".
+ */
+function* Reflect_inferSlot([name = Value.undefined]: Arguments): ValueEvaluator {
+  const key = Q(yield* ToString(name));
+  return GetTypeObject({ Kind: 'parameter', Name: key.stringValue() } as never);
+}
+
+/**
+ * `Reflect.matchType(pattern, subject)` - one-sided structural unification:
+ * "where every slot in _pattern_ can be bound consistently so that the pattern
+ * becomes _subject_, it returns an object mapping each slot's name to the Type
+ * Object bound there, and otherwise it returns *null*."
+ *
+ * A constraint on a binding is not expressed here: "A constraint on a binding is
+ * an ordinary check of the result afterwards, so `Reflect.isAssignable` supplies
+ * what an `infer S extends string` says."
+ */
+function* Reflect_matchType([pattern = Value.undefined, subject = Value.undefined]: Arguments): ValueEvaluator {
+  if (!isTypeObject(pattern) || !isTypeObject(subject)) {
+    return Throw.TypeError('$1 is not a type', isTypeObject(pattern) ? subject : pattern);
+  }
+  const patternRecord = (pattern as unknown as { TypeRecord: never }).TypeRecord;
+  const subjectRecord = (subject as unknown as { TypeRecord: never }).TypeRecord;
+  if (HasSlotInsideApplication(patternRecord)) {
+    return Throw.TypeError('$1', Value('a slot inside a deferred application cannot be matched, because no operation inverts a builder'));
+  }
+  const bindings = new Map();
+  if (!matchTypeStructurally(patternRecord, subjectRecord, bindings)) {
+    return Value.null;
+  }
+  const result = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Object.prototype%'));
+  for (const [slot, bound] of bindings) {
+    const named = slot as unknown as { Name?: string };
+    if (typeof named.Name !== 'string') {
+      continue;
+    }
+    X(CreateDataProperty(result, Value(named.Name), GetTypeObject(bound as never)));
+  }
+  return result;
 }
 
 function* Reflect_typeOf([value = Value.undefined]: Arguments) {
@@ -1138,6 +1188,8 @@ export function bootstrapReflect(realmRec: Realm) {
     ...(surroundingAgent.feature('runtime-types') ? [
       ['typeOf', Reflect_typeOf, 1] as [string, typeof Reflect_typeOf, number],
       ['declareInverse', Reflect_declareInverse, 2] as [string, typeof Reflect_declareInverse, number],
+      ['inferSlot', Reflect_inferSlot, 1] as [string, typeof Reflect_inferSlot, number],
+      ['matchType', Reflect_matchType, 2] as [string, typeof Reflect_matchType, number],
       ['getReflection', Reflect_getReflection, 1] as [string, typeof Reflect_getReflection, number],
       ['getMetadata', Reflect_getMetadata, 1] as [string, typeof Reflect_getMetadata, number],
       ['getReflectionByIndex', Reflect_getReflectionByIndex, 1] as [string, typeof Reflect_getReflectionByIndex, number],

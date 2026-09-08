@@ -1605,7 +1605,38 @@ function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumpti
  * structurally, running no user code. Returns false where the concrete parts
  * disagree or a parameter would need two different bindings.
  */
-function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): boolean {
+/**
+ * Whether a ~parameter~ record stands anywhere inside an ~application~ within
+ * `pattern`.
+ *
+ * #sec-structural-matching: "A slot inside an ~application~ Type Record is a type
+ * error at the match rather than *null*, because evaluating a builder against an
+ * unbound slot is exactly the inversion no operation of this specification
+ * performs." So this is asked before matching, and the caller throws rather than
+ * reporting no match - the two answers mean different things, and a pattern
+ * written against an application is a mistake rather than a shape that failed.
+ */
+export function HasSlotInsideApplication(pattern: TypeRecord): boolean {
+  const seen = new Set<object>();
+  const walk = (node: unknown, insideApplication: boolean): boolean => {
+    if (!node || typeof node !== 'object' || seen.has(node as object)) {
+      return false;
+    }
+    seen.add(node as object);
+    if (Array.isArray(node)) {
+      return node.some((child) => walk(child, insideApplication));
+    }
+    const record = node as { Kind?: string };
+    if (insideApplication && record.Kind === 'parameter') {
+      return true;
+    }
+    const within = insideApplication || record.Kind === 'application';
+    return Object.entries(record).some(([key, child]) => key !== 'Builder' && walk(child, within));
+  };
+  return walk(pattern, false);
+}
+
+export function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): boolean {
   if (pattern.Kind === 'parameter') {
     const prior = bindings.get(pattern);
     if (prior) {
