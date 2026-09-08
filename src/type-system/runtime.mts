@@ -1,4 +1,4 @@
-import { SpecializedClassConstructor } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { SpecializedClassConstructor, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
 import { wrappedParse } from '../parse.mts';
@@ -4225,7 +4225,20 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // and registers it with `AssociateClassType`. Reusing it here is what
           // makes the annotation and the value expression describe one type
           // rather than two.
-          const specializedCtor = SpecializedClassConstructor(baseRecord.Declaration, argRecords);
+          let specializedCtor = SpecializedClassConstructor(baseRecord.Declaration, argRecords);
+          if (specializedCtor === undefined) {
+            // CREATE it, rather than only finding one a construction left behind.
+            //
+            // The lookup answers undefined until some `new G.<4>()` has run, and
+            // the fall-through handed back the DECLARATION's constructor - whose
+            // methods resolve `N` in a frame where it is unbound, and whose
+            // `Reflect.typeOf` differs from a constructed instance's. Measured:
+            // the same program with `new G.<4>()` written first worked and with
+            // `new G.<8>()` first did not, so what NAMED the application decided
+            // what it was.
+            const made = yield* MaterializeSpecialization(baseRecord.Declaration as never, argRecords);
+            specializedCtor = made instanceof ObjectValue ? made : undefined;
+          }
           if (specializedCtor !== undefined) {
             return { ...baseRecord, Arguments: argRecords, Constructor: specializedCtor };
           }

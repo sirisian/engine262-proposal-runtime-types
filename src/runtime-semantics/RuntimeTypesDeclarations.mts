@@ -1772,6 +1772,114 @@ const classSpecializations = new Map<unknown, Map<string, Value>>();
  * Answers undefined where no application has been evaluated yet - the annotation
  * then keeps the record it had, which is what it did before.
  */
+/**
+ * Declarations whose specialization is being built right now.
+ *
+ * An annotation inside a generic class's OWN body names an application that is
+ * part of what is being made: `class L<T> { next: L.<T> | null = null; }`
+ * resolving `L.<T>` would materialise `L`, whose body resolves `L.<T>`, without
+ * end - the linked list of `#sec-layout-finiteness`, which is not an exotic
+ * shape. Such an annotation falls through to the record it had, which is right
+ * rather than a compromise: the specialization it wants is the one in progress.
+ */
+const specializationsInProgress = new Set<unknown>();
+
+/**
+ * Create the specialization for an application, whatever named it.
+ *
+ * `SpecializedClassConstructor` only FINDS one, and an annotation that missed
+ * fell back to the declaration's constructor - so `let _g_: G.<4>;` alone gave a
+ * different type than `new G.<4>()` did, and writing a construction first changed
+ * the answer. The application is named either way; what named it should not
+ * decide what it is.
+ *
+ * The class body is evaluated here, so a static block runs when a type is first
+ * NAMED rather than first constructed. That is one more occasion of an effect
+ * that already happens per specialization - a static block, a static field and a
+ * computed key each run once per distinct application today - and it replaces an
+ * order-dependent number of occasions with one a reader can count.
+ *
+ * Answers *undefined* for a variadic parameter list, where binding is the
+ * engine's rather than positional, and for a declaration already in progress.
+ */
+export function* MaterializeSpecialization(
+  declaration: ParseNode.ClassDeclaration,
+  argRecords: readonly (TypeRecord | number)[],
+): ValueEvaluator {
+  const params = declaration.TypeParameters?.TypeParameterList ?? [];
+  // Only a CLASS is specialized by evaluating a body. A generic INTERFACE
+  // reaches this same annotation arm and has no |ClassTail|, so it has nothing
+  // to evaluate and takes the record it had.
+  // An argument that is still a PARAMETER names no particular application.
+  // `Box.<T>` written inside a generic function has `T` unbound until the
+  // function is applied, and specializing on it would build one class for a
+  // value the program has not chosen yet.
+  const unbound = argRecords.some((a) => typeof a !== 'number'
+    && ((a as { Kind?: string }).Kind === 'parameter' || (a as { Kind?: string }).Kind === 'application'));
+  if (declaration.ClassTail === undefined
+    || unbound
+    || specializationsInProgress.has(declaration)
+    || params.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)
+    || params.length !== argRecords.length) {
+    return undefined as never;
+  }
+  const frame = new Map<string, TypeRecord>();
+  const key: string[] = [];
+  for (let i = 0; i < argRecords.length; i += 1) {
+    const param = params[i];
+    const name = (param as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+    const record = argRecords[i];
+    if (name) {
+      bindTypeParameter(frame, name, record as never, param as never);
+    }
+    key.push(specializationKeyOf(record as never));
+  }
+  return yield* SpecializeFromFrame(declaration, frame, argRecords, key.join(','));
+}
+
+/** The tail both entry points share, so one specialization is built by one path. */
+function* SpecializeFromFrame(
+  declaration: ParseNode.ClassDeclaration,
+  frame: Map<string, TypeRecord>,
+  argRecords: readonly (TypeRecord | number)[],
+  cacheKey: string,
+): ValueEvaluator {
+  let byArgs = classSpecializations.get(declaration);
+  if (byArgs === undefined) {
+    byArgs = new Map();
+    classSpecializations.set(declaration, byArgs);
+  }
+  const cached = byArgs.get(cacheKey);
+  if (cached !== undefined) {
+    return cached as never;
+  }
+  pushTypeParameterFrame(frame);
+  specializationsInProgress.add(declaration);
+  let specialized;
+  try {
+    const className = Value(declaration.BindingIdentifier?.name ?? '');
+    specialized = EnsureCompletion(yield* ClassDefinitionEvaluation(
+      declaration.ClassTail,
+      className,
+      className,
+      '',
+      [],
+    ));
+  } finally {
+    specializationsInProgress.delete(declaration);
+    popTypeParameterFrame();
+  }
+  if (specialized.Type !== 'normal') {
+    return specialized as never;
+  }
+  const ctor = specialized.Value as Value;
+  AssociateClassType(ctor, GetTypeObject({
+    Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
+  } as never));
+  byArgs.set(cacheKey, ctor);
+  return ctor as never;
+}
+
 export function SpecializedClassConstructor(
   declaration: unknown,
   argRecords: readonly (TypeRecord | number)[],
@@ -1896,39 +2004,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     argRecords.push(record);
   }
   }
-  let byArgs = classSpecializations.get(declaration);
-  if (byArgs === undefined) {
-    byArgs = new Map();
-    classSpecializations.set(declaration, byArgs);
-  }
-  const cacheKey = key.join(',');
-  const cached = byArgs.get(cacheKey);
-  if (cached !== undefined) {
-    return cached;
-  }
-  pushTypeParameterFrame(frame);
-  let specialized;
-  try {
-    const className = Value(declaration.BindingIdentifier?.name ?? '');
-    specialized = EnsureCompletion(yield* ClassDefinitionEvaluation(
-      declaration.ClassTail,
-      className,
-      className,
-      '',
-      [],
-    ));
-  } finally {
-    popTypeParameterFrame();
-  }
-  if (specialized.Type !== 'normal') {
-    return specialized as never;
-  }
-  const ctor = specialized.Value as Value;
-  AssociateClassType(ctor, GetTypeObject({
-    Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
-  } as never));
-  byArgs.set(cacheKey, ctor);
-  return ctor;
+  return yield* SpecializeFromFrame(declaration, frame, argRecords, key.join(','));
 }
 
 /**
