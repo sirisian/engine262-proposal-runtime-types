@@ -480,58 +480,6 @@ function isCanonicalMetadata(record: unknown): boolean {
   );
 }
 
-/**
- * A `[[Metadata]]` record, read out of the ECMAScript object a type node
- * carries it in.
- *
- * The canonical form of the
- * slot is a FROZEN PLAIN RECORD - `MetadataObjectFromType` builds one and
- * `SameMetadata` walks it with `Object.keys` - whose LEAVES are engine `Value`s
- * or the structural markers the metadata language defines: a pattern's
- * `{ __pattern, source, flags }`, and the same shape for a range.
- *
- * The first version of this read-in flattened ONE level and left each value as
- * whatever `Get` returned. For a brand that happened to be right, because a
- * tag is a `Value` on both sides. For a pattern it was not: the marker came
- * back an `ObjectValue`, `SameMetadata`'s marker branch tests
- * `ap.__pattern || bp.__pattern` and an `ObjectValue` has no such own property,
- * so the branch was skipped and the two markers compared by the engine's own
- * fields. `makeType(getReflection(Px)) === Px` was therefore FALSE for a
- * pattern and true for a brand - the working feature masking the broken one.
- *
- * `sec-reflect-maketype` states the round trip as an identity in as many words:
- * "For every type T, Reflect.makeType(Reflect.getReflection(T)) is T ... which
- * is what makes the round trip the identity function rather than an
- * equivalence." It names two deliberate exceptions and a parameterized type is
- * neither, so a one-level read was a conformance failure and not a shortcoming.
- *
- * Recursion is over CONTAINERS only. A leaf stays the `Value` it is, which
- * is settled: a Symbol tag has no plain equivalent whose identity survives,
- * and `SameValue` on two SymbolValues is what makes a symbol-tagged brand
- * unforgeable.
- */
-function* metadataFromValue(value: ObjectValue): ValueEvaluator {
-  const keys = Q(yield* value.OwnPropertyKeys());
-  const record: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-  for (const key of keys) {
-    if (!(key instanceof JSStringValue)) {
-      continue;
-    }
-    const v = Q(yield* Get(value, key));
-    // A nested ECMAScript object is a CONTAINER - a marker, or a record of
-    // further metadata - and becomes a plain record. Anything else is a leaf.
-    //
-    // Written as a statement rather than a conditional expression: the build's
-    // Babel pass refuses `Q(yield* )` inside one.
-    if (v instanceof ObjectValue) {
-      const nested = Q(yield* metadataFromValue(v));
-      record[key.stringValue()] = nested;
-    } else {
-      record[key.stringValue()] = v;
-    }
-  }
-  return Object.freeze(record) as unknown as Value;
-}
 
 /**
  * proposal-runtime-types #sec-reflect-maketype: read a reflection-node object as
