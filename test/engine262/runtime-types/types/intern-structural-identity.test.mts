@@ -39,6 +39,19 @@ test('the refinement itself is untouched: these are still subtypes', () => {
   expect(evaluated(`${E}String(Reflect.isAssignable(E, type string));`)).toBe('true');
 });
 
+test('a tuple and an object are two types, whatever the tuple can be iterated as', () => {
+  // SameTypeWithAssumptions carried two more subtype folds beside the refinement
+  // ones: a library nominal against the object type it IMPLEMENTS, and an array
+  // or tuple against an object its ITERATION INTERFACE satisfies. Reached from
+  // the intern table, the second matched an object record against a tuple
+  // already interned, so `Reflect.makeType({ kind: 'object', ... })` handed back
+  // a TUPLE Type Object - the kit's `objectOf` returning a tuple.
+  expect(evaluated('type T = [1, 2]; type O = { a: uint8 }; String(T === O);')).toBe('false');
+  expect(evaluated(`let A = ${mk('uint8')}; type T = [1, 2]; String(A === T);`)).toBe('false');
+  // The subtype question those folds answer is untouched.
+  expect(evaluated('String(Reflect.isAssignable(type [uint8], type Iterable.<uint8>));')).toBe('true');
+});
+
 test('and identical records still intern together', () => {
   expect(evaluated(pair('uint8', 'uint8'))).toBe('true');
   expect(evaluated(`${E}type V = string.<{ brand: 'V' }>; String((type E & V) === (type V & E));`)).toBe('true');

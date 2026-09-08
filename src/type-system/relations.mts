@@ -338,7 +338,11 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // side tables, so there is no structural form to compare - and it is placed
   // before the kind guard because the source is ~nominal~ and the target is
   // ~object~, which that guard would otherwise separate without looking.
-  if (s.Kind === 'nominal' && t.Kind === 'object'
+  // NOT under `strict`, for the reason the refinement folds above are not: these
+  // answer "does s satisfy t", a SUBTYPE question, and the intern table asks
+  // whether two records ARE the same. A library nominal is not the object type
+  // whose members it happens to implement.
+  if (!structuralOnly && s.Kind === 'nominal' && t.Kind === 'object'
       && builtinImplements(s.LibraryName, s.Arguments, (declared) => IsSubtype(declared, t, [...assumptions, { First: s, Second: t }]))) {
     return true;
   }
@@ -352,7 +356,12 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   // `Iterable` parameter: `function f(i: Iterable.<uint8>)` refused a
   // `[].<uint8>` while `_a_ is Iterable.<uint8>` answered *true* for the same
   // value. A tuple reaches this too, every tuple being an array.
-  if ((s.Kind === 'array' || s.Kind === 'tuple') && t.Kind === 'object') {
+  // Likewise: a tuple or an array is not the object type its ITERATION
+  // INTERFACE satisfies. Reached from the intern table this made an object
+  // record match a tuple already in the table, so `Reflect.makeType({ kind:
+  // 'object', ... })` handed back a tuple Type Object - the kit's `objectOf`
+  // returning a tuple, which is how this was found.
+  if (!structuralOnly && (s.Kind === 'array' || s.Kind === 'tuple') && t.Kind === 'object') {
     const element = s.Kind === 'array'
       ? (s as { Element?: TypeRecord }).Element
       : elementUnionOfTuple(s as TypeRecord);
