@@ -1802,6 +1802,7 @@ const specializationsInProgress = new Set<unknown>();
  * Answers *undefined* for a variadic parameter list, where binding is the
  * engine's rather than positional, and for a declaration already in progress.
  */
+/* eslint-disable-next-line no-unused-vars */
 export function* MaterializeSpecialization(
   declaration: ParseNode.ClassDeclaration,
   argRecords: readonly (TypeRecord | number)[],
