@@ -67,6 +67,18 @@ test('an interface member is held to the same rule', () => {
   expect(ok('interface I { p?: any = Math.random() }')).toBe(false);
 });
 
+test('a tuple element default is held to both halves', () => {
+  // #sec-array-and-tuple-types states the requirement in the same words as
+  // #sec-object-types states it of a member, and for the same reason: a tuple
+  // type is interned, so the default is shared by every use of the type. Neither
+  // half reached here, so a tuple default could call `eval` or read the clock.
+  expect(ok('type T = [uint8 = 9];')).toBe(true);
+  expect(ok('function f() { return 7; } type T = [uint8 = f()];')).toBe(true);
+  expect(ok('type T = [uint8 = eval("5")];')).toBe(false);
+  expect(ok('type T = [uint8 = Math.random()];')).toBe(false);
+  expect(ok('const r = Math.random; type T = [uint8 = r()];')).toBe(false);
+});
+
 test('the syntactic half still reports its own forms', () => {
   expectStaticTypeError('type S = { p?: uint8 = eval("5") };');
 });

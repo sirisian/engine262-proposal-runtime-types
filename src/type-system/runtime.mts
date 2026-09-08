@@ -4475,7 +4475,23 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // interned, so this value is shared by every use of the type; the
           // compile-time restriction is what makes that unobservable, since a
           // value type or a string is copied rather than aliased.
-          Initial = Q(yield* GetValue(Q(yield* Evaluate(e.Initializer))));
+          //
+          // #sec-array-and-tuple-types states that restriction in the same words
+          // as #sec-object-types states it of a member: "The |Initializer| must
+          // be compile-time evaluable ... and it is a type error otherwise." It
+          // was enforced for a member and not here, so a tuple default could
+          // call `eval` or read the clock, and the shared value the note above
+          // relies on being unobservable was neither.
+          const outsideElement = FirstNonEvaluableForm(e.Initializer as never);
+          if (outsideElement !== undefined) {
+            return Throw.TypeError('a tuple element default must be compile-time evaluable, and $1 is not', Value(outsideElement));
+          }
+          BeginFragmentEvaluation();
+          try {
+            Initial = Q(yield* GetValue(Q(yield* Evaluate(e.Initializer))));
+          } finally {
+            EndFragmentEvaluation();
+          }
           sawDefault = true;
         }
         if (e.Rest) {
