@@ -9,7 +9,7 @@ import { CopyValueClassInstance } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
-import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateGet, ToLength } from './all.mts';
+import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, ToLength } from './all.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -398,8 +398,29 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): Plain
   if (layout?.fields === undefined) {
     return value;
   }
+  // The VALUE's prototype, not the type's constructor's.
+  //
+  // They differ for a GENERIC class, which is evaluated once per application as
+  // well as at its declaration - measured: `class G<N> {} new G.<4>(); new
+  // G.<8>();` runs ClassDefinitionEvaluation THREE times where a non-generic
+  // class runs it once. Each evaluation mints its own Private Names and its own
+  // prototype, so taking the prototype from `t`'s constructor while the private
+  // elements come from the value gave a copy whose getter resolved `this.#b` to
+  // one name and whose element sat under another: `G.<4>` lost its private field
+  // at every class-field boundary, and the non-generic case worked only because
+  // there was one evaluation and nothing to disagree with.
+  //
+  // A copy of a value is the same kind of thing as the value, so its prototype
+  // is the value's; the type's constructor remains the fallback for anything not
+  // built by one.
   const ctor = (t as { Constructor?: ObjectValue }).Constructor;
-  const proto = ctor ? Q(yield* Get(ctor, Value('prototype'))) : Value.null;
+  const ownProto = (value as { Prototype?: Value }).Prototype;
+  let proto: Value = Value.null;
+  if (ownProto instanceof ObjectValue) {
+    proto = ownProto;
+  } else if (ctor) {
+    proto = Q(yield* Get(ctor, Value('prototype')));
+  }
   const copy = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
   const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
   for (const field of layout.fields) {
@@ -414,11 +435,7 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): Plain
     // other, which is why `hasLayout` is *true* for a class whose only field is
     // private - so the copy was dropping a field the type says it has.
     if (typeof field.key !== 'string') {
-      let heldPrivate = Q(yield* PrivateGet(value, field.key));
-      if (heldPrivate instanceof ObjectValue && field.type.Kind === 'nominal' && LayoutOf(field.type) !== null) {
-        heldPrivate = Q(yield* CopyValueTypeInstance(heldPrivate, field.type));
-      }
-      Q(yield* PrivateFieldAdd(copy, field.key, heldPrivate));
+      // Copied from the value's OWN elements, in the loop after this one.
       continue;
     }
     const key = Value(field.key);
@@ -432,6 +449,22 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): Plain
     }
     X(CreateDataPropertyOrThrow(copy, key, held));
     typed.set(field.key, { TypeRecord: field.type });
+  }
+  // PRIVATE fields, taken from the value's own elements rather than looked up by
+  // the layout's Private Name - which for a generic class belongs to a different
+  // evaluation, as above. Whatever name the instance carries is the name the copy
+  // gets. Fields only: a private method or accessor lives on the prototype and is
+  // not per-instance state.
+  for (const element of (value as { PrivateElements?: readonly { Key: PrivateName, Kind: string, Value?: Value }[] }).PrivateElements ?? []) {
+    if (element.Kind !== 'field') {
+      continue;
+    }
+    let held = element.Value as Value;
+    const declared = layout.fields.find((f) => f.key === element.Key);
+    if (held instanceof ObjectValue && declared && declared.type.Kind === 'nominal' && LayoutOf(declared.type) !== null) {
+      held = Q(yield* CopyValueTypeInstance(held, declared.type));
+    }
+    Q(yield* PrivateFieldAdd(copy, element.Key, held));
   }
   (copy as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
   // Sealed, as the original is. A value type class has a layout with no room for

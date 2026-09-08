@@ -187,3 +187,32 @@ test('a binary operator can read the other operand\'s private field', () => {
   expect(evaluated('class C { #m() { return 7; } operator ==(o: C) { return this.#m() === o.#m(); } }'
     + ' String(new C() == new C());')).toBe('true');
 });
+
+test('a GENERIC class keeps its private field through a copy', () => {
+  // Found by running the design documents' examples: `fixedstring.md` stores a
+  // `FixedString.<32>` in a class field and reads it back, and that did not work.
+  //
+  // A generic class is evaluated once per APPLICATION as well as at its
+  // declaration - measured, `class G<N> {} new G.<4>(); new G.<8>();` runs
+  // ClassDefinitionEvaluation three times where a non-generic class runs it once
+  // - and each evaluation mints its own Private Names and its own prototype. The
+  // copy took its prototype from the TYPE's constructor while its private
+  // elements came from the VALUE, so the copy's getter resolved `this.#b` to one
+  // name while the element sat under another.
+  const G = 'class G<N: uint32> { #b: [N].<uint8>; get first(): uint8 { return this.#b[0]; } } ';
+  expect(evaluated(`${G} class H { g: G.<4> = new G.<4>(); } String(Number(new H().g.first));`)).toBe('0');
+  // The private field's TYPE is not what mattered - a scalar fails the same way,
+  // so genericity alone was sufficient.
+  expect(evaluated('class G2<N: uint32> { #b: uint8 = 7; n: [N].<uint8>; get f(): uint8 { return this.#b; } }'
+    + ' class H { g: G2.<4> = new G2.<4>(); } String(Number(new H().g.f));')).toBe('7');
+  // ...and a non-generic class was always fine, which is the pair that made it
+  // diagnostic.
+  expect(evaluated('class G3 { #b: uint8 = 7; get f(): uint8 { return this.#b; } }'
+    + ' class H { g: G3 = new G3(); } String(Number(new H().g.f));')).toBe('7');
+
+  // Two applications keep their own sizes across the same boundary - what would
+  // break if the fix had reached for one shared prototype.
+  expect(evaluated('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return this.b.length; } }'
+    + ' class K { a: S.<4> = new S.<4>(); b: S.<8> = new S.<8>(); }'
+    + ' const k = new K(); String(Number(k.a.len)) + "/" + String(Number(k.b.len));')).toBe('4/8');
+});
