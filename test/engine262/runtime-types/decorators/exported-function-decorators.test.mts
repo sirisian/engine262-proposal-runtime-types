@@ -11,9 +11,9 @@ import {
  *   Assert(Declaration.type === 'ClassDeclaration' && !Declaration.Decorators);
  *
  * so `@dec export function f() {}` was refused outright while `@dec function
- * f() {}` worked. Found trying to give the standard kit its `exemplars`: every
- * kit builder is an exported function, so no kit builder could carry a decorator
- * at all.
+ * f() {}` worked - for every decorator and every author. Found trying to
+ * decorate a builder in the standard kit, where each one is an exported
+ * function, so none of them could carry a decorator at all.
  *
  * The decorators sit on the EXPORT node rather than on the declaration, which is
  * why the function evaluator could not find them on its own. It is handed them

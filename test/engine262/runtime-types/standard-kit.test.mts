@@ -226,10 +226,6 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   // reached only through the builder can be inferred. The decorator is
   // `Reflect.declareInverse` applied at the declaration; the row checks that
   // the export IS that decorator and that applying it registers the inverse.
-  // #sec-checked-contracts' other declaration-site decorator. It records the
-  // arguments a builder's contracts should be verified at; the forcing that
-  // reads them is not wired yet, so the row tests the surface only.
-  ['exemplars', 'typeof std.exemplars === "function" && std.exemplars.length === 2', ''],
   ['inverse', 'typeof std.inverse === "function" && std.inverse.length === 2 && unpack(new Box.<uint8>(1)) === "uint.<8>"',
     'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function unboxed(Bs) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Bs).elements.map((e) => ({ type: Reflect.getReflection(e.type).generic.arguments[0] })) }); }' + NL
@@ -242,10 +238,10 @@ test('the table covers every export, and only exports', async () => {
   // Guards the suite against the kit growing past it. A helper added without a
   // test fails on the count here rather than passing unnoticed.
   const named = EXPORTS.map(([name]) => name);
-  // 73: the 71 of `typeprogramming.md`'s table, plus `inverse` from
-  // #sec-declared-inverses and `exemplars` from #sec-checked-contracts. The guard below fired on it, as it should - an
+  // 72: the 71 of `typeprogramming.md`'s table plus `inverse`, which
+  // #sec-declared-inverses added. The guard below fired on it, as it should - an
   // export with no row here is an export with no test.
-  expect(new Set(named).size).toBe(73);
+  expect(new Set(named).size).toBe(72);
   expect(await run(`const extra = Object.keys(std).filter(k => !${JSON.stringify(named)}.includes(k));`
     + ' if (extra.length) { throw new Error("untested exports: " + extra.join(",")); }'
     + ` if (Object.keys(std).length !== ${named.length}) { throw new Error("count " + Object.keys(std).length); }`)).toBe('ok');

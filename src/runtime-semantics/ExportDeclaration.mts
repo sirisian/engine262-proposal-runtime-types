@@ -54,10 +54,10 @@ export function* Evaluate_ExportDeclaration(ExportDeclaration: ParseNode.ExportD
       // replacement written back through the binding are all its.
       //
       // This reached an assertion that a decorated export is always a class, so
-      // `@dec export function f() {}` was refused outright. Every builder in the
-      // standard kit is an exported function, so no kit builder could carry a
-      // decorator at all - which is how this was found, trying to give the kit
-      // its `exemplars`.
+      // `@dec export function f() {}` was refused outright for every decorator
+      // and every author. Found while trying to decorate a builder in the
+      // standard kit, where each one is an exported function, so none of them
+      // could carry a decorator at all.
       if (Declaration.type === 'FunctionDeclaration') {
         Assert(!Declaration.Decorators);
         return yield* Evaluate_FunctionDeclaration(Declaration, Decorators);
