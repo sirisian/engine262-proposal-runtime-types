@@ -223,3 +223,47 @@ test('what the concatenation type does not disturb', () => {
   // The out-of-range literal rule still applies to a numeric `+`.
   expectStaticTypeError('let a: uint8 = 0; a = a + 300;');
 });
+
+// ---------------------------------------------------------------------------
+// A STRICT COMPARISON BETWEEN DISJOINT TYPES CAN NEVER BE TRUE.
+//
+// The design's position on a test that cannot succeed is stated, not open. The
+// disjoint-intersection rule refuses `uint8 & string` because "reduction alone
+// would report the mistake at every USE ... rather than at the `&` that made it
+// - which is how an erasure checker reports it and is the least useful place to
+// say it", and it cites narrowing, "which reports a test that cannot succeed as
+// a mistake rather than narrowing to the type with no values".
+//
+// Three forms were already refused on that principle - `a is string` for a
+// `uint8`, a disjoint intersection, and a narrowing that reaches nothing - and
+// `===` was the spelling that never got it.
+//
+// TWO EXCLUSIONS, both found by the corpus:
+//   - a LITERAL operand, because `let x: uint32 = 5; x === 5` compares `uint32`
+//     with a literal whose Base is `number` - disjoint as TYPES, but the literal
+//     adopts, and this arm does not perform that adoption yet;
+//   - a `void` operand, which is a genuine tension rather than a limitation: the
+//     principle WOULD refuse `a(o: k) === k` for an interface declaring no
+//     return, and `callable-interfaces` asserts it must run. Left for whoever
+//     reconciles the two.
+// ---------------------------------------------------------------------------
+
+test('a strict comparison between disjoint types is refused', () => {
+  expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; let c: boolean = a === b;');
+  expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; let c: boolean = a !== b;');
+});
+
+test('what the disjointness rule leaves alone', () => {
+  expect(ok('let a: uint8 | string = 1; let b: string = "s"; let c: boolean = a === b;')).toBe(true);
+  expect(ok('let a: uint8 = 1; let b: uint8 = 2; let c: boolean = a === b;')).toBe(true);
+  // A LOOSE `==` across numeric types is meaningful - it compares mathematical
+  // values - so disjointness of the types says nothing about it.
+  expect(ok('let a: uint8 = 1; let b: float32 = 1; let c: boolean = a == b;')).toBe(true);
+  // A literal operand adopts the other operand's type.
+  expect(ok('let x: uint32 = 5; const b: boolean = x === 5;')).toBe(true);
+  // An `any` operand overlaps with everything - AreDisjoint is conservative.
+  expect(ok('function g() { return 1; } let b: string = "s"; let c: boolean = g() === b;')).toBe(true);
+  // An `if` CONDITION is not typed at all, so this reaches no judgment - the
+  // same statement-position gap a bare `a[9];` had, and what 4.6 needs first.
+  expect(ok('let a: uint8 = 1; let b: string = "s"; if (a === b) { }')).toBe(true);
+});

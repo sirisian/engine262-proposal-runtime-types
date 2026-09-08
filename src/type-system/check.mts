@@ -9395,6 +9395,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // it in place the adoption here turns a wrong static type into a wrong
         // run-time answer. Recorded in TEST-FAILURE-PLAN.md.
         const operandTypes = operandNodes.map((x) => staticType(x));
+        // A STRICT comparison between DISJOINT types can never be true, and the
+        // design's position on a test that cannot succeed is stated: the
+        // disjoint-intersection rule refuses one because "reduction alone would
+        // report the mistake at every USE ... rather than at the `&` that made
+        // it", citing narrowing, "which reports a test that cannot succeed as a
+        // mistake rather than narrowing to the type with no values". `a is
+        // string` for a `uint8` is already refused on that principle; `===` was
+        // the spelling that never got it.
+        //
+        // `===` and `!==` ONLY. A loose `==` across numeric types is MEANINGFUL -
+        // it compares mathematical values - and disjointness says nothing about
+        // that. `AreDisjoint` is conservative by construction, answering *false*
+        // for ~any~, a ~parameter~ and an unevaluated ~application~, so an
+        // unknown operand overlaps with everything and is untouched.
+        //
+        // A LITERAL operand is excluded, and that exclusion is the whole of what
+        // makes this safe. `let x: uint32 = 5; x === 5` compares a `uint32` with
+        // a literal whose Base is `number`, which AreDisjoint calls disjoint -
+        // correctly, for those two TYPES - but the literal ADOPTS the other
+        // operand's type, so the comparison is meaningful and common. The arm's
+        // own comment above records that the adoption is not performed here yet;
+        // until it is, a literal operand cannot be judged for disjointness at
+        // all.
+        const strictOperator = (node as unknown as { operator?: string }).operator;
+
+        // A `void` operand is excluded too, and this one is a genuine tension
+        // rather than a limitation. `interface I { (o: object, n: uint8 = 1); }`
+        // declares no return type, so `a(o: k) === k` compares `void` with an
+        // object - which the principle WOULD call a test that cannot succeed,
+        // and which `callable-interfaces` asserts must run, because the
+        // implementer passed in returns a value the signature does not mention.
+        // Refusing it is defensible and would break a test that states the
+        // opposite intent, so it is left for whoever reconciles the two.
+        const literalOperandType = (t: Known): boolean => !!t && (t.Kind === 'literal' || t.Kind === 'void');
+        if ((strictOperator === '===' || strictOperator === '!==')
+            && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
+            && !literalOperandType(operandTypes[0]) && !literalOperandType(operandTypes[1])
+            && AreDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord)) {
+          const completion = Throw.StaticTypeError('$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(operandTypes[0] as TypeRecord)), Value(displayType(operandTypes[1] as TypeRecord)), Value(strictOperator === '===' ? 'false' : 'true')) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        }
         // An operand whose type is not known could be a vector, so the answer is
         // withheld rather than guessed: an unknown operand keeps the comparison
         // unknown, which is what it was before this case existed.
