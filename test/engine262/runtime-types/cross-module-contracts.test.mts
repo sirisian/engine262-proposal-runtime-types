@@ -39,15 +39,15 @@ function runWith(specifier: string, source: string, body: string): Promise<strin
       loadBuiltinModule: (request: { Specifier: string }, _realm: unknown, callback: (v: unknown) => void) => {
         callback(request.Specifier === specifier ? source : Throw.Error(`no module ${request.Specifier}`) as never);
       },
-    }),
+    } as never),
   ]) as never;
   const parsed = realm.compileModule(body, { specifier: 'main' } as never);
   if ((parsed as { Type?: string }).Type === 'throw') return Promise.resolve('compile threw');
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve('NEVER SETTLED'), 15000);
-    realm.evaluateModule((parsed as { Value: unknown }).Value as never, undefined, (c: never) => {
+    realm.evaluateModule((parsed as { Value: unknown }).Value as never, undefined, (c: unknown) => {
       clearTimeout(timer);
-      resolve(settle(c));
+      resolve(settle(c as Parameters<typeof settle>[0]));
     });
   });
 }

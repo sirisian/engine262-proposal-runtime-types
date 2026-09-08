@@ -270,13 +270,14 @@ test('inventory: the complex Math additions exist and answer their own family', 
 });
 
 test('inventory: the specified-but-absent operations are the deferrals they should be', () => {
-  const DEFERRED: Record<string, string> = {
-    // Structural matching. The clause itself calls it optional rather than
-    // load-bearing: "the design's own catalog needed this operation exactly zero
-    // times, which is the measurement that makes it optional".
-    'Reflect.inferSlot': 'typeprogramming, structural matching',
-    'Reflect.matchType': 'typeprogramming, structural matching',
-  };
+  // EMPTY, and that is the point. `Reflect.inferSlot` and `Reflect.matchType`
+  // were the two entries, deferred because "the design's own catalog needed this
+  // operation exactly zero times". Both now EXIST and are covered by
+  // `reflection/structural-matching.test.mts`, so this test did what its own
+  // message asks - "If this now exists, move it into real coverage" - and the
+  // list is empty rather than the test deleted, so the next deferral has a home
+  // and the same check applies to it.
+  const DEFERRED: Record<string, string> = {};
   for (const [name, why] of Object.entries(DEFERRED)) {
     expect(evaluated(`String(typeof ${name});`), `${name} is deferred: ${why}. If this now exists, move it into real coverage.`).toBe('undefined');
   }

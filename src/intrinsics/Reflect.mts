@@ -35,7 +35,6 @@ import {
   IsConstructor,
   LengthOfArrayLike,
   ToString,
-  IsArray,
   PrepareForTailCall,
   OrdinaryObjectCreate,
   R,

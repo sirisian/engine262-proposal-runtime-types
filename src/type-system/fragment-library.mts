@@ -80,7 +80,11 @@ function excludedSetFor(realm: Realm): WeakSet<ObjectValue> {
   // Resolved from the realm's intrinsics rather than from its global object, so
   // a program that reassigns `Math` does not change what the rule decides.
   for (const [intrinsic, property] of EXCLUDED) {
-    const holder = (realm.Intrinsics as Record<string, ObjectValue | undefined>)[intrinsic];
+    // Through `unknown`: `Intrinsics` is a interface of named slots rather than
+    // an index signature, so a direct cast is the one the compiler rejects as
+    // insufficiently overlapping. The lookup is by a key from EXCLUDED, and the
+    // `instanceof` below is what makes it safe.
+    const holder = (realm.Intrinsics as unknown as Record<string, ObjectValue | undefined>)[intrinsic];
     if (!(holder instanceof ObjectValue)) {
       continue;
     }
