@@ -11,6 +11,7 @@ import {
   DecoratorListEvaluation,
 } from './all.mts';
 import { surroundingAgent } from '#self';
+import { Evaluate_FunctionDeclaration } from './FunctionDeclaration.mts';
 import {
   Assert, GetValue, type ECMAScriptFunctionObject, type FunctionDeclaration,
 } from '#self';
@@ -46,6 +47,21 @@ export function* Evaluate_ExportDeclaration(ExportDeclaration: ParseNode.ExportD
   }
   if (Declaration) {
     if (Decorators) {
+      // A decorated exported FUNCTION declaration. The decorators sit on this
+      // node rather than on the declaration, so they are handed to the function
+      // evaluator, which owns the application - decorators.md's rule that a
+      // decorated declaration does not hoist, the sub-target pass, and the
+      // replacement written back through the binding are all its.
+      //
+      // This reached an assertion that a decorated export is always a class, so
+      // `@dec export function f() {}` was refused outright. Every builder in the
+      // standard kit is an exported function, so no kit builder could carry a
+      // decorator at all - which is how this was found, trying to give the kit
+      // its `exemplars`.
+      if (Declaration.type === 'FunctionDeclaration') {
+        Assert(!Declaration.Decorators);
+        return yield* Evaluate_FunctionDeclaration(Declaration, Decorators);
+      }
       Assert(Declaration.type === 'ClassDeclaration' && !Declaration.Decorators);
       const decorators = Q(yield* DecoratorListEvaluation(Decorators));
       Q(yield* BindingClassDeclarationEvaluation(Declaration, decorators));

@@ -16,7 +16,19 @@ import { InstantiateFunctionObject } from './all.mts';
 // FunctionDeclaration :
 //   function BindingIdentifier ( FormalParameters ) { FunctionBody }
 //   function ( FormalParameters ) { FunctionBody }
-export function* Evaluate_FunctionDeclaration(FunctionDeclaration: ParseNode.FunctionDeclaration): PlainEvaluator {
+export function* Evaluate_FunctionDeclaration(
+  FunctionDeclaration: ParseNode.FunctionDeclaration,
+  // `@dec export function f() {}` parses with the decorators on the EXPORT node,
+  // not on the declaration, so ExportDeclaration passes them here rather than
+  // reimplementing the application. Without this they reached an assertion that
+  // only classes carry decorators through an export, and every decorated
+  // exported function was refused - which is every builder in the standard kit,
+  // since the kit exports each one.
+  externalDecorators?: readonly ParseNode.Decorator[] | null,
+): PlainEvaluator {
+  const decorators = FunctionDeclaration.Decorators?.length
+    ? FunctionDeclaration.Decorators
+    : externalDecorators;
   // proposal-runtime-types decorators.md "Order": "A DECORATED FUNCTION
   // DECLARATION DOES NOT HOIST. `@dec function f() {}` behaves as
   // `var f = @dec function () {};`"
@@ -33,7 +45,7 @@ export function* Evaluate_FunctionDeclaration(FunctionDeclaration: ParseNode.Fun
   // A class method and an object method never had this - theirs run from
   // ClassElementEvaluation, which does not ask whether the member is decorated.
   if (surroundingAgent.feature('runtime-types')
-      && (FunctionDeclaration.Decorators?.length || HasSubTargetDecorators(FunctionDeclaration as never))) {
+      && (decorators?.length || HasSubTargetDecorators(FunctionDeclaration as never))) {
     const name = (FunctionDeclaration.BindingIdentifier as { name?: string } | undefined)?.name;
     let fn: Value = Value.undefined;
     if (typeof name === 'string') {
@@ -50,8 +62,8 @@ export function* Evaluate_FunctionDeclaration(FunctionDeclaration: ParseNode.Fun
       Q(yield* PutValue(Q(yield* ResolveBinding(Value(name))), fn));
     }
     Q(yield* ApplySubTargetDecorators(FunctionDeclaration as never, 'Function', typeof name === 'string' ? Value(name) : Value.undefined, fn));
-    if (FunctionDeclaration.Decorators?.length) {
-      const replacement = Q(yield* ApplyDecorators(FunctionDeclaration.Decorators, Q(yield* FunctionDecoratorContext(
+    if (decorators?.length) {
+      const replacement = Q(yield* ApplyDecorators(decorators, Q(yield* FunctionDecoratorContext(
         typeof name === 'string' ? Value(name) : Value.undefined, fn, FunctionDeclaration as never,
       )), true));
       // decorators.md's table: a `Reflect.Function` decorator's return "replaces
