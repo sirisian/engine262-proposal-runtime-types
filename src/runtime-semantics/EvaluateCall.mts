@@ -20,11 +20,13 @@ import {
   GetValue,
   R,
 } from '#self';
-import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
 import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
 export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: ParseNode.TemplateLiteral | ParseNode.Arguments, tailPosition: boolean, callExpression?: ParseNode.CallExpression | ParseNode.OptionalExpression) {
+  // The call expression's own position, read before its arguments push theirs.
+  const callContext = surroundingAgent.feature('runtime-types') ? contextualTypeFor(callExpression) : undefined;
   // 1. If Type(ref) is Reference, then
   let thisValue;
   if (ref instanceof ReferenceRecord) {
@@ -64,7 +66,9 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     // clause resolves by rejecting rather than guessing, and a parameter whose
     // type is still a type PARAMETER, which a generic call is about to infer.
     const soleParameterTypes = Q(yield* soleSignatureParameterTypes(func));
-    pushContextualType(soleParameterTypes?.[0] ?? null);
+    // Tagged with the FIRST argument's node, the one the type is for.
+    const firstArgument = ((args as { ArgumentList?: readonly object[] }).ArgumentList ?? [])[0];
+    pushContextualType(soleParameterTypes?.[0] ?? null, firstArgument);
     try {
       argList = Q(yield* ArgumentListEvaluation(args));
     } finally {
@@ -125,7 +129,22 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     PrepareForTailCall();
   }
   // 7. Let result be Call(func, thisValue, argList).
-  const result = yield* Call(func, thisValue, argList);
+  // proposal-runtime-types (PLAN-v3 Q2-c, calls): the CALL's own contextual
+  // type - read from its position, which this expression node names - is
+  // handed to the callee, whose body binds its type parameters from it before
+  // the arguments (#sec-constructing-a-generic-class, the same ladder for a
+  // call). Set here, after the arguments have run, and cleared after the call.
+  let result;
+  if (surroundingAgent.feature('runtime-types')) {
+    SetPendingCalleeContext(callContext);
+    try {
+      result = yield* Call(func, thisValue, argList);
+    } finally {
+      SetPendingCalleeContext(undefined);
+    }
+  } else {
+    result = yield* Call(func, thisValue, argList);
+  }
   // 8. Assert: If tailPosition is true, the above call will not return here but instead
   //    evaluation will continue as if the following return has already occurred.
   // 9. Assert: If result is not an abrupt completion, then Type(result) is an ECMAScript language type.

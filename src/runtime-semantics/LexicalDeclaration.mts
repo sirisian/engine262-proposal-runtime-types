@@ -138,7 +138,9 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
         // being defended.
         contextual = (resolved && typeof resolved === 'object' && 'Kind' in resolved) ? resolved : null;
       }
-      pushContextualType(contextual);
+      // Tagged with the initializer: the position is the initializer's, and
+      // nothing nested under it inherits it (contextualTypeFor).
+      pushContextualType(contextual, Initializer as object);
       let rhs;
       try {
         // a. Let rhs be the result of evaluating Initializer.

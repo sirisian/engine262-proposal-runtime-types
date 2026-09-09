@@ -35,7 +35,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
   currentTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
-  pushContextualType, popContextualType,
+  pushContextualType, popContextualType, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
 } from '../type-system/runtime.mts';
 import { functionTypeParameters } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
@@ -314,7 +314,8 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     // initializer gets in LexicalDeclaration, so `b: Box.<uint8> = new Box(1)`
     // constructs the `Box.<uint8>` the RequireType below then checks.
     if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
-      pushContextualType((fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord);
+      // Tagged with the initializer expression, which is the function's code.
+      pushContextualType((fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord, (initializer as { ECMAScriptCode?: object }).ECMAScriptCode);
       try {
         initValue = Q(yield* Call(initializer, receiver));
       } finally {
@@ -483,6 +484,12 @@ function* FunctionCallSlot(this: FunctionObject, thisArgument: Value, argumentsL
 
   // 1. Assert: F is an ECMAScript function object.
   Assert(isECMAScriptFunctionObject(F));
+  // proposal-runtime-types (PLAN-v3 Q2-c, calls): the call's contextual type,
+  // handed over by EvaluateCall, is taken at the callee's entry and carried to
+  // its body, whose inference reads it before the arguments.
+  if (surroundingAgent.feature('runtime-types')) {
+    SetBodyContext(TakePendingCalleeContext());
+  }
   // 2. Let callerContext be the running execution context.
   // 3. Let calleeContext be PrepareForOrdinaryCall(F, undefined).
   const calleeContext = PrepareForOrdinaryCall(F, Value.undefined);
@@ -556,6 +563,10 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
       if (specialization !== undefined && specialization !== (F as Value)) {
         return Q(yield* Construct(specialization as FunctionObject, argumentsList, specialization as FunctionObject));
       }
+    } else {
+      // A context handed to a construction of anything else is consumed here,
+      // so no body that runs below - and no construction nested in it - sees it.
+      TakePendingCalleeContext();
     }
   }
   // 3. Let callerContext be the running execution context.
@@ -860,6 +871,17 @@ const { apply } = Reflect;
 /** https://tc39.es/ecma262/#sec-builtincallorconstruct */
 function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value | 'uninitialized', argumentsListInput: Arguments, newTarget: FunctionObject | UndefinedValue): ValueEvaluator {
   let argumentsList = argumentsListInput;
+  // A context handed to a built-in is consumed and dropped, so a user function
+  // the built-in calls in turn (`arr.map(f)`) does not read the position of
+  // the built-in's call as its own. The one built-in that IS the consumer is
+  // a class's default constructor (ClassDefinitionEvaluation's closure), whose
+  // construction of a generic class takes it; that keeps it.
+  if (surroundingAgent.feature('runtime-types')) {
+    const handed = TakePendingCalleeContext();
+    if (thisArgument === 'uninitialized' && (F as { IsClassConstructor?: unknown }).IsClassConstructor === Value.true) {
+      SetPendingCalleeContext(handed);
+    }
+  }
   const calleeContext = new ExecutionContext();
   calleeContext.Function = F;
   const calleeRealm = F.Realm;

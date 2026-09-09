@@ -4754,9 +4754,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (node.type === 'ParenthesizedExpression') {
+      // Parentheses are transparent to the position: `(new Box(1))` at
+      // `Box.<uint8>` is `new Box(1)` there, as the runtime's
+      // contextualTypeFor reads it.
       const inner = (node as unknown as { Expression?: ParseNode }).Expression;
-      if (inner && inner.type === 'ArrayLiteral' && contextual
-          && (contextual.Kind === 'array' || contextual.Kind === 'tuple')) {
+      if (inner && contextual) {
         return staticTypeIn(inner, contextual);
       }
     }
@@ -5318,10 +5320,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * are visible WITHOUT making class assignability structural, which stays by
    * [[Declaration]] identity.
    */
+  /**
+   * The structure a value of _t_ has. For an INSTANTIATION of a generic
+   * declaration - `Box.<number>` - the declaration's structure with its
+   * parameters replaced by the arguments, so a member read `b.v` on a
+   * `Box.<number>` is a `number` and not the parameter `T` it was declared
+   * as, which admitted anything: `const n: string = new Box.<number>(1).v`
+   * was accepted while `new P().v` for a `class P { v: number }` was refused.
+   * Memoized per record; a structure with no parameters in it is returned as
+   * it is.
+   */
+  const substitutedStructures = new WeakMap<object, TypeRecord | null>();
   const structureOf = (t: Known): Known => {
     if (t && t.Kind === 'nominal') {
       const s = (t as unknown as { Structure?: TypeRecord }).Structure;
-      return s ?? null;
+      if (!s) {
+        return null;
+      }
+      const args = (t as unknown as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+      const params = (((t as unknown as { Declaration?: { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } }).Declaration)
+        ?.TypeParameters?.TypeParameterList) ?? [];
+      if (args.length === 0 || params.length === 0 || args.length !== params.length) {
+        return s;
+      }
+      const memo = substitutedStructures.get(t as object);
+      if (memo !== undefined) {
+        return memo;
+      }
+      const bindings = new Map<string, TypeRecord>();
+      params.forEach((q, i) => {
+        const name = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+        const a = args[i]!;
+        if (name) {
+          bindings.set(name, typeof a === 'number'
+            ? { Kind: 'literal', Value: Value(a), Base: makePrimitive('number') } as TypeRecord
+            : a);
+        }
+      });
+      const substituted = mentionsTypeParameter(s) ? substituteTypeParameters(s, bindings) as TypeRecord | null : s;
+      substitutedStructures.set(t as object, substituted);
+      return substituted;
     }
     return t;
   };
@@ -8633,42 +8671,86 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   }
                 }
               }
-              if (bindings.size === 0) {
-                // No explicit arguments: read them from what was passed.
-                const passed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])
-                  .map((a) => staticType(a as ParseNode));
-                bindTypeParametersFromArguments(
-                  (only as unknown as { Parameters?: readonly { Type?: Known }[] }).Parameters ?? [],
-                  passed,
-                  new Set(only.TypeParameters!.map((t) => t.Name)),
-                  bindings,
-                );
-              }
+              const explicit = bindings.size > 0;
+              const names = new Set(only.TypeParameters!.map((t) => t.Name));
+              const parameters = (only as unknown as { Parameters?: readonly { Type?: Known }[] }).Parameters ?? [];
+              const passed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])
+                .map((a) => staticType(a as ParseNode));
               const declaredOrPublished = only.Return ?? only.InferredReturn ?? null;
-              // A variable the ARGUMENTS cannot bind may still be bound by the
-              // call's CONTEXTUAL type - what the position requires - by matching
-              // the declared return against it. `f<T>(): T` has no argument
-              // mentioning T, so `let _n_: uint8 = f()` bound nothing and the
-              // call said nothing.
+              // #sec-constructing-a-generic-class, the same ladder for a call:
+              // explicit arguments, then the CONTEXTUAL type - what the position
+              // requires, matched against the declared return - then the value
+              // arguments, then defaults. The contextual rung comes BEFORE the
+              // arguments, not after them as a fallback: an untyped literal binds
+              // `number` when looked at first, and `number` is not `uint8`, so
+              // `const r: uint8 = f(1)` for `f<T>(x: T): T` was refused; read
+              // first, the annotation fixes T and the literal takes it, which is
+              // what `f.<uint8>(1)` does. A contextual binding is VERIFIED
+              // against the argument a formal annotated with exactly that
+              // parameter receives, by the argument's own assignability or a
+              // literal's fit, and dropped where the argument contradicts it -
+              // so `const r: uint8 = f("s")` binds `string` from the argument
+              // and is refused at the binding, as it should be.
               //
               // The contextual type is already recorded on the node by
               // `staticTypeIn`, for #sec-overloading-on-return-type; this reads
               // the same record for a second purpose rather than threading a
               // target through the walk.
-              //
-              // AFTER the arguments, never instead of them: an argument is a
-              // stronger statement than a position, and `into` keeps the first
-              // binding, so a contextual match cannot overrule what was passed.
-              if (declaredOrPublished && mentionsTypeParameter(declaredOrPublished)) {
+              if (!explicit && declaredOrPublished && mentionsTypeParameter(declaredOrPublished)) {
                 const wanted = (node as unknown as { ContextualType?: Known }).ContextualType;
                 if (wanted) {
-                  bindTypeParametersFromArguments(
-                    [{ Type: declaredOrPublished as Known }],
-                    [wanted],
-                    new Set(only.TypeParameters!.map((t) => t.Name)),
-                    bindings,
-                  );
+                  const seeds = new Map<string, TypeRecord>();
+                  bindTypeParametersFromArguments([{ Type: declaredOrPublished as Known }], [wanted], names, seeds);
+                  for (const [name, seed] of seeds) {
+                    if (seed.Kind === 'any' || seed.Kind === 'parameter') {
+                      continue;
+                    }
+                    // Every formal that mentions the parameter is read at the
+                    // seed; an argument that does not fit contradicts it. A
+                    // formal still mentioning ANOTHER unbound parameter is not
+                    // decidable yet and does not vote.
+                    let contradicted = false;
+                    const trial = new Map<string, TypeRecord>([...bindings, [name, seed]]);
+                    parameters.forEach((pp, i) => {
+                      const pt = pp.Type as Known;
+                      const at = passed[i];
+                      if (!pt || !at || !mentionsTypeParameter(pt)) {
+                        return;
+                      }
+                      // What the argument itself would bind the parameter to,
+                      // read through the same walk; a binding that disagrees
+                      // with the seed contradicts it (a callback's inferred
+                      // return, which assignability does not read).
+                      // (For a bare `x: T` the direct check below reads the
+                      // literal itself; the walk would widen `1` to `number`,
+                      // which is not the question.)
+                      if (pt.Kind !== 'parameter') {
+                        const derived = new Map<string, TypeRecord>();
+                        bindTypeParametersFromArguments([pp], [at], names, derived);
+                        const own = derived.get(name);
+                        if (own && own.Kind !== 'any' && own.Kind !== 'parameter'
+                            && !IsAssignable(own, seed) && !(own.Kind === 'literal' && literalFitsNumericType(own, seed))) {
+                          contradicted = true;
+                          return;
+                        }
+                      }
+                      const atSeed = substituteTypeParameters(pt, trial);
+                      if (!atSeed || mentionsTypeParameter(atSeed)) {
+                        return;
+                      }
+                      if (!IsAssignable(at, atSeed) && !(at.Kind === 'literal' && literalFitsNumericType(at, atSeed))) {
+                        contradicted = true;
+                      }
+                    });
+                    if (!contradicted) {
+                      bindings.set(name, seed);
+                    }
+                  }
                 }
+              }
+              if (!explicit) {
+                // Read the rest from what was passed; a binding already made keeps.
+                bindTypeParametersFromArguments(parameters, passed, names, bindings);
               }
               if (declaredOrPublished && bindings.size > 0) {
                 return substituteTypeParameters(declaredOrPublished, bindings);
@@ -10194,8 +10276,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // ~any~, through the same slot a setter uses to give a property a write
       // type distinct from its read type.
       const annotated = f.TypeAnnotation !== null && f.TypeAnnotation !== undefined;
+      // A field's annotation resolves with the class's TYPE parameters in scope
+      // (the mode a method's signature uses), so `v: T` is the parameter record
+      // an instantiation's structure then substitutes; outside the scope `T`
+      // resolved to nothing, the field was left out of the structure, and a
+      // read of it on `Box.<number>` was unchecked.
+      const resolveField = (): Known => {
+        const pushed = pushTypeParameterScopeOf(n, 'type-only');
+        try {
+          return resolveType(f.TypeAnnotation!.Type);
+        } finally {
+          if (pushed) {
+            typeParameterScopes.pop();
+          }
+        }
+      };
       const t = annotated
-        ? resolveType(f.TypeAnnotation!.Type)
+        ? resolveField()
         : (fieldInitializer
           ? ((): Known => {
             const inferred = staticType(fieldInitializer as ParseNode);
@@ -16411,12 +16508,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Pushed for the body only, and popped with the class context, so a
         // nested function's `this` is unaffected and an adopting literal's frame
         // still wins by being innermost.
-        const instanceType = classInstanceType(n);
+        // Inside the body `this` is the class OVER ITS OWN PARAMETERS - `A.<T>`
+        // - and not the defaulted instantiation `classInstanceType` answers
+        // for a bare name in a type position: a constructor's `this.a = a` for
+        // `class A<T = uint8> { a: T; constructor(a: T) }` compares a `T` with
+        // a `T`, not with a `uint8`.
+        const declaredInstance = classInstanceType(n);
+        const ownParams = ((n as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null }).TypeParameters?.TypeParameterList ?? []);
+        const instanceType: Known = declaredInstance && declaredInstance.Kind === 'nominal' && ownParams.length > 0
+          ? CanonicalizeType({
+            ...(declaredInstance as TypeRecord),
+            Arguments: ownParams.map((q) => {
+              const name = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '';
+              return { Kind: 'parameter', Name: name } as unknown as TypeRecord;
+            }),
+          } as TypeRecord) as Known
+          : declaredInstance;
         if (instanceType) {
           thisTypeFrames.push(instanceType);
         }
-        for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
-          walk(el);
+        // #sec-generic-functions, for a class: a name the class BINDS denotes
+        // its type parameter for the whole of the body - the constructor's
+        // formals, every method, every field initializer - and shadows an
+        // outer declaration of the same name. Without the scope the walk
+        // resolved a constructor formal's `v: T` to a top-level `type T = ...`
+        // where one existed, and `this.v = v` then compared the alias with the
+        // field's parameter. Type-only, as a method's signature reads it.
+        const pushedClassScopeForBody = pushTypeParameterScopeOf(n, 'type-only');
+        try {
+          for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
+            walk(el);
+          }
+        } finally {
+          if (pushedClassScopeForBody) {
+            typeParameterScopes.pop();
+          }
         }
         if (instanceType) {
           thisTypeFrames.pop();

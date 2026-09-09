@@ -9,7 +9,7 @@ import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { currentContextualType, pushContextualType, popContextualType, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { contextualTypeFor, pushContextualType, popContextualType, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { StampTypedCollection, soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
@@ -26,10 +26,13 @@ import {
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-evaluatenew */
-function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: undefined | ParseNode.Arguments, placementArgs?: readonly ParseNode.AssignmentExpressionOrHigher[] | null) {
+function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: undefined | ParseNode.Arguments, placementArgs?: readonly ParseNode.AssignmentExpressionOrHigher[] | null, newExpression?: ParseNode.NewExpression) {
   // 1. Assert: constructExpr is either a NewExpression or a MemberExpression.
   // 2. Assert: arguments is either empty or an Arguments.
   Assert(args === undefined || isArray(args));
+  // The construction's own position, read before its arguments push theirs
+  // (PLAN-v3 Q2-c; #sec-constructing-a-generic-class).
+  const constructionContext = surroundingAgent.feature('runtime-types') ? contextualTypeFor(newExpression) : undefined;
   // 3. Let ref be the result of evaluating constructExpr.
   // Refused BEFORE the callee is evaluated. `Span` is deliberately not a global
   // binding, so evaluating it first raises `"Span" is not defined` and the
@@ -73,7 +76,8 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     // its own `T` from the outer annotation.
     if (surroundingAgent.feature('runtime-types') && constructor instanceof ObjectValue) {
       const soleParameterTypes = Q(yield* soleSignatureParameterTypes(constructor));
-      pushContextualType(soleParameterTypes?.[0] ?? null);
+      const firstArgument = ((args as { ArgumentList?: readonly object[] }).ArgumentList ?? [])[0];
+      pushContextualType(soleParameterTypes?.[0] ?? null, firstArgument);
       try {
         argList = Q(yield* ArgumentListEvaluation(args));
       } finally {
@@ -141,12 +145,20 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   }
   // 8. Return ? Construct(constructor, argList).
   let constructed;
+  // The context is handed to [[Construct]] as the placement is: set just
+  // before, taken at the constructor's entry, cleared whatever happened.
+  if (surroundingAgent.feature('runtime-types')) {
+    SetPendingCalleeContext(constructionContext);
+  }
   try {
     constructed = Q(yield* Construct(constructor, argList));
   } finally {
     // Cleared whatever happened, so a failed construction cannot leave a
     // placement waiting for the next unrelated one.
     SetPendingPlacement(undefined);
+    if (surroundingAgent.feature('runtime-types')) {
+      SetPendingCalleeContext(undefined);
+    }
   }
   // proposal-runtime-types, the PLACEMENT forms: `new(buffer, byteOffset,
   // byteLength) Type(args)`. The parser has built these arguments since the
@@ -238,10 +250,10 @@ export function* Evaluate_NewExpression(node: ParseNode.NewExpression): ValueEva
   const placementArgs = (node as { PlacementArguments?: readonly ParseNode.AssignmentExpressionOrHigher[] | null }).PlacementArguments;
   if (!Arguments) {
     // 1. Return ? EvaluateNew(NewExpression, empty).
-    return Q(yield* EvaluateNew(MemberExpression, undefined, placementArgs));
+    return Q(yield* EvaluateNew(MemberExpression, undefined, placementArgs, node));
   } else {
     // 1. Return ? EvaluateNew(MemberExpression, Arguments).
-    return Q(yield* EvaluateNew(MemberExpression, Arguments, placementArgs));
+    return Q(yield* EvaluateNew(MemberExpression, Arguments, placementArgs, node));
   }
 }
 
@@ -272,7 +284,7 @@ export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueE
   // The declaration already resolves its annotation and pushes it for exactly
   // this reason - "the type has to be in scope WHILE the initializer runs" - so
   // the answer was on the stack and was not being read.
-  const t = TargetTypedNewType(node as object) ?? currentContextualType();
+  const t = TargetTypedNewType(node as object) ?? contextualTypeFor(node as object);
   if (!t) {
     return Throw.SyntaxError('$1 requires a contextual type', Value('new.()'));
   }
@@ -321,5 +333,12 @@ export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueE
     return Throw.TypeError('$1 is not a constructor', Value(displayType(t)));
   }
   const argList = Q(yield* ArgumentListEvaluation(node.Arguments));
-  return Q(yield* Construct(ctor as never, argList as readonly Value[]));
+  // The target type IS the construction's context: a generic declaration's
+  // [[Construct]] binds its parameters from it (#sec-constructing-a-generic-class).
+  SetPendingCalleeContext(t);
+  try {
+    return Q(yield* Construct(ctor as never, argList as readonly Value[]));
+  } finally {
+    SetPendingCalleeContext(undefined);
+  }
 }

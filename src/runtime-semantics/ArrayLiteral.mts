@@ -7,6 +7,8 @@ import {
   Q, X,
 } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   Set,
   ArrayCreate,
@@ -16,6 +18,7 @@ import {
   CreateDataPropertyOrThrow,
   F,
   IteratorStepValue,
+  surroundingAgent,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-arrayaccumulation */
@@ -29,7 +32,7 @@ import {
 //    ElementList : ElementList `,` Elision SpreadElement
 //  SpreadElement :
 //    `...` AssignmentExpression
-function* ArrayAccumulation(ElementList: ParseNode.ElementList, array: ObjectValue, nextIndex: number): PlainEvaluator<number> {
+function* ArrayAccumulation(ElementList: ParseNode.ElementList, array: ObjectValue, nextIndex: number, elementContext: TypeRecord | null = null): PlainEvaluator<number> {
   let postIndex = nextIndex;
   for (const element of ElementList) {
     switch (element.type) {
@@ -41,11 +44,36 @@ function* ArrayAccumulation(ElementList: ParseNode.ElementList, array: ObjectVal
         postIndex = Q(yield* ArrayAccumulation_SpreadElement(element, array, postIndex));
         break;
       default:
-        postIndex = Q(yield* ArrayAccumulation_AssignmentExpression(element, array, postIndex));
+        // proposal-runtime-types #sec-contextual-types: "an element of an array
+        // literal at a position of known array type" takes the element type.
+        // Pushed FOR the element, so `[new Box(1)]` at `[].<Box.<uint8>>`
+        // constructs `Box.<uint8>` and nothing nested under it inherits it.
+        if (surroundingAgent.feature('runtime-types')) {
+          pushContextualType(elementContext, element as object);
+          try {
+            postIndex = Q(yield* ArrayAccumulation_AssignmentExpression(element, array, postIndex));
+          } finally {
+            popContextualType();
+          }
+        } else {
+          postIndex = Q(yield* ArrayAccumulation_AssignmentExpression(element, array, postIndex));
+        }
         break;
     }
   }
   return postIndex;
+}
+
+/** The element type an array literal's own position declares, or null. */
+function elementContextOf(literal: object): TypeRecord | null {
+  const t = contextualTypeFor(literal);
+  if (!t) {
+    return null;
+  }
+  if (t.Kind === 'array') {
+    return (t as { Element?: TypeRecord }).Element ?? null;
+  }
+  return null;
 }
 
 // SpreadElement : `...` AssignmentExpression
@@ -88,11 +116,12 @@ function* ArrayAccumulation_AssignmentExpression(AssignmentExpression: ParseNode
 //    `[` Elision `]`
 //    `[` ElementList `]`
 //    `[` ElementList `,` Elision `]`
-export function* Evaluate_ArrayLiteral({ ElementList }: ParseNode.ArrayLiteral): ValueEvaluator {
+export function* Evaluate_ArrayLiteral(node: ParseNode.ArrayLiteral): ValueEvaluator {
+  const { ElementList } = node;
   // 1. Let array be ! ArrayCreate(0).
   const array = X(ArrayCreate(0));
   // 2. Let len be the result of performing ArrayAccumulation for ElementList with arguments array and 0.
-  const len = yield* ArrayAccumulation(ElementList, array, 0);
+  const len = yield* ArrayAccumulation(ElementList, array, 0, surroundingAgent.feature('runtime-types') ? elementContextOf(node) : null);
   Q(len);
   // 4. Return array.
   return array;

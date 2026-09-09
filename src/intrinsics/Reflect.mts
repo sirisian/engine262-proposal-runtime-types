@@ -6,7 +6,8 @@ import { PublishedReturnTypeOf } from '../type-system/check.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
-import { GetTypeObject, isClassTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { CanonicalizeType, GetTypeObject, isClassTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { GenericClassDeclarationOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
 import { SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
 import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';
@@ -417,9 +418,21 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
     const classType = value instanceof ObjectValue && (!isTypeObject(value) || isClassTypeObject(value))
       ? LookupClassType(value as unknown as object)
       : undefined;
-    const constructedType = classType !== undefined
+    let constructedType = classType !== undefined
       ? (classType as unknown as TypeObject).TypeRecord
       : undefined;
+    // A generic class's declaration constructs the class OVER ITS OWN
+    // PARAMETERS: `<T>(v: T) => Box.<T>`, not a bare `Box` that no value is of
+    // (PLAN-v3 Q7-a). A specialization's constructor is its own instantiation
+    // and needs nothing here.
+    const genericDeclaration = LookupClassType(value as unknown as object) !== undefined ? GenericClassDeclarationOf(value) : undefined;
+    if (constructedType && constructedType.Kind === 'nominal' && genericDeclaration !== undefined) {
+      const params = genericDeclaration.TypeParameters?.TypeParameterList ?? [];
+      constructedType = CanonicalizeType({
+        ...constructedType,
+        Arguments: params.map((q) => ({ Kind: 'parameter', Name: (q as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '', Declaration: q } as unknown as TypeRecord)),
+      } as TypeRecord);
+    }
     // #sec-inferred-return-types: a function that PUBLISHES an inferred return
     // type is reported with it. The rule just above - that a signature counts as
     // declared only where a type was WRITTEN - is what keeps an unannotated

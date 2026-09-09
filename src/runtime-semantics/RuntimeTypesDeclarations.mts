@@ -30,7 +30,7 @@ import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
-import { InferGenericBindings, currentContextualType } from '../type-system/runtime.mts';
+import { InferGenericBindings, TakePendingCalleeContext } from '../type-system/runtime.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
@@ -1966,8 +1966,10 @@ export function* SpecializationForConstruction(
 ): PlainEvaluator<Value | undefined> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   const formals = ((ctor as unknown as { FormalParameters?: readonly ParseNode[] }).FormalParameters) ?? [];
-  // The contextual type is the CALLER's - read before the scope below changes.
-  const preBound = contextualBindingsFor(declaration, params, currentContextualType());
+  // The contextual type is the CONSTRUCTION's own position, handed in by
+  // EvaluateNew or the target-typed form (TakePendingCalleeContext); a
+  // `Reflect.construct` has none. Read before the scope below changes.
+  const preBound = contextualBindingsFor(declaration, params, TakePendingCalleeContext());
   // The declaration's scope, for two reasons. A type parameter's default and
   // constraint are written at the declaration and resolve there, not at
   // whichever `new` first reached this application; and the DEFAULT constructor

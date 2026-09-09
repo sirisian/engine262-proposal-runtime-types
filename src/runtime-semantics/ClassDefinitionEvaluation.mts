@@ -54,6 +54,7 @@ import {
 } from './all.mts';
 import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import { GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf } from './RuntimeTypesDeclarations.mts';
+import { TakePendingCalleeContext } from '../type-system/runtime.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
 import {
   surroundingAgent,
@@ -715,6 +716,8 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           if (specialization !== undefined && specialization !== (F as unknown as Value)) {
             return Q(yield* Construct(specialization as FunctionObject, args, specialization as FunctionObject));
           }
+        } else {
+          TakePendingCalleeContext();
         }
       }
       let result;

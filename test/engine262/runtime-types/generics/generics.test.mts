@@ -92,17 +92,29 @@ test('generics: a class type parameter reaches a field annotation', () => {
   // not defined": a field is evaluated during class definition, where nothing
   // bound the class's parameters. Each is bound to a ~parameter~ record now -
   // the kind #table-type-record-kinds specifies and the engine lacked.
-  expect(ok('class B<T> { v: T = null; }')).toBe(true);
+  // The annotation resolves; the INITIALIZER is then checked against it, and
+  // `null` is not a value of an opaque `T` any more than `5` is
+  // (generic-body-checking, "a value of the bound is not a value of the
+  // parameter") - which is the checking the field's type now takes part in.
+  expect(ok('class B<T> { v: T = null; }')).toBe(false);
+  expect(ok('class B<T> { v: T; constructor(v: T) { this.v = v; } }')).toBe(true);
   // Uninitialized too: a parameter has no default, which is what leaves the
   // field alone rather than checking `undefined` against it.
   expect(ok('class B<T> { v: T; }')).toBe(true);
-  expect(ok('class B<T> { accessor v: T = null; }')).toBe(true);
+  // An accessor's backing field is the same position.
+  expect(ok('class B<T> { accessor v: T = null; }')).toBe(false);
+  expect(ok('class B<T> { accessor v: T; }')).toBe(true);
   // The positions that already worked must keep working.
   expect(ok('class B<T> { constructor(v: T) {} }')).toBe(true);
   expect(ok('class B<T> { m(v: T) {} }')).toBe(true);
-  expect(ok('class B<T> { m(): T { return null; } }')).toBe(true);
-  expect(ok('class B<T> { get v(): T { return null; } }')).toBe(true);
-  expect(ok('class B<T> { m() { const x: T = null; } }')).toBe(true);
+  // ...and a method BODY reads the class's `T` as the opaque parameter it is,
+  // exactly as a generic function's body does (`function f<T>() { let v: T =
+  // 5; }` is refused), now that the class scope is pushed for the whole body.
+  // These passed before because `T` in a body resolved to nothing at all.
+  expect(ok('class B<T> { m(): T { return null; } }')).toBe(false);
+  expect(ok('class B<T> { get v(): T { return null; } }')).toBe(false);
+  expect(ok('class B<T> { m() { const x: T = null; } }')).toBe(false);
+  expect(ok('class B<T> { m(v: T): T { const x: T = v; return x; } }')).toBe(true);
   expect(ok('class P<T> {} class B<T> extends P.<T> {}')).toBe(true);
 });
 

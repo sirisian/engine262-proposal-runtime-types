@@ -84,6 +84,41 @@ test('contextual positions: return, argument, assignment, field initializer, fie
   expectStaticTypeError(`${BOX} const b: Box.<uint8> = new Box(new Box(1));`);
 });
 
+test('a position\'s type reaches exactly the expression at that position', () => {
+  // #sec-contextual-types lists POSITIONS; "any other position" has none. A
+  // construction as a statement, a declaration's initializer of another type,
+  // or a condition inside `function g(): Box.<uint8>` does not read g's return
+  // type as its own - the position-precise stack (contextualTypeFor).
+  expect(evaluated(`${BOX} function g(): Box.<uint8> { new Box("s"); return new Box(1); } String(Reflect.typeOf(g()));`)).toBe('Box.<uint.<8>>');
+  expect(evaluated(`${BOX} function g(): Box.<uint8> { const x = new Box("s"); return new Box(1); } String(Reflect.typeOf(g()));`)).toBe('Box.<uint.<8>>');
+  expect(evaluated(`${BOX} function g(): Box.<uint8> { if (new Box("s")) {} return new Box(1); } String(Reflect.typeOf(g()));`)).toBe('Box.<uint.<8>>');
+  // The forms the checker is transparent to carry the position through.
+  expect(evaluated(`${BOX} const b: Box.<uint8> = (new Box(1)); String(Reflect.typeOf(b));`)).toBe('Box.<uint.<8>>');
+  expect(evaluated(`${BOX} const b: Box.<uint8> = true ? new Box(1) : new Box(2); String(Reflect.typeOf(b));`)).toBe('Box.<uint.<8>>');
+  // An element of an array literal at a position of known array type.
+  expect(evaluated(`${BOX} const bs: [].<Box.<uint8>> = [new Box(1)]; String(Reflect.typeOf(bs[0])) + " " + String(Reflect.typeOf(bs[0].v));`)).toBe('Box.<uint.<8>> uint.<8>');
+  expect(evaluated(`${ALIAS} ${caught('const bs: [].<Box.<uint8>> = [new C(1)]; r = String(Reflect.typeOf(bs[0]));')}`)).toBe('Box.<uint.<8>>');
+});
+
+test('C5: a call binds from its context before its arguments, both sides, and a seed the argument contradicts is dropped', () => {
+  const F = 'function f<T>(x: T): T { return x; } ';
+  expect(evaluated(`${F} const r: uint8 = f(1); String(Reflect.typeOf(r));`)).toBe('uint.<8>');
+  expectStaticTypeError(`${F} const r: uint8 = f("s");`);
+  expect(evaluated(`${F} function g(): uint8 { return f(1); } String(Reflect.typeOf(g()));`)).toBe('uint.<8>');
+  // A stale or foreign context costs nothing: the argument decides.
+  expect(evaluated(`${F} function g(): uint8 { f("s"); return 1; } String(g());`)).toBe('1');
+  // Bound through the declared return's shape.
+  expect(evaluated(`${BOX} function mk<T>(x: T): Box.<T> { return new Box(x); } const b: Box.<uint8> = mk(1); String(Reflect.typeOf(b)) + " " + String(Reflect.typeOf(b.v));`)).toBe('Box.<uint.<8>> uint.<8>');
+  expectStaticTypeError(`${BOX} function mk<T>(x: T): Box.<T> { return new Box(x); } const b: Box.<uint8> = mk("s");`);
+  // A callback's inferred return contradicts a seed as an argument's type does.
+  expectStaticTypeError('function f<K>(cb: () => K): K { return cb(); } let s: string = f(() => (1 := uint8));');
+  expect(evaluated('function f<K>(cb: () => K): K { return cb(); } let s: uint8 = f(() => (1 := uint8)); String(Reflect.typeOf(s));')).toBe('uint.<8>');
+  // The runtime alone (a call the checker cannot see through - a function
+  // read out of an untyped array): same answers.
+  expect(evaluated(`${F} const fs = [f]; const r: uint8 = fs[0](1); String(Reflect.typeOf(r));`)).toBe('uint.<8>');
+  expect(evaluated(`${F} const fs = [f]; ${caught('const q: uint8 = fs[0]("s"); r = "admitted";')}`)).toContain('runtime:');
+});
+
 // -- 2b. Which parameters are reachable --------------------------------------
 
 test('B1: every parameter reached by a formal binds', () => {
@@ -195,6 +230,26 @@ test('H2/H3/H4/Q7-i: the declaration is the family for instanceof', () => {
   expect(evaluated(`${BOX} String(new Box.<uint8>(1) instanceof Box.<uint8>) + " " + String(new Box.<uint8>(1) instanceof Box.<uint16>);`)).toBe('true false');
   expect(evaluated(`${BOX} class S extends Box.<uint8> {} String(new S(1) instanceof Box);`)).toBe('true');
   expect(evaluated(`${BOX} class Other {} String(new Other() instanceof Box) + " " + String(({}) instanceof Box);`)).toBe('false false');
+});
+
+test('H8: the declaration reflects as a generic signature over its own parameters', () => {
+  expect(evaluated(`${BOX} String(Reflect.typeOf(Box));`)).toBe('<T>(v: T) => Box.<T>');
+  expect(evaluated(`${BOX} String(Reflect.typeOf(Box.<uint8>));`)).toBe('(v: uint.<8>) => Box.<uint.<8>>');
+  expect(evaluated('class Pair<A, C> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } String(Reflect.typeOf(Pair));')).toBe('<A, C>(a: A, c: C) => Pair.<A, C>');
+});
+
+test('a member read on an instantiation is checked statically at the argument', () => {
+  // The field's declared type resolves under the class's parameters and the
+  // instantiation's arguments are substituted into its structure: `v` on a
+  // `Box.<number>` is a `number`, not an opaque `T` that admitted anything.
+  expectStaticTypeError(`${BOX} const n: string = new Box.<number>(1).v;`);
+  expectStaticTypeError(`${BOX} const b = new Box((1 := uint8)); const n: string = b.v;`);
+  expect(evaluated(`${BOX} const b = new Box((1 := uint8)); const n: uint8 = b.v; String(Reflect.typeOf(n));`)).toBe('uint.<8>');
+  expect(evaluated('class Pair<A, C> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } const p = new Pair((1 := uint8), "s"); const s: string = p.c; s;')).toBe('s');
+  // Inside the body `T` is the class's own parameter - it shadows a same-named
+  // outer alias, and a literal is not a value of it, as in a generic function.
+  expect(evaluated('type T = uint8; class C<T> { v: T; constructor(v: T) { this.v = v; } } String(Reflect.typeOf(new C("s")));')).toBe('C.<string>');
+  expectStaticTypeError('class A<T> { value: T = 0; }');
 });
 
 // -- 2c. The function path, for comparison ----------------------------------

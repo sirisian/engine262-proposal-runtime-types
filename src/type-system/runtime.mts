@@ -83,21 +83,104 @@ const typeParameterFrames: Map<string, TypeRecord>[] = [];
  * Modelled on typeParameterFrames above, which solves the same shape of
  * problem for generic parameters.
  */
-const contextualTypes: (TypeRecord | null)[] = [];
+const contextualTypes: { type: TypeRecord | null, node: object | undefined }[] = [];
 
-/** Bracket an evaluation whose position requires _t_, or nothing where it does not. */
-export function pushContextualType(t: TypeRecord | null): void {
-  contextualTypes.push(t);
+/**
+ * Bracket an evaluation whose position requires _t_, or nothing where it does
+ * not. _node_ is the expression AT that position - the initializer, the return
+ * operand, the right operand, the element - and a consumer that names its own
+ * node (contextualTypeFor) reads the type only for that node: #sec-contextual-
+ * types lists POSITIONS, and "any other position" has none. Without the tag a
+ * push applied to every expression nested under the position, so a `new
+ * Box("s");` statement inside `function g(): Box.<uint8>` read g's return type
+ * as its own and refused the String. A push with no node keeps the older,
+ * leaky reading for the consumers that still use currentContextualType.
+ */
+export function pushContextualType(t: TypeRecord | null, node?: object): void {
+  contextualTypes.push({ type: t, node });
 }
 
 export function popContextualType(): void {
   contextualTypes.pop();
 }
 
-/** The type the innermost bracketed position requires, or undefined. */
+/** The type the innermost bracketed position requires, or undefined - whatever node it was pushed for. */
 export function currentContextualType(): TypeRecord | undefined {
   const top = contextualTypes[contextualTypes.length - 1];
-  return top ?? undefined;
+  return top?.type ?? undefined;
+}
+
+/**
+ * The type _node_'s own position requires, or undefined. The innermost push
+ * answers when it was made for _node_, or for an ancestor reached from _node_
+ * through the forms the checker's staticTypeIn is transparent to: a
+ * parenthesized expression, an arm of a conditional, an operand of `&&`, `||`
+ * or `??`, the last expression of a comma. A push with no node answers for any
+ * node, as it always did.
+ */
+export function contextualTypeFor(node: object | undefined): TypeRecord | undefined {
+  const top = contextualTypes[contextualTypes.length - 1];
+  if (!top) {
+    return undefined;
+  }
+  if (top.node === undefined) {
+    return top.type ?? undefined;
+  }
+  let n: object | undefined = node;
+  while (n) {
+    if (n === top.node) {
+      return top.type ?? undefined;
+    }
+    const parent = (n as { parent?: object }).parent;
+    if (!parent) {
+      break;
+    }
+    const pt = (parent as { type?: string }).type;
+    const p = parent as { ShortCircuitExpression?: object, Expression?: object, ExpressionList?: readonly object[] };
+    const transparent = pt === 'ParenthesizedExpression'
+      || (pt === 'ConditionalExpression' && n !== p.ShortCircuitExpression)
+      || pt === 'LogicalANDExpression' || pt === 'LogicalORExpression' || pt === 'CoalesceExpression'
+      || (pt === 'CommaOperator' && p.ExpressionList !== undefined && p.ExpressionList[p.ExpressionList.length - 1] === n);
+    if (!transparent) {
+      break;
+    }
+    n = parent;
+  }
+  return undefined;
+}
+
+/**
+ * The contextual type a CALL or a CONSTRUCTION hands to its callee. EvaluateCall
+ * and EvaluateNew have the expression node and read its position
+ * (contextualTypeFor); the callee's [[Call]] or [[Construct]] does not, and the
+ * bindings are made there. Set immediately before the call and taken at the
+ * callee's entry - by FunctionCallSlot for the body's inference, by
+ * SpecializationForConstruction for a generic class, and discarded by any other
+ * entry - and cleared by the caller after the call returns, so nothing stale
+ * survives the expression.
+ */
+let pendingCalleeContext: TypeRecord | undefined;
+export function SetPendingCalleeContext(t: TypeRecord | undefined): void {
+  pendingCalleeContext = t;
+}
+export function TakePendingCalleeContext(): TypeRecord | undefined {
+  const t = pendingCalleeContext;
+  pendingCalleeContext = undefined;
+  return t;
+}
+/**
+ * The call's context, carried from FunctionCallSlot (which takes the pending
+ * one at the callee's entry) to EvaluateBody (which reads it FIRST, before the
+ * parameters' defaults run any code that could set another).
+ */
+let bodyContext: TypeRecord | undefined;
+export function SetBodyContext(t: TypeRecord | undefined): void {
+  bodyContext = t;
+}
+export function TakeBodyContext(): TypeRecord | undefined {
+  const t = bodyContext;
+  bodyContext = undefined;
+  return t;
 }
 
 /**

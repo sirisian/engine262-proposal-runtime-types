@@ -7,14 +7,16 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-const GRID = 'class Grid<T = float64, Cols = uint8> { t: T = 1; c: Cols = 1; }';
+// A field over a parameter takes its value through the constructor: a plain
+// literal is not a value of an opaque parameter (generic-body-checking).
+const GRID = 'class Grid<T = float64, Cols = uint8> { t: T; c: Cols; constructor(t: T, c: Cols) { this.t = t; this.c = c; } }';
 const BUFFER = "class Buffer<T = uint8, Size: uint32 = 256, Name: string = 'buf'> { size(): uint32 { return Size; } label(): string { return Name; } }";
 
 // A.B - classes.
 test('a named argument reaches its class parameter in TYPE position (B7)', () => {
   // Before: `Grid.<Cols: uint16>` resolved as `Grid.<uint16>` - T took the
   // argument and the annotation refused its own value.
-  expect(evaluated(`${GRID} let g: Grid.<Cols: uint16> = new Grid.<float64, uint16>(); String(g.c is uint16);`)).toBe('true');
+  expect(evaluated(`${GRID} let g: Grid.<Cols: uint16> = new Grid.<float64, uint16>(1, 1); String(g.c is uint16);`)).toBe('true');
 });
 
 test('a named argument reaches its class parameter through `new` (B1, B2)', () => {

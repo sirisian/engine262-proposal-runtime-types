@@ -271,7 +271,7 @@ export function* Evaluate_AssignmentExpression({
         // type is the right operand's contextual type (declaredTypeOfTarget).
         let rref;
         if (surroundingAgent.feature('runtime-types')) {
-          pushContextualType(declaredTypeOfTarget(lref));
+          pushContextualType(declaredTypeOfTarget(lref), AssignmentExpression as object);
           try {
             rref = Q(yield* Evaluate(AssignmentExpression));
           } finally {

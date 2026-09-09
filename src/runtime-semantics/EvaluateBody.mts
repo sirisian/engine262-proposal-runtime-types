@@ -10,7 +10,7 @@ import { Evaluate, type StatementEvaluator } from '../evaluator.mts';
 import { IsAnonymousFunctionDefinition, type FunctionDeclaration } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Mutable } from '../utils/language.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFrame } from '../type-system/runtime.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFrame, TakeBodyContext } from '../type-system/runtime.mts';
 import {
   Evaluate_FunctionStatementList,
   FunctionDeclarationInstantiation,
@@ -66,11 +66,13 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
   // parameters needs the boundary whether or not anything in it is annotated;
   // one with neither is unaffected, since the operations below then find
   // nothing to do.
+  // Read FIRST, before anything in this body could set another.
+  const callContext = surroundingAgent.feature('runtime-types') ? TakeBodyContext() : undefined;
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode
       && (functionHasAnnotations(functionObject) || functionTypeParameters(functionObject as never) !== null)) {
     // Capability B: a generic function infers its type parameters from the call
     // arguments and evaluates its parameter and return types over those bindings.
-    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList, currentTypeParameterFrame()));
+    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList, currentTypeParameterFrame(), callContext));
     // proposal-runtime-types #sec-generics: a parameter already bound by a
     // frame in scope - a specialization's, or the explicit arguments of
     // `f.<4>()` - keeps that binding. The inference above falls back to `any` for a
@@ -97,7 +99,10 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
       // cannot select an overload, because the overload has already run, which
       // is what the binding boundary looked like before it was fixed.
       const declaredReturn = EnsureCompletion(yield* returnTypeRecordOf(functionObject));
-      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null);
+      // Tagged with the BODY, which no expression is, so only a `return`
+      // (Evaluate_ReturnStatement re-pushes it for its operand) and the
+      // concise body's expression read it as their own position.
+      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null, functionObject.ECMAScriptCode as object);
       let result;
       try {
         result = EnsureCompletion(yield* Evaluate_FunctionStatementList(FunctionStatementList));
@@ -143,12 +148,14 @@ export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.Exp
 /** https://tc39.es/ecma262/#sec-arrow-function-definitions-runtime-semantics-evaluatebody */
 // ConciseBody : ExpressionBody
 export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
+  // Read FIRST: a parameter default below may call something that sets another.
+  const callContext = surroundingAgent.feature('runtime-types') ? TakeBodyContext() : undefined;
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode
       && (functionHasAnnotations(functionObject) || functionTypeParameters(functionObject as never) !== null)) {
     // Capability B: infer generic type parameters from the call arguments.
-    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList, currentTypeParameterFrame()));
+    const bindings = Q(yield* InferGenericCallBindings(functionObject, argumentsList, currentTypeParameterFrame(), callContext));
     // proposal-runtime-types #sec-generics: a parameter already bound by a
     // frame in scope - a specialization's, or the explicit arguments of
     // `f.<4>()` - keeps that binding. The inference above falls back to `any` for a
@@ -175,7 +182,10 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
       // cannot select an overload, because the overload has already run, which
       // is what the binding boundary looked like before it was fixed.
       const declaredReturn = EnsureCompletion(yield* returnTypeRecordOf(functionObject));
-      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null);
+      // Tagged with the BODY, which no expression is, so only a `return`
+      // (Evaluate_ReturnStatement re-pushes it for its operand) and the
+      // concise body's expression read it as their own position.
+      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null, functionObject.ECMAScriptCode as object);
       let result;
       try {
         result = EnsureCompletion(yield* Evaluate(ExpressionBody));

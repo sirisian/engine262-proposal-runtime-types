@@ -348,11 +348,14 @@ test('a specialized field holds the argument type', () => {
   expectThrown(`${box} const b = new Box.<uint8>(); b.set("a string");`);
 });
 
-test('a plain literal initializer converts to the bound type', () => {
-  // The assertion that would pass spuriously against an ALREADY-TYPED
-  // initializer: `value: T = (0 := uint8)` reads back as a uint8 whether or not
-  // the field's type substituted, because the initializer was one already.
-  expect(evaluated('class A<T> { value: T = 0; } const a = new A.<uint8>();'
+test('a plain literal is not a value of the parameter, in a field as in a binding', () => {
+  // The rule generic-body-checking states for `let v: T = 5`: a parameter is
+  // opaque within its declaration, and a Number is not known to be a `T`. A
+  // field initializer is the same position, and was accepted only while the
+  // field's type was invisible to the checker. What substitutes is the field's
+  // TYPE: a value that arrives AS a `T` reads back at the bound type.
+  expectError('class A<T> { value: T = 0; }');
+  expect(evaluated('class A<T> { value: T; constructor(v: T) { this.value = v; } } const a = new A.<uint8>(0);'
     + ' `${a.value}:${a.value is uint8}`;')).toBe('0:true');
 });
 

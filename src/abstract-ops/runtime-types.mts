@@ -24,6 +24,7 @@ import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
 import { currentContextualType } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
@@ -3489,7 +3490,7 @@ export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNod
  * call arguments. A non-generic function returns null; the caller then does not
  * push a frame.
  */
-export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly (Value | undefined)[], preBound?: ReadonlyMap<string, TypeRecord>): PlainEvaluator<Map<string, TypeRecord> | null> {
+export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly (Value | undefined)[], preBound?: ReadonlyMap<string, TypeRecord>, callContext?: TypeRecord): PlainEvaluator<Map<string, TypeRecord> | null> {
   const typeParameters = functionTypeParameters(fn);
   if (!typeParameters) {
     // proposal-runtime-types: a METHOD of a generic class has no type
@@ -3518,7 +3519,144 @@ export function* InferGenericCallBindings(fn: AnnotatedFunction, args: readonly 
     return null;
   }
   const formals = (fn.FormalParameters as readonly ParseNode[] | undefined) ?? [];
-  return Q(yield* InferGenericBindings(typeParameters, formals, args.map((a) => a ?? Value.undefined), preBound));
+  const values = args.map((a) => a ?? Value.undefined);
+  // proposal-runtime-types #sec-constructing-a-generic-class, the same ladder
+  // for a call: the CONTEXTUAL type of the call binds, before the arguments,
+  // the parameters its declared return type mentions - `const r: uint8 = f(1)`
+  // for `f<T>(x: T): T` binds T to uint8 and the literal takes it, as the
+  // checker's arm reads it. A seed is kept only where the arguments the
+  // positional rule sees accept it (contextualCallSeeds), so a context that
+  // reached the wrong call - which a position-precise stack should not let
+  // happen, but a pending slot might - costs nothing.
+  let seeded = preBound;
+  if (callContext !== undefined) {
+    const seeds = Q(yield* contextualCallSeeds(fn, typeParameters, formals, values, callContext, preBound));
+    if (seeds.size > 0) {
+      const merged = new Map<string, TypeRecord>(preBound ?? []);
+      for (const [name, record] of seeds) {
+        if (!merged.has(name)) {
+          merged.set(name, record);
+        }
+      }
+      seeded = merged;
+    }
+  }
+  return Q(yield* InferGenericBindings(typeParameters, formals, values, seeded));
+}
+
+/**
+ * The bindings a call's contextual type makes: the declared return type,
+ * resolved with the unbound parameters as ~parameter~ records, matched by the
+ * shared walk (unify.mts) against the context. Each seed is then VERIFIED
+ * against the argument any formal annotated with exactly that parameter
+ * receives, by the parameter boundary's own test (CheckedConvertValue): a seed
+ * the argument would not convert to is dropped, and the argument binds instead.
+ */
+function* contextualCallSeeds(
+  fn: AnnotatedFunction,
+  typeParameters: readonly ParseNode.TypeParameter[],
+  formals: readonly ParseNode[],
+  args: readonly Value[],
+  callContext: TypeRecord,
+  preBound?: ReadonlyMap<string, TypeRecord>,
+): PlainEvaluator<Map<string, TypeRecord>> {
+  const seeds = new Map<string, TypeRecord>();
+  const annotation = returnAnnotationOf(fn);
+  if (!annotation?.Type) {
+    return seeds;
+  }
+  const placeholders = new Map<string, TypeRecord>();
+  for (const tp of typeParameters) {
+    const name = tp.BindingIdentifier?.name;
+    if (name && !preBound?.has(name) && ((tp as { Arity?: number }).Arity ?? 0) === 0) {
+      placeholders.set(name, { Kind: 'parameter', Name: name, Declaration: tp } as unknown as TypeRecord);
+    }
+  }
+  if (placeholders.size === 0) {
+    return seeds;
+  }
+  const names = new Set(placeholders.keys());
+  pushTypeParameterFrame(placeholders);
+  let shape: TypeRecord | null = null;
+  try {
+    const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+    shape = resolved.Type === 'normal' ? resolved.Value as TypeRecord : null;
+  } finally {
+    popTypeParameterFrame();
+  }
+  if (!shape || !mentionsParameterNamed(shape, names)) {
+    return seeds;
+  }
+  unifyTypeParameters([{ Type: shape }], [callContext], names, seeds, {
+    mentionsTypeParameter: (t) => mentionsParameterNamed(t, names),
+    substituteTypeParameters: substituteParametersNamed,
+  });
+  for (const [name, record] of [...seeds]) {
+    if (record.Kind === 'parameter' || record.Kind === 'any') {
+      seeds.delete(name);
+    }
+  }
+  if (seeds.size === 0) {
+    return seeds;
+  }
+  // Verification: every formal that mentions a seeded parameter, resolved with
+  // the seeds (and the parameters they leave open as placeholders), must accept
+  // its argument by the parameter boundary's own test. A formal still
+  // mentioning an open parameter is not decidable yet and does not vote.
+  const trial = new Map<string, TypeRecord>(placeholders);
+  for (const [name, record] of seeds) {
+    trial.set(name, record);
+  }
+  const contradicted = new Set<string>();
+  pushTypeParameterFrame(trial);
+  try {
+    for (let i = 0; i < formals.length && i < args.length; i += 1) {
+      const f = formals[i] as { type?: string, TypeAnnotation?: { Type?: ParseNode.Type } | null };
+      const annotation = f.TypeAnnotation?.Type;
+      if (!annotation || f.type === 'BindingRestElement') {
+        continue;
+      }
+      const mentioned = [...seeds.keys()].filter((n) => annotationMentionsName(annotation, n));
+      if (mentioned.length === 0) {
+        continue;
+      }
+      const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation));
+      if (resolved.Type !== 'normal') {
+        continue;
+      }
+      const shape = resolved.Value as TypeRecord;
+      const open = new Set([...placeholders.keys()].filter((n) => !seeds.has(n)));
+      if (open.size > 0 && mentionsParameterNamed(shape, open)) {
+        continue;
+      }
+      const converted = EnsureCompletion(yield* CheckedConvertValue(args[i]!, shape));
+      if (converted.Type !== 'normal') {
+        for (const n of mentioned) {
+          contradicted.add(n);
+        }
+      }
+    }
+  } finally {
+    popTypeParameterFrame();
+  }
+  for (const n of contradicted) {
+    seeds.delete(n);
+  }
+  return seeds;
+}
+
+/** Whether a type annotation node mentions the type parameter _name_. */
+function annotationMentionsName(node: unknown, name: string): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  const n = node as { type?: string, name?: string, TypeName?: { IdentifierReference?: { name?: string } } };
+  if ((n.type === 'TypeReference' && n.TypeName?.IdentifierReference?.name === name) || (n.type === 'IdentifierReference' && n.name === name)) {
+    return true;
+  }
+  return Object.keys(n).some((key) => key !== 'parent' && key !== 'location' && (Array.isArray((n as Record<string, unknown>)[key])
+    ? ((n as Record<string, unknown[]>)[key]).some((c) => annotationMentionsName(c, name))
+    : annotationMentionsName((n as Record<string, unknown>)[key], name)));
 }
 
 /** Converts each annotated parameter's bound value in place at entry. */
@@ -3983,7 +4121,15 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   // resolver can rank a generic member (overloads.mts, the Generic tier) and the
   // call that selects it binds them from the arguments as any generic call does.
   const genericDeclaration = (((fn as { ECMAScriptCode?: { parent?: unknown } | null }).ECMAScriptCode?.parent) ?? null) as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | null;
-  const genericTypeParameters = genericDeclaration?.TypeParameters?.TypeParameterList;
+  // A generic CLASS's constructor is a generic signature over the CLASS's
+  // parameters: `Reflect.typeOf(Box)` for `class Box<T> { constructor(v: T) }`
+  // is `<T>(v: T) => Box.<T>`, as `Reflect.typeOf(f)` for `function f<T>(x: T):
+  // T` is `<T>(x: T) => T`. Read without them the formal's `T` was not defined
+  // (PLAN-v3 H8). A SPECIALIZATION's constructor resolves under its own frame
+  // (classFrameOfMethod) and is not this.
+  const constructorOfGeneric = classFrameOfMethod(fn) === null ? GenericClassDeclarationOf(fn as unknown as Value) : undefined;
+  const genericTypeParameters = genericDeclaration?.TypeParameters?.TypeParameterList
+    ?? constructorOfGeneric?.TypeParameters?.TypeParameterList;
   // A METHOD's annotations may name its CLASS's parameters (`[].<T>` on a
   // method of `vec<T, N>`); they resolve under the specialized class's frame.
   const methodClassFrame = resolveAnnotations ? classFrameOfMethod(fn) : null;

@@ -11,7 +11,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { CreateArrayFromList, Get } from '../abstract-ops/all.mts';
-import { RuntimeTypeOf, currentContextualType, pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
   Q, X,
@@ -45,6 +45,21 @@ import { CreateDataProperty, OrdinaryObjectCreate } from '#self';
  * carries its members in [[Properties]]; an interface or alias is a nominal
  * whose [[Structure]] does.
  */
+/** The contextual type of the object literal a property definition belongs to. */
+function objectLiteralContext(definition: object, literal: object | undefined): TypeRecord | undefined {
+  // The definition's ancestors up to the ObjectLiteral; the first that has a
+  // position is the literal's.
+  let n: object | undefined = definition;
+  for (let i = 0; i < 3 && n; i += 1) {
+    const t = contextualTypeFor(n);
+    if (t !== undefined) {
+      return t;
+    }
+    n = (n as { parent?: object }).parent;
+  }
+  return literal ? contextualTypeFor(literal) : undefined;
+}
+
 function propertyContextualType(contextual: TypeRecord | null | undefined, key: Value): TypeRecord | null {
   if (!contextual || !(key instanceof JSStringValue)) {
     return null;
@@ -265,7 +280,10 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
     // leak into a member that is not it.
     let exprValueRef;
     if (surroundingAgent.feature('runtime-types')) {
-      pushContextualType(propertyContextualType(currentContextualType(), propKey));
+      // The literal's own position (its parent is the ObjectLiteral).
+      const definition = PropertyDefinition as unknown as { parent?: { parent?: object } };
+      const literal = definition.parent?.parent ?? (definition as { parent?: object }).parent;
+      pushContextualType(propertyContextualType(objectLiteralContext(PropertyDefinition as object, literal), propKey), AssignmentExpression as object);
       try {
         exprValueRef = Q(yield* Evaluate(AssignmentExpression));
       } finally {
