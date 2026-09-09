@@ -57,6 +57,18 @@ const KINDS: [string, string, string][] = [
 for (const [n, pre, expr] of KINDS) {
   test(n, () => { expect(`${n}:${check(pre, [expr])}`).toBe(`${n}:same`); });
 }
+test('canonical order: the table does not depend on how roots were enumerated', () => {
+  // Ordered by `orderKey`, the total order interning already sorts by, rather
+  // than by first encounter from the roots. First-encounter is cheaper and lets
+  // two producers over one graph emit different bytes for the same types, which
+  // the hash would then call a difference. Determinism belongs to the format.
+  const forward = rootsOf('type A = { a: uint8 }; type B = { b: string };', ['A', 'B'])!;
+  const reverse = rootsOf('type A = { a: uint8 }; type B = { b: string };', ['B', 'A'])!;
+  const shape = (m: Map<string, never>) => SerializeTypeTable(m as never)
+    .types.map((e) => String((e as { Kind?: string }).Kind)).join(',');
+  expect(shape(forward.roots)).toBe(shape(reverse.roots));
+});
+
 test('deterministic: the same roots twice give the same table', () => {
   const r = rootsOf('type U = { b: uint8, a: string };', ['U'])!;
   const a = JSON.stringify(SerializeTypeTable(r.roots as never).types.map((e) => Object.keys(e)));

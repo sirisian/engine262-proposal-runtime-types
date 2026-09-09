@@ -1,5 +1,5 @@
 import { GetTypeObject } from './intern.mts';
-import type { TypeRecord } from './records.mts';
+import { orderKey, type TypeRecord } from './records.mts';
 
 /**
  * proposal-runtime-types #sec-expansion-artifact, the reference scheme.
@@ -78,32 +78,52 @@ function isTypeRecord(value: unknown): value is TypeRecord {
  * canonical order.
  */
 export function SerializeTypeTable(roots: ReadonlyMap<string, TypeRecord>): TypeTable {
-  const indices = new Map<TypeRecord, number>();
-  const types: Entry[] = [];
-
-  const indexOf = (record: TypeRecord): number => {
-    const seen = indices.get(record);
-    if (seen !== undefined) {
-      return seen;
+  // Collected first, ordered second, encoded third.
+  //
+  // The order is CANONICAL - `orderKey`'s total order over records, the same one
+  // interning sorts by - and not first-encounter from the roots. First-encounter
+  // is cheaper and makes the table's layout depend on the order a caller happened
+  // to enumerate its exports in, so two producers over one graph could emit
+  // different bytes for the same types and the hash would call them different.
+  // Determinism has to be a property of the format rather than of the caller.
+  const reachable = new Set<TypeRecord>();
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
     }
-    // Reserved BEFORE the fields are walked, so a record that reaches itself
-    // finds its own index rather than recurring.
-    const index = types.length;
-    indices.set(record, index);
-    types.push({});
-    const entry = types[index]!;
-    for (const [key, value] of Object.entries(record)) {
-      entry[key] = encode(value);
+    if (isTypeRecord(value)) {
+      if (reachable.has(value)) {
+        return;
+      }
+      reachable.add(value);
+      for (const nested of Object.values(value)) {
+        collect(nested);
+      }
+      return;
     }
-    return index;
+    if (isPlainRecord(value)) {
+      Object.values(value).forEach(collect);
+    }
   };
+  for (const record of roots.values()) {
+    collect(record);
+  }
+
+  const ordered = [...reachable].sort((a, b) => {
+    const ka = orderKey(a);
+    const kb = orderKey(b);
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+  const indices = new Map<TypeRecord, number>();
+  ordered.forEach((record, index) => indices.set(record, index));
 
   const encode = (value: unknown): unknown => {
     if (Array.isArray(value)) {
       return value.map(encode);
     }
     if (isTypeRecord(value)) {
-      return { $ref: indexOf(value) } satisfies Ref;
+      return { $ref: indices.get(value)! } satisfies Ref;
     }
     if (isPlainRecord(value)) {
       const out: Record<string, unknown> = {};
@@ -115,9 +135,16 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, TypeRecord>): Type
     return value;
   };
 
+  const types: Entry[] = ordered.map((record) => {
+    const entry: Entry = {};
+    for (const [key, value] of Object.entries(record)) {
+      entry[key] = encode(value);
+    }
+    return entry;
+  });
   const exports: Record<string, number> = {};
   for (const [name, record] of roots) {
-    exports[name] = indexOf(record);
+    exports[name] = indices.get(record)!;
   }
   return { version: TYPE_TABLE_VERSION, types, exports };
 }
