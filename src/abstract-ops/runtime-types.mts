@@ -2430,6 +2430,30 @@ export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
     marker.endBound = value.RangeEndBound;
     return Object.freeze(marker) as unknown as Value;
   }
+  // A marker the reflection side already produced, handed back through
+  // `makeType`. `metadataToValue` emits a range as `{ __range, start, end,
+  // startBound, endBound }` rather than as a live RangeObject, so a round trip
+  // arrives here as an ordinary object and was walked as one - the rebuilt type
+  // read `float64.<{ bounds: { __range: true, ... } }>` where the original read
+  // `float64.<{ bounds: 0..<10 }>`, which is a different interned type.
+  //
+  // Rebuilt into the same frozen marker the branch above produces, so the two
+  // ways of reaching a range agree. Reading the fields back is what makes the
+  // identity law hold for a range carried as metadata.
+  if (value instanceof ObjectValue) {
+    const flag = Q(yield* Get(value, Value('__range')));
+    if (flag === Value.true) {
+      const marker: Record<string, unknown> = Object.create(null);
+      marker.__range = true;
+      marker.start = Q(yield* Get(value, Value('start')));
+      marker.end = Q(yield* Get(value, Value('end')));
+      const startBound = Q(yield* Get(value, Value('startBound')));
+      const endBound = Q(yield* Get(value, Value('endBound')));
+      marker.startBound = startBound instanceof JSStringValue ? startBound.stringValue() : startBound;
+      marker.endBound = endBound instanceof JSStringValue ? endBound.stringValue() : endBound;
+      return Object.freeze(marker) as unknown as Value;
+    }
+  }
   const asRegExp = value as { OriginalSource?: JSStringValue, OriginalFlags?: JSStringValue };
   if (asRegExp.OriginalSource !== undefined && asRegExp.OriginalFlags !== undefined) {
     const marker: Record<string, unknown> = Object.create(null);

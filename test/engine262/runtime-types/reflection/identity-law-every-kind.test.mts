@@ -53,12 +53,13 @@ test('shared keeps its marker, which is what the round trip was losing', () => {
   expect(evaluated('type S = shared uint32; String(S === uint32);')).toBe('false');
 });
 
-// KNOWN GAP, pinned rather than hidden. A range carried as metadata does not
-// round-trip: the rebuilt type reads `float64.<{ bounds: { __range: true, ... } }>`
-// where the original reads `float64.<{ bounds: 0..<10 }>`, so the leaf is walked
-// as an ordinary object instead of being rebuilt as a range. `bounds` needs a
-// user `meta` declaration, which is why it took a preamble to reach at all.
-test.fails('range metadata does not round-trip yet', () => {
+// Range metadata, which this sweep found broken and which is fixed now: the
+// rebuilt type read `float64.<{ bounds: { __range: true, ... } }>` where the
+// original reads `float64.<{ bounds: 0..<10 }>`, because reflection emits a range
+// as a marker rather than as a live object and the snapshot walked the marker as
+// an ordinary record. `bounds` needs a user `meta` declaration, which is why it
+// took a preamble to reach at all - and why nine sampled kinds missed it.
+test('range metadata round-trips', () => {
   const meta = 'type NB = { bounds?: RangeBounds }; meta NB { default = {}; subtype(a,b){ return true; } } ';
   const declaration = 'type R = float64.<{ bounds: 0..<10 }>; ';
   expect(evaluated(`${meta}${declaration} String(Reflect.makeType(Reflect.getReflection(R)) === R);`)).toBe('true');
