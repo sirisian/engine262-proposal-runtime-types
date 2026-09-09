@@ -8,6 +8,7 @@ import {
   AllDefaultsFrame, pushTypeParameterFrame, popTypeParameterFrame,
 } from '../type-system/runtime.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
+import { RecordTypeOrigin, OriginOfNode } from '../type-system/provenance.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { InstallTypeObjectSurface } from '../intrinsics/TypePrototype.mts';
 import { RegisterStampedClass } from '../type-system/intern.mts';
@@ -112,9 +113,23 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       (value as unknown as { TypeRecord?: unknown }).TypeRecord = (typeObject as unknown as { TypeRecord: unknown }).TypeRecord;
       InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue);
       AssociateClassType(value, value);
+      // #sec-provenance: a class type carried NO origin, while an alias, an
+      // interface and an enum all do - so a tool could say where every other
+      // declaration form was written and nothing about a class, which is the
+      // form most often asked about. Recorded here because this is where a class
+      // becomes its own Type Object.
+      RecordTypeOrigin(value as unknown as object,
+        OriginOfNode(ClassDeclaration as never, 'ClassDeclaration', className.stringValue()));
       RegisterStampedClass((typeObject as unknown as { TypeRecord: { Declaration: object } }).TypeRecord.Declaration, value as unknown as ObjectValue);
     } else {
       AssociateClassType(value, typeObject);
+      // A GENERIC class: recorded on BOTH the generic Type Object and the
+      // constructor, because a tool may hold either. `G` in a type position is
+      // the generic; `G` in expression position is the constructor, and asking
+      // where it was declared is the same question.
+      const origin = OriginOfNode(ClassDeclaration as never, 'ClassDeclaration', className.stringValue());
+      RecordTypeOrigin(typeObject as unknown as object, origin);
+      RecordTypeOrigin(value as unknown as object, origin);
     }
   }
   // 4. Let env be the running execution context's LexicalEnvironment.

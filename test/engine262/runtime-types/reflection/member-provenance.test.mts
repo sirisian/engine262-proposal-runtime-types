@@ -59,6 +59,21 @@ test('a member a builder minted has none, and the application is the fallback', 
   expect(TypeOrigins(t)).toEqual([]);
 });
 
+test('a class carries an origin, as every other declaration form does', () => {
+  // It carried none, while an alias, an interface and an enum all did - so a tool
+  // could say where every other form was written and nothing about a class,
+  // which is the form most often asked about. Found while asking how a NOMINAL
+  // type could be named in an expansion artifact: a declaration cannot cross a
+  // wire, so the stable name has to come from somewhere, and provenance is where.
+  const cls = typeOf('class C {}\nC;');
+  expect(TypeOrigins(cls)[0]?.name).toBe('C');
+  expect(TypeOrigins(cls)[0]?.kind).toBe('ClassDeclaration');
+  // A generic class records on both the generic Type Object and the constructor,
+  // because a tool may hold either and it is the same question.
+  const generic = typeOf('class G<T> { v: T; }\nG;');
+  expect(TypeOrigins(generic)[0]?.name).toBe('G');
+});
+
 test('a key that was never declared has none', () => {
   const t = typeOf('type User = { name: string }; User;');
   expect(MemberOrigins(t, 'nope')).toEqual([]);
