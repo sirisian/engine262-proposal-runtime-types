@@ -28,13 +28,13 @@ import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
-  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
+  pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration, InferGenericBindings } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
-import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
+import { markBuiltinFunctionAsConstructor, setConstructionSpecializer } from '../abstract-ops/function-operations.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import { anyType } from '../type-system/records.mts';
 import { ConvertValue, AssociateClassType, LookupClassType } from '../abstract-ops/runtime-types.mts';
@@ -2345,3 +2345,62 @@ function NumericValueOfEnumerator(v: Value): number | undefined {
   }
   return v instanceof NumberValue ? (R(v) as number) : undefined;
 }
+
+/**
+ * A bare construction of a generic class builds from the specialization its
+ * ARGUMENTS name.
+ *
+ * `new Box((1 := uint8))` reported bare `Box`, so a program could not name the
+ * type of the value it had just built:
+ * `const b: Box.<uint8> = new Box((1 := uint8))` was refused. The class's type
+ * parameter was reached at the call - `InferGenericCallBindings` finds it through
+ * the enclosing class - but bound to ~any~, because for an ordinary METHOD
+ * substituting the real type is the specialization's work. A construction is
+ * where the specialization is chosen, and its arguments are the only evidence
+ * there will be.
+ *
+ * Registered rather than called directly: `[[Construct]]` is in abstract-ops,
+ * which nothing imports this module from, and the hook is the seam
+ * `setLayoutSubstituter` already uses for the same direction.
+ *
+ * Answers *undefined* wherever it does not apply, so `[[Construct]]` carries no
+ * type-system knowledge: a class with no type parameters, an argument list that
+ * leaves a parameter unreached, a constructor that already belongs to a
+ * specialization, and a subclass construction (which `[[Construct]]` filters by
+ * `newTarget === F` before calling).
+ */
+setConstructionSpecializer(function* constructionSpecializer(F, args) {
+  const classType = LookupClassType(F as unknown as object);
+  const declaration = classType && isTypeObject(classType) && classType.TypeRecord.Kind === 'nominal'
+    ? classType.TypeRecord.Declaration as unknown as ParseNode.ClassDeclaration
+    : undefined;
+  const params = declaration?.TypeParameters?.TypeParameterList;
+  if (!declaration || !params || params.length === 0 || !declaration.ClassTail) {
+    return undefined;
+  }
+  // Already a specialization: its record carries the arguments it was made for.
+  const existing = (classType as { TypeRecord?: { Arguments?: readonly unknown[] } }).TypeRecord;
+  if (existing?.Arguments?.length) {
+    return undefined;
+  }
+  const formals = ((F as unknown as { FormalParameters?: readonly ParseNode[] }).FormalParameters) ?? [];
+  const inferred = Q(yield* InferGenericBindings(
+    params as readonly ParseNode.TypeParameter[],
+    formals,
+    args as readonly Value[],
+  ));
+  const argRecords: TypeRecord[] = [];
+  for (const p of params) {
+    const name = (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+    const bound = name ? inferred.get(name) : undefined;
+    // A parameter the arguments do not reach leaves the construction bare, as it
+    // was before: inferring some and defaulting the rest would name a
+    // specialization the program did not.
+    if (!bound || bound.Kind === 'any') {
+      return undefined;
+    }
+    argRecords.push(bound);
+  }
+  const made = Q(yield* MaterializeSpecialization(declaration, argRecords));
+  return made instanceof ObjectValue ? made : undefined;
+});
