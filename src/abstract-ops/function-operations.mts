@@ -222,25 +222,6 @@ export function OrdinaryCallBindThis(F: ECMAScriptFunctionObject, calleeContext:
 }
 
 /** https://tc39.es/ecma262/#sec-ordinarycallevaluatebody */
-/**
- * Chooses the specialization a BARE construction of a generic class builds from.
- *
- * Registered by the type system at load rather than imported, because
- * `[[Construct]]` lives in abstract-ops and the specializer lives in
- * runtime-semantics, which imports FROM here and not the other way. This is the
- * seam `setLayoutSubstituter` and `setRangeEnumRecordImpl` already use.
- *
- * Answers *undefined* for anything it does not handle - a non-generic class, a
- * class whose parameters the arguments do not reach, an explicit application, or
- * a subclass construction - so the guards live with the type system and this file
- * stays free of them.
- */
-let constructionSpecializer: ((F: ObjectValue, args: Arguments) => PlainEvaluator<ObjectValue | undefined>) | undefined;
-
-export function setConstructionSpecializer(fn: typeof constructionSpecializer): void {
-  constructionSpecializer = fn;
-}
-
 export function* OrdinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // proposal-runtime-types #sec-generics: a body declared inside a
   // specialization sees that specialization's bindings. The frame captured when
@@ -536,26 +517,6 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   let thisArgument;
   // 5. If kind is base, then
   if (kind === 'base') {
-    // proposal-runtime-types: a BARE construction of a generic class chooses its
-    // specialization here, from the arguments.
-    //
-    // The prototype comes from `newTarget`, and this line runs BEFORE the body -
-    // so inferring the class's type parameters in `EvaluateBody`, where every
-    // other inference happens, is thirty lines too late: the instance already
-    // exists with the declaration's prototype, and a typed instance is sealed and
-    // cannot be repointed. `new Box((1 := uint8))` therefore reported bare `Box`,
-    // and `const b: Box.<uint8> = new Box((1 := uint8))` was refused as
-    // "Box is not assignable to Box.<uint.<8>>".
-    //
-    // The hook is registered by the type system rather than imported: this file
-    // is in abstract-ops, which nothing imports the specializer from, and
-    // `setLayoutSubstituter` solves the same direction problem the same way.
-    if (constructionSpecializer !== undefined && newTarget === (F as unknown as ObjectValue)) {
-      const specialized = yield* constructionSpecializer(F as unknown as ObjectValue, argumentsList);
-      if (specialized !== undefined) {
-        newTarget = specialized as typeof newTarget;
-      }
-    }
     // a. Let thisArgument be ? OrdinaryCreateFromConstructor(newTarget, "%Object.prototype%").
     thisArgument = Q(yield* OrdinaryCreateFromConstructor(newTarget, '%Object.prototype%'));
     // proposal-runtime-types: a placement allocation binds HERE, between the
