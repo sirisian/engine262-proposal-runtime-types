@@ -1,5 +1,6 @@
 import { GetTypeObject } from './intern.mts';
 import { TypeOrigins } from './provenance.mts';
+import { Value, TypedNumberValue } from '../value.mts';
 import { orderKey, type TypeRecord } from './records.mts';
 
 /**
@@ -105,6 +106,13 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, object>): TypeTabl
     }
     if (isPlainRecord(value)) {
       Object.values(value).forEach(collect);
+      return;
+    }
+    // A typed number carries the numeric type of its value, which needs a table
+    // entry like any other type.
+    const typed = value as { type?: string, TypeRecord?: unknown } | null;
+    if (typed?.type === 'TypedNumber' && isTypeRecord(typed.TypeRecord)) {
+      collect(typed.TypeRecord);
     }
   };
   // TYPE OBJECTS in, Type Objects out. The reader already returns them - it ends
@@ -143,6 +151,9 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, object>): TypeTabl
         out[key] = encode(nested);
       }
       return out;
+    }
+    if (isEncodableLeaf(value)) {
+      return encodeLeaf(value, (r) => ({ $ref: indices.get(r)! }));
     }
     return value;
   };
@@ -205,6 +216,59 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 function isParseNode(value: object): boolean {
   return typeof (value as { type?: unknown }).type === 'string'
     && 'parent' in value;
+}
+
+/**
+ * A LEAF is encoded, not carried. Once a nominal travels by name, every leaf a
+ * table holds is a primitive value - measured: a string, a number, a boolean, a
+ * bigint, or a typed number - so the table becomes bytes rather than an
+ * in-process structure, and that is what makes it an artifact rather than a
+ * stage toward one.
+ *
+ * A TYPED NUMBER is not quite a leaf: it carries the numeric type its value has,
+ * so its type is a reference into the table like any other. That is why the
+ * collecting pass has to look inside one.
+ *
+ * A SYMBOL is refused. An unregistered symbol has no name that survives a
+ * boundary, and a registered one would need `Symbol.for` at the consumer - a
+ * decision about identity across a wire rather than an encoding, so it declines
+ * here rather than guessing.
+ */
+function encodeLeaf(value: unknown, ref: (r: TypeRecord) => unknown): unknown {
+  const leaf = value as { type?: string, value?: unknown, TypeRecord?: TypeRecord };
+  switch (leaf.type) {
+    case 'String': return { $str: leaf.value as string };
+    case 'Number': return { $num: leaf.value as number };
+    case 'Boolean': return { $bool: leaf.value as boolean };
+    case 'BigInt': return { $bigint: String(leaf.value) };
+    case 'TypedNumber':
+      return { $typed: { value: String(leaf.value), type: ref(leaf.TypeRecord as TypeRecord) } };
+    default:
+      return undefined;
+  }
+}
+
+function decodeLeaf(value: Record<string, unknown>, deref: (v: unknown) => unknown): unknown {
+  if ('$str' in value) { return Value(value.$str as string); }
+  if ('$num' in value) { return Value(value.$num as number); }
+  if ('$bool' in value) { return value.$bool === true ? Value.true : Value.false; }
+  if ('$bigint' in value) { return Value(BigInt(value.$bigint as string)); }
+  if ('$typed' in value) {
+    const typed = value.$typed as { value: string, type: unknown };
+    const record = deref(typed.type) as TypeRecord;
+    const numeric = typed.value.includes('.') || typed.value.includes('e')
+      ? Number(typed.value)
+      : BigInt(typed.value);
+    return new TypedNumberValue(numeric as never, record as never);
+  }
+  return undefined;
+}
+
+/** Whether a value is one of the leaves `encodeLeaf` knows. */
+function isEncodableLeaf(value: unknown): boolean {
+  const type = (value as { type?: string } | null)?.type;
+  return type === 'String' || type === 'Number' || type === 'Boolean'
+    || type === 'BigInt' || type === 'TypedNumber';
 }
 
 /**
@@ -272,6 +336,10 @@ export function DeserializeTypeTable(
         return shells[ref];
       }
       if (isPlainRecord(value)) {
+        const leaf = decodeLeaf(value as Record<string, unknown>, decode);
+        if (leaf !== undefined) {
+          return leaf;
+        }
         const out: Record<string, unknown> = {};
         for (const [key, nested] of Object.entries(value)) {
           out[key] = decode(nested);

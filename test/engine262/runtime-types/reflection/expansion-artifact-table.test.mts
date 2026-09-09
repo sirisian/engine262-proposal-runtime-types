@@ -100,6 +100,39 @@ test('a nominal is carried by name, and nothing unencodable survives', () => {
   expect((nominal as never as { nominal: { name?: string } }).nominal.name).toBe('User');
 });
 
+test('a table survives a real JSON round trip', () => {
+  // The point of encoding leaves: a table that cannot leave the process is a
+  // stage toward an artifact rather than one. Once a nominal travels by name,
+  // every remaining leaf is a primitive - a string, number, boolean or bigint -
+  // and the table is bytes.
+  for (const [program, names] of [
+    ['type A = "x"; type B = 42; type C = true; type D = 10n;', ['A', 'B', 'C', 'D']],
+    ['type O = { a: uint8, b: string };', ['O']],
+    ['type L = { next: L | void };', ['L']],
+    ['class U { name: string; }', ['U']],
+    ['type P = string.<{ pattern: /^a$/ }>;', ['P']],
+  ] as [string, string[]][]) {
+    const r = rootsOf(program, names)!;
+    const json = JSON.stringify(SerializeTypeTable(r.roots as never));
+    const back = DeserializeTypeTable(JSON.parse(json),
+      (nm) => r.roots.get(String(nm.name)) as object | undefined);
+    expect(back).toBeTruthy();
+    names.forEach((n, i) => expect(back!.get(n)).toBe(r.originals[i]));
+  }
+});
+
+// KNOWN GAP, pinned. A TYPED NUMBER leaf - the value of `type T = [uint8 = 7]` -
+// encodes, but rebuilding one needs a realm that the other leaves do not, so a
+// table read back outside an agent context throws on it. The encoding is right;
+// where the reconstruction may run is the open part, and it is a question about
+// the reader's contract rather than about the format.
+test.fails('a typed-number default survives a JSON round trip', () => {
+  const r = rootsOf('type T = [uint8 = 7];', ['T'])!;
+  const json = JSON.stringify(SerializeTypeTable(r.roots as never));
+  const back = DeserializeTypeTable(JSON.parse(json), () => undefined);
+  expect(back!.get('T')).toBe(r.originals[0]);
+});
+
 test('an unresolvable name is declined, as a stale hash is', () => {
   // A consumer that does not have what the artifact names cannot read the table
   // and must evaluate. Declining is the same answer a hash mismatch gets.
