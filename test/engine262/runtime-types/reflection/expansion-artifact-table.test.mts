@@ -35,7 +35,10 @@ function rootsOf(program: string, names: string[]) {
 function check(program: string, names: string[]): string {
   const r = rootsOf(program, names);
   if (!r || r.roots.size !== names.length) return 'setup failed';
-  const back = DeserializeTypeTable(SerializeTypeTable(r.roots as never));
+  const byName = new Map<string, unknown>();
+  for (const [n, to] of r.roots) byName.set(n, to);
+  const back = DeserializeTypeTable(SerializeTypeTable(r.roots as never),
+    (nm) => byName.get(String(nm.name)) as object | undefined);
   if (!back) return 'declined';
   return names.every((n, i) => back.get(n) === r.originals[i]) ? 'same' : 'DIFFERENT';
 }
@@ -75,6 +78,35 @@ test('deterministic: the same roots twice give the same table', () => {
   const b = JSON.stringify(SerializeTypeTable(r.roots as never).types.map((e) => Object.keys(e)));
   expect(a).toBe(b);
 });
+test('a nominal is carried by name, and nothing unencodable survives', () => {
+  // Its record holds a [[Declaration]], a parse node, and a [[Constructor]], a
+  // live class - measured to be the ONLY two leaves a table cannot encode, and
+  // both only here. Carrying the name instead is the whole of what stands
+  // between this table and bytes.
+  const r = rootsOf('class User { name: string; }\nclass Account { owner: User; }\n', ['User', 'Account'])!;
+  const table = SerializeTypeTable(r.roots as never);
+  const unencodable: string[] = [];
+  const walk = (v: unknown): void => {
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (typeof v !== 'object' || v === null) return;
+    if ((v as { $ref?: number }).$ref !== undefined) return;
+    const proto = Object.getPrototypeOf(v);
+    if (proto === Object.prototype || proto === null) { Object.values(v).forEach(walk); return; }
+    unencodable.push(v.constructor?.name ?? '?');
+  };
+  table.types.forEach((e) => Object.values(e).forEach(walk));
+  expect(unencodable).toEqual([]);
+  const nominal = table.types.find((e) => (e as { Kind?: string }).Kind === 'nominal');
+  expect((nominal as never as { nominal: { name?: string } }).nominal.name).toBe('User');
+});
+
+test('an unresolvable name is declined, as a stale hash is', () => {
+  // A consumer that does not have what the artifact names cannot read the table
+  // and must evaluate. Declining is the same answer a hash mismatch gets.
+  const r = rootsOf('class User { name: string; }\n', ['User'])!;
+  expect(DeserializeTypeTable(SerializeTypeTable(r.roots as never), () => undefined)).toBe(undefined);
+});
+
 test('a newer version is declined rather than misread', () => {
   expect(DeserializeTypeTable({ version: 999, types: [], exports: {} })).toBe(undefined);
 });
