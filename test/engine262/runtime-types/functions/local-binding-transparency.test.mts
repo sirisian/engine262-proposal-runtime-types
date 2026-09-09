@@ -342,3 +342,40 @@ test('a parameter shadows an outer binding of the same name', () => {
   // An ordinary parameter shadows too, which always worked.
   expect(value('let v: string = "s"; function f3(v: uint8): uint8 { return v; } `${f3(3)}`;')).toBe('3');
 });
+
+// ---------------------------------------------------------------------------
+// AN UNTYPED DECLARATION STILL SHADOWS.
+//
+// `declare` records every name in [[declaredNames]] and records a TYPE only
+// where there is one, and `lookup` read [[bindings]] alone - so an UNTYPED
+// parameter left no binding, the walk carried on to an outer frame, and the
+// parameter resolved to whatever the name meant OUTSIDE.
+//
+//     let x: uint8 = 1;
+//     function f(x) { let s: string = x; }   // refused, and f("hi") is fine
+//
+// Shadowing is a scoping fact and does not depend on the shadowing declaration
+// having a type: a name declared here is ~any~ here, not what it meant outside.
+//
+// Found from the far end. A field annotation resolving under the class's type
+// parameters made `class A<T> { a: T; constructor(a: T) { this.a = a; } }` with
+// an outer `const a` fail, because the field's existence finally gave the bad
+// lookup a rule to reach. Five other causes were eliminated first; the trace
+// that settled it printed `DECLARE a depth=2 type=null`.
+// ---------------------------------------------------------------------------
+
+test('an untyped parameter shadows an outer typed binding', () => {
+  expectOk('let x: uint8 = 1; function f(x) { let s: string = x; return s; } f("hi");');
+  expectOk('let y: string = "a"; function g(y) { let u: uint8 = y; return u; } String(g(5));');
+});
+
+test('what shadowing must not change', () => {
+  // A TYPED parameter shadows as it always did.
+  expectOk('let z: uint8 = 1; function h(z: string) { let s: string = z; return s; } h("hi");');
+  // With no outer binding there is nothing to shadow.
+  expectOk('function k(w) { let s: string = w; return s; } k("hi");');
+  // An outer binding is still SEEN where the inner scope does not declare it -
+  // the walk must stop at a declaration, not at every frame.
+  expectThrows('let q: uint8 = 1; function m() { let s: string = q; return s; }');
+  expectOk('let r: uint8 = 1; function m2() { let u: uint8 = r; return u; } String(m2());');
+});

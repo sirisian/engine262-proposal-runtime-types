@@ -5417,6 +5417,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (t) {
         return t;
       }
+      // AN UNTYPED DECLARATION STILL SHADOWS. `declare` records every name in
+      // [[declaredNames]] and only records a TYPE where there is one, so an
+      // untyped parameter left `bindings` empty and the walk carried on to an
+      // outer frame - `let x: uint8 = 1; function f(x) { let s: string = x; }`
+      // resolved the parameter to the OUTER binding and refused a program that
+      // runs. Shadowing is a scoping fact and does not depend on the shadowing
+      // declaration having a type; a name declared here is `~any~` here, not
+      // whatever it meant outside.
+      if (frames[i].declaredNames.has(name)) {
+        return null;
+      }
     }
     return null;
   };
