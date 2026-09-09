@@ -25,6 +25,7 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { currentContextualType } from '../type-system/runtime.mts';
+import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
   wellKnownSymbols,
@@ -1246,9 +1247,30 @@ function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): Pl
   if (t.Kind !== 'nominal') {
     return undefined;
   }
-  const ctor = (t as unknown as { Constructor?: Value }).Constructor;
+  let ctor = (t as unknown as { Constructor?: Value }).Constructor;
   if (!ctor || !IsConstructor(ctor)) {
     return undefined;
+  }
+  // proposal-runtime-types (PLAN-v3 §1.3, item 9): the converting constructor is
+  // the TARGET's. An annotation record for `Box.<uint8>` carries the
+  // declaration's constructor, and constructing through THAT built a `Box` of
+  // whatever arrived - a `Box.<uint16>`, a String - and called it the
+  // conversion, which is how a value of one instantiation reached a binding
+  // of another by being copied into a fresh unchecked instance. A generic
+  // declaration has no converting constructor of its own; its specialization
+  // at the target's arguments does, and its parameter `v: uint8` decides what
+  // converts. A bare generic target names no specialization and converts
+  // nothing.
+  if (GenericClassDeclarationOf(ctor) !== undefined) {
+    const args = (t as unknown as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+    if (args.length === 0) {
+      return undefined;
+    }
+    const specialized = Q(yield* MaterializeSpecialization((t as unknown as { Declaration: ParseNode.ClassDeclaration }).Declaration, args));
+    if (specialized === undefined || !IsConstructor(specialized)) {
+      return undefined;
+    }
+    ctor = specialized;
   }
   // One parameter EXACTLY: the clause says a constructor "taking one parameter",
   // and a constructor of two is reached through target-typed construction.

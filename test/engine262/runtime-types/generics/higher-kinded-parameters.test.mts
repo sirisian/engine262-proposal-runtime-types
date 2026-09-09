@@ -224,12 +224,14 @@ test('a kinded argument resolves in a const annotation', () => {
   // known, so a bare generic declaration - which is what a kinded position
   // wants - reported that it "is not a type".
   const P = 'type Identity<T> = T; class B<W<_>> {} ';
-  // The construction must supply the argument too. A bare `new B()` is a `B`
-  // and correctly does not satisfy `B.<Identity>` - the same rule an ordinary
-  // generic follows, and it only became visible once applications stopped
-  // collapsing to their base.
+  // A bare `new B()` at a `B.<Identity>` position CONSTRUCTS `B.<Identity>`:
+  // the position's type binds the parameter before the arguments are looked
+  // at (#sec-contextual-types, PLAN-v3 Q2-c), a kinded parameter included. The
+  // two spellings reach one specialization, and the earlier reading - that the
+  // bare construction was a `B` which could not satisfy the annotation - was
+  // the defect, not the rule.
   expect(ok(`${P}const a: B.<Identity> = new B.<Identity>();`)).toBe(true);
-  expect(ok(`${P}const a: B.<Identity> = new B();`)).toBe(false);
+  expect(ok(`${P}const a: B.<Identity> = new B();`)).toBe(true);
   expect(ok(`${P}function f(x: B.<Identity>) {}`)).toBe(true);
 
   // And the refusals survive the fallback: it resolves a bare name to its

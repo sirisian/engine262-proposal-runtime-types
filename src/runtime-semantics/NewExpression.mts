@@ -9,8 +9,8 @@ import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { currentContextualType, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { StampTypedCollection } from '../abstract-ops/runtime-types.mts';
+import { currentContextualType, pushContextualType, popContextualType, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { StampTypedCollection, soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation } from './all.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
@@ -58,7 +58,30 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     argList = [];
   } else { // 6. Else,
     // a. Let argList be ? ArgumentListEvaluation of arguments.
-    argList = Q(yield* ArgumentListEvaluation(args));
+    //
+    // proposal-runtime-types #sec-contextual-types: "An argument of a call whose
+    // callee has a single applicable signature" takes "the declared type of the
+    // corresponding parameter" as its contextual type, and a construction's
+    // arguments are such a position (a constructor "reflects exactly one
+    // signature", #sec-inference-and-function-forms). Pushed as EvaluateCall
+    // pushes it, and for the same reason: an inner form that reads its context
+    // - a nested `new.()`, a vector construction, an overloaded call - must see
+    // the constructor's parameter and not the type of the OUTER position. For a
+    // generic class the parameter is still a type parameter and
+    // soleSignatureParameterTypes answers null; without the push a nested bare
+    // construction in `const b: Box.<uint8> = new Box(new Box(1))` would seed
+    // its own `T` from the outer annotation.
+    if (surroundingAgent.feature('runtime-types') && constructor instanceof ObjectValue) {
+      const soleParameterTypes = Q(yield* soleSignatureParameterTypes(constructor));
+      pushContextualType(soleParameterTypes?.[0] ?? null);
+      try {
+        argList = Q(yield* ArgumentListEvaluation(args));
+      } finally {
+        popContextualType();
+      }
+    } else {
+      argList = Q(yield* ArgumentListEvaluation(args));
+    }
   }
   // 7. If IsConstructor(constructor) is false, throw a TypeError exception.
   if (!IsConstructor(constructor)) {

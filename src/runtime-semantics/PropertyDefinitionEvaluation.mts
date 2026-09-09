@@ -11,7 +11,8 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { CreateArrayFromList, Get } from '../abstract-ops/all.mts';
-import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, currentContextualType, pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   Q, X,
   NormalCompletion,
@@ -39,6 +40,26 @@ import { CreateDataProperty, OrdinaryObjectCreate } from '#self';
 /** https://tc39.es/ecma262/#sec-object-initializer-runtime-semantics-propertydefinitionevaluation */
 //   PropertyDefinitionList :
 //     PropertyDefinitionList `,` PropertyDefinition
+/**
+ * The type an object type declares for a property, or null. An object record
+ * carries its members in [[Properties]]; an interface or alias is a nominal
+ * whose [[Structure]] does.
+ */
+function propertyContextualType(contextual: TypeRecord | null | undefined, key: Value): TypeRecord | null {
+  if (!contextual || !(key instanceof JSStringValue)) {
+    return null;
+  }
+  const shape = contextual.Kind === 'object'
+    ? contextual
+    : (contextual.Kind === 'nominal' ? (contextual as { Structure?: TypeRecord }).Structure : undefined);
+  if (!shape || shape.Kind !== 'object') {
+    return null;
+  }
+  const name = key.stringValue();
+  const property = (shape as { Properties?: readonly { key: string, type: TypeRecord }[] }).Properties?.find((p) => p.key === name);
+  return property?.type ?? null;
+}
+
 export function* PropertyDefinitionEvaluation_PropertyDefinitionList(PropertyDefinitionList: ParseNode.PropertyDefinitionList, object: ObjectValue, enumerable: BooleanValue<true>): PlainEvaluator {
   for (const PropertyDefinition of PropertyDefinitionList) {
     Q(yield* PropertyDefinitionEvaluation_PropertyDefinition(PropertyDefinition, object, enumerable));
@@ -236,7 +257,23 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
     propValue = yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, propKey);
   } else { // 6. Else,
     // a. Let exprValueRef be the result of evaluating AssignmentExpression.
-    const exprValueRef = Q(yield* Evaluate(AssignmentExpression));
+    // proposal-runtime-types #sec-contextual-types: "a property of an object
+    // literal at a position of known object type" takes "the type the object
+    // type declares for that property". The literal's own contextual type is
+    // the stack top (its position pushed it); the property's is read off it,
+    // and null is pushed where it declares none so the OBJECT's type does not
+    // leak into a member that is not it.
+    let exprValueRef;
+    if (surroundingAgent.feature('runtime-types')) {
+      pushContextualType(propertyContextualType(currentContextualType(), propKey));
+      try {
+        exprValueRef = Q(yield* Evaluate(AssignmentExpression));
+      } finally {
+        popContextualType();
+      }
+    } else {
+      exprValueRef = Q(yield* Evaluate(AssignmentExpression));
+    }
     // b. Let propValue be ? GetValue(exprValueRef).
     propValue = Q(yield* GetValue(exprValueRef));
   }

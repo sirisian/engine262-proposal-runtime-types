@@ -53,7 +53,9 @@ test('the checker was already right, and stays right', () => {
   // the runtime side must not disturb them.
   expect(evaluated(`${ID}${B} const b: B.<Id> = new B.<Id>(); "ok";`)).toBe('ok');
   expectThrown(`${ID}${B} const b: B.<Wrap> = new B.<Id>();`, '"B.<Id>" is not assignable to "B.<Wrap>"');
-  expectThrown(`${ID}${B} const b: B.<Id> = new B();`, '"B" is not assignable to "B.<Id>"');
+  // A bare construction at an annotated position constructs the annotation's
+  // specialization (PLAN-v3 Q2-c): `new B()` at `B.<Id>` is `new B.<Id>()`.
+  expect(evaluated(`${ID}${B} const b: B.<Id> = new B(); String(Reflect.typeOf(b));`)).toBe('B.<Id>');
 });
 
 test('value and type arguments are unchanged', () => {

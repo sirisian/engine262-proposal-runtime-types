@@ -47,8 +47,10 @@ test('a value parameter carries the type it was declared with', () => {
 });
 
 test('an unspecialized generic class stays usable', () => {
-  // the declaration binds the name; the parts that depend on a parameter wait
-  expect(evaluated('class C<W: uint32> { m() { return 1; } } String(new C().m());')).toBe('1');
+  // the declaration binds the name; a construction that reaches no argument for
+  // a parameter with no default is the naming error (PLAN-v3 Q4), never an
+  // instance with an open parameter
+  expectThrown('class C<W: uint32> { m() { return 1; } } new C();', 'is not determined by the arguments and has no default');
   expect(evaluated('class C<W: uint32> { static f = W; } String(typeof C);')).toBe('function');
   // a non-generic class is untouched
   expect(evaluated('class C { f = 5; m() { return this.f; } } String(new C().m());')).toBe('5');
@@ -321,7 +323,8 @@ test('a declaration whose parameters all have defaults needs no arguments', () =
 
 test('a parameter without a default still needs its argument', () => {
   // one parameter lacking a default is enough to need an application
-  expect(evaluated('class C<T> { m() { return 1; } } String(new C().m());')).toBe('1');
+  expectThrown('class C<T> { m() { return 1; } } new C();', 'is not determined by the arguments and has no default');
+  expect(evaluated('class C<T> { m() { return 1; } } String(new C.<uint8>().m());')).toBe('1');
   expectThrown('type A<T> = [].<T>; let a: A;');
   expectThrown('type A<T, U = uint8> = [].<T>; let a: A;');
 });
@@ -373,11 +376,13 @@ test('two specializations do not share a field type', () => {
   expect(evaluated(`${box} const s = new Box.<string>(); s.value = "ok"; s.value;`)).toBe('ok');
 });
 
-test('an unspecialized generic still constructs', () => {
-  // The frame the field pushes exists for exactly this case - a declaration
-  // with nothing to bind its parameters to - so deferring to an active binding
-  // must not disturb it.
-  expect(evaluated('class U<T> { v: T; } typeof new U();')).toBe('object');
+test('an unspecialized generic does not construct', () => {
+  // A construction that reaches nothing for a parameter with no default is the
+  // naming error (PLAN-v3 Q4): there is no instance whose `v: T` is open.
+  // Every construction of a generic class is a construction of a specialization.
+  expectThrown('class U<T> { v: T; } new U();', 'is not determined by the arguments and has no default');
+  expect(evaluated('class U<T> { v: T; } typeof new U.<uint8>();')).toBe('object');
+  expect(evaluated('class U<T> { v: T; } const u: U.<uint8> = new U(); typeof u;')).toBe('object');
 });
 
 // -- Declaration-site variance (#sec-generic-variance) ------------------------

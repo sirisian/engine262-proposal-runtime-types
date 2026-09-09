@@ -25,6 +25,7 @@ import {
 import { ExpectedArgumentCount } from '../static-semantics/all.mts';
 import {
   ClassFieldDefinitionRecord, EvaluateBody, PrivateElementRecord,
+  GenericClassDeclarationOf, SpecializationForConstruction,
 } from '../runtime-semantics/all.mts';
 import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -34,6 +35,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
   currentTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
+  pushContextualType, popContextualType,
 } from '../type-system/runtime.mts';
 import { functionTypeParameters } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
@@ -42,6 +44,7 @@ import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './pl
 import {
   Assert,
   Call,
+  Construct,
   CreateDataPropertyOrThrow,
   DefinePropertyOrThrow,
   HasOwnProperty,
@@ -305,7 +308,21 @@ export function* DefineField(receiver: ObjectValue, fieldRecord: ClassFieldDefin
     }
   } else if (initializer !== undefined) {
     // a. Let initValue be ? Call(initializer, receiver).
-    initValue = Q(yield* Call(initializer, receiver));
+    // proposal-runtime-types #sec-contextual-types: a field initializer is a
+    // position whose type the field's annotation declares, and the initializer
+    // is evaluated with it as the contextual type - the same push a declaration's
+    // initializer gets in LexicalDeclaration, so `b: Box.<uint8> = new Box(1)`
+    // constructs the `Box.<uint8>` the RequireType below then checks.
+    if (surroundingAgent.feature('runtime-types') && fieldTypeObject) {
+      pushContextualType((fieldTypeObject as { TypeRecord: TypeRecord }).TypeRecord);
+      try {
+        initValue = Q(yield* Call(initializer, receiver));
+      } finally {
+        popContextualType();
+      }
+    } else {
+      initValue = Q(yield* Call(initializer, receiver));
+    }
   } else if (fieldAnnotation) {
     // proposal-runtime-types (spec sec-typed-classes): a typed field declared
     // without an initializer takes its type's default rather than undefined, the
@@ -510,6 +527,36 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   // arrives with a concrete NewTarget and runs the abstract constructor body.
   if ((F as { IsAbstract?: boolean }).IsAbstract && (F as FunctionObject) === newTarget) {
     return Throw.TypeError('$1 is an abstract class and cannot be instantiated', F);
+  }
+  // proposal-runtime-types #sec-typed-classes, "the class is the type a
+  // construction yields" - for a GENERIC class, a specialization is. The
+  // declaration's own constructor has no body that can run: `T` is bound in no
+  // frame there, so a bare `new Box(x)` produced an instance whose `v: T` checked
+  // nothing and whose type no annotation could name. Three routes arrive here
+  // and `newTarget` tells them apart:
+  //   1. newTarget is F - a direct `new Box(...)`, `Reflect.construct(Box,
+  //      args)`, or `new C(...)` through an alias. The bindings come from the
+  //      contextual type, the arguments, and the defaults (one ladder, shared
+  //      with a generic call), and the SPECIALIZATION is constructed with
+  //      itself as newTarget: its body runs under its frame, the instance takes
+  //      its prototype, and `new.target` names it as `new Box.<uint8>(...)` does.
+  //   2. newTarget is a subclass of a specialization - `super()` from `class S
+  //      extends Box.<uint8>`. That never reaches this function; the heritage
+  //      evaluated to the specialization and `super` calls its constructor.
+  //   3. Anything else - `Reflect.construct(Box, args, Unrelated)` - would run
+  //      the open body against a foreign prototype, which is the unchecked
+  //      instance by another route, and is refused.
+  if (surroundingAgent.feature('runtime-types')) {
+    const declaration = GenericClassDeclarationOf(F);
+    if (declaration !== undefined) {
+      if ((F as FunctionObject) !== newTarget) {
+        return Throw.TypeError('$1 is a generic class; it is constructed through a specialization, not through its declaration', F);
+      }
+      const specialization = Q(yield* SpecializationForConstruction(declaration, F, argumentsList as readonly Value[]));
+      if (specialization !== undefined && specialization !== (F as Value)) {
+        return Q(yield* Construct(specialization as FunctionObject, argumentsList, specialization as FunctionObject));
+      }
+    }
   }
   // 3. Let callerContext be the running execution context.
   // 4. Let kind be F.[[ConstructorKind]].

@@ -45,6 +45,7 @@ import {
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
+import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
@@ -500,7 +501,7 @@ export function* BindTypeArgumentsInto(
             if (converted.Type !== 'normal') {
               return converted as never;
             }
-            r = { ...r, Value: converted.Value as Value } as TypeRecord;
+            r = { ...r, Value: converted.Value as Value, Base: elementBound } as TypeRecord;
           }
           elements.push(r);
         }
@@ -528,7 +529,9 @@ export function* BindTypeArgumentsInto(
         if (converted.Type !== 'normal') {
           return converted as never;
         }
-        record = { ...record, Value: converted.Value as Value } as TypeRecord;
+        // Base moves with the value (see SpecializeGenericClass): a `uint32`
+        // 4 over a `number` base failed its own formal's boundary.
+        record = { ...record, Value: converted.Value as Value, Base: constraint } as TypeRecord;
       } else if (constraint && !IsAssignable(record, constraint)) {
         // A non-literal explicit argument is checked against the constraint here (step 8).
         return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
@@ -599,7 +602,7 @@ export function* BindTypeArgumentRecords(
             if (converted.Type !== 'normal') {
               return converted as never;
             }
-            r = { ...r, Value: converted.Value as Value } as TypeRecord;
+            r = { ...r, Value: converted.Value as Value, Base: elementBounds[j] as TypeRecord } as TypeRecord;
           }
           elements.push(r);
         }
@@ -1131,6 +1134,91 @@ function builderSiteMentioning(formals: readonly ParseNode[], paramName: string)
 }
 
 /**
+ * proposal-runtime-types (PLAN-v3 Q6): the ARGUMENTS the shared inference core
+ * reads, behind an oracle.
+ *
+ * One matching rule, two callers. The runtime binds a generic call's or
+ * construction's parameters from VALUES; the checker binds the same
+ * parameters from Static Types, so that `new Box(x)`'s static and runtime
+ * types cannot disagree by being computed twice. The first rung of the ladder
+ * needs only an argument's type, but the trial and declared-inverse rungs
+ * VERIFY a candidate against the arguments (`IsOfType` on a value,
+ * `IsAssignable` on a Static Type), and the literal rule needs a literal type -
+ * so the core cannot be shared "as-is" over types; it is shared over this.
+ *
+ * `typeOf` reads through a reference to its referent, the rule the design
+ * states for a `ref` argument ("a `ref` argument contributing its referent's").
+ */
+export interface InferenceArguments {
+  readonly length: number;
+  /** The type of argument _i_: its runtime type, or its Static Type. */
+  typeOf(i: number): PlainEvaluator<TypeRecord>;
+  /** The literal type of argument _i_, where the literal rule governs the parameter. */
+  literalTypeOf(i: number): PlainEvaluator<TypeRecord>;
+  /** Whether argument _i_ is of type _t_ - membership on a value, assignability on a Static Type. */
+  satisfies(i: number, t: TypeRecord): PlainEvaluator<boolean>;
+}
+
+/** The runtime's oracle: values, read through references. */
+export function valueArguments(args: readonly Value[]): InferenceArguments {
+  const referent = function* (i: number): PlainEvaluator<Value> {
+    const a = args[i] ?? Value.undefined;
+    if (a instanceof ReferenceValue) {
+      return Q(yield* GetValue(a.Location));
+    }
+    return a;
+  };
+  return {
+    length: args.length,
+    * typeOf(i) {
+      return RuntimeTypeOf(Q(yield* referent(i)));
+    },
+    * literalTypeOf(i) {
+      return literalTypeOf(Q(yield* referent(i)));
+    },
+    * satisfies(i, t) {
+      return Q(yield* IsOfType(Q(yield* referent(i)), t));
+    },
+  };
+}
+
+/**
+ * Forward verification: every annotated formal, evaluated over the frame as it
+ * stands, accepts the arguments it receives. The check an explicitly
+ * specialized call faces, performed by the same operations, and shared by the
+ * trial rung and the inverse rung.
+ */
+function* formalsAcceptArguments(formals: readonly ParseNode[], args: InferenceArguments): PlainEvaluator<boolean> {
+  for (let i = 0; i < formals.length; i += 1) {
+    const annotation = (formals[i] as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation;
+    if (!annotation?.Type) {
+      continue;
+    }
+    const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+    if (resolved.Type !== 'normal') {
+      return false;
+    }
+    const isRest = (formals[i] as { type?: string }).type === 'BindingRestElement';
+    const wanted = isRest ? restElementType(resolved.Value as TypeRecord) : resolved.Value as TypeRecord;
+    const indices: number[] = [];
+    if (isRest) {
+      for (let k = i; k < args.length; k += 1) {
+        indices.push(k);
+      }
+    } else if (i < args.length) {
+      indices.push(i);
+    }
+    for (const k of indices) {
+      const fits = EnsureCompletion(yield* args.satisfies(k, wanted));
+      if (fits.Type !== 'normal' || fits.Value !== true) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
  * Rung three's positive half. Returns the verified binding, null where the
  * builder declares no inverse, or a throw completion where a proposal exists
  * and fails - naming the builder and the proposal.
@@ -1139,7 +1227,7 @@ function* proposeThroughDeclaredInverse(
   builder: string,
   paramName: string,
   formals: readonly ParseNode[],
-  args: readonly Value[],
+  args: InferenceArguments,
   typeParameters: readonly ParseNode.TypeParameter[],
   frame: Map<string, TypeRecord>,
 ): PlainEvaluator<TypeRecord | null> {
@@ -1166,22 +1254,14 @@ function* proposeThroughDeclaredInverse(
   if (formal.type === 'BindingRestElement') {
     const elements: { Type: TypeRecord, Rest: boolean, Initial: 'none' }[] = [];
     for (let k = site.formalIndex; k < args.length; k += 1) {
-      let referent: Value = args[k]!;
-      if (referent instanceof ReferenceValue) {
-        referent = Q(yield* GetValue(referent.Location));
-      }
-      elements.push({ Type: RuntimeTypeOf(referent), Rest: false, Initial: 'none' });
+      elements.push({ Type: Q(yield* args.typeOf(k)), Rest: false, Initial: 'none' });
     }
     argType = CanonicalizeType({ Kind: 'tuple', Elements: elements } as TypeRecord);
   } else {
     if (site.formalIndex >= args.length) {
       return null;
     }
-    let a: Value = args[site.formalIndex]!;
-    if (a instanceof ReferenceValue) {
-      a = Q(yield* GetValue(a.Location));
-    }
-    argType = RuntimeTypeOf(a);
+    argType = Q(yield* args.typeOf(site.formalIndex));
   }
   // Memoized per site and argument type; metered.
   let table = inverseProposals.get(site.node);
@@ -1231,32 +1311,7 @@ function* proposeThroughDeclaredInverse(
   for (const [name, record] of proposals) {
     frame.set(name, record);
   }
-  let accepts = true;
-  for (let i = 0; i < formals.length && accepts; i += 1) {
-    const annotation = (formals[i] as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation;
-    if (!annotation?.Type) {
-      continue;
-    }
-    const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
-    if (resolved.Type !== 'normal') {
-      accepts = false;
-      break;
-    }
-    const isRest = (formals[i] as { type?: string }).type === 'BindingRestElement';
-    const wanted = isRest ? restElementType(resolved.Value as TypeRecord) : resolved.Value as TypeRecord;
-    const indices = isRest ? args.map((_, k) => k).filter((k) => k >= i) : (i < args.length ? [i] : []);
-    for (const k of indices) {
-      let referent: Value = args[k]!;
-      if (referent instanceof ReferenceValue) {
-        referent = Q(yield* GetValue(referent.Location));
-      }
-      const fits = EnsureCompletion(yield* IsOfType(referent, wanted));
-      if (fits.Type !== 'normal' || fits.Value !== true) {
-        accepts = false;
-        break;
-      }
-    }
-  }
+  const accepts = Q(yield* formalsAcceptArguments(formals, args));
   if (!accepts) {
     for (const name of proposals.keys()) {
       frame.delete(name);
@@ -1268,10 +1323,34 @@ function* proposeThroughDeclaredInverse(
   return proposals.get(paramName)!;
 }
 
+/**
+ * The runtime's entry: bind a declaration's type parameters from a call's or a
+ * construction's argument VALUES. A wrapper over `InferGenericBindingsFrom`
+ * with the value oracle; the checker calls the core with its own.
+ */
 export function* InferGenericBindings(
   typeParameters: readonly ParseNode.TypeParameter[],
   formals: readonly ParseNode[],
   args: readonly Value[],
+  preBound?: ReadonlyMap<string, TypeRecord>,
+): PlainEvaluator<Map<string, TypeRecord>> {
+  return yield* InferGenericBindingsFrom(typeParameters, formals, valueArguments(args), preBound);
+}
+
+/**
+ * proposal-runtime-types #sec-computed-constraints, #sec-inference-through-results:
+ * the shared matching core. Parameters bind left to right; each takes, in order,
+ * a binding already made (`preBound` - an explicit argument, an enclosing
+ * specialization's frame, or the CONTEXTUAL type of a construction), a binding
+ * inferred from the argument a formal annotated with it receives, a binding
+ * proposed by trial or by a declared inverse where the parameter is reached only
+ * through a builder, or its declared default. The ladder is the one the
+ * specification states and it is the same for a call and for a construction.
+ */
+export function* InferGenericBindingsFrom(
+  typeParameters: readonly ParseNode.TypeParameter[],
+  formals: readonly ParseNode[],
+  args: InferenceArguments,
   preBound?: ReadonlyMap<string, TypeRecord>,
 ): PlainEvaluator<Map<string, TypeRecord>> {
   const frame = new Map<string, TypeRecord>();
@@ -1296,10 +1375,11 @@ export function* InferGenericBindings(
     for (const tp of typeParameters) {
       const paramName = tp.BindingIdentifier.name;
       // A parameter ALREADY
-      // BOUND - by the explicit arguments of `d.<4, 1>()`, or a specialization's
-      // frame - keeps that binding, and the parameters after it evaluate their
-      // computed constraints and defaults OVER it. Inferring here first, with
-      // `N` falling back to `any`, evaluated `M: uint32 = N.foo` against a Type
+      // BOUND - by the explicit arguments of `d.<4, 1>()`, a specialization's
+      // frame, or the contextual type of the construction - keeps that
+      // binding, and the parameters after it evaluate their computed
+      // constraints and defaults OVER it. Inferring here first, with `N`
+      // falling back to `any`, evaluated `M: uint32 = N.foo` against a Type
       // Object and refused every call of such a declaration.
       const pre = preBound?.get(paramName);
       if (pre) {
@@ -1313,38 +1393,58 @@ export function* InferGenericBindings(
         constraint = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterConstraint));
       }
       const literalRule = constraint !== null && constraintWantsLiteral(constraint);
+      // generics.md "Binding a value generic from an argument": a VALUE
+      // parameter bound through a formal typed by it binds the LITERAL type of
+      // the argument - `init(Component.Transform, ...)` binds C to that
+      // enumerator, and `new G((4 := uint32))` binds N to 4 - and not the
+      // argument's type, which is the constraint itself and says nothing. The
+      // value is then converted to the constraint as a default's is below, so
+      // `N: uint32` binds a `uint32` 4 and not the plain Number it arrived as.
+      // Confined to a PRIMITIVE constraint, where the conversion is defined;
+      // an enum-constrained value parameter keeps the binding it had.
+      const valueRule = (tp as { IsValueParameter?: boolean }).IsValueParameter === true
+        && constraint !== null && constraint.Kind === 'primitive';
 
       // Find an ordinary parameter annotated with exactly this type parameter.
       let bound: TypeRecord | null = null;
       const ordIndex = ordinary.findIndex((o) => o.annotationName === paramName);
       if (ordIndex >= 0 && ordIndex < args.length) {
-        bound = literalRule ? literalTypeOf(args[ordIndex]) : RuntimeTypeOf(args[ordIndex]);
+        if (literalRule || valueRule) {
+          bound = Q(yield* args.literalTypeOf(ordIndex));
+        } else {
+          bound = Q(yield* args.typeOf(ordIndex));
+        }
       } else if (restName !== null && restAnnotationName === paramName) {
         // `...parts: S` binds S to the tuple of the trailing arguments' types.
         const elements: { Type: TypeRecord, Rest: boolean, Initial: 'none' }[] = [];
         for (let i = ordinary.length; i < args.length; i += 1) {
           // A `ref` argument in the run contributes its REFERENT's type -
           // `apply2(cb, ref a, ref f)` binds Cs to [uint32, float32].
-          const arg = args[i]!;
-          const referent = arg instanceof ReferenceValue ? Q(yield* GetValue(arg.Location)) : arg;
-          elements.push({ Type: literalRule ? elementLiteralTypeOf(referent) : RuntimeTypeOf(referent), Rest: false, Initial: 'none' });
+          let elementType: TypeRecord;
+          if (literalRule) {
+            elementType = Q(yield* args.literalTypeOf(i));
+          } else {
+            elementType = Q(yield* args.typeOf(i));
+          }
+          elements.push({ Type: elementType, Rest: false, Initial: 'none' });
         }
         bound = { Kind: 'tuple', Elements: elements };
       }
 
       if (bound === null && tp.TypeParameterDefault) {
         bound = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterDefault));
-        // #sec-type-parameters: a VALUE parameter's argument "is a value of the
-        // named type", and a default is an argument like any other - so `H:
-        // uint32 = 2` binds a `uint32` and not the plain number it was spelled
-        // as. Both halves of the literal move: its VALUE becomes one of the
-        // constraint's, and its BASE becomes the constraint, without which the
-        // check below refused a default against its own declared constraint.
-        if (bound.Kind === 'literal' && constraint !== null && constraint.Kind === 'primitive') {
-          const converted = EnsureCompletion(yield* ConvertValue(bound.Value, constraint));
-          if (converted.Type === 'normal') {
-            bound = { ...bound, Value: converted.Value as Value, Base: constraint } as never;
-          }
+      }
+      // #sec-type-parameters: a VALUE parameter's argument "is a value of the
+      // named type", and a default or an inferred literal is an argument like
+      // any other - so `H: uint32 = 2` and `n: N` receiving 4 both bind a
+      // `uint32` and not the plain number they were spelled as. Both halves of
+      // the literal move: its VALUE becomes one of the constraint's, and its
+      // BASE becomes the constraint, without which the check below refused a
+      // default against its own declared constraint.
+      if (bound !== null && bound.Kind === 'literal' && constraint !== null && constraint.Kind === 'primitive') {
+        const converted = EnsureCompletion(yield* ConvertValue(bound.Value, constraint));
+        if (converted.Type === 'normal') {
+          bound = { ...bound, Value: converted.Value as Value, Base: constraint } as never;
         }
       }
       if (bound === null) {
@@ -1363,29 +1463,7 @@ export function* InferGenericBindings(
             const passing: TypeRecord[] = [];
             for (const candidate of candidates) {
               frame.set(paramName, candidate);
-              let accepts = true;
-              for (let i = 0; i < formals.length && accepts; i += 1) {
-                const annotation = (formals[i] as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation;
-                if (!annotation?.Type) {
-                  continue;
-                }
-                const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
-                if (resolved.Type !== 'normal') {
-                  accepts = false;
-                  break;
-                }
-                const isRest = (formals[i] as { type?: string }).type === 'BindingRestElement';
-                const wanted = isRest ? restElementType(resolved.Value as TypeRecord) : resolved.Value as TypeRecord;
-                const argIndices = isRest ? args.map((_, k) => k).filter((k) => k >= i) : (i < args.length ? [i] : []);
-                for (const k of argIndices) {
-                  const referent = args[k] instanceof ReferenceValue ? Q(yield* GetValue((args[k] as ReferenceValue).Location)) : args[k]!;
-                  const fits = EnsureCompletion(yield* IsOfType(referent, wanted));
-                  if (fits.Type !== 'normal' || fits.Value !== true) {
-                    accepts = false;
-                    break;
-                  }
-                }
-              }
+              const accepts = Q(yield* formalsAcceptArguments(formals, args));
               frame.delete(paramName);
               if (accepts) {
                 passing.push(candidate);
@@ -1416,11 +1494,37 @@ export function* InferGenericBindings(
             bound = proposed;
           }
         }
-        // Nothing to infer from and no default: bind `any` so downstream
-        // resolution does not throw on an unbound reference. (Guarded: a
-        // trial above may have bound the parameter.)
+        // Nothing binds it - no explicit or contextual binding, no formal
+        // annotated with it, no builder, no default. #sec-bindtypearguments: "a
+        // parameter left by all three is an error"; #sec-overload-resolution: a
+        // signature "whose parameters cannot be bound is not viable";
+        // generics.md: "a TypeError when the context fixes no type". Binding
+        // `any` here instead gave `new Registry()` a `Registry.<any>` the
+        // program never named and could not see it had - an unchecked
+        // specialization by accident - and `f<A, B>(x: A)` a `B` that admitted
+        // everything. (PLAN-v3 Q4.) The message names the parameter and the
+        // remedy.
         if (bound === null) {
-          bound = anyType;
+          const kinded = ((tp as { Arity?: number }).Arity ?? 0) > 0;
+          if (!kinded && annotationMentions(formals, paramName)) {
+            // Mentioned by a formal - `items: [].<T>`, `cb: (x: T) => void`,
+            // `m: Map.<K, V>` - that the positional rule above cannot see
+            // through. The checker's unifier binds these structurally
+            // (bindTypeParametersFromArguments); this core does not yet, and
+            // until that rung is shared (PLAN-v3 §6, "the reach of the shared
+            // core") the binding is `any`, which is what the call did before
+            // and is at least never a refusal of a call the checker accepted.
+            bound = anyType;
+          } else if (!kinded && (tp as { IsVariadic?: boolean }).IsVariadic === true) {
+            // #sec-variadic-parameters: a pack no formal mentions and nothing
+            // reaches is the EMPTY pack, a binding like any other -
+            // `f<...I: [].<uint32>>()` called as `f()` binds I to `[]`. A pack a
+            // tuple pattern mentions, `p: [T, ...Rest]`, is the case above.
+            bound = { Kind: 'tuple', Elements: [] } as TypeRecord;
+          } else {
+            const owner = ownerNameOfTypeParameters(typeParameters);
+            return Throw.TypeError('the type parameter $1 of $2 is not determined by the arguments and has no default; supply it explicitly with $2.<...>', Value(paramName), Value(owner ?? 'the declaration'));
+          }
         }
       }
       // spec sec-computed-constraints: the binding is checked against its
@@ -1440,12 +1544,51 @@ export function* InferGenericBindings(
           return Throw.TypeError('$1 is not assignable to $2', Value(displayType(bound)), Value(displayType(constraint)));
         }
       }
-      bindTypeParameter(frame, paramName, bound, tp);
+      // Canonical BEFORE it binds, as the explicit application path does: the
+      // frame's record and the specialization's stored argument must be one
+      // object, since a frame later derived from an instance's [[Arguments]]
+      // reads the value-parameter mark off that very record.
+      bindTypeParameter(frame, paramName, CanonicalizeType(bound), tp);
     }
   } finally {
     popTypeParameterFrame();
   }
   return frame;
+}
+
+/** Whether any formal's annotation mentions the type parameter _paramName_, however deeply. */
+function annotationMentions(formals: readonly ParseNode[], paramName: string): boolean {
+  const mentions = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    const n = node as { type?: string, name?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } };
+    if (n.type === 'TypeReference' && n.TypeName?.IdentifierReference?.name === paramName) {
+      return true;
+    }
+    if (n.type === 'IdentifierReference' && n.name === paramName) {
+      return true;
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location') {
+        continue;
+      }
+      const child = (n as Record<string, unknown>)[key];
+      if (Array.isArray(child) ? child.some(mentions) : (!!child && typeof child === 'object' && mentions(child))) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return formals.some((f) => mentions((f as { TypeAnnotation?: unknown }).TypeAnnotation));
+}
+
+/** The declaration a type parameter list belongs to, by name, for a diagnostic; null where none is in reach. */
+function ownerNameOfTypeParameters(typeParameters: readonly ParseNode.TypeParameter[]): string | null {
+  const first = typeParameters[0] as { parent?: { parent?: { BindingIdentifier?: { name?: string }, ClassDeclaration?: unknown } } } | undefined;
+  const list = first?.parent;
+  const owner = list?.parent as { BindingIdentifier?: { name?: string } } | undefined;
+  return owner?.BindingIdentifier?.name ?? null;
 }
 
 /** The type-parameter name a `: T` annotation names, or null if it is not a bare reference. */
@@ -2311,7 +2454,20 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // Field-wise regardless of LAYOUT: a class holding a `string` field has
       // no layout and still has a default, so this reads the field list rather
       // than the layout walk's result.
-      const constructor = t.Constructor as {
+      // proposal-runtime-types (PLAN-v3 Q7-a): an INSTANTIATION's default is an
+      // instance of the specialization, with its prototype. The annotation record
+      // for `A.<uint8>` carries the declaration's constructor until the
+      // specialization exists, and a default built on that prototype reported
+      // bare `A` - the two spellings of one type giving two answers.
+      let ctorValue = t.Constructor as Value | undefined;
+      const appliedEarly = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+      if (ctorValue !== undefined && appliedEarly.length > 0 && GenericClassDeclarationOf(ctorValue) !== undefined) {
+        const specialized = Q(yield* MaterializeSpecialization((t as { Declaration: ParseNode.ClassDeclaration }).Declaration, appliedEarly));
+        if (specialized !== undefined) {
+          ctorValue = specialized;
+        }
+      }
+      const constructor = ctorValue as unknown as {
         Fields?: readonly { Name?: unknown, TypeObject?: { TypeRecord?: TypeRecord } }[],
         prototypeForDefault?: unknown,
       } | undefined;
@@ -4154,10 +4310,24 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // #sec-computed-constraints) mirror the specialization loop.
         if (baseRecord.Kind === 'nominal') {
           const declParamsC = (baseRecord.Declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })?.TypeParameters?.TypeParameterList;
-          if (declParamsC && argRecords.length > 0) {
+          // proposal-runtime-types #sec-parameterized-types, #sec-type-references
+          // (PLAN-v3 Q7-a): a parameter no argument reaches "takes its
+          // |TypeParameterDefault|; it is a type error where a parameter has
+          // none". That is one rule for three spellings - a trailing position
+          // left empty (`Grid.<8>` is `Grid.<8, 4>`), the empty list `A.<>`, and
+          // the BARE name `A` - and `new Grid.<8>()` already binds the default
+          // (SpecializeGenericClass), so an annotation that did not named a
+          // different type from the value it was written for. A bare name is
+          // left as the declaration in one place only: as a type ARGUMENT, where
+          // it may be binding a higher-kinded parameter and is a declaration
+          // rather than a type; badKindedArgument decides that position.
+          const isTypeArgumentPosition = (node as { parent?: { type?: string } }).parent?.type === 'TypeArguments';
+          const bindsDefaults = declParamsC !== undefined && declParamsC.length > 0
+            && !declParamsC.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)
+            && (argRecords.length > 0 || node.TypeArguments != null || !isTypeArgumentPosition);
+          if (declParamsC && bindsDefaults) {
             const frameC = new Map<string, TypeRecord>();
-            const hadNames = argNames2.some((n) => n !== undefined);
-            const reach = hadNames ? declParamsC.length : Math.min(argRecords.length, declParamsC.length);
+            const reach = declParamsC.length;
             for (let i = 0; i < reach; i += 1) {
               const paramC = declParamsC[i] as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null, TypeParameterDefault?: { Type?: ParseNode.Type } | ParseNode.Type | null };
               if (argRecords[i] === undefined) {
@@ -4185,7 +4355,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
                 if (convertedC.Type !== 'normal') {
                   return convertedC as never;
                 }
-                recordC = { ...recordC, Value: convertedC.Value as Value } as never;
+                recordC = { ...recordC, Value: convertedC.Value as Value, Base: declaredC as TypeRecord } as never;
                 argRecords[i] = recordC;
               }
               if (paramC.BindingIdentifier?.name) {

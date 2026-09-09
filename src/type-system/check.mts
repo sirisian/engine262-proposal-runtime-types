@@ -4615,7 +4615,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'NewExpression': {
         const callee = (node as unknown as { MemberExpression?: { type?: string, name?: string } }).MemberExpression;
-        if ((callee?.type === 'IdentifierReference' && callee.name === 'WeakRef') || callee?.type === 'TypeArgumentsExpression') {
+        // A bare construction of a GENERIC class is typed wherever it stands,
+        // so the ladder runs - and its Q4 error is reported - for `new K();` as
+        // a statement and not only where the value reaches a typed position.
+        const genericCallee = callee?.type === 'IdentifierReference' && callee.name !== undefined
+          && ((classNodes.get(callee.name) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)
+            ?.TypeParameters?.TypeParameterList?.length ?? 0) > 0;
+        if ((callee?.type === 'IdentifierReference' && callee.name === 'WeakRef') || callee?.type === 'TypeArgumentsExpression' || genericCallee) {
           staticType(node);
           return;
         }
@@ -4770,6 +4776,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       targetTypedNewTypes.set(node as object, contextual);
       return contextual;
+    }
+    // proposal-runtime-types (PLAN-v3 Q2-c): a CONSTRUCTION reads its position's
+    // type for the same reason a call does - the bindings a bare `new Box(1)`
+    // makes begin with what the position requires - and the `NewExpression` arm
+    // of `staticType` reads it back off the node exactly as the call arm does.
+    if (node.type === 'NewExpression' && contextual) {
+      (node as unknown as { ContextualType?: Known }).ContextualType = contextual;
     }
     if (node.type === 'CallExpression') {
       // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
@@ -5715,7 +5728,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!resolved) {
         return [];
       }
-      out.push(resolved as TypeRecord);
+      // A NUMERIC default is the number the annotation path writes for a
+      // numeric argument (`let g: Grid.<8>` carries 8, not a literal record),
+      // so a bare `Grid` and a written `Grid.<4, 4>` compare equal.
+      out.push(resolved.Kind === 'literal' && (resolved as { Value?: unknown }).Value instanceof NumberValue
+        ? R((resolved as { Value: NumberValue }).Value) as unknown as TypeRecord
+        : resolved as TypeRecord);
     }
     return out;
   };
@@ -6071,6 +6089,233 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // only there - which is a rule this proposal has not stated and which the bare-nominal rule
     // deliberately declined for the general case. Filed rather than guessed.
     return node ? instanceTypeOf(node) : null;
+  };
+  /**
+   * proposal-runtime-types #sec-parameterized-types, #sec-type-references
+   * (PLAN-v3 Q7-a): a parameter no written argument reaches "takes its
+   * |TypeParameterDefault|; it is a type error where a parameter has none". One
+   * rule for the empty list `A.<>`, a trailing position left empty (`Grid.<8>`
+   * is `Grid.<8, 4>`), and - through `classInstanceType`'s defaults - the bare
+   * name. The runtime's annotation path binds the same defaults, so the two
+   * sides name one type for one spelling. A default may name an earlier
+   * parameter and is read over the bindings so far. Returns the completed list,
+   * or the list as given where the class declares no parameters or has a
+   * variadic one; a missing default reports and fills `any` so the walk goes on.
+   */
+  const fillClassDefaults = (userClass: Known, args: readonly (TypeRecord | number)[]): (TypeRecord | number)[] => {
+    if (!userClass || userClass.Kind !== 'nominal') {
+      return [...args];
+    }
+    const decl = (userClass as unknown as { Declaration?: ParseNode }).Declaration;
+    const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } | undefined)
+      ?.TypeParameters?.TypeParameterList ?? [];
+    if (params.length === 0 || args.length >= params.length
+        || params.some((q) => (q as unknown as { IsVariadic?: boolean }).IsVariadic === true)) {
+      return [...args];
+    }
+    const className = (decl as unknown as { BindingIdentifier?: { name?: string } } | undefined)?.BindingIdentifier?.name ?? 'the class';
+    const out: (TypeRecord | number)[] = [...args];
+    const bindings = new Map<string, TypeRecord>();
+    params.forEach((q, i) => {
+      const name = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? String(i);
+      if (i < out.length) {
+        const given = out[i]!;
+        bindings.set(name, typeof given === 'number'
+          ? { Kind: 'literal', Value: Value(given), Base: makePrimitive('number') } as TypeRecord
+          : given);
+        return;
+      }
+      const pdefault = (q as unknown as { TypeParameterDefault?: ParseNode.Type }).TypeParameterDefault;
+      // Resolved with the class's parameters in scope - `U = [].<T>` names T -
+      // and the parameter records then replaced by the bindings so far.
+      const pushed = pdefault ? pushTypeParameterScopeOf(decl) : false;
+      let resolved: Known = null;
+      try {
+        resolved = pdefault ? resolveType(pdefault) : null;
+      } finally {
+        if (pushed) {
+          typeParameterScopes.pop();
+        }
+      }
+      if (!resolved) {
+        const completion = Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default', Value(name), Value(className)) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+        out.push(anyTypeRecord);
+        bindings.set(name, anyTypeRecord);
+        return;
+      }
+      const filled = substituteTypeParameters(resolved, bindings) as TypeRecord;
+      bindings.set(name, filled);
+      out.push(filled.Kind === 'literal' && (filled as { Value?: unknown }).Value instanceof NumberValue
+        ? R((filled as { Value: NumberValue }).Value)
+        : filled);
+    });
+    return out;
+  };
+  /**
+   * A bare generic class name in a TYPE position names `Box.<>` (PLAN-v3 Q7-a),
+   * and `classInstanceType` already binds the defaults where every parameter
+   * has one. Where one has none the bare name denotes nothing a value can be of
+   * - no bare instance exists once a construction yields a specialization - and
+   * that is reported here, naming the parameter. A bare name as a type
+   * ARGUMENT is left alone: it may bind a higher-kinded parameter, where it is
+   * a declaration and not a type, and `badKindedArgument` decides that.
+   */
+  const refuseBareGeneric = (node: ParseNode, resolved: Known): Known => {
+    if (!resolved || resolved.Kind !== 'nominal' || (resolved as { LibraryName?: string }).LibraryName !== undefined) {
+      return resolved;
+    }
+    const decl = (resolved as unknown as { Declaration?: ParseNode }).Declaration;
+    if ((decl as { type?: string } | undefined)?.type !== 'ClassDeclaration' && (decl as { type?: string } | undefined)?.type !== 'ClassExpression') {
+      return resolved;
+    }
+    const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null }).TypeParameters?.TypeParameterList ?? [];
+    if (params.length === 0 || (resolved as { Arguments?: readonly unknown[] }).Arguments?.length) {
+      return resolved;
+    }
+    if ((node as { parent?: { type?: string } }).parent?.type === 'TypeArguments') {
+      return resolved;
+    }
+    // Fill what can be filled and report what cannot; the report names the
+    // first parameter without a default.
+    return CanonicalizeType({ ...(resolved as TypeRecord), Arguments: fillClassDefaults(resolved, []) } as TypeRecord) as Known;
+  };
+  /**
+   * proposal-runtime-types (PLAN-v3 Q1, Q2, Q4, Q6): the bindings a BARE
+   * construction of a generic class makes, on the static side.
+   *
+   * #sec-typed-classes: "the class is the type a construction yields" - for a
+   * generic class, a specialization is, and which one is decided by the same
+   * ladder the runtime's InferGenericBindings runs at [[Construct]]: a binding
+   * the CONTEXTUAL type fixes (read first and treated as an explicit one, so the
+   * ordinary `const b: Box.<uint8> = new Box(1)` binds `uint8` and the literal
+   * takes it), then one inferred from the argument a constructor formal
+   * annotated with the parameter receives, then the declared default. The
+   * checker cannot drive the runtime's core - the core is a generator that
+   * evaluates computed types, and this walk is synchronous - so the static side
+   * runs the same ladder over Static Types with the unifier a generic CALL
+   * already uses here. Two implementations of one stated rule, kept in step by
+   * the row-by-row tests that reach each side alone.
+   *
+   * Answers null for a non-generic class, and the arguments as a list in
+   * parameter order otherwise. A numeric literal argument becomes the NUMBER
+   * the annotation path already uses for one, so `new G(4)` and `let g: G.<4>`
+   * compare equal.
+   */
+  const constructionArguments = (node: ParseNode, declared: Known): readonly (TypeRecord | number)[] | null => {
+    if (!declared || declared.Kind !== 'nominal') {
+      return null;
+    }
+    const decl = (declared as unknown as { Declaration?: ParseNode }).Declaration;
+    const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } | undefined)
+      ?.TypeParameters?.TypeParameterList ?? [];
+    if (!decl || params.length === 0) {
+      return null;
+    }
+    const nameOf = (q: ParseNode): string | undefined => (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+    const names = new Set(params.map(nameOf).filter((x): x is string => !!x));
+    const bindings = new Map<string, TypeRecord>();
+    // 1. The contextual type: an instantiation of THIS declaration, or a union
+    // one of whose members is. An `any` argument is the family wildcard and
+    // seeds nothing in its position. A PARAMETER record does seed: inside
+    // `function w<T>(x: T): Box.<T> { return new Box(x); }` the context is
+    // `Box.<T>` over w's own T, which is the right static answer there and is
+    // concrete by the time the runtime reaches it.
+    const wanted = (node as unknown as { ContextualType?: Known }).ContextualType ?? null;
+    const seedFrom = (t: Known): void => {
+      if (!t || t.Kind !== 'nominal' || (t as unknown as { Declaration?: ParseNode }).Declaration !== decl) {
+        return;
+      }
+      const given = (t as unknown as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+      if (given.length !== params.length) {
+        return;
+      }
+      given.forEach((a, i) => {
+        const name = nameOf(params[i]!);
+        if (!name) {
+          return;
+        }
+        if (typeof a === 'number') {
+          bindings.set(name, { Kind: 'literal', Value: Value(a), Base: makePrimitive('number') } as TypeRecord);
+        } else if (a && a.Kind !== 'any') {
+          bindings.set(name, a);
+        }
+      });
+    };
+    if (wanted && wanted.Kind === 'union') {
+      for (const m of (wanted as { Members: readonly TypeRecord[] }).Members) {
+        if (m.Kind === 'nominal' && (m as unknown as { Declaration?: ParseNode }).Declaration === decl) {
+          seedFrom(m);
+          break;
+        }
+      }
+    } else {
+      seedFrom(wanted);
+    }
+    // 2. The arguments, through the constructor's signature. A binding already
+    // made keeps; the unifier's `into` never overrules one.
+    const sig = constructSignatures.get(decl);
+    if (sig) {
+      const argNodes = ((node as unknown as { Arguments?: readonly ParseNode[] | null }).Arguments ?? [])
+        .filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
+      // An argument with NO Static Type - an unannotated parameter, an untyped
+      // property read - is ~any~ here (#sec-static-type-of-an-expression), and
+      // ~any~ is a binding: the run time binds the value's own type from the
+      // same argument, and the static side saying "unknown" must not turn into
+      // "unreached", which is a different claim and a different error.
+      const passed = argNodes.map((a) => staticType(a) ?? anyTypeRecord);
+      bindTypeParametersFromArguments(sig.Parameters, passed, names, bindings);
+    }
+    // 3. Defaults, evaluated over the bindings so far - a default may name an
+    // earlier parameter, `U = [].<T>`.
+    for (const q of params) {
+      const name = nameOf(q);
+      if (!name || bindings.has(name)) {
+        continue;
+      }
+      const pdefault = (q as unknown as { TypeParameterDefault?: ParseNode.Type }).TypeParameterDefault;
+      if (pdefault) {
+        const pushed = pushTypeParameterScopeOf(decl);
+        let resolved: Known = null;
+        try {
+          resolved = resolveType(pdefault);
+        } finally {
+          if (pushed) {
+            typeParameterScopes.pop();
+          }
+        }
+        if (resolved) {
+          bindings.set(name, substituteTypeParameters(resolved, bindings) as TypeRecord);
+        }
+      }
+    }
+    // 4. Nothing binds it and it has no default: a type error naming the
+    // parameter (PLAN-v3 Q4; #sec-bindtypearguments, "a parameter left by all
+    // three is an error"), reported once here and the construction typed at
+    // `any` in that position so the walk can go on.
+    const className = (decl as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? 'the class';
+    const out: (TypeRecord | number)[] = [];
+    for (const q of params) {
+      const name = nameOf(q);
+      let bound: TypeRecord | undefined = name ? bindings.get(name) : undefined;
+      if (bound === undefined) {
+        const completion = Throw.StaticTypeError('the type parameter $1 of $2 is not determined by the arguments and has no default; supply it explicitly with $2.<...>', Value(name ?? '?'), Value(className)) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+        bound = anyTypeRecord;
+      }
+      out.push(bound.Kind === 'literal' && (bound as { Value?: unknown }).Value instanceof NumberValue
+        ? R((bound as { Value: NumberValue }).Value)
+        : bound);
+    }
+    return out;
+  };
+  /** The specialization a bare construction yields: the declaration's record at the bindings above. */
+  const constructedType = (node: ParseNode, declared: Known): Known => {
+    const args = constructionArguments(node, declared);
+    if (!args) {
+      return declared;
+    }
+    return CanonicalizeType({ ...(declared as TypeRecord), Arguments: args } as TypeRecord) as Known;
   };
   /**
    * proposal-runtime-types: an ENUM name used as a TYPE.
@@ -6826,7 +7071,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               errors.push(completion.Value as ObjectValue);
               return null;
             }
-            return CanonicalizeType({ ...userClass, Arguments: args });
+            return CanonicalizeType({ ...userClass, Arguments: fillClassDefaults(userClass, args) });
           }
           return userClass;
         }
@@ -6859,7 +7104,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // Last is also the conservative place: this lookup answers only for a
         // name nothing else in the chain claims.
-        return builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name);
+        return refuseBareGeneric(node, builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : makePrimitive('null');
@@ -9204,7 +9449,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const targetName = (target as { name: string }).name;
           const declared = classTypeOf(targetName);
           if (declared) {
-            return declared;
+            // A GENERIC class constructed bare yields the specialization its
+            // context, arguments and defaults name (constructionArguments); a
+            // non-generic one is its own type.
+            return constructedType(node, declared);
           }
           // A BUILTIN constructor, where the
           // call determines its own answer. `classTypeOf` knows only declared
@@ -9408,7 +9656,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 if (asLibrary) {
                   return CanonicalizeType(asLibrary as TypeRecord) as Known;
                 }
-                return CanonicalizeType({ ...base, Arguments: valueArgs });
+                // `new A.<>(5)` and `new Grid.<8>()` bind their defaults, as the
+                // runtime's SpecializeGenericClass does (PLAN-v3 Q7-a).
+                return CanonicalizeType({ ...base, Arguments: fillClassDefaults(base, valueArgs) });
               }
             }
             return base;
@@ -9899,16 +10149,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // over. It is collected separately, for `new C(...)`.
           const cparams: ParameterRecord[] = [];
           let cusable = true;
-          for (const p of md.UniqueFormalParameters ?? []) {
-            if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
-              cusable = false;
-              break;
+          // The class's type parameters are in scope for its constructor's
+          // formals, as they are for a method's (below), and INCLUDING the
+          // value parameters: `constructor(v: T)` and `constructor(n: N)` are
+          // what a bare construction binds T and N from (PLAN-v3 Q1,
+          // constructionArguments), and a formal resolved outside that scope
+          // read `T` as nothing and bound nothing. The full scope rather than
+          // 'type-only', because a value parameter's formal IS the binding
+          // site; the extent hazard the type-only mode guards against is a
+          // field's, not a formal's.
+          const pushedClassScopeForConstruct = pushTypeParameterScopeOf(n);
+          try {
+            for (const p of md.UniqueFormalParameters ?? []) {
+              if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
+                cusable = false;
+                break;
+              }
+              const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
+              cparams.push(parameter((pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null) ?? anyTypeRecord, {
+                Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
+                Optional: pp.Optional === true || !!pp.Initializer,
+              }));
             }
-            const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
-            cparams.push(parameter((pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null) ?? anyTypeRecord, {
-              Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
-              Optional: pp.Optional === true || !!pp.Initializer,
-            }));
+          } finally {
+            if (pushedClassScopeForConstruct) {
+              typeParameterScopes.pop();
+            }
           }
           if (cusable) {
             construct = { Parameters: cparams };
@@ -15852,11 +16118,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : null;
           const sig = decl ? constructSignatures.get(decl) : undefined;
           if (sig) {
+            // The parameter types are read AT THE BINDINGS the construction
+            // makes, so `new Box(1)` at a `Box.<uint8>` context checks `1` at
+            // `uint8` and `new Box("s")` there is refused here rather than at
+            // run time. An unbound parameter admits its argument, as before.
+            const constructed = constructionArguments(n, instance);
+            const bindings = new Map<string, TypeRecord>();
+            if (constructed && decl) {
+              const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null })
+                .TypeParameters?.TypeParameterList ?? [];
+              params.forEach((q, i) => {
+                const name = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+                const a = constructed[i];
+                if (!name || a === undefined) {
+                  return;
+                }
+                // A VALUE parameter's formal - `n: N` for `N: uint32` - takes a
+                // value OF the constraint; that the value equals the bound N is
+                // the run time's check (#sec-type-parameters). Substituting the
+                // literal itself asked whether `4` is assignable to "a literal
+                // type of number", which is not the question.
+                const q2 = q as unknown as { IsValueParameter?: boolean, TypeParameterConstraint?: ParseNode.Type | null };
+                if (q2.IsValueParameter) {
+                  const constraint = q2.TypeParameterConstraint ? resolveType(q2.TypeParameterConstraint) : null;
+                  bindings.set(name, (constraint as TypeRecord | null) ?? makePrimitive('number'));
+                  return;
+                }
+                bindings.set(name, typeof a === 'number'
+                  ? { Kind: 'literal', Value: Value(a), Base: makePrimitive('number') } as TypeRecord
+                  : a);
+              });
+            }
             ne.Arguments.forEach((arg, i) => {
               if (i < sig.Parameters.length && arg.type !== 'AssignmentRestElement') {
                 const p = sig.Parameters[i]?.Type;
                 if (p) {
-                  requireAssignable(staticTypeIn(arg, p), p);
+                  const at = bindings.size > 0 ? substituteTypeParameters(p, bindings) : p;
+                  requireAssignable(staticTypeIn(arg, at), at);
                 }
               }
             });

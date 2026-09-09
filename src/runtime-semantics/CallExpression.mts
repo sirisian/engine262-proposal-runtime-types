@@ -22,7 +22,7 @@ import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { anyType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter } from '../type-system/runtime.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';
@@ -1098,11 +1098,15 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   let explicitFrame: Map<string, TypeRecord> | undefined;
   if (surroundingAgent.feature('runtime-types') && memberExpr.type === 'TypeArgumentsExpression') {
     const params = functionTypeParameters(func as never);
-    // A HIGHER-KINDED parameter's argument is a generic declaration rather than
-    // a type, so it is not resolvable as one; that form keeps the path that
-    // already handles it (#sec-higher-kinded-parameters).
-    const kindedParam = params?.some((p: ParseNode.TypeParameter) => ((p as unknown as { Arity?: number }).Arity ?? 0) > 0);
-    if (params && params.length > 0 && !kindedParam) {
+    // A HIGHER-KINDED parameter binds here too. Its argument is a generic
+    // declaration, which TypeNodeToTypeRecord answers for a bare generic name
+    // in a type-ARGUMENT position (the one position a bare generic name is left
+    // as its declaration, PLAN-v3 Q7-a). This path excluded a kinded list and
+    // deferred to the specialization-value path, which excludes it too
+    // ("bound by the explicit call alone"), so `m.<Identity>()` bound W to
+    // nothing and the body read it as `any` - a hole the removal of the `any`
+    // fallback (PLAN-v3 Q4) turned into the naming error.
+    if (params && params.length > 0) {
       const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
       // `f.<V: 5>()`
       // bound V's argument to the FIRST parameter. Named arguments are ordered
@@ -1163,17 +1167,36 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         if (!argNode) {
           return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(p.BindingIdentifier?.name ?? String(i)), Value('the call'));
         }
+        // A higher-kinded parameter's argument is a DECLARATION: resolved as
+        // the class application resolves one (TypeArgumentAsDeclaration), since
+        // as a type a bare generic name is the error its own parameters make
+        // it. Its arity is what `badKindedArgument` validates; the constraint
+        // branches below are for type and value parameters and are skipped.
+        const kindedHere = ((p as unknown as { Arity?: number }).Arity ?? 0) > 0;
         pushTypeParameterFrame(frame);
         let record;
         try {
-          record = Q(yield* TypeNodeToTypeRecord(argNode));
+          // (Two statements rather than `??`: the completion macro hoists its
+          // call ahead of the operator and would resolve the name as a type
+          // regardless.)
+          let asDeclaration: TypeRecord | undefined;
+          if (kindedHere) {
+            asDeclaration = Q(yield* TypeArgumentAsDeclaration(argNode));
+          }
+          if (asDeclaration !== undefined) {
+            record = asDeclaration;
+          } else {
+            record = Q(yield* TypeNodeToTypeRecord(argNode));
+          }
         } finally {
           popTypeParameterFrame();
         }
         // A value parameter's argument is a value OF the declared type, so the
         // literal it binds carries a value of that type rather than the plain
         // number the argument was written as.
-        if (record.Kind === 'literal' && p.TypeParameterConstraint) {
+        if (kindedHere) {
+          // Bound below as the declaration it is.
+        } else if (record.Kind === 'literal' && p.TypeParameterConstraint) {
           // #sec-computed-constraints: the constraint is evaluated over the
           // bindings so far, so it resolves UNDER the frame - `V: T = 0` read
           // T with no frame in scope and threw "'T' is not defined".

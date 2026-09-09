@@ -20,8 +20,8 @@ test('a positional short list crosses its own specialization\'s boundary', () =>
   expect(evaluated('class B<T = uint8, S: uint32 = 256> { s(): uint32 { return S; } } let c: B.<uint8> = new B.<uint8>(); String(c.s());')).toBe('256');
 });
 
-test.fails('positional and named spellings of one application are one type in TYPE position', () => {
-  // The named annotation canonicalizes to the full list; the positional one
-  // stays short, so the two records differ until positional lists fill too.
+test('positional and named spellings of one application are one type in TYPE position', () => {
+  // A positional list fills its trailing defaults as a named one does
+  // (#sec-parameterized-types, PLAN-v3 Q7-a), so the two records are one.
   expect(evaluated("class B<T = uint8, S: uint32 = 256> {} type A = B.<uint8>; type C = B.<T: uint8>; String(A === C);")).toBe('true');
 });

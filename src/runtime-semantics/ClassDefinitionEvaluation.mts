@@ -53,6 +53,7 @@ import {
   ClassFieldDefinitionEvaluation_decorator,
 } from './all.mts';
 import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
+import { GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf } from './RuntimeTypesDeclarations.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
 import {
   surroundingAgent,
@@ -628,7 +629,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // c. Set the running execution context's LexicalEnvironment to env.
     surroundingAgent.runningExecutionContext.LexicalEnvironment = env;
     // d. Let superclass be ? GetValue(superclassRef).
-    const superclass = Q(yield* GetValue(superclassRef));
+    let superclass = Q(yield* GetValue(superclassRef));
     // e. If superclass is null, then
     if (superclass instanceof NullValue) {
       // i. Let protoParent be null.
@@ -639,6 +640,22 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // f. Else if IsConstructor(superclass) is false, throw a TypeError exception.
       return Throw.TypeError('Super class $1 is not a constructor', superclass);
     } else { // g. Else,
+      // proposal-runtime-types (PLAN-v3 Q7-a, F2): a GENERIC class written bare
+      // as a heritage names its all-defaults specialization, as the bare name
+      // does in every type position, and is an error naming the parameter where
+      // one has no default. Extending the open declaration gave the subclass a
+      // `v: T` bound to nothing, which admitted a String into an instance
+      // built from a `uint8`. `extends Box.<U>` in `class S<U>` is unaffected:
+      // that heritage already evaluates to a specialization.
+      if (surroundingAgent.feature('runtime-types')) {
+        const genericHeritage = GenericClassDeclarationOf(superclass as Value);
+        if (genericHeritage !== undefined) {
+          const defaulted = Q(yield* DefaultSpecializationOf(genericHeritage, superclass as Value));
+          if (defaulted !== undefined) {
+            superclass = defaulted as ObjectValue;
+          }
+        }
+      }
       // i. Let protoParent be ? Get(superclass, "prototype").
       protoParent = Q(yield* Get(superclass as ObjectValue, Value('prototype')));
       // ii. If Type(protoParent) is neither Object nor Null, throw a TypeError exception.
@@ -680,6 +697,25 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // super() (a concrete NewTarget).
       if ((F as { IsAbstract?: boolean }).IsAbstract && (F as unknown) === NewTarget) {
         return Throw.TypeError('$1 is an abstract class and cannot be instantiated', F);
+      }
+      // proposal-runtime-types #sec-typed-classes: the DECLARATION of a generic
+      // class constructs its specialization, never itself - the same rule
+      // FunctionConstructSlot applies to a class with a written constructor, at
+      // the second creation path a class without one takes. A default
+      // constructor has no formals, so the bindings come from the contextual
+      // type and the defaults; `new K()` for `class K<T> { items: [].<T> = [] }`
+      // must not produce an instance whose `items` is typed over an open `T`.
+      if (surroundingAgent.feature('runtime-types')) {
+        const declaration = GenericClassDeclarationOf(F);
+        if (declaration !== undefined) {
+          if ((F as unknown) !== NewTarget) {
+            return Throw.TypeError('$1 is a generic class; it is constructed through a specialization, not through its declaration', F);
+          }
+          const specialization = Q(yield* SpecializationForConstruction(declaration, F, args as readonly Value[], classScope));
+          if (specialization !== undefined && specialization !== (F as unknown as Value)) {
+            return Q(yield* Construct(specialization as FunctionObject, args, specialization as FunctionObject));
+          }
+        }
       }
       let result;
       // iv. If F.[[ConstructorKind]] is derived, then

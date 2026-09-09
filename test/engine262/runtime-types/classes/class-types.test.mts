@@ -40,9 +40,12 @@ test('a class name denotes its class type', () => {
   // so `type A` and `A` are one object and it answers as the function it is.
   expect(evaluated('class A {} const T = type A; typeof T === "function" ? "ok" : "no";')).toBe('ok');
   expect(evaluated('class A {} String((type A) === A);')).toBe('true');
-  // An unapplied GENERIC class is not unified: it is a type constructor rather
-  // than a type, and a higher-kinded position binds it as one.
-  expect(evaluated('class G<T> {} String((type G) === G);')).toBe('false');
+  // A GENERIC class's specialization is not unified with the constructor: it
+  // is a distinct class object with a Type Object of its own. (A bare `G` in
+  // type position names `G.<>`, an error where T has no default - PLAN-v3
+  // Q7-a - so the application is written.)
+  expect(evaluated('class G<T> {} String((type G.<uint8>) === G);')).toBe('false');
+  expectThrown('class G<T> {} type G;');
   // The class type is stable: the same class yields the same Type Object.
   expect(evaluated('class A {} type A1 = A; type A2 = A; A1 === A2 ? "same" : "different";')).toBe('same');
   // Distinct classes are distinct types even when structurally identical.

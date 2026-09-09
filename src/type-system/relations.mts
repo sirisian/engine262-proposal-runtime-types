@@ -1047,9 +1047,21 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // The bound this gives a caller is the one the set operations need:
   // `union<U>(other: Set.<U>)` has no spelling in a checker that cannot say
   // "a Set of some element type", and `Set.<any>` is that spelling.
-  if (t.Kind === 'nominal' && s.Kind === 'nominal'
-      && t.LibraryName !== undefined && t.LibraryName === s.LibraryName
-      && COLLECTION_LIBRARY_NAMES.has(t.LibraryName)
+  //
+  // proposal-runtime-types (PLAN-v3 Q7): the same rule for a USER generic
+  // class. Once a bare construction yields a specialization, no value of the
+  // bare type `Box` exists and the family needs a spelling; `Box.<any>` is the
+  // one the collections already have, and it is sound for the same reason
+  // theirs is - a store through the wider view is checked against the
+  // INSTANCE's own field type (#sec-typed-storage, [[TypedProperties]]) at run
+  // time, whatever the static type permitted. Two nominals of one declaration
+  // relate here; a library nominal outside the collection families (`Promise`,
+  // `RegExp`) keeps the rule its own clause states.
+  const sameFamily = t.Kind === 'nominal' && s.Kind === 'nominal'
+    && (t.LibraryName !== undefined
+      ? (t.LibraryName === s.LibraryName && COLLECTION_LIBRARY_NAMES.has(t.LibraryName))
+      : (s.LibraryName === undefined && t.Declaration !== undefined && t.Declaration === s.Declaration));
+  if (sameFamily && t.Kind === 'nominal' && s.Kind === 'nominal'
       && t.Arguments.length > 0 && t.Arguments.length === s.Arguments.length
       && t.Arguments.some((a) => typeof a !== 'number' && (a as TypeRecord).Kind === 'any')) {
     return t.Arguments.every((want, i) => {

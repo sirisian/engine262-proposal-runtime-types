@@ -498,6 +498,17 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
   if (!(node instanceof ObjectValue)) {
     return Throw.TypeError('$1 is not a type node', node);
   }
+  // proposal-runtime-types (PLAN-v3 Q7-a): a GENERIC class's constructor stands
+  // for its declaration. A bare generic name in a type position names the
+  // application at its defaults, so the declaration's own Type Object - what a
+  // `generic` node's `base` is, and what `getReflection(A).generic.base`
+  // returns - has no type-position spelling; in expression position the
+  // constructor is that value, and `makeType({ kind: "generic", base: Box,
+  // arguments: [...] })` names it that way.
+  const asClass = LookupClassType(node);
+  if (asClass !== undefined && isTypeObject(asClass)) {
+    return asClass.TypeRecord;
+  }
   const obj = node;
   const kindValue = Q(yield* Get(obj, Value('kind')));
   if (!(kindValue instanceof JSStringValue)) {

@@ -11,7 +11,7 @@ import {
 } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { vectorGet } from '../type-system/vector-ops.mts';
-import { InstanceofOperator } from '../runtime-semantics/all.mts';
+import { InstanceofOperator, GenericClassDeclarationOf, IsInstanceOfSomeSpecialization } from '../runtime-semantics/all.mts';
 import {
   EnsureCompletion,
   Q, X,
@@ -408,15 +408,31 @@ export function* OrdinaryHasInstance(constructor: Value, O: Value): ValueEvaluat
   if (!(P instanceof ObjectValue)) {
     return Throw.TypeError('$1 is not an object', P);
   }
+  const instance = O;
   while (true) {
     O = Q(yield* O.GetPrototypeOf());
     if (O instanceof NullValue) {
-      return Value.false;
+      break;
     }
     if (SameValue(P, O)) {
       return Value.true;
     }
   }
+  // proposal-runtime-types #sec-instanceof-for-type-objects (PLAN-v3 Q7-i): a
+  // GENERIC class's declaration is the family of its specializations. Each
+  // specialization is a distinct class object, so the walk above never reaches
+  // the declaration's prototype from an instance of one; `x instanceof Box` is
+  // nevertheless true when x is an instance of some `Box.<...>`, as every
+  // program that writes `instanceof Box` expects. Consulted only where the
+  // ordinary walk has already said no and the constructor is such a
+  // declaration, so nothing else pays for it.
+  if (surroundingAgent.feature('runtime-types')) {
+    const declaration = GenericClassDeclarationOf(constructor);
+    if (declaration !== undefined && Q(yield* IsInstanceOfSomeSpecialization(declaration, instance))) {
+      return Value.true;
+    }
+  }
+  return Value.false;
 }
 
 /** https://tc39.es/ecma262/#sec-speciesconstructor */

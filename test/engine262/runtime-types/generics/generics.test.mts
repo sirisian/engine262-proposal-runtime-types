@@ -40,9 +40,13 @@ test('generics: a generic interface declares and applies', () => {
 // -- Generic classes (parse + run) ---------------------------------------------
 test('generics: a generic class declares, constructs, and applies', () => {
   expect(evaluated('class Box<T> { } typeof Box;')).toBe('function');
-  // construct with implicit and explicit type arguments
-  expect(evaluated('class Box<T> { constructor(v) { this.v = v; } } String(new Box((5 := uint8)).v);')).toBe('5');
+  // construct with inferred and explicit type arguments. A bare construction
+  // binds T from the formal annotated with it (PLAN-v3 Q1); a constructor whose
+  // formal is unannotated reaches T through nothing, and the bare form is then
+  // the naming error (PLAN-v3 Q4) rather than an instance whose T is open.
+  expect(evaluated('class Box<T> { constructor(v: T) { this.v = v; } } String(new Box((5 := uint8)).v);')).toBe('5');
   expect(evaluated('class Box<T> { constructor(v) { this.v = v; } } String(new Box.<uint8>((5 := uint8)).v);')).toBe('5');
+  expectThrown('class Box<T> { constructor(v) { this.v = v; } } new Box((5 := uint8));', 'is not determined by the arguments and has no default');
 });
 
 test('generics: a generic class may constrain its parameter', () => {
@@ -54,15 +58,16 @@ test('generics: a generic class may constrain its parameter', () => {
 // -- Generic functions (parse + run) -------------------------------------------
 test('generics: a generic function declares, calls, and applies', () => {
   expect(evaluated('function id<T>(x: T): T { return x; } typeof id;')).toBe('function');
-  // implicit call
-  expect(evaluated('function id<T>(x) { return x; } String(id(5));')).toBe('5');
+  // inferred call; a parameter no formal names is the naming error (PLAN-v3 Q4)
+  expect(evaluated('function id<T>(x: T) { return x; } String(id(5));')).toBe('5');
+  expectThrown('function id<T>(x) { return x; } id(5);', 'is not determined by the arguments and has no default');
   // explicit .<T> application
   expect(ok('function id<T>(x) { return x; } id.<uint8>((5 := uint8)) === (5 := uint8);')).toBe(true);
 });
 
 test('generics: generic function expressions parse, named and unnamed', () => {
-  expect(evaluated('let f = function<T>(x) { return x; }; String(f(7));')).toBe('7');
-  expect(evaluated('let f = function id<T>(x) { return x; }; String(f(8));')).toBe('8');
+  expect(evaluated('let f = function<T>(x: T) { return x; }; String(f(7));')).toBe('7');
+  expect(evaluated('let f = function id<T>(x: T) { return x; }; String(f(8));')).toBe('8');
   // async generic function
   expect(evaluated('async function f<T>(x) { return x; } typeof f;')).toBe('function');
 });

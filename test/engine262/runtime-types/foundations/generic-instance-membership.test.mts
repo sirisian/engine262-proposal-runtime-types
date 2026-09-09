@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectThrown } from '../harness.mts';
 
 const G = 'class G<T> { x: uint8; } ';
 
@@ -22,17 +22,25 @@ test('membership still discriminates, and still refuses what it should', () => {
   // Map.<string, uint8> is a subtype of no other instantiation of Map." One
   // specialization is not a member of another.
   expect(evaluated(`${G} String(new G.<uint8>() is G.<string>);`)).toBe('false');
-  // Nor of the UNSPECIALIZED type. Invariance is the reason, and the relations
-  // already agreed - `isAssignable(G.<uint8>, G)` is false.
-  expect(evaluated(`${G} String(new G.<uint8>() is G);`)).toBe('false');
-  expect(evaluated(`${G} String(Reflect.isAssignable(type G.<uint8>, type G));`)).toBe('false');
+  // There is no UNSPECIALIZED type to be a member of: a bare `G` in type
+  // position names `G.<>`, an error where T has no default (PLAN-v3 Q7-a),
+  // and the FAMILY is spelled `G.<any>`, which every specialization satisfies
+  // (the collections' wildcard rule, extended to a user class).
+  expectThrown(`${G} String(new G.<uint8>() is G);`);
+  expect(evaluated(`${G} String(new G.<uint8>() is G.<any>);`)).toBe('true');
+  expect(evaluated(`${G} String(Reflect.isAssignable(type G.<uint8>, type G.<any>));`)).toBe('true');
+  expect(evaluated(`${G} String(Reflect.isAssignable(type G.<any>, type G.<uint8>));`)).toBe('false');
 });
 
 test('the shapes that already worked are unchanged', () => {
   expect(evaluated('class P { x: uint8; } String(new P() is P);')).toBe('true');
-  expect(evaluated(`${G} String(new G() is G);`)).toBe('true');
+  // A bare construction of a generic class constructs a specialization, from
+  // its context where the arguments reach nothing (PLAN-v3 Q1, Q2-c); with
+  // neither, the naming error (Q4) rather than an instance of an open type.
+  expect(evaluated(`${G} let b: G.<uint8> = new G(); String(b is G.<uint8>);`)).toBe('true');
+  expectThrown(`${G} new G();`, 'is not determined by the arguments and has no default');
   expect(evaluated(`${G} let b: G.<uint8> = new G.<uint8>(); String(b.x);`)).toBe('0');
-  expect(evaluated('class C<T> { x: uint8; } let c: C = new C(); String(c.x);')).toBe('0');
+  expect(evaluated('class C<T = uint8> { x: uint8; } let c: C = new C(); String(c.x);')).toBe('0');
 });
 
 test('the three-way contradiction is resolved, not traded', () => {

@@ -1,6 +1,9 @@
 import { copiesOnBinding } from './LexicalDeclaration.mts';
 import { JSStringValue, NumberValue, ObjectValue, ReferenceRecord, TypedNumberValue, Value } from '../value.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
+import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import type { TypeRecord } from '../type-system/records.mts';
+import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, ObjectEnvironmentRecord } from '../execution-context/Environment.mts';
 import { Q, X } from '../completion.mts';
 import {
   IsAnonymousFunctionDefinition,
@@ -197,6 +200,57 @@ function isTypedStorageTarget(reference: unknown): boolean {
     .TypedProperties?.has(key) === true;
 }
 
+/**
+ * proposal-runtime-types #sec-contextual-types: "the right operand of an
+ * assignment whose target has a declared type" takes that type as its
+ * contextual type. The declared type is wherever the boundary that will check
+ * the store reads it from: a binding's [[declaredType]] (Environment.mts
+ * SetMutableBinding), a typed field's [[TypedProperties]] entry
+ * (objects.mts, the typed-store branch), a private field's Private Name, or the
+ * global object's [[TypedProperties]] for a global `let`. Null where the target
+ * declares none, so a position requiring nothing pushes nothing.
+ *
+ * Read BEFORE the right operand runs, which is the whole point: a bare
+ * construction on the right - `this.b = new Box(1)` at `b: Box.<uint8>` -
+ * binds its parameters from the context first (PLAN-v3 Q2-c), and the checker
+ * already reads the same row for the same node.
+ */
+function declaredTypeOfTarget(lref: unknown): TypeRecord | null {
+  const ref = lref as { Base?: unknown, ReferencedName?: unknown } | undefined;
+  const base = ref?.Base;
+  const name = ref?.ReferencedName;
+  const key = name instanceof JSStringValue ? name.stringValue() : name;
+  if (base instanceof ObjectValue) {
+    const typed = (base as { TypedProperties?: Map<unknown, { TypeRecord?: TypeRecord }> }).TypedProperties?.get(key);
+    if (typed?.TypeRecord) {
+      return typed.TypeRecord;
+    }
+    const privateType = (name as { TypeObject?: { TypeRecord?: TypeRecord } } | undefined)?.TypeObject?.TypeRecord;
+    return privateType ?? null;
+  }
+  if (typeof key !== 'string') {
+    return null;
+  }
+  const fromDeclarative = (env: DeclarativeEnvironmentRecord): TypeRecord | null => {
+    const binding = env.bindings.get(Value(key) as JSStringValue) as { declaredType?: unknown } | undefined;
+    return (binding?.declaredType as TypeRecord | undefined) ?? null;
+  };
+  const fromObjectRecord = (env: ObjectEnvironmentRecord): TypeRecord | null => {
+    const typed = (env.BindingObject as { TypedProperties?: Map<unknown, { TypeRecord?: TypeRecord }> }).TypedProperties?.get(key);
+    return typed?.TypeRecord ?? null;
+  };
+  if (base instanceof DeclarativeEnvironmentRecord) {
+    return fromDeclarative(base);
+  }
+  if (base instanceof GlobalEnvironmentRecord) {
+    return fromDeclarative(base.DeclarativeRecord) ?? fromObjectRecord(base.ObjectRecord);
+  }
+  if (base instanceof ObjectEnvironmentRecord) {
+    return fromObjectRecord(base);
+  }
+  return null;
+}
+
 export function* Evaluate_AssignmentExpression({
   LeftHandSideExpression, AssignmentOperator, AssignmentExpression,
 }: ParseNode.AssignmentExpression): ValueEvaluator {
@@ -213,7 +267,19 @@ export function* Evaluate_AssignmentExpression({
         rval = Q(yield* NamedEvaluation(AssignmentExpression as FunctionDeclaration, (lref as ReferenceRecord).ReferencedName as JSStringValue));
       } else { // d. Else,
         // i. Let rref be the result of evaluating AssignmentExpression.
-        const rref = Q(yield* Evaluate(AssignmentExpression));
+        // proposal-runtime-types #sec-contextual-types: the target's declared
+        // type is the right operand's contextual type (declaredTypeOfTarget).
+        let rref;
+        if (surroundingAgent.feature('runtime-types')) {
+          pushContextualType(declaredTypeOfTarget(lref));
+          try {
+            rref = Q(yield* Evaluate(AssignmentExpression));
+          } finally {
+            popContextualType();
+          }
+        } else {
+          rref = Q(yield* Evaluate(AssignmentExpression));
+        }
         // ii. Let rval be ? GetValue(rref).
         rval = Q(yield* GetValue(rref));
       }

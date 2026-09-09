@@ -30,6 +30,8 @@ import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
+import { InferGenericBindings, currentContextualType } from '../type-system/runtime.mts';
+import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
@@ -1857,6 +1859,218 @@ export function* MaterializeSpecialization(
   return yield* SpecializeFromFrame(declaration, frame, argRecords, key.join(','));
 }
 
+/**
+ * proposal-runtime-types (PLAN-v3 Q1, Q5): the DECLARATION of a generic class,
+ * where _ctor_ is that declaration's own constructor and not one of its
+ * specializations; undefined for anything else.
+ *
+ * A specialization is a fresh class object with its own [[Arguments]]; the
+ * declaration's constructor carries the record with none. It is the declaration
+ * whose [[Construct]] has no body that can run - `T` is bound in no frame there
+ * - so it is the declaration that resolves a specialization and constructs that.
+ * A non-generic class is its own Type Object with no type parameters and is not
+ * this; a generic INTERFACE has no |ClassTail| and is not constructible at all.
+ */
+export function GenericClassDeclarationOf(ctor: Value): ParseNode.ClassDeclaration | undefined {
+  const typeObject = LookupClassType(ctor);
+  if (typeObject === undefined) {
+    return undefined;
+  }
+  const record = (typeObject as unknown as { TypeRecord?: TypeRecord }).TypeRecord;
+  if (!record || record.Kind !== 'nominal') {
+    return undefined;
+  }
+  if (((record as { Arguments?: readonly unknown[] }).Arguments?.length ?? 0) > 0) {
+    return undefined;
+  }
+  const declaration = record.Declaration as ParseNode.ClassDeclaration | undefined;
+  const params = declaration?.TypeParameters?.TypeParameterList;
+  if (!declaration || !params || params.length === 0 || declaration.ClassTail === undefined) {
+    return undefined;
+  }
+  return declaration;
+}
+
+/**
+ * proposal-runtime-types (PLAN-v3 Q2-c): the bindings a construction's
+ * CONTEXTUAL type supplies before its arguments are looked at.
+ *
+ * #sec-contextual-types names the positions; generics.md "Inferring from the
+ * expected type" says a parameter the arguments leave open takes what the
+ * position requires. Here the context is read FIRST and a binding it fixes is
+ * treated as an explicit one - fixed, with the arguments then checked against
+ * it - because that is the only order under which the ordinary spelling
+ * `const b: Box.<uint8> = new Box(1)` works: an untyped literal binds `number`
+ * when it is looked at first, and `Box.<number>` is not a `Box.<uint8>`. Read
+ * first, `T` is `uint8` and the literal takes it, exactly as `new Box.<uint8>(1)`.
+ *
+ * The context seeds only an instantiation of the constructed declaration (or a
+ * union one of whose members is); an `any` argument is the family wildcard and
+ * seeds nothing in its position; a parameter record is not yet a type. An
+ * interface, a supertype, or a structural type contributes nothing - this
+ * proposal's inference is positional.
+ */
+export function contextualBindingsFor(
+  declaration: ParseNode.ClassDeclaration,
+  params: readonly ParseNode.TypeParameter[],
+  contextual: TypeRecord | null | undefined,
+): Map<string, TypeRecord> | undefined {
+  if (!contextual) {
+    return undefined;
+  }
+  let candidate: TypeRecord | undefined;
+  if (contextual.Kind === 'nominal' && contextual.Declaration === declaration) {
+    candidate = contextual;
+  } else if (contextual.Kind === 'union') {
+    candidate = contextual.Members.find((m) => m.Kind === 'nominal' && m.Declaration === declaration);
+  }
+  if (!candidate || candidate.Kind !== 'nominal') {
+    return undefined;
+  }
+  const args = (candidate as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
+  if (args.length !== params.length) {
+    return undefined;
+  }
+  const bound = new Map<string, TypeRecord>();
+  for (let i = 0; i < params.length; i += 1) {
+    const a = args[i];
+    if (typeof a !== 'object' || a === null || a.Kind === 'any' || a.Kind === 'parameter') {
+      continue;
+    }
+    const name = (params[i] as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+    if (name) {
+      bound.set(name, a);
+    }
+  }
+  return bound.size > 0 ? bound : undefined;
+}
+
+/**
+ * proposal-runtime-types (PLAN-v3 Q1, Q2, Q4, Q5): the specialization a BARE
+ * construction of a generic class constructs.
+ *
+ * The ladder: a binding the contextual type fixes, then one inferred from the
+ * argument a constructor formal annotated with the parameter receives, then the
+ * declared default (InferGenericBindings, the same core a generic call runs).
+ * The bindings name an application, and MaterializeSpecialization builds or
+ * finds it, so a bare construction and `new Box.<uint8>(1)` reach one class
+ * object and one type. Answers undefined where no specialization can be
+ * materialized (a variadic parameter list, a declaration in progress), and the
+ * caller falls back to the declaration.
+ */
+export function* SpecializationForConstruction(
+  declaration: ParseNode.ClassDeclaration,
+  ctor: Value,
+  args: readonly Value[],
+  environment?: EnvironmentRecord,
+): PlainEvaluator<Value | undefined> {
+  const params = declaration.TypeParameters?.TypeParameterList ?? [];
+  const formals = ((ctor as unknown as { FormalParameters?: readonly ParseNode[] }).FormalParameters) ?? [];
+  // The contextual type is the CALLER's - read before the scope below changes.
+  const preBound = contextualBindingsFor(declaration, params, currentContextualType());
+  // The declaration's scope, for two reasons. A type parameter's default and
+  // constraint are written at the declaration and resolve there, not at
+  // whichever `new` first reached this application; and the DEFAULT constructor
+  // is a built-in whose execution context has no LexicalEnvironment at all, so
+  // resolving `uint32` in `H: uint32 = 2` from it found no environment to ask.
+  // A written constructor's [[Environment]] is the class scope; the default
+  // constructor's closure hands its class scope in.
+  const scope = environment ?? (ctor as unknown as { Environment?: EnvironmentRecord }).Environment;
+  const context = surroundingAgent.runningExecutionContext;
+  const savedLexical = context.LexicalEnvironment;
+  if (scope !== undefined) {
+    context.LexicalEnvironment = scope;
+  }
+  try {
+    const frame = Q(yield* InferGenericBindings(params, formals, args, preBound));
+    const argRecords: TypeRecord[] = [];
+    for (const param of params) {
+      const name = (param as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+      const record = name ? frame.get(name) : undefined;
+      if (!record) {
+        return undefined;
+      }
+      argRecords.push(record);
+    }
+    return yield* MaterializeSpecialization(declaration, argRecords);
+  } finally {
+    context.LexicalEnvironment = savedLexical;
+  }
+}
+
+/**
+ * proposal-runtime-types (PLAN-v3 Q7-a): the specialization a generic class
+ * names when written BARE in a type position - every parameter at its default -
+ * built for `class S extends Box { }`, where the heritage is an expression
+ * that evaluated to the declaration's constructor. A parameter with no default
+ * is the naming TypeError the ladder gives an unreached parameter, since a
+ * subclass of the open declaration would inherit a `v: T` that checks nothing
+ * (F2). No contextual type takes part: a heritage is not a position that
+ * requires a type.
+ */
+export function* DefaultSpecializationOf(
+  declaration: ParseNode.ClassDeclaration,
+  ctor: Value,
+): PlainEvaluator<Value | undefined> {
+  const params = declaration.TypeParameters?.TypeParameterList ?? [];
+  const scope = (ctor as unknown as { Environment?: EnvironmentRecord }).Environment;
+  const context = surroundingAgent.runningExecutionContext;
+  const savedLexical = context.LexicalEnvironment;
+  if (scope !== undefined) {
+    context.LexicalEnvironment = scope;
+  }
+  try {
+    const frame = Q(yield* InferGenericBindings(params, [], [], undefined));
+    const argRecords: TypeRecord[] = [];
+    for (const param of params) {
+      const name = (param as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+      const record = name ? frame.get(name) : undefined;
+      if (!record) {
+        return undefined;
+      }
+      argRecords.push(record);
+    }
+    return yield* MaterializeSpecialization(declaration, argRecords);
+  } finally {
+    context.LexicalEnvironment = savedLexical;
+  }
+}
+
+/**
+ * proposal-runtime-types (PLAN-v3 Q7-i): whether some object on _O_'s prototype
+ * chain is the prototype of a SPECIALIZATION of _declaration_.
+ *
+ * A specialization is a fresh class object whose prototype chain does not pass
+ * through the declaration's `prototype`, so the ordinary walk in
+ * OrdinaryHasInstance answers *false* for `new Box.<uint8>(1) instanceof Box` -
+ * and, once a bare construction yields a specialization, for `new Box(1)
+ * instanceof Box`. The declaration is the FAMILY: `x instanceof Box` is true
+ * when x is an instance of any specialization of Box, or of a class extending
+ * one. Read from the specialization table rather than through a `constructor`
+ * property, so no user getter is observed.
+ */
+export function* IsInstanceOfSomeSpecialization(declaration: ParseNode.ClassDeclaration, O: ObjectValue): PlainEvaluator<boolean> {
+  const byArgs = classSpecializations.get(declaration);
+  if (byArgs === undefined || byArgs.size === 0) {
+    return false;
+  }
+  const prototypes = new Set<Value>();
+  for (const ctor of byArgs.values()) {
+    const proto = (ctor as unknown as { properties?: Map<unknown, { Value?: Value }> }).properties?.get(Value('prototype'))?.Value;
+    if (proto instanceof ObjectValue) {
+      prototypes.add(proto);
+    }
+  }
+  let current: Value = Q(yield* O.GetPrototypeOf());
+  while (current instanceof ObjectValue) {
+    if (prototypes.has(current)) {
+      return true;
+    }
+    current = Q(yield* current.GetPrototypeOf());
+  }
+  return false;
+}
+
 /** The tail both entry points share, so one specialization is built by one path. */
 function* SpecializeFromFrame(
   declaration: ParseNode.ClassDeclaration,
@@ -2020,7 +2234,12 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
       if (converted.Type !== 'normal') {
         return converted as never;
       }
-      record = { ...record, Value: converted.Value as Value } as never;
+      // Both halves of the literal move - its VALUE to one of the constraint's
+      // and its BASE to the constraint - as the inferred path's do
+      // (InferGenericBindingsFrom). With the base left at `number` the formal
+      // `n: N` refused a plain `4` against a `uint32` 4: `new G.<4>(4)` and
+      // `h.<4>((4 := uint32))` both failed their own parameter boundary.
+      record = { ...record, Value: converted.Value as Value, Base: declared as TypeRecord } as never;
     }
     // Canonical BEFORE it binds: the frame's record and the stored argument
     // must be one object, since a frame later derived from the instance's
