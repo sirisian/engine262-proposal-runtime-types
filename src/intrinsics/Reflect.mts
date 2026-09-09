@@ -528,11 +528,24 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
   switch (kind) {
     case 'primitive':
     case 'reference':
-    case 'shared':
       // A named leaf or a ref borrow: its `type`/`target` Type Object carries the
       // record directly. (Generic decomposition is not reconstructed here; the
       // interned leaf is authoritative.)
+      //
+      // ~shared~ is NOT one of these, though it was grouped here and reads as
+      // though it were. #table-reflection-nodes gives it a `target` like a
+      // borrow, but records.mts gives the record as
+      // `{ Kind: 'shared', Target }` - a wrapper AROUND a target rather than a
+      // name FOR one - so returning the target discarded the marker and
+      // `makeType(getReflection(type shared uint32))` was `uint32`. That is a
+      // different type: #sec-threading-memory-model has `shared T` and `T`
+      // distinct, and the sharing is the whole of what the marker says.
       return Q(yield* typeProp(kind === 'primitive' ? 'type' : 'target'));
+    case 'shared':
+      // The target is always a leaf - `shared` takes a numeric type or an alias
+      // to one, and rejects an object, a class and an array - so there is no
+      // recursion to do here. What was missing is the wrapper, not the walk.
+      return { Kind: 'shared', Target: Q(yield* typeProp('target')) };
     case 'literal': {
       const value = Q(yield* Get(node, Value('value')));
       const base = Q(yield* typeProp('base'));
