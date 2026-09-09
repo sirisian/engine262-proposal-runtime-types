@@ -1,0 +1,68 @@
+import { test, expect } from 'vitest';
+import { SerializeTypeTable, DeserializeTypeTable } from '#self';
+
+/**
+ * #sec-expansion-artifact's reference scheme: "a serialization of the interning
+ * table for the concrete types a module graph's public surface produces".
+ *
+ * A TABLE because nothing else works. Two ordinary shapes defeat a serializer
+ * that walks nested types by containment: a primitive record refers to ITSELF -
+ * `getReflection(uint8).type` is `uint8` - and a recursive type closes a cycle
+ * through a nested position. An entry naming another by INDEX represents both,
+ * and the reader needs no cycle detection because it allocates every entry
+ * before filling any.
+ *
+ * The walk is generic rather than a switch over kinds, so a kind added later is
+ * carried without being taught. What it must NOT walk is anything that is not a
+ * record: an engine `Value` walked apart loses what it was, and a parse node
+ * held by a nominal record has a `parent` back-pointer and does not terminate.
+ * Both were found by running this, not by reading.
+ */
+import { run } from '../harness.mts';
+function rootsOf(program: string, names: string[]) {
+  const c = run(`${program} [${names.join(',')}];`) as { Type: string, Value?: unknown };
+  if (c.Type !== 'normal') return undefined;
+  const arr = c.Value as { properties?: Map<unknown, { Value?: unknown }> };
+  const roots = new Map<string, never>();
+  const originals: unknown[] = [];
+  names.forEach((n, i) => {
+    const to = arr.properties?.get(String(i) as never)?.Value as { TypeRecord?: never } | undefined;
+    originals.push(to);
+    if (to?.TypeRecord) roots.set(n, to.TypeRecord);
+  });
+  return { roots, originals };
+}
+function check(program: string, names: string[]): string {
+  const r = rootsOf(program, names);
+  if (!r || r.roots.size !== names.length) return 'setup failed';
+  const back = DeserializeTypeTable(SerializeTypeTable(r.roots as never));
+  if (!back) return 'declined';
+  return names.every((n, i) => back.get(n) === r.originals[i]) ? 'same' : 'DIFFERENT';
+}
+const KINDS: [string, string, string][] = [
+  ['primitive', '', 'uint8'], ['literal', '', 'type "x"'],
+  ['object', 'type O = { a: uint8, b: string };', 'O'],
+  ['tuple', 'type T = [uint8, string];', 'T'],
+  ['array', 'type A = [].<uint8>;', 'A'],
+  ['union', 'type U = uint8 | string;', 'U'],
+  ['intersection', 'type I = { a: uint8 } & { b: string };', 'I'],
+  ['function', 'type F = (uint8) => string;', 'F'],
+  ['nominal', 'class C {}', 'C'], ['enum', 'enum E { a, b }', 'E'],
+  ['parameterized', 'type P = uint32.<{ brand: "X" }>;', 'P'],
+  ['pattern meta', 'type Pt = string.<{ pattern: /^a$/ }>;', 'Pt'],
+  ['shared', 'type S = shared uint32;', 'S'],
+  ['recursive', 'type L = { next: L | void };', 'L'],
+  ['nested', 'type N = { a: { b: [].<uint8> } };', 'N'],
+];
+for (const [n, pre, expr] of KINDS) {
+  test(n, () => { expect(`${n}:${check(pre, [expr])}`).toBe(`${n}:same`); });
+}
+test('deterministic: the same roots twice give the same table', () => {
+  const r = rootsOf('type U = { b: uint8, a: string };', ['U'])!;
+  const a = JSON.stringify(SerializeTypeTable(r.roots as never).types.map((e) => Object.keys(e)));
+  const b = JSON.stringify(SerializeTypeTable(r.roots as never).types.map((e) => Object.keys(e)));
+  expect(a).toBe(b);
+});
+test('a newer version is declined rather than misread', () => {
+  expect(DeserializeTypeTable({ version: 999, types: [], exports: {} })).toBe(undefined);
+});

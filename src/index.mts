@@ -40,6 +40,7 @@ export * from './evaluator.mts';
 export { TypeOrigins, MemberOrigins, type TypeOrigin } from './type-system/provenance.mts';
 export { InspectPattern } from './type-system/pattern-fragment.mts';
 export { DecidesInclusion } from './type-system/pattern-inclusion.mts';
+export { SerializeTypeTable, DeserializeTypeTable, TYPE_TABLE_VERSION, type TypeTable } from './type-system/artifact.mts';
 
 
 export {
