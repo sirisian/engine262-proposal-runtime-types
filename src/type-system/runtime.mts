@@ -21,7 +21,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue, DeclaredInverseOf } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
@@ -46,6 +46,7 @@ import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
 import { isRangeShapeName, rangeMatchesBoundArguments, rangeShapeMatches } from './range-bounds-match.mts';
@@ -1171,7 +1172,19 @@ export function valueArguments(args: readonly Value[]): InferenceArguments {
   return {
     length: args.length,
     * typeOf(i) {
-      return RuntimeTypeOf(Q(yield* referent(i)));
+      const v = Q(yield* referent(i));
+      const t = RuntimeTypeOf(v);
+      // A FUNCTION value's runtime type is an object record; its signature is
+      // read off its annotations (OverloadSignatureOf), as Reflect.typeOf reads
+      // it, so a callback's shape can bind - `K` in `f<K>(cb: () => K)`.
+      if (t.Kind === 'object' && v instanceof ObjectValue && IsCallable(v) && !isTypeObject(v)) {
+        const sig = EnsureCompletion(yield* OverloadSignatureOf(v));
+        if (sig.Type === 'normal') {
+          const one = sig.Value as { Parameters: readonly unknown[], ReturnType?: TypeRecord };
+          return { Kind: 'function', Signatures: [{ Parameters: one.Parameters, Return: one.ReturnType ?? null }] } as unknown as TypeRecord;
+        }
+      }
+      return t;
     },
     * literalTypeOf(i) {
       return literalTypeOf(Q(yield* referent(i)));
@@ -1354,6 +1367,7 @@ export function* InferGenericBindingsFrom(
   preBound?: ReadonlyMap<string, TypeRecord>,
 ): PlainEvaluator<Map<string, TypeRecord>> {
   const frame = new Map<string, TypeRecord>();
+  let structural: Map<string, TypeRecord> | null = null;
   // Index the formal parameters: the ordinary ones by position, and the rest
   // element (if any) by the index at which trailing arguments begin.
   const ordinary: { name: string, annotationName: string | null }[] = [];
@@ -1429,6 +1443,23 @@ export function* InferGenericBindingsFrom(
           elements.push({ Type: elementType, Rest: false, Initial: 'none' });
         }
         bound = { Kind: 'tuple', Elements: elements };
+      }
+
+      // The STRUCTURAL rung (unify.mts, shared with the checker): a formal that
+      // reaches the parameter through a shape - `items: [].<T>`, `m: Map.<K,
+      // V>`, `cb: (x: T) => void`, `p: [T, ...Rest]`, `i: Iterable.<T>` - binds
+      // it by matching the formal's type, the parameters still unbound left as
+      // ~parameter~ records, against the argument's type. Computed once per
+      // call at the first parameter that needs it, over the bindings so far,
+      // and consulted by every later parameter it bound.
+      if (bound === null && ((tp as { Arity?: number }).Arity ?? 0) === 0) {
+        if (structural === null) {
+          structural = Q(yield* structuralBindingsOf(typeParameters, formals, args, frame));
+        }
+        const found = structural.get(paramName);
+        if (found !== undefined) {
+          bound = found;
+        }
       }
 
       if (bound === null && tp.TypeParameterDefault) {
@@ -1507,13 +1538,14 @@ export function* InferGenericBindingsFrom(
         if (bound === null) {
           const kinded = ((tp as { Arity?: number }).Arity ?? 0) > 0;
           if (!kinded && annotationMentions(formals, paramName)) {
-            // Mentioned by a formal - `items: [].<T>`, `cb: (x: T) => void`,
-            // `m: Map.<K, V>` - that the positional rule above cannot see
-            // through. The checker's unifier binds these structurally
-            // (bindTypeParametersFromArguments); this core does not yet, and
-            // until that rung is shared (PLAN-v3 §6, "the reach of the shared
-            // core") the binding is `any`, which is what the call did before
-            // and is at least never a refusal of a call the checker accepted.
+            // REACHED but UNTYPED: a formal mentions the parameter and an
+            // argument arrived, but the argument's type says nothing about it -
+            // an unannotated callback `(x) => x` at `cb: (x: T) => T`, an
+            // untyped array at `[].<T>`. The structural rung above bound what
+            // the shape offered; what it could not, the checker also reads as
+            // ~any~ for an argument with no Static Type. "Unknown here" and
+            // "reached by nothing" are different claims, and only the second
+            // is the error below.
             bound = anyType;
           } else if (!kinded && (tp as { IsVariadic?: boolean }).IsVariadic === true) {
             // #sec-variadic-parameters: a pack no formal mentions and nothing
@@ -1554,6 +1586,106 @@ export function* InferGenericBindingsFrom(
     popTypeParameterFrame();
   }
   return frame;
+}
+
+/**
+ * The structural rung's bindings: each ordinary formal's annotation resolved
+ * with the still-unbound parameters as ~parameter~ records, matched by the
+ * shared walk against the arguments' types. A formal whose annotation does not
+ * resolve under placeholders (a value parameter read as an extent, say)
+ * contributes nothing; the walk binds only names in the placeholder set, so a
+ * parameter the frame already binds is never overruled.
+ */
+function* structuralBindingsOf(
+  typeParameters: readonly ParseNode.TypeParameter[],
+  formals: readonly ParseNode[],
+  args: InferenceArguments,
+  frame: ReadonlyMap<string, TypeRecord>,
+): PlainEvaluator<Map<string, TypeRecord>> {
+  const into = new Map<string, TypeRecord>();
+  const placeholders = new Map<string, TypeRecord>();
+  for (const tp of typeParameters) {
+    const name = tp.BindingIdentifier?.name;
+    if (name && !frame.has(name) && ((tp as { Arity?: number }).Arity ?? 0) === 0) {
+      placeholders.set(name, { Kind: 'parameter', Name: name, Declaration: tp } as unknown as TypeRecord);
+    }
+  }
+  if (placeholders.size === 0) {
+    return into;
+  }
+  const names = new Set(placeholders.keys());
+  const shapes: { Type?: TypeRecord | null, Rest?: boolean }[] = [];
+  pushTypeParameterFrame(placeholders);
+  try {
+    for (const f of formals) {
+      const node = f as { type?: string, TypeAnnotation?: { Type?: ParseNode.Type } | null };
+      const annotation = node.TypeAnnotation?.Type;
+      // A formal typed by a BUILDER over a parameter, `x: wrapOf(T)`, is rung
+      // three's: it binds through the builder's declared inverse, with forward
+      // verification, or is refused naming the builder - never by evaluating
+      // the builder over a placeholder here, which would run it on a record
+      // that is not a type and bind whatever fell out.
+      if (!annotation || containsComputedTypeOver(annotation, names)) {
+        shapes.push({ Type: null, Rest: node.type === 'BindingRestElement' });
+        continue;
+      }
+      const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation));
+      shapes.push({ Type: resolved.Type === 'normal' ? resolved.Value as TypeRecord : null, Rest: node.type === 'BindingRestElement' });
+    }
+  } finally {
+    popTypeParameterFrame();
+  }
+  if (!shapes.some((sh) => sh.Type && mentionsParameterNamed(sh.Type, names))) {
+    return into;
+  }
+  const argumentTypes: (TypeRecord | null)[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const t = EnsureCompletion(yield* args.typeOf(i));
+    argumentTypes.push(t.Type === 'normal' ? t.Value as TypeRecord : null);
+  }
+  unifyTypeParameters(shapes, argumentTypes, names, into, {
+    mentionsTypeParameter: (t) => mentionsParameterNamed(t, names),
+    substituteTypeParameters: substituteParametersNamed,
+  });
+  // A binding that is itself still a placeholder is no binding.
+  for (const [name, record] of [...into]) {
+    if (record.Kind === 'parameter' && names.has((record as { Name: string }).Name)) {
+      into.delete(name);
+    }
+  }
+  return into;
+}
+
+/** Whether _node_ contains a computed type (a builder application) whose arguments mention a parameter in _names_. */
+function containsComputedTypeOver(node: unknown, names: ReadonlySet<string>): boolean {
+  const mentionsAny = (n: unknown): boolean => [...names].some((name) => {
+    const r = n as { type?: string, name?: string, TypeName?: { IdentifierReference?: { name?: string } } };
+    if (r?.type === 'TypeReference' && r.TypeName?.IdentifierReference?.name === name) {
+      return true;
+    }
+    if (r?.type === 'IdentifierReference' && r.name === name) {
+      return true;
+    }
+    if (!n || typeof n !== 'object') {
+      return false;
+    }
+    return Object.keys(n as object).some((key) => key !== 'parent' && key !== 'location' && (Array.isArray((n as Record<string, unknown>)[key])
+      ? ((n as Record<string, unknown[]>)[key]).some(mentionsAny)
+      : mentionsAny((n as Record<string, unknown>)[key])));
+  });
+  const walk = (n: unknown): boolean => {
+    if (!n || typeof n !== 'object') {
+      return false;
+    }
+    const r = n as { type?: string, Arguments?: readonly unknown[] };
+    if (r.type === 'ComputedType' && (r.Arguments ?? []).some(mentionsAny)) {
+      return true;
+    }
+    return Object.keys(n as object).some((key) => key !== 'parent' && key !== 'location' && (Array.isArray((n as Record<string, unknown>)[key])
+      ? ((n as Record<string, unknown[]>)[key]).some(walk)
+      : walk((n as Record<string, unknown>)[key])));
+  };
+  return walk(node);
 }
 
 /** Whether any formal's annotation mentions the type parameter _paramName_, however deeply. */

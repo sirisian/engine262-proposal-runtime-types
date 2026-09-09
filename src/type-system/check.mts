@@ -11,6 +11,7 @@ import { type SignatureRecord, type PropertyTypeRecord, type MetadataRecord,
   typeParameterRecordsOf, type TypeParameterRecord,
 } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
+import { unifyTypeParameters } from './unify.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
@@ -2435,9 +2436,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * first binding for a name wins, since a later disagreement is the caller's
    * error rather than a reason to rebind.
    */
-  /** The interfaces an argument may be matched against to recover an element type. */
-  const ITERATION_INTERFACES_FOR_INFERENCE = ['Iterable', 'Iterator', 'IterableIterator'] as const;
-
   /**
    * The element type an ARGUMENT offers to an iterable-typed parameter, or
    * *null* where it offers none.
@@ -3213,206 +3211,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  /**
+   * The structural rung of inference, over Static Types: the shared walk in
+   * unify.mts (PLAN-v3 Q6), with this checker's own `mentionsTypeParameter`
+   * and `substituteTypeParameters` supplied where the walk needs them. The
+   * run time calls the same walk over RuntimeTypeOf of its values, which is
+   * what makes `f<T>(items: [].<T>)` and `new L(items)` bind the same `T` on
+   * both sides.
+   */
   const bindTypeParametersFromArguments = (
     parameters: readonly { Type?: Known }[],
     argumentTypes: readonly Known[],
     names: ReadonlySet<string>,
     into: Map<string, TypeRecord>,
   ): void => {
-    const match = (param: Known, arg: Known): void => {
-      if (!param || !arg) {
-        return;
-      }
-      if (param.Kind === 'parameter') {
-        const name = (param as { Name: string }).Name;
-        if (names.has(name) && !into.has(name)) {
-          into.set(name, widen(arg) as TypeRecord);
-        }
-        return;
-      }
-      // An INTERFACE-typed parameter. `Iterable.<T>` resolves to a STRUCTURAL
-      // record with T buried inside `[Symbol.iterator]`'s return's `next`'s
-      // return, so neither the [[Arguments]] walk below nor the [[Element]] one
-      // can see it, and `f<T>(i: Iterable.<T>)` bound nothing - the most useful
-      // parameter shape a generic over a sequence can have, and the one
-      // `Map.groupBy` is declared with.
-      //
-      // Recovered by RECONSTRUCTION rather than by walking in: for each variable
-      // still unbound, rebuild the interface at that variable and ask whether it
-      // is the parameter's own type. That is one `SameType` per candidate, and
-      // it is exact - it cannot mistake a hand-written object type for an
-      // interface, because a hand-written one is not what
-      // `iterationInterfaceRecord` builds. Walking the shape inward would have
-      // to know the interface's layout, which is the coupling this avoids.
-      if (param.Kind === 'object') {
-        for (const candidate of names) {
-          if (into.has(candidate)) {
-            continue;
-          }
-          const variable = { Kind: 'parameter', Name: candidate } as unknown as TypeRecord;
-          for (const interfaceName of ITERATION_INTERFACES_FOR_INFERENCE) {
-            const rebuilt = iterationInterfaceRecord(interfaceName, [variable]);
-            if (rebuilt && SameType(rebuilt, param as TypeRecord)) {
-              const element = elementTypeOfIterable(arg);
-              if (element) {
-                into.set(candidate, widen(element) as TypeRecord);
-              }
-              return;
-            }
-          }
-        }
-      }
-      // A UNION parameter. `match` walked members, arguments, elements,
-      // signatures and properties, and had no case for a union - so a variable
-      // inside one bound nothing, and `f<T>(x: [].<T> | Set.<T>)` was
-      // unconstrained however plainly the argument matched an arm.
-      //
-      // The arm that the argument is ASSIGNABLE to is the one that binds. Trying
-      // every arm and keeping the first binding would let a non-matching arm
-      // claim the variable: for `[].<T> | Set.<T>` given a `Set.<uint8>`, the
-      // array arm structurally offers an [[Element]] to match against and would
-      // bind T from whatever it found there. Assignability is what says which
-      // arm the call actually took.
-      //
-      // Where two arms both admit the argument, the FIRST is taken and the rest
-      // are not tried - a later arm disagreeing is the caller's ambiguity rather
-      // than a reason to bind twice, which is the rule `into` already applies
-      // within one arm.
-      if (param.Kind === 'union') {
-        const members = (param as { Members?: readonly TypeRecord[] }).Members ?? [];
-        // The arm whose KIND the argument has is the one that binds, and it is
-        // tried before assignability. An arm still mentioning an unbound
-        // variable admits almost anything - `IsAssignable(Set.<uint8>,
-        // [].<T>)` holds while T is free - so assignability alone let the
-        // FIRST arm claim the variable whatever the argument was: `[].<T> |
-        // Set.<T>` given a `Set.<uint8>` bound T from the array arm, and the
-        // same union written the other way round worked. Order is not supposed
-        // to decide this.
-        //
-        // A nominal is matched on its [[LibraryName]] too, since `Set.<T>` and
-        // `Map.<K, V>` are both nominals and the kind alone would not separate
-        // them.
-        const argLibrary = (arg as { LibraryName?: string }).LibraryName;
-        for (const arm of members) {
-          if (mentionsTypeParameter(arm) && arm.Kind === arg.Kind
-              && (arm.Kind !== 'nominal' || (arm as { LibraryName?: string }).LibraryName === argLibrary)) {
-            match(arm, arg);
-            return;
-          }
-        }
-        for (const arm of members) {
-          if (mentionsTypeParameter(arm) && IsAssignable(arg as TypeRecord, substituteTypeParameters(arm, into) as TypeRecord)) {
-            match(arm, arg);
-            return;
-          }
-        }
-        // No arm admits it as written, which is the ordinary case while the
-        // variable is still unbound: fall back to the arms that mention one, so
-        // a first binding can be made from the shape alone.
-        for (const arm of members) {
-          if (mentionsTypeParameter(arm)) {
-            match(arm, arg);
-            return;
-          }
-        }
-        return;
-      }
-      const pArgs = (param as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
-      const aArgs = (arg as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
-      if (pArgs && aArgs) {
-        pArgs.forEach((pa, i) => {
-          const aa = aArgs[i];
-          if (typeof pa !== 'number' && aa !== undefined && typeof aa !== 'number') {
-            match(pa, aa);
-          }
-        });
-        return;
-      }
-      const pEl = (param as { Element?: TypeRecord }).Element;
-      const aEl = (arg as { Element?: TypeRecord }).Element;
-      if (pEl && aEl) {
-        match(pEl, aEl);
-        return;
-      }
-      // A FUNCTION parameter: a callback's shape says what a variable is as
-      // plainly as a direct position does. Without this, `K` in
-      // `f<K>(cb: () => K)` was never bound - the walk had no case for
-      // [[Signatures]], so it stopped at the function record and left `K`
-      // unconstrained, and `"() => uint8" is not assignable to "() => K"` was
-      // the result even where the callback plainly returned a `uint8`.
-      //
-      // This is what `standardlibrary.md` means by the signatures stating "how
-      // element and key types flow through": `Map.groupBy`'s key type is the
-      // callback's RETURN and is knowable from nowhere else.
-      //
-      // Only the FIRST signature of each, and only pairwise: an overloaded
-      // callback type is not something a call site can resolve against here, and
-      // binding from one arbitrary overload would be worse than binding nothing.
-      type SigShape = {
-        Parameters?: readonly { Type?: TypeRecord }[],
-        Return?: TypeRecord | null,
-        InferredReturn?: TypeRecord | null,
-      };
-      const pSigs = (param as { Signatures?: readonly SigShape[] }).Signatures;
-      const aSigs = (arg as { Signatures?: readonly SigShape[] }).Signatures;
-      if (pSigs?.length === 1 && aSigs?.length === 1) {
-        const pSig = pSigs[0];
-        const aSig = aSigs[0];
-        (pSig.Parameters ?? []).forEach((pp, i) => {
-          const ap = (aSig.Parameters ?? [])[i];
-          if (pp?.Type && ap?.Type) {
-            match(pp.Type, ap.Type);
-          }
-        });
-        // [[InferredReturn]] as well as [[Return]], since a callback whose return
-        // type is inferred is the ordinary way one is written and
-        // `effectiveFunctionType` normalises the two wherever a function type is
-        // COMPARED.
-        //
-        // NOTE: this alone does NOT make a block-bodied arrow bind a variable
-        // from its return. Measured: `staticType` of `(v) => { return "k"; }`
-        // answers *null* at the result-binding site - there is no record to read
-        // either field from - while the concise `(v) => "k"` answers a function
-        // type and binds. So a block body's return is unavailable at that point,
-        // not merely stored elsewhere, and closing it is a separate piece of
-        // work.
-        const pReturn = pSig.Return ?? pSig.InferredReturn;
-        const aReturn = aSig.Return ?? aSig.InferredReturn;
-        if (pReturn && aReturn) {
-          match(pReturn, aReturn);
-        }
-      }
-    };
-    for (let i = 0; i < parameters.length; i += 1) {
-      const p = parameters[i]!;
-      const pt = p.Type ?? null;
-      if ((p as { Rest?: boolean }).Rest === true && pt) {
-        // Rung one (#sec-variadic-parameters): a REST parameter annotated with a type
-        // parameter, `...xs: Ts`, binds it to the TUPLE of the trailing
-        // arguments' types - the rule the runtime binder already applies - and
-        // one annotated with an array binds through its element against each
-        // trailing argument. Zipping the rest with the one argument at its
-        // index bound `Ts` to the first argument's type and refused the second.
-        const trailing = argumentTypes.slice(i);
-        if (pt.Kind === 'parameter') {
-          const name = (pt as { Name: string }).Name;
-          if (names.has(name) && !into.has(name) && trailing.every((a) => a !== null)) {
-            into.set(name, {
-              Kind: 'tuple',
-              Elements: trailing.map((a) => ({ Type: widen(a!) as TypeRecord, Rest: false, Initial: 'none' })),
-            } as unknown as TypeRecord);
-          }
-        } else if (pt.Kind === 'array') {
-          for (const a of trailing) {
-            match((pt as { Element: TypeRecord }).Element, a ?? null);
-          }
-        } else {
-          match(pt, argumentTypes[i] ?? null);
-        }
-        break;
-      }
-      match(pt, argumentTypes[i] ?? null);
-    }
+    unifyTypeParameters(
+      parameters as readonly { Type?: TypeRecord | null, Rest?: boolean }[],
+      argumentTypes as readonly (TypeRecord | null)[],
+      names,
+      into,
+      {
+        mentionsTypeParameter: (t) => mentionsTypeParameter(t as Known),
+        substituteTypeParameters: (t, bindings) => substituteTypeParameters(t as Known, bindings) as TypeRecord | null,
+      },
+    );
   };
 
   /**

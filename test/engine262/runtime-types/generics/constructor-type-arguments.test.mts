@@ -102,6 +102,26 @@ test('B2/Q4: a parameter nothing reaches and no default is the naming error, bot
   expectThrown('function f<A, B>(x: A): string { return String(B); } f((1 := uint8));', 'is not determined by the arguments and has no default');
 });
 
+test('B4: a parameter reached through a shape binds structurally, on both sides', () => {
+  // The structural rung (unify.mts) is one walk shared by the checker over
+  // Static Types and by the runtime core over runtime types: `[].<T>`,
+  // `Map.<K, V>`, a callback's signature, a union arm, `Iterable.<T>`.
+  const L = 'class L<T> { items: [].<T>; constructor(items: [].<T>) { this.items = items; } } ';
+  expect(evaluated(`${L} const a: [].<uint8> = [1]; String(Reflect.typeOf(new L(a))) + " " + String(Reflect.typeOf(new L(a).items));`)).toBe('L.<uint.<8>> [].<uint.<8>>');
+  expect(evaluated(`${L} const LC = L; const a: [].<uint8> = [1]; String(Reflect.typeOf(new LC(a)));`)).toBe('L.<uint.<8>>');
+  expect(evaluated(`${L} String(Reflect.typeOf(new L([1, 2])));`)).toBe('L.<number>');
+  expect(evaluated('function g<K, V>(m: Map.<K, V>): string { return String(K) + "," + String(V); } const m: Map.<string, uint8> = new Map(); g(m);')).toBe('string,uint.<8>');
+  expect(evaluated('function g<K>(cb: () => K): string { return String(K); } g((): uint8 => 1);')).toBe('uint.<8>');
+  expect(evaluated('function g<T>(cb: (x: T) => void): string { return String(T); } g((x: uint8) => {});')).toBe('uint.<8>');
+  expect(evaluated('function g<T>(x: [].<T> | Set.<T>): string { return String(T); } const s: Set.<uint8> = new Set(); g(s);')).toBe('uint.<8>');
+  expect(evaluated('function g<T>(i: Iterable.<T>): string { return String(T); } const a: [].<uint16> = [1]; g(a);')).toBe('uint.<16>');
+  // REACHED but UNTYPED - an unannotated callback - is `any` ("unknown here"),
+  // which is a different claim from "reached by nothing" (the error above).
+  expect(evaluated('function g<T>(cb: (x: T) => void): string { return String(T); } g((x) => {});')).toBe('any');
+  // A builder formal is rung three's, never resolved over a placeholder here.
+  expectThrown('function wrapOf(T) { return T; } function j<T>(x: wrapOf(T)): uint32 { return 1; } j(1);', 'declares no inverse');
+});
+
 test('B3: a value parameter binds the literal, converted to its constraint', () => {
   const G = 'class G<N: uint32> { b: [N].<uint8>; constructor(n: N) {} } ';
   expect(evaluated(`${G} String(Reflect.typeOf(new G((4 := uint32))));`)).toBe('G.<4>');
