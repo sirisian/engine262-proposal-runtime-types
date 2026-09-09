@@ -28,7 +28,7 @@ function rootsOf(program: string, names: string[]) {
   names.forEach((n, i) => {
     const to = arr.properties?.get(String(i) as never)?.Value as { TypeRecord?: never } | undefined;
     originals.push(to);
-    if (to?.TypeRecord) roots.set(n, to.TypeRecord);
+    if (to?.TypeRecord) roots.set(n, to as never);
   });
   return { roots, originals };
 }

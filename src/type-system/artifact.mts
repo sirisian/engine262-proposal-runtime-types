@@ -77,7 +77,7 @@ function isTypeRecord(value: unknown): value is TypeRecord {
  * themselves come from a module's exports, which the checker already holds in a
  * canonical order.
  */
-export function SerializeTypeTable(roots: ReadonlyMap<string, TypeRecord>): TypeTable {
+export function SerializeTypeTable(roots: ReadonlyMap<string, object>): TypeTable {
   // Collected first, ordered second, encoded third.
   //
   // The order is CANONICAL - `orderKey`'s total order over records, the same one
@@ -106,8 +106,19 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, TypeRecord>): Type
       Object.values(value).forEach(collect);
     }
   };
-  for (const record of roots.values()) {
-    collect(record);
+  // TYPE OBJECTS in, Type Objects out. The reader already returns them - it ends
+  // in `GetTypeObject` - so taking records made the round trip asymmetric at the
+  // one operation whose whole property is `deserialize(serialize(x)) === x`.
+  //
+  // It also put the serializer out of reach of what it needs. A nominal cannot be
+  // carried by value: its record holds a [[Declaration]], a parse node, and a
+  // [[Constructor]], a live class - the only two leaves in a table that cannot be
+  // encoded, and both only there. Carrying it by NAME instead needs the declared
+  // name, which lives in provenance, which is keyed on Type Objects. A record
+  // cannot reach it; a Type Object can, and can always yield its record.
+  const recordOf = (root: object): TypeRecord => (root as { TypeRecord?: TypeRecord }).TypeRecord ?? root as TypeRecord;
+  for (const root of roots.values()) {
+    collect(recordOf(root));
   }
 
   const ordered = [...reachable].sort((a, b) => {
@@ -143,8 +154,8 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, TypeRecord>): Type
     return entry;
   });
   const exports: Record<string, number> = {};
-  for (const [name, record] of roots) {
-    exports[name] = indices.get(record)!;
+  for (const [name, root] of roots) {
+    exports[name] = indices.get(recordOf(root))!;
   }
   return { version: TYPE_TABLE_VERSION, types, exports };
 }
