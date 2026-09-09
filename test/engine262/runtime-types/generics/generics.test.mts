@@ -310,3 +310,29 @@ test('expression-position type arguments specialize', () => {
 test('arity mismatches throw', () => {
   expect(run('type Pair<A, B> = [A, B]; type P = Pair.<uint8>;')).toMatchObject({ Type: 'throw' });
 });
+
+/**
+ * A CLASS'S TYPE PARAMETERS ARE IN SCOPE FOR ITS METHODS' ANNOTATIONS.
+ *
+ * `pushTypeParameterScopeOf` was called with the METHOD node, and a method's
+ * `TypeParameterList` holds only its OWN parameters - so `class C<T> { m(v: T) }`
+ * pushed nothing and `T` resolved PAST the class to whatever the name meant
+ * outside it. Independently reproducible, with no specialization work applied.
+ *
+ * The class is named DIRECTLY rather than found by walking the parent chain,
+ * which is the narrower predicate the note above asks for: walking "caught a
+ * parameterized `primitive` block's operators", and the guard against that
+ * regression is the third assertion here.
+ */
+test('a class type parameter is in scope for its methods', () => {
+  // The bug: an outer alias of the same name won.
+  expect(ok('type T = string; class C<T> { m(v: T) { return v; } } new C.<uint8>().m(5);')).toBe(true);
+  // Unaffected without a collision.
+  expect(ok('class C<T> { m(v: T) { return v; } } new C.<uint8>().m(5);')).toBe(true);
+  // The regression a walk (rather than a named class) caused before.
+  expect(ok('class B<T> { m(v: T): T { return v; } } new B.<uint8>().m(1);')).toBe(true);
+  // A method's OWN parameter still shadows the class's, being pushed above it.
+  expect(ok('class C2<T> { m<T>(v: T) { return v; } } new C2.<uint8>().m(5);')).toBe(true);
+  // A VALUE parameter is untouched: it is not a type and is not pushed here.
+  expect(ok('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return this.b.length; } } new S.<4>().len;')).toBe(true);
+});

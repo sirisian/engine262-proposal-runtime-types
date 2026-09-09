@@ -1789,7 +1789,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * constraint before its OWN constraint resolves, so a self-reference
    * terminates rather than recurring.
    */
-  const pushTypeParameterScopeOf = (declaration: ParseNode | null | undefined): boolean => {
+  /**
+   * @param only `'type-only'` skips VALUE parameters. `class S<N: uint32> { b:
+   *   [N].<uint8>; }` declares a compile-time constant standing in an extent,
+   *   not a type; bringing it into a TYPE scope makes `[N].<uint8>` resolve
+   *   where it did not, because `SubstituteTypeArguments` is written for type
+   *   arguments. Generic TYPE parameters, generic VALUE parameters and type
+   *   PACKS are three features wearing one name.
+   */
+  const pushTypeParameterScopeOf = (declaration: ParseNode | null | undefined, only?: 'type-only'): boolean => {
     const list = (declaration as unknown as {
       TypeParameters?: {
         TypeParameterList?: readonly {
@@ -1806,7 +1814,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     typeParameterScopes.push(scope);
     for (const tp of list) {
       const name = tp.BindingIdentifier?.name;
-      if (!name) {
+      if (!name || (only === 'type-only' && (tp as { IsValueParameter?: boolean }).IsValueParameter === true)) {
         continue;
       }
       scope.set(name, null);
@@ -9966,6 +9974,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // function declaration's does - so `on<T, U>` is not typed as
         // `(name: string, h: any) => void` and `implements` can compare it.
         const mdTypeParameters = (md as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null }).TypeParameters?.TypeParameterList ?? null;
+        // THE CLASS'S type parameters are in scope for a method's annotations,
+        // pushed UNDER the method's own so an inner parameter of the same name
+        // still shadows. A method's `TypeParameterList` holds only its OWN
+        // parameters, so `class C<T> { m(v: T) {} }` pushed nothing and `T`
+        // resolved past the class to whatever the name meant outside:
+        //
+        //     type T = string;
+        //     class C<T> { m(v: T) { return v; } }
+        //     new C.<uint8>().m(5);   // "number is not assignable to string"
+        //
+        // The class node is named DIRECTLY rather than found by walking the
+        // parent chain, which is the narrower predicate a prior attempt's note
+        // asks for: walking "caught a parameterized `primitive` block's
+        // operators ... The fix is a narrower predicate, not a shorter walk."
+        const pushedClassScopeForParams = pushTypeParameterScopeOf(n, 'type-only');
         const pushedMethodScope = pushTypeParameterScopeOf(md as unknown as ParseNode);
         try {
           for (const p of md.UniqueFormalParameters) {
@@ -9982,17 +10005,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (pushedMethodScope) {
             typeParameterScopes.pop();
           }
+          if (pushedClassScopeForParams) {
+            typeParameterScopes.pop();
+          }
         }
         if (!usable) {
           unusable.add(key);
           continue;
         }
+        const pushedClassScopeForReturn = pushTypeParameterScopeOf(n, 'type-only');
         const pushedForReturn = pushTypeParameterScopeOf(md as unknown as ParseNode);
         let Return: Known;
         try {
           Return = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
         } finally {
           if (pushedForReturn) {
+            typeParameterScopes.pop();
+          }
+          if (pushedClassScopeForReturn) {
             typeParameterScopes.pop();
           }
         }
