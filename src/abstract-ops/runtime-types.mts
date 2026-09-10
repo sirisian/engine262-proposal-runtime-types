@@ -1152,7 +1152,27 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // let `b[0] = 300` through - the store check reads the type the VALUE
     // carries, which is the whole of why the covariance is sound.
     const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
-    const unstamped = (value as { TypedElement?: unknown }).TypedElement === undefined;
+    // "HAS THIS VALUE BEEN THROUGH THE CONVERSION", which is the question this
+    // branch means to ask. It used to ask "does it have an element type", and
+    // the two came apart: `StampTypedArray` gives an array its element type AND
+    // the prototype carrying the capacity operations, so a value with the slot
+    // and the ORDINARY prototype has been half converted. One did exist -
+    // `ArrayTypeConstructor` stamped an array and then `SetPrototypeOf`-ed over
+    // its own swap - and the elided path skipped it, because the slot was set,
+    // so `rows.window` was *undefined* on a correctly typed array.
+    //
+    // That constructor is fixed and no path half-stamps today: instrumenting
+    // this branch across `arrays`, `memory-layout` and `enforcement` - 443 tests
+    // - finds none. The condition is widened anyway, because the ONLY thing
+    // between the old proxy and a wrong answer was that absence, and the failure
+    // it produces is a method silently disappearing rather than an error.
+    //
+    // No cost today: a fully converted value answers *false* on the first
+    // comparison, and the O(n) element copy below is reached exactly as before.
+    const prototypeSwapped = (value as unknown as { Prototype?: unknown }).Prototype
+      === surroundingAgent.currentRealmRecord.Intrinsics['%TypedArrayLike.prototype%'];
+    const unstamped = (value as { TypedElement?: unknown }).TypedElement === undefined
+      || !prototypeSwapped;
     if (unstamped && elided.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
       // The same store, on the ELIDED path. A DYNAMIC `[].<P>` annotation
       // reaches `StampTypedArray` from here rather than through

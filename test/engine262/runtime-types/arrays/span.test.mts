@@ -948,3 +948,40 @@ test('a class deriving from an array type keeps its own prototype', () => {
   // prototype is not the ordinary one, which is the subclass case.
   expect(evaluated('class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
 });
+
+// ---------------------------------------------------------------------------
+// THE ELIDED BOUNDARY ASKS WHETHER A VALUE HAS BEEN CONVERTED, NOT WHETHER IT
+// HAS AN ELEMENT TYPE.
+//
+// `StampTypedArray` gives an array its element type AND the prototype carrying
+// the capacity operations, so a value with the slot and the ORDINARY prototype
+// has been half converted. The elided branch used to test the slot alone and
+// skip such a value - and one existed: `ArrayTypeConstructor` stamped an array
+// and then `SetPrototypeOf`-ed over its own swap, so `rows.window` was
+// *undefined* on a correctly typed array.
+//
+// That constructor is fixed and no path half-stamps today - instrumenting the
+// branch across `arrays`, `memory-layout` and `enforcement` finds none in 443
+// tests. The condition is widened anyway: the only thing between the old proxy
+// and a wrong answer was that absence, and the failure it produces is a method
+// SILENTLY DISAPPEARING rather than an error.
+//
+// No cost: a converted value answers on the first comparison, and the O(n)
+// element copy is reached exactly as before.
+// ---------------------------------------------------------------------------
+
+test('an elided boundary leaves a typed array fully usable', () => {
+  // The program the half-stamped construction broke.
+  expect(evaluated('const rows: [64].<uint32> = new [64].<uint32>(); String(rows.window.<8>(0).length);')).toBe('8');
+  // The three shapes that reach the boundary differently: an already-typed
+  // literal, a plain literal, and a construction.
+  expect(evaluated('let b: [].<uint8> = [(1 := uint8)]; typeof b.window;')).toBe('function');
+  expect(evaluated('const c: [4].<uint32> = [1,2,3,4]; typeof c.window;')).toBe('function');
+  expect(evaluated('const r = new [4].<uint32>(); typeof r.window;')).toBe('function');
+});
+
+test('a class deriving from an array type keeps its own prototype', () => {
+  // `StampTypedArray` declines to swap where the prototype is not the ordinary
+  // one, and the widened condition must not defeat that guard.
+  expect(evaluated('class Rows extends [4].<uint32> { m() { return 7; } } const s = new Rows(); String(s.m()) + " " + String(s instanceof Rows);')).toBe('7 true');
+});
