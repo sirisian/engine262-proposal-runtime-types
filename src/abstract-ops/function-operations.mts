@@ -37,7 +37,8 @@ import {
   currentTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
   pushContextualType, popContextualType, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
 } from '../type-system/runtime.mts';
-import { functionTypeParameters } from './runtime-types.mts';
+import { resolveOverload } from '../type-system/overloads.mts';
+import { functionTypeParameters, SignaturesOf } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
 import { PlacementBackingOf, TakePendingPlacement, WritePlacedField } from './placement.mts';
@@ -607,7 +608,34 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   // 9. Let constructorEnv be the LexicalEnvironment of calleeContext.
   const constructorEnv = calleeContext.LexicalEnvironment;
   // 10. Let result be OrdinaryCallEvaluateBody(F, argumentsList).
-  const result = yield* OrdinaryCallEvaluateBody(F, argumentsList);
+  // proposal-runtime-types: a class declaring more than one constructor chooses
+  // which body runs, here.
+  //
+  // `OrdinaryCallEvaluateBody` takes the function as a PARAMETER, so the context
+  // prepared from `F` above is kept - `this`, `new.target`, the private
+  // environment, the field initializers - and only the body and its parameter
+  // binding come from the chosen overload. Nothing readonly is swapped.
+  //
+  // The resolution is `resolveOverload`, the same operation an overloaded
+  // FUNCTION call uses, over signatures `SignaturesOf` builds from each closure's
+  // own annotations. The checker asks `resolveOverloadByTypes` - its type-based
+  // sibling - of the same table, so both sides answer one question with one rule.
+  let bodyFunction = F;
+  const ctorOverloads = (F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
+  if (surroundingAgent.feature('runtime-types') && ctorOverloads && ctorOverloads.length > 1) {
+    const signatures = Q(yield* SignaturesOf(F as unknown as Value));
+    const resolution = resolveOverload(signatures, argumentsList as readonly Value[], undefined);
+    if (resolution.Kind === 'none') {
+      surroundingAgent.executionContextStack.pop(calleeContext);
+      return Throw.TypeError('no overload of $1 matches these arguments', F);
+    }
+    if (resolution.Kind === 'ambiguous') {
+      surroundingAgent.executionContextStack.pop(calleeContext);
+      return Throw.TypeError('the call to $1 is ambiguous between overloads', F);
+    }
+    bodyFunction = resolution.Signature.Function as typeof F;
+  }
+  const result = yield* OrdinaryCallEvaluateBody(bodyFunction, argumentsList);
   // 11. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
   surroundingAgent.executionContextStack.pop(calleeContext);
   // 12. If result.[[Type]] is return, then

@@ -27,6 +27,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import {
   IsStatic,
   ConstructorMethod,
+  ConstructorMethods,
   NonConstructorElements,
   PrivateBoundIdentifiers,
 } from '../static-semantics/all.mts';
@@ -769,6 +770,29 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     F = constructorInfo.Closure;
     // c. Perform SetFunctionName(F, className).
     SetFunctionName(F, className);
+    // proposal-runtime-types: a class may declare more than one constructor, and
+    // each needs its own closure - its own parameters to bind and its own body to
+    // run. `F` stays the class constructor, so `this`, `new.target`, the private
+    // environment and the field initializers are unchanged; only which body
+    // `[[Construct]]` evaluates is chosen.
+    //
+    // Stashed in the slots the FUNCTION overload dispatch already uses, so
+    // `SignaturesOf` builds the candidates from each closure's own annotations
+    // and `resolveOverload` picks among them. Nothing here resolves anything: a
+    // second matching rule for constructors is what this deliberately avoids.
+    if (ClassBody && surroundingAgent.feature('runtime-types')) {
+      const allConstructors = ConstructorMethods(ClassBody);
+      if (allConstructors.length > 1) {
+        const overloadFunctions: Value[] = [F as Value];
+        for (const extra of allConstructors.slice(1)) {
+          const info = X(yield* DefineMethod(extra, proto, constructorParent));
+          SetFunctionName(info.Closure, className);
+          overloadFunctions.push(info.Closure as Value);
+        }
+        (F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions = overloadFunctions;
+        (F as { OverloadContext?: unknown }).OverloadContext = surroundingAgent.runningExecutionContext;
+      }
+    }
   }
   __ts_cast__<Mutable<DefaultConstructorBuiltinFunction>>(F);
   F.HostInitialName = className;
