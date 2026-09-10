@@ -415,6 +415,98 @@ function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[])
  * and so on. Returns a negative number if `a` is better, positive if `b` is, and
  * zero if they are indistinguishable by tier.
  */
+/**
+ * The literal-overload rank of a parameter type (#sec-literal-overload-ranking),
+ * or *undefined* for a type the clause does not list.
+ *
+ * The clause states the case this implements: "Given `f(a: `float32`)` and
+ * `f(a: `uint32`)`, the call `f(1)` selects the `float32` signature." Both
+ * parameters score Tier.Literal - an untyped literal can take either - so the
+ * tiers tie and the ranking is the second key that separates them.
+ *
+ * Answering *undefined* is load-bearing. The clause's own notes record that the
+ * table "does not include `number`, and it should" and "omits the rational types
+ * and the parameterized widths `int.<N>` and `uint.<N>`". Ranking those would be
+ * inventing an order the proposal has not written, so an unranked type declines
+ * to break the tie and the call stays ambiguous, as it is today.
+ */
+function literalRank(t: TypeRecord): number | undefined {
+  if (t.Kind !== 'primitive') {
+    return undefined;
+  }
+  // The families spell their width differently, which is easy to get wrong:
+  // `float32` and `decimal64` carry it in the NAME with no arguments, while
+  // `uint32` is Name `uint` with Arguments [32] and `int32` is Name `int` with
+  // Arguments [32]. A table switching on the name alone silently ranks the
+  // floats and leaves every integer unranked.
+  switch (t.Name) {
+    case 'float64': return 1;
+    case 'float128': case 'float32': case 'float16': return 2;
+    case 'decimal128': case 'decimal64': case 'decimal32': return 3;
+    default: break;
+  }
+  if (t.Name !== 'uint' && t.Name !== 'int') {
+    return undefined;
+  }
+  const width = (t as { Arguments?: readonly unknown[] }).Arguments?.[0];
+  // Only the NAMED shorthands are in the clause's table. `uint.<7>` is a legal
+  // width and is not one of them, and the clause records the omission: it
+  // "omits the rational types and the parameterized widths `int.<N>` and
+  // `uint.<N>` for an N that is not a named shorthand".
+  if (width !== 8 && width !== 16 && width !== 32 && width !== 64 && width !== 128) {
+    return undefined;
+  }
+  return t.Name === 'uint' ? 4 : 5;
+}
+
+/**
+ * Orders two signatures by the literal ranking, at the positions where an untyped
+ * literal is what made them tie.
+ *
+ * DOMINANCE, not a positional first-difference: a signature wins only where its
+ * rank is at least as good at EVERY such position and strictly better at one.
+ * Where neither dominates, the tie stands.
+ *
+ * This is the shape `compareTiers` forces. That operation sorts both tier lists
+ * and compares worst-first, discarding position deliberately, so a tie-break that
+ * decided by "the first argument where they differ" would contradict the
+ * comparison it is refining. Dominance needs no order over positions and invents
+ * no ordering where the clause gives none - which is also what keeps an unranked
+ * type from silently losing.
+ */
+function compareByLiteralRank(
+  a: { sig: OverloadSignature, tiers: readonly Tier[] },
+  b: { sig: OverloadSignature, tiers: readonly Tier[] },
+): number {
+  let sign = 0;
+  const positions = Math.min(a.tiers.length, b.tiers.length);
+  for (let i = 0; i < positions; i += 1) {
+    if (a.tiers[i] !== Tier.Literal || b.tiers[i] !== Tier.Literal) {
+      continue;
+    }
+    const aType = a.sig.Parameters[i]?.Type;
+    const bType = b.sig.Parameters[i]?.Type;
+    if (!aType || !bType) {
+      continue;
+    }
+    const aRank = literalRank(aType);
+    const bRank = literalRank(bType);
+    if (aRank === undefined || bRank === undefined) {
+      return 0;
+    }
+    if (aRank === bRank) {
+      continue;
+    }
+    const here = aRank < bRank ? -1 : 1;
+    if (sign !== 0 && sign !== here) {
+      // Each is better at a different argument: nothing dominates.
+      return 0;
+    }
+    sign = here;
+  }
+  return sign;
+}
+
 function compareTiers(a: readonly Tier[], b: readonly Tier[]): number {
   const aSorted = [...a].sort((x, y) => y - x);
   const bSorted = [...b].sort((x, y) => y - x);
@@ -487,6 +579,14 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
       if (iRest !== bestRest) {
         cmp = iRest ? 1 : -1;
       }
+    }
+    if (cmp === 0) {
+      // #sec-literal-overload-ranking: an untyped literal can take either
+      // parameter's type, so both score Tier.Literal and the tiers tie. The
+      // ranking is the second key, and the clause's own example is this one:
+      // "Given `f(a: float32)` and `f(a: uint32)`, the call `f(1)` selects the
+      // `float32` signature."
+      cmp = compareByLiteralRank(viable[i], best);
     }
     if (cmp < 0) {
       best = viable[i];
