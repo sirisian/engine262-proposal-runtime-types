@@ -121,12 +121,13 @@ test('a table survives a real JSON round trip', () => {
   }
 });
 
-// KNOWN GAP, pinned. A TYPED NUMBER leaf - the value of `type T = [uint8 = 7]` -
-// encodes, but rebuilding one needs a realm that the other leaves do not, so a
-// table read back outside an agent context throws on it. The encoding is right;
-// where the reconstruction may run is the open part, and it is a question about
-// the reader's contract rather than about the format.
-test.fails('a typed-number default survives a JSON round trip', () => {
+// This was pinned as a known gap and was a SYMPTOM of something else. A decoded
+// typed number is a different Value object holding the same number, and the tuple
+// path compared defaults by object identity - so the rebuilt type never matched
+// the interned one, and interning tried to create a new type instead. Making a
+// default part of identity BY VALUE fixed the round trip without this file
+// changing.
+test('a typed-number default survives a JSON round trip', () => {
   const r = rootsOf('type T = [uint8 = 7];', ['T'])!;
   const json = JSON.stringify(SerializeTypeTable(r.roots as never));
   const back = DeserializeTypeTable(JSON.parse(json), () => undefined);

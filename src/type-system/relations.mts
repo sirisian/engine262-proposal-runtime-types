@@ -227,6 +227,29 @@ export function SameTypeStrict(s: TypeRecord, t: TypeRecord, assumptions: readon
   }
 }
 
+/**
+ * Whether two defaults are the same default, BY VALUE.
+ *
+ * `===` was the tuple path's test and it is wrong: two declarations of
+ * `[uint8 = 7]` evaluate to two Value objects holding the same number, so
+ * identity called them different and the two tuples never interned together.
+ */
+function sameDefault(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+  const absent = (v: unknown) => v === undefined || v === 'none';
+  if (absent(a) || absent(b)) {
+    return absent(a) && absent(b);
+  }
+  const left = a as { value?: unknown, stringValue?(): string };
+  const right = b as { value?: unknown, stringValue?(): string };
+  if ('value' in left && 'value' in right) {
+    return Object.is(left.value, right.value);
+  }
+  return false;
+}
+
 export function SameTypeStructural(s: TypeRecord, t: TypeRecord): boolean {
   const outer = structuralOnly;
   structuralOnly = true;
@@ -268,7 +291,7 @@ function sameMemberSet(a: readonly TypeRecord[], b: readonly TypeRecord[], assum
 }
 
 function sameTupleElements(a: readonly TupleElementRecord[], b: readonly TupleElementRecord[], assumptions: readonly Assumption[]): boolean {
-  return a.length === b.length && a.every((e, i) => e.Rest === b[i].Rest && e.Initial === b[i].Initial && SameTypeWithAssumptions(e.Type, b[i].Type, assumptions));
+  return a.length === b.length && a.every((e, i) => e.Rest === b[i].Rest && sameDefault(e.Initial, b[i].Initial) && SameTypeWithAssumptions(e.Type, b[i].Type, assumptions));
 }
 
 /** #sec-sametypewithassumptions */
@@ -517,6 +540,10 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
           return q !== undefined
             && p.optional === q.optional
             && p.readonly === q.readonly
+            // A default is part of what interns, so it is part of sameness. The
+            // object path omitted it entirely, which made two types alike but for
+            // a default into ONE type whose default was decided by load order.
+            && sameDefault(p.initial, q.initial)
             && SameTypeStrict(p.type, q.type, next);
         })
         && s.IndexSignatures.length === to.IndexSignatures.length

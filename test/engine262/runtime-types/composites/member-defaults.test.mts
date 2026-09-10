@@ -81,3 +81,26 @@ test('an object literal AT the type is filled; a bound value is not', () => {
   // And an untyped literal is untouched.
   expect(evaluated("let v = { id: 1 }; String('page' in v);")).toBe('false');
 });
+
+test('a default is part of what interns, in both spellings', () => {
+  // #sec-object-types: "this one evaluates it once, which is what makes 'the
+  // default is part of the contents that intern' a coherent statement."
+  //
+  // Neither order key carried it, and the two comparisons disagreed in opposite
+  // directions. An OBJECT ignored the default entirely, so two types alike but
+  // for a default interned as one and whichever was seen first supplied the
+  // default to both - load-order crowning, which this design treats as a defect
+  // everywhere else. A TUPLE compared its default by object identity, so the
+  // same default written twice produced two types, because two declarations
+  // evaluate to two Value objects holding the same number.
+  expect(evaluated('type A = { p?: uint8 = 7 }; type B = { p?: uint8 = 7 }; String(A === B);')).toBe('true');
+  expect(evaluated('type A = { p?: uint8 = 7 }; type B = { p?: uint8 = 8 }; String(A === B);')).toBe('false');
+  expect(evaluated('type A = [uint8 = 7]; type B = [uint8 = 7]; String(A === B);')).toBe('true');
+  expect(evaluated('type A = [uint8 = 7]; type B = [uint8 = 8]; String(A === B);')).toBe('false');
+  // A string default compares by value too, not by the Value object.
+  expect(evaluated('type A = { p?: string = "x" }; type B = { p?: string = "x" }; String(A === B);')).toBe('true');
+  expect(evaluated('type A = { p?: string = "x" }; type B = { p?: string = "y" }; String(A === B);')).toBe('false');
+  // Without defaults, nothing changes.
+  expect(evaluated('type A = { p?: uint8 }; type B = { p?: uint8 }; String(A === B);')).toBe('true');
+  expect(evaluated('type A = [uint8]; type B = [uint8]; String(A === B);')).toBe('true');
+});

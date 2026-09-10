@@ -1073,6 +1073,32 @@ export function propertiesInKeyOrder<T extends { key: string | SymbolValue }>(pr
  * structural markers a pattern and a range take. Record keys are SORTED, so two
  * records holding the same metadata key alike however they were built.
  */
+/**
+ * A member's or element's DEFAULT, rendered for an order key.
+ *
+ * #sec-object-types: "this one evaluates it once, which is what makes 'the
+ * default is part of the contents that intern' a coherent statement". So a
+ * default belongs in identity - two types alike but for a default are two types,
+ * and two alike including it are one.
+ *
+ * Neither order key carried it, and the two comparisons then disagreed in
+ * opposite directions: an object ignored the default entirely, so
+ * `{ p?: uint8 = 7 }` and `{ p?: uint8 = 8 }` interned as ONE type and whichever
+ * was seen first supplied the default to both - the load-order crowning this
+ * design treats as a defect everywhere else. A tuple compared its default by
+ * object IDENTITY, so `[uint8 = 7]` written twice produced two types, because two
+ * declarations evaluate to two Value objects with the same number in them.
+ *
+ * By value, through the same leaf rendering metadata uses, so the two spellings
+ * of one default agree.
+ */
+function defaultOrderKey(initial: unknown): string {
+  if (initial === undefined || initial === 'none') {
+    return '';
+  }
+  return `=${metadataOrderKey(initial)}`;
+}
+
 function metadataOrderKey(m: unknown): string {
   if (m === null || m === undefined) {
     return String(m);
@@ -1166,7 +1192,7 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
     case 'nominal': return `nominal:${t.LibraryName ? `lib:${t.LibraryName}` : (t.Declaration as { location?: { startIndex?: number } }).location?.startIndex ?? 0}${t.Arguments.length > 0 ? `<${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : orderKey(a))).join(',')}>` : ''}`;
     case 'union': return `union:${t.Members.map(orderKey).join('|')}`;
     case 'intersection': return `intersection:${t.Members.map(orderKey).join('&')}`;
-    case 'tuple': return `tuple:${t.Elements.map((e) => `${e.Rest ? '...' : ''}${orderKey(e.Type)}`).join(',')}`;
+    case 'tuple': return `tuple:${t.Elements.map((e) => `${e.Rest ? '...' : ''}${orderKey(e.Type)}${defaultOrderKey(e.Initial)}`).join(',')}`;
     case 'array': return `array:${orderKey(t.Element)}:${t.Extent}`;
     case 'reference': return `reference:${orderKey(t.Target)}`;
     case 'shared': return `shared:${orderKey(t.Target)}`;
@@ -1180,7 +1206,7 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
       // sort the same union two ways, giving it two Type Objects. Sorting here
       // makes the key what #sec-sameobjecttype says identity is: independent of
       // the order the members were written in.
-      return `object:${propertiesInKeyOrder(t.Properties).map((p) => `${p.readonly ? 'readonly ' : ''}${String(p.key)}${p.optional ? '?' : ''}:${orderKey(p.type)}`).join(',')};${t.IndexSignatures.map((ix) => `[${orderKey(ix.Key)}]:${orderKey(ix.Value)}`).join(',')}`;
+      return `object:${propertiesInKeyOrder(t.Properties).map((p) => `${p.readonly ? 'readonly ' : ''}${String(p.key)}${p.optional ? '?' : ''}:${orderKey(p.type)}${defaultOrderKey(p.initial)}`).join(',')};${t.IndexSignatures.map((ix) => `[${orderKey(ix.Key)}]:${orderKey(ix.Value)}`).join(',')}`;
     // A parameter's Rest and Optional flags are
     // part of a signature's identity, so they belong in the canonical order key.
     // Without them `(...a: [].<uint8>) => void` and `(a: [].<uint8>) => void`
