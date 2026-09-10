@@ -1059,3 +1059,44 @@ test('an ABSENT handler passes its type through, and catch unions', () => {
   expectStaticTypeError(`${P} p.then((v) => { let s: string = v; return 1; });`);
   expectStaticTypeError('let a: [].<uint8> = []; let b: [].<string> = a.map((v) => (1 := uint8));');
 });
+
+// ---------------------------------------------------------------------------
+// `Object.keys` ANSWERS A TYPED ARRAY, AND THE VALUE CARRIES IT.
+//
+// The checker already typed it `[].<string>` - it answers Strings whatever it is
+// given - but the VALUE carried no element type, so
+// `Reflect.typeOf(Object.keys(o).length)` was `number` where a declared array's
+// is `uint.<64>`. `#sec-overloading-of-the-standard-library` makes an array's
+// `length` the index type "where the array HAS an element type", and this one
+// had none: the run time disagreed with itself, and with the checker, about the
+// same kind of value.
+//
+// Stamping it settles that in the direction that keeps ONE array spelling. The
+// alternative considered - a second, "descriptive" array form beside `[].<T>` -
+// was rejected because `[]` exists precisely so that there is no verbose `Array`
+// spelling, and two forms differing only in what they CARRY would be the
+// confusion that syntax avoids.
+//
+// Nothing a program already holds changes: `Object.keys` builds a FRESH array
+// each call. `%TypedArray%` is untouched - a `Uint8Array` is a separate array
+// system, as `#sec-relationship-to-typed-arrays` says.
+// ---------------------------------------------------------------------------
+
+test('Object.keys answers a value that carries its element type', () => {
+  expect(evaluated('const o = { a: 1 }; String(Reflect.typeOf(Object.keys(o)));')).toBe('[].<string>');
+  // The length now agrees with a declared array's, which is the whole defect.
+  expect(evaluated('const o = { a: 1 }; String(Reflect.typeOf(Object.keys(o).length));')).toBe('uint.<64>');
+  expect(evaluated('let a: [].<uint8> = [1]; String(Reflect.typeOf(a.length));')).toBe('uint.<64>');
+  // ...and it carries the capacity operations any `[].<T>` has.
+  expect(evaluated('const o = { a: 1 }; String(typeof Object.keys(o).window);')).toBe('function');
+});
+
+test('what stamping Object.keys does not change', () => {
+  // The array still behaves as one.
+  expect(evaluated('const o = { a: 1, b: 2 }; Object.keys(o).join(",");')).toBe('a,b');
+  // A fresh array each call, so nothing a program held is affected.
+  expect(evaluated('const o = { a: 1 }; String(Object.keys(o) === Object.keys(o));')).toBe('false');
+  // The static assignability rules are untouched: elements are Strings.
+  expect(ok('let b: [].<string> = Object.keys({ a: 1 });')).toBe(true);
+  expectStaticTypeError('let b: [].<uint8> = Object.keys({ a: 1 });');
+});

@@ -12,6 +12,8 @@ import {
 } from '../value.mts';
 import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { AddEntriesFromIterable } from './Map.mts';
+import { StampTypedArray } from '../abstract-ops/array-view.mts';
+import { makePrimitive } from '../type-system/records.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
   surroundingAgent,
@@ -368,7 +370,21 @@ function* Object_keys([O = Value.undefined]: Arguments): ValueEvaluator {
   // 2. Let nameList be ? EnumerableOwnPropertyNames(obj, key).
   const nameList = Q(yield* EnumerableOwnProperties(obj, 'key'));
   // 3. Return CreateArrayFromList(nameList).
-  return CreateArrayFromList(nameList);
+  const keys = CreateArrayFromList(nameList);
+  // STAMPED as `[].<string>`. `Object.keys` answers Strings whatever it is
+  // given, and the checker already types it so - but the VALUE carried no
+  // element type, and `#sec-overloading-of-the-standard-library` makes an
+  // array's `length` the index type only "where the array HAS an element type".
+  // So `Reflect.typeOf(Object.keys(o).length)` answered `number` where a
+  // declared array's answers `uint.<64>`: the run time disagreed with itself,
+  // and with the checker, about the same kind of value.
+  //
+  // Nothing a program already holds changes - `Object.keys` builds a FRESH
+  // array on every call, `Object.keys(o) === Object.keys(o)` being *false*.
+  // `%TypedArray%` is untouched, which `#sec-relationship-to-typed-arrays`
+  // promises: a `Uint8Array` is a separate array system and is not reached here.
+  StampTypedArray(keys, makePrimitive('string'));
+  return keys;
 }
 
 /** https://tc39.es/ecma262/#sec-object.preventextensions */
