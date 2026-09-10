@@ -42,6 +42,8 @@ export { InspectPattern } from './type-system/pattern-fragment.mts';
 export { DecidesInclusion } from './type-system/pattern-inclusion.mts';
 export { SerializeTypeTable, DeserializeTypeTable, TYPE_TABLE_VERSION, type TypeTable } from './type-system/artifact.mts';
 export { ModuleGraphInventory, type GraphEntry } from './type-system/module-graph.mts';
+export { ProduceArtifact, SEMANTICS_ID, type Artifact } from './type-system/produce.mts';
+export { ExportedTypesOf, ExportedAliasesOf } from './type-system/check.mts';
 
 
 export {

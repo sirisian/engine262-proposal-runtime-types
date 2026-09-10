@@ -1344,6 +1344,9 @@ function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: Pars
  */
 const moduleExportedTypes = new WeakMap<object, Map<string, Known>>();
 
+/** A module's TYPE declarations by local name: aliases, classes, interfaces, enums. */
+const moduleExportedAliases = new WeakMap<object, Map<string, unknown>>();
+
 /**
  * A module's top-level function declarations, keyed by LOCAL name, recorded when
  * the module is checked and read by an importer.
@@ -1379,6 +1382,11 @@ export function ImportedBuilderNode(name: string): ParseNode | undefined {
   return importedBuilderNodes?.get(name);
 }
 
+/** A module's TYPE declarations by local name - what an artifact publishes. */
+export function ExportedAliasesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
+  return moduleExportedAliases.get(module as unknown as object);
+}
+
 export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
   return moduleExportedTypes.get(module as unknown as object) as Map<string, unknown> | undefined;
 }
@@ -1399,6 +1407,17 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   // a re-export or a renamed export resolves through the same lookup.
   const exported = new Map<string, Known>(session.frame.bindings);
   moduleExportedTypes.set(module as unknown as object, exported);
+  // The TYPE declarations, which live in a different map. `bindings` holds what a
+  // name's VALUE is typed as - `const x: uint8` puts `x` here - and `aliases`
+  // holds what a name IS as a type, which is where `type P = ...`, a class, an
+  // interface and an enum all land.
+  //
+  // Recorded separately rather than merged, because the two answer different
+  // questions and a caller wants one or the other: an importer resolving a
+  // contract wants the first, and an expansion artifact publishing a module's
+  // types wants the second. Merging them would make `ExportedTypesOf` mean two
+  // things depending on which name you asked about.
+  moduleExportedAliases.set(module as unknown as object, new Map(session.frame.aliases));
   // The same list, for the declarations an importer's contract lookup needs.
   // `export function f() {}` puts the declaration in [[HoistableDeclaration]];
   // [[Declaration]] is null for that form.
