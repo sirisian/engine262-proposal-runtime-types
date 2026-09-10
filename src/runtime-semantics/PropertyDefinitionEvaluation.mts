@@ -60,7 +60,7 @@ function objectLiteralContext(definition: object, literal: object | undefined): 
   return literal ? contextualTypeFor(literal) : undefined;
 }
 
-function propertyContextualType(contextual: TypeRecord | null | undefined, key: Value): TypeRecord | null {
+function propertyContextualType(contextual: TypeRecord | null | undefined, key: unknown): TypeRecord | null {
   if (!contextual || !(key instanceof JSStringValue)) {
     return null;
   }

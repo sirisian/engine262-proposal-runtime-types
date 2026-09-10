@@ -131,7 +131,7 @@ export function substituteParametersNamed(t: TypeRecord | null, bindings: Readon
     return { ...t, Arguments: r.Arguments.map((a) => (typeof a === 'number' ? a : sub(a) as TypeRecord)) } as TypeRecord;
   }
   if (r.Elements) {
-    return { ...t, Elements: r.Elements.map((e) => (e.Type ? { ...e, Type: sub(e.Type) as TypeRecord } : e)) } as TypeRecord;
+    return { ...t, Elements: r.Elements.map((e) => (e.Type ? { ...e, Type: sub(e.Type) as TypeRecord } : e)) } as unknown as TypeRecord;
   }
   if (r.Element) {
     return { ...t, Element: sub(r.Element) as TypeRecord } as TypeRecord;
@@ -144,10 +144,10 @@ export function substituteParametersNamed(t: TypeRecord | null, bindings: Readon
         Parameters: (s.Parameters ?? []).map((p) => ({ ...p, Type: sub(p.Type) ?? p.Type })),
         Return: sub(s.Return ?? null) ?? s.Return,
       })),
-    } as TypeRecord;
+    } as unknown as TypeRecord;
   }
   if (r.Properties) {
-    return { ...t, Properties: r.Properties.map((p) => ({ ...p, type: sub(p.type) ?? p.type })) } as TypeRecord;
+    return { ...t, Properties: r.Properties.map((p) => ({ ...p, type: sub(p.type) ?? p.type })) } as unknown as TypeRecord;
   }
   return t;
 }

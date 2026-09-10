@@ -1,13 +1,11 @@
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
 import {
-  LookupClassType, SignaturesOf, OverloadSignatureOf, IsDecorationContextOpen, DeclareInverse } from '../abstract-ops/runtime-types.mts';
-import { PublishedReturnTypeOf } from '../type-system/check.mts';
+  LookupClassType, IsDecorationContextOpen, DeclareInverse } from '../abstract-ops/runtime-types.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
-import { CanonicalizeType, GetTypeObject, isClassTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
-import { GenericClassDeclarationOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
 import { SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
 import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';

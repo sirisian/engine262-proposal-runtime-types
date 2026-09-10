@@ -1851,10 +1851,6 @@ function literalTypeOf(value: Value): TypeRecord {
   return { Kind: 'literal', Value: value, Base: RuntimeTypeOf(value) };
 }
 
-/** The literal type of a rest-argument element. */
-function elementLiteralTypeOf(value: Value): TypeRecord {
-  return literalTypeOf(value);
-}
 
 /**
  * proposal-runtime-types: the run-time type of a value. Until the numeric
@@ -3793,7 +3789,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
             ...declared,
             Signatures: (declared as { Signatures: readonly { ThisType?: TypeRecord }[] }).Signatures
               .map((g) => (g.ThisType === undefined ? { ...g, ThisType: wantedThis } : g)),
-          } as TypeRecord;
+          } as unknown as TypeRecord;
           return IsAssignable(adopted, t);
         }
       }
