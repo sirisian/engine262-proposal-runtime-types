@@ -10411,6 +10411,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             publishedReturnTypes.set(el as unknown as object, published);
           }
         }
+        // Two members of one name with NO annotation between them are not an
+        // overload set: they are one member declared twice, and the base language
+        // says the later wins.
+        //
+        // `class C { m() { return 1; } m() { return 2; } }` is ordinary
+        // JavaScript that evaluates to 2. Accumulating both arms made every call
+        // to `m` ambiguous - two signatures with identical (absent) parameter
+        // types and nothing to choose between them - so a program with no types
+        // in it stopped running.
+        //
+        // The gate is the one `#sec-constructor-overloading` states for a
+        // constructor: "The annotation is what admits the set. A class body
+        // carrying no annotation on any constructor parameter is exactly what it
+        // was." That is a rule about members, not about constructors, and this is
+        // the same rule for the rest of them.
+        //
+        // One annotation anywhere in the set is enough, so `m(a: uint8)` beside
+        // `m(a)` is still an overload set and still resolves.
+        if (signature.Untyped && sigs.length > 0 && sigs.every((q) => q.Untyped)) {
+          sigs.length = 0;
+        }
         sigs.push(signature);
         methods.set(key, sigs);
         continue;
