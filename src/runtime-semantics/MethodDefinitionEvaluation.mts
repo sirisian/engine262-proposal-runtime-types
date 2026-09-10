@@ -15,6 +15,7 @@ import {
   DefinePropertyOrThrow,
   IsCallable,
   MakeOverloadedFunction,
+  functionHasAnnotations,
   SetFunctionName,
   MakeMethod,
   sourceTextMatchedBy,
@@ -85,7 +86,26 @@ function* DefineMethodProperty(key: PropertyKeyValue | PrivateName, homeObject: 
       // redeclaring `m` reported the call as ambiguous between the two.
       const own = homeObject.properties?.get(key as PropertyKeyValue);
       const existing = own?.Value ?? Value.undefined;
-      if (existing !== Value.undefined && existing !== closure && IsCallable(existing)) {
+      // Two members of one name with NO annotation between them are not an
+      // overload set: they are one member declared twice, and the base language
+      // says the later wins.
+      //
+      // `class C { m() { return 1; } m() { return 2; } }` and
+      // `const o = { m() { return 1; }, m() { return 2; } }` are ordinary
+      // JavaScript that evaluate to 2. Building an overloaded function from the
+      // two made every call ambiguous - two arms with identical (absent)
+      // parameter types and nothing to choose between them - so a program with no
+      // types in it stopped running.
+      //
+      // The gate is the one `#sec-constructor-overloading` states for a
+      // constructor: "The annotation is what admits the set." One annotation
+      // across the pair is enough, so `m(a: uint8)` beside `m(a)` is still an
+      // overload set.
+      const existingIsScripted = !!(existing as { ECMAScriptCode?: unknown }).ECMAScriptCode;
+      const eitherAnnotated = existingIsScripted
+        ? functionHasAnnotations(existing as never) || functionHasAnnotations(closure as never)
+        : true;
+      if (existing !== Value.undefined && existing !== closure && IsCallable(existing) && eitherAnnotated) {
         value = Q(yield* MakeOverloadedFunction(
           key instanceof JSStringValue ? key : Value(String(key)),
           [existing as Value, closure as Value],
