@@ -189,11 +189,20 @@ test('a class instance carries its declared fields into the checker', () => {
   // one diagnosed, and no call passing one checked.
   expectStatic('class C { x: uint8 = 1; } function nc(c: C) { let y: uint16 = c.x; }');
   expectStatic('function nc(c: C) { c.x = 300; } class C { x: uint8 = 1; }');
-  // Fields that are not instance fields of the public shape stay invisible:
-  // a static field is not on the instance, and a private field is not
-  // reachable through a member expression at all.
+  // Fields that are not instance fields of the public shape stay invisible -
+  // a static field is not on the instance, and a private field is not reachable
+  // through a member expression at all - and BECAUSE they are invisible, a write
+  // to one is now refused as a write of an undeclared member to a sealed
+  // instance. The intent of these two rows is unchanged and their outcome is
+  // sharper: the names are not members, which is exactly what the refusal says.
+  // A class whose only typed field is STATIC has no typed INSTANCE field, so it
+  // is not sealed at all and its instances stay extensible - this row is
+  // unchanged and is the boundary of the sealing derivation.
   expect(evaluated('class C { static s: uint8 = 1; } function nc(c: C) { c.s = 300; } "ok";')).toBe('ok');
-  expect(evaluated('class C { #p: uint8 = 1; } function nc(c: C) { c.q = 300; } "ok";')).toBe('ok');
+  // A class with a typed PRIVATE field IS sealed - the derivation counts public
+  // and private alike - so a write of an undeclared name to one is refused where
+  // it used to be left to the run time.
+  expectStatic('class C { #p: uint8 = 1; } function nc(c: C) { c.q = 300; }');
   // And the diagnostic names the classes, which it could not do while nominal
   // types printed as the word "nominal".
   const message = thrownMessage('class Apple { x: uint8 = 1; } class Orange { x: uint8 = 1; } function nc(a: Apple) { let b: Orange = a; } "unreachable";');

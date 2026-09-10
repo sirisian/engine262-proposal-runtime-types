@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
  * A subclass that declares no fields of its own.
@@ -43,7 +43,13 @@ test('a base-typed binding holding the subclass is non-extensible', () => {
   // The violation stated from the caller's side: a `V`-typed binding is
   // documented to hold a sealed instance, and it held an extensible one.
   expect(evaluated(`${V} class X extends V { } let v: V = new X(); String(Object.isExtensible(v));`)).toBe('false');
-  expect(evaluated(`${V} class X extends V { } let v: V = new X(); v.extra = 1; String(v.extra);`)).toBe('undefined');
+  // The direct write is now an EARLY ERROR - #sec-typed-storage's "a property
+  // may not be added or removed", enforced at the check rather than left to
+  // fail at run time. The run-time behaviour it used to demonstrate is still
+  // covered: `Object.isExtensible` above states it directly, and the computed
+  // key below reaches the same failure by a spelling the checker cannot judge.
+  expectStaticTypeError(`${V} class X extends V { } let v: V = new X(); v.extra = 1;`);
+  expect(evaluated(`${V} class X extends V { } let v: V = new X(); const k = 'extra'; v[k] = 1; String(v[k]);`)).toBe('undefined');
 });
 
 test('an array of the subclass has a layout', () => {
