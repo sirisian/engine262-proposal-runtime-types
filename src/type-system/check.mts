@@ -6354,6 +6354,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Construct signatures by class node, for checking `new C(...)`. */
   const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }[]>();
   /**
+   * Whether two constructor parameters are the same for signature identity.
+   *
+   * Deliberately narrow: two types are the same when `SameType` says so, and an
+   * ABSENT type equals only an absent one. Treating an unannotated parameter as
+   * `any` would make `constructor(a)` and `constructor(a: uint8)` one signature
+   * and refuse a legal overload set, and treating it as unknown-so-different
+   * would let `constructor(a)` be declared twice.
+   */
+  const sameConstructParameter = (a: Known | null, b: Known | null): boolean => {
+    if (!a || !b) {
+      return !a && !b;
+    }
+    return SameType(a, b);
+  };
+
+  /** The class name for a diagnostic, or *undefined* for an anonymous one. */
+  const classNameForDiagnostics = (n: ParseNode): string | undefined => (n as unknown as {
+    BindingIdentifier?: { name?: string },
+  }).BindingIdentifier?.name;
+
+  /**
    * The construct signature a call selects, from a class that may declare more
    * than one.
    *
@@ -10712,6 +10733,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       SetterTypes: setterTypes.size > 0 ? new Map(setterTypes) : undefined,
     } as unknown as Known;
     if (construct.length > 0) {
+      // Two constructors with the SAME parameter types are one signature declared
+      // twice, and that is an error AT THE CLASS.
+      //
+      // This follows the FUNCTION rule - "$1 is declared twice with the same
+      // parameter types" - rather than the method one, deliberately. Two
+      // identical METHODS are accepted here and every call to them is ambiguous,
+      // which reports at a distance from the cause and is a defect in its own
+      // right: `class C { m() { return 1; } m() { return 2; } }` is ordinary
+      // JavaScript that the method behaviour breaks. It is not a precedent to
+      // follow.
+      //
+      // A constructor cannot differ by return type - a construction yields the
+      // class - so identical parameter types really is one signature twice, which
+      // is exactly what the function rule names. C++, Java and Rust all reject
+      // this at the declaration too.
+      for (let i = 1; i < construct.length; i += 1) {
+        for (let j = 0; j < i; j += 1) {
+          const a = construct[j]!.Parameters;
+          const b = construct[i]!.Parameters;
+          if (a.length !== b.length) {
+            continue;
+          }
+          if (a.every((q, k) => sameConstructParameter(q.Type ?? null, b[k]?.Type ?? null))) {
+            const completion = Throw.StaticTypeError(
+              '$1 is declared twice with the same parameter types',
+              Value(classNameForDiagnostics(n) ?? 'the constructor'),
+            );
+            errors.push(completion.Value as ObjectValue);
+            break;
+          }
+        }
+      }
       constructSignatures.set(n, construct);
     }
     // The RUNTIME builds its own nominal

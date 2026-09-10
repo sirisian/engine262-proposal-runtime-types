@@ -72,3 +72,43 @@ test('a single constructor is untouched', () => {
     + ' String(Number(new E((1 := uint32)).x));')).toBe('7');
   expect(evaluated('class P { constructor(a) { this.a = a; } } String(new P(5).a);')).toBe('5');
 });
+
+test('two constructors with the SAME parameter types are an error at the class', () => {
+  // Signature identity is the parameter types, and a constructor cannot differ by
+  // return type - a construction yields the class - so identical parameters is
+  // one signature declared twice. Reported where the mistake is, in the words the
+  // FUNCTION rule already uses.
+  //
+  // Not the method precedent, deliberately: two identical METHODS are accepted
+  // and every call to them is ambiguous, which reports at a distance and is a
+  // defect in its own right - `class C { m() { return 1; } m() { return 2; } }`
+  // is ordinary JavaScript that behaviour breaks. C++, Java and Rust all reject
+  // this at the declaration.
+  expectThrown('class A { constructor(a: uint32) {} constructor(a: uint32) {} }',
+    '"A" is declared twice with the same parameter types');
+  // Static, so it fires for code that never runs.
+  expectThrown('if (false) { class A { constructor(a: uint32) {} constructor(a: uint32) {} } }',
+    'is declared twice with the same parameter types');
+  // Distinct sets are unaffected, by arity or by type.
+  expect(ok('class A { constructor(a: uint32) {} constructor(a: uint32, b: uint32) {} }')).toBe(true);
+  expect(ok('class A { constructor(a: uint32) {} constructor(a: string) {} }')).toBe(true);
+});
+
+test('every one-parameter overload is a converting constructor', () => {
+  // `#sec-conversions` makes a one-parameter constructor a converting one. With
+  // an overload set there are several, and the conversion resolves by argument
+  // type like any other call rather than picking one arbitrarily or refusing.
+  const M = 'class M { v: uint32 = 0;'
+    + ' constructor(a: uint32) { this.v = 1; }'
+    + ' constructor(a: string) { this.v = 2; } } ';
+  expect(evaluated(`${M} let t: M = (1 := uint32); String(Number(t.v));`)).toBe('1');
+  expect(evaluated(`${M} let t: M = "s"; String(Number(t.v));`)).toBe('2');
+  // A sole one-parameter constructor converts as it always did.
+  expect(evaluated('class N { v: uint32 = 0; constructor(a: uint32) { this.v = 9; } }'
+    + ' let t: N = (1 := uint32); String(Number(t.v));')).toBe('9');
+  // An overload of another arity is not a converting constructor and does not
+  // disturb the one that is.
+  expect(evaluated('class P { v: uint32 = 0; constructor(a: uint32) { this.v = 1; }'
+    + ' constructor(a: uint32, b: uint32) { this.v = 2; } }'
+    + ' let t: P = (1 := uint32); String(Number(t.v));')).toBe('1');
+});
