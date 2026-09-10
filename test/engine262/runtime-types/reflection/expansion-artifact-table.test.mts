@@ -134,6 +134,20 @@ test('a typed-number default survives a JSON round trip', () => {
   expect(back!.get('T')).toBe(r.originals[0]);
 });
 
+test('an unencodable leaf is refused, and the refusal names it', () => {
+  // A symbol has no name that survives a boundary: an unregistered one has none
+  // at all, and a registered one would need `Symbol.for` at the consumer, which
+  // is a decision about identity across a wire rather than an encoding.
+  //
+  // It was CARRIED before, not refused - the comment here claimed otherwise - so
+  // a symbol-keyed member threw from inside the walk with a failure that named
+  // neither the symbol nor the member. A producer that cannot encode a surface
+  // should emit no artifact rather than a broken one, and say which leaf stopped
+  // it.
+  const r = rootsOf('const s = Symbol("k"); type O = { [s]: uint8 };', ['O'])!;
+  expect(() => SerializeTypeTable(r.roots as never)).toThrow(/cannot carry a symbol/);
+});
+
 test('an unresolvable name is declined, as a stale hash is', () => {
   // A consumer that does not have what the artifact names cannot read the table
   // and must evaluate. Declining is the same answer a hash mismatch gets.

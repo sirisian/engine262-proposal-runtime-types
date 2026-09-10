@@ -155,6 +155,19 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, object>): TypeTabl
     if (isEncodableLeaf(value)) {
       return encodeLeaf(value, (r) => ({ $ref: indices.get(r)! }));
     }
+    if (typeof value === 'object' && value !== null) {
+      // REFUSED, and named. Anything reaching here is an object this format has
+      // no encoding for, and carrying it produced an artifact that could not be
+      // written: a symbol-keyed member threw from inside the walk, with a failure
+      // that named neither the symbol nor the member.
+      //
+      // A producer that cannot encode a surface should emit no artifact, not a
+      // broken one - a consumer with no artifact evaluates and is always correct.
+      // Saying which leaf stopped it is what lets an author fix it or decide the
+      // surface is not shippable.
+      throw new TypeError(`an expansion artifact cannot carry ${describeLeaf(value)}`);
+    }
+    // A JS primitive - a `Rest` flag, a kind name, an arity - travels as itself.
     return value;
   };
 
@@ -262,6 +275,26 @@ function decodeLeaf(value: Record<string, unknown>, deref: (v: unknown) => unkno
     return new TypedNumberValue(numeric as never, record as never);
   }
   return undefined;
+}
+
+/**
+ * Names an unencodable leaf for the refusal, so the message points at the cause.
+ *
+ * A SYMBOL is the case that exists today, and its limit is real rather than an
+ * oversight: an unregistered symbol has no name that survives a boundary, and a
+ * registered one would need `Symbol.for` at the consumer - a decision about
+ * identity across a wire rather than an encoding, which this format does not make
+ * on an author's behalf.
+ */
+function describeLeaf(value: object): string {
+  const type = (value as { type?: string }).type;
+  if (type === 'Symbol') {
+    return 'a symbol, which has no name that survives a boundary';
+  }
+  if (type === 'Object') {
+    return 'an object value';
+  }
+  return `a ${type ?? value.constructor?.name ?? 'value'} it has no encoding for`;
 }
 
 /** Whether a value is one of the leaves `encodeLeaf` knows. */
