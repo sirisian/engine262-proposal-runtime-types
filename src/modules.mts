@@ -11,7 +11,7 @@ import {
   type ImportEntry,
   type ExportEntry,
 } from './static-semantics/all.mts';
-import { CheckModuleWithImports, ExportedTypesOf, ExportedBuilderNodesOf } from './type-system/check.mts';
+import { CheckModuleWithImports, ExportedTypesOf, ExportedAliasesOf, ExportedBuilderNodesOf } from './type-system/check.mts';
 import { InstantiateFunctionObject } from './runtime-semantics/all.mts';
 import { collectOverloadGroups, MakeOverloadedFunction } from './abstract-ops/runtime-types.mts';
 import { skipDebugger } from './evaluator.mts';
@@ -788,8 +788,16 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
           if (surroundingAgent.feature('runtime-types')
               && resolution.Module instanceof SourceTextModuleRecord) {
             const bindingName = (resolution.BindingName as JSStringValue).stringValue?.() ?? String(resolution.BindingName);
+            // BOTH maps. `ExportedTypesOf` records what a name's VALUE is typed
+            // as, which is where a class lands; `ExportedAliasesOf` records what a
+            // name IS as a type. Asking only the first meant a module exporting
+            // types contributed nothing, and the check below is gated on this
+            // being non-empty.
             const exported = ExportedTypesOf(resolution.Module.ECMAScriptCode);
-            const t = exported?.get(bindingName);
+            const exportedAliases = ExportedAliasesOf(
+              (resolution.Module.HostDefined as { specifier?: string } | undefined)?.specifier,
+            );
+            const t = exportedAliases?.get(bindingName) ?? exported?.get(bindingName);
             if (t !== undefined) {
               importedTypes.set(ie.LocalName.stringValue(), t);
             }
@@ -812,7 +820,8 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // reported twice: a module whose parse-time check failed never reaches
     // linking, so every error found here is one that needed an import to see.
     if (surroundingAgent.feature('runtime-types') && importedTypes.size > 0) {
-      const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders);
+      const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders,
+        (module.HostDefined as { specifier?: string } | undefined)?.specifier);
       if (typeErrors.length > 0) {
         return ThrowCompletion(typeErrors[0]);
       }

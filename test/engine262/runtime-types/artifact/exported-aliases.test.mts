@@ -15,6 +15,8 @@ import { Agent, ManagedRealm, setSurroundingAgent, ExportedAliasesOf } from '#se
  */
 
 function aliasesOf(source: string): string[] | undefined {
+  // A fresh agent per call: the record is keyed by SPECIFIER now, and every
+  // fixture here uses the same one.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
   const parsed = realm.compileModule(source, { specifier: 'm.mts' } as never) as unknown as {
@@ -24,7 +26,7 @@ function aliasesOf(source: string): string[] | undefined {
   if (!record || typeof record.LoadRequestedModules !== 'function') {
     return undefined;
   }
-  const map = ExportedAliasesOf(record.ECMAScriptCode as never);
+  const map = ExportedAliasesOf('m.mts');
   return map ? [...map.keys()] : undefined;
 }
 
@@ -52,12 +54,13 @@ test('a class is here too, exported or not', () => {
   expect(aliasesOf('export class U { a: uint8; }\ntype P = { a: uint8 };\n')).toEqual(['P', 'U']);
 });
 
-// KNOWN GAP, pinned. A type that REFERENCES AN IMPORTED NAME is dropped from the
-// map: `type P = { u: U }` with `U` imported records nothing for `P`, while the
-// same module's `type S = { b: string }` records fine, and merely having an
-// import present does not do it. So an artifact cannot yet publish the types that
-// most need publishing - the ones built over a dependency's classes.
-test.fails('a type over an imported name is recorded', () => {
+// A type over an imported name needs the module to be LINKED, since the pass that
+// can resolve it is the one holding the module's imports. Compiling alone cannot,
+// and that is not a defect: the import has not resolved yet. `produce.test.mts`
+// covers the linked case, where `type Page = { u: User }` survives.
+test('a type over an unresolved import is dropped, not left half-formed', () => {
+  // Dropped rather than standing as an empty object type, which would turn an
+  // unmodelled type into a spurious error at every annotation naming it.
   expect(aliasesOf('import { U } from "u.mts";\ntype P = { u: U };\ntype S = { b: string };\n'))
-    .toEqual(['P', 'S']);
+    .toEqual(['S']);
 });

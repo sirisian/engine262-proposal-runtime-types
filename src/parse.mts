@@ -687,7 +687,7 @@ function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: Modul
   // proposal-runtime-types #sec-type-errors: the same checker gate as the
   // script goal, over module items.
   if (surroundingAgent.feature('runtime-types')) {
-    const typeErrors = CheckModule(body);
+    const typeErrors = CheckModule(body, (hostDefined as { specifier?: string }).specifier);
     if (typeErrors.length > 0) {
       const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);
       typeErrors.forEach((error) => Parser.decorateSyntaxErrorWithScriptId(error, scriptId));

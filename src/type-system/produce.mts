@@ -76,7 +76,7 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
   // CLASS is not there: its binding is the constructor, and the constructor IS
   // the type, so it comes from `bindings`. Asking one map would publish half a
   // surface.
-  const aliases = ExportedAliasesOf(code as never);
+  const aliases = ExportedAliasesOf((record as { HostDefined?: { specifier?: string } }).HostDefined?.specifier);
   const bindings = ExportedTypesOf(code as never);
   const entries = (module as { LocalExportEntries?: readonly {
     LocalName?: { stringValue?(): string }, ExportName?: { stringValue?(): string },

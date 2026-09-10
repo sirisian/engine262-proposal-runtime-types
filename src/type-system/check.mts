@@ -1344,8 +1344,63 @@ function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: Pars
  */
 const moduleExportedTypes = new WeakMap<object, Map<string, Known>>();
 
-/** A module's TYPE declarations by local name: aliases, classes, interfaces, enums. */
-const moduleExportedAliases = new WeakMap<object, Map<string, unknown>>();
+/**
+ * A module's TYPE declarations by local name: aliases, classes, interfaces,
+ * enums - keyed by the module's SPECIFIER.
+ *
+ * Not by the parse tree, which was the defect. A module is checked several times
+ * as a graph links, and the tree is not the same object across those passes, so
+ * the pass with the most information - the one that has the module's imports and
+ * can therefore resolve a type built over one - wrote to a key nothing read. The
+ * write sequence for a two-module graph ended
+ * `PLAIN:User; WI:User+Page+Plain;` while a reader holding the first tree still
+ * saw `Plain`: the right answer computed, stored where no one looks.
+ *
+ * A specifier is stable across those passes, which is the property the key needs
+ * and the parse tree does not have.
+ */
+const moduleExportedAliasesByAgent = new WeakMap<object, Map<string, Map<string, unknown>>>();
+
+/**
+ * Per AGENT, not process-global. A specifier is stable across the passes that
+ * check one module, which is the property the key needs - but it is not unique
+ * across agents, and a record that outlived its agent would answer for a module
+ * some other realm compiled under the same name.
+ */
+function moduleAliasTable(): Map<string, Map<string, unknown>> {
+  const agent = surroundingAgent as unknown as object;
+  let table = moduleExportedAliasesByAgent.get(agent);
+  if (!table) {
+    table = new Map();
+    moduleExportedAliasesByAgent.set(agent, table);
+  }
+  return table;
+}
+
+/**
+ * Record a module's type declarations, MERGING with anything already recorded.
+ *
+ * A module checked without its imports necessarily knows less: a type built over
+ * an imported name cannot resolve there, and is dropped rather than left
+ * standing as an empty object type. Replacing would let whichever pass ran last
+ * decide, including one that knew less. Merging makes the record monotone - a
+ * later pass adds what it learned and takes nothing away.
+ */
+function recordModuleAliases(specifier: string | undefined, module: ParseNode.Module, aliases: Map<string, unknown>): void {
+  if (specifier === undefined) {
+    return;
+  }
+  const complete = withTopLevelClasses(module, aliases);
+  const table = moduleAliasTable();
+  const existing = table.get(specifier);
+  if (!existing) {
+    table.set(specifier, complete);
+    return;
+  }
+  for (const [name, t] of complete) {
+    existing.set(name, t);
+  }
+}
 
 /**
  * A module's top-level function declarations, keyed by LOCAL name, recorded when
@@ -1419,15 +1474,15 @@ function withTopLevelClasses(module: ParseNode.Module, aliases: Map<string, unkn
   return aliases;
 }
 
-export function ExportedAliasesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
-  return moduleExportedAliases.get(module as unknown as object);
+export function ExportedAliasesOf(specifier: string | undefined): Map<string, unknown> | undefined {
+  return specifier === undefined ? undefined : moduleAliasTable().get(specifier);
 }
 
 export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
   return moduleExportedTypes.get(module as unknown as object) as Map<string, unknown> | undefined;
 }
 
-export function CheckModule(module: ParseNode.Module): ObjectValue[] {
+export function CheckModule(module: ParseNode.Module, specifier?: string): ObjectValue[] {
   // Module items are a superset of statements; import/export wrappers are
   // walked structurally, and their inner declarations checked as usual.
   const session = CreateCheckSession();
@@ -1453,8 +1508,6 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   // contract wants the first, and an expansion artifact publishing a module's
   // types wants the second. Merging them would make `ExportedTypesOf` mean two
   // things depending on which name you asked about.
-  moduleExportedAliases.set(module as unknown as object,
-    withTopLevelClasses(module, new Map(session.frame.aliases)));
   // The same list, for the declarations an importer's contract lookup needs.
   // `export function f() {}` puts the declaration in [[HoistableDeclaration]];
   // [[Declaration]] is null for that form.
@@ -1470,6 +1523,7 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
     }
   }
   moduleBuilderNodes.set(module as unknown as object, builders);
+  recordModuleAliases(specifier, module, new Map(session.frame.aliases));
   return errors;
 }
 
@@ -1498,13 +1552,20 @@ const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
   'size', 'clear', 'keys', 'values', 'entries', 'forEach',
 ]);
 
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>): ObjectValue[] {
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string): ObjectValue[] {
   if (imported.size === 0) {
     return [];
   }
   const session = CreateCheckSession();
   for (const [name, t] of imported) {
     session.frame.bindings.set(name, t as TypeRecord);
+    // ALSO as an alias. A type annotation naming an import resolves through
+    // `lookupAlias`, which reads `aliases` and not `bindings`, so an imported
+    // type seeded only into `bindings` did not resolve - and the alias built
+    // over it was then deleted by the rule that stops an unresolved alias
+    // standing as an empty object type. Both halves are right alone; together
+    // they erased every type a module built over a dependency's.
+    session.frame.aliases.set(name, t as TypeRecord);
     session.frame.declaredNames.add(name);
     // An import binding cannot be assigned, so a call through it is stable for
     // #sec-elision-stability - the exporting module's own mutation is what the
@@ -1514,7 +1575,12 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   const outerBuilders = importedBuilderNodes;
   importedBuilderNodes = builders;
   try {
-    return CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+    const errors = CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+    // Recorded HERE and not only on the plain path: this pass has the module's
+    // imports, so it is the one that can resolve a type built over one, and its
+    // answer is the complete one.
+    recordModuleAliases(specifier, module, new Map(session.frame.aliases));
+    return errors;
   } finally {
     importedBuilderNodes = outerBuilders;
   }
@@ -17037,5 +17103,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   unclaimedKeyChecks.set(root, unclaimed);
   defaultRequirements.set(root, defaultsNeeded);
   blockScopedMetaNames.set(root, nestedMetaNames);
+
   return errors;
 }
