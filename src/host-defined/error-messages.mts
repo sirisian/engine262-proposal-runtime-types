@@ -609,6 +609,7 @@ export interface Throw {
   | '$1 is a typed class and cannot be proxied'
   | '$1 is a typed element and cannot be deleted'
   | '$1 is a typed property and cannot be deleted'
+  | '$1 is not a member of $2'
   | '$1 is already an enumerator of this enum'
   | '$1 is already claimed by another meta type'
   | '$1 is already declared'

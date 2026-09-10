@@ -2268,6 +2268,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if ((m.MemberExpression as { type?: string } | undefined)?.type === 'ThisExpression' && constructorDepth > 0) {
       return;
     }
+    // A SEALED INSTANCE CANNOT GAIN A MEMBER. #sec-typed-storage: a class with a
+    // typed field is "automatically sealed, as if PreventExtensions had been
+    // performed on each of its instances ... a property may not be added or
+    // removed". So `c.nope = 1` cannot work - and in sloppy mode a failed write
+    // is SILENT, so the program was simply wrong with no signal at all, which is
+    // the case an Early Error is worth most.
+    //
+    // The sealing is derived exactly as `typeCanBeHeldWeakly` derives it, from
+    // the declaration, so the two cannot disagree about which classes are
+    // sealed. `dynamic` classes, untyped classes and plain objects are all
+    // untouched.
+    //
+    // Only a NAMED member. A computed or symbol key names nothing the checker
+    // can see; a PRIVATE name is not a member access in this rule's sense and
+    // the member walk skips those keys, so they are never in the structure.
+    //
+    // The `this` form is included deliberately and is the most valuable of the
+    // three: `class C { v: uint8 = 0; m() { this.other = 1; } }` throws at run
+    // time, and the mistake is the class author's own.
+    const sealedReceiver = m.MemberExpression ? staticType(m.MemberExpression) : null;
+    const sealedName = m.IdentifierName as { name: string, type?: string } | null | undefined;
+    if (sealedReceiver && sealedReceiver.Kind === 'nominal' && sealedName
+        && sealedName.type !== 'PrivateIdentifier'
+        && !typeCanBeHeldWeakly(sealedReceiver as TypeRecord)) {
+      const sealedStructure = structureOf(sealedReceiver);
+      const named = sealedName.name;
+      // The DECLARATION is consulted where the structure does not carry the
+      // name, because the structure is a record of TYPED members: an accessor
+      // with no return annotation - `get w() { ... }` - contributes no type and
+      // so no Property, but the class plainly declares `w` and a write to it
+      // must not be refused. The structure answers "what type has this member";
+      // only the declaration answers "does this class have one".
+      const declaresName = (((sealedReceiver as unknown as {
+        Declaration?: { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null },
+      }).Declaration?.ClassTail?.ClassBody) ?? []).some((el) => {
+        const key = (el as unknown as { ClassElementName?: { name?: string, value?: string } | null }).ClassElementName;
+        return (key?.name ?? key?.value) === named;
+      });
+      if (sealedStructure && sealedStructure.Kind === 'object'
+          && !sealedStructure.Properties.some((p) => p.key === named)
+          && !declaresName
+          && (sealedStructure.IndexSignatures ?? []).length === 0) {
+        const completion = Throw.StaticTypeError('$1 is not a member of $2', Value(`"${named}"`), Value(displayType(sealedReceiver as TypeRecord))) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+        return;
+      }
+    }
     const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
     if (!objType || objType.Kind !== 'object') {
       return;
