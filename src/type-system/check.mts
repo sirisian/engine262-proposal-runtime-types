@@ -6190,7 +6190,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // 2. The arguments, through the constructor's signature. A binding already
     // made keeps; the unifier's `into` never overrules one.
-    const sig = constructSignatures.get(decl);
+    const sigs = constructSignatures.get(decl);
+    const argNodesForSelect = ((node as unknown as { Arguments?: readonly ParseNode[] | null }).Arguments ?? [])
+      .filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
+    const sig = selectConstructSignature(sigs, argNodesForSelect.map((a) => staticType(a) ?? anyTypeRecord));
     if (sig) {
       const argNodes = ((node as unknown as { Arguments?: readonly ParseNode[] | null }).Arguments ?? [])
         .filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
@@ -6330,7 +6333,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return built;
   };
   /** Construct signatures by class node, for checking `new C(...)`. */
-  const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }>();
+  const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }[]>();
+  /**
+   * The construct signature a call selects, from a class that may declare more
+   * than one.
+   *
+   * Routed through `resolveOverloadByTypes` rather than matched by arity here,
+   * because the checker and the runtime must not answer this differently. Four
+   * defects in this area have been two sides disagreeing about a type, and a
+   * second matching rule written for constructors would be a fifth waiting to
+   * happen.
+   *
+   * Answers the sole signature where a class declares one, so the common case
+   * pays nothing and behaves exactly as it did.
+   */
+  const selectConstructSignature = (
+    sigs: readonly { Parameters: ParameterRecord[] }[] | undefined,
+    argTypes: readonly TypeRecord[],
+  ): { Parameters: ParameterRecord[] } | undefined => {
+    if (!sigs || sigs.length === 0) {
+      return undefined;
+    }
+    if (sigs.length === 1) {
+      return sigs[0];
+    }
+    const resolution = resolveOverloadByTypes(sigs as never, argTypes as TypeRecord[]);
+    return resolution.Kind === 'resolved'
+      ? (resolution.Signature as unknown as { Parameters: ParameterRecord[] })
+      : undefined;
+  };
+
+
 
   const resolvingAliases = new Set<string>();
   /**
@@ -10087,7 +10120,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      */
     const abstractMembers = new Map<string, TypeRecord | null>();
     const unusable = new Set<string>();
-    let construct: { Parameters: ParameterRecord[] } | null = null;
+    // A class may declare MORE THAN ONE constructor, so this accumulates rather
+    // than holds. Before the parser admitted a second, the last one written won
+    // by overwriting; now the second would be silently discarded instead, which
+    // is worse - it parses, type-checks, and never runs.
+    const construct: { Parameters: ParameterRecord[] }[] = [];
     const accessorKeys = new Set<string>();
     const getterKeys = new Set<string>();
     const setterTypes = new Map<string, TypeRecord>();
@@ -10157,7 +10194,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (cusable) {
-            construct = { Parameters: cparams };
+            construct.push({ Parameters: cparams });
           }
           continue;
         }
@@ -10655,7 +10692,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // cannot be decided.
       SetterTypes: setterTypes.size > 0 ? new Map(setterTypes) : undefined,
     } as unknown as Known;
-    if (construct) {
+    if (construct.length > 0) {
       constructSignatures.set(n, construct);
     }
     // The RUNTIME builds its own nominal
@@ -11626,8 +11663,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return true;
     }
   };
-
-
 
   /**
    * #sec-inference-fixpoint: publish an inferred return type for each queued
@@ -16111,7 +16146,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const decl = instance && instance.Kind === 'nominal'
             ? (instance as unknown as { Declaration: ParseNode }).Declaration
             : null;
-          const sig = decl ? constructSignatures.get(decl) : undefined;
+          const sigList = decl ? constructSignatures.get(decl) : undefined;
+          const sigArgNodes = ((n as unknown as { Arguments?: readonly ParseNode[] | null }).Arguments ?? [])
+            .filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
+          const sig = selectConstructSignature(sigList, sigArgNodes.map((a) => staticType(a) ?? anyTypeRecord));
           if (sig) {
             // The parameter types are read AT THE BINDINGS the construction
             // makes, so `new Box(1)` at a `Box.<uint8>` context checks `1` at
