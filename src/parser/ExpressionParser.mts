@@ -2435,6 +2435,18 @@ export abstract class ExpressionParser extends FunctionParser {
       }, () => {
         const ClassBody: Mutable<ParseNode.ClassElementList> = [];
         let hasConstructor = false;
+        // proposal-runtime-types: a class may declare more than one constructor
+        // where the declarations are distinct SIGNATURES and at least one
+        // parameter across the set carries an annotation.
+        //
+        // The base language forbids a second `constructor` outright, and this
+        // proposal previously declined to relax it. Relaxing it needs the
+        // decision deferred to after the element loop for the same reason the
+        // typed-class check below is: an annotation may come after the
+        // constructor that needs it, as in
+        // `class C { constructor(a) {} constructor(a: uint8, b) {} }`.
+        const constructorNodes: ParseNode.MethodDefinition[] = [];
+        let anyConstructorParamAnnotated = false;
         while (this.eat(Token.SEMICOLON)) {
           // nothing
         }
@@ -2575,9 +2587,17 @@ export abstract class ExpressionParser extends FunctionParser {
             && !!m.UniqueFormalParameters
             && name === 'constructor';
           if (isActualConstructor) {
-            if (hasConstructor) {
+            constructorNodes.push(m as ParseNode.MethodDefinition);
+            // `parseUniqueFormalParameters` returns the parameter ARRAY itself,
+            // not a node wrapping one, so this reads it directly.
+            const formals = ((m as unknown as { UniqueFormalParameters?: readonly unknown[] })
+              .UniqueFormalParameters ?? []) as readonly unknown[];
+            if (formals.some((q) => (q as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined)) {
+              anyConstructorParamAnnotated = true;
+            }
+            if (hasConstructor && !surroundingAgent.feature('runtime-types')) {
               this.addEarlyError(Throw.SyntaxError('Duplicate constructor'), m);
-            } else {
+            } else if (!hasConstructor) {
               hasConstructor = true;
             }
           }
@@ -2588,6 +2608,17 @@ export abstract class ExpressionParser extends FunctionParser {
           if (m.static && m.type === 'FieldDefinition' && name === 'constructor') {
             this.addEarlyError(Throw.SyntaxError('A class static field cannot be named as "constructor"'), m);
           }
+        }
+
+        // proposal-runtime-types: the deferred half of the constructor-overloading
+        // relaxation above. By here every element has been seen, so an annotation
+        // that came after the constructor needing it has been counted.
+        //
+        // Two constructors with no annotation anywhere are refused: a class body
+        // with no types in it behaves as it does today, and overloading is
+        // reached by annotating rather than by arity alone.
+        if (constructorNodes.length > 1 && !anyConstructorParamAnnotated) {
+          this.addEarlyError(Throw.SyntaxError('Duplicate constructor'), constructorNodes[1]!);
         }
         // Reported HERE and not at the `return`, because this is the first
         // point that knows whether the class is TYPED: an annotation may come

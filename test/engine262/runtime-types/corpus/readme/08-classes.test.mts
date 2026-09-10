@@ -102,8 +102,24 @@ test('Readonly Fields: assignment outside the constructor is a TypeError', () =>
   expectThrown('class A { readonly id; constructor() { this.set(); } set() { this.id = 1; } } new A();');
 });
 
-test('Constructor Overloading: multiple constructors are not yet supported (documents the gap)', () => {
-  // Target (README): two constructors of different signatures, selected by
-  // overload resolution. Today this is a duplicate-constructor error.
-  expectThrown('class A { x: float32; constructor(x: float32) { this.x = x; } constructor(y: uint32) { this.x = float32(y); } }');
+test('Constructor Overloading: a class may declare more than one constructor', () => {
+  // The README's target, and no longer a gap. Base ECMAScript forbids a second
+  // `constructor` outright and this proposal previously declined to relax it;
+  // it now does, where the declarations are distinct signatures and at least one
+  // parameter across the set carries an annotation.
+  //
+  // The annotation is what turns the feature on, so a class body with no types in
+  // it behaves as it did: two untyped constructors are still refused, and are
+  // still refused with the feature off.
+  expect(ok('class A { constructor(x: float32) {} constructor(y: uint32) {} }')).toBe(true);
+  expect(ok('class A { constructor(x: float32) {} constructor(x: float32, y: uint32) {} }')).toBe(true);
+  // The README's own version of this example assigns a `uint32` parameter to a
+  // `float32` field, which is a separate type error and not what this tests:
+  // `class A { x: float32; … constructor(y: uint32) { this.x = y; } }` refuses
+  // with "uint.<32>" is not assignable to "float32". The overload set parses;
+  // the body does not check.
+  expect(ok('class A { constructor(a: uint32) {} constructor(a, b) {} }')).toBe(true);
+  expectThrown('class A { constructor(a) {} constructor(a, b) {} }', 'Duplicate constructor');
+  // One constructor, annotated or not, is untouched.
+  expect(ok('class A { constructor(a) {} }')).toBe(true);
 });
