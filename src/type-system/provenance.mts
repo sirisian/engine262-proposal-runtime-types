@@ -1,3 +1,4 @@
+import { GetActiveScriptOrModule } from '../execution-context/ExecutionContext.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '#self';
 
@@ -94,11 +95,18 @@ function tableForAgent(): WeakMap<object, TypeOrigin[]> {
 /** Build an opaque handle for a declaration node, retaining none of it. */
 export function OriginOfNode(node: ParseNode, kind: string, name?: string): TypeOrigin {
   const location = (node as { location?: { startIndex: number, endIndex: number, start: { line: number, column: number } } }).location;
-  const host = (node as { sourceText?: unknown }) as { scriptOrModule?: { HostDefined?: { specifier?: string } } };
+  // The host's name for the source comes from the ACTIVE script or module, not
+  // from the node. A parse node has no `scriptOrModule` property - nothing in
+  // this engine sets one - so reading it here meant `source` was undefined for
+  // every origin ever recorded, and the field promised in the record above was
+  // never delivered. #sec-provenance wants "where a type was written", and which
+  // module is being evaluated when a declaration is evaluated is what answers it.
+  const active = GetActiveScriptOrModule() as unknown as { HostDefined?: { specifier?: unknown } };
+  const specifier = active?.HostDefined?.specifier;
   return {
     kind,
     name,
-    source: host?.scriptOrModule?.HostDefined?.specifier,
+    source: typeof specifier === 'string' ? specifier : undefined,
     line: location?.start?.line ?? 0,
     column: location?.start?.column ?? 0,
     startIndex: location?.startIndex ?? 0,
