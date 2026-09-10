@@ -342,127 +342,14 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
   // `keyof Reflect.typeOf(C)` reads, and a function type has no properties to
   // read. The `declared` filter was silently doing this job as well; removing
   // it made the second job visible.
-  const fallThrough = surroundingAgent.feature('runtime-types')
-    && IsCallable(value) && (!isTypeObject(value) || isClassTypeObject(value))
-    ? RuntimeTypeOf(value)
-    : undefined;
-  if (fallThrough !== undefined && (fallThrough as { Kind?: string }).Kind === 'object') {
-    // SignaturesOf serves an OVERLOADED function, reading the arms it was built
-    // from; a singly-declared function has no such slot, so its one signature is
-    // derived directly.
-    const overloaded = (value as { OverloadFunctions?: unknown }).OverloadFunctions !== undefined
-      || (value as { OverloadSignatures?: unknown }).OverloadSignatures !== undefined;
-    let overloads;
-    if (overloaded) {
-      overloads = Q(yield* SignaturesOf(value));
-    } else {
-      // `Q(yield* …)` may not appear inside an array literal - the build's Babel
-      // pass rewrites Q and cannot place the result there.
-      const one = Q(yield* OverloadSignatureOf(value));
-      overloads = [one];
-    }
-    // An OverloadSignature carries `ReturnType` and the implementing function; a
-    // SignatureRecord carries `Return` and nothing else. The parameter model is
-    // already shared, so only the return field is mapped.
-    // "has declared signatures" means a type was WRITTEN, not that parameters
-    // exist: `g(a)` has a parameter and declares nothing, and reporting a
-    // function type for it would synthesise the all-`any` signature the
-    // unannotated rule refuses. A parameter with no annotation resolves to
-    // `any`, so a signature counts as declared where some parameter is not
-    // `any` or a return type was written.
-    // This filter USED to discard
-    // a signature that had already been built, on the grounds that reporting
-    // all-`any` parameters "would be inference the program did not ask for".
-    //
-    // That rationale does not hold. The checker ALREADY performs the inference
-    // and prints the result in diagnostics, parameter names included:
-    // `function g(a) { return 1; }` is reported as `(a: any) => void` when it
-    // fails to satisfy an annotation. So the filter did not decline to INVENT a
-    // type - it declined to REPORT one the engine holds, which is a different
-    // act and one the rationale never covered.
-    //
-    // What it cost is the property #sec-runtimetypeof's own paragraph says
-    // step 10 exists to establish: `Reflect.typeOf` answered differently from
-    // the checker about the same value, and in both directions. `f` was a
-    // `() => void` to a binding and a `{}` to reflection; `type {}` to
-    // reflection and not a `{}` to a binding. Every unannotated callable in a
-    // program - functions, arrows, methods, builtins, class constructors - also
-    // shared ONE type, `type {}`, so a Map keyed on `Reflect.typeOf` collapsed
-    // them all into one entry.
-    //
-    // The "unannotated is not `any`" distinction the filter protected is real
-    // and survives: it lives on DECLARATION reflection, which answers what was
-    // WRITTEN, where `m(a) {}` still reports no signatures and `m(a: any) {}`
-    // still reports one. `Reflect.typeOf` answers what a value IS. The two are
-    // allowed to differ and this is where.
-    const declared = overloads;
-    // A CLASS CONSTRUCTOR's body-inferred return is `void` - the constructor
-    // returns nothing, and a typed one may return nothing but `this`. But
-    // `void` is not what `new C(...)` produces, and reporting it made every
-    // class with the same constructor parameters share ONE type: `typeOf(C)`
-    // and `typeOf(D)` were equal for `class C { x: uint8 = 1; }` and
-    // `class D { y: string = ""; }`, the same collapse surviving for classes
-    // after it was fixed for functions.
-    //
-    // The class is what a construction yields - #sec-typed-classes says so, and
-    // the constructor-return rule makes it TRUE by refusing any other `return`
-    // - so the return is derivable rather than guessed.
-    //
-    // This does NOT touch the rule that gives a constructor's DECLARATION
-    // reflection no return entry because a
-    // constructor declares none. That rule is about what was WRITTEN and lives
-    // in the class-member reflection path; this is about what a VALUE is. The
-    // two answers differ on purpose and a test asserts both.
-    // A class type object is admitted: it is the one type object that is also a
-    // function, so what it IS and what it DENOTES differ and this asks the first.
-    const classType = value instanceof ObjectValue && (!isTypeObject(value) || isClassTypeObject(value))
-      ? LookupClassType(value as unknown as object)
-      : undefined;
-    let constructedType = classType !== undefined
-      ? (classType as unknown as TypeObject).TypeRecord
-      : undefined;
-    // A generic class's declaration constructs the class OVER ITS OWN
-    // PARAMETERS: `<T>(v: T) => Box.<T>`, not a bare `Box` that no value is of
-    // (PLAN-v3 Q7-a). A specialization's constructor is its own instantiation
-    // and needs nothing here.
-    const genericDeclaration = LookupClassType(value as unknown as object) !== undefined ? GenericClassDeclarationOf(value) : undefined;
-    if (constructedType && constructedType.Kind === 'nominal' && genericDeclaration !== undefined) {
-      const params = genericDeclaration.TypeParameters?.TypeParameterList ?? [];
-      constructedType = CanonicalizeType({
-        ...constructedType,
-        Arguments: params.map((q) => ({ Kind: 'parameter', Name: (q as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '', Declaration: q } as unknown as TypeRecord)),
-      } as TypeRecord);
-    }
-    // #sec-inferred-return-types: a function that PUBLISHES an inferred return
-    // type is reported with it. The rule just above - that a signature counts as
-    // declared only where a type was WRITTEN - is what keeps an unannotated
-    // `g(a)` from being given a synthesised all-`any` signature, and it stays;
-    // publication is a different case, because the program did ask by
-    // annotating what the inference derives from, and the published type is
-    // enforced when the function returns. An enforced type that reflection
-    // denied would be the one fact about a value a program could not read.
-    const code = (value as { ECMAScriptCode?: { parent?: object } }).ECMAScriptCode;
-    const published = code?.parent ? PublishedReturnTypeOf(code.parent) : undefined;
-    if (published && declared.length === 0 && overloads.length === 1) {
-      const Signatures = [{ Parameters: overloads[0].Parameters, Return: published }];
-      return GetTypeObject({ Kind: 'function', Signatures } as unknown as TypeRecord);
-    }
-    if (declared.length > 0) {
-      const Signatures = declared.map((o) => ({
-        Parameters: o.Parameters,
-        // A signature whose parameters were written but whose return was not
-        // reports the published return, so the two halves of one signature are
-        // reported on the same footing.
-        Return: constructedType ?? o.ReturnType ?? (declared.length === 1 ? published ?? null : null),
-        // #sec-signature-records: a GENERIC signature keeps its type parameters
-        // (the fifth field-by-field rebuild that dropped them).
-        ...((o as { TypeParameters?: readonly unknown[] }).TypeParameters?.length
-          ? { TypeParameters: (o as { TypeParameters?: readonly unknown[] }).TypeParameters }
-          : {}),
-      }));
-      return GetTypeObject({ Kind: 'function', Signatures } as unknown as TypeRecord);
-    }
-  }
+  // proposal-runtime-types #sec-runtimetypeof, the callable step: a callable
+  // that is not a Type Object (a CLASS type object included - the one that is
+  // also a function) reports its declared signatures, with a class
+  // constructor's return being the class and a signature whose return was not
+  // written reporting the return the checker published. That construction
+  // lived here, for the top level alone; it is RuntimeTypeOf's now
+  // (SignatureTypeOf, PLAN-callable Q1), so a callable inside a structure
+  // reports the same signature it reports alone.
   // proposal-runtime-types: the interned Type Object of the value's run-time type.
   return GetTypeObject(RuntimeTypeOf(value));
 }

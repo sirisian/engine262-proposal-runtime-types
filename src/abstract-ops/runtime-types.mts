@@ -25,6 +25,7 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
+import { containsComputedType } from '../type-system/runtime.mts';
 import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
@@ -4103,8 +4104,12 @@ export function LookupClassType(ctor: object): Value | undefined {
  * the resolved types are read synchronously at each call). The rest/optional/
  * default arity is read from the parameter nodes.
  */
-export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): PlainEvaluator<OverloadSignature> {
+export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, options: { computedAsAny?: boolean } = {}): PlainEvaluator<OverloadSignature> {
   const formals = ((fn as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined) ?? [];
+  // PLAN-callable Q5: a caller that must not run user code (RuntimeTypeOf's
+  // signature derivation) reads a formal whose annotation contains a computed
+  // type - a builder call, which evaluates - as `any`, and the return likewise.
+  const computedAsAny = options.computedAsAny === true;
   // Resolve each parameter's annotation to a type record up front. describeParameters
   // wants a synchronous typeOf, so pre-resolve into a map keyed by node.
   //
@@ -4127,14 +4132,60 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   // T` is `<T>(x: T) => T`. Read without them the formal's `T` was not defined
   // (PLAN-v3 H8). A SPECIALIZATION's constructor resolves under its own frame
   // (classFrameOfMethod) and is not this.
-  const constructorOfGeneric = classFrameOfMethod(fn) === null ? GenericClassDeclarationOf(fn as unknown as Value) : undefined;
-  const genericTypeParameters = genericDeclaration?.TypeParameters?.TypeParameterList
-    ?? constructorOfGeneric?.TypeParameters?.TypeParameterList;
+  // The frames are for RESOLUTION; the syntactic read (resolveAnnotations
+  // false) looks up none of them - classFrameOfMethod types the HomeObject,
+  // which for a method of an object literal is the literal holding it.
+  const methodClassFrame = resolveAnnotations ? classFrameOfMethod(fn) : null;
+  const constructorOfGeneric = resolveAnnotations && methodClassFrame === null ? GenericClassDeclarationOf(fn as unknown as Value) : undefined;
+  // A METHOD of a generic DECLARATION (PLAN-callable V5): its HomeObject is the
+  // declaration's prototype (or, for a static method, the declaration), whose
+  // record carries no arguments, so classFrameOfMethod answers nothing and
+  // `m(y: T): T` read `T` as undefined. The class's parameters are put in
+  // scope as ~parameter~ records, as they are for the declaration's own
+  // constructor above, and reported as the signature's where the method
+  // declares none of its own.
+  const declarationOfMethod = (() => {
+    if (!resolveAnnotations || methodClassFrame !== null || constructorOfGeneric !== undefined) {
+      return undefined;
+    }
+    const home = (fn as { HomeObject?: Value }).HomeObject;
+    if (!home) {
+      return undefined;
+    }
+    const asStatic = GenericClassDeclarationOf(home);
+    if (asStatic !== undefined) {
+      return asStatic;
+    }
+    const ctor = (home as unknown as { properties?: Map<unknown, { Value?: Value }> }).properties?.get(Value('constructor'))?.Value;
+    return ctor ? GenericClassDeclarationOf(ctor) : undefined;
+  })();
+  const classParameters = constructorOfGeneric?.TypeParameters?.TypeParameterList
+    ?? declarationOfMethod?.TypeParameters?.TypeParameterList;
+  const ownTypeParameters = genericDeclaration?.TypeParameters?.TypeParameterList;
+  const genericTypeParameters = ownTypeParameters ?? classParameters;
   // A METHOD's annotations may name its CLASS's parameters (`[].<T>` on a
   // method of `vec<T, N>`); they resolve under the specialized class's frame.
-  const methodClassFrame = resolveAnnotations ? classFrameOfMethod(fn) : null;
   if (methodClassFrame) {
     pushTypeParameterFrame(methodClassFrame);
+  }
+  // A CLOSURE over a generic body captured its frame at creation
+  // (`F.TypeParameterFrame`, PLAN-callable P34): `(y: T): T => y` returned from
+  // `mk<T>` means the T that mk was called at, and resolves under that frame.
+  const capturedFrame = resolveAnnotations ? ((fn as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame ?? null) : null;
+  if (capturedFrame) {
+    pushTypeParameterFrame(capturedFrame);
+  }
+  // The class's parameters as placeholders under a method's OWN, where both exist.
+  let classPlaceholders: Map<string, TypeRecord> | null = null;
+  if (resolveAnnotations && ownTypeParameters && ownTypeParameters.length > 0 && classParameters && classParameters.length > 0) {
+    classPlaceholders = new Map<string, TypeRecord>();
+    for (const tp of classParameters) {
+      const tpName = tp.BindingIdentifier?.name;
+      if (tpName) {
+        classPlaceholders.set(tpName, { Kind: 'parameter', Name: tpName } as TypeRecord);
+      }
+    }
+    pushTypeParameterFrame(classPlaceholders);
   }
   let genericFrame: Map<string, TypeRecord> | null = null;
   if (resolveAnnotations && genericTypeParameters && genericTypeParameters.length > 0) {
@@ -4152,7 +4203,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   for (const p of formals) {
     const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
     if (ann) {
-      if (resolveAnnotations) {
+      if (resolveAnnotations && !(computedAsAny && containsComputedType(ann.Type))) {
         resolved.set(p, Q(yield* TypeNodeToTypeRecord(ann.Type)));
       } else {
         resolved.set(p, { Kind: 'any' } as TypeRecord);
@@ -4187,7 +4238,11 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
     // Resolved directly rather than looked up in `resolved`, which is keyed on
     // the FORMALS alone - the return annotation is never in it, so the lookup
     // this replaced could not have found anything.
-    ReturnType = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
+    if (computedAsAny && containsComputedType(returnAnnotation.Type)) {
+      ReturnType = { Kind: 'any' } as TypeRecord;
+    } else {
+      ReturnType = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
+    }
   }
   return {
     Parameters: params,
@@ -4200,6 +4255,12 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true): Plai
   };
   } finally {
     if (genericFrame) {
+      popTypeParameterFrame();
+    }
+    if (classPlaceholders) {
+      popTypeParameterFrame();
+    }
+    if (capturedFrame) {
       popTypeParameterFrame();
     }
     if (methodClassFrame) {

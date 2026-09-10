@@ -1794,7 +1794,44 @@ function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, ass
   return IsSignatureSubtypeCore(sg, tg, assumptions);
 }
 
-function IsSignatureSubtypeCore(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[]): boolean {
+/**
+ * A rest parameter typed by a FIXED tuple - `...xs: [uint32, float32]`, which is
+ * what a pack bound from two arguments reads as - takes exactly those
+ * positions, so it is compared as the positional parameters it lists. Read as
+ * a rest, its element type was the union of the elements and every position
+ * was asked to accept the union, which refused the positional
+ * `(x: uint32, y: float32) => void` at `(...xs: [uint32, float32]) => void`
+ * (PLAN-callable, found by the function-typed boundary check). A reference
+ * rest expands to reference elements. A tuple with a rest element, or an
+ * array, is a rest as before.
+ */
+function expandTupleRests(params: readonly ParameterRecord[]): readonly ParameterRecord[] {
+  if (!params.some((p) => p.Rest)) {
+    return params;
+  }
+  const out: ParameterRecord[] = [];
+  for (const p of params) {
+    if (!p.Rest) {
+      out.push(p);
+      continue;
+    }
+    const asReference = p.Type.Kind === 'reference';
+    const inner = asReference ? (p.Type as { Target?: TypeRecord }).Target : p.Type;
+    if (!inner || inner.Kind !== 'tuple' || inner.Elements.some((e) => e.Rest)) {
+      out.push(p);
+      continue;
+    }
+    inner.Elements.forEach((e, i) => {
+      const elementType = asReference ? { ...(p.Type as object), Target: e.Type } as TypeRecord : e.Type;
+      out.push({ ...p, Name: `${p.Name}${i}`, Type: elementType, Rest: false, Optional: e.Initial !== 'none' } as ParameterRecord);
+    });
+  }
+  return out;
+}
+
+function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, assumptions: readonly Assumption[]): boolean {
+    const sg = { ...sgIn, Parameters: expandTupleRests(sgIn.Parameters) } as SignatureRecord;
+    const tg = { ...tgIn, Parameters: expandTupleRests(tgIn.Parameters) } as SignatureRecord;
     // #sec-issignaturesubtype step 1: "If a.[[Untyped]] is true, return true."
     //
     // FIRST, before the arity and parameter steps, because an untyped signature

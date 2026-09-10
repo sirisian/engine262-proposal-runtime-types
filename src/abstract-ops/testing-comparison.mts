@@ -409,6 +409,13 @@ function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefine
       || !(x instanceof ObjectValue) || !(y instanceof ObjectValue)) {
     return undefined;
   }
+  // A callable is never a value-class instance, and RuntimeTypeOf of one now
+  // derives its signature (PLAN-callable Q1) - not a cost to pay on every
+  // `===` between two functions, nor one that can be paid at all while the
+  // realm is still being built and no execution context exists.
+  if (IsCallable(x) || IsCallable(y)) {
+    return undefined;
+  }
   const xt = RuntimeTypeOf(x);
   const yt = RuntimeTypeOf(y);
   if (xt.Kind !== 'nominal' || yt.Kind !== 'nominal' || xt.EnumMembers !== undefined) {

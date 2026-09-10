@@ -55,8 +55,11 @@ test('accessors and methods reflect', () => {
   expect(evaluated(`${A}const r = Reflect.getReflection.<Reflect.ObjectSetter>(o, "s"); String(r.kind) + "/" + String(r.name);`)).toBe('ObjectSetter/s');
   expect(evaluated(`${A}String(Reflect.getReflection.<Reflect.ObjectMethod>(o, "m").kind);`)).toBe('ObjectMethod');
   expect(evaluated(`${A}String(Reflect.getReflection.<Reflect.ObjectGetterReturn>(o, "g").kind);`)).toBe('ObjectGetterReturn');
-  // The reported type is a Type Object and reflects in turn.
-  expect(evaluated(`${A}const r = Reflect.getReflection.<Reflect.ObjectGetter>(o, "g"); String(Reflect.getReflection(r.type).kind);`)).toBe('object');
+  // The reported type is a Type Object and reflects in turn - as the
+  // FUNCTION type the shape clause names ("the getter's function type"). It
+  // reflected as an empty object while a callable inside a structure had no
+  // type at run time (PLAN-callable Q1).
+  expect(evaluated(`${A}const r = Reflect.getReflection.<Reflect.ObjectGetter>(o, "g"); String(Reflect.getReflection(r.type).kind);`)).toBe('function');
 });
 
 test('a member of the wrong kind is refused', () => {

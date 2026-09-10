@@ -21,7 +21,10 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf } from '../abstract-ops/runtime-types.mts';
+import type { OverloadSignature } from './overloads.mts';
+import { PublishedReturnTypeOf } from './check.mts';
+import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
@@ -44,7 +47,7 @@ import {
 } from './iteration-types.mts';
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
-import { CanonicalizeType, GetTypeObject, isTypeObject } from './intern.mts';
+import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
@@ -1255,19 +1258,10 @@ export function valueArguments(args: readonly Value[]): InferenceArguments {
   return {
     length: args.length,
     * typeOf(i) {
-      const v = Q(yield* referent(i));
-      const t = RuntimeTypeOf(v);
-      // A FUNCTION value's runtime type is an object record; its signature is
-      // read off its annotations (OverloadSignatureOf), as Reflect.typeOf reads
-      // it, so a callback's shape can bind - `K` in `f<K>(cb: () => K)`.
-      if (t.Kind === 'object' && v instanceof ObjectValue && IsCallable(v) && !isTypeObject(v)) {
-        const sig = EnsureCompletion(yield* OverloadSignatureOf(v));
-        if (sig.Type === 'normal') {
-          const one = sig.Value as { Parameters: readonly unknown[], ReturnType?: TypeRecord };
-          return { Kind: 'function', Signatures: [{ Parameters: one.Parameters, Return: one.ReturnType ?? null }] } as unknown as TypeRecord;
-        }
-      }
-      return t;
+      // A callable argument's type is its signature, as RuntimeTypeOf now
+      // answers at any depth (PLAN-callable Q1); the case this once carried by
+      // hand for a top-level callback is the same path.
+      return RuntimeTypeOf(Q(yield* referent(i)));
     },
     * literalTypeOf(i) {
       return literalTypeOf(Q(yield* referent(i)));
@@ -1737,6 +1731,19 @@ function* structuralBindingsOf(
     }
   }
   return into;
+}
+
+/** Whether _node_ contains a computed type (a builder application) at all. */
+export function containsComputedType(node: unknown): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  if ((node as { type?: string }).type === 'ComputedType') {
+    return true;
+  }
+  return Object.keys(node as object).some((key) => key !== 'parent' && key !== 'location' && (Array.isArray((node as Record<string, unknown>)[key])
+    ? ((node as Record<string, unknown[]>)[key]).some(containsComputedType)
+    : containsComputedType((node as Record<string, unknown>)[key])));
 }
 
 /** Whether _node_ contains a computed type (a builder application) whose arguments mention a parameter in _names_. */
@@ -2232,6 +2239,20 @@ function runtimeObjectType(value: ObjectValue, seen: Set<ObjectValue>): TypeReco
   if (carried) {
     return carried;
   }
+  // #sec-runtimetypeof, the callable step: "If value is callable and is not a
+  // Type Object, return the ~function~ Type Record whose [[Signatures]] are its
+  // declared signatures" - a step OF RuntimeTypeOf, so it holds at every depth
+  // (PLAN-callable Q1): `{ f: (x: uint8) => 1 }` is `{ f: (x: uint8) => … }`,
+  // an array of callbacks is an array of their signatures, and a generic call
+  // binds through a callable property as it binds through a callback argument.
+  // Walking a function's own enumerable properties instead answered `{}` for
+  // every callable inside a structure, and `{ f: fn }` was `{ f: {} }`. A
+  // CLASS type object is the one Type Object that is also a function and is
+  // asked what it IS (Reflect_typeOf's own predicate); an enum's binding and
+  // every other Type Object keep the path below.
+  if (IsCallable(value) && (!isTypeObject(value) || isClassTypeObject(value))) {
+    return SignatureTypeOf(value);
+  }
   // proposal-runtime-types #sec-runtimetypeof: an Array reports an ~array~ Type
   // Record, not the ~object~ Type Record describing its indices as properties.
   //
@@ -2280,6 +2301,130 @@ function runtimeObjectType(value: ObjectValue, seen: Set<ObjectValue>): TypeReco
 /** The `object` type: an object type with no required properties. */
 function makeObjectType(): TypeRecord {
   return { Kind: 'object', Properties: [], IndexSignatures: [] };
+}
+
+/**
+ * PLAN-callable Q2, Q4, Q5: a callable's ~function~ Type Record, derived on
+ * first demand and cached on the function object.
+ *
+ * Deriving a signature needs the evaluator - an annotation resolves through
+ * TypeNodeToTypeRecord - and RuntimeTypeOf is synchronous, so the derivation
+ * is driven to completion with skipDebugger, the engine's way of running an
+ * evaluator inside a synchronous operation (modules.mts, Composite.mts). It
+ * runs in the function's OWN scope: the running context's LexicalEnvironment
+ * is set to the function's [[Environment]] for the duration, so an annotation
+ * naming an alias local to the declaring scope resolves there and not at
+ * whatever site asked (V15), and OverloadSignatureOf pushes the frame the
+ * function captured (P34). It runs no user code: a formal whose annotation
+ * contains a computed type reads `any` (computedAsAny), and a derivation that
+ * fails - an annotation naming nothing in scope - yields the all-`any`
+ * signature marked [[Untyped]], the catch-all of #sec-issignaturesubtype step
+ * 1, so a callable whose types cannot be read is admitted rather than refused.
+ *
+ * A class constructor's return is the class - the self-instantiation for a
+ * generic declaration (`<T>(v: T) => Box.<T>`) - and a signature whose return
+ * was not written reports the return the checker PUBLISHED for it
+ * (#sec-inferred-return-types), both as Reflect.typeOf has always reported
+ * them; this is that construction, moved to where every reader shares it.
+ *
+ * One slot per function object (Q4): a closure's captured frame and
+ * environment are fixed at creation, so the answer does not vary by caller.
+ */
+export function SignatureTypeOf(value: ObjectValue): TypeRecord {
+  const slot = value as { SignatureTypeRecord?: TypeRecord };
+  if (slot.SignatureTypeRecord) {
+    return slot.SignatureTypeRecord;
+  }
+  // Re-entrancy: deriving a METHOD's signature asks its class frame through
+  // its HomeObject (classFrameOfMethod → RuntimeTypeOf of the home), and a
+  // method of an object literal has the literal as its home - whose
+  // properties include the method. The slot holds the untyped catch-all while
+  // the derivation runs, so the nested ask answers at once and the real
+  // signature replaces it on the way out.
+  slot.SignatureTypeRecord = { Kind: 'function', Signatures: [{ Parameters: [], Return: null, Untyped: true }] } as unknown as TypeRecord;
+  const record = deriveSignatureType(value);
+  slot.SignatureTypeRecord = record;
+  return record;
+}
+
+/** The all-`any` catch-all: the parameters the function takes, untyped, from the nodes alone. */
+function untypedSignatureOf(value: ObjectValue): TypeRecord {
+  const shape = skipDebugger(OverloadSignatureOf(value, false));
+  const completion = EnsureCompletion(shape as never);
+  const parameters = completion.Type === 'normal'
+    ? (completion.Value as unknown as OverloadSignature).Parameters
+    : [];
+  return { Kind: 'function', Signatures: [{ Parameters: parameters, Return: null, Untyped: true }] } as unknown as TypeRecord;
+}
+
+function deriveSignatureType(value: ObjectValue): TypeRecord {
+  const F = value as unknown as {
+    Environment?: unknown,
+    FormalParameters?: readonly ParseNode[],
+    ECMAScriptCode?: { parent?: object } | null,
+    OverloadFunctions?: unknown,
+    OverloadSignatures?: unknown,
+  };
+  // A built-in declares nothing here (its prelude signature, where it has one,
+  // is what SignaturesOf reads through [[OverloadSignatures]]), and while the
+  // realm is being built there is no execution context to resolve anything in:
+  // both take the syntactic, all-`any` shape below without evaluation.
+  const context = surroundingAgent.runningExecutionContext as { LexicalEnvironment?: unknown } | undefined;
+  const hasCode = F.ECMAScriptCode !== undefined && F.ECMAScriptCode !== null;
+  const overloaded = F.OverloadFunctions !== undefined || F.OverloadSignatures !== undefined;
+  // A class's DEFAULT constructor is a built-in with no code of its own; it
+  // takes the syntactic shape and still returns its class, below.
+  const classType = context !== undefined ? LookupClassType(value as unknown as object) : undefined;
+  if (context === undefined || (!hasCode && !overloaded && classType === undefined)) {
+    return untypedSignatureOf(value);
+  }
+  const savedLexical = context.LexicalEnvironment;
+  if (F.Environment !== undefined) {
+    context.LexicalEnvironment = F.Environment as never;
+  }
+  let declared: readonly OverloadSignature[] | null = null;
+  try {
+    const outcome = overloaded
+      ? skipDebugger(SignaturesOf(value))
+      : skipDebugger((function* one(): PlainEvaluator<readonly OverloadSignature[]> {
+        return [Q(yield* OverloadSignatureOf(value, hasCode, { computedAsAny: true }))];
+      }()));
+    const completion = EnsureCompletion(outcome as never);
+    declared = completion.Type === 'normal' ? (completion.Value as unknown as readonly OverloadSignature[]) : null;
+  } catch {
+    declared = null;
+  } finally {
+    context.LexicalEnvironment = savedLexical;
+  }
+  if (declared === null || declared.length === 0) {
+    return untypedSignatureOf(value);
+  }
+  // A class constructor returns the class; a generic declaration's, the class
+  // over its own parameters.
+  let constructedType: TypeRecord | undefined;
+  if (classType !== undefined && isTypeObject(classType)) {
+    constructedType = classType.TypeRecord;
+    const genericDeclaration = GenericClassDeclarationOf(value);
+    if (constructedType.Kind === 'nominal' && genericDeclaration !== undefined) {
+      const params = genericDeclaration.TypeParameters?.TypeParameterList ?? [];
+      constructedType = CanonicalizeType({
+        ...constructedType,
+        Arguments: params.map((q) => ({ Kind: 'parameter', Name: (q as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '', Declaration: q } as unknown as TypeRecord)),
+      } as TypeRecord);
+    }
+  }
+  const published = F.ECMAScriptCode?.parent ? PublishedReturnTypeOf(F.ECMAScriptCode.parent) : undefined;
+  const Signatures = declared.map((o) => ({
+    Parameters: o.Parameters,
+    Return: constructedType ?? o.ReturnType ?? (declared!.length === 1 ? published ?? null : null),
+    // A class constructor's signature is not the catch-all: its return is
+    // determined (the class) whether or not it wrote a parameter type.
+    ...(o.Untyped && constructedType === undefined ? { Untyped: true } : {}),
+    ...((o as { TypeParameters?: readonly unknown[] }).TypeParameters?.length
+      ? { TypeParameters: (o as { TypeParameters?: readonly unknown[] }).TypeParameters }
+      : {}),
+  }));
+  return { Kind: 'function', Signatures } as unknown as TypeRecord;
 }
 
 /**
@@ -3616,10 +3761,44 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       }
       return true;
     }
-    case 'function':
-      // Signature membership needs typed functions; callability decides
-      // until then.
-      return IsCallable(value);
+    case 'function': {
+      // #sec-isoftype, the ~function~ case: "the check confirms only that the
+      // value is callable and that the signature it declares is assignable to
+      // the target, which admits `any`" - the declared signature being what
+      // RuntimeTypeOf now answers for a callable, and the admission of an
+      // untyped one being #sec-issignaturesubtype step 1 (an [[Untyped]]
+      // signature is the catch-all). Callability alone admitted a
+      // `(x: string) => string` at a `(x: uint8) => uint8` slot (PLAN-callable
+      // P12, P27); the checker refused the same where it could see it.
+      if (!IsCallable(value)) {
+        return false;
+      }
+      const declared = RuntimeTypeOf(value);
+      if (IsAssignable(declared, t)) {
+        return true;
+      }
+      // #sec-this-adoption at the boundary: a NON-ARROW function whose signature
+      // declares no `this` adopts the target's [[ThisType]] - an interface's
+      // method member carries `this`, and a plain function stored there IS
+      // called with that `this`. The checker reads the same way (a method
+      // literal, a `function` expression, or a function reference at the
+      // member all pass; an arrow is refused, having no `this` of its own).
+      // Read here rather than stamped at creation, because the checker adopts
+      // for a reference as readily as for a literal.
+      if (declared.Kind === 'function' && (value as { ThisMode?: string }).ThisMode !== 'lexical') {
+        const targetSignatures = (t as { Signatures: readonly { ThisType?: TypeRecord }[] }).Signatures;
+        const wantedThis = targetSignatures.find((g) => g.ThisType !== undefined)?.ThisType;
+        if (wantedThis !== undefined) {
+          const adopted = {
+            ...declared,
+            Signatures: (declared as { Signatures: readonly { ThisType?: TypeRecord }[] }).Signatures
+              .map((g) => (g.ThisType === undefined ? { ...g, ThisType: wantedThis } : g)),
+          } as TypeRecord;
+          return IsAssignable(adopted, t);
+        }
+      }
+      return false;
+    }
     default:
       return false;
   }
