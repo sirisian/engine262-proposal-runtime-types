@@ -1383,6 +1383,42 @@ export function ImportedBuilderNode(name: string): ParseNode | undefined {
 }
 
 /** A module's TYPE declarations by local name - what an artifact publishes. */
+/**
+ * A module's type declarations, plus its top-level CLASSES.
+ *
+ * A class is not in the check frame's `aliases` map: its name is hoisted into a
+ * local table of class nodes and its type is published against the node, so
+ * neither module-level map held it. The effect ran a long way - a module
+ * exporting a class contributed nothing to an importer's imported types, the
+ * import-aware check was gated on that being non-empty and so never ran, an
+ * annotation naming the import did not resolve, and the alias built over it was
+ * deleted by the rule that stops an unresolved alias standing as an empty object
+ * type. Every step was right on its own.
+ *
+ * Read off the declarations here rather than threaded through the frame, because
+ * what a class's type IS is already published and this only needs to say which
+ * name it answers to.
+ */
+function withTopLevelClasses(module: ParseNode.Module, aliases: Map<string, unknown>): Map<string, unknown> {
+  for (const item of module.ModuleBody?.ModuleItemList ?? []) {
+    const node = item as { type?: string, Declaration?: unknown, ClassDeclaration?: unknown };
+    // An export wraps its declaration in `Declaration` or `ClassDeclaration`,
+    // not in a field named after itself.
+    const declaration = (node.type === 'ExportDeclaration'
+      ? (node.ClassDeclaration ?? node.Declaration)
+      : node) as { type?: string, BindingIdentifier?: { name?: string } | null } | undefined;
+    if (declaration?.type !== 'ClassDeclaration') {
+      continue;
+    }
+    const name = declaration.BindingIdentifier?.name;
+    const published = PublishedClassTypeOf(declaration as unknown as object);
+    if (name && published && !aliases.has(name)) {
+      aliases.set(name, published);
+    }
+  }
+  return aliases;
+}
+
 export function ExportedAliasesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
   return moduleExportedAliases.get(module as unknown as object);
 }
@@ -1417,7 +1453,8 @@ export function CheckModule(module: ParseNode.Module): ObjectValue[] {
   // contract wants the first, and an expansion artifact publishing a module's
   // types wants the second. Merging them would make `ExportedTypesOf` mean two
   // things depending on which name you asked about.
-  moduleExportedAliases.set(module as unknown as object, new Map(session.frame.aliases));
+  moduleExportedAliases.set(module as unknown as object,
+    withTopLevelClasses(module, new Map(session.frame.aliases)));
   // The same list, for the declarations an importer's contract lookup needs.
   // `export function f() {}` puts the declaration in [[HoistableDeclaration]];
   // [[Declaration]] is null for that form.

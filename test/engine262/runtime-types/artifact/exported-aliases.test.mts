@@ -39,10 +39,17 @@ test('a generic alias is recorded too', () => {
   expect(aliasesOf('type Box<T> = { v: T };\nexport { Box };\n')).toEqual(['Box']);
 });
 
-test('a class is NOT here, because its binding is the constructor', () => {
-  // `U === (type U)`, so a class's type comes from the value binding. A consumer
-  // of this map has to consult both, which is what the producer does.
-  expect(aliasesOf('export class U { a: uint8; }\n')).toEqual([]);
+test('a class is here too, exported or not', () => {
+  // It was in NEITHER module-level map: a class's name is hoisted into a local
+  // table of class nodes and its type is published against the node, so nothing
+  // carried it out. That ran a long way - a module exporting a class contributed
+  // nothing to an importer, the import-aware check is gated on that being
+  // non-empty and so never ran, an annotation naming the import did not resolve,
+  // and the alias built over it was deleted by the rule that stops an unresolved
+  // alias standing as an empty object type. Every step was right on its own.
+  expect(aliasesOf('export class U { a: uint8; }\n')).toEqual(['U']);
+  expect(aliasesOf('class U { a: uint8; }\n')).toEqual(['U']);
+  expect(aliasesOf('export class U { a: uint8; }\ntype P = { a: uint8 };\n')).toEqual(['P', 'U']);
 });
 
 // KNOWN GAP, pinned. A type that REFERENCES AN IMPORTED NAME is dropped from the
