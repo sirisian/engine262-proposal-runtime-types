@@ -25,7 +25,7 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
-import { currentContextualType } from '../type-system/runtime.mts';
+import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
 import {
@@ -4300,9 +4300,14 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     // #sec-overloading-on-return-type: the contextual type filters what ranking
     // left tied. It is read here rather than passed down from the binding,
     // because a binding boundary sees the RESULT - by then the overload has
-    // been chosen and the wrong one may already have run.
+    // been chosen and the wrong one may already have run. It is the CALL's
+    // own position's type, handed over by EvaluateCall and taken at this
+    // entry (TakeBodyContext) - read off the stack it was whatever enclosing
+    // position had pushed, so `f(1);` as a statement inside `function g():
+    // string` selected by `string`.
+    const callContext = TakeBodyContext();
     const signatures = Q(yield* SignaturesOf(overloaded));
-    const resolution = resolveOverload(signatures, args, currentContextualType());
+    const resolution = resolveOverload(signatures, args, callContext);
     if (resolution.Kind === 'none') {
       return Throw.TypeError('no overload of $1 matches these arguments', name);
     }

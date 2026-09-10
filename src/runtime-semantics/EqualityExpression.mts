@@ -1,6 +1,7 @@
 import { Q, X } from '../completion.mts';
 import { AdoptLiteralOperand, DecayEnumOperands } from '../type-system/arithmetic.mts';
 import { vectorComparison } from '../type-system/vector-ops.mts';
+import { contextualTypeFor } from '../type-system/runtime.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Value, ObjectValue } from '../value.mts';
 import { OutOfRange } from '../utils/language.mts';
@@ -25,7 +26,8 @@ import {
 //     EqualityExpression `!=` RelationalExpression
 //     EqualityExpression `===` RelationalExpression
 //     EqualityExpression `!==` RelationalExpression
-export function* Evaluate_EqualityExpression({ EqualityExpression, operator, RelationalExpression }: ParseNode.EqualityExpression): ValueEvaluator<BooleanValue> {
+export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression): ValueEvaluator<BooleanValue> {
+  const { EqualityExpression, operator, RelationalExpression } = node;
   // 1. Let lref be the result of evaluating EqualityExpression.
   const lref = Q(yield* Evaluate(EqualityExpression));
   // 2. Let lval be ? GetValue(lref).
@@ -50,7 +52,7 @@ export function* Evaluate_EqualityExpression({ EqualityExpression, operator, Rel
   if (surroundingAgent.feature('runtime-types')
       && (lval.type === 'Vector' || rval.type === 'Vector')
       && (operator === '==' || operator === '!=')) {
-    return Q(yield* vectorComparison(lval, operator, rval)) as never;
+    return Q(yield* vectorComparison(lval, operator, rval, contextualTypeFor(node as object))) as never;
   }
   if (surroundingAgent.feature('runtime-types')
       && lval instanceof ObjectValue

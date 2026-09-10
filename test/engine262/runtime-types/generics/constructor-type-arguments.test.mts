@@ -100,6 +100,23 @@ test('a position\'s type reaches exactly the expression at that position', () =>
   expect(evaluated(`${ALIAS} ${caught('const bs: [].<Box.<uint8>> = [new C(1)]; r = String(Reflect.typeOf(bs[0]));')}`)).toBe('Box.<uint.<8>>');
 });
 
+test('an overload selected by return type reads the call\'s own position, not an enclosing one', () => {
+  // The dispatcher is a built-in and read the stack from inside the callee,
+  // so a bare `f(1);` inside `function g(): string` selected by g's return.
+  // It now takes the CALL's position: selection by the binding still works,
+  // and a call in no position is #sec-overloading-on-return-type's ambiguity.
+  const F = 'function f(x: uint8): string { return "s"; } function f(x: uint8): uint32 { return 7; } ';
+  expect(evaluated(`${F} const a: string = f(1); const b: uint32 = f(1); String(a) + " " + String(b);`)).toBe('s 7');
+  expect(evaluated(`${F} function g(): uint32 { const s: string = f(1); return f(1); } String(g());`)).toBe('7');
+  // ...and a call in NO position is ambiguous - refused, statically where the
+  // checker sees the statement and at run time where it does not - rather than
+  // selected by an enclosing position it is not at.
+  expect(ok(`${F} function g(): uint32 { f(1); return 1; } String(g());`)).toBe(false);
+  expect(ok(`${F} f(1);`)).toBe(false);
+  // A concise arrow body's expression is the position.
+  expect(evaluated('function f(): uint32 { return 1; } function f(): string { return "two"; } const r = (): string => f(); String(r());')).toBe('two');
+});
+
 test('C5: a call binds from its context before its arguments, both sides, and a seed the argument contradicts is dropped', () => {
   const F = 'function f<T>(x: T): T { return x; } ';
   expect(evaluated(`${F} const r: uint8 = f(1); String(Reflect.typeOf(r));`)).toBe('uint.<8>');
@@ -150,6 +167,10 @@ test('B4: a parameter reached through a shape binds structurally, on both sides'
   expect(evaluated('function g<T>(cb: (x: T) => void): string { return String(T); } g((x: uint8) => {});')).toBe('uint.<8>');
   expect(evaluated('function g<T>(x: [].<T> | Set.<T>): string { return String(T); } const s: Set.<uint8> = new Set(); g(s);')).toBe('uint.<8>');
   expect(evaluated('function g<T>(i: Iterable.<T>): string { return String(T); } const a: [].<uint16> = [1]; g(a);')).toBe('uint.<16>');
+  // An object-typed formal binds through its properties, on both sides.
+  expect(evaluated('function g<T>(o: { a: T }): string { return String(T); } g({ a: (1 := uint8) });')).toBe('uint.<8>');
+  expectStaticTypeError('function g<T>(o: { a: T }): T { return o.a; } const r: string = g({ a: (1 := uint8) });');
+  expect(evaluated('class W<T> { constructor(o: { v: T }) {} } String(Reflect.typeOf(new W({ v: (1 := uint8) })));')).toBe('W.<uint.<8>>');
   // REACHED but UNTYPED - an unannotated callback - is `any` ("unknown here"),
   // which is a different claim from "reached by nothing" (the error above).
   expect(evaluated('function g<T>(cb: (x: T) => void): string { return String(T); } g((x) => {});')).toBe('any');

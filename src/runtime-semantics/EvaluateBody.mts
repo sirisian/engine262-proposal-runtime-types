@@ -49,6 +49,10 @@ export function Evaluate_AnyFunctionBody({ FunctionStatementList }: ParseNode.Fu
 // FunctionBody : FunctionStatementList
 export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.FunctionBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
+  // proposal-runtime-types (PLAN-v3 §10): the call's context, read FIRST -
+  // before FunctionDeclarationInstantiation, whose parameter binding calls a
+  // list iterator's `next`, a built-in, and any built-in entry resets the slot.
+  const callContext = surroundingAgent.feature('runtime-types') ? TakeBodyContext() : undefined;
   Q(yield* FunctionDeclarationInstantiation(functionObject, argumentsList));
   // proposal-runtime-types #sec-generics: a body declared inside a
   // specialization sees that specialization's bindings, whether or not
@@ -66,8 +70,6 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
   // parameters needs the boundary whether or not anything in it is annotated;
   // one with neither is unaffected, since the operations below then find
   // nothing to do.
-  // Read FIRST, before anything in this body could set another.
-  const callContext = surroundingAgent.feature('runtime-types') ? TakeBodyContext() : undefined;
   if (surroundingAgent.feature('runtime-types') && functionObject.ECMAScriptCode
       && (functionHasAnnotations(functionObject) || functionTypeParameters(functionObject as never) !== null)) {
     // Capability B: a generic function infers its type parameters from the call
@@ -185,7 +187,9 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
       // Tagged with the BODY, which no expression is, so only a `return`
       // (Evaluate_ReturnStatement re-pushes it for its operand) and the
       // concise body's expression read it as their own position.
-      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null, functionObject.ECMAScriptCode as object);
+      // A concise body's EXPRESSION is the position (its value is what the
+      // function returns), so the push is tagged with it.
+      pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null, ((ExpressionBody as { AssignmentExpression?: object }).AssignmentExpression ?? ExpressionBody) as object);
       let result;
       try {
         result = EnsureCompletion(yield* Evaluate(ExpressionBody));

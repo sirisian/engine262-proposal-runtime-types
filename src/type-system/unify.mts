@@ -199,6 +199,26 @@ export function unifyTypeParameters(
         }
       }
     }
+    // An OBJECT parameter against an object argument, or a nominal whose
+    // structure is one: each declared property binds against the argument's
+    // property of that key, so `f<T>(o: { a: T })` binds T from `{ a: (1 :=
+    // uint8) }`. (An iteration interface was tried first, above.)
+    if (param.Kind === 'object') {
+      const pProps = (param as { Properties?: readonly { key: string, type?: TypeRecord }[] }).Properties ?? [];
+      const aShape = arg.Kind === 'object' ? arg : (arg.Kind === 'nominal' ? (arg as { Structure?: TypeRecord }).Structure : undefined);
+      const aProps = aShape && aShape.Kind === 'object'
+        ? (aShape as { Properties?: readonly { key: string, type?: TypeRecord }[] }).Properties
+        : undefined;
+      if (aProps) {
+        for (const pp of pProps) {
+          const ap = aProps.find((q) => q.key === pp.key);
+          if (pp.type && ap?.type) {
+            match(pp.type, ap.type);
+          }
+        }
+        return;
+      }
+    }
     // A UNION parameter: the arm whose KIND the argument has binds, tried
     // before assignability (an arm still mentioning an unbound variable admits
     // almost anything); then the arm the argument is assignable to; then, as

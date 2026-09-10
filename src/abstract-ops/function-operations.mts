@@ -880,6 +880,12 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
     const handed = TakePendingCalleeContext();
     if (thisArgument === 'uninitialized' && (F as { IsClassConstructor?: unknown }).IsClassConstructor === Value.true) {
       SetPendingCalleeContext(handed);
+    } else {
+      // A built-in that IS a position's consumer - the overload dispatcher,
+      // which selects by the call's contextual type - reads it from the body
+      // slot at its entry, as an ECMAScript function's body does; any other
+      // built-in leaves it there and the next function entry overwrites it.
+      SetBodyContext(handed);
     }
   }
   const calleeContext = new ExecutionContext();

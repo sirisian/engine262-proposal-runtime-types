@@ -8,7 +8,6 @@ import { Throw } from '../host-defined/error-messages.mts';
 import type { TypeRecord } from './records.mts';
 import { displayType } from './records.mts';
 import { SameType } from './relations.mts';
-import { currentContextualType } from './runtime.mts';
 import { CanonicalizeType } from './intern.mts';
 import {
   RequireType, CreateBuiltinFunction, ApplyStringOrNumericBinaryOperator, CheckedConvertValue,
@@ -630,6 +629,7 @@ export function* vectorComparison(
   lval: Value,
   operator: string,
   rval: Value,
+  expected: TypeRecord | undefined = undefined,
 ): PlainEvaluator<Value> {
   const leftShape = lval.type === 'Vector' ? vectorShape(lval as VectorValue) : null;
   const rightShape = rval.type === 'Vector' ? vectorShape(rval as VectorValue) : null;
@@ -652,8 +652,11 @@ export function* vectorComparison(
   // The three forms are the compact mask, the wide mask, and the compared
   // vector type itself. The comparison computes the COMPACT one and the
   // conversion reaches the other two, so the selection here is only whether a
-  // contextual type exists - not which of three to build.
-  const expected = currentContextualType();
+  // contextual type exists - not which of three to build. The type is the
+  // COMPARISON's own position's, read by the operator evaluation for its node
+  // (contextualTypeFor) and passed in; read off the stack from here it was
+  // whatever enclosing position had pushed, which is the leaky reading the
+  // position-precise stack replaced.
   if (!expected) {
     // The three forms NAMED. The clause defines them - the wide mask, the
     // compact mask, and the compared vector type itself - and the remedy is to
