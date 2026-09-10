@@ -112,3 +112,24 @@ test('every one-parameter overload is a converting constructor', () => {
     + ' constructor(a: uint32, b: uint32) { this.v = 2; } }'
     + ' let t: P = (1 := uint32); String(Number(t.v));')).toBe('1');
 });
+
+test('an overload set reflects one signature per constructor', () => {
+  // `#table-reflection-contexts` gives a `ClassMethod` a `signatures` List "in
+  // declaration order, of length 1 where the method is not overloaded", and
+  // `#sec-constructor-overloading` says a constructor's has one entry per
+  // declared constructor. Pinned because that sentence was added to the
+  // specification by this work and nothing tested it.
+  //
+  // Read from the FUNCTION TYPE RECORD, which is where `signatures` lives. A
+  // DECORATOR CONTEXT also has a `signatures` and is a different thing: it
+  // describes the one declaration it decorates, so it is 1 however many arms the
+  // member has. Reading that one instead is what made this look broken three
+  // times over while it was working.
+  expect(evaluated('class A { constructor(x: uint8) {} }'
+    + ' String(Reflect.getReflection(Reflect.typeOf(A)).signatures.length);')).toBe('1');
+  expect(evaluated('class A { constructor(x: uint8) {} constructor(x: string) {} }'
+    + ' String(Reflect.getReflection(Reflect.typeOf(A)).signatures.length);')).toBe('2');
+  // The same shape for a method, so the constructor is not a special case.
+  expect(evaluated('class A { m(x: uint8) {} m(x: string) {} } const a = new A();'
+    + ' String(Reflect.getReflection(Reflect.typeOf(a.m)).signatures.length);')).toBe('2');
+});
