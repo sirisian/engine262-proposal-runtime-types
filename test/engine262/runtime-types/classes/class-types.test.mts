@@ -216,10 +216,10 @@ test('the instance side is unchanged by the extraction', () => {
 test('what the static side does not claim', () => {
   // Private and computed statics contribute nothing, as they do for instances.
   expect(evaluated('class C { static #p: uint8 = 1; static v: uint8 = 2; } String(typeof C);')).toBe('function');
-  // INHERITED statics are out of scope: the instance path's base merge is
-  // written against instance shapes and a nominal Base, so pointing it at
-  // statics is a separate change. This pins the current behaviour so that
-  // change is deliberate.
+  // INHERITED statics WERE out of scope, and are no longer: the merge reads the
+  // base's CLASS-OBJECT type where the instance path reads its instance type,
+  // which is the one call that had to differ. The value still flows, which is
+  // what this row asserted while the type did not.
   expect(evaluated('class B { static b: uint8 = 1; } class D extends B { } String(D.b);')).toBe('1');
 });
 
@@ -269,4 +269,47 @@ test('the guard still does the job it was written for', () => {
   // A heritage cycle still TERMINATES - it is a ReferenceError at run time, as
   // it is in ECMAScript, rather than hanging the checker.
   expectThrown('class X extends Y {} class Y extends X {}');
+});
+
+// ---------------------------------------------------------------------------
+// A SUBCLASS INHERITS ITS BASE'S STATICS, AND THE TYPE SAYS SO.
+//
+// `D.b` is `1` at run time for a `class D extends B` with `static b: uint8` on
+// B, and the class-object type did not carry it - so every rule that reached
+// `B.b` missed `D.b`.
+//
+// The merge reads the base's CLASS-OBJECT type. The instance path's merge
+// resolves `classTypeOf(baseName)`, which answers the instance shape and would
+// be the wrong thing to merge here; that one call is the whole difference.
+//
+// The recursion was already guarded: the memo is set to *null* before the walk,
+// so a heritage cycle answers nothing rather than hanging. An earlier draft of
+// the plan for this believed there was no guard and put the recursion first -
+// measuring it moved the risk from moderate to low.
+// ---------------------------------------------------------------------------
+
+test('a subclass inherits its base statics, with their types', () => {
+  const B = 'class B { static b: uint8 = 1; } ';
+  expectStatic(`${B} class D extends B { } let s: string = D.b;`);
+  expectStatic(`${B} class D extends B { } D.b = "s";`);
+  expect(evaluated(`${B} class D extends B { } let u: uint8 = D.b; String(u);`)).toBe('1');
+  // Three levels: the grandparent's static is inherited too.
+  expectStatic('class A { static a: uint8 = 1; } class B2 extends A { } class C2 extends B2 { } let s: string = C2.a;');
+  expect(evaluated('class A { static a: uint8 = 1; } class B3 extends A { } class C3 extends B3 { } String(C3.a);')).toBe('1');
+});
+
+test('an override wins, as the prototype chain does', () => {
+  const O = 'class B4 { static b: uint8 = 1; } class D4 extends B4 { static b: uint16 = 2; } ';
+  expectStatic(`${O} let s: string = D4.b;`);
+  expect(evaluated(`${O} let u: uint16 = D4.b; String(u);`)).toBe('2');
+});
+
+test('what the static merge does not claim', () => {
+  // A heritage clause naming no class contributes nothing rather than guessing.
+  expect(evaluated('function mixin(x) { return x; } class B5 { static b: uint8 = 1; } class D5 extends mixin(B5) { } "ok";')).toBe('ok');
+  // `dynamic` does NOT inherit: a typed subclass of a dynamic base is sealed,
+  // because the derivation reads the class's OWN declaration.
+  expectStatic('dynamic class B6 { v: uint8 = 0; } class D6 extends B6 { w: uint8 = 1; } const d = new D6(); d.nope = 1;');
+  // The INSTANCE path is a separate merge and is untouched.
+  expectStatic('class B7 { v: uint8 = 0; } class D7 extends B7 { } const d = new D7(); let s: string = d.v;');
 });

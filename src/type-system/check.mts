@@ -5974,8 +5974,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const acc = classMemberWalk(node, 'static');
     classMemberFolds(acc);
     const { Properties } = acc;
-    const built = Properties.length > 0
-      ? ({ Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known)
+    // INHERITED STATICS. A subclass inherits its base's statics at run time -
+    // `D.b` is `1` for a `class D extends B` with `static b` on B - and the
+    // class-object type did not carry them, so every rule that reached `B.b`
+    // missed `D.b`.
+    //
+    // The base's CLASS-OBJECT type, not its instance type: the instance path's
+    // merge resolves `classTypeOf(baseName)`, which answers the instance shape
+    // and would be the wrong thing to merge here. The recursion is already
+    // guarded - the memo is set to *null* before the walk, so a heritage cycle
+    // answers nothing rather than hanging, and terminates as a ReferenceError at
+    // run time exactly as ECMAScript says.
+    //
+    // An unknown base contributes nothing rather than guessing, which is what
+    // the instance path says of a heritage clause naming no class.
+    const heritage = ((node as unknown as {
+      ClassTail?: { ClassHeritage?: ParseNode | null } | null,
+    }).ClassTail)?.ClassHeritage;
+    const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
+      ? (heritage as { name: string }).name
+      : null;
+    const baseObject = baseName ? classObjectTypeOf(baseName) : null;
+    const baseProperties = baseObject && baseObject.Kind === 'object'
+      ? (baseObject as unknown as { Properties: readonly { key: string }[] }).Properties
+      : null;
+    // An OVERRIDE wins, which is what the prototype chain does at run time - the
+    // same rule and the same order the instance merge uses.
+    const merged = baseProperties
+      ? [...baseProperties.filter((p) => !Properties.some((own) => own.key === p.key)), ...Properties]
+      : Properties;
+    const built = merged.length > 0
+      ? ({ Kind: 'object', Properties: merged, IndexSignatures: [] } as unknown as Known)
       : null;
     classObjectTypeMemo.set(node, built);
     return built;
