@@ -1,5 +1,103 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`a module console entry echoes its last value, awaiting or not > export {}; 42; 1`] = `
+{
+  "description": "42",
+  "type": "number",
+  "value": 42,
+}
+`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; await 0; "hello"; 1`] = `
+{
+  "type": "string",
+  "value": "hello",
+}
+`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; await 0; 42; 1`] = `
+{
+  "description": "42",
+  "type": "number",
+  "value": 42,
+}
+`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; const q = 1; 1`] = `
+{
+  "className": "Module",
+  "description": "Module",
+  "objectId": "default:1",
+  "preview": {
+    "description": "Module",
+    "overflow": false,
+    "properties": [
+      {
+        "name": "Symbol(Symbol.toStringTag)",
+        "type": "string",
+        "value": "Module",
+      },
+    ],
+    "type": "object",
+  },
+  "type": "object",
+}
+`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; const q = 1; accessor properties (prototype) 1`] = `""`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; const q = 1; accessor properties 1`] = `[]`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; const q = 1; non-indexed owned properties (private) 1`] = `""`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; const q = 1; non-indexed owned properties 1`] = `
+[
+  {
+    "configurable": false,
+    "enumerable": false,
+    "isOwn": true,
+    "name": "Symbol(Symbol.toStringTag)",
+    "symbol": {
+      "description": "Symbol(Symbol.toStringTag)",
+      "objectId": "default:2",
+      "type": "symbol",
+    },
+    "value": {
+      "type": "string",
+      "value": "Module",
+    },
+    "writable": false,
+  },
+]
+`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; const q = 1; non-indexed properties (prototype) 1`] = `""`;
+
+exports[`a module console entry echoes its last value, awaiting or not > export {}; const q = 1; properties 1`] = `
+{
+  "internalProperties": [],
+  "privateProperties": [],
+  "result": [
+    {
+      "configurable": false,
+      "enumerable": false,
+      "isOwn": true,
+      "name": "Symbol(Symbol.toStringTag)",
+      "symbol": {
+        "description": "Symbol(Symbol.toStringTag)",
+        "objectId": "default:2",
+        "type": "symbol",
+      },
+      "value": {
+        "type": "string",
+        "value": "Module",
+      },
+      "writable": false,
+    },
+  ],
+}
+`;
+
 exports[`array > [,,,] 1`] = `
 {
   "className": "Array",

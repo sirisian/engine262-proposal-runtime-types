@@ -995,7 +995,10 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
       // a. Assert: capability is a PromiseCapability Record.
       Assert(capability instanceof PromiseCapabilityRecord);
       // b. Perform ! AsyncBlockStart(capability, module.[[ECMAScriptCode]], moduleCxt).
-      X(yield* AsyncBlockStart(capability, module.ECMAScriptCode, moduleContext));
+      // The module is passed so its last value can be stashed there: an awaiting
+      // module never reaches the synchronous stash above, and `AsyncBlockStart`
+      // discards the body's value on its normal-completion arm.
+      X(yield* AsyncBlockStart(capability, module.ECMAScriptCode, moduleContext, module));
       // c. Return.
       return Value.undefined;
     }

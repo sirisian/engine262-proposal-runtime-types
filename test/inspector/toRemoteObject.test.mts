@@ -36,6 +36,45 @@ test('primitive values', async () => {
   }
 });
 
+test('a module console entry echoes its last value, awaiting or not', async () => {
+  // proposal-runtime-types: the console echoes a module entry's stashed last
+  // value, falling back to the namespace only where there is none. That stash
+  // was taken on `ExecuteModule`'s SYNCHRONOUS branch only, so a module with
+  // TOP-LEVEL AWAIT showed its namespace where the developer wanted the value.
+  //
+  // TWO defects, and neither is visible alone:
+  //   1. `AsyncBlockStart` DISCARDS the body's value - a module body has no
+  //      `return`, so it takes the normal-completion arm and resolves with
+  //      *undefined*. The value had to be taken there, where `result` is in hand;
+  //      wrapping the capability could not have recovered it.
+  //   2. `evaluateModule` called `finish` with the evaluation promise
+  //      IMMEDIATELY, so the inspector read a value nothing had set yet.
+  //      Deferring it must be gated on `HasTLA` - `Evaluate` answers a promise
+  //      for EVERY module, and deferring them all changes when a non-awaiting
+  //      module's throw is reported.
+  //
+  // The entries must begin with `export {}` or an import: `DeclaresModuleSyntax`
+  // is /^[\s;]*(import|export)\s/m, so `await 0; 42;` alone parses as a SCRIPT
+  // and throws for a reason that has nothing to do with this.
+  const agent = new Agent({ features: ['runtime-types'] });
+  setSurroundingAgent(agent);
+  const inspector = new TestInspector();
+  const realm = new ManagedRealm();
+  inspector.attachAgent(agent, [realm]);
+
+  for (const value of [
+    // The control: no await, already worked.
+    'export {}; 42;',
+    // The defect: these showed `Module`.
+    'export {}; await 0; 42;',
+    'export {}; await 0; "hello";',
+    // A declaration leaves no value, so the namespace is still right.
+    'export {}; const q = 1;',
+  ]) {
+    await snapshotObject(inspector, value);
+  }
+});
+
 test('runtime-types extended numeric values', async () => {
   // proposal-runtime-types: a `complex64` or `decimal128` used to fall through
   // to the ordinary object inspector and describe as a bare `Object`, while the
