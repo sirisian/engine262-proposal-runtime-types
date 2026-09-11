@@ -1,5 +1,6 @@
-import { SerializeTypeTable, type TypeTable } from './artifact.mts';
+import { SerializeTypeTable, DeserializeTypeTable, type TypeTable } from './artifact.mts';
 import { ModuleGraphInventory, type GraphEntry } from './module-graph.mts';
+import { GraphKey } from './graph-key.mts';
 import { ExportedTypesOf, ExportedAliasesOf } from './check.mts';
 
 /**
@@ -37,6 +38,16 @@ export interface Artifact {
    * stale hash and a higher format version already take.
    */
   readonly semantics: string;
+  /**
+   * The key: SHA-256 over the canonical encoding of `graph`.
+   *
+   * Carried rather than left to a host, because the clause fixes what an
+   * artifact is keyed BY and was silent on what the key is computed FROM. Two
+   * producers serializing one inventory differently get different keys, and a
+   * consumer then reads every current artifact as stale - quietly, so the
+   * symptom is that artifacts never help.
+   */
+  readonly key: string;
 }
 
 /**
@@ -102,9 +113,49 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
   // and that is left to propagate. It names the leaf, and an author who wrote one
   // into a public surface needs to know rather than to receive nothing silently.
   const table = SerializeTypeTable(roots);
+  const graph = ModuleGraphInventory(module);
   return {
     table,
-    graph: ModuleGraphInventory(module),
+    graph,
     semantics: SEMANTICS_ID,
+    key: GraphKey(graph),
   };
+}
+
+/**
+ * Read an artifact: the consumer #sec-expansion-artifact describes.
+ *
+ *   "A consumer verifies the hash and reads the types out of it rather than
+ *   evaluating them; on a mismatch it evaluates, and determinism is what makes
+ *   the two agree."
+ *
+ * Returns the exported types by name, or *undefined* where the artifact cannot
+ * be read - a version this reader does not know, a key that does not match the
+ * graph the artifact carries, a semantics identifier it does not recognize, or a
+ * nominal name it cannot resolve. DECLINING rather than throwing is what keeps
+ * "an optimization and never a semantics" true: a caller that gets nothing
+ * evaluates, which is always correct.
+ *
+ * A HOST API, beside `ProduceArtifact`, rather than a reflective intrinsic. The
+ * two halves of one mechanism belong in one world, and a program cannot reach
+ * this at all - which is a stronger statement than nothing in the engine
+ * consulting it.
+ */
+export function ReadArtifact(
+  artifact: Artifact,
+  resolveNominal: (name: { name?: string, source?: string }) => object | undefined,
+): Map<string, unknown> | undefined {
+  if (artifact.semantics !== SEMANTICS_ID) {
+    // Types computed under other rules. The graph could be identical, so the key
+    // cannot catch this and the format version does not either: that says how the
+    // bytes are laid out, not what the types mean.
+    return undefined;
+  }
+  if (artifact.key !== GraphKey(artifact.graph)) {
+    // The artifact does not describe the graph it carries. Nothing here can be
+    // trusted, including the graph, so there is nothing to compare against a
+    // caller's own sources.
+    return undefined;
+  }
+  return DeserializeTypeTable(artifact.table, resolveNominal);
 }
