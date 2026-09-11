@@ -203,6 +203,32 @@ function* Array_from([items = Value.undefined, mapper = Value.undefined, thisArg
 function* Array_fromAsync([items = Value.undefined, mapper = Value.undefined, thisArg = Value.undefined]: Arguments, { thisValue }: FunctionCallContext) {
   const constructor = thisValue;
   let mapping = false;
+  // STAMPED FROM THE SOURCE, WITH THE PROMISE UNWRAPPED.
+  // `#sec-overloading-of-the-standard-library`: `Array.fromAsync` AWAITS each
+  // element, so "a collection of `Promise.<T, E>` yields `[].<T>` and NOT an
+  // array of promises". The source's element type therefore cannot be used as a
+  // stamp directly - an array of promises reports
+  // `[].<Promise.<uint.<8>, any>>`, and what the result holds is the `uint.<8>`
+  // inside it. Stamping the un-decomposed element would be CONFIDENTLY wrong,
+  // which is worse than leaving it unstamped.
+  //
+  // As with `Array.from`: not with a mapping callback, whose U the spec gives
+  // the result and which is known only where the callback's return type is.
+  const stampFromSource = (out: Value) => {
+    if (mapping) {
+      return;
+    }
+    const element = (items as unknown as { TypedElement?: TypeRecord }).TypedElement;
+    if (!element || !(out instanceof ObjectValue)) {
+      return;
+    }
+    const awaited = (element as unknown as { LibraryName?: string, Arguments?: readonly TypeRecord[] });
+    const resolved = awaited.LibraryName === 'Promise' && awaited.Arguments && awaited.Arguments.length > 0
+      ? awaited.Arguments[0]
+      : element;
+    StampTypedArray(out, resolved);
+  };
+
   if (mapper !== Value.undefined) {
     if (!IsCallable(mapper)) {
       return Throw.TypeError('arguments[1] ($1) is not a function', mapper);
@@ -246,6 +272,7 @@ function* Array_fromAsync([items = Value.undefined, mapper = Value.undefined, th
       const done = Q(yield* IteratorComplete(nextResult));
       if (done === Value.true) {
         Q(yield* Set(array, Value('length'), F(k), Value.true));
+        stampFromSource(array);
         return array;
       }
 
@@ -294,6 +321,7 @@ function* Array_fromAsync([items = Value.undefined, mapper = Value.undefined, th
     }
 
     Q(yield* Set(array, Value('length'), F(len), Value.true));
+    stampFromSource(array);
     return array;
   }
 }

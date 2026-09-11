@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
+import { evaluated, ok, expectStaticTypeError, evaluatedSequence } from '../harness.mts';
 
 /**
  * TYPED SIGNATURES FOR THE STANDARD LIBRARY'S GENERIC STATICS.
@@ -1113,6 +1113,25 @@ test('Array.from carries its SOURCE element type', () => {
   // an EMPTY typed source still yields a typed result, where inference would
   // have nothing to look at and answer `[].<any>`.
   expect(evaluated('let a: [].<uint8> = []; String(Reflect.typeOf(Array.from(a)));')).toBe('[].<uint.<8>>');
+});
+
+test('Array.fromAsync carries its source element type, AWAITED', () => {
+  // `#sec-overloading-of-the-standard-library`: `fromAsync` AWAITS each element,
+  // so "a collection of `Promise.<T, E>` yields `[].<T>` and NOT an array of
+  // promises". The source's element type must be DECOMPOSED before it is
+  // stamped - stamping it whole would be confidently wrong rather than silent.
+  //
+  // Read through `evaluatedSequence`: the result arrives through a promise, and
+  // the job queue drains between scripts so a later reader observes it.
+  expect(evaluatedSequence([
+    'globalThis.out = "pending"; let a: [].<uint8> = [1,2]; Array.fromAsync(a).then((v) => { globalThis.out = String(Reflect.typeOf(v.length)); });',
+    'String(globalThis.out);',
+  ])).toBe('uint.<64>');
+  // THE UNWRAP: a source of promises yields an array of what they resolve with.
+  expect(evaluatedSequence([
+    'globalThis.o2 = "pending"; let p: [].<Promise.<uint8, any>> = [Promise.resolve((1 := uint8))]; Array.fromAsync(p).then((v) => { globalThis.o2 = String(Reflect.typeOf(v)); });',
+    'String(globalThis.o2);',
+  ])).toBe('[].<uint.<8>>');
 });
 
 test('Array.from leaves untyped sources and mapped results alone', () => {
