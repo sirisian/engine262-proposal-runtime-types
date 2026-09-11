@@ -15980,6 +15980,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkNumericCall(n, null);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = callableForm(staticType(c.CallExpression));
+        // proposal-runtime-types #sec-conversions: a call whose callee names a
+        // TYPE is a conversion, and the checker had no handling for one at all -
+        // `uint32("s")` raised nothing statically and `const c: string =
+        // uint32(1)` was ACCEPTED, because neither the argument nor the result
+        // was checked.
+        //
+        // Recognised by three guards, each of which the value side could not
+        // supply: an ordinary function is CALLABLE and a type name is not; a
+        // value binding SHADOWS the type, which `declaredNames` sees where
+        // `lookup` does not; and the name denotes a type, which is the question
+        // the annotation side asks through `builtinTypeRecord`
+        // (<emu-xref> resolveType's TypeReference arm).
+        const conversionTarget = ((): TypeRecord | undefined => {
+          const ce = c.CallExpression as { type?: string, name?: string };
+          if (ce.type !== 'IdentifierReference' || !ce.name || callee) {
+            return undefined;
+          }
+          if (frames.some((f) => f.declaredNames.has(ce.name!))) {
+            return undefined;
+          }
+          return builtinTypeRecord(ce.name, []) ?? undefined;
+        })();
+        if (conversionTarget !== undefined) {
+          const argNodes = (c.Arguments ?? []).filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
+          if (argNodes.length === 1) {
+            // The argument is typed IN the target's context, which is what
+            // `uint32(f())` needed: the overload resolves because the position
+            // says `uint32`.
+            staticTypeIn(argNodes[0]!, conversionTarget as Known);
+          }
+        }
         // A WRITTEN TYPE ARGUMENT MUST SATISFY ITS PARAMETER'S CONSTRAINT.
         // `function f<T extends object>(x: T) {}` called `f.<uint8>(1)` was the
         // run time's TypeError, though both sides are written down: the
