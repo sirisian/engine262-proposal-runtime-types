@@ -6899,20 +6899,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const builtinStaticSignature = (callee: ParseNode | undefined): ((args: readonly ParseNode[], contextual?: Known) => Known) | undefined => {
     /**
-     * The type an ARGUMENT should be read at, given what the call's target wants
-     * of the RESULT.
-     *
-     * `staticType(args[i])` alone widens an untyped literal - `1` becomes
-     * `number` - and no later check recovers the `uint8` the position wanted.
-     * Reading the argument with `staticTypeIn` against its wanted type lets it
-     * adapt exactly as it does at a binding, an element or a parameter.
-     *
-     * `literalFitsNumericType` is the predicate `requireAssignable` consults
-     * BEFORE its own `IsAssignable`, and it is what decides whether a literal
-     * belongs at that type: it answers true for `1` at `uint8` and false for `1`
-     * at `string`, where `IsAssignable` answers false to both.
-     */
-    /**
      * An ITERABLE argument's wanted type, given the ELEMENT the target wants of
      * the result.
      *
@@ -6927,6 +6913,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const iterableOf = (element: TypeRecord | null): TypeRecord | null => (
       element ? arrayOfElement(element) as TypeRecord | null : null
     );
+    /**
+     * The type an ARGUMENT should be read at, given what the call's target wants
+     * of the RESULT.
+     *
+     * `staticType(args[i])` alone widens an untyped literal - `1` becomes
+     * `number` - and no later check recovers the `uint8` the position wanted.
+     * Reading the argument with `staticTypeIn` against its wanted type lets it
+     * adapt exactly as it does at a binding, an element or a parameter.
+     *
+     * `literalFitsNumericType` is the predicate `requireAssignable` consults
+     * BEFORE its own `IsAssignable`, and it is what decides whether a literal
+     * belongs at that type: it answers true for `1` at `uint8` and false for `1`
+     * at `string`, where `IsAssignable` answers false to both.
+     */
     const adaptArgument = (node: ParseNode | undefined, wanted: TypeRecord | null): Known => {
       if (!node) {
         return null;
@@ -11654,24 +11654,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // arm and cannot take one as a parameter.
     const wanted = node ? contextualObjectTypes.get(node as ParseNode) : undefined;
     /**
-     * The type the TARGET wants of a member, or null where it wants none.
-     *
-     * A COMPOSITE target carries its arms on [[Members]] and has no
-     * [[Properties]] at all - traced, an intersection and a union both
-     * arrive as `keys=["Kind","Members"] props=0` - so reading [[Properties]]
-     * alone found nothing and no member of `{ x: 1, y: 2 }` adapted, where the
-     * same literal adapts at either arm written alone.
-     *
-     * An INTERSECTION's arms must ALL be satisfied, so a key is taken only where
-     * every arm carrying it AGREES. `{ x: int32 } & { x: string }` adapts
-     * nothing: taking either arm would admit a literal at a target wanting both,
-     * and that row must keep refusing.
-     *
-     * A UNION is left alone. It is satisfied by ONE arm, so a key with a
-     * different type in each has no single answer and adapting to whichever arm
-     * comes first would be arbitrary.
-     */
-    /**
      * The arms a UNION offers for a key its arms DISAGREE about.
      *
      * `wantedOf` answers ONE type, and a union whose arms disagree has none, so
@@ -11729,6 +11711,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return arms.length > 1 ? arms : [];
     };
 
+    /**
+     * The type the TARGET wants of a member, or null where it wants none.
+     *
+     * A COMPOSITE target carries its arms on [[Members]] and has no
+     * [[Properties]] at all, so the arms are read: reading [[Properties]] alone
+     * would find nothing and no member of `{ x: 1, y: 2 }` would adapt, where
+     * the same literal adapts at either arm written alone.
+     *
+     * An INTERSECTION's arms must ALL be satisfied, so a key is taken only where
+     * every arm carrying it AGREES. `{ x: int32 } & { x: string }` adapts
+     * nothing: taking either arm would admit a literal at a target wanting both,
+     * and that row must keep refusing.
+     *
+     * A UNION is left alone. It is satisfied by ONE arm, so a key with a
+     * different type in each has no single answer and adapting to whichever arm
+     * comes first would be arbitrary.
+     */
     const wantedOf = (key: string): TypeRecord | null => {
       // A NOMINAL target - an interface or an alias - carries its members on
       // [[Structure]] rather than directly, so reading [[Properties]] alone
