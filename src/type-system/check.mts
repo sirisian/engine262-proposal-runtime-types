@@ -1949,9 +1949,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *
    * `contextualReturnTypes` above is set only for an `ArrowFunction` or a
    * `FunctionExpression`, and `enterFunction` enforces a return only where a
-   * `returnAnnotation` was WRITTEN - so `let p: { m(): uint8 } = { m() { return
-   * "s"; } }` was accepted while the ANNOTATED body, the ARROW member
-   * `{ m: () => "s" }` and a standalone function were all refused.
+   * `returnAnnotation` was WRITTEN, so a method needs its own channel for `let
+   * p: { m(): uint8 } = { m() { return "s"; } }` to be refused as the ARROW
+   * member `{ m: () => "s" }` and a standalone function are.
    */
   const contextualMethodReturns = new Journaled<Known>();
 
@@ -1960,26 +1960,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * function literal's and read in the same place - `staticType`'s own arm for
    * the node.
    *
-   * A near-identical map was added once and REMOVED when covariance made it
-   * dead. This is not that: that one wanted the target's REJECTION type, which the
-   * variance rule now supplies without asking. This wants each ARGUMENT's type,
-   * so that an untyped literal adapts as it does at every other position -
-   * `Array.of(1, 2)` at a `[].<uint8>` widened its literals to `number` and was
-   * refused. Variance does not reach that: a literal's adaptation is a different
-   * question, and `Promise.resolve(1)` stayed refused after covariance landed.
+   * Not to be confused with the target's REJECTION type, which the variance
+   * rule supplies without asking. This carries each ARGUMENT's type, so that an
+   * untyped literal adapts as it does at every other position: without it
+   * `Array.of(1, 2)` at a `[].<uint8>` widens its literals to `number` and is
+   * refused. Variance does not reach that - a literal's adaptation is a
+   * different question, and `Promise.resolve(1)` needs this channel too.
    */
   const contextualCallTypes = new Journaled<Known>();
 
   /**
    * An OBJECT LITERAL's contextual type.
    *
-   * Its members were recorded as `widen(memberType)`, so
-   * `let g: Grid = { t: 1.0, c: 1 }` for a `Grid` of `{ t: float64, c: uint8 }`
-   * built `{ t: number, c: number }` and was refused - the untyped literals
-   * widened before they could adapt. That is the literal-adaptation defect one
-   * level in, and this is its mechanism: read each member against the type the target wants
-   * of it, and take that type where `literalFitsNumericType` says the literal
-   * belongs there.
+   * Literal adaptation one level in: each member is read against the type the
+   * target wants of it, and takes that type where `literalFitsNumericType` says
+   * the literal belongs there. Recording the members as `widen(memberType)`
+   * instead would build `{ t: number, c: number }` for `let g: Grid = { t: 1.0,
+   * c: 1 }` at a `Grid` of `{ t: float64, c: uint8 }` and refuse it - the
+   * untyped literals widened before they could adapt.
    */
   const contextualObjectTypes = new Journaled<Known>();
 
@@ -2348,8 +2346,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *                                                 has declared it will not use
    *                                                 the result"
    *
-   * A WHOLESALE skip on `context.Kind === 'void'` was tried before and is
-   * recorded in the arm as wrong: it admitted the first row too.
+   * A wholesale skip on `context.Kind === 'void'` is not an option: it would
+   * admit the first row too.
    */
   const returnContextIsContextual: boolean[] = [];
 
@@ -2576,16 +2574,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // the permanent contextual-typing rule (not a stopgap): after R1/R3 the value
   // space is genuinely distinct, and this is how a plain literal enters it.
   const literalFitsNumericType = (sourceRaw: TypeRecord, targetRaw: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean => {
-    // `shared uint8` is `uint8` for the purpose of this rule. `IsSubtype` already
-    // looks through the marker (relations.mts), but a numeric literal reaches a
-    // numeric type by CONVERSION rather than by subtyping, and this path did not
-    // - so `let s: shared uint8 = 1;` was refused the moment the annotation
-    // resolved, while the runtime converted and admitted it.
-    //
-    // The `shared` annotation was
-    // left UNRESOLVED to avoid that refusal, which bought silence at the cost of
-    // the whole annotation being unchecked. Looking through here is what lets it
-    // be resolved.
+    // `shared uint8` is `uint8` for the purpose of this rule. `IsSubtype` looks
+    // through the marker (relations.mts), but a numeric literal reaches a
+    // numeric type by CONVERSION rather than by subtyping, so this path has to
+    // look through it as well, or `let s: shared uint8 = 1;` is refused the
+    // moment the annotation resolves while the runtime converts and admits it.
+    // Looking through here is what lets a `shared` annotation be resolved at
+    // all rather than left unchecked to keep the peace.
     const source = sourceRaw.Kind === 'shared' ? sourceRaw.Target as TypeRecord : sourceRaw;
     const target = targetRaw.Kind === 'shared' ? targetRaw.Target as TypeRecord : targetRaw;
     if (source.Kind === 'literal' && target.Kind === 'primitive'
@@ -3171,27 +3166,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const sealedSubclasses = new Map<ParseNode, ParseNode[]>();
 
   /**
-   * Interface declarations by name, and their structures. The checker
-   * resolved an interface name in a type position to NOTHING, so
-   * `function f(i: I) { i.k = 300 }` was unchecked entirely - a bigger gap than
-   * the one this set out to close, which was only that a class did not
-   * pick up the members of an interface it implements.
+   * Interface declarations by name. An interface name in a type position
+   * resolves through here, so that `function f(i: I) { i.k = 300 }` is checked
+   * against `I`'s members and a class picks up the members of an interface it
+   * implements.
    */
   const interfaceNodes = new Map<string, ParseNode>();
 
   /**
    * EVERY declaration of an interface name, in source order.
    *
-   * `interfaceNodes` holds ONE node - the first at one site, the last at the
-   * other - so a `partial interface` REPLACED the interface's members instead of
-   * adding to them: with `interface P { n: int32 }` and
-   * `partial interface P { u: string }`, `{ n: "s", u: "s" }` was accepted
-   * because `n` was not in the structure at all.
+   * `interfaceNodes` holds ONE node per name; this holds all of them, so that a
+   * `partial interface` ADDS to the interface's members rather than replacing
+   * them. With `interface P { n: int32 }` and `partial interface P { u: string
+   * }`, `{ n: "s", u: "s" }` is refused because `n` is in the structure.
    *
    * #sec-partial-declarations: "A `partial` declaration over an INTERFACE may
-   * add members", and a `partial` "re-opens ... and adds". The RUN TIME already
-   * merges (`RuntimeTypesDeclarations.mts:600`); the checker had no `Partial`
-   * handling whatever.
+   * add members", and a `partial` "re-opens ... and adds". The RUN TIME merges
+   * the same way (RuntimeTypesDeclarations.mts, Evaluate_RuntimeTypesBindingDeclaration).
    */
   const interfaceDeclarations = new Map<string, ParseNode[]>();
 
@@ -3401,12 +3393,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // same type the completed one denotes; only its members are filled in
     // later, and they are filled into the array this record already holds.
     const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
-    // An interface's INDEX SIGNATURES, filled beside its members. The
-    // structure below hardcoded `IndexSignatures: []` and the walk skipped every
-    // non-TypeMember, so a declared signature was PARSED and then dropped -
-    // measured, `iface member type=IndexSignature` reaches the walk - and
-    // `interface I { [k: string]: int32 } let c: I = { x: "s" }` was accepted by
-    // the checker AND by the run time, since neither had anything to enforce.
+    // An interface's INDEX SIGNATURES, filled beside its members from the
+    // IndexSignature members the walk meets, so that `interface I { [k: string]:
+    // int32 } let c: I = { x: "s" }` is refused: a signature parsed and then
+    // dropped leaves the checker and the run time nothing to enforce.
     const IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[] = [];
     // A bare generic INTERFACE takes its parameters' DEFAULTS as its arguments.
     // #sec-type-arguments: "Each parameter takes, in order: its positional
@@ -3709,12 +3699,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return memo;
     }
     classObjectTypeMemo.set(node, null);
-    // THE SHARED WALK, filtered for statics. Its own field loop used to live
-    // here and could not model a static METHOD: overload arms accumulate into a
-    // `methods` map keyed by name, and a builder pushing a Property per method
-    // let the first arm win, while a `ref` return's borrow is not what a
-    // resolved return annotation describes. Both were caught by tests asserting
-    // exactly those behaviours, and both come free from reusing the walk.
+    // THE SHARED WALK, filtered for statics, rather than a field loop of its
+    // own: overload arms accumulate into a `methods` map keyed by name, and a
+    // builder pushing a Property per method would let the first arm win, while
+    // a `ref` return's borrow is not what a resolved return annotation
+    // describes. Both come free from reusing the walk.
     const acc = classMemberWalk(node, 'static');
     classMemberFolds(acc);
     const { Properties } = acc;
@@ -3776,9 +3765,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *
    * The in-progress guard below answers `null` to stop a heritage cycle hanging
    * the checker, and that is right for a cycle - but a class's own members are
-   * resolved while it is in progress, so `class B { m(): B { ... } }` hit the
-   * guard too and its return annotation resolved to NOTHING. `let s: string =
-   * b.m()` was accepted while the same method annotated `A2` was refused.
+   * resolved while it is in progress, and `class B { m(): B { ... } }` would
+   * hit the guard too, its return annotation resolving to NOTHING, so that `let
+   * s: string = b.m()` passed where the same method annotated `A2` is refused.
    *
    * The INTERFACE path in this file already solves this: it memoizes an
    * in-progress RECORD before walking members and fills its [[Structure]]
@@ -3789,10 +3778,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const classShells = new Map<ParseNode, Record<string, unknown>>();
 
   /**
-   * A class's INSTANCE type. Until now a class name in a type position resolved
-   * to nothing, so `function f(c: C) { c.x = 300 }` was unchecked, no field's
-   * type was visible, and every value of a class type was ~any~ to the checker.
-   * The record is NOMINAL - assignability compares [[Declaration]]
+   * A class's INSTANCE type, which a class name in a type position denotes: it
+   * is what makes `function f(c: C) { c.x = 300 }` checked and a field's type
+   * visible. The record is NOMINAL - assignability compares [[Declaration]]
    * identity, so two classes with the same fields stay distinct - and it
    * carries the declared fields as its [[Structure]], which is the same channel
    * an interface already uses. Private fields are deliberately absent: they are
@@ -3855,15 +3843,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // store through an accessor.
     const methods = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     /**
-     * #sec-type-errors makes a determinable type error an Early Error, and both
-     * abstract rules refused at class definition EVALUATION - so the marker
-     * before the class ran, and a class in dead code was never checked.
+     * The class's ABSTRACT members, keyed the way the member push below keys
+     * everything, so the inherited walk can find them by name.
      *
-     * The checker skipped `AbstractMethodDefinition` entirely: this walk handles
-     * `MethodDefinition` and nothing else, so an abstract member was absent from
-     * the class structure and there was nothing to reason about. Collected here,
-     * keyed the way the member push below keys everything, so the inherited walk
-     * can find them by name.
+     * #sec-type-errors makes a determinable type error an Early Error, so both
+     * abstract rules are judged here rather than at class definition
+     * EVALUATION: the marker is checked before the class runs, and a class in
+     * dead code is checked too. That needs `AbstractMethodDefinition` walked
+     * beside `MethodDefinition`, or an abstract member is absent from the
+     * structure and there is nothing to reason about.
      */
     const abstractMembers = new Map<string, TypeRecord | null>();
     const unusable = new Set<string>();
@@ -3947,10 +3935,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (md.PropertySetParameterList) {
           // A setter gives the property its WRITE type, which is what a store
-          // through the accessor must satisfy. It is kept apart from the read
-          // type because a getter and setter pair may legitimately differ, and
-          // before this a store through a setter was unchecked entirely while a
-          // store to a field of the same name was caught.
+          // through the accessor must satisfy - the same check a store to a
+          // field of the same name gets. It is kept apart from the read type
+          // because a getter and setter pair may legitimately differ.
           const sp = md.PropertySetParameterList[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
           const t = sp?.TypeAnnotation ? resolveType(sp.TypeAnnotation.Type) : null;
           if (t) {
@@ -4159,9 +4146,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const annotated = f.TypeAnnotation !== null && f.TypeAnnotation !== undefined;
       // A field's annotation resolves with the class's TYPE parameters in scope
       // (the mode a method's signature uses), so `v: T` is the parameter record
-      // an instantiation's structure then substitutes; outside the scope `T`
-      // resolved to nothing, the field was left out of the structure, and a
-      // read of it on `Box.<number>` was unchecked.
+      // an instantiation's structure then substitutes. Outside the scope `T`
+      // would resolve to nothing, the field would be left out of the structure,
+      // and a read of it on `Box.<number>` would go unchecked.
       const resolveField = (): Known => {
         const pushed = pushTypeParameterScopeOf(n, 'type-only');
         try {
@@ -4184,12 +4171,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Properties.push({
           // #sec-object-types: "A write to a `readonly` member is a type error,
           // AT COMPILE TIME WHERE THE TYPE OF THE BASE IS KNOWN and at run time
-          // otherwise." This was hardcoded *false*, so a `readonly` class FIELD
-          // was a compile-time error nowhere while the same member on an object
-          // type or an interface was refused - the rule and the operation that
-          // applies it (`requireWritableMember`) were both right and reached; the
-          // flag they read simply never arrived from the declaration. The run
-          // time refused the write, so the divergence was in the moment only.
+          // otherwise." The flag comes from the declaration so that a
+          // `readonly` class FIELD is refused at compile time by
+          // `requireWritableMember`, as the same member on an object type or an
+          // interface is; the run time refuses the write either way.
           key, type: t, optional: false, readonly: (f as { readonly?: boolean }).readonly === true,
           protected: (f as { protected?: boolean }).protected === true,
           ...(annotated ? {} : { writeType: anyTypeRecord as TypeRecord }),
@@ -4252,27 +4237,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // the class did not also declare itself. Merged UNDER both the class's
     // own declarations and its heritage, since either is more specific.
     // The heritage is resolved BEFORE `implements` is verified, because an
-    // interface's member may be satisfied by one the class INHERITS. It was
-    // resolved after, so `class C extends B implements A {}` where `B` declared
-    // `a` was refused with "C, which declares no member a" - a member that was
-    // declared, on the base, and that the merge below would have carried.
-    // TypeScript accepts the identical program, and so does the run time here.
+    // interface's member may be satisfied by one the class INHERITS: `class C
+    // extends B implements A {}` where `B` declares `a` is accepted, as
+    // TypeScript and the run time accept it, rather than refused with "C,
+    // which declares no member a".
     const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
     const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
       ? (heritage as { name: string }).name
       : null;
     // A class may extend a LIBRARY nominal - `class MyErr extends Error` - and
-    // `classTypeOf` finds only classes declared in source, so [[Base]] was left
-    // undefined and the chain the subtype relation walks stopped short. The run
-    // time walked it anyway: `new MyErr() is Error` and `instanceof` both
-    // answered *true* while `let e: Error = new MyErr()` was refused, which is
-    // the disagreement this record exists to end.
-    //
-    // Worse than a refusal, it disagreed with ITSELF across a module boundary:
-    // the same class imported from another module was ACCEPTED, because this
-    // pass cannot see an imported declaration and abstained, leaving the run
-    // time to answer correctly. A program's meaning depended on which file its
-    // class was written in.
+    // `classTypeOf` finds only classes declared in source, so the library
+    // record stands in as [[Base]]. Otherwise the chain the subtype relation
+    // walks stops short, and `let e: Error = new MyErr()` is refused while
+    // `new MyErr() is Error` and `instanceof` answer *true* at run time - and
+    // the same class imported from another module, which this pass cannot see
+    // and so abstains on, is accepted, so the program's meaning would depend
+    // on which file its class was written in.
     const base = baseName ? (classTypeOf(baseName) ?? libraryTypeRecord(baseName)) : null;
     const baseStructure = base && base.Kind === 'nominal'
       ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
@@ -4874,13 +4854,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const enumTypeMemo = new Map<ParseNode, Known>();
 
   /**
-   * proposal-runtime-types: an ENUM name used as a TYPE.
-   *
-   * The bare-|TypeReference| resolver consulted seven sources and no enum one,
-   * so `function f(e: E)` gave the binding NO static type - which is why the
-   * exhaustiveness check reaches enums by a NAME lookup on the binding rather
-   * than by the subject's type, and why a `match` over an enum-typed value that
-   * is not a plain identifier was never checked at all.
+   * proposal-runtime-types: an ENUM name used as a TYPE, which the bare-
+   * |TypeReference| resolver consults beside its other sources so that
+   * `function f(e: E)` gives the binding a static type and a `match` over an
+   * enum-typed value that is not a plain identifier is checked. (The `switch`
+   * exhaustiveness check reaches enums by a NAME lookup on the binding
+   * instead, which is the older route.)
    *
    * MEMOIZED by declaration node, because `instanceTypeOf` is: a class has one
    * record per declaration, and an enum resolved freshly on each mention would
@@ -4903,15 +4882,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // enum evaluation computes them - an initializer's value, or the previous
     // numeric value plus one, starting at 0.
     //
-    // These were previously all `undefined`, one per member, which counted the
-    // members correctly and identified none of them. Since membership against
-    // an enum is SameValue over this list, nothing was ever a member as far as
-    // the checker was concerned, and so EVERY initializer of an enum-typed
-    // binding was refused - `let x: E = 0` no less than `let x: E = 5` - while
-    // the runtime, whose record carries real values, answered `0 is E`
-    // correctly. An initializer the checker cannot read statically stays
-    // undefined and simply matches nothing, which is imprecise rather than
-    // wrong.
+    // Membership against an enum is SameValue over this list, so the values
+    // have to be the real ones: a list of `undefined`s would count the members
+    // and identify none, and refuse `let x: E = 0` no less than `let x: E =
+    // 5` where the runtime, whose record carries the values, answers `0 is E`.
+    // An initializer the checker cannot read statically stays undefined and
+    // simply matches nothing, which is imprecise rather than wrong.
     const memberValues: (Value | undefined)[] = [];
     let nextAuto = 0;
     for (const member of decl.EnumMemberList ?? []) {
@@ -5431,24 +5407,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // #sec-parameterized-types: a primitive whose one type argument is an
           // object type is a metadata parameterization, `float32.<{ m: 1 }>`.
           // Mirrors TypeNodeToTypeRecord so the checker and the runtime agree on
-          // what the annotation means; before this, builtinTypeRecord dropped the
-          // object argument and every parameterization looked to this pass like
-          // its bare base, which is why the metadata subtype judgment had no
-          // static site.
+          // what the annotation means: `builtinTypeRecord` alone drops the
+          // object argument, and every parameterization then looks like its
+          // bare base, leaving the metadata subtype judgment no static site.
           //
-          // THE BASE DECIDES. A base that
-          // declares type parameters is being APPLIED, and its argument is a
-          // type however object-shaped it looks; only a base with no parameters
-          // reads its argument as metadata.
-          //
-          // This copy is why `Composite.<{ x: uint8 }>` failed. `Composite`'s
-          // record is ~primitive~ (#sec-composite-types), so the test below
-          // accepted it, built `Composite.<{ }>` with the SHAPE as metadata, and
-          // then refused the shape's own members for not being metadata values.
-          // The runtime had an escape hatch for that one name and this pass did
-          // not, so the two resolvers disagreed about what the annotation meant -
-          // which is the drift the comment above was written to prevent, and it
-          // had already happened.
+          // THE BASE DECIDES. A base that declares type parameters is being
+          // APPLIED, and its argument is a type however object-shaped it looks;
+          // only a base with no parameters reads its argument as metadata.
+          // `Composite`'s record is ~primitive~ (#sec-composite-types), so
+          // without this distinction `Composite.<{ x: uint8 }>` would be built
+          // as `Composite.<{ }>` with the SHAPE as metadata and its members
+          // refused for not being metadata values - the two resolvers
+          // disagreeing about what the annotation means, which the mirroring
+          // exists to prevent.
           const baseName = node.TypeName.IdentifierReference.name;
           const appliedBuiltin = builtinTypeRecord(baseName, args);
           const bareBuiltin = builtinTypeRecord(baseName);
@@ -5456,19 +5427,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (!bareBuiltin || !SameType(bareBuiltin, appliedBuiltin));
           if (!builtinTakesArguments
             && args.length === 1 && typeof args[0] !== 'number' && (args[0] as TypeRecord).Kind === 'object') {
-            // The base is a BUILTIN or an ALIAS. Only the builtin was consulted,
-            // so a parameterization whose base was named by an alias resolved to
-            // nothing here and the annotation degraded to ~any~ in this pass.
-            //
-            // That is the whole of the reach gap recorded against
-            // #sec-intersection-type-early-errors: `string.<{ brand: 'E' }>` was
-            // diagnosed because `string` is a builtin, while
-            // `E.<{ brand: 'N' }>`, `ObjectBase.<{ brand }>`,
-            // `ArrayBase.<{ brand }>` and a brand over a literal alias were all
-            // missed - the four shapes differing only in what named the base.
-            // The runtime read them and reduced them to `never`; this pass could
-            // not, so the mistake was reported from a use site rather than from
-            // the annotation.
+            // The base is a BUILTIN or an ALIAS, and both are consulted: a
+            // parameterization whose base is named by an alias would otherwise
+            // resolve to nothing here and degrade the annotation to ~any~.
+            // That is the reach #sec-intersection-type-early-errors needs -
+            // `string.<{ brand: 'E' }>` is diagnosed because `string` is a
+            // builtin, and `E.<{ brand: 'N' }>`, `ObjectBase.<{ brand }>`,
+            // `ArrayBase.<{ brand }>` and a brand over a literal alias differ
+            // only in what names the base, so they are diagnosed from the
+            // annotation rather than from a use site.
             //
             // Any base carries metadata (#sec-parameterized-types admits
             // ~primitive~, ~literal~, ~object~, ~array~, ~tuple~ and ~nominal~
@@ -5508,10 +5475,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // else is a metadata value. A function, an object other than the
               // forms above, and *undefined* are not." A property whose type is
               // none of the admitted forms is DROPPED by
-              // `MetadataObjectFromType`, so `float64.<{ bounds: SomeClass }>`
-              // was accepted and carried no bounds at all. The drop is
-              // observable as a missing key, which finds it without writing the
-              // form list twice.
+              // `MetadataObjectFromType`, and `float64.<{ bounds: SomeClass }>`
+              // must not pass carrying no bounds at all. The drop is observable
+              // as a missing key, which finds it without writing the form list
+              // twice.
               //
               // Only where the argument was WRITTEN INLINE. A parameterization's
               // object-typed argument is two things in one shape: a metadata
