@@ -5132,11 +5132,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!declared) {
           return null;
         }
-        // A |ComputedType| -
-        // `type G = makeG();` - resolves by EVALUATING, not by walking, so
-        // `resolveType` below cannot answer for one and answers ~any~ instead:
-        // the annotation admitted everything and the bad value was refused at
-        // run time, where the inline spelling refuses it here.
+        // A |ComputedType| - `type G = makeG();` - resolves by EVALUATING, not
+        // by walking, so `resolveType` below cannot answer for one; left at
+        // ~any~ the annotation would admit everything, and a bad value would
+        // be refused at run time where the inline spelling refuses it here.
         //
         // The evaluation has already happened. The pass pre-evaluates this
         // source text's type declarations before it walks (check-pass.mts), and
@@ -9241,11 +9240,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ArrowFunction':
       case 'FunctionExpression': {
         // proposal-runtime-types #table-check-sites makes an argument and an
-        // annotated binding check sites, and a function LITERAL had no static
-        // type at all - so nothing could be checked against anything at either.
-        // A function DECLARATION was refused correctly and a literal of the same
-        // shape was not, which is what said the gap was the literal rather than
-        // the position it stood in.
+        // annotated binding check sites, so a function LITERAL has a static
+        // type, or nothing could be checked against anything at either; a
+        // function DECLARATION of the same shape is refused at those sites and
+        // a literal must be too.
         //
         // Built from what the literal WROTE DOWN: each parameter's annotation,
         // or the contextual type its position supplied, or ~any~; and the
@@ -10880,12 +10878,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // here, although the clause's row - "an operand of a binary operator
         // whose other operand has a known value type" - covers `==` and `<`, and
         // `a == 18446744073709551614` with `a: uint64` holding that value is
-        // *false* for want of it. Adopting here was tried and withdrawn: the
-        // checker types several builtins' results as typed arrays that the run
-        // time returns untyped - `Object.keys(o).length` is `uint64` to the
-        // checker and a Number at run time - so the literal in
-        // `Object.keys(m).length === 1` took `uint64`, and a Number `===` a typed
-        // value is *false*. That disagreement is the defect to fix first; with
+        // *false* for want of it. Adopting here is blocked by a disagreement
+        // to fix first: the checker types several builtins' results as typed
+        // arrays that the run time returns untyped - `Object.keys(o).length` is
+        // `uint64` to the checker and a Number at run time - so the literal in
+        // `Object.keys(m).length === 1` would take `uint64`, and a Number `===`
+        // a typed value is *false*. With
         // it in place the adoption here turns a wrong static type into a wrong
         // run-time answer. Recorded in TEST-FAILURE-PLAN.md.
         const operandTypes = operandNodes.map((x) => staticType(x));
@@ -11362,14 +11360,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
-    // The LAST member writing a key decides its type.
-    //
-    // The walk had no notion of order: it tested each member against the target
-    // as it met it. So `{ a: (1 := uint8), ...t }` was accepted by checking the
-    // NAMED `a` and never learning that `t`'s String `a` overwrote it, and
-    // `{ ...u, ...t }` was accepted for the same reason one spread later. The
-    // mirror case, `{ ...t, a: (1 := uint8) }`, is correct and must stay so:
-    // there the named member IS the last writer and the object is well-typed.
+    // The LAST member writing a key decides its type. Testing each member
+    // against the target as it is met would accept `{ a: (1 := uint8), ...t }`
+    // by checking the NAMED `a` and never learning that `t`'s String `a`
+    // overwrites it, and `{ ...u, ...t }` for the same reason one spread
+    // later; the mirror case, `{ ...t, a: (1 := uint8) }`, is well-typed,
+    // because there the named member IS the last writer.
     //
     // This is JavaScript's own evaluation order, not a type rule; the walk just
     // has to ask who wrote last before deciding whom to check.
@@ -11456,13 +11452,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         AssignmentExpression?: ParseNode,
       };
       // A SPREAD carries its operand's members, and each is judged as though it
-      // had been written here.
-      //
-      // The walk reads `PropertyDefinitionList`, so a spread - a
-      // PropertyDefinition with NO PropertyName - contributed no key and the
-      // freshness rule saw nothing. `{ ...u }` at `{ a: uint8 }` was accepted
-      // with `u`'s excess `zz` unreported, while the same members written
-      // plainly were refused.
+      // had been written here: `{ ...u }` at `{ a: uint8 }` reports `u`'s
+      // excess `zz` as the same members written plainly would. A spread is a
+      // PropertyDefinition with NO PropertyName, so it contributes no key of
+      // its own and needs its operand enumerated.
       //
       // `objectLiteralMembers` is the enumeration to use, and it keeps
       // the NULL where the keys are unknowable - an `any`-typed operand, a
@@ -11516,12 +11509,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // A member's wanted type: its NAMED declaration, or failing that the INDEX
       // SIGNATURE that admits its key.
       //
-      // `Properties` alone left a key reached through a signature with no
-      // `declared` at all, so the block below was skipped and its value was
-      // checked against NOTHING - `let c: { [k: string]: int32 } = { x: "s" }`
-      // was accepted, and `{ [k: string]: uint8 } = { x: 999 }` with it. At a
-      // RETURN type and at an INTERFACE the run time misses them too, so they
-      // were enforced nowhere.
+      // A key reached only through a signature has no `declared` in
+      // `Properties`; without the signature as its wanted type the block below
+      // is skipped and its value checked against NOTHING, accepting `let c: {
+      // [k: string]: int32 } = { x: "s" }` and `{ [k: string]: uint8 } = { x:
+      // 999 }` - which at a RETURN type and at an INTERFACE the run time misses
+      // too.
       //
       // `keyAdmittedBy` is the same predicate the freshness rule below already
       // uses to decide whether a key is EXCESS: the machinery answered the KEY
@@ -11591,9 +11584,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *
    * That is right for a type and wrong for MEMBERSHIP. The missing-member rule
    * and the excess rule are not publishing a type; they ask whether a required
-   * key is present, and a spread whose operand's type is KNOWN answers that. So
-   * `{ ...s }` at `{ a: uint8, b: uint8 }` was accepted with `b` never supplied,
-   * and a literal written plainly was refused - the same program, two answers.
+   * key is present, and a spread whose operand's type is KNOWN answers that, so
+   * `{ ...s }` at `{ a: uint8, b: uint8 }` is refused with `b` never supplied,
+   * exactly as the literal written plainly is.
    *
    * The NULL is kept where the keys are genuinely unknowable: an `any`-typed
    * operand, a getter, a computed key. Enumerating those would report
@@ -11658,10 +11651,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return null;
     }
     const members = (node as unknown as { PropertyDefinitionList?: readonly ParseNode[] }).PropertyDefinitionList ?? [];
-    // An EMPTY object literal has a type too: `{ }` with no properties.
-    // Returning null here made `let n: uint8 = {}` unchecked, where
-    // `let n: uint8 = { a: 1 }` was refused - the same literal, one property
-    // apart, answering differently.
+    // An EMPTY object literal has a type too: `{ }` with no properties, so that
+    // `let n: uint8 = {}` is refused as `let n: uint8 = { a: 1 }` is - the
+    // same literal, one property apart, must not answer differently.
     if (members.length === 0) {
       return { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as Known;
     }
@@ -11691,24 +11683,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     /**
      * The arms a UNION offers for a key its arms DISAGREE about.
      *
-     * `wantedOf` answers ONE type, and a union whose arms disagree has none - so
-     * an untyped numeric literal was never adapted toward any arm. `{ x: 1 }`
-     * was refused at `{ x: int32 } | { x: string }` although `{ x: int32 }`
-     * written ALONE accepts it, and at `{ x: int32 } | { x: uint8 }`, whose arms
-     * do not disagree about being numeric at all. A literal needing NO
-     * adaptation - `{ x: "s" }`, `{ x: true }` - was accepted throughout, which
-     * places the defect at ADAPTATION rather than at disagreement.
+     * `wantedOf` answers ONE type, and a union whose arms disagree has none, so
+     * an untyped numeric literal needs the arms themselves to adapt toward:
+     * `{ x: 1 }` at `{ x: int32 } | { x: string }` is accepted because `{ x:
+     * int32 }` written ALONE accepts it, and so is `{ x: int32 } | { x: uint8
+     * }`, whose arms do not disagree about being numeric at all. A literal
+     * needing NO adaptation - `{ x: "s" }`, `{ x: true }` - never depended on
+     * this.
      *
-     * The SAME question one level up is already answered: `let v: string | uint8
-     * = 1` adapts and gives `uint.<8>`. Only the literal as an object MEMBER was
-     * refused, so this makes the member position answer what the scalar position
-     * answers - `literalFitsNumericType`'s rule, not a new one.
+     * The SAME question one level up has the same answer: `let v: string |
+     * uint8 = 1` adapts and gives `uint.<8>`, so the member position answers
+     * what the scalar position answers - `literalFitsNumericType`'s rule, not
+     * a new one.
      *
      * A SECOND entry point rather than a change to `wantedOf`, because that
      * walk's "no single answer" is read four ways: adaptation hears "do not
-     * adapt", the intersection rule hears "the arms disagree, refuse", the union row's
-     * union freshness hears "no key here, stay conservative", and the nested-arm
-     * walk hears "recurse no further". Collecting inside it broke the last three.
+     * adapt", the intersection rule hears "the arms disagree, refuse", union
+     * freshness hears "no key here, stay conservative", and the nested-arm walk
+     * hears "recurse no further". Collecting inside it would change the last
+     * three.
      */
     const wantedArmsFor = (key: string): readonly TypeRecord[] => {
       const target = wanted as { Kind?: string, Members?: readonly TypeRecord[] } | null | undefined;
@@ -11765,9 +11758,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A PARAMETERISED nominal's [[Structure]] holds its members
         // UNSUBSTITUTED - `interface Box<T> { get(): T; }` carries `T`, not the
         // argument - so the members must be substituted before they can be
-        // compared, as happens everywhere else this structure is read. Without
-        // it a correct `Box.<uint8>` literal was refused for returning `uint8`
-        // where `T` was wanted.
+        // compared, as happens everywhere else this structure is read, or a
+        // correct `Box.<uint8>` literal is refused for returning `uint8` where
+        // `T` is wanted.
         const nominalArguments = (t as { Arguments?: readonly (TypeRecord | number)[] } | undefined)?.Arguments ?? [];
         if (nominalArguments.length === 0) {
           return structure.Properties;
@@ -11834,14 +11827,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     for (const member of members) {
       // A METHOD written in shorthand contributes a member rather than voiding
-      // the whole shape.
-      //
-      // `member.type !== 'PropertyDefinition'` returned null for the LITERAL, so
-      // `{ m() { … } }` had no shape at all and NOTHING about it was checked -
-      // not the method, and not its siblings. Measured, `{ m(): uint8 }` accepted
-      // `{ m() { return "s"; } }` while the arrow spelling `{ m: () => "s" }`
-      // was refused, and an intersection with CONFLICTING method arms accepted a
-      // literal where the data equivalent refused.
+      // the whole shape: a literal with no shape has NOTHING checked, not the
+      // method and not its siblings, and `{ m(): uint8 }` would accept `{ m()
+      // { return "s"; } }` while refusing the arrow spelling `{ m: () => "s"
+      // }`.
       //
       // The member is typed as a function whose signature is UNKNOWN: an
       // unannotated body's return is not inferred here, so `~any~` is the honest
@@ -11975,10 +11964,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       //
       // An OBJECT-literal member reaches its contextual by recursing into
       // `objectLiteralShape`, which consults `contextualObjectTypes`. An ARRAY
-      // literal has no such recursion: `staticType` answers with the unadapted
-      // array type, so the shape carried `[].<number>` where the target wanted
-      // `[].<int32>` and the literal was refused - at ANY union target, whether
-      // or not the arms disagreed, while the OBJECT twin was accepted.
+      // literal has no such recursion - `staticType` answers with the
+      // unadapted array type - so it is taken at its contextual here, or the
+      // shape carries `[].<number>` where the target wants `[].<int32>` and the
+      // literal is refused at any union target while its OBJECT twin passes.
       //
       // `staticTypeIn` cannot supply the type: its array branch deliberately
       // answers NULL, because reporting the target would manufacture
@@ -12025,11 +12014,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // reaching a numeric PRIMITIVE - `1` at `int32` - and answers false for a
       // literal reaching a LITERAL, which is the shape a discriminated union is
       // made of: `{ d: true } | { d: false }` offers two arms for `d` and the
-      // source fits exactly one of them. Without this the member took its
+      // source fits exactly one of them. Without this the member takes its
       // widened type - `boolean`, `number`, `string` - which no literal arm
-      // accepts, so every discriminated union was unsatisfiable by a literal.
-      // `IteratorResult` is that shape, which is why a hand-written
-      // `{ next: () => ({ value: 1, done: false }) }` was refused.
+      // accepts, and every discriminated union is unsatisfiable by a literal;
+      // `IteratorResult` is that shape, so a hand-written `{ next: () => ({
+      // value: 1, done: false }) }` depends on it.
       const wantedMember = wantedForMember ?? (() => {
         if (typeof key !== 'string') {
           return null;
@@ -12067,58 +12056,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // there: a numeric literal by `literalFitsNumericType`, and a NESTED
       // OBJECT by assignability.
       //
-      // Widening a nested object lost it: `{ a: { x: (1 := int32) } }` at
-      // `{ a: { x: int32 } } & { }` widened `a` and the widened shape no longer
-      // matched, while the SAME value through a binding was accepted and the
-      // same literal at a SINGLE target was too - there the member walk checks
-      // the inner literal separately, and at a COMPOSITE only the shape is
-      // compared.
+      // Widening a nested object would lose it: `{ a: { x: (1 := int32) } }`
+      // at `{ a: { x: int32 } } & { }` with `a` widened no longer matches,
+      // while the SAME value through a binding and the same literal at a
+      // SINGLE target are accepted - there the member walk checks the inner
+      // literal separately, and at a COMPOSITE only the shape is compared.
       const adapted = wantedMember
         && (literalFitsNumericType(memberType as TypeRecord, wantedMember)
           // ANY member that fits its wanted type takes it, not only an ~object~
-          // one.
+          // one. At `type L = { value: uint8, next: L | null }` the inner
+          // literal's `next: null` must take `L | null` rather than keep the
+          // literal type `null`: `next` is WRITABLE and therefore compared
+          // INVARIANTLY (#sec-isobjectsubtype, "subtyped in depth only through
+          // a `readonly` member"), so `SameType(null, L | null)` would decide
+          // it and refuse the whole literal - correctly by the relation,
+          // wrongly for a literal, which is created at the type its position
+          // asks for. Adaptation happens ONLY where the member is assignable,
+          // so a member that does not fit is untouched and refused.
           //
-          // The `IsAssignable` arm was added for a nested OBJECT member and
-          // scoped it to that kind, which was the case it had. A member of any
-          // other kind fell through to `widen`, so at
-          // `type L = { value: uint8, next: L | null }` the inner literal's
-          // `next: null` kept the literal type `null` where its position wanted
-          // `L | null`. `next` is WRITABLE and therefore compared INVARIANTLY
-          // (#sec-isobjectsubtype, "subtyped in depth only through a `readonly`
-          // member"), so `SameType(null, L | null)` decided it and the whole
-          // literal was refused - correctly by the relation, wrongly for a
-          // literal, which is created at the type its position asks for.
-          //
-          // `wantedOf` was already returning `{ value: uint8, next: ... } | null`
-          // here; traced, only this gate discarded it.
-          //
-          // Adaptation still happens ONLY where the member is assignable, so a
-          // member that does not fit is untouched and refused as before.
-          //
-          // That arm is kept EXACTLY as it was and a second one added beside
-          // it, rather than the kind test being dropped. Widening it to
-          // every kind was measured first and LOOSENED freshness: an excess
-          // member in the nested literal stopped being reported, because taking
-          // `wantedMember` wholesale replaces the shape the excess member lives
-          // in. Restricting the new arm to NON-object members leaves every
-          // object member on that path, where freshness still sees it.
+          // Two arms, split on the kind, rather than one over every kind: an
+          // object member that takes `wantedMember` wholesale replaces the
+          // shape an excess member lives in, and freshness then cannot see it.
+          // Keeping object members on their own arm leaves them where
+          // freshness still does.
           || ((memberType as TypeRecord).Kind === 'object' && IsAssignable(memberType as TypeRecord, wantedMember))
           || ((memberType as TypeRecord).Kind !== 'object' && IsAssignable(memberType as TypeRecord, wantedMember)))
         ? wantedMember
         : widen(memberType) as TypeRecord;
       // `readonly` is SET, not left absent. A Property Type Record has a
       // [[Readonly]] field (#sec-type-records), and `relations.mts`'s exact-match
-      // arm compares it with `===` - so a record omitting it carried `undefined`
-      // where a written type carries `false`, and two structurally identical
-      // objects were not `SameType`.
-      //
-      // Measured: `ro undefined/false sameType=true` for the member types, and
-      // the comparison failed anyway. That made an inner `{ x: int32 }` unequal,
-      // which failed the member holding it, which refused
-      // `let c: { a: { x: int32 } } | { y: string } = { a: { x: (1 := int32) } }`
-      // - a literal matching the first arm exactly.
-      //
-      // Only a UNION surfaced it: a single or intersection target reaches
+      // arm compares it with `===` - so a record omitting it would carry
+      // `undefined` where a written type carries `false`, and two structurally
+      // identical objects would not be `SameType`. An inner `{ x: int32 }`
+      // unequal to itself fails the member holding it, which refuses `let c: {
+      // a: { x: int32 } } | { y: string } = { a: { x: (1 := int32) } }` - a
+      // literal matching the first arm exactly. Only a UNION target asks the
+      // question: a single or intersection target reaches
       // `checkObjectLiteralAgainst`, which compares members individually and
       // never asks whether the whole literal is the SAME TYPE.
       Properties.push({ key, type: adapted, optional: false, readonly: false });
