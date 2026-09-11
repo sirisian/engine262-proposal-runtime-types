@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown } from '../harness.mts';
+import { ok, expectThrown } from '../harness.mts';
 
 /**
  * A literal in a meta type's `default` takes the type its claim shape gives the

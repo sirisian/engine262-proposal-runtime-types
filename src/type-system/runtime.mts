@@ -3220,6 +3220,30 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       return yield* IsOfType(new TypedNumberValue((value as TypedNumberValue).value, valueRecord.Underlying), t);
     }
   }
+  // A rational VALUE is a member of a rational type, on the same terms the decimal
+  // arm below states for a decimal: the value is an object carrying its parts, and
+  // membership is the type's identity rather than a walk.
+  //
+  // Without this arm the type had no members at all once `rational` became a
+  // primitive record: `const v = rational(1, 10); let r: rational = v` refused,
+  // and so did every literal, since the literal machinery produces exactly such an
+  // object.
+  //
+  // A BARE `rational` admits any width, as a bare name does elsewhere; an applied
+  // `rational.<N>` compares N. A value built by `rational(a, b)` carries no width,
+  // so it satisfies the bare spelling only - the applied one needs
+  // `CreateRationalValue` to take a width, as `CreateDecimalValue` does.
+  if (t.Kind === 'primitive' && t.Name === 'rational') {
+    if (value instanceof ObjectValue && 'RationalNumerator' in value) {
+      const want = t.Arguments?.[0];
+      if (want === undefined) {
+        return true;
+      }
+      const carried = (value as unknown as { RationalWidth?: number }).RationalWidth;
+      return carried !== undefined && carried === want;
+    }
+    return false;
+  }
   if (t.Kind === 'primitive' && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128')) {
     if (value instanceof ObjectValue && 'DecimalSignificand' in value) {
       const width = (value as unknown as { DecimalWidth: number }).DecimalWidth;
