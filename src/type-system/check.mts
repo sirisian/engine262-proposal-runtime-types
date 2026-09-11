@@ -41,13 +41,31 @@ import { R, Throw } from '#self';
 
 /**
  * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
- * A post-parse walk computing the Static Type of expressions and raising the
- * specification's type errors. The Static Type of anything the checker does
- * not model is ~any~, so under the gradual rule silence is sound: an error is
- * raised only where both sides of a judgment are statically known. Scoping is
- * simplified to one frame per function; block-level shadowing inside one
- * function is approximated by overwriting, which cannot introduce a false
- * positive because an unknown type is ~any~.
+ *
+ * The static checker: a post-parse walk over a Script or Module that computes
+ * the Static Type of each expression and raises the specification's type
+ * errors. The Static Type of anything the checker does not model is ~any~, so
+ * under the gradual rule silence is sound: an error is raised only where both
+ * sides of a judgment are statically known.
+ *
+ * Scoping follows the program's. `enterFunction` and `pushBlock` push a Frame
+ * per function and per block-like construct, so an inner declaration shadows
+ * an outer one and is gone when its scope ends; a console session keeps the
+ * top-level frame between entries (CheckSession).
+ *
+ * The walk is synchronous and cannot run user code, so whatever needs a hook -
+ * a `meet`, a `subtype`, a `narrow`, a declared default - is DEFERRED: the walk
+ * records an obligation keyed by the root Parse Node, and the checking pass
+ * (check-pass.mts) discharges it after the type declarations pre-evaluate and
+ * before the source text runs. The same side tables carry marks the evaluator
+ * reads - which literals adopt a contextual type, which checks are elided, what
+ * a `new.(...)` resolved to - and the return, class and abstract-member types
+ * the runtime records read rather than compute again.
+ *
+ * Layout: types; constants; those side tables, each beside its accessor;
+ * helpers with no checker state; the entry points; and CheckStatementList,
+ * one closure holding the walk and every helper that reads its state, grouped
+ * by concern under `// ----` banners.
  */
 
 // ---- types ----------------------------------------------------------
@@ -169,8 +187,8 @@ function cloneFrame(frame: Frame): Frame {
  * lexical binding has no run-time typed-storage boundary to catch what they
  * miss - the note in performDevtoolsEval says as much. So a console that
  * evaluates each entry as its own script forgets every declared type at the
- * entry boundary: `let n: uint8 = 1;` then `n = 300;` was accepted, and a
- * `switch` over an enum-typed binding declared earlier was not checked for
+ * entry boundary: `let n: uint8 = 1;` then `n = 300;` would be accepted, and a
+ * `switch` over an enum-typed binding declared earlier left unchecked for
  * exhaustiveness, while the same text in ONE entry is refused.
  *
  * A session carries the top-level frame between entries, which is exactly that
@@ -329,22 +347,13 @@ const FIXED_GLOBAL_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
  */
 const FIXED_STATIC_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
   'Array.isArray': () => makePrimitive('boolean'),
-  // `Number.isInteger`, `isFinite`, `isNaN` and `isSafeInteger` were HERE and
-  // have been removed. They are OVERLOADED - #sec-overloading-of-the-standard-
-  // library names them explicitly alongside the global `isFinite` and `isNaN` -
-  // and `table-numeric-library-signatures` gives them LITERAL results per
-  // family: `Number.isNaN` over an integer family answers *false*, and
-  // `Number.isInteger` over one answers *true*.
-  //
-  // A fixed `boolean` displaced that. It reads as more precise than the ~any~
-  // they had, and it is LESS precise than the table, so
-  // `let _n_: false = Number.isNaN(_x_)` for a `uint8` _x_ - which the table
-  // says holds - was refused. The tell was that the global `isNaN` still
-  // accepted it, the two spellings of one predicate disagreeing.
-  //
-  // They belong to the overload work, not to this table. A fixed result must
-  // never displace an overload, which is a mistake already made once
-  // with `Math.*` and made again here.
+  // NOT here: `Number.isInteger`, `isFinite`, `isNaN` and `isSafeInteger`.
+  // #sec-overloading-of-the-standard-library names them as OVERLOADED, and
+  // `table-numeric-library-signatures` gives them LITERAL results per family -
+  // `Number.isNaN` over an integer family answers *false* - so a fixed
+  // `boolean` here would displace the overload and refuse `let _n_: false =
+  // Number.isNaN(_x_)` for a `uint8` _x_. A fixed result must never displace
+  // an overload; `Math.*` is kept out of this table for the same reason.
   'Object.is': () => makePrimitive('boolean'),
   'ArrayBuffer.isView': () => makePrimitive('boolean'),
   'String.raw': () => makePrimitive('string'),
@@ -362,11 +371,11 @@ const FIXED_STATIC_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
  * `class WeakSet<T extends object | symbol>`, `class WeakRef<T extends object |
  * symbol>`. The constraint on the type parameter that must be weakly
  * referenceable, by library name; `FinalizationRegistry`'s T is the HELD value
- * and is unconstrained, so it is not here. Nothing recorded these constraints
- * before - the library generics had parameter NAMES and an ARITY - so
- * `WeakMap.<string, uint8>` was accepted at every position and the program
- * learned at its first `set`, from the run time's own TypeError, that no key
- * could ever satisfy it.
+ * and is unconstrained, so it is not here. The library generics otherwise carry
+ * parameter NAMES and an ARITY only; without the constraint
+ * `WeakMap.<string, uint8>` would be accepted at every position, and the
+ * program would learn at its first `set`, from the run time's own TypeError,
+ * that no key could ever satisfy it.
  */
 const WEAK_KEY_PARAMETER: Record<string, number> = { WeakMap: 0, WeakSet: 0, WeakRef: 0 };
 
@@ -376,7 +385,7 @@ const WEAK_KEY_PARAMETER: Record<string, number> = { WeakMap: 0, WeakSet: 0, Wea
  * Everything that follows from being ENUMERABLE, plus `clear`. A weak collection
  * is neither enumerable nor clearable: what it holds may be collected between
  * one step of a walk and the next, so there is no order to report and no count
- * to report it against. Reading any of these was ~any~ before this list existed.
+ * to report it against. A read of one of these on a weak collection is refused.
  */
 const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
   'size', 'clear', 'keys', 'values', 'entries', 'forEach',
@@ -1025,11 +1034,10 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
   // skipped where the source provably satisfies the target, since a check that
   // cannot fail does nothing. A copy is never nothing." Neither is a stamp.
   //
-  // Measured before this: `let m: Map.<string, uint8> = new Map()` adopted,
-  // `let g: Map.<…> = Map.groupBy(…)` did NOT, and laundering the same call
-  // through `any` made it adopt again - one behaviour decided by what the
-  // checker happened to prove. Giving `Map.groupBy` a Static Type is
-  // what created that, by making the proof possible.
+  // Otherwise `let m: Map.<string, uint8> = new Map()` adopts, `let g: Map.<…>
+  // = Map.groupBy(…)` does not, and laundering the same call through `any`
+  // makes it adopt again - one behaviour decided by what the checker happens
+  // to prove, which giving `Map.groupBy` a Static Type makes possible.
   //
   // Keyed on the NAME and the argument count, deliberately. An earlier attempt
   // at the value-type half of this asked `LayoutOf` instead and broke four
@@ -1484,17 +1492,14 @@ function writtenAnnotationAbove(node: object): boolean {
 }
 
 /**
- * The signature of an Array method for a given ELEMENT type.
+ * The signature of an Array method for a given ELEMENT type, or null where the
+ * method is left to the run time. The checker instantiates it with the
+ * receiver's element to check a call; it reads no checker state, which is why
+ * it lives at module scope.
  *
- * Lifted to module scope so both readers can share ONE source: the checker
- * instantiates it with the receiver's element to check a call, and the
- * reflection path instantiates it with a type PARAMETER to report what the
- * method IS - `a.map` is the same object as `Array.prototype.map`, so a
- * receiver-specialised signature is not reportable and the generic one is.
- *
- * #sec-runtimetypeof requires the second: it names built-ins collapsing "into
- * one entry" as the cost its step was changed to avoid, and says the operation
- * "reports what a value IS".
+ * Only methods with a fixed leading parameter are here: `push` and `unshift`
+ * take a rest parameter, and an argument loop that checked only their first
+ * argument would be worse than the run time, which already enforces them.
  */
 const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
@@ -1570,9 +1575,8 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
     }
     case 'shrinkToFit':
       // #sec-array.prototype.shrinktofit: takes nothing and answers nothing.
-      // It had no entry, so it resolved to ~any~ and `a.shrinkToFit(1, 2, 3)`
-      // was accepted - the same hole that was closed for `capacity`, reopened
-      // by adding an operation without adding its signature alongside.
+      // Without an entry a method resolves to ~any~ and `a.shrinkToFit(1, 2,
+      // 3)` is accepted, so an operation added to the array is added here too.
       return { Kind: 'function', Signatures: [{ Parameters: [], Return: makePrimitive('undefined'), Untyped: false }] } as unknown as Known;
     case 'reserve':
       // #sec-array.prototype.reserve: takes a count and answers nothing. The
@@ -1632,9 +1636,9 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
     // the same entry caused both.
     case 'concat': {
       // `Extent` is ~dynamic~, as in every other array Type Record the checker
-      // builds. `undefined` renders as `[undefined].<uint.<8>>`, which is not a
-      // type any program can write, and it matches nothing - so `a.concat(b)`
-      // was refused for an argument of exactly the right element type.
+      // builds: an undefined extent renders as `[undefined].<uint.<8>>`, which
+      // no program can write and which matches nothing, not even an argument
+      // of exactly the right element type.
       const arrayOfElement = { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord;
       // An argument may be an ELEMENT or an array of them, since
       // `Array.prototype.concat` flattens one level: `[1].concat(2)` is
@@ -1673,6 +1677,10 @@ export function CheckScript(script: ParseNode.Script): ObjectValue[] {
  *
  * The caller commits `next` only if it accepts the entry - a rejected entry must
  * leave no declarations behind - which is why the session is not mutated here.
+ *
+ * ONE pass, where CheckScript runs two: the inference asymmetry checkInTwoPasses
+ * describes therefore applies to a body that reads a binding its own entry
+ * declares.
  */
 export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession): { errors: ObjectValue[], next: CheckSession } {
   const next: CheckSession = { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) };
@@ -1694,8 +1702,8 @@ export function CheckScriptInSession(script: ParseNode.Script, session: CheckSes
  * but the memoization: a type is not complete until the walk has seen every
  * declaration that adds to it - an interface whose computed key waits on a
  * `const`, or any name a `partial interface` extends - and resolving an
- * annotation early CACHES the incomplete record. Both were measured, and both
- * are silent: the member simply stops being checked.
+ * annotation early CACHES the incomplete record. Both failures are silent: the
+ * member simply stops being checked.
  *
  * So the declarations are made by a whole first pass, in order, with its
  * diagnostics discarded; the frame it produces is handed to the second pass,
@@ -1768,6 +1776,9 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * Running the whole check twice reports nothing twice, because a module whose
  * first pass found errors never reaches linking. Every error this pass finds is
  * one that needed an import to see.
+ *
+ * ONE pass, where CheckModule runs two: the inference asymmetry checkInTwoPasses
+ * describes applies to what this pass adds.
  */
 export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string): ObjectValue[] {
   if (imported.size === 0) {
@@ -2201,13 +2212,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const pushBlock = <T,>(f: () => T): T => {
-    // A block or switch introduces a scope; a binding declared inside shadows
-    // an outer one without disturbing it. Overwriting in the same frame stays
-    // sound because an unknown type is any.
+    // A block, a `switch` body or a clause introduces a scope of its own: a
+    // binding declared inside shadows an outer one and is gone when the block
+    // ends. A deferral opened by an assertion statement covers the rest of ITS
+    // block and no further, so the guard depth is restored with the frame.
     frames.push(emptyFrame());
-    // The ~void~ form: a deferral
-    // opened by an assertion statement covers the rest of ITS block and no
-    // further, so the depth is restored with the frame it belongs to.
     const deferredAtEntry = deferredGuardDepth;
     try {
       return f();
@@ -2223,12 +2232,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * The type parameters in scope, innermost last. A generic declaration binds
    * its parameters for its whole signature and body, so they are pushed while
-   * that declaration is read and popped after.
+   * that declaration is read and popped after. Each scope maps a name to its
+   * RESOLVED constraint, or null where it declares none: the constraint is what
+   * #sec-issubtype's [[Constraint]] step reads, so `function f<T: string>(x:
+   * T): string { return x; }` is admitted on the strength of `T: string`.
    */
-  // A scope maps each name to its RESOLVED
-  // constraint, or null where it declares none. It was a `Set<string>` - names
-  // only - which is why `#sec-issubtype`'s [[Constraint]] step had nothing to
-  // read and `function f<T: string>(x: T): string { return x; }` was refused.
   const typeParameterScopes: Map<string, Known | null>[] = [];
 
   const typeParameterInScope = (name: string): boolean => typeParameterScopes.some((scope) => scope.has(name));
@@ -2253,14 +2261,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * declaration order for that reason. A parameter is entered with a null
    * constraint before its OWN constraint resolves, so a self-reference
    * terminates rather than recurring.
-   */
-  /**
+   *
    * @param only `'type-only'` skips VALUE parameters. `class S<N: uint32> { b:
    *   [N].<uint8>; }` declares a compile-time constant standing in an extent,
-   *   not a type; bringing it into a TYPE scope makes `[N].<uint8>` resolve
-   *   where it did not, because `SubstituteTypeArguments` is written for type
-   *   arguments. Generic TYPE parameters, generic VALUE parameters and type
-   *   PACKS are three features wearing one name.
+   *   not a type, and `SubstituteTypeArguments` is written for type arguments,
+   *   so bringing `N` into a TYPE scope would make `[N].<uint8>` resolve as one.
+   *   Generic TYPE parameters, generic VALUE parameters and type PACKS are three
+   *   features wearing one name.
    */
   const pushTypeParameterScopeOf = (declaration: ParseNode | null | undefined, only?: 'type-only'): boolean => {
     const list = (declaration as unknown as {
@@ -3909,8 +3916,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // The class's type parameters are in scope for its constructor's
           // formals, as they are for a method's (below), and INCLUDING the
           // value parameters: `constructor(v: T)` and `constructor(n: N)` are
-          // what a bare construction binds T and N from (PLAN-v3 Q1,
-          // constructionArguments), and a formal resolved outside that scope
+          // what a bare construction binds T and N from
+          // (`constructionArguments`), and a formal resolved outside that scope
           // read `T` as nothing and bound nothing. The full scope rather than
           // 'type-only', because a value parameter's formal IS the binding
           // site; the extent hazard the type-only mode guards against is a
@@ -4505,8 +4512,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * proposal-runtime-types #sec-parameterized-types, #sec-type-references
-   * (PLAN-v3 Q7-a): a parameter no written argument reaches "takes its
+   * proposal-runtime-types #sec-parameterized-types, #sec-type-references:
+   * a parameter no written argument reaches "takes its
    * |TypeParameterDefault|; it is a type error where a parameter has none". One
    * rule for the empty list `A.<>`, a trailing position left empty (`Grid.<8>`
    * is `Grid.<8, 4>`), and - through `classInstanceType`'s defaults - the bare
@@ -4568,7 +4575,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * A bare generic class name in a TYPE position names `Box.<>` (PLAN-v3 Q7-a),
+   * A bare generic class name in a TYPE position names `Box.<>` (#sec-type-references),
    * and `classInstanceType` already binds the defaults where every parameter
    * has one. Where one has none the bare name denotes nothing a value can be of
    * - no bare instance exists once a construction yields a specialization - and
@@ -4597,7 +4604,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * proposal-runtime-types (PLAN-v3 Q1, Q2, Q4, Q6): the bindings a BARE
+   * proposal-runtime-types #sec-bindtypearguments: the bindings a BARE
    * construction of a generic class makes, on the static side.
    *
    * #sec-typed-classes: "the class is the type a construction yields" - for a
@@ -4709,7 +4716,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     // 4. Nothing binds it and it has no default: a type error naming the
-    // parameter (PLAN-v3 Q4; #sec-bindtypearguments, "a parameter left by all
+    // parameter (#sec-bindtypearguments, "a parameter left by all
     // three is an error"), reported once here and the construction typed at
     // `any` in that position so the walk can go on.
     const className = (decl as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? 'the class';
@@ -5936,9 +5943,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // A shared member that is two parameterizations of one base is
                 // DEFERRED, exactly as the arm-level pair is: whether the two
                 // constraints share a value is the `meet` hook's question and
-                // this walk cannot call one. Q1's distribution routes the pair
-                // here rather than to the arm loop, so without this the object
-                // form of the same mistake goes unreported.
+                // this walk cannot call one. Distributing an intersection over
+                // its members routes the pair here rather than to the arm loop,
+                // so the object form of the same mistake is reported too.
                 const lp = left.type as TypeRecord & { Kind: string, Base?: TypeRecord };
                 const rp = right.type as TypeRecord & { Kind: string, Base?: TypeRecord };
                 if (lp.Kind === 'parameterized' && rp.Kind === 'parameterized'
@@ -6361,24 +6368,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /** Memo of `structureOf` over generic instantiations, keyed by the record. */
   const substitutedStructures = new WeakMap<object, TypeRecord | null>();
 
-  /**
-   * The structure a value of _t_ has. For an INSTANTIATION of a generic
-   * declaration - `Box.<number>` - the declaration's structure with its
-   * parameters replaced by the arguments, so a member read `b.v` on a
-   * `Box.<number>` is a `number` and not the parameter `T` it was declared
-   * as, which admitted anything: `const n: string = new Box.<number>(1).v`
-   * was accepted while `new P().v` for a `class P { v: number }` was refused.
-   * Memoized per record; a structure with no parameters in it is returned as
-   * it is.
-   */
   /**
    * The structural shape behind a type, where it has one: an object type is its
    * own, and a nominal type - a class or an interface - carries one in
    * [[Structure]]. Reading a member goes through here so that a class's fields
    * are visible WITHOUT making class assignability structural, which stays by
    * [[Declaration]] identity.
+   *
+   * For an INSTANTIATION of a generic declaration - `Box.<number>` - the answer
+   * is the declaration's structure with its parameters replaced by the
+   * arguments, so a member read `b.v` on a `Box.<number>` is a `number` and not
+   * the parameter `T` it was declared as. Memoized per record; a structure with
+   * no parameters in it is returned as it is.
    */
   const structureOf = (t: Known): Known => {
     if (t && t.Kind === 'nominal') {
@@ -6671,14 +6675,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * together and binds a parameter position to whatever stands opposite it; the
    * first binding for a name wins, since a later disagreement is the caller's
    * error rather than a reason to rebind.
-   */
-  /**
-   * The structural rung of inference, over Static Types: the shared walk in
-   * unify.mts (PLAN-v3 Q6), with this checker's own `mentionsTypeParameter`
-   * and `substituteTypeParameters` supplied where the walk needs them. The
-   * run time calls the same walk over RuntimeTypeOf of its values, which is
-   * what makes `f<T>(items: [].<T>)` and `new L(items)` bind the same `T` on
-   * both sides.
+   *
+   * The matching is the shared walk in unify.mts, over Static Types here, with
+   * this checker's own `mentionsTypeParameter` and `substituteTypeParameters`
+   * supplied where the walk needs them. The run time calls the same walk over
+   * RuntimeTypeOf of its values, which is what makes `f<T>(items: [].<T>)` and
+   * `new L(items)` bind the same `T` on both sides.
    */
   const bindTypeParametersFromArguments = (
     parameters: readonly { Type?: Known }[],
@@ -8121,7 +8123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'NewExpression': {
         const callee = (node as unknown as { MemberExpression?: { type?: string, name?: string } }).MemberExpression;
         // A bare construction of a GENERIC class is typed wherever it stands,
-        // so the ladder runs - and its Q4 error is reported - for `new K();` as
+        // so the ladder runs - and its unbound-parameter error is reported - for `new K();` as
         // a statement and not only where the value reaches a typed position.
         const genericCallee = callee?.type === 'IdentifierReference' && callee.name !== undefined
           && ((classNodes.get(callee.name) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)
@@ -8634,7 +8636,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       targetTypedNewTypes.set(node as object, contextual);
       return contextual;
     }
-    // proposal-runtime-types (PLAN-v3 Q2-c): a CONSTRUCTION reads its position's
+    // proposal-runtime-types #sec-contextual-types: a CONSTRUCTION reads its position's
     // type for the same reason a call does - the bindings a bare `new Box(1)`
     // makes begin with what the position requires - and the `NewExpression` arm
     // of `staticType` reads it back off the node exactly as the call arm does.
@@ -10931,7 +10933,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   return CanonicalizeType(asLibrary as TypeRecord) as Known;
                 }
                 // `new A.<>(5)` and `new Grid.<8>()` bind their defaults, as the
-                // runtime's SpecializeGenericClass does (PLAN-v3 Q7-a).
+                // runtime's SpecializeGenericClass does (#sec-type-references).
                 return CanonicalizeType({ ...base, Arguments: fillClassDefaults(base, valueArgs) });
               }
             }
@@ -12483,7 +12485,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
-  /** The enclosing request's key, maintained as the walk descends (Q1). */
+  /** The enclosing request's key, maintained as the walk descends. */
   let enclosingRequestKey: object | null = null;
 
   const narrowingRequestsHere: NarrowingRequest[] = [];
@@ -12631,7 +12633,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       enclosingRequestKey = request.key;
     }
     try {
-      // A3.2: #sec-metadata-narrowing, consumed. The checking pass resolved this
+      // #sec-metadata-narrowing, consumed: the checking pass resolved this
       // comparison by calling `narrow`, which this walk cannot; where it did,
       // the branch types are its answer. Recorded through `declareNarrowed` so
       // an assignment invalidates a metadata narrowing exactly as it
@@ -12698,8 +12700,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  /** The narrowed walk of the two branches, split out so the parent link above
-   * covers both without duplicating the restore. */
+  /**
+   * The narrowed walk of the two branches, split out so the parent-link
+   * bookkeeping in `walkGuarded` covers both without duplicating the restore.
+   */
   const walkGuardedBranches = (fact: NonNullable<ReturnType<typeof narrowingFactOf>>, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
     const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
     const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
