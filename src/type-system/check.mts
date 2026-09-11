@@ -39,9 +39,6 @@ import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
 import { R, Throw } from '#self';
 
-/** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
-const TOPIC_NAME = '%';
-
 /**
  * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
  * A post-parse walk computing the Static Type of expressions and raising the
@@ -53,44 +50,147 @@ const TOPIC_NAME = '%';
  * positive because an unknown type is ~any~.
  */
 
+// ---- types ----------------------------------------------------------
+
 type Known = TypeRecord | null;
 
-/**
- * proposal-runtime-types #sec-primitive-metadata: two parameterizations of one
- * base with different metadata are related only as the metadata subtype
- * judgment admits, and the judgment consults `subtype` hooks, which are user
- * code. This pass is synchronous and runs at parse, so it does not decide such
- * a pair; it DEFERS it, and the checking pass (check-pass.mts), which runs
- * after parse and before the source text evaluates (#sec-type-errors), judges
- * the deferred pairs where an effectful context exists. The obligations are
- * keyed by the root Parse Node so that pass retrieves exactly its own source
- * text's pairs.
- */
-export interface DeferredMetadataCheck {
-  readonly source: TypeRecord & { readonly Kind: 'parameterized' };
-  readonly target: TypeRecord & { readonly Kind: 'parameterized' };
+/** An exact decimal: significand * 10^exponent. */
+type Dec = { sig: bigint, exp: number };
+
+// proposal-runtime-types (spec sec-enums): what the checker records about an enum
+// declaration so a switch over an enum value can be checked: the member names in
+// declaration order, to match a `case E.Member` label and to report a missing one.
+interface EnumInfo {
+  readonly names: readonly string[];
 }
-const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataCheck[]>();
+
+interface Frame {
+  readonly bindings: Map<string, TypeRecord>;
+
+  /**
+   * Names bound by a `const` whose initializer is a compile-time numeric
+   * constant. Held in the FRAME so it is scoped exactly as the bindings beside
+   * it: a parallel stack was not pushed per scope, so an inner `let K` inherited
+   * an outer `const K`'s treatment and adopted a type it must not.
+   */
+  readonly constLiterals: Set<string>;
+
+  /**
+   * The literal type of each such `const`'s initializer.
+   *
+   * #sec-static-type-of-an-expression: a use of one "produces the value the
+   * initializer would have produced had it been written at that position", so a
+   * position that refuses the written literal must refuse the use. The names
+   * alone could not answer that - `const k = 300; let a: uint8 = k` reported at
+   * RUN TIME where `let a: uint8 = 300` reports before the program runs.
+   */
+  readonly constLiteralTypes: Map<string, TypeRecord>;
+  /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
+  readonly constLiteralValues: Map<string, bigint>;
+  /** The EXACT decimal value of a `const` whose initializer is a constant expression. */
+  readonly constDecimalValues: Map<string, Dec>;
+
+  /** Names bound by a `let` to a numeric constant; see `letConstantUses`. */
+  readonly letConstants: Set<string>;
+
+  /**
+   * Names this frame binds IMMUTABLY - a `const` declaration. Read by
+   * `derivationIsStable`: a call through such a name cannot be a call to a
+   * replaced function, which is what lets its return annotation license an
+   * elision.
+   */
+  readonly immutableNames: Set<string>;
+
+  /**
+   * Every name this frame declares, whether or not it got a type. An
+   * unannotated `let` registers NO binding - its type is null - so the bindings
+   * map cannot answer "does this frame shadow the name", which is what the
+   * const-literal lookup needs in order to stop at an inner `let`.
+   */
+  readonly declaredNames: Set<string>;
+  // The names this frame NARROWS rather than declares. sec-narrowing: "a
+  // narrowed binding is invalidated by an assignment that leaves the narrowed
+  // type", so an assignment has to find the DECLARED type to check against and
+  // then drop the narrowing - which needs the two kinds of entry told apart.
+  readonly narrowed?: Set<string>;
+  readonly aliases: Map<string, TypeRecord>;
+  // Enum declarations in scope, by enum name, and the bindings known to hold an
+  // enumerator of one, by variable name to enum name.
+  readonly enums: Map<string, EnumInfo>;
+  readonly enumBindings: Map<string, string>;
+}
+
+function emptyFrame(): Frame {
+  return {
+    bindings: new Map(),
+    constLiterals: new Set<string>(),
+    constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(),
+    letConstants: new Set<string>(),
+    immutableNames: new Set<string>(),
+    declaredNames: new Set<string>(),
+    aliases: new Map(),
+    enums: new Map(),
+    enumBindings: new Map(),
+  };
+}
 
 /**
- * Two parameterizations of one base, written in one intersection.
+ * A copy of _frame_, so that checking an entry that is then REJECTED leaves the
+ * session as it was.
  *
- * Deferred for the reason a DeferredMetadataCheck is: the answer needs a `meet`
- * hook, which is user code, and AreDisjoint is synchronous and runs on the
- * interning path. Whether anything satisfies both constraints is a question only
- * the meta type can answer, and it is asked where the checking pass can call it.
+ * Every field is carried, including the three that look like they describe only
+ * the current entry. `constLiterals`, `letConstants`, and `declaredNames` are
+ * what isNumericConstantExpression reads: without them a `const K = 5;` in an
+ * earlier entry stops being a numeric constant in a later one. `narrowed` is
+ * not carried - a narrowing is established by control flow within an entry and
+ * does not survive one.
  */
-export interface DeferredMeetCheck {
-  readonly left: TypeRecord & { readonly Kind: 'parameterized' };
-  readonly right: TypeRecord & { readonly Kind: 'parameterized' };
-  /** The member the pair was written at, where it was, so the report can name it. */
-  readonly member?: string;
+function cloneFrame(frame: Frame): Frame {
+  return {
+    bindings: new Map(frame.bindings),
+    constLiterals: new Set(frame.constLiterals),
+    constLiteralTypes: new Map(frame.constLiteralTypes),
+    constLiteralValues: new Map(frame.constLiteralValues),
+    constDecimalValues: new Map(frame.constDecimalValues),
+    immutableNames: new Set(frame.immutableNames),
+    letConstants: new Set(frame.letConstants),
+    declaredNames: new Set(frame.declaredNames),
+    aliases: new Map(frame.aliases),
+    enums: new Map(frame.enums),
+    enumBindings: new Map(frame.enumBindings),
+  };
 }
-const deferredMeetChecks = new WeakMap<object, readonly DeferredMeetCheck[]>();
 
-export function TakeDeferredMeetChecks(root: object): readonly DeferredMeetCheck[] {
-  return deferredMeetChecks.get(root) ?? [];
+/**
+ * proposal-runtime-types: the static knowledge one console entry leaves for the
+ * next.
+ *
+ * The checks this proposal inserts are STATIC (#table-check-sites), and a
+ * lexical binding has no run-time typed-storage boundary to catch what they
+ * miss - the note in performDevtoolsEval says as much. So a console that
+ * evaluates each entry as its own script forgets every declared type at the
+ * entry boundary: `let n: uint8 = 1;` then `n = 300;` was accepted, and a
+ * `switch` over an enum-typed binding declared earlier was not checked for
+ * exhaustiveness, while the same text in ONE entry is refused.
+ *
+ * A session carries the top-level frame between entries, which is exactly that
+ * knowledge. It is deliberately NOT a concatenation of the session's source: a
+ * console permits `let a = 1;` twice, and concatenating two accepted entries
+ * produces "Identifier a already declared" from the parser.
+ */
+export interface CheckSession {
+  frame: Frame;
+  enumNodes: Map<string, ParseNode>;
 }
+
+export function CreateCheckSession(): CheckSession {
+  return { frame: emptyFrame(), enumNodes: new Map() };
+}
+
+// ---- constants ------------------------------------------------------
+
+/** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
+const TOPIC_NAME = '%';
 
 /** Identity of the self type a method's [[ThisType]] uses (#sec-this-adoption). */
 const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
@@ -257,8 +357,147 @@ const FIXED_STATIC_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
   'Date.now': () => makePrimitive('number'),
 };
 
+/**
+ * README, "Weak References": `class WeakMap<K extends object | symbol, V>`,
+ * `class WeakSet<T extends object | symbol>`, `class WeakRef<T extends object |
+ * symbol>`. The constraint on the type parameter that must be weakly
+ * referenceable, by library name; `FinalizationRegistry`'s T is the HELD value
+ * and is unconstrained, so it is not here. Nothing recorded these constraints
+ * before - the library generics had parameter NAMES and an ARITY - so
+ * `WeakMap.<string, uint8>` was accepted at every position and the program
+ * learned at its first `set`, from the run time's own TypeError, that no key
+ * could ever satisfy it.
+ */
+const WEAK_KEY_PARAMETER: Record<string, number> = { WeakMap: 0, WeakSet: 0, WeakRef: 0 };
+
+/**
+ * The members a `Map` or `Set` has and a `WeakMap` or `WeakSet` does not.
+ *
+ * Everything that follows from being ENUMERABLE, plus `clear`. A weak collection
+ * is neither enumerable nor clearable: what it holds may be collected between
+ * one step of a walk and the next, so there is no order to report and no count
+ * to report it against. Reading any of these was ~any~ before this list existed.
+ */
+const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
+  'size', 'clear', 'keys', 'values', 'entries', 'forEach',
+]);
+
+/**
+ * #index-type: the type of every count a container reports or accepts - an
+ * array's `length` and `capacity`, an element index, a view's length, a keyed
+ * collection's `size`. The specification names it once, as `uint64`, so it is
+ * referenced here rather than spelled at each site; `INDEX_TYPE` in value.mts is
+ * the RUNTIME's record of the same type, and `collections/size-and-counts` pins
+ * the two to each other.
+ */
+const indexTypeRecord = (): TypeRecord => builtinTypeRecord('uint', [64])!;
+
+// ---- obligations handed to the checking pass (check-pass.mts) -------
+
+/**
+ * proposal-runtime-types #sec-primitive-metadata: two parameterizations of one
+ * base with different metadata are related only as the metadata subtype
+ * judgment admits, and the judgment consults `subtype` hooks, which are user
+ * code. This pass is synchronous and runs at parse, so it does not decide such
+ * a pair; it DEFERS it, and the checking pass (check-pass.mts), which runs
+ * after parse and before the source text evaluates (#sec-type-errors), judges
+ * the deferred pairs where an effectful context exists. The obligations are
+ * keyed by the root Parse Node so that pass retrieves exactly its own source
+ * text's pairs.
+ */
+export interface DeferredMetadataCheck {
+  readonly source: TypeRecord & { readonly Kind: 'parameterized' };
+  readonly target: TypeRecord & { readonly Kind: 'parameterized' };
+}
+
+const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataCheck[]>();
+
 export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
   return deferredMetadataChecks.get(root) ?? [];
+}
+
+/**
+ * Two parameterizations of one base, written in one intersection.
+ *
+ * Deferred for the reason a DeferredMetadataCheck is: the answer needs a `meet`
+ * hook, which is user code, and AreDisjoint is synchronous and runs on the
+ * interning path. Whether anything satisfies both constraints is a question only
+ * the meta type can answer, and it is asked where the checking pass can call it.
+ */
+export interface DeferredMeetCheck {
+  readonly left: TypeRecord & { readonly Kind: 'parameterized' };
+  readonly right: TypeRecord & { readonly Kind: 'parameterized' };
+  /** The member the pair was written at, where it was, so the report can name it. */
+  readonly member?: string;
+}
+
+const deferredMeetChecks = new WeakMap<object, readonly DeferredMeetCheck[]>();
+
+export function TakeDeferredMeetChecks(root: object): readonly DeferredMeetCheck[] {
+  return deferredMeetChecks.get(root) ?? [];
+}
+
+/**
+ * #sec-primitive-metadata: "a metadata object whose own key no meta type
+ * claims is a type error at the parameterization that writes it". The keys
+ * are COLLECTED during the walk and adjudicated by the checking pass, because
+ * claims register when a MetaDeclaration EVALUATES: deciding here would
+ * reject a parameterization written above its meta type, which is legal.
+ * Mirrors the deferred-metadata channel above.
+ */
+export interface UnclaimedKeyCheck {
+  readonly node: ParseNode;
+  readonly display: string;
+  readonly base: TypeRecord;
+  readonly keys: readonly string[];
+}
+
+const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
+
+export function TakeUnclaimedKeyChecks(root: object): readonly UnclaimedKeyCheck[] {
+  return unclaimedKeyChecks.get(root) ?? [];
+}
+
+/**
+ * A binding declared with a type and NO initializer, held for the pass.
+ *
+ * #sec-defaultvalueof: "It is a type error to
+ * declare a binding or a field with a type _t_ and no initializer when
+ * DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
+ * determinable before the text runs an Early Error. The engine reported it at
+ * DECLARATION EVALUATION instead, so `if (false) { let x: I; }` was never
+ * checked at all and the diagnostic arrived after the program had begun.
+ *
+ * Collected here and DECIDED in the pass, for the reason the two channels above
+ * are: the answer needs `DefaultValueOf`, which is an evaluator, and it needs
+ * the source text's own `meta` declarations to have been processed - a
+ * registered `default` supplies one for a type that has no structural zero.
+ * This walk is synchronous and runs before that, so it can only collect.
+ *
+ * [[MetaNamesUnprocessed]] carries the nested-`meta` guard: the names of types that a `meta`
+ * declaration the pre-evaluation loop did NOT process could supply a default
+ * for. The loop scans a Script's top-level items, so a `meta` nested in a block
+ * is invisible to it while being perfectly visible to the running program.
+ */
+export interface DefaultRequirement {
+  readonly node: ParseNode;
+  readonly type: TypeRecord;
+  readonly display: string;
+  /**
+   * The name the annotation WROTE, where it wrote one.
+   *
+   * That guard compares against the name a `meta` declaration targets, and a
+   * meta declaration targets a NAME - `meta T { ... }` - while [[Display]] is
+   * the resolved type, `uint.<8> | string` for the same annotation. Comparing
+   * displays found nothing and the guard never fired.
+   */
+  readonly annotationName?: string;
+}
+
+const defaultRequirements = new WeakMap<object, readonly DefaultRequirement[]>();
+
+export function TakeDefaultRequirements(root: object): readonly DefaultRequirement[] {
+  return defaultRequirements.get(root) ?? [];
 }
 
 /**
@@ -300,98 +539,6 @@ export interface NarrowingRequest {
 
 const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
 
-/**
- * Uses of a `const` bound to a compile-time numeric constant. The binary
- * operator asks its OPERAND NODE whether it is a literal - `isNumericLiteralOperand`
- * - and these answer yes, so `K * r` adopts `r`'s type exactly as `3.14 * r`
- * does. Marked here because only the checker knows which binding a name
- * resolves to; consulted at evaluation because that is where the value is made.
- */
-/**
- * The resolved contextual type of each `new.(...)`, recorded by the checker
- * because only it knows what a position requires.
- */
-/**
- * Was an annotation WRITTEN on the declaration this node initializes?
- *
- * Asked of the Parse Node's parents rather than threaded through the walk,
- * because the arm that needs it sees only the resolved contextual type - and an
- * annotation naming an unresolved binding and no annotation at all both arrive
- * there as absent.
- */
-function writtenAnnotationAbove(node: object): boolean {
-  let cursor = (node as { parent?: unknown }).parent;
-  for (let depth = 0; depth < 6 && cursor && typeof cursor === 'object'; depth += 1) {
-    if ((cursor as { TypeAnnotation?: unknown }).TypeAnnotation) {
-      return true;
-    }
-    cursor = (cursor as { parent?: unknown }).parent;
-  }
-  return false;
-}
-
-const targetTypedNewTypes = new WeakMap<object, TypeRecord>();
-
-export function TargetTypedNewType(node: object): TypeRecord | undefined {
-  return targetTypedNewTypes.get(node);
-}
-
-/**
- * #sec-object-types: an object literal written AT a position of object type is
- * FRESH and is being built there, so "the type supplies what the literal omits"
- * - a declared default reaches it, where a value that arrived through a binding
- * is only read and nothing is written onto it.
- *
- * Freshness is syntactic and the fill is a run-time write, so the two halves sit
- * on opposite sides of the phase boundary. The checker knows which literals are
- * fresh and records the type here; `Evaluate_ObjectLiteral` reads it. This is
- * the channel `TargetTypedNewType` above already uses, for the same reason: the
- * mark is keyed on the LITERAL node, so one record and one read cover every
- * position a literal can occupy - a binding, an argument, a return, a nested
- * property - rather than one change per coercion site.
- */
-const freshObjectLiteralTargets = new WeakMap<object, TypeRecord>();
-
-export function FreshObjectLiteralTarget(node: object): TypeRecord | undefined {
-  return freshObjectLiteralTargets.get(node);
-}
-
-const constLiteralUses = new WeakSet<object>();
-
-export function IsConstLiteralUse(node: object): boolean {
-  return constLiteralUses.has(node);
-}
-
-/**
- * Uses of a `let` whose initializer IS a compile-time numeric constant. Such a
- * binding deliberately does not adopt - a mutable binding's type must be fixed,
- * or a reassignment has nothing to check against - but it is the one shape where
- * the failure has a one-word fix, so the diagnostic can say so instead of
- * reporting an unexplained type mismatch.
- */
-const letConstantUses = new WeakSet<object>();
-
-export function IsLetConstantUse(node: object): boolean {
-  return letConstantUses.has(node);
-}
-
-/**
- * TEST HOOK: how many element accesses the most recent check proved in bounds.
- *
- * #sec-bounds-checks: the index of a read or write of a fixed-length `[N].<T>`
- * is known to be below _N_ where _N_ is a compile-time constant and the index
- * is a value generic, a `where`-constrained parameter, or the counter of a
- * `for` over a range with that bound; the bound is proven statically and no
- * check is performed. Eliding a check that would have PASSED is unobservable,
- * so the proof can be pinned only by counting it. The cases where it must NOT
- * fire are the ones that matter.
- */
-let lastBoundsProvenCount = 0;
-
-export function BoundsProvenCountForLastCheck(): number {
-  return lastBoundsProvenCount;
-}
-
 export function TakeNarrowingRequests(root: object): readonly NarrowingRequest[] {
   return narrowingRequests.get(root) ?? [];
 }
@@ -419,65 +566,184 @@ function GetNarrowingResolution(root: object, key: object): NarrowingResolution 
   return narrowingResolutions.get(root)?.get(key);
 }
 
-/**
- * #sec-primitive-metadata: "a metadata object whose own key no meta type
- * claims is a type error at the parameterization that writes it". The keys
- * are COLLECTED during the walk and adjudicated by the checking pass, because
- * claims register when a MetaDeclaration EVALUATES: deciding here would
- * reject a parameterization written above its meta type, which is legal.
- * Mirrors the deferred-metadata channel above.
- */
-export interface UnclaimedKeyCheck {
-  readonly node: ParseNode;
-  readonly display: string;
-  readonly base: TypeRecord;
-  readonly keys: readonly string[];
-}
-const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
+// ---- marks read at evaluation ---------------------------------------
 
 /**
- * A binding declared with a type and NO initializer, held for the pass.
+ * #sec-check-elision: "A check is required only where the static types do not
+ * already establish the result." The checker proves that at a boundary and
+ * records the annotation whose check may be skipped; the run time consults the
+ * same set.
  *
- * #sec-defaultvalueof: "It is a type error to
- * declare a binding or a field with a type _t_ and no initializer when
- * DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
- * determinable before the text runs an Early Error. The engine reported it at
- * DECLARATION EVALUATION instead, so `if (false) { let x: I; }` was never
- * checked at all and the diagnostic arrived after the program had begun.
- *
- * Collected here and DECIDED in the pass, for the reason the two channels above
- * are: the answer needs `DefaultValueOf`, which is an evaluator, and it needs
- * the source text's own `meta` declarations to have been processed - a
- * registered `default` supplies one for a type that has no structural zero.
- * This walk is synchronous and runs before that, so it can only collect.
- *
- * [[MetaNamesUnprocessed]] carries the nested-`meta` guard: the names of types that a `meta`
- * declaration the pre-evaluation loop did NOT process could supply a default
- * for. The loop scans a Script's top-level items, so a `meta` nested in a block
- * is invisible to it while being perfectly visible to the running program.
+ * The condition is narrower than the clause's first bullet reads, and the
+ * narrowing is the whole correctness argument. A LITERAL is assignable to
+ * `uint8` and still needs converting - `let x: uint8 = 5` must produce a uint8
+ * value, not the Number 5 - so assignability alone does not license skipping
+ * the boundary. What licenses it is that the value is ALREADY of the target
+ * type: a non-literal static type that is assignable needs no representation
+ * change, so the boundary would return it unchanged.
  */
-export interface DefaultRequirement {
-  readonly node: ParseNode;
-  readonly type: TypeRecord;
-  readonly display: string;
-  /**
-   * The name the annotation WROTE, where it wrote one.
-   *
-   * That guard compares against the name a `meta` declaration targets, and a
-   * meta declaration targets a NAME - `meta T { ... }` - while [[Display]] is
-   * the resolved type, `uint.<8> | string` for the same annotation. Comparing
-   * displays found nothing and the guard never fired.
-   */
-  readonly annotationName?: string;
-}
-const defaultRequirements = new WeakMap<object, readonly DefaultRequirement[]>();
+const elidableAnnotations = new WeakSet<object>();
 
-export function TakeDefaultRequirements(root: object): readonly DefaultRequirement[] {
-  return defaultRequirements.get(root) ?? [];
+export function IsCheckElided(annotation: object): boolean {
+  return elidableAnnotations.has(annotation);
 }
 
-export function TakeUnclaimedKeyChecks(root: object): readonly UnclaimedKeyCheck[] {
-  return unclaimedKeyChecks.get(root) ?? [];
+/**
+ * TEST HOOK: how many element accesses the most recent check proved in bounds.
+ *
+ * #sec-bounds-checks: the index of a read or write of a fixed-length `[N].<T>`
+ * is known to be below _N_ where _N_ is a compile-time constant and the index
+ * is a value generic, a `where`-constrained parameter, or the counter of a
+ * `for` over a range with that bound; the bound is proven statically and no
+ * check is performed. Eliding a check that would have PASSED is unobservable,
+ * so the proof can be pinned only by counting it. The cases where it must NOT
+ * fire are the ones that matter.
+ */
+let lastBoundsProvenCount = 0;
+
+export function BoundsProvenCountForLastCheck(): number {
+  return lastBoundsProvenCount;
+}
+
+/**
+ * The resolved contextual type of each `new.(...)`, recorded by the checker
+ * because only it knows what a position requires.
+ */
+const targetTypedNewTypes = new WeakMap<object, TypeRecord>();
+
+export function TargetTypedNewType(node: object): TypeRecord | undefined {
+  return targetTypedNewTypes.get(node);
+}
+
+/**
+ * #sec-object-types: an object literal written AT a position of object type is
+ * FRESH and is being built there, so "the type supplies what the literal omits"
+ * - a declared default reaches it, where a value that arrived through a binding
+ * is only read and nothing is written onto it.
+ *
+ * Freshness is syntactic and the fill is a run-time write, so the two halves sit
+ * on opposite sides of the phase boundary. The checker knows which literals are
+ * fresh and records the type here; `Evaluate_ObjectLiteral` reads it. This is
+ * the channel `TargetTypedNewType` above already uses, for the same reason: the
+ * mark is keyed on the LITERAL node, so one record and one read cover every
+ * position a literal can occupy - a binding, an argument, a return, a nested
+ * property - rather than one change per coercion site.
+ */
+const freshObjectLiteralTargets = new WeakMap<object, TypeRecord>();
+
+export function FreshObjectLiteralTarget(node: object): TypeRecord | undefined {
+  return freshObjectLiteralTargets.get(node);
+}
+
+/**
+ * Uses of a `const` bound to a compile-time numeric constant. The binary
+ * operator asks its OPERAND NODE whether it is a literal - `isNumericLiteralOperand`
+ * - and these answer yes, so `K * r` adopts `r`'s type exactly as `3.14 * r`
+ * does. Marked here because only the checker knows which binding a name
+ * resolves to; consulted at evaluation because that is where the value is made.
+ */
+const constLiteralUses = new WeakSet<object>();
+
+export function IsConstLiteralUse(node: object): boolean {
+  return constLiteralUses.has(node);
+}
+
+/**
+ * Uses of a `let` whose initializer IS a compile-time numeric constant. Such a
+ * binding deliberately does not adopt - a mutable binding's type must be fixed,
+ * or a reassignment has nothing to check against - but it is the one shape where
+ * the failure has a one-word fix, so the diagnostic can say so instead of
+ * reporting an unexplained type mismatch.
+ */
+const letConstantUses = new WeakSet<object>();
+
+export function IsLetConstantUse(node: object): boolean {
+  return letConstantUses.has(node);
+}
+
+/** Numeric literals the checker read at `bigint`, consulted by NumericValue. */
+const bigintLiterals = new WeakSet<object>();
+
+export function IsBigIntContextLiteral(node: object): boolean {
+  return bigintLiterals.has(node);
+}
+
+/**
+ * Numeric literals the checker read at a DECIMAL type, with the width to build
+ * them at - consulted by NumericValue, exactly as the bigint mark is.
+ *
+ * "In a decimal context the literal `0.1` is the
+ * decimal one tenth, where in a `float64` context the same `0.1` is the nearest
+ * binary float", and the cohort member comes from the SOURCE TEXT: `1.0` is
+ * 10 x 10^-1 where `1.00` is 100 x 10^-2, and by the time the lexer has made a
+ * double the two are indistinguishable.
+ */
+const decimalLiterals = new WeakMap<object, 32 | 64 | 128>();
+
+export function DecimalContextLiteralWidth(node: object): 32 | 64 | 128 | undefined {
+  return decimalLiterals.get(node);
+}
+
+/**
+ * Numeric literals the checker read at a RATIONAL type, with the exact digits to
+ * build them from - consulted by NumericValue, exactly as the decimal and wide
+ * integer marks are.
+ *
+ * #sec-literal-types: "The mathematical value of a literal is exact. `0.1`
+ * denotes one tenth… so `0.1` in a `decimal64` position is the decimal one tenth
+ * and in a `rational` position is 1/10." The double nearest one tenth is not one
+ * tenth, and a rational does not round - it holds whatever it is given exactly -
+ * so a rational built from the double gives 3602879701896397/36028797018963968.
+ * The digits have to come from the SOURCE TEXT, as the decimal mark's do.
+ */
+const rationalLiterals = new WeakMap<object, { sig: bigint, exp: number }>();
+
+export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: number } | undefined {
+  return rationalLiterals.get(node);
+}
+
+/**
+ * Numeric literals the checker read at a WIDE INTEGER type, with the exact value
+ * to build them from - consulted by NumericValue, exactly as the two marks above
+ * are.
+ *
+ * #sec-integer-types gives `int.<N>` "exactly 2**N values", and a double
+ * distinguishes those only to 53 bits, so `let x: int64 = 9007199254740993;`
+ * was the double ...992 before anything could consult the type.
+ * #sec-literalvalueintype takes "the mathematical value denoted by the literal,
+ * as defined by the numeric literal grammar, BEFORE ANY ROUNDING", and the
+ * source text is where that value still exists.
+ */
+const wideIntegerLiterals = new WeakMap<object, { value: bigint, type: TypeRecord }>();
+
+export function WideIntegerContextLiteral(node: object): { value: bigint, type: TypeRecord } | undefined {
+  return wideIntegerLiterals.get(node);
+}
+
+/**
+ * README, "a `const` of a numeric constant behaves as if inlined ... the
+ * initializer may compute": a constant arithmetic expression at an integer
+ * contextual type is folded to its mathematical value by the checker, checked
+ * against the type, and recorded here. The evaluator returns the recorded
+ * value as a value of the type instead of evaluating the operands - see the
+ * arithmetic cases in `evaluator.mts`.
+ */
+const foldedConstants = new WeakMap<object, { value: bigint, type: TypeRecord }>();
+
+export function FoldedConstantOf(node: object): { value: bigint, type: TypeRecord } | undefined {
+  return foldedConstants.get(node);
+}
+
+/**
+ * The decimal counterpart: a constant expression at a DECIMAL contextual type,
+ * folded exactly on its source digits (decimal.md: "in a decimal context the
+ * literal `0.1` is the decimal one tenth"). The evaluator builds the decimal
+ * value from the significand and exponent.
+ */
+const foldedDecimals = new WeakMap<object, { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord }>();
+
+export function FoldedDecimalOf(node: object): { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord } | undefined {
+  return foldedDecimals.get(node);
 }
 
 /**
@@ -496,129 +762,209 @@ export function TakeStaticCallResolution(node: object): (TypeRecord & { Kind: 'p
   return staticCallResolutions.get(node);
 }
 
-// proposal-runtime-types (spec sec-enums): what the checker records about an enum
-// declaration so a switch over an enum value can be checked: the member names in
-// declaration order, to match a `case E.Member` label and to report a missing one.
-interface EnumInfo {
-  readonly names: readonly string[];
-}
+// ---- published declaration types, read by the runtime records -------
 
-interface Frame {
-  readonly bindings: Map<string, TypeRecord>;
+/**
+ * proposal-runtime-types #sec-inferred-return-types: the published inferred
+ * return type of a function, keyed by its declaration node.
+ *
+ * The run time needs it for the reason it needs a written annotation: the
+ * check-site table gives a `return` in a function with a declared OR PUBLISHED
+ * return type a RequireType, and without that the published type is a claim
+ * nothing verifies - a type the checker hands to callers and the boundary never
+ * tests. It is a WeakMap rather than a field on the function object because the
+ * checker computes it over declarations, before any function object exists.
+ */
+const publishedReturnTypes = new WeakMap<object, TypeRecord>();
 
-  /**
-   * Names bound by a `const` whose initializer is a compile-time numeric
-   * constant. Held in the FRAME so it is scoped exactly as the bindings beside
-   * it: a parallel stack was not pushed per scope, so an inner `let K` inherited
-   * an outer `const K`'s treatment and adopted a type it must not.
-   */
-  readonly constLiterals: Set<string>;
-
-  /**
-   * The literal type of each such `const`'s initializer.
-   *
-   * #sec-static-type-of-an-expression: a use of one "produces the value the
-   * initializer would have produced had it been written at that position", so a
-   * position that refuses the written literal must refuse the use. The names
-   * alone could not answer that - `const k = 300; let a: uint8 = k` reported at
-   * RUN TIME where `let a: uint8 = 300` reports before the program runs.
-   */
-  readonly constLiteralTypes: Map<string, TypeRecord>;
-  /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
-  readonly constLiteralValues: Map<string, bigint>;
-  /** The EXACT decimal value of a `const` whose initializer is a constant expression. */
-  readonly constDecimalValues: Map<string, Dec>;
-
-  /** Names bound by a `let` to a numeric constant; see `letConstantUses`. */
-  readonly letConstants: Set<string>;
-
-  /**
-   * Names this frame binds IMMUTABLY - a `const` declaration. Read by
-   * `derivationIsStable`: a call through such a name cannot be a call to a
-   * replaced function, which is what lets its return annotation license an
-   * elision.
-   */
-  readonly immutableNames: Set<string>;
-
-  /**
-   * Every name this frame declares, whether or not it got a type. An
-   * unannotated `let` registers NO binding - its type is null - so the bindings
-   * map cannot answer "does this frame shadow the name", which is what the
-   * const-literal lookup needs in order to stop at an inner `let`.
-   */
-  readonly declaredNames: Set<string>;
-  // The names this frame NARROWS rather than declares. sec-narrowing: "a
-  // narrowed binding is invalidated by an assignment that leaves the narrowed
-  // type", so an assignment has to find the DECLARED type to check against and
-  // then drop the narrowing - which needs the two kinds of entry told apart.
-  readonly narrowed?: Set<string>;
-  readonly aliases: Map<string, TypeRecord>;
-  // Enum declarations in scope, by enum name, and the bindings known to hold an
-  // enumerator of one, by variable name to enum name.
-  readonly enums: Map<string, EnumInfo>;
-  readonly enumBindings: Map<string, string>;
-}
-
-function emptyFrame(): Frame {
-  return {
-    bindings: new Map(),
-    constLiterals: new Set<string>(),
-    constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(),
-    letConstants: new Set<string>(),
-    immutableNames: new Set<string>(),
-    declaredNames: new Set<string>(),
-    aliases: new Map(),
-    enums: new Map(),
-    enumBindings: new Map(),
-  };
+export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefined {
+  return publishedReturnTypes.get(declaration);
 }
 
 /**
- * A copy of _frame_, so that checking an entry that is then REJECTED leaves the
- * session as it was.
+ * The instance type the checker built for a class declaration, by its node.
  *
- * Every field is carried, including the three that look like they describe only
- * the current entry. `constLiterals`, `letConstants`, and `declaredNames` are
- * what isNumericConstantExpression reads: without them a `const K = 5;` in an
- * earlier entry stops being a numeric constant in a later one. `narrowed` is
- * not carried - a narrowing is established by control flow within an entry and
- * does not survive one.
+ * The runtime's own record for the same class
+ * reads [[Base]] and [[Structure]] from here rather than computing them again.
  */
-function cloneFrame(frame: Frame): Frame {
-  return {
-    bindings: new Map(frame.bindings),
-    constLiterals: new Set(frame.constLiterals),
-    constLiteralTypes: new Map(frame.constLiteralTypes),
-    constLiteralValues: new Map(frame.constLiteralValues),
-    constDecimalValues: new Map(frame.constDecimalValues),
-    immutableNames: new Set(frame.immutableNames),
-    letConstants: new Set(frame.letConstants),
-    declaredNames: new Set(frame.declaredNames),
-    aliases: new Map(frame.aliases),
-    enums: new Map(frame.enums),
-    enumBindings: new Map(frame.enumBindings),
-  };
+const publishedClassTypes = new WeakMap<object, TypeRecord>();
+
+export function PublishedClassTypeOf(declaration: object): TypeRecord | undefined {
+  return publishedClassTypes.get(declaration);
 }
+
+/**
+ * The ABSTRACT members a class declares, by name, with their declared types.
+ *
+ * Published beside
+ * the class record because the two rules of #sec-abstract-classes are questions
+ * about a CHAIN - "a class not declared `abstract` leaves an inherited abstract
+ * method unimplemented" - and the chain is walked through [[Base]], whose
+ * declarations this is keyed by.
+ */
+const publishedAbstractMembers = new WeakMap<object, ReadonlyMap<string, TypeRecord | null>>();
+
+function PublishedAbstractMembersOf(declaration: object): ReadonlyMap<string, TypeRecord | null> | undefined {
+  return publishedAbstractMembers.get(declaration);
+}
+
+// ---- module tables, read at link time -------------------------------
+
+/**
+ * proposal-runtime-types #sec-inference-fixpoint: the types a module makes
+ * available under each exported name, recorded when the module is checked so
+ * that an IMPORTING module can read them.
+ *
+ * A module's own text determines these - `export function fx(): uint32` says
+ * what `fx` is without reference to anything imported - so they are collected
+ * during the ordinary parse-time check and read later, at link time, when the
+ * graph is resolved and an importer can be told what it is importing.
+ */
+const moduleExportedTypes = new WeakMap<object, Map<string, Known>>();
+
+export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
+  return moduleExportedTypes.get(module as unknown as object) as Map<string, unknown> | undefined;
+}
+
+/**
+ * A module's TYPE declarations by local name: aliases, classes, interfaces,
+ * enums - keyed by the module's SPECIFIER.
+ *
+ * Not by the parse tree, which was the defect. A module is checked several times
+ * as a graph links, and the tree is not the same object across those passes, so
+ * the pass with the most information - the one that has the module's imports and
+ * can therefore resolve a type built over one - wrote to a key nothing read. The
+ * write sequence for a two-module graph ended
+ * `PLAIN:User; WI:User+Page+Plain;` while a reader holding the first tree still
+ * saw `Plain`: the right answer computed, stored where no one looks.
+ *
+ * A specifier is stable across those passes, which is the property the key needs
+ * and the parse tree does not have.
+ */
+const moduleExportedAliasesByAgent = new WeakMap<object, Map<string, Map<string, unknown>>>();
+
+/**
+ * Per AGENT, not process-global. A specifier is stable across the passes that
+ * check one module, which is the property the key needs - but it is not unique
+ * across agents, and a record that outlived its agent would answer for a module
+ * some other realm compiled under the same name.
+ */
+function moduleAliasTable(): Map<string, Map<string, unknown>> {
+  const agent = surroundingAgent as unknown as object;
+  let table = moduleExportedAliasesByAgent.get(agent);
+  if (!table) {
+    table = new Map();
+    moduleExportedAliasesByAgent.set(agent, table);
+  }
+  return table;
+}
+
+/**
+ * A module's type declarations, plus its top-level CLASSES.
+ *
+ * A class is not in the check frame's `aliases` map: its name is hoisted into a
+ * local table of class nodes and its type is published against the node, so
+ * neither module-level map held it. The effect ran a long way - a module
+ * exporting a class contributed nothing to an importer's imported types, the
+ * import-aware check was gated on that being non-empty and so never ran, an
+ * annotation naming the import did not resolve, and the alias built over it was
+ * deleted by the rule that stops an unresolved alias standing as an empty object
+ * type. Every step was right on its own.
+ *
+ * Read off the declarations here rather than threaded through the frame, because
+ * what a class's type IS is already published and this only needs to say which
+ * name it answers to.
+ */
+function withTopLevelClasses(module: ParseNode.Module, aliases: Map<string, unknown>): Map<string, unknown> {
+  for (const item of module.ModuleBody?.ModuleItemList ?? []) {
+    const node = item as { type?: string, Declaration?: unknown, ClassDeclaration?: unknown };
+    // An export wraps its declaration in `Declaration` or `ClassDeclaration`,
+    // not in a field named after itself.
+    const declaration = (node.type === 'ExportDeclaration'
+      ? (node.ClassDeclaration ?? node.Declaration)
+      : node) as { type?: string, BindingIdentifier?: { name?: string } | null } | undefined;
+    if (declaration?.type !== 'ClassDeclaration') {
+      continue;
+    }
+    const name = declaration.BindingIdentifier?.name;
+    const published = PublishedClassTypeOf(declaration as unknown as object);
+    if (name && published && !aliases.has(name)) {
+      aliases.set(name, published);
+    }
+  }
+  return aliases;
+}
+
+/**
+ * Record a module's type declarations, MERGING with anything already recorded.
+ *
+ * A module checked without its imports necessarily knows less: a type built over
+ * an imported name cannot resolve there, and is dropped rather than left
+ * standing as an empty object type. Replacing would let whichever pass ran last
+ * decide, including one that knew less. Merging makes the record monotone - a
+ * later pass adds what it learned and takes nothing away.
+ */
+function recordModuleAliases(specifier: string | undefined, module: ParseNode.Module, aliases: Map<string, unknown>): void {
+  if (specifier === undefined) {
+    return;
+  }
+  const complete = withTopLevelClasses(module, aliases);
+  const table = moduleAliasTable();
+  const existing = table.get(specifier);
+  if (!existing) {
+    table.set(specifier, complete);
+    return;
+  }
+  for (const [name, t] of complete) {
+    existing.set(name, t);
+  }
+}
+
+/** A module's TYPE declarations by local name - what an artifact publishes. */
+export function ExportedAliasesOf(specifier: string | undefined): Map<string, unknown> | undefined {
+  return specifier === undefined ? undefined : moduleAliasTable().get(specifier);
+}
+
+/**
+ * A module's top-level function declarations, keyed by LOCAL name, recorded when
+ * the module is checked and read by an importer.
+ *
+ * #sec-checked-contracts has two halves and they behaved differently across a
+ * module boundary. The VERIFIED half fires at every concrete evaluation of an
+ * imported builder. The ASSUMED half - what lets a generic body reason about a
+ * deferred application before specialization - reads the builder's DECLARATION
+ * to find its `where` clauses, and the only declarations in reach were those in
+ * the caller's own compilation. So a body checked against a locally declared
+ * `omit` and not against the same `omit` imported from 'std:types', which is the
+ * case typeprogramming.md 6.2 is written for.
+ *
+ * Recorded here rather than resolved on demand because the importer already has
+ * this channel: `moduleExportedTypes` above carries what a name IS across the
+ * same boundary, for the same reason and at the same moment.
+ */
+const moduleBuilderNodes = new WeakMap<object, Map<string, ParseNode>>();
+
+export function ExportedBuilderNodesOf(module: ParseNode.Module): Map<string, ParseNode> | undefined {
+  return moduleBuilderNodes.get(module as unknown as object);
+}
+
+/** The imported builders visible to the check now running, if any. */
+let importedBuilderNodes: ReadonlyMap<string, ParseNode> | undefined;
+
+/**
+ * The declaration of a builder the current module IMPORTED, for the contract
+ * lookup. Consulted only when the caller's own compilation has no declaration of
+ * that name, so a local one always wins.
+ */
+function ImportedBuilderNode(name: string): ParseNode | undefined {
+  return importedBuilderNodes?.get(name);
+}
+
+// ---- helpers with no checker state ----------------------------------
 
 function widen(t: TypeRecord): TypeRecord {
   return t.Kind === 'literal' ? t.Base : t;
 }
-
-/**
- * #sec-check-elision: "A check is required only where the static types do not
- * already establish the result." The checker proves that at a boundary and
- * records the annotation whose check may be skipped; the run time consults the
- * same set.
- *
- * The condition is narrower than the clause's first bullet reads, and the
- * narrowing is the whole correctness argument. A LITERAL is assignable to
- * `uint8` and still needs converting - `let x: uint8 = 5` must produce a uint8
- * value, not the Number 5 - so assignability alone does not license skipping
- * the boundary. What licenses it is that the value is ALREADY of the target
- * type: a non-literal static type that is assignable needs no representation
- * change, so the boundary would return it unchanged.
- */
-const elidableAnnotations = new WeakSet<object>();
 
 /**
  * proposal-runtime-types: whether a conversion to this target has an EFFECT
@@ -695,11 +1041,6 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
     && (target as { Arguments: readonly unknown[] }).Arguments.length > 0;
 }
 
-/**
- * Whether a contextual type asks for a `bigint`, through a union as well as
- * directly: `let x: bigint | undefined = 9007199254740993` wants the same
- * reading as the bare annotation.
- */
 /** The width of a decimal type, or *undefined* where the type is not one. */
 function decimalWidthOf(t: TypeRecord): 32 | 64 | 128 | undefined {
   const base = t.Kind === 'literal' ? t.Base : t;
@@ -714,6 +1055,11 @@ function decimalWidthOf(t: TypeRecord): 32 | 64 | 128 | undefined {
   }
 }
 
+/**
+ * Whether a contextual type asks for a `bigint`, through a union as well as
+ * directly: `let x: bigint | undefined = 9007199254740993` wants the same
+ * reading as the bare annotation.
+ */
 function bigintTarget(t: TypeRecord): boolean {
   if (t.Kind === 'primitive') {
     return t.Name === 'bigint';
@@ -901,143 +1247,6 @@ function isNumericValueTypeName(name: string | undefined): boolean {
     || name === 'decimal' || name === 'decimal32' || name === 'decimal64' || name === 'decimal128';
 }
 
-/** An exact decimal: significand * 10^exponent. */
-type Dec = { sig: bigint, exp: number };
-
-/**
- * The exact decimal value of a constant expression, read from the literals'
- * source digits - decimal.md: "a decimal literal is read from its source digits
- * directly, not routed through a binary float64". `+`, `-` and `*` are exact in
- * this representation; `/` is not in general and is not folded. A constant
- * `const` reference resolves to its exact decimal, or to its exact integer as a
- * decimal with exponent 0.
- */
-function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => Dec | null): Dec | null {
-  const fold = (n: ParseNode) => foldDecimalConstant(n, resolveConst);
-  const e = node as ParseNode & {
-    Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
-    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
-    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode, SourceText?: string,
-  };
-  const align = (a: Dec, b: Dec): [bigint, bigint, number] => {
-    const exp = Math.min(a.exp, b.exp);
-    return [a.sig * 10n ** BigInt(a.exp - exp), b.sig * 10n ** BigInt(b.exp - exp), exp];
-  };
-  switch (e.type) {
-    case 'NumericLiteral': {
-      if (typeof e.SourceText !== 'string') {
-        return null;
-      }
-      const d = ParseDecimalDigits(e.SourceText.replace(/_/g, ''));
-      return d ? { sig: d.significand, exp: d.exponent } : null;
-    }
-    case 'IdentifierReference':
-      return resolveConst && e.name ? resolveConst(e.name) : null;
-    case 'ParenthesizedExpression':
-      return e.Expression ? fold(e.Expression) : null;
-    case 'UnaryExpression': {
-      const v = e.UnaryExpression ? fold(e.UnaryExpression) : null;
-      if (v === null) {
-        return null;
-      }
-      if (e.operator === '-') {
-        return { sig: -v.sig, exp: v.exp };
-      }
-      return e.operator === '+' ? v : null;
-    }
-    case 'AdditiveExpression': {
-      const l = fold(e.AdditiveExpression!);
-      const r = fold(e.MultiplicativeExpression!);
-      if (l === null || r === null) {
-        return null;
-      }
-      const [a, b, exp] = align(l, r);
-      return { sig: e.operator === '+' ? a + b : a - b, exp };
-    }
-    case 'MultiplicativeExpression': {
-      const l = fold(e.MultiplicativeExpression!);
-      const r = fold(e.ExponentiationExpression!);
-      if (l === null || r === null) {
-        return null;
-      }
-      const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
-      return op === '*' ? { sig: l.sig * r.sig, exp: l.exp + r.exp } : null;
-    }
-    default:
-      return null;
-  }
-}
-
-/**
- * README, "Weak References": `class WeakMap<K extends object | symbol, V>`,
- * `class WeakSet<T extends object | symbol>`, `class WeakRef<T extends object |
- * symbol>`. The constraint on the type parameter that must be weakly
- * referenceable, by library name; `FinalizationRegistry`'s T is the HELD value
- * and is unconstrained, so it is not here. Nothing recorded these constraints
- * before - the library generics had parameter NAMES and an ARITY - so
- * `WeakMap.<string, uint8>` was accepted at every position and the program
- * learned at its first `set`, from the run time's own TypeError, that no key
- * could ever satisfy it.
- */
-const WEAK_KEY_PARAMETER: Record<string, number> = { WeakMap: 0, WeakSet: 0, WeakRef: 0 };
-
-/**
- * Static counterpart of CanBeHeldWeakly, over a TYPE: whether every value of
- * the type can be held weakly.
- *
- * #sec-weak-references-and-typed-objects: "An instance of a typed class cannot
- * be held weakly ... A class becomes ineligible exactly when it becomes a typed,
- * sealed class." The run time derives "sealed" as: a non-`dynamic` class with a
- * typed instance field (`ClassDefinitionEvaluation`, `SealInstances`). The same
- * derivation is made here from the declaration, so the two agree by
- * construction. A composite is refused in the same positions (the clause merges
- * both into one predicate).
- *
- * Answers: `object` and any object, array, tuple, function or library nominal
- * type - yes; `symbol` - yes (a registered symbol is the run time's, as the
- * README says); `any` - yes (unknown, so the run time decides); a union - only
- * if every arm is; a value type, a literal, `null`, `undefined`, `string`,
- * `number`, `boolean`, `bigint` - no; a typed sealed class - no, and so its
- * nullable union `A | null`, which the clause does not carve out.
- */
-function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
-  if (!t) {
-    return true;
-  }
-  switch (t.Kind) {
-    case 'any': return true;
-    case 'object': case 'array': case 'tuple': case 'function': return true;
-    case 'primitive': {
-      const name = (t as { Name?: string }).Name;
-      if (name === 'object' || name === 'symbol') {
-        return true;
-      }
-      return false;
-    }
-    case 'union': return (t as { Members: readonly TypeRecord[] }).Members.every((m) => typeCanBeHeldWeakly(m));
-    case 'intersection': return (t as { Members: readonly TypeRecord[] }).Members.some((m) => typeCanBeHeldWeakly(m));
-    case 'nominal': {
-      const decl = (t as { Declaration?: ParseNode | null }).Declaration as (ParseNode & { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null, ClassModifiers?: readonly string[] | null }) | null | undefined;
-      if (!decl || (decl.type !== 'ClassDeclaration' && decl.type !== 'ClassExpression')) {
-        // A library nominal - Map, Promise, Date - is an ordinary object.
-        return true;
-      }
-      const body = decl.ClassTail?.ClassBody ?? [];
-      // `ClassModifiers` on the declaration, which is where the run time reads
-      // `dynamic` from (through the tail's parent) - a `dynamic` typed class is
-      // not sealed and IS holdable.
-      const isDynamic = (decl.ClassModifiers ?? []).includes('dynamic');
-      const hasTypedInstanceField = body.some((el) => (el as { type?: string }).type === 'FieldDefinition'
-        && !(el as { static?: boolean }).static
-        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
-        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== null);
-      return !(hasTypedInstanceField && !isDynamic);
-    }
-    default:
-      return false;
-  }
-}
-
 /** Whether a type is an integer value type - `uint` or `int` at any width. */
 function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
   return !!t && t.Kind === 'primitive'
@@ -1134,475 +1343,145 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
   }
 }
 
-/** Numeric literals the checker read at `bigint`, consulted by NumericValue. */
-const bigintLiterals = new WeakSet<object>();
-
-export function IsBigIntContextLiteral(node: object): boolean {
-  return bigintLiterals.has(node);
-}
-
 /**
- * Numeric literals the checker read at a DECIMAL type, with the width to build
- * them at - consulted by NumericValue, exactly as the bigint mark is.
- *
- * "In a decimal context the literal `0.1` is the
- * decimal one tenth, where in a `float64` context the same `0.1` is the nearest
- * binary float", and the cohort member comes from the SOURCE TEXT: `1.0` is
- * 10 x 10^-1 where `1.00` is 100 x 10^-2, and by the time the lexer has made a
- * double the two are indistinguishable.
+ * The exact decimal value of a constant expression, read from the literals'
+ * source digits - decimal.md: "a decimal literal is read from its source digits
+ * directly, not routed through a binary float64". `+`, `-` and `*` are exact in
+ * this representation; `/` is not in general and is not folded. A constant
+ * `const` reference resolves to its exact decimal, or to its exact integer as a
+ * decimal with exponent 0.
  */
-const decimalLiterals = new WeakMap<object, 32 | 64 | 128>();
-
-/**
- * Numeric literals the checker read at a RATIONAL type, with the exact digits to
- * build them from - consulted by NumericValue, exactly as the decimal and wide
- * integer marks are.
- *
- * #sec-literal-types: "The mathematical value of a literal is exact. `0.1`
- * denotes one tenth… so `0.1` in a `decimal64` position is the decimal one tenth
- * and in a `rational` position is 1/10." The double nearest one tenth is not one
- * tenth, and a rational does not round - it holds whatever it is given exactly -
- * so a rational built from the double gives 3602879701896397/36028797018963968.
- * The digits have to come from the SOURCE TEXT, as the decimal mark's do.
- */
-const rationalLiterals = new WeakMap<object, { sig: bigint, exp: number }>();
-export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: number } | undefined {
-  return rationalLiterals.get(node);
-}
-
-export function DecimalContextLiteralWidth(node: object): 32 | 64 | 128 | undefined {
-  return decimalLiterals.get(node);
-}
-
-/**
- * Numeric literals the checker read at a WIDE INTEGER type, with the exact value
- * to build them from - consulted by NumericValue, exactly as the two marks above
- * are.
- *
- * #sec-integer-types gives `int.<N>` "exactly 2**N values", and a double
- * distinguishes those only to 53 bits, so `let x: int64 = 9007199254740993;`
- * was the double ...992 before anything could consult the type.
- * #sec-literalvalueintype takes "the mathematical value denoted by the literal,
- * as defined by the numeric literal grammar, BEFORE ANY ROUNDING", and the
- * source text is where that value still exists.
- */
-const wideIntegerLiterals = new WeakMap<object, { value: bigint, type: TypeRecord }>();
-
-export function WideIntegerContextLiteral(node: object): { value: bigint, type: TypeRecord } | undefined {
-  return wideIntegerLiterals.get(node);
-}
-
-/**
- * README, "a `const` of a numeric constant behaves as if inlined ... the
- * initializer may compute": a constant arithmetic expression at an integer
- * contextual type is folded to its mathematical value by the checker, checked
- * against the type, and recorded here. The evaluator returns the recorded
- * value as a value of the type instead of evaluating the operands - see the
- * arithmetic cases in `evaluator.mts`.
- */
-const foldedConstants = new WeakMap<object, { value: bigint, type: TypeRecord }>();
-
-export function FoldedConstantOf(node: object): { value: bigint, type: TypeRecord } | undefined {
-  return foldedConstants.get(node);
-}
-
-/**
- * The decimal counterpart: a constant expression at a DECIMAL contextual type,
- * folded exactly on its source digits (decimal.md: "in a decimal context the
- * literal `0.1` is the decimal one tenth"). The evaluator builds the decimal
- * value from the significand and exponent.
- */
-const foldedDecimals = new WeakMap<object, { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord }>();
-
-export function FoldedDecimalOf(node: object): { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord } | undefined {
-  return foldedDecimals.get(node);
-}
-
-/**
- * proposal-runtime-types #sec-inferred-return-types: the published inferred
- * return type of a function, keyed by its declaration node.
- *
- * The run time needs it for the reason it needs a written annotation: the
- * check-site table gives a `return` in a function with a declared OR PUBLISHED
- * return type a RequireType, and without that the published type is a claim
- * nothing verifies - a type the checker hands to callers and the boundary never
- * tests. It is a WeakMap rather than a field on the function object because the
- * checker computes it over declarations, before any function object exists.
- */
-const publishedReturnTypes = new WeakMap<object, TypeRecord>();
-
-/**
- * The instance type the checker built for a class declaration, by its node.
- *
- * The runtime's own record for the same class
- * reads [[Base]] and [[Structure]] from here rather than computing them again.
- */
-const publishedClassTypes = new WeakMap<object, TypeRecord>();
-
-export function PublishedClassTypeOf(declaration: object): TypeRecord | undefined {
-  return publishedClassTypes.get(declaration);
-}
-
-/**
- * The ABSTRACT members a class declares, by name, with their declared types.
- *
- * Published beside
- * the class record because the two rules of #sec-abstract-classes are questions
- * about a CHAIN - "a class not declared `abstract` leaves an inherited abstract
- * method unimplemented" - and the chain is walked through [[Base]], whose
- * declarations this is keyed by.
- */
-const publishedAbstractMembers = new WeakMap<object, ReadonlyMap<string, TypeRecord | null>>();
-
-function PublishedAbstractMembersOf(declaration: object): ReadonlyMap<string, TypeRecord | null> | undefined {
-  return publishedAbstractMembers.get(declaration);
-}
-
-export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefined {
-  return publishedReturnTypes.get(declaration);
-}
-
-export function IsCheckElided(annotation: object): boolean {
-  return elidableAnnotations.has(annotation);
-}
-
-/**
- * proposal-runtime-types: the static knowledge one console entry leaves for the
- * next.
- *
- * The checks this proposal inserts are STATIC (#table-check-sites), and a
- * lexical binding has no run-time typed-storage boundary to catch what they
- * miss - the note in performDevtoolsEval says as much. So a console that
- * evaluates each entry as its own script forgets every declared type at the
- * entry boundary: `let n: uint8 = 1;` then `n = 300;` was accepted, and a
- * `switch` over an enum-typed binding declared earlier was not checked for
- * exhaustiveness, while the same text in ONE entry is refused.
- *
- * A session carries the top-level frame between entries, which is exactly that
- * knowledge. It is deliberately NOT a concatenation of the session's source: a
- * console permits `let a = 1;` twice, and concatenating two accepted entries
- * produces "Identifier a already declared" from the parser.
- */
-export interface CheckSession {
-  frame: Frame;
-  enumNodes: Map<string, ParseNode>;
-}
-
-export function CreateCheckSession(): CheckSession {
-  return { frame: emptyFrame(), enumNodes: new Map() };
-}
-
-/**
- * Checks _script_ as the next entry of _session_, and returns the state to
- * carry forward beside the errors.
- *
- * The caller commits `next` only if it accepts the entry - a rejected entry must
- * leave no declarations behind - which is why the session is not mutated here.
- */
-export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession): { errors: ObjectValue[], next: CheckSession } {
-  const next: CheckSession = { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) };
-  const errors = CheckStatementList(script.ScriptBody?.StatementList ?? null, script, next);
-  return { errors, next };
-}
-
-export function CheckScript(script: ParseNode.Script): ObjectValue[] {
-  return checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script, CreateCheckSession());
-}
-
-/**
- * Check _list_ twice: once to DECLARE, and once to report.
- *
- * Inferred return types are published before the walk, because a call's Static
- * Type must be settled before the walk checks the calls. That order left a body
- * reading anything the list itself declares - a module-scope
- * `let arr: [].<uint8>` - with nothing to read, while a body CALLING a function
- * declared beside it published, because signatures ARE collected first. The
- * asymmetry was invisible except as an inference that silently did not happen.
- *
- * Declaring the bindings earlier does not work, and the reason is not the order
- * but the memoization: a type is not complete until the walk has seen every
- * declaration that adds to it - an interface whose computed key waits on a
- * `const`, or any name a `partial interface` extends - and resolving an
- * annotation early CACHES the incomplete record. Both were measured, and both
- * are silent: the member simply stops being checked.
- *
- * So the declarations are made by a whole first pass, in order, with its
- * diagnostics discarded; the frame it produces is handed to the second pass,
- * whose publication then sees every type in its final form. The second pass
- * reports. Everything else a pass accumulates is local to the call, so the
- * second starts clean.
- *
- * _session_ is the caller's and is filled in place: after the call its frame
- * holds every top-level declaration of _statementList_, which is what a
- * module's importer reads.
- */
-function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession): ObjectValue[] {
-  CheckStatementList(statementList, root, session);
-  return CheckStatementList(statementList, root, session);
-}
-
-/**
- * proposal-runtime-types #sec-inference-fixpoint: the types a module makes
- * available under each exported name, recorded when the module is checked so
- * that an IMPORTING module can read them.
- *
- * A module's own text determines these - `export function fx(): uint32` says
- * what `fx` is without reference to anything imported - so they are collected
- * during the ordinary parse-time check and read later, at link time, when the
- * graph is resolved and an importer can be told what it is importing.
- */
-const moduleExportedTypes = new WeakMap<object, Map<string, Known>>();
-
-/**
- * A module's TYPE declarations by local name: aliases, classes, interfaces,
- * enums - keyed by the module's SPECIFIER.
- *
- * Not by the parse tree, which was the defect. A module is checked several times
- * as a graph links, and the tree is not the same object across those passes, so
- * the pass with the most information - the one that has the module's imports and
- * can therefore resolve a type built over one - wrote to a key nothing read. The
- * write sequence for a two-module graph ended
- * `PLAIN:User; WI:User+Page+Plain;` while a reader holding the first tree still
- * saw `Plain`: the right answer computed, stored where no one looks.
- *
- * A specifier is stable across those passes, which is the property the key needs
- * and the parse tree does not have.
- */
-const moduleExportedAliasesByAgent = new WeakMap<object, Map<string, Map<string, unknown>>>();
-
-/**
- * Per AGENT, not process-global. A specifier is stable across the passes that
- * check one module, which is the property the key needs - but it is not unique
- * across agents, and a record that outlived its agent would answer for a module
- * some other realm compiled under the same name.
- */
-function moduleAliasTable(): Map<string, Map<string, unknown>> {
-  const agent = surroundingAgent as unknown as object;
-  let table = moduleExportedAliasesByAgent.get(agent);
-  if (!table) {
-    table = new Map();
-    moduleExportedAliasesByAgent.set(agent, table);
-  }
-  return table;
-}
-
-/**
- * Record a module's type declarations, MERGING with anything already recorded.
- *
- * A module checked without its imports necessarily knows less: a type built over
- * an imported name cannot resolve there, and is dropped rather than left
- * standing as an empty object type. Replacing would let whichever pass ran last
- * decide, including one that knew less. Merging makes the record monotone - a
- * later pass adds what it learned and takes nothing away.
- */
-function recordModuleAliases(specifier: string | undefined, module: ParseNode.Module, aliases: Map<string, unknown>): void {
-  if (specifier === undefined) {
-    return;
-  }
-  const complete = withTopLevelClasses(module, aliases);
-  const table = moduleAliasTable();
-  const existing = table.get(specifier);
-  if (!existing) {
-    table.set(specifier, complete);
-    return;
-  }
-  for (const [name, t] of complete) {
-    existing.set(name, t);
-  }
-}
-
-/**
- * A module's top-level function declarations, keyed by LOCAL name, recorded when
- * the module is checked and read by an importer.
- *
- * #sec-checked-contracts has two halves and they behaved differently across a
- * module boundary. The VERIFIED half fires at every concrete evaluation of an
- * imported builder. The ASSUMED half - what lets a generic body reason about a
- * deferred application before specialization - reads the builder's DECLARATION
- * to find its `where` clauses, and the only declarations in reach were those in
- * the caller's own compilation. So a body checked against a locally declared
- * `omit` and not against the same `omit` imported from 'std:types', which is the
- * case typeprogramming.md 6.2 is written for.
- *
- * Recorded here rather than resolved on demand because the importer already has
- * this channel: `moduleExportedTypes` above carries what a name IS across the
- * same boundary, for the same reason and at the same moment.
- */
-const moduleBuilderNodes = new WeakMap<object, Map<string, ParseNode>>();
-
-export function ExportedBuilderNodesOf(module: ParseNode.Module): Map<string, ParseNode> | undefined {
-  return moduleBuilderNodes.get(module as unknown as object);
-}
-
-/** The imported builders visible to the check now running, if any. */
-let importedBuilderNodes: ReadonlyMap<string, ParseNode> | undefined;
-
-/**
- * The declaration of a builder the current module IMPORTED, for the contract
- * lookup. Consulted only when the caller's own compilation has no declaration of
- * that name, so a local one always wins.
- */
-function ImportedBuilderNode(name: string): ParseNode | undefined {
-  return importedBuilderNodes?.get(name);
-}
-
-/** A module's TYPE declarations by local name - what an artifact publishes. */
-/**
- * A module's type declarations, plus its top-level CLASSES.
- *
- * A class is not in the check frame's `aliases` map: its name is hoisted into a
- * local table of class nodes and its type is published against the node, so
- * neither module-level map held it. The effect ran a long way - a module
- * exporting a class contributed nothing to an importer's imported types, the
- * import-aware check was gated on that being non-empty and so never ran, an
- * annotation naming the import did not resolve, and the alias built over it was
- * deleted by the rule that stops an unresolved alias standing as an empty object
- * type. Every step was right on its own.
- *
- * Read off the declarations here rather than threaded through the frame, because
- * what a class's type IS is already published and this only needs to say which
- * name it answers to.
- */
-function withTopLevelClasses(module: ParseNode.Module, aliases: Map<string, unknown>): Map<string, unknown> {
-  for (const item of module.ModuleBody?.ModuleItemList ?? []) {
-    const node = item as { type?: string, Declaration?: unknown, ClassDeclaration?: unknown };
-    // An export wraps its declaration in `Declaration` or `ClassDeclaration`,
-    // not in a field named after itself.
-    const declaration = (node.type === 'ExportDeclaration'
-      ? (node.ClassDeclaration ?? node.Declaration)
-      : node) as { type?: string, BindingIdentifier?: { name?: string } | null } | undefined;
-    if (declaration?.type !== 'ClassDeclaration') {
-      continue;
+function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => Dec | null): Dec | null {
+  const fold = (n: ParseNode) => foldDecimalConstant(n, resolveConst);
+  const e = node as ParseNode & {
+    Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string, name?: string,
+    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode, SourceText?: string,
+  };
+  const align = (a: Dec, b: Dec): [bigint, bigint, number] => {
+    const exp = Math.min(a.exp, b.exp);
+    return [a.sig * 10n ** BigInt(a.exp - exp), b.sig * 10n ** BigInt(b.exp - exp), exp];
+  };
+  switch (e.type) {
+    case 'NumericLiteral': {
+      if (typeof e.SourceText !== 'string') {
+        return null;
+      }
+      const d = ParseDecimalDigits(e.SourceText.replace(/_/g, ''));
+      return d ? { sig: d.significand, exp: d.exponent } : null;
     }
-    const name = declaration.BindingIdentifier?.name;
-    const published = PublishedClassTypeOf(declaration as unknown as object);
-    if (name && published && !aliases.has(name)) {
-      aliases.set(name, published);
+    case 'IdentifierReference':
+      return resolveConst && e.name ? resolveConst(e.name) : null;
+    case 'ParenthesizedExpression':
+      return e.Expression ? fold(e.Expression) : null;
+    case 'UnaryExpression': {
+      const v = e.UnaryExpression ? fold(e.UnaryExpression) : null;
+      if (v === null) {
+        return null;
+      }
+      if (e.operator === '-') {
+        return { sig: -v.sig, exp: v.exp };
+      }
+      return e.operator === '+' ? v : null;
     }
-  }
-  return aliases;
-}
-
-export function ExportedAliasesOf(specifier: string | undefined): Map<string, unknown> | undefined {
-  return specifier === undefined ? undefined : moduleAliasTable().get(specifier);
-}
-
-export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> | undefined {
-  return moduleExportedTypes.get(module as unknown as object) as Map<string, unknown> | undefined;
-}
-
-export function CheckModule(module: ParseNode.Module, specifier?: string): ObjectValue[] {
-  // Module items are a superset of statements; import/export wrappers are
-  // walked structurally, and their inner declarations checked as usual. The
-  // two passes are the script's (see checkInTwoPasses): a module's own
-  // top-level bindings are invisible to a single pass's inference for the same
-  // reason a script's are. The session is kept because its final frame is what
-  // an importer reads.
-  const session = CreateCheckSession();
-  const errors = checkInTwoPasses(module.ModuleBody?.ModuleItemList ?? null, module, session);
-  // Every top-level declaration of the module, keyed by its LOCAL name. An
-  // importer resolves an import to the exporting module and a binding name -
-  // which is that local name - so nothing here needs to read export syntax, and
-  // a re-export or a renamed export resolves through the same lookup.
-  const exported = new Map<string, Known>(session.frame.bindings);
-  moduleExportedTypes.set(module as unknown as object, exported);
-  // The TYPE declarations, which live in a different map. `bindings` holds what a
-  // name's VALUE is typed as - `const x: uint8` puts `x` here - and `aliases`
-  // holds what a name IS as a type, which is where `type P = ...`, a class, an
-  // interface and an enum all land.
-  //
-  // Recorded separately rather than merged, because the two answer different
-  // questions and a caller wants one or the other: an importer resolving a
-  // contract wants the first, and an expansion artifact publishing a module's
-  // types wants the second. Merging them would make `ExportedTypesOf` mean two
-  // things depending on which name you asked about.
-  // The same list, for the declarations an importer's contract lookup needs.
-  // `export function f() {}` puts the declaration in [[HoistableDeclaration]];
-  // [[Declaration]] is null for that form.
-  const builders = new Map<string, ParseNode>();
-  for (const item of module.ModuleBody?.ModuleItemList ?? []) {
-    const wrapper = item as { type?: string, HoistableDeclaration?: ParseNode, Declaration?: ParseNode };
-    const declaration = wrapper.type === 'ExportDeclaration'
-      ? (wrapper.HoistableDeclaration ?? wrapper.Declaration)
-      : (item as ParseNode);
-    const named = declaration as { type?: string, BindingIdentifier?: { name?: string } } | undefined;
-    if (named?.type === 'FunctionDeclaration' && typeof named.BindingIdentifier?.name === 'string') {
-      builders.set(named.BindingIdentifier.name, declaration as ParseNode);
+    case 'AdditiveExpression': {
+      const l = fold(e.AdditiveExpression!);
+      const r = fold(e.MultiplicativeExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      const [a, b, exp] = align(l, r);
+      return { sig: e.operator === '+' ? a + b : a - b, exp };
     }
-  }
-  moduleBuilderNodes.set(module as unknown as object, builders);
-  recordModuleAliases(specifier, module, new Map(session.frame.aliases));
-  return errors;
-}
-
-/**
- * Check _module_ again with the types of the names it IMPORTS supplied.
- *
- * The parse-time check above runs before the module graph is resolved, so an
- * imported name is undeclared there and a call of it is ~any~. This pass runs at
- * link time, when every dependency has been parsed and its exported types
- * recorded, and it can therefore report what the first pass could not: that a
- * value crossing a module boundary does not fit the annotation it is given.
- *
- * Running the whole check twice reports nothing twice, because a module whose
- * first pass found errors never reaches linking. Every error this pass finds is
- * one that needed an import to see.
- */
-/**
- * The members a `Map` or `Set` has and a `WeakMap` or `WeakSet` does not.
- *
- * Everything that follows from being ENUMERABLE, plus `clear`. A weak collection
- * is neither enumerable nor clearable: what it holds may be collected between
- * one step of a walk and the next, so there is no order to report and no count
- * to report it against. Reading any of these was ~any~ before this list existed.
- */
-const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
-  'size', 'clear', 'keys', 'values', 'entries', 'forEach',
-]);
-
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string): ObjectValue[] {
-  if (imported.size === 0) {
-    return [];
-  }
-  const session = CreateCheckSession();
-  for (const [name, t] of imported) {
-    session.frame.bindings.set(name, t as TypeRecord);
-    // ALSO as an alias. A type annotation naming an import resolves through
-    // `lookupAlias`, which reads `aliases` and not `bindings`, so an imported
-    // type seeded only into `bindings` did not resolve - and the alias built
-    // over it was then deleted by the rule that stops an unresolved alias
-    // standing as an empty object type. Both halves are right alone; together
-    // they erased every type a module built over a dependency's.
-    session.frame.aliases.set(name, t as TypeRecord);
-    session.frame.declaredNames.add(name);
-    // An import binding cannot be assigned, so a call through it is stable for
-    // #sec-elision-stability - the exporting module's own mutation is what the
-    // stability rule there judges, and this pass does not see it.
-    session.frame.immutableNames.add(name);
-  }
-  const outerBuilders = importedBuilderNodes;
-  importedBuilderNodes = builders;
-  try {
-    const errors = CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
-    // Recorded HERE and not only on the plain path: this pass has the module's
-    // imports, so it is the one that can resolve a type built over one, and its
-    // answer is the complete one.
-    recordModuleAliases(specifier, module, new Map(session.frame.aliases));
-    return errors;
-  } finally {
-    importedBuilderNodes = outerBuilders;
+    case 'MultiplicativeExpression': {
+      const l = fold(e.MultiplicativeExpression!);
+      const r = fold(e.ExponentiationExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
+      return op === '*' ? { sig: l.sig * r.sig, exp: l.exp + r.exp } : null;
+    }
+    default:
+      return null;
   }
 }
 
 /**
- * #index-type: the type of every count a container reports or accepts - an
- * array's `length` and `capacity`, an element index, a view's length, a keyed
- * collection's `size`. The specification names it once, as `uint64`, so it is
- * referenced here rather than spelled at each site; `INDEX_TYPE` in value.mts is
- * the RUNTIME's record of the same type, and `collections/size-and-counts` pins
- * the two to each other.
+ * Static counterpart of CanBeHeldWeakly, over a TYPE: whether every value of
+ * the type can be held weakly.
+ *
+ * #sec-weak-references-and-typed-objects: "An instance of a typed class cannot
+ * be held weakly ... A class becomes ineligible exactly when it becomes a typed,
+ * sealed class." The run time derives "sealed" as: a non-`dynamic` class with a
+ * typed instance field (`ClassDefinitionEvaluation`, `SealInstances`). The same
+ * derivation is made here from the declaration, so the two agree by
+ * construction. A composite is refused in the same positions (the clause merges
+ * both into one predicate).
+ *
+ * Answers: `object` and any object, array, tuple, function or library nominal
+ * type - yes; `symbol` - yes (a registered symbol is the run time's, as the
+ * README says); `any` - yes (unknown, so the run time decides); a union - only
+ * if every arm is; a value type, a literal, `null`, `undefined`, `string`,
+ * `number`, `boolean`, `bigint` - no; a typed sealed class - no, and so its
+ * nullable union `A | null`, which the clause does not carve out.
  */
-const indexTypeRecord = (): TypeRecord => builtinTypeRecord('uint', [64])!;
+function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
+  if (!t) {
+    return true;
+  }
+  switch (t.Kind) {
+    case 'any': return true;
+    case 'object': case 'array': case 'tuple': case 'function': return true;
+    case 'primitive': {
+      const name = (t as { Name?: string }).Name;
+      if (name === 'object' || name === 'symbol') {
+        return true;
+      }
+      return false;
+    }
+    case 'union': return (t as { Members: readonly TypeRecord[] }).Members.every((m) => typeCanBeHeldWeakly(m));
+    case 'intersection': return (t as { Members: readonly TypeRecord[] }).Members.some((m) => typeCanBeHeldWeakly(m));
+    case 'nominal': {
+      const decl = (t as { Declaration?: ParseNode | null }).Declaration as (ParseNode & { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null, ClassModifiers?: readonly string[] | null }) | null | undefined;
+      if (!decl || (decl.type !== 'ClassDeclaration' && decl.type !== 'ClassExpression')) {
+        // A library nominal - Map, Promise, Date - is an ordinary object.
+        return true;
+      }
+      const body = decl.ClassTail?.ClassBody ?? [];
+      // `ClassModifiers` on the declaration, which is where the run time reads
+      // `dynamic` from (through the tail's parent) - a `dynamic` typed class is
+      // not sealed and IS holdable.
+      const isDynamic = (decl.ClassModifiers ?? []).includes('dynamic');
+      const hasTypedInstanceField = body.some((el) => (el as { type?: string }).type === 'FieldDefinition'
+        && !(el as { static?: boolean }).static
+        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
+        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== null);
+      return !(hasTypedInstanceField && !isDynamic);
+    }
+    default:
+      return false;
+  }
+}
+
+/**
+ * Was an annotation WRITTEN on the declaration this node initializes?
+ *
+ * Asked of the Parse Node's parents rather than threaded through the walk,
+ * because the arm that needs it sees only the resolved contextual type - and an
+ * annotation naming an unresolved binding and no annotation at all both arrive
+ * there as absent.
+ */
+function writtenAnnotationAbove(node: object): boolean {
+  let cursor = (node as { parent?: unknown }).parent;
+  for (let depth = 0; depth < 6 && cursor && typeof cursor === 'object'; depth += 1) {
+    if ((cursor as { TypeAnnotation?: unknown }).TypeAnnotation) {
+      return true;
+    }
+    cursor = (cursor as { parent?: unknown }).parent;
+  }
+  return false;
+}
 
 /**
  * The signature of an Array method for a given ELEMENT type.
@@ -1781,6 +1660,148 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
       return null;
   }
 };
+
+// ---- entry points ---------------------------------------------------
+
+export function CheckScript(script: ParseNode.Script): ObjectValue[] {
+  return checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script, CreateCheckSession());
+}
+
+/**
+ * Checks _script_ as the next entry of _session_, and returns the state to
+ * carry forward beside the errors.
+ *
+ * The caller commits `next` only if it accepts the entry - a rejected entry must
+ * leave no declarations behind - which is why the session is not mutated here.
+ */
+export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession): { errors: ObjectValue[], next: CheckSession } {
+  const next: CheckSession = { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) };
+  const errors = CheckStatementList(script.ScriptBody?.StatementList ?? null, script, next);
+  return { errors, next };
+}
+
+/**
+ * Check _list_ twice: once to DECLARE, and once to report.
+ *
+ * Inferred return types are published before the walk, because a call's Static
+ * Type must be settled before the walk checks the calls. That order left a body
+ * reading anything the list itself declares - a module-scope
+ * `let arr: [].<uint8>` - with nothing to read, while a body CALLING a function
+ * declared beside it published, because signatures ARE collected first. The
+ * asymmetry was invisible except as an inference that silently did not happen.
+ *
+ * Declaring the bindings earlier does not work, and the reason is not the order
+ * but the memoization: a type is not complete until the walk has seen every
+ * declaration that adds to it - an interface whose computed key waits on a
+ * `const`, or any name a `partial interface` extends - and resolving an
+ * annotation early CACHES the incomplete record. Both were measured, and both
+ * are silent: the member simply stops being checked.
+ *
+ * So the declarations are made by a whole first pass, in order, with its
+ * diagnostics discarded; the frame it produces is handed to the second pass,
+ * whose publication then sees every type in its final form. The second pass
+ * reports. Everything else a pass accumulates is local to the call, so the
+ * second starts clean.
+ *
+ * _session_ is the caller's and is filled in place: after the call its frame
+ * holds every top-level declaration of _statementList_, which is what a
+ * module's importer reads.
+ */
+function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession): ObjectValue[] {
+  CheckStatementList(statementList, root, session);
+  return CheckStatementList(statementList, root, session);
+}
+
+export function CheckModule(module: ParseNode.Module, specifier?: string): ObjectValue[] {
+  // Module items are a superset of statements; import/export wrappers are
+  // walked structurally, and their inner declarations checked as usual. The
+  // two passes are the script's (see checkInTwoPasses): a module's own
+  // top-level bindings are invisible to a single pass's inference for the same
+  // reason a script's are. The session is kept because its final frame is what
+  // an importer reads.
+  const session = CreateCheckSession();
+  const errors = checkInTwoPasses(module.ModuleBody?.ModuleItemList ?? null, module, session);
+  // Every top-level declaration of the module, keyed by its LOCAL name. An
+  // importer resolves an import to the exporting module and a binding name -
+  // which is that local name - so nothing here needs to read export syntax, and
+  // a re-export or a renamed export resolves through the same lookup.
+  const exported = new Map<string, Known>(session.frame.bindings);
+  moduleExportedTypes.set(module as unknown as object, exported);
+  // The TYPE declarations, which live in a different map. `bindings` holds what a
+  // name's VALUE is typed as - `const x: uint8` puts `x` here - and `aliases`
+  // holds what a name IS as a type, which is where `type P = ...`, a class, an
+  // interface and an enum all land.
+  //
+  // Recorded separately rather than merged, because the two answer different
+  // questions and a caller wants one or the other: an importer resolving a
+  // contract wants the first, and an expansion artifact publishing a module's
+  // types wants the second. Merging them would make `ExportedTypesOf` mean two
+  // things depending on which name you asked about.
+  // The same list, for the declarations an importer's contract lookup needs.
+  // `export function f() {}` puts the declaration in [[HoistableDeclaration]];
+  // [[Declaration]] is null for that form.
+  const builders = new Map<string, ParseNode>();
+  for (const item of module.ModuleBody?.ModuleItemList ?? []) {
+    const wrapper = item as { type?: string, HoistableDeclaration?: ParseNode, Declaration?: ParseNode };
+    const declaration = wrapper.type === 'ExportDeclaration'
+      ? (wrapper.HoistableDeclaration ?? wrapper.Declaration)
+      : (item as ParseNode);
+    const named = declaration as { type?: string, BindingIdentifier?: { name?: string } } | undefined;
+    if (named?.type === 'FunctionDeclaration' && typeof named.BindingIdentifier?.name === 'string') {
+      builders.set(named.BindingIdentifier.name, declaration as ParseNode);
+    }
+  }
+  moduleBuilderNodes.set(module as unknown as object, builders);
+  recordModuleAliases(specifier, module, new Map(session.frame.aliases));
+  return errors;
+}
+
+/**
+ * Check _module_ again with the types of the names it IMPORTS supplied.
+ *
+ * The parse-time check above runs before the module graph is resolved, so an
+ * imported name is undeclared there and a call of it is ~any~. This pass runs at
+ * link time, when every dependency has been parsed and its exported types
+ * recorded, and it can therefore report what the first pass could not: that a
+ * value crossing a module boundary does not fit the annotation it is given.
+ *
+ * Running the whole check twice reports nothing twice, because a module whose
+ * first pass found errors never reaches linking. Every error this pass finds is
+ * one that needed an import to see.
+ */
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string): ObjectValue[] {
+  if (imported.size === 0) {
+    return [];
+  }
+  const session = CreateCheckSession();
+  for (const [name, t] of imported) {
+    session.frame.bindings.set(name, t as TypeRecord);
+    // ALSO as an alias. A type annotation naming an import resolves through
+    // `lookupAlias`, which reads `aliases` and not `bindings`, so an imported
+    // type seeded only into `bindings` did not resolve - and the alias built
+    // over it was then deleted by the rule that stops an unresolved alias
+    // standing as an empty object type. Both halves are right alone; together
+    // they erased every type a module built over a dependency's.
+    session.frame.aliases.set(name, t as TypeRecord);
+    session.frame.declaredNames.add(name);
+    // An import binding cannot be assigned, so a call through it is stable for
+    // #sec-elision-stability - the exporting module's own mutation is what the
+    // stability rule there judges, and this pass does not see it.
+    session.frame.immutableNames.add(name);
+  }
+  const outerBuilders = importedBuilderNodes;
+  importedBuilderNodes = builders;
+  try {
+    const errors = CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+    // Recorded HERE and not only on the plain path: this pass has the module's
+    // imports, so it is the one that can resolve a type built over one, and its
+    // answer is the complete one.
+    recordModuleAliases(specifier, module, new Map(session.frame.aliases));
+    return errors;
+  } finally {
+    importedBuilderNodes = outerBuilders;
+  }
+}
 
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
   const errors: ObjectValue[] = [];
