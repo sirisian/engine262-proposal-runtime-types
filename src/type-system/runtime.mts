@@ -1894,7 +1894,8 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
   if ((value as { BrandTypeRecord?: unknown })?.BrandTypeRecord !== undefined) {
     return (value as { BrandTypeRecord?: unknown }).BrandTypeRecord as TypeRecord;
   }
-  if (isDecimalObject(value as Value)) {
+  if (isDecimalObject(value as Value)
+      || (value as { RationalNumerator?: bigint })?.RationalNumerator !== undefined) {
     return (value as unknown as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
   }
   return undefined;
@@ -5698,6 +5699,12 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
   // Every finite Number is a float128 value: the format is strictly wider than
   // binary64 in both significand and exponent, so nothing a double can hold
   // falls outside it.
+  // A rational holds any finite Number, so the fit question is representability
+  // rather than rounding. The VALUE it ends up with comes from the literal's
+  // digits where there are any - see `rationalLiterals` in check.mts.
+  if (name === 'rational') {
+    return Number.isFinite(v as number);
+  }
   return name === 'float16' || name === 'float32' || name === 'float64' || name === 'float128';
 }
 

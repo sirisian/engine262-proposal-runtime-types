@@ -970,6 +970,12 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     // imaginary literal have the type `complex` at all.
     case 'complex':
       return makePrimitive('complex', args.length > 0 ? args : [makePrimitive('number')]);
+    // #sec-primitives names `rational` a parameterized PRIMITIVE beside `uint`,
+    // `int` and `vector`. Without a case here it fell through to a NOMINAL
+    // record, and every numeric-literal path is keyed on `Kind === 'primitive'`,
+    // so no literal reached any rational form.
+    case 'rational':
+      return makePrimitive('rational', args);
     // The width-named shorthands "count total bits rather than component bits,
     // following the convention of NumPy and Go, so `complex64` is a pair of
     // `float32` and not a pair of `float64`".

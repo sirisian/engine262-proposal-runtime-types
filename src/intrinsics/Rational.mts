@@ -4,6 +4,7 @@ import {
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
+import { makePrimitive } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
@@ -66,6 +67,11 @@ export function CreateRationalValue(numerator: bigint, denominator: bigint, real
   const obj = OrdinaryObjectCreate(proto, ['RationalNumerator', 'RationalDenominator']) as Mutable<RationalObject>;
   obj.RationalNumerator = num;
   obj.RationalDenominator = den;
+  // A decimal object carries its Type Record so `CarriedTypeRecordOf` can answer
+  // for it, which is how a decimal VALUE satisfies a `decimal64` annotation. A
+  // rational carried none, so once `rational` became a primitive type the value
+  // and the type no longer matched and every binding refused its own literal.
+  (obj as Mutable<RationalObject> & { TypeRecord?: unknown }).TypeRecord = makePrimitive('rational', []);
   return obj;
 }
 

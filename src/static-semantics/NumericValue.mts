@@ -1,8 +1,9 @@
 import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral, DecimalContextLiteralWidth, WideIntegerContextLiteral } from '../type-system/check.mts';
+import { IsBigIntContextLiteral, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits } from '../type-system/check.mts';
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
+import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { surroundingAgent } from '#self';
 
 /**
@@ -40,6 +41,19 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
   const wide = WideIntegerContextLiteral(node);
   if (wide !== undefined) {
     return new TypedNumberValue(wide.value, wide.type);
+  }
+  // A literal the checker read at a RATIONAL type becomes that rational from its
+  // DIGITS, on the same terms as the decimal mark below: `0.1` in a rational
+  // position is 1/10 (#sec-literal-types), and the double nearest one tenth is
+  // not one tenth. A rational does not round, so building one from the double
+  // would give 3602879701896397/36028797018963968 - the Number's true value, and
+  // the wrong answer for the literal.
+  const rational = RationalContextLiteralDigits(node);
+  if (rational !== undefined) {
+    const { sig, exp } = rational;
+    return exp >= 0
+      ? CreateRationalValue(sig * 10n ** BigInt(exp), 1n, surroundingAgent.currentRealmRecord)
+      : CreateRationalValue(sig, 10n ** BigInt(-exp), surroundingAgent.currentRealmRecord);
   }
   const source = typeof node.SourceText === 'string' ? node.SourceText : undefined;
   const width = source !== undefined ? DecimalContextLiteralWidth(node) : undefined;

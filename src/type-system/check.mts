@@ -1162,6 +1162,23 @@ export function IsBigIntContextLiteral(node: object): boolean {
  */
 const decimalLiterals = new WeakMap<object, 32 | 64 | 128>();
 
+/**
+ * Numeric literals the checker read at a RATIONAL type, with the exact digits to
+ * build them from - consulted by NumericValue, exactly as the decimal and wide
+ * integer marks are.
+ *
+ * #sec-literal-types: "The mathematical value of a literal is exact. `0.1`
+ * denotes one tenth… so `0.1` in a `decimal64` position is the decimal one tenth
+ * and in a `rational` position is 1/10." The double nearest one tenth is not one
+ * tenth, and a rational does not round - it holds whatever it is given exactly -
+ * so a rational built from the double gives 3602879701896397/36028797018963968.
+ * The digits have to come from the SOURCE TEXT, as the decimal mark's do.
+ */
+const rationalLiterals = new WeakMap<object, { sig: bigint, exp: number }>();
+export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: number } | undefined {
+  return rationalLiterals.get(node);
+}
+
 export function DecimalContextLiteralWidth(node: object): 32 | 64 | 128 | undefined {
   return decimalLiterals.get(node);
 }
@@ -2149,7 +2166,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const source = sourceRaw.Kind === 'shared' ? sourceRaw.Target as TypeRecord : sourceRaw;
     const target = targetRaw.Kind === 'shared' ? targetRaw.Target as TypeRecord : targetRaw;
     if (source.Kind === 'literal' && target.Kind === 'primitive'
-        && ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'bigint'].includes(target.Name)
+        && ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'bigint', 'rational'].includes(target.Name)
         && source.Value instanceof NumberValue
         && fitsNumericType(R(source.Value) as number, target.Name, target.Arguments)) {
       return true;
@@ -5335,6 +5352,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // text too, and for a sharper reason than bigint's: the double is not
     // merely imprecise, it CANNOT REPRESENT THE ANSWER AT ALL, since `1.0` and
     // `1.00` are one double and two decimals.
+    if (node.type === 'NumericLiteral' && contextual
+        && contextual.Kind === 'primitive' && contextual.Name === 'rational') {
+      const text = (node as ParseNode.NumericLiteral).SourceText;
+      if (typeof text === 'string') {
+        const digits = ParseDecimalDigits(text.replace(/_/g, ''));
+        if (digits) {
+          rationalLiterals.set(node, { sig: digits.significand, exp: digits.exponent });
+          return contextual;
+        }
+      }
+    }
     if (node.type === 'NumericLiteral' && contextual) {
       const width = decimalWidthOf(contextual);
       if (width !== undefined && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
