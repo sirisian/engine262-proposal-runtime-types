@@ -3,12 +3,15 @@ import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.mts';
+import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
-import { type SignatureRecord, type PropertyTypeRecord, type MetadataRecord,
-  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, type TypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
-  parameter, type ParameterRecord, anyType as anyTypeRecord, generatorDeclaredType, generatorParameters,
-  neverType, libraryTypeRecord as libraryType,
-  typeParameterRecordsOf, type TypeParameterRecord,
+import {
+  type SignatureRecord, type PropertyTypeRecord, type MetadataRecord, type TypeRecord,
+  type ParameterRecord, type TypeParameterRecord,
+  builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
+  anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
+  parameter, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
+  badKindedArgument, restElementType, parameterTypeRecord,
 } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { unifyTypeParameters } from './unify.mts';
@@ -17,29 +20,27 @@ import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
 import { SoAColumnsOf } from './layout.mts';
-
-import { badKindedArgument, restElementType, parameterTypeRecord } from './records.mts';
-import { libraryTypeParameterNames as libraryTypeParameterNamesShared, orderTypeArguments as orderTypeArgumentsShared, typeArgumentNameOf as typeArgumentNameOfShared, assignTypeArguments as assignTypeArgumentsShared } from './type-argument-order.mts';
-import { voidType as voidTypeRecord } from './records.mts';
-
-/** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
-const TOPIC_NAME = '%';
+import {
+  libraryTypeParameterNames as libraryTypeParameterNamesShared,
+  orderTypeArguments as orderTypeArgumentsShared,
+  typeArgumentNameOf as typeArgumentNameOfShared,
+  assignTypeArguments as assignTypeArgumentsShared,
+} from './type-argument-order.mts';
 import { Diverges } from './divergence.mts';
 import { IsSubtype, SameType, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType } from './vector-ops.mts';
-import {
-  NarrowTo, NarrowFrom, nullishType, empty,
-} from './narrowing.mts';
+import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments } from './runtime.mts';
-import { isWideIntegerType } from './arithmetic.mts';
-import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments } from './overloads.mts';
 import { slotReceiving } from './sequence-assignment.mts';
-import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
 import { R, Throw } from '#self';
+
+/** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
+const TOPIC_NAME = '%';
 
 /**
  * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
@@ -107,11 +108,6 @@ const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
  * declared it.
  */
 export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
-
-
-
-
-
 
 /**
  * Constructors whose instance type is the constructor's own name.
@@ -566,7 +562,6 @@ interface Frame {
   readonly enums: Map<string, EnumInfo>;
   readonly enumBindings: Map<string, string>;
 }
-
 
 function emptyFrame(): Frame {
   return {
@@ -1781,7 +1776,6 @@ export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver
   }
 };
 
-
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
   const errors: ObjectValue[] = [];
   const deferred: DeferredMetadataCheck[] = [];
@@ -1991,7 +1985,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const names = list.map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
     return names.length > 0 ? names : null;
   };
-
 
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const returnTypes: Known[] = [];
@@ -2806,7 +2799,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           Signatures: [{
             TypeParameters: [],
             Parameters: [{ Name: 'value', Type: parameter, Optional: false, Rest: false }],
-            Return: voidTypeRecord,
+            Return: voidType,
           }],
         } as unknown as TypeRecord);
         return {
@@ -3004,7 +2997,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const items = adaptArgument(args[0], wantedIter);
         const element = items ? elementTypeOfIterable(items) : null;
         return element
-          ? libraryTypeRecord('IteratorHelper', [widen(element) as TypeRecord, voidTypeRecord, voidTypeRecord]) ?? null
+          ? libraryTypeRecord('IteratorHelper', [widen(element) as TypeRecord, voidType, voidType]) ?? null
           : null;
       };
     }
@@ -3552,9 +3545,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         let nextExtent = withExtentS.Extent;
         if (nextExtent && typeof nextExtent === 'object') {
           const done = substituteTypeParameters(nextExtent as Known, bindings);
-          const lit = done as { Kind?: string, Value?: { numberValue?: () => number } } | null;
+          const lit = done as { Kind?: string, Value?: unknown } | null;
           const raw = lit && lit.Kind === 'literal' ? lit.Value : undefined;
-          const asNumber = raw && typeof raw.numberValue === 'function' ? raw.numberValue() : undefined;
+          const asNumber = raw instanceof NumberValue ? R(raw) : undefined;
           nextExtent = typeof asNumber === 'number' ? asNumber : (done as TypeRecord | undefined) ?? nextExtent;
         }
         return {
@@ -3773,12 +3766,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (erasedSource.Kind === 'literal') {
         const literalToLane = eraseMetadata(erasedSource.Base as TypeRecord);
         const fitsLane = laneTarget.Kind === 'primitive'
-          && typeof (erasedSource.Value as { numberValue?(): number })?.numberValue === 'function'
-          && fitsNumericType(
-            (erasedSource.Value as { numberValue(): number }).numberValue(),
-            laneTarget.Name,
-            laneTarget.Arguments,
-          );
+          && erasedSource.Value instanceof NumberValue
+          && fitsNumericType(R(erasedSource.Value), laneTarget.Name, laneTarget.Arguments);
         if (IsAssignable(literalToLane, laneTarget) || fitsLane) {
           return;
         }
@@ -4405,9 +4394,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (typeof arg === 'number') {
       return arg;
     }
-    const t = arg as { Kind?: string, Value?: { numberValue?(): number } } | undefined;
-    if (t?.Kind === 'literal' && typeof t.Value?.numberValue === 'function') {
-      return t.Value.numberValue();
+    const t = arg as { Kind?: string, Value?: unknown } | undefined;
+    if (t?.Kind === 'literal' && t.Value instanceof NumberValue) {
+      return R(t.Value);
     }
     return null;
   };
@@ -6534,8 +6523,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : undefined;
   };
 
-
-
   const resolvingAliases = new Set<string>();
   /**
    * A generic alias's body with every parameter bound to its
@@ -8232,7 +8219,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return x === 0 || Number.isNaN(x);
     }
     if (inner instanceof BigIntValue) {
-      return (inner as unknown as { bigintValue(): bigint }).bigintValue() === 0n;
+      return R(inner) === 0n;
     }
     if (typeof (inner as { stringValue?: () => string }).stringValue === 'function') {
       return (inner as { stringValue(): string }).stringValue() === '';
@@ -8367,7 +8354,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : (yielded.length === 1 ? yielded[0] : CanonicalizeType({ Kind: 'union', Members: yielded }));
         const R = returned.length === 0 ? voidType
           : (returned.length === 1 ? returned[0] : CanonicalizeType({ Kind: 'union', Members: returned }));
-        return libraryType(d.async ? 'AsyncGenerator' : 'Generator', [Y, R, voidType]);
+        return libraryTypeRecord(d.async ? 'AsyncGenerator' : 'Generator', [Y, R, voidType]);
       }
       // A unary `+` or `-` over a numeric literal has that literal's type.
       //
@@ -10529,7 +10516,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (inferred && (annotated.some((t) => t !== null) || anchorage.anchored)) {
             const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
-              ? voidTypeRecord
+              ? voidType
               : inferred;
             signature.InferredReturn = published;
             publishedReturnTypes.set(el as unknown as object, published);
@@ -10727,7 +10714,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // pass cannot see an imported declaration and abstained, leaving the run
     // time to answer correctly. A program's meaning depended on which file its
     // class was written in.
-    const base = baseName ? (classTypeOf(baseName) ?? libraryType(baseName)) : null;
+    const base = baseName ? (classTypeOf(baseName) ?? libraryTypeRecord(baseName)) : null;
     const baseStructure = base && base.Kind === 'nominal'
       ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
       : null;
@@ -12009,7 +11996,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (resolves && (item.signatureTyped || aa.anchored)) {
             const settled = resolves.Kind === 'primitive' && resolves.Name === 'undefined'
-              ? voidTypeRecord
+              ? voidType
               : resolves;
             const published = libraryTypeRecord('Promise', [settled, anyTypeRecord]);
             if (published && (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, published))) {
@@ -12071,7 +12058,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // since a body that MIXES a valueless path with a value-carrying one
         // joins to a union rather than to `undefined` alone.
         const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
-          ? voidTypeRecord
+          ? voidType
           : inferred;
         const previous = item.signature.InferredReturn;
         if (!previous || !SameType(previous, published)) {
@@ -12697,7 +12684,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
-      ? voidTypeRecord
+      ? voidType
       : inferred;
     if (published.Kind !== 'void') {
       publishedReturnTypes.set(fn as unknown as object, published);
@@ -13137,7 +13124,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // with a value-carrying one still joins to `T | undefined`, which the
       // clause requires in the same breath.
       if (contributions.length > 0 && contributions.every((c) => c.Kind === 'primitive' && (c as { Name?: string }).Name === 'undefined')) {
-        return voidTypeRecord as Known;
+        return voidType as Known;
       }
       const Members: TypeRecord[] = [];
       for (const c of contributions) {
@@ -13164,7 +13151,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const iteratorMethodSignature = (name: string, element: TypeRecord): Known => {
     const boolType = makePrimitive('boolean');
-    const u32 = builtinTypeRecord('uint', [64])!!;
+    const u32 = builtinTypeRecord('uint', [64])!;
     const anyT = { Kind: 'any' as const } as TypeRecord;
     const fn = (params: TypeRecord[], Return: TypeRecord) => ({
       Kind: 'function',
@@ -13176,7 +13163,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // carrying its element type, and an interface record carries members rather
     // than arguments. `IteratorHelper` is a library name users do not write, so
     // `Iterator.<T>` stays the interface a hand-written iterator satisfies.
-    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidTypeRecord, voidTypeRecord])!;
+    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidType, voidType])!;
     switch (name) {
       case 'map': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
       case 'filter': return fn([cb(boolType) as TypeRecord], iteratorOf(element));
@@ -13184,10 +13171,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'drop': return fn([u32], iteratorOf(element));
       case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
       case 'toArray': return fn([], { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord);
-      case 'forEach': return fn([cb(voidTypeRecord) as TypeRecord], voidTypeRecord);
+      case 'forEach': return fn([cb(voidType) as TypeRecord], voidType);
       case 'some':
       case 'every': return fn([cb(boolType) as TypeRecord], boolType);
-      case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, voidTypeRecord] } as unknown as TypeRecord);
+      case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, voidType] } as unknown as TypeRecord);
       case 'reduce': return fn([fn([anyT, element, u32], anyT) as TypeRecord, anyT], anyT);
       default: return null;
     }
@@ -13240,7 +13227,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * satisfies it and can also carry a chain. It is the same choice
      * `iteratorMethodSignature` already makes for the helpers themselves.
      */
-    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidTypeRecord, voidTypeRecord])!;
+    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidType, voidType])!;
     /**
      * `Set.<any>`, the top of the set family: the bound the set operations take
      * their `other` operand at. Built from the receiver's own Declaration so it
@@ -13252,7 +13239,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Kind: 'function',
       Signatures: [{
         Parameters: [first, second, receiver].map((t, i) => parameter(t, { Name: `a${i}`, Optional: i > 0 })),
-        Return: voidTypeRecord,
+        Return: voidType,
         Untyped: false,
       }],
     } as unknown as TypeRecord);
@@ -13301,7 +13288,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       switch (name) {
-        case 'clear': return sig([], voidTypeRecord);
+        case 'clear': return sig([], voidType);
         // On a Set `keys` IS `values` - the same function object, not merely
         // the same behaviour - so the two share a signature.
         case 'keys':
@@ -13310,7 +13297,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // language does; typing it as the pair it actually yields is what lets
         // a destructuring `for (const [a, b] of s)` check.
         case 'entries': return sig([], iteratorOf(pairOf(element, element)));
-        case 'forEach': return sig([forEachCallback(element, element), anyType as TypeRecord], voidTypeRecord, 1);
+        case 'forEach': return sig([forEachCallback(element, element), anyType as TypeRecord], voidType, 1);
         default: return null;
       }
     }
@@ -13362,20 +13349,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const weaklyHeld = joinTypes(makePrimitive('object') as TypeRecord, makePrimitive('symbol') as TypeRecord) as TypeRecord;
       const held = arg(0);
       switch (name) {
-        case 'register': return sig([weaklyHeld, held, weaklyHeld], voidTypeRecord, 2);
+        case 'register': return sig([weaklyHeld, held, weaklyHeld], voidType, 2);
         case 'unregister': return sig([weaklyHeld], boolType);
         default: return null;
       }
     }
     switch (name) {
-      case 'clear': return sig([], voidTypeRecord);
+      case 'clear': return sig([], voidType);
       case 'keys': return sig([], iteratorOf(key));
       case 'values': return sig([], iteratorOf(value));
       case 'entries': return sig([], iteratorOf(pairOf(key, value)));
       // (value, key, map) - the value FIRST, which is the order the language
       // chose and the order a reader gets wrong. Typing it is most of the value
       // of typing `forEach` at all.
-      case 'forEach': return sig([forEachCallback(value, key), anyType as TypeRecord], voidTypeRecord, 1);
+      case 'forEach': return sig([forEachCallback(value, key), anyType as TypeRecord], voidType, 1);
       default: return null;
     }
   };
@@ -14290,7 +14277,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
     }
   };
-
 
   // The enum a binding should be tracked as holding, from its initializer or its
   // type annotation. `let e = E.Member` and `let e: E` both make `e` enum-typed;
@@ -17203,13 +17189,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   walk(statementList);
   deferredMetadataChecks.set(root, deferred);
   deferredMeetChecks.set(root, meets);
-  // A3.1: the SECOND walk re-derives the same requests, and its resolutions
-  // already exist keyed by node - so it must not replace the list the sweep was
-  // built from, which is also what keeps a third walk from ever looking needed.
+  // The narrowing requests are recorded only by the walk that runs BEFORE the
+  // checking pass resolves them. A later walk of the same root re-derives the
+  // same requests, and its resolutions are already keyed by node, so replacing
+  // the list would orphan the resolutions the sweep was built from.
   if (!narrowingResolutions.has(root)) {
     boundsProvenAccesses.set(root, provenHere);
-  lastBoundsProvenCount = provenHere.size;
-  narrowingRequests.set(root, narrowingRequestsHere);
+    lastBoundsProvenCount = provenHere.size;
+    narrowingRequests.set(root, narrowingRequestsHere);
   }
   unclaimedKeyChecks.set(root, unclaimed);
   defaultRequirements.set(root, defaultsNeeded);
