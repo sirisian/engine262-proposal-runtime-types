@@ -9119,6 +9119,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             typeArithmeticWithin(a as ParseNode);
           }
         }
+        // proposal-runtime-types #sec-conversions: a conversion call answers its
+        // TARGET type - or, where the position supplies a contextual type that
+        // the target CONVERTS to, the position's type.
+        //
+        // The second half is not assignability. `#sec-conversions` keys the
+        // numeric conversions on FAMILIES - "a numeric target has a conversion
+        // available only when the value is itself numeric" - so a `uint32` in a
+        // `uint8` position converts, though `IsAssignable` is false for it. The
+        // runtime converts there (`const v = uint32(1); h(v)` runs), and
+        // README.md:2088 documents `h(uint32(f()))` as a remedy that depends on
+        // it.
+        //
+        // Without any answer the checker did not know what `uint32(1)` IS, so
+        // `const c: string = uint32(1)` was accepted; answering the target alone
+        // refused the remedy. Both halves are needed.
+        {
+          const ce = (node as { CallExpression?: { type?: string, name?: string } }).CallExpression;
+          if (ce && ce.type === 'IdentifierReference' && ce.name
+              && !frames.some((f) => f.declaredNames.has(ce.name!))) {
+            const asType = builtinTypeRecord(ce.name, []) as Known;
+            if (asType) {
+              if (contextualForCall
+                  && numericFamilyOf(asType) !== null
+                  && numericFamilyOf(contextualForCall) !== null) {
+                return contextualForCall;
+              }
+              return asType;
+            }
+          }
+        }
         return null;
       }
       case 'YieldExpression': {

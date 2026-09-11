@@ -54,3 +54,28 @@ test('the runtime still rejects a bad conversion source', () => {
   // error is additional, not a replacement.
   expectThrown('uint32("s");', 'not a conversion source');
 });
+
+test('a conversion call answers its target type', () => {
+  // Without this the checker did not know what `uint32(1)` IS, so a wrong program
+  // passed: `const c: string = uint32(1)` was accepted. That is the mirror of the
+  // ambiguity above - a right program refused - and both came from the checker
+  // not modelling the construct.
+  expectThrown('const c: string = uint32(1);', 'not assignable');
+  expectThrown('if (false) { const c: string = uint32(1); }', 'not assignable');
+  expect(evaluated('const c: uint32 = uint32(1); String(Number(c));')).toBe('1');
+});
+
+test('...but the POSITION wins where it converts', () => {
+  // `#sec-conversions` keys the numeric conversions on FAMILIES - "a numeric
+  // target has a conversion available only when the value is itself numeric" -
+  // so a `uint32` in a `uint8` position converts, though `IsAssignable` is false
+  // for it and the runtime converts there too.
+  //
+  // Answering the target type UNCONDITIONALLY refused this, which is the remedy
+  // `README.md:2088` documents. The test is here because four attempts at this
+  // step passed the two rows above and failed this one.
+  const F = 'function f(): uint32 { return 10; } function f(): string { return "10"; } ';
+  expect(evaluated(`${F} function h(a: uint8) { return 1; } function h(a: string) { return 2; }`
+    + ' String(h(uint32(f())));')).toBe('1');
+  expect(evaluated('function h(a: uint8) { return 1; } const v = uint32(1); String(h(v));')).toBe('1');
+});
