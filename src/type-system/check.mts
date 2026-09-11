@@ -14,7 +14,7 @@ import {
   badKindedArgument, restElementType, parameterTypeRecord,
 } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
-import { unifyTypeParameters } from './unify.mts';
+import { unifyTypeParameters, elementTypeOfIterable } from './unify.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
@@ -96,16 +96,35 @@ export function TakeDeferredMeetChecks(root: object): readonly DeferredMeetCheck
 const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
 
 /**
- * The [[ThisType]] a METHOD carries, as one record.
+ * proposal-runtime-types #sec-this-adoption: the [[ThisType]] every METHOD
+ * carries, as one record.
  *
- * The checker built this per class and per
- * interface, which is fine because identity of a ~nominal~ is its
- * [[Declaration]] and they all share SELF_THIS. It is exported because the
- * RUNTIME record for an interface has to attach the SAME marker: a class's
- * method member carries it, and [[ThisType]] is contravariant with absence
- * meaning something - so a marked source against an unmarked target is refused,
- * and a method-bearing interface could not be satisfied by the class that
- * declared it.
+ * "A method extracted from its class and called free of it is the case this
+ * decides: its `this` is not of the type its body assumes, and the extraction
+ * is a type error at the boundary that took it rather than a *TypeError*
+ * inside it." So a method's signature has to say that it expects one.
+ *
+ * WHICH type it expects is not the class. A method is always invoked on the
+ * object it was found on, so its `this` is the RECEIVER, whatever the
+ * receiver's declared type: a self type rather than a fixed one. Giving a
+ * class's method the class itself would refuse `class C implements I`, since
+ * the class's method would expect a `C` where the interface's expects an `I`,
+ * and `C` is the narrower of the two, which contravariance rejects - wrongly,
+ * because the interface's method is reached only through an object that HAS
+ * it, so the receiver is a `C` at every call either way.
+ *
+ * Every method therefore carries this same marker. Two methods agree on it, so
+ * a class satisfies an interface declaring the same method; a method and a
+ * FREE function do not, which is the extraction. An explicit [[ThisType]] -
+ * the one `withThisType` writes - stays an ordinary type and is compared
+ * contravariantly against another explicit one.
+ *
+ * One record rather than one per class or interface: identity of a ~nominal~
+ * is its [[Declaration]], and they all share SELF_THIS. Exported because the
+ * RUNTIME record for an interface has to attach the SAME marker - [[ThisType]]
+ * is contravariant with absence meaning something, so a marked source against
+ * an unmarked target is refused, and a method-bearing interface could not be
+ * satisfied by the class that declared it.
  */
 export const SelfThisTypeRecord = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
 
@@ -282,22 +301,6 @@ export interface NarrowingRequest {
 const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
 
 /**
- * #sec-bounds-checks: "The index of a read or write of a fixed-length
- * `[N].<T>` is known to be below _N_, because _N_ is a compile-time constant
- * and the index is a value generic, a `where`-constrained parameter, or the
- * counter of a `for` over a range with that bound. The bound is proven
- * statically and no check is performed."
- *
- * This records the accesses for which that proof holds. It has no observable
- * effect: eliding a check that would have PASSED changes no program's
- * behaviour, which is why the clause is phrased as what an implementation
- * establishes rather than as behaviour. The set is what a production engine
- * consumes, and what a test can assert so the proof's SOUNDNESS is pinned - the
- * cases where it must NOT fire being the ones that matter.
- */
-const boundsProvenAccesses = new WeakMap<object, Set<object>>();
-
-/**
  * Uses of a `const` bound to a compile-time numeric constant. The binary
  * operator asks its OPERAND NODE whether it is a literal - `isNumericLiteralOperand`
  * - and these answer yes, so `K * r` adopts `r`'s type exactly as `3.14 * r`
@@ -372,16 +375,16 @@ export function IsLetConstantUse(node: object): boolean {
   return letConstantUses.has(node);
 }
 
-export function TakeBoundsProvenAccesses(root: object): ReadonlySet<object> {
-  return boundsProvenAccesses.get(root) ?? new Set();
-}
-
 /**
- * TEST HOOK. The count from the most recent check, because the proof is
- * otherwise unreachable: eliding a check that would have PASSED is
- * unobservable, and the set is keyed on a root a script cannot name. Without
- * this the analysis could only be verified by temporary instrumentation, which
- * verifies it once rather than keeping it verified.
+ * TEST HOOK: how many element accesses the most recent check proved in bounds.
+ *
+ * #sec-bounds-checks: the index of a read or write of a fixed-length `[N].<T>`
+ * is known to be below _N_ where _N_ is a compile-time constant and the index
+ * is a value generic, a `where`-constrained parameter, or the counter of a
+ * `for` over a range with that bound; the bound is proven statically and no
+ * check is performed. Eliding a check that would have PASSED is unobservable,
+ * so the proof can be pinned only by counting it. The cases where it must NOT
+ * fire are the ones that matter.
  */
 let lastBoundsProvenCount = 0;
 
@@ -412,7 +415,7 @@ export function SetNarrowingResolutions(root: object, table: Map<object, Narrowi
   narrowingResolutions.set(root, table);
 }
 
-export function GetNarrowingResolution(root: object, key: object): NarrowingResolution | undefined {
+function GetNarrowingResolution(root: object, key: object): NarrowingResolution | undefined {
   return narrowingResolutions.get(root)?.get(key);
 }
 
@@ -471,13 +474,6 @@ const defaultRequirements = new WeakMap<object, readonly DefaultRequirement[]>()
 
 export function TakeDefaultRequirements(root: object): readonly DefaultRequirement[] {
   return defaultRequirements.get(root) ?? [];
-}
-
-/** Type names a `meta` declaration nested where the pass cannot see it names. */
-const blockScopedMetaNames = new WeakMap<object, ReadonlySet<string>>();
-
-export function TakeBlockScopedMetaNames(root: object): ReadonlySet<string> {
-  return blockScopedMetaNames.get(root) ?? new Set();
 }
 
 export function TakeUnclaimedKeyChecks(root: object): readonly UnclaimedKeyCheck[] {
@@ -1258,7 +1254,7 @@ export function PublishedClassTypeOf(declaration: object): TypeRecord | undefine
  */
 const publishedAbstractMembers = new WeakMap<object, ReadonlyMap<string, TypeRecord | null>>();
 
-export function PublishedAbstractMembersOf(declaration: object): ReadonlyMap<string, TypeRecord | null> | undefined {
+function PublishedAbstractMembersOf(declaration: object): ReadonlyMap<string, TypeRecord | null> | undefined {
   return publishedAbstractMembers.get(declaration);
 }
 
@@ -1310,7 +1306,7 @@ export function CheckScriptInSession(script: ParseNode.Script, session: CheckSes
 }
 
 export function CheckScript(script: ParseNode.Script): ObjectValue[] {
-  return checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script);
+  return checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script, CreateCheckSession());
 }
 
 /**
@@ -1333,15 +1329,16 @@ export function CheckScript(script: ParseNode.Script): ObjectValue[] {
  * So the declarations are made by a whole first pass, in order, with its
  * diagnostics discarded; the frame it produces is handed to the second pass,
  * whose publication then sees every type in its final form. The second pass
- * reports. Everything a pass accumulates is local to the call, so the second
- * starts clean.
+ * reports. Everything else a pass accumulates is local to the call, so the
+ * second starts clean.
+ *
+ * _session_ is the caller's and is filled in place: after the call its frame
+ * holds every top-level declaration of _statementList_, which is what a
+ * module's importer reads.
  */
-function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession): ObjectValue[] {
-  const declaring: CheckSession = session
-    ? { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) }
-    : CreateCheckSession();
-  CheckStatementList(statementList, root, declaring);
-  return CheckStatementList(statementList, root, declaring);
+function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession): ObjectValue[] {
+  CheckStatementList(statementList, root, session);
+  return CheckStatementList(statementList, root, session);
 }
 
 /**
@@ -1445,7 +1442,7 @@ let importedBuilderNodes: ReadonlyMap<string, ParseNode> | undefined;
  * lookup. Consulted only when the caller's own compilation has no declaration of
  * that name, so a local one always wins.
  */
-export function ImportedBuilderNode(name: string): ParseNode | undefined {
+function ImportedBuilderNode(name: string): ParseNode | undefined {
   return importedBuilderNodes?.get(name);
 }
 
@@ -1496,14 +1493,13 @@ export function ExportedTypesOf(module: ParseNode.Module): Map<string, unknown> 
 
 export function CheckModule(module: ParseNode.Module, specifier?: string): ObjectValue[] {
   // Module items are a superset of statements; import/export wrappers are
-  // walked structurally, and their inner declarations checked as usual.
+  // walked structurally, and their inner declarations checked as usual. The
+  // two passes are the script's (see checkInTwoPasses): a module's own
+  // top-level bindings are invisible to a single pass's inference for the same
+  // reason a script's are. The session is kept because its final frame is what
+  // an importer reads.
   const session = CreateCheckSession();
-  // Declared first, reported second - see checkInTwoPasses. A module's own
-  // top-level bindings are invisible to its inference for the same reason a
-  // script's are, so the same two passes apply; the frame is already threaded
-  // here, which is what the pass needs.
-  CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
-  const errors = CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+  const errors = checkInTwoPasses(module.ModuleBody?.ModuleItemList ?? null, module, session);
   // Every top-level declaration of the module, keyed by its LOCAL name. An
   // importer resolves an import to the exporting module and a binding name -
   // which is that local name - so nothing here needs to read export syntax, and
@@ -1599,6 +1595,16 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
 }
 
 /**
+ * #index-type: the type of every count a container reports or accepts - an
+ * array's `length` and `capacity`, an element index, a view's length, a keyed
+ * collection's `size`. The specification names it once, as `uint64`, so it is
+ * referenced here rather than spelled at each site; `INDEX_TYPE` in value.mts is
+ * the RUNTIME's record of the same type, and `collections/size-and-counts` pins
+ * the two to each other.
+ */
+const indexTypeRecord = (): TypeRecord => builtinTypeRecord('uint', [64])!;
+
+/**
  * The signature of an Array method for a given ELEMENT type.
  *
  * Lifted to module scope so both readers can share ONE source: the checker
@@ -1611,13 +1617,13 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
  * one entry" as the cost its step was changed to avoid, and says the operation
  * "reports what a value IS".
  */
-export const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
+const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
   const numberType = makePrimitive('number');
   // sec-array-types: the index type is `uint64`, and `length` is of it. An
   // entry taking `number` instead refuses an array's own length - `a.at(a.length)`
   // - and refuses the index a callback receives, which is already this type.
-  const indexTypeForArray = builtinTypeRecord('uint', [64])!;
+  const indexTypeForArray = indexTypeRecord();
   const boolType = makePrimitive('boolean');
   const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
   switch (name) {
@@ -1783,8 +1789,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const unclaimed: UnclaimedKeyCheck[] = [];
   /** Declarations the pass must answer for. */
   const defaultsNeeded: DefaultRequirement[] = [];
-  /** Type names named by a `meta` the pre-evaluation loop cannot reach. */
-  const nestedMetaNames = new Set<string>();
   // The outermost frame is the session's where there is one, so a console entry
   // sees what earlier entries declared. It is already a copy (see
   // CheckScriptInSession), so checking writes the next state into it and the
@@ -2615,42 +2619,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * first binding for a name wins, since a later disagreement is the caller's
    * error rather than a reason to rebind.
    */
-  /**
-   * The element type an ARGUMENT offers to an iterable-typed parameter, or
-   * *null* where it offers none.
-   *
-   * The same derivation `for`-`of` uses, from the same places: an array's
-   * [[Element]], a tuple's positions, a `string`'s characters, a nominal's own
-   * arguments. Kept beside the inference rather than shared with the statement
-   * walk because that one also has to handle a Map's pair, which is a binding
-   * question rather than an element one.
-   */
-  const elementTypeOfIterable = (t: Known): Known => {
-    if (!t) {
-      return null;
-    }
-    if (t.Kind === 'array') {
-      return ((t as { Element?: TypeRecord }).Element ?? null) as Known;
-    }
-    if (t.Kind === 'tuple') {
-      const elements = (t as { Elements?: readonly { Type: TypeRecord }[] }).Elements ?? [];
-      if (elements.length === 0) {
-        return null;
-      }
-      return (elements.length === 1
-        ? elements[0].Type
-        : CanonicalizeType({ Kind: 'union', Members: elements.map((e) => e.Type) } as TypeRecord)) as Known;
-    }
-    const base = t.Kind === 'literal' ? (t as { Base?: TypeRecord }).Base : t;
-    if (base && base.Kind === 'primitive' && (base as { Name?: string }).Name === 'string') {
-      return makePrimitive('string') as Known;
-    }
-    if (t.Kind === 'nominal' && t.Arguments.length > 0) {
-      const first = t.Arguments[0];
-      return typeof first === 'number' ? null : first as Known;
-    }
-    return null;
-  };
 
   /**
    * The typed signature a named standard-library STATIC carries, or *undefined*.
@@ -6029,7 +5997,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           type: {
             Kind: 'function',
             Signatures: [{
-              Parameters, Return, Untyped: false, ThisType: selfThisType,
+              Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord,
               ...(msTypeParameters && msTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(msTypeParameters) } : {}),
             }],
           } as unknown as TypeRecord,
@@ -7809,7 +7777,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // method's signature has one, and a signature without it did not
               // match - `let o: Shape = new C()` for `type Shape = { read(): uint8 }`
               // began to refuse once this type resolved at all.
-              type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: selfThisType }] } as unknown as TypeRecord,
+              type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord }] } as unknown as TypeRecord,
               optional: !!(member as unknown as { Optional?: boolean }).Optional,
               // `readonly: true`, as the INTERFACE path sets it for a method and
               // for the reason it records. #sec-variance-annotations: "a
@@ -10243,32 +10211,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * proposal-runtime-types #sec-this-adoption: the `this` a METHOD expects.
-   *
-   * "A method extracted from its class and called free of it is the case this
-   * decides: its `this` is not of the type its body assumes, and the extraction
-   * is a type error at the boundary that took it rather than a *TypeError*
-   * inside it." So a method's signature has to say that it expects one.
-   *
-   * WHICH type it expects is the question, and the answer is not the class. A
-   * method is always invoked on the object it was found on, so its `this` is
-   * the RECEIVER, whatever the receiver's declared type - it is a self type
-   * rather than a fixed one. Giving a class's method the class itself was
-   * tried and refuses `class C implements I`: the class's method would expect a
-   * `C` where the interface's expects an `I`, and `C` is the narrower of the
-   * two, which contravariance rejects. That refusal is wrong, and it is wrong
-   * because the premise is: the interface's method is reached only through an
-   * object that HAS it, so the receiver is a `C` at every call either way.
-   *
-   * Every method therefore carries the same marker. Two methods agree on it, so
-   * a class satisfies an interface declaring the same method; a method and a
-   * FREE function do not, which is the extraction. An explicit [[ThisType]] -
-   * the one `withThisType` writes - stays an ordinary type and is compared
-   * contravariantly against another explicit one.
-   */
-  const selfThisType = { Kind: 'nominal', Declaration: SELF_THIS, Arguments: [] } as unknown as TypeRecord;
-
-  /**
    * The class MEMBER WALK, shared by the instance and static sides.
    *
    * The only difference between them is which members it keeps: two filters, one
@@ -10667,7 +10609,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (unusable.has(key) || Properties.some((p) => p.key === key)) {
         continue;
       }
-      const selfSignatures = Signatures.map((sig) => ({ ...sig, ThisType: selfThisType }));
+      const selfSignatures = Signatures.map((sig) => ({ ...sig, ThisType: SelfThisTypeRecord }));
       Properties.push({ key, type: { Kind: 'function', Signatures: selfSignatures } as unknown as TypeRecord, optional: false });
     }
   };
@@ -13151,14 +13093,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const iteratorMethodSignature = (name: string, element: TypeRecord): Known => {
     const boolType = makePrimitive('boolean');
-    const u32 = builtinTypeRecord('uint', [64])!;
+    const index = indexTypeRecord();
     const anyT = { Kind: 'any' as const } as TypeRecord;
     const fn = (params: TypeRecord[], Return: TypeRecord) => ({
       Kind: 'function',
       Signatures: [{ Parameters: params.map((t, i) => parameter(t, { Name: `a${i}` })), Return, Untyped: false }],
     } as unknown as Known);
     // (value, index) => U, the shape every helper callback takes.
-    const cb = (ret: TypeRecord) => fn([element, u32], ret);
+    const cb = (ret: TypeRecord) => fn([element, index], ret);
     // The carrier, not the interface: a chain's next step needs a receiver
     // carrying its element type, and an interface record carries members rather
     // than arguments. `IteratorHelper` is a library name users do not write, so
@@ -13168,14 +13110,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'map': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
       case 'filter': return fn([cb(boolType) as TypeRecord], iteratorOf(element));
       case 'take':
-      case 'drop': return fn([u32], iteratorOf(element));
+      case 'drop': return fn([index], iteratorOf(element));
       case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
       case 'toArray': return fn([], { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord);
       case 'forEach': return fn([cb(voidType) as TypeRecord], voidType);
       case 'some':
       case 'every': return fn([cb(boolType) as TypeRecord], boolType);
       case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, voidType] } as unknown as TypeRecord);
-      case 'reduce': return fn([fn([anyT, element, u32], anyT) as TypeRecord, anyT], anyT);
+      case 'reduce': return fn([fn([anyT, element, index], anyT) as TypeRecord, anyT], anyT);
       default: return null;
     }
   };
@@ -13366,13 +13308,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       default: return null;
     }
   };
-
-  /**
-   * #index-type: the type of every count an array reports or accepts. Defined
-   * as `uint32` and referenced rather than repeated, so that widening it is one
-   * edit here and one in the specification rather than a search for `uint32`.
-   */
-  const indexTypeRecord = () => builtinTypeRecord('uint', [64])!;
 
   /**
    * #sec-span-type: `Span.<T>` is a library nominal, so a receiver is
@@ -17194,13 +17129,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // same requests, and its resolutions are already keyed by node, so replacing
   // the list would orphan the resolutions the sweep was built from.
   if (!narrowingResolutions.has(root)) {
-    boundsProvenAccesses.set(root, provenHere);
     lastBoundsProvenCount = provenHere.size;
     narrowingRequests.set(root, narrowingRequestsHere);
   }
   unclaimedKeyChecks.set(root, unclaimed);
   defaultRequirements.set(root, defaultsNeeded);
-  blockScopedMetaNames.set(root, nestedMetaNames);
 
   return errors;
 }

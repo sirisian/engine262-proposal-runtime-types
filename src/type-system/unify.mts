@@ -41,7 +41,13 @@ export function widenForBinding(t: TypeRecord): TypeRecord {
   return t;
 }
 
-/** The element type an iterable argument yields, or null. */
+/**
+ * The element type an iterable-typed value yields, or *null* where it yields
+ * none: an array's [[Element]], the join of a tuple's positions, a `string`'s
+ * characters, or a nominal's first type argument. Shared by the inference here
+ * and by the checker; the `for`-`of` walk derives a Map's pair separately,
+ * that being a binding question rather than an element one.
+ */
 export function elementTypeOfIterable(t: TypeRecord | null): TypeRecord | null {
   if (!t) {
     return null;
