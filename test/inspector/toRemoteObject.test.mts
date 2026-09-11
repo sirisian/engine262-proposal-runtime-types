@@ -36,6 +36,32 @@ test('primitive values', async () => {
   }
 });
 
+test('runtime-types extended numeric values', async () => {
+  // proposal-runtime-types: a `complex64` or `decimal128` used to fall through
+  // to the ordinary object inspector and describe as a bare `Object`, while the
+  // NEIGHBOURING kind - a typed number - described as `1 (uint8)`.
+  //
+  // Both halves of the description already existed and only needed joining: the
+  // VALUE from the intrinsic's own text function, called directly as
+  // `dates.mts` calls `DateProto_toISOString`, and the TYPE name from
+  // `primitives.mts`'s house style. A formatter holds a `Value`, so the host's
+  // `.toString()` answers `[object Object]` - measured, on a first attempt.
+  const agent = new Agent({ features: ['runtime-types'] });
+  setSurroundingAgent(agent);
+  const inspector = new TestInspector();
+  const realm = new ManagedRealm();
+  inspector.attachAgent(agent, [realm]);
+
+  for (const value of [
+    'complex64(complex(1.5, 2.5))',
+    // `complexToString`'s own rule: "`complex(0, 4)` prints as `4i`".
+    'complex64(complex(0, 4))',
+    'decimal128("1.5")',
+  ]) {
+    await snapshotObject(inspector, value);
+  }
+});
+
 test('runtime-types primitive values', async () => {
   // proposal-runtime-types: a typed number is its own value class, not a
   // NumberValue subclass, so it matched no case in getInspector and reached the

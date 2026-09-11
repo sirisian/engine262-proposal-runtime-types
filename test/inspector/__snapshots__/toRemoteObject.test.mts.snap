@@ -7987,6 +7987,105 @@ exports[`regex > var a = /cat/; a.lastIndex = 1; a properties 1`] = `
 }
 `;
 
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) 1`] = `
+{
+  "className": "Complex",
+  "description": "4i (complex64)",
+  "objectId": "default:20",
+  "preview": {
+    "description": "4i (complex64)",
+    "overflow": false,
+    "properties": [],
+    "type": "object",
+  },
+  "type": "object",
+}
+`;
+
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) accessor properties (prototype) 1`] = `"real, imaginary, __proto__"`;
+
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) accessor properties 1`] = `[]`;
+
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) non-indexed owned properties (private) 1`] = `""`;
+
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) non-indexed owned properties 1`] = `[]`;
+
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) non-indexed properties (prototype) 1`] = `"real, imaginary, toString, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+
+exports[`runtime-types extended numeric values > complex64(complex(0, 4)) properties 1`] = `
+{
+  "internalProperties": [],
+  "privateProperties": [],
+  "result": [],
+}
+`;
+
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) 1`] = `
+{
+  "className": "Complex",
+  "description": "1.5+2.5i (complex64)",
+  "objectId": "default:1",
+  "preview": {
+    "description": "1.5+2.5i (complex64)",
+    "overflow": false,
+    "properties": [],
+    "type": "object",
+  },
+  "type": "object",
+}
+`;
+
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) accessor properties (prototype) 1`] = `"real, imaginary, __proto__"`;
+
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) accessor properties 1`] = `[]`;
+
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) non-indexed owned properties (private) 1`] = `""`;
+
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) non-indexed owned properties 1`] = `[]`;
+
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) non-indexed properties (prototype) 1`] = `"real, imaginary, toString, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+
+exports[`runtime-types extended numeric values > complex64(complex(1.5, 2.5)) properties 1`] = `
+{
+  "internalProperties": [],
+  "privateProperties": [],
+  "result": [],
+}
+`;
+
+exports[`runtime-types extended numeric values > decimal128("1.5") 1`] = `
+{
+  "className": "Decimal",
+  "description": "1.5 (decimal128)",
+  "objectId": "default:21",
+  "preview": {
+    "description": "1.5 (decimal128)",
+    "overflow": false,
+    "properties": [],
+    "type": "object",
+  },
+  "type": "object",
+}
+`;
+
+exports[`runtime-types extended numeric values > decimal128("1.5") accessor properties (prototype) 1`] = `"__proto__"`;
+
+exports[`runtime-types extended numeric values > decimal128("1.5") accessor properties 1`] = `[]`;
+
+exports[`runtime-types extended numeric values > decimal128("1.5") non-indexed owned properties (private) 1`] = `""`;
+
+exports[`runtime-types extended numeric values > decimal128("1.5") non-indexed owned properties 1`] = `[]`;
+
+exports[`runtime-types extended numeric values > decimal128("1.5") non-indexed properties (prototype) 1`] = `"toString, valueOf, Symbol(Symbol.toStringTag), hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toLocaleString, toString, valueOf, __defineGetter__, __defineSetter__, __lookupGetter__, __lookupSetter__, __proto__, constructor"`;
+
+exports[`runtime-types extended numeric values > decimal128("1.5") properties 1`] = `
+{
+  "internalProperties": [],
+  "privateProperties": [],
+  "result": [],
+}
+`;
+
 exports[`runtime-types primitive values > 'x' := string 1`] = `
 {
   "type": "string",

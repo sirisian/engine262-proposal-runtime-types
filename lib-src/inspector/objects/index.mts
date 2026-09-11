@@ -13,6 +13,7 @@ import { RegExp } from './RegExp.mts';
 import { Type } from './Type.mts';
 import { Proxy } from './proxies.mts';
 import { Promise } from './promises.mts';
+import { Complex, Decimal } from './extended-numerics.mts';
 import {
   Array, TypedArray, ArrayBuffer, DataView,
 } from './arrays.mts';
@@ -34,6 +35,8 @@ import {
   isMapObject,
   isModuleNamespaceObject,
   isPromiseObject,
+  isComplexObject,
+  isDecimalObject,
   isProxyExoticObject,
   isRegExpObject,
   isSetObject,
@@ -117,6 +120,13 @@ export function getInspector(value: Value): Inspector<Value> {
       return Error;
     case isPromiseObject(value):
       return Promise;
+    // proposal-runtime-types: without these a `complex64` or `decimal128`
+    // describes as a bare `Object`, where the neighbouring typed number
+    // describes as `1 (uint8)`.
+    case isComplexObject(value):
+      return Complex;
+    case isDecimalObject(value):
+      return Decimal;
     case isTypedArrayObject(value):
       return TypedArray;
     case isArrayBufferObject(value):

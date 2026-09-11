@@ -100,3 +100,5 @@ export { isTemporalPlainMonthDayObject, type TemporalPlainMonthDayObject } from 
 export { isTemporalPlainTimeObject, type TemporalPlainTimeObject } from './intrinsics/Temporal/PlainTime.mts';
 export { isTemporalPlainYearMonthObject, type TemporalPlainYearMonthObject } from './intrinsics/Temporal/PlainYearMonth.mts';
 export { isTemporalZonedDateTimeObject, type TemporalZonedDateTimeObject } from './intrinsics/Temporal/ZonedDateTime.mts';
+export { isComplexObject, complexToString, type ComplexObject } from './intrinsics/Complex.mts';
+export { isDecimalObject, DecimalToString, type DecimalObject } from './intrinsics/Decimal.mts';
