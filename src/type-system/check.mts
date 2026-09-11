@@ -1904,8 +1904,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `staticTypeIn` is not a query - it RECORDS a contextual type for
    * every literal it walks - so an arm that loses a trial must be rolled back.
    *
-   * On the MAP rather than at its callers: the write sites were miscounted twice
-   * by grep, and there are seven of these maps.
+   * On the MAP rather than at its callers: there are seven of these maps and
+   * many write sites, and a journal that lives with the map cannot miss one.
    */
   const trialJournal: { map: Map<ParseNode, unknown>, key: ParseNode, had: boolean, old: unknown }[] = [];
 
@@ -2057,8 +2057,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // `declaredNames`, not `bindings`: `declare` records a TYPE only where one is
     // known, and the shadow that matters most is exactly the one whose type is
     // not - `const Token = uint8;` binds the name while telling the checker
-    // nothing about it. Asking `bindings` answers false for those and leaves the
-    // divergence in place, which is what the first attempt at this did.
+    // nothing about it. Asking `bindings` would answer false for those and
+    // leave the divergence in place.
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       if (frames[i].declaredNames.has(name)) {
         return true;
@@ -5069,8 +5069,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * Mirrors `AllDefaultsFrame` (`runtime.mts:133`) including its completeness
    * requirement. BINDINGS then SUBSTITUTION: `typeParameterScopes` records a
    * parameter's CONSTRAINT and not a value bound to it, so resolving the body
-   * inside a pushed scope leaves `T` a parameter record - measured, the
-   * structure came out `{ t: T }` and refused `{ t: float64 }`.
+   * inside a pushed scope leaves `T` a parameter record: the structure comes
+   * out `{ t: T }` and refuses `{ t: float64 }`.
    */
   const defaultedAliasBody = (declaration: ParseNode): Known => {
     const params = (declaration as unknown as {
@@ -7257,11 +7257,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // and a covariant position admits what it is ASSIGNABLE FROM, so an
         // `any` rejection reaches any declared one.
         //
-        // An arm that read E from the CONTEXTUAL type stood here. It was
-        // measured dead once covariance landed: removed, all five of its rows
-        // answered identically and the suite passed. It computed by hand, one
-        // call at a time, what the variance rule now gives - and a checker path
-        // that answers no question invites the next reader to extend it.
+        // No arm reads E from the CONTEXTUAL type here: that would compute by
+        // hand, one call at a time, what the variance rule gives, and a checker
+        // path that answers no question invites the next reader to extend it.
         return (args, contextual) => {
           // The target's RESOLUTION type, where it wants a promise: the single
           // argument becomes it, so that is what its literals adapt to.
@@ -8749,10 +8747,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // loosening.
     //
     // Reported HERE rather than by typing the literal. Typing it `[].<never>` or
-    // `[].<any>` were BOTH measured and both refuse `let a: U = []` where
-    // `U = [].<T>` - an array whose element is an opaque type PARAMETER, which no
-    // concrete element type is assignable to. A note in `staticType` already
-    // recorded that for `never`; `any` fails the same rows. So `staticType` keeps
+    // `[].<any>` both refuse `let a: U = []` where `U = [].<T>` - an array whose
+    // element is an opaque type PARAMETER, which no concrete element type is
+    // assignable to. So `staticType` keeps
     // answering `null` and nothing downstream changes.
     //
     // Only kinds NO array can satisfy are refused - a ~primitive~, an ~object~,
@@ -9288,19 +9285,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const Return = literal.TypeAnnotation
           ? resolveType(literal.TypeAnnotation.Type)
           // A BLOCK body's return is inferred too, by the same operation the
-          // concise form uses. It was gated on `conciseBodied`, so
-          // `(v) => { return "k"; }` had no return type where `(v) => "k"` did -
-          // one spelling of a callback binding a caller's type variable and the
-          // other not (gap 4).
-          //
-          // Two objections stood against this and both are now answered. The
-          // first, recorded in the source, was that an empty body infers
-          // *undefined* and no `void` position accepts it - an objection to the
-          // JOIN, which #sec-inferred-result-type says collapses an all-*undefined*
-          // contribution set to `void`, and which now does. The second, found by
-          // trying it, was that a correct body is refused because its literal
-          // widens - answered by reading each `return` AT THE WANTED TYPE, as
-          // the concise path already did.
+          // concise form uses, so `(v) => { return "k"; }` binds a caller's type
+          // variable as `(v) => "k"` does. Two things make that safe: the JOIN
+          // collapses an all-*undefined* contribution set to `void`
+          // (#sec-inferred-result-type), so an empty body fits a `void`
+          // position; and each `return` is read AT THE WANTED TYPE, as the
+          // concise path is, so a correct body's literal does not widen into a
+          // refusal.
           : ((inferredReturnType(node, contextual as readonly Known[], wantedReturn))
             // Where inference answers nothing, the literal still adopts the
             // return its position wants rather than claiming ~any~: `any` is not
@@ -11177,11 +11168,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *   it, and refusing on a count this arm cannot compute would refuse a working
    *   program. A default cannot absorb an EXTRA element, so this half needs no
    *   knowledge of defaults.
-   * - The per-position ELEMENT TYPE. A first attempt at it refused a literal of
-   *   PROMISES at a tuple of promise types, taking `Promise.all` over a tuple
-   *   with it. The check itself is what the array arm does; the difference is in
-   *   how a position's type reaches `staticTypeIn`, and that wants instrumenting
-   *   rather than guessing.
+   * - The per-position ELEMENT TYPE is `checkArrayLiteralAgainst`'s, not this
+   *   arm's. Checking it here as well is not a free addition: a literal of
+   *   PROMISES at a tuple of promise types (`Promise.all` over a tuple) depends
+   *   on how a position's type reaches `staticTypeIn`, and that has to be
+   *   traced rather than guessed.
    */
   const checkArrayLiteralArityAgainstTuple = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'tuple' }) => {
     const elements = (node.ElementList ?? []).filter((el) => !!el && typeof el === 'object') as readonly ParseNode[];
@@ -11320,9 +11311,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     //
     // Asked of the literal's TYPE rather than its syntax, because a GETTER
     // supplies a member with no data property and a computed key supplies one
-    // whose name is not known here. `objectLiteralShape` answers NULL for both -
-    // measured - which is exactly the "cannot enumerate" signal this needs, and
-    // it captures a SPREAD's contribution where the source's type is known.
+    // whose name is not known here. `objectLiteralShape` answers NULL for both,
+    // which is exactly the "cannot enumerate" signal this needs, and it
+    // captures a SPREAD's contribution where the source's type is known.
     //
     // Only for a FRESH literal: "freshness is a property of the literal and not
     // of its type", so a binding that merely HAS an object type is not this
@@ -11635,8 +11626,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * member read.
    *
    * Computed HERE rather than given to the literal as its Static Type, for the
-   * reason the array-literal cycle measured: typing an expression form for every
-   * consumer reaches library signatures, where literal propagation builds an
+   * reason an array literal is not typed either: typing an expression form for
+   * every consumer reaches library signatures, where literal propagation builds an
    * argument at the element type and changes what an untyped program means. This
    * type has one consumer - the contribution - and appears in no expression's
    * Static Type.
@@ -12674,10 +12665,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * "An unguarded clause covers an atom _a_ when its pattern's PatternType _pt_
    * satisfies IsSubtype(the type of _a_, _pt_)."
    *
-   * **(measured)** `when { c: 'US' }` parses as a |MatchTypePattern| whose
-   * `Type` is an object type - the pattern IS a type - so the specification's
-   * primary rule handles it directly. A first draft read it as a structural
-   * OBJECT PATTERN and walked named members against the atom's properties;
+   * `when { c: 'US' }` parses as a |MatchTypePattern| whose `Type` is an
+   * object type - the pattern IS a type - so the specification's primary rule
+   * handles it directly. Reading it as a structural OBJECT PATTERN and walking
+   * named members against the atom's properties would be a second rule;
    * that node shape does not exist here, so it matched nothing and an
    * exhaustive `match` was reported as missing every branch.
    *
@@ -13218,9 +13209,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `b`'s inference with `a` already marked; `b`'s own call to `a` then reaches
    * the mark and contributes `never`, which vanishes from the join, so `b`
    * settles on what its other paths give and `a` settles on that. Marking the
-   * whole queue instead - the first attempt - made every call to an unpublished
-   * function answer `never` during any inference, which is wrong for the
-   * ordinary wrapper and broke 115 tests.
+   * whole queue instead would make every call to an unpublished function
+   * answer `never` during any inference, which is wrong for the ordinary
+   * wrapper.
    */
   const pendingBySignature = new Map<object, {
     signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
@@ -13324,36 +13315,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const literalDerivedArrays = new WeakSet<object>();
 
   /**
-   * Whether an expression DERIVES FROM A DECLARED TYPE, which is what
-   * #sec-anchored-contributions asks.
-   *
-   * The comment above states the assumption this replaces: "a known,
-   * non-literal contribution is one that derives from an annotation
-   * somewhere". It is FALSE for a form that DESCRIBES ITSELF - an object
-   * literal is `{}`, a function expression is `() => void`, `null` is `null` -
-   * all non-literal, all deriving from no declaration at all.
-   *
-   * The consequence was that `function g(){ return {}; } let a: uint8 = g();`
-   * PARTICIPATED in inference, so the call had a Static Type where the clause
-   * gives it ~any~, and the mismatch was refused BEFORE THE PROGRAM RAN. An
-   * ~any~ value rejected statically is the direction that breaks working
-   * programs, and it is why six suite rows asserting a catchable TypeError
-   * were failing: those tests were right.
-   *
-   * Two tests are applied, and BOTH are the code comment's own reasoning
-   * generalized rather than a new idea:
-   *
-   *  - the TYPE has exactly one value - a ~literal~, or the ~primitive~ `null`
-   *    or `undefined` (#sec-the-null-and-undefined-types gives those two
-   *    [[Kind]]: ~primitive~, which is why the old proxy anchored them). Such a
-   *    type "knows its type perfectly well and still says nothing a program
-   *    annotated";
-   *  - the EXPRESSION is a self-describing literal FORM, which is the same
-   *    point for an object or function whose type has many values but whose
-   *    shape no declaration supplied.
-   *
-   * `literalDerivedArrays` is this discovery made once already, for one form,
-   * and patched with a set rather than by correcting the test.
+   * Whether a TYPE has exactly one value: a ~literal~, or the ~primitive~
+   * `null` or `undefined` (#sec-the-null-and-undefined-types gives those two
+   * [[Kind]]: ~primitive~). Such a type "knows its type perfectly well and
+   * still says nothing a program annotated", so a contribution of it is
+   * unanchored - see `derivesFromDeclaration`, which reads this first.
    */
   const selfDescribingType = (t: { Kind?: string, Name?: string } | null | undefined): boolean => !!t
     && (t.Kind === 'literal'
@@ -13367,9 +13333,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * knows its type perfectly well and still says nothing a program annotated,
    * while `return f()` where `f` declares `: uint32` reports `uint32` because a
    * declaration said so, and a read of a typed binding reports its annotation
-   * for the same reason. So a known, non-literal contribution is one that
-   * derives from an annotation somewhere, and an unknown one derives from
-   * nothing at all.
+   * for the same reason. An unknown contribution derives from nothing at all.
+   *
+   * A known, non-literal contribution is NOT therefore anchored, because a
+   * form that DESCRIBES ITSELF derives from no declaration either: an object
+   * literal is `{}`, a function expression is `() => void`, `null` is `null`.
+   * Two tests are applied - the TYPE has exactly one value
+   * (`selfDescribingType`), or the EXPRESSION is a self-describing literal
+   * FORM, which is the same point for an object or function whose type has
+   * many values but whose shape no declaration supplied. Without the second,
+   * `function g(){ return {}; } let a: uint8 = g();` would PARTICIPATE in
+   * inference and the call would have a Static Type where the clause gives
+   * it ~any~, refusing before the program ran a mismatch the run time
+   * reports as a catchable TypeError - the direction that breaks working
+   * programs. `literalDerivedArrays` is the same test for one more form,
+   * decided where the array is built.
    */
   const derivesFromDeclaration = (expr: ParseNode | null | undefined, t: { Kind?: string, Name?: string } | null | undefined): boolean => {
     if (!t || selfDescribingType(t)) {
@@ -13412,7 +13390,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * function still unresolved when the passes run out contributed something
    * unknown - a recursive call reaches its own unpublished signature - and
    * publishing nothing for it is the conservative answer, which leaves it
-   * exactly as untyped as it was before this operation existed.
+   * untyped.
    */
   const publishInferredReturns = (): void => {
     if (pendingInferences.length === 0) {
@@ -13507,8 +13485,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Only the signature being computed is marked. Marking the whole queue
         // would let a MUTUAL cycle settle, but it also makes every call to a
         // not-yet-published function answer `never` during an inference, which
-        // is wrong for the ordinary case and for query inference alike - it
-        // broke 115 tests. Mutual recursion therefore does not publish yet.
+        // is wrong for the ordinary case and for query inference alike. Mutual
+        // recursion therefore does not publish yet.
         inferencesInProgress.add(item.signature as object);
         let inferred: Known;
         try {
@@ -13902,12 +13880,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // AN ANNOTATED ELEMENT SAYS ITS OWN TYPE - and that type is what
               // the binding holds, so it is recorded rather than skipped. The
               // annotation is enforced at the binding either way (a wrong-typed
-              // value is refused there, and `v is uint8` holds afterwards), but
-              // the checker had no type for the name, so
-              // `let { (v: uint8) } = { v: 1 }; let s: string = v;` was accepted
-              // where the same annotation on a plain `let` is refused. Taken
-              // unwidened, as the annotation is written: it is a declared type,
-              // not a type inferred from a value.
+              // value is refused there, and `v is uint8` holds afterwards), and
+              // recording it is what refuses `let { (v: uint8) } = { v: 1 };
+              // let s: string = v;` as the same annotation on a plain `let` is
+              // refused. Taken unwidened, as the annotation is written: it is a
+              // declared type, not a type inferred from a value.
               if (el.TypeAnnotation) {
                 const declaredHere = resolveType(el.TypeAnnotation.Type);
                 if (declaredHere) {
@@ -13968,11 +13945,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // Read AT THE WANTED type where the position supplies one, exactly as
           // the concise body above does. The two spellings of one function must
-          // agree - which is what #sec-inferred-result-type exists to prevent
-          // them from doing otherwise - and they did not: `() => 1` at a `uint8`
-          // position gave a `uint8` while `() => { return 1; }` gave the widened
-          // `number`, which is not assignable to `uint8`, so a correct
-          // block-bodied callback was refused where the concise one passed.
+          // agree, which is what #sec-inferred-result-type exists for: read
+          // without the wanted type, `() => { return 1; }` at a `uint8`
+          // position gives the widened `number` where `() => 1` gives `uint8`,
+          // and a correct block-bodied callback is refused where the concise
+          // one passes.
           //
           // The wanted type GUIDES the literal rather than replacing the
           // contribution: `() => { return "wrong"; }` at a `uint8` still reads
@@ -14079,15 +14056,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       // #sec-inferred-result-type: "Where every contribution is *undefined*,
       // because no `return` carries a value and none needs to, the join is
-      // `void`." The clause is explicit and the join did not do it, answering
-      // the bare *undefined* instead - so `() => {}` inferred
-      // `() => undefined`, which is not assignable to a `() => void` position,
-      // and a block-bodied callback was refused wherever one was wanted.
-      //
-      // That is the objection recorded against inferring a block body's return
-      // at all, and it was an objection to THIS, not to the inference. With the
-      // join corrected, the inference is safe and `(v) => { return "k"; }` can
-      // bind a caller's type variable as `(v) => "k"` already did (gap 4).
+      // `void`." Answering the bare *undefined* instead would infer `() =>
+      // undefined` for `() => {}`, which is not assignable to a `() => void`
+      // position, and refuse a block-bodied callback wherever one is wanted.
+      // With the join as the clause states it, inferring a block body's return
+      // is safe, and `(v) => { return "k"; }` binds a caller's type variable
+      // as `(v) => "k"` does.
       //
       // `undefined` remains the CONTRIBUTION, so a body mixing a valueless path
       // with a value-carrying one still joins to `T | undefined`, which the
@@ -14140,9 +14114,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
     // this proposal's function overloading - so the signatures are collected
-    // per name and declared together. Declaring one at a time let the last
-    // declaration clobber the earlier ones, which turned every call matching
-    // an earlier overload into a spurious Early Error (measured).
+    // per name and declared together: declared one at a time, the last
+    // declaration would clobber the earlier ones and turn every call matching
+    // an earlier overload into a spurious Early Error.
     // The argument check at a call site fires only for a SINGLE-signature
     // type, so an overloaded name keeps resolving where it did before, at run
     // time, until the checker learns to rank signatures.
@@ -14202,19 +14176,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     //
     // The scan above records the alias NODE, and the walk publishes the TYPE
     // when it reaches the declaration - which for a NESTED list is after the
-    // signatures in that list have been read. Instrumented, a lookup of `L`
-    // finds it at the top level (a placeholder, then the filled record) and
-    // finds NOTHING at any frame when the alias is declared inside a function:
-    // `p: L` then resolves through a fallback that the argument check does not
-    // use, so `f({ v: "s", next: null })` was accepted where the same program
-    // at the top level is refused.
+    // signatures in that list have been read. Without this, a lookup of `L`
+    // from a signature finds NOTHING at any frame when the alias is declared
+    // inside a function, `p: L` resolves through a fallback the argument check
+    // does not use, and `f({ v: "s", next: null })` is accepted where the same
+    // program at the top level is refused.
     //
     // A BINDING at the same alias refuses either way, because it is walked
     // after the declaration; only a SIGNATURE is read early. A NON-recursive
     // alias is unaffected for the same reason it needs no placeholder.
-    //
-    // This is the same shape for an alias: that moved a publication AFTER the
-    // list's declarations, and this moves one BEFORE the signatures.
     for (const n of list) {
       if (n.type !== 'TypeAliasDeclaration') {
         continue;
@@ -14281,16 +14251,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const typeParameterScope = typeParameterNamesOf(n as ParseNode);
       const pushedTypeParameters = pushTypeParameterScopeOf(n as ParseNode);
       for (const p of fn.FormalParameters ?? []) {
-        // A REST parameter is usable. This read "no arity to check against,
-        // so the whole name is left untyped rather than half-described", and the
-        // consequence was that ONE rest switched off argument checking for the
-        // entire call, the FIXED parameters included:
-        // `function h(_x_: uint8, ...a: [].<uint8>) {} h("no")` was accepted.
-        //
-        // A rest does have an arity: #sec-type-annotations makes its annotation
-        // the type of what it COLLECTS, so `[].<uint8>` admits any count while
-        // `[2].<uint8>` fixes one. A DESTRUCTURING parameter is still excluded -
-        // it binds a pattern rather than a name.
+        // A REST parameter is usable: it does have an arity, since
+        // #sec-type-annotations makes its annotation the type of what it
+        // COLLECTS, so `[].<uint8>` admits any count while `[2].<uint8>` fixes
+        // one. Leaving the whole name untyped for one rest would switch off
+        // argument checking for the entire call, FIXED parameters included,
+        // and accept `function h(_x_: uint8, ...a: [].<uint8>) {} h("no")`. A
+        // DESTRUCTURING parameter is still excluded - it binds a pattern rather
+        // than a name.
         if (p.type === 'BindingRestElement') {
           const rp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null };
           const restResolved = rp.TypeAnnotation ? resolveType(rp.TypeAnnotation.Type) : null;
@@ -14396,8 +14364,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // a signature that is viable for the same argument list as an existing one
       // at the same rank". A signature repeating another's parameter types AND
       // return type is that case in its purest form - one signature written
-      // twice - and it was accepted here, leaving every call of the name
-      // ambiguous with nothing at the declaration to say why.
+      // twice - and is refused at the declaration, where there is something
+      // to say why, rather than leaving every call of the name ambiguous.
       //
       // Return-type overloading is untouched: two signatures differing in their
       // return are distinguished by the contextual type of a call
@@ -14569,12 +14537,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // class may still name one declared later.
     //
     // The member walk is where a class's own declarations are judged, and it
-    // had been reached only ON DEMAND - when something asked for the class's
-    // type. A class that nothing references was never walked, so a rule checked
-    // there fired only if the program happened to mention the class elsewhere,
-    // which is no rule at all. `instanceTypeOf` memoizes, so forcing it here
-    // runs the walk exactly once per class and every later demand is a cache
-    // hit: the errors below are reported once, not once per reference.
+    // is otherwise reached only ON DEMAND - when something asks for the
+    // class's type. A class that nothing references would never be walked,
+    // and a rule checked there would fire only if the program happened to
+    // mention the class elsewhere, which is no rule at all. `instanceTypeOf`
+    // memoizes, so forcing it here runs the walk exactly once per class and
+    // every later demand is a cache hit: the errors below are reported once,
+    // not once per reference.
     // typeprogramming.md §6.6: "a declared `const s = Symbol()` used in type
     // position IS the unique symbol type, without a keyword". A checker has no
     // VALUES, so that identity is carried by the DECLARATION - two consts are
@@ -14959,11 +14928,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         BindingIdentifier?: { name?: string },
       } | undefined;
       const name = decl?.ForBinding?.BindingIdentifier?.name ?? decl?.BindingIdentifier?.name;
-      // #sec-iteration-types: the binding a `for`-`of` introduces takes
-      // the ELEMENT TYPE of what is iterated. It took no type at all - for EVERY
-      // receiver, not only a collection - so
-      // `for (const v of a) { let s: string = v; }` was accepted for an
-      // `a: [].<uint8>` as readily as for a generator, a string or a range.
+      // #sec-iteration-types: the binding a `for`-`of` introduces takes the
+      // ELEMENT TYPE of what is iterated, for EVERY receiver - an array, a
+      // generator, a string, a range - so `for (const v of a) { let s: string
+      // = v; }` is refused for an `a: [].<uint8>`.
       //
       // Declared HERE rather than in the statement switch below, because this
       // branch returns before reaching it: a `for`-`of` is handled once. The
@@ -14972,10 +14940,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // counter over a literal range getting both its bound and its type.
       const element = f.AssignmentExpression ? iteratedElementType(f.AssignmentExpression) : null;
       walk(f.AssignmentExpression);
-      // ...and the binding's own ANNOTATION, where it writes one. It was
-      // dropped: `for (const x: string of arr)` on a `[].<uint8>` ran the loop
-      // and reported nothing, the binding taking the element type above or no
-      // type at all, so a written annotation was neither honoured nor checked.
+      // ...and the binding's own ANNOTATION, where it writes one, so that
+      // `for (const x: string of arr)` on a `[].<uint8>` is refused rather than
+      // run with the binding taking the element type above.
       // The annotation wins as the binding's type - it is declared, where the
       // element type is inferred - and the element type must be assignable to
       // it, since that is what the loop will put there.
@@ -15061,9 +15028,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       declareFunctionSignatures(node as readonly ParseNode[], false);
       node.forEach((n) => walk(n));
       // The list's own bindings are declared by now, so an inference anchored by
-      // one of them has something to read. `let s: string = "s";
-      // function g(){ return s; }` in a block published nothing before this,
-      // and the same program at top level published `string`.
+      // one of them has something to read: `let s: string = "s"; function g(){
+      // return s; }` in a block publishes `string` as it does at top level.
       publishInferredReturns();
       reportDeferredDuplicates();
       return;
@@ -15419,17 +15385,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // SUBJECT'S TYPE, through the one operation that knows all of them,
         // rather than a name lookup on the binding.
         //
-        // The name lookup required the subject to be an |IdentifierReference|.
-        // It was written that way because a bare enum ANNOTATION resolved to
-        // nothing - `function f(e: E)` gave `e` no static type - which is fixed
-        // where enums are resolved as types.
-        //
-        // **(measured)** removing that restriction does NOT by itself check
-        // `match (g())` over an enum-returning call: the subject's type comes
-        // from `staticType`, and a call's RETURN annotation does not resolve to
-        // the enum record either. Same class of gap, one resolution site
-        // further on, and not fixed here - recorded so the capability is not
-        // claimed before it exists.
+        // A name lookup would require the subject to be an
+        // |IdentifierReference|; the subject's type covers any expression whose
+        // type is known. KNOWN LIMIT: `match (g())` over an enum-returning call
+        // is not checked, because a call's RETURN annotation does not resolve
+        // to the enum record - the same class of gap one resolution site
+        // further on, recorded so the capability is not claimed before it
+        // exists.
         const enumAtoms = Atoms(subjectType ?? undefined);
         // proposal-runtime-types `sec-discriminated-where-chains`: a dependent
         // record type's atoms are the atoms of the union its chain denotes.
@@ -15781,16 +15743,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             frames[frames.length - 1].immutableNames.add(n.BindingIdentifier.name);
           }
           // A `const` bound to a CONSTRUCTION takes that construction's
-          // Static Type. It took nothing, so `const c = new C(); c.x` read the
-          // field at ~any~ while `new C().x` - the same access one step earlier
-          // - read it at its declared type. Every signature the checker provides
-          // was reachable through an annotation and not through the spelling a
-          // program actually writes. `protected-access.test.mts` pins the old
-          // answer and says in as many words that it "closes when inference for
-          // `new` bindings lands".
+          // Static Type, so `const c = new C(); c.x` reads the field at its
+          // declared type as `new C().x` does - the spelling a program
+          // actually writes, not only the annotated one.
           //
-          // NARROW ON PURPOSE, and the width was measured. Inferring a type for
-          // EVERY unannotated binding breaks participation outright: `let a = 1;
+          // NARROW ON PURPOSE. Inferring a type for EVERY unannotated binding
+          // breaks participation outright: `let a = 1;
           // a = "s";` is an untyped program, and giving `a` the type `number`
           // makes it an error. A construction is different in kind - it names a
           // class the program declared, so its type is something the program
@@ -15807,11 +15765,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // sense: `Composite.<[uint8, uint8]>([1, 2])`, `JSON.parse.<T>(text)`
           // name their type at the call, so the type is something the program
           // wrote, not something inferred from a literal. Left out, the binding
-          // was ~any~ to the checker while the same call inline was typed - so
-          // `let a: [].<uint8> = t` for such a `t` passed the checker and the
-          // composite was bound as a mutable array, which the clause says is a
-          // subtype of no ~array~ type, to be admitted by the run time's
-          // structural read of the exotic array.
+          // would be ~any~ while the same call inline is typed, and `let a:
+          // [].<uint8> = t` for such a `t` would bind the composite as a
+          // mutable array - which the clause says is a subtype of no ~array~
+          // type - leaving it to the run time's structural read of the exotic
+          // array.
           const writesTypeArguments = newInit?.type === 'CallExpression'
             && (newInit as { CallExpression?: { type?: string } }).CallExpression?.type === 'TypeArgumentsExpression';
           if (!declared && !n.TypeAnnotation && isConstDeclaration
@@ -15853,9 +15811,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the binding introduced, so `{ (a: uint8) }` binds `a` to the value of
         // property `a`, ENFORCED AT THAT BINDING AS AN ANNOTATED DECLARATION
         // IS". It is so enforced at run time - a wrong-typed value is refused
-        // there and `v is uint8` holds afterwards - but the checker recorded no
-        // type for the name, so `let s: string = v` was accepted where the same
-        // annotation on a plain `let` is refused. The written annotation is the
+        // there and `v is uint8` holds afterwards - and the checker records the
+        // name's type as well, so `let s: string = v` is refused as it is for
+        // the same annotation on a plain `let`. The written annotation is the
         // binding's declared type, taken unwidened for the reason a plain
         // annotation is: it is declared, not inferred from a value.
         declarePatternAnnotations((n as { BindingPattern?: ParseNode | null }).BindingPattern);
@@ -16270,17 +16228,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (param && param.Kind === 'function' && param.Signatures.length === 1
                   && (arg.type === 'ArrowFunction' || arg.type === 'FunctionExpression')) {
                 contextualParameterTypes.set(arg, param.Signatures[0].Parameters.map((pr) => pr.Type) as readonly Known[]);
-                // The position's RETURN as well as its parameters. Only the
-                // parameters were recorded here, so a block-bodied callback's
-                // `return` was read with no wanted type and its literal widened:
-                // `h((x) => { return 1; })` at a `(x: uint8) => uint8` parameter
-                // gave `number`, which is not assignable to `uint8`, and a
-                // correct callback was refused where the concise `(x) => 1`
-                // passed.
-                //
-                // `staticTypeIn` already does this wherever a node meets its
-                // contextual type; an ARGUMENT is such a position and was the
-                // one place it did not.
+                // The position's RETURN as well as its parameters, so that a
+                // block-bodied callback's `return` is read at the wanted type:
+                // otherwise its literal widens, `h((x) => { return 1; })` at a
+                // `(x: uint8) => uint8` parameter gives `number`, and a correct
+                // callback is refused where the concise `(x) => 1` passes.
+                // `staticTypeIn` does the same wherever a node meets its
+                // contextual type; an ARGUMENT is such a position.
                 const wantedForBody = param.Signatures[0].Return;
                 if (wantedForBody) {
                   contextualReturnTypes.set(arg, wantedForBody as Known);
@@ -16593,13 +16547,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } else if (objType && objType.Kind === 'array' && m.Expression) {
             target = objType.Element;
           } else if (objType && objType.Kind === 'tuple' && m.Expression) {
-            // A store into a TUPLE POSITION takes that position's type.
-            // The array arm above existed and this one did not, so
-            // `_x_[1] = (9 := uint8)` on a `[uint8, string]` was accepted - and
-            // at run time the store CONVERTS, so the uint8 became the String
-            // "9". The run time is not the gap: it behaves identically for an
-            // array element, which the checker refuses; the asymmetry was
-            // entirely here.
+            // A store into a TUPLE POSITION takes that position's type, as a
+            // store into an array element takes the element's: `_x_[1] = (9 :=
+            // uint8)` on a `[uint8, string]` is refused here, rather than
+            // CONVERTED at run time into the String "9".
             //
             // The index must be a literal to name a position. A computed index
             // could be any of them, and the union of the positions is what such
@@ -16637,20 +16588,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // is `void` evaluates to *undefined*". The same word, two positions,
           // and only this one admits the value.
           //
-          // Gated on the VALUE, not on the context. Written as
-          // `if (!(context.Kind === 'void'))` it skipped the check WHOLESALE, so
-          // `function f(): void { return "s"; }` and `{ return (1 := uint8); }`
-          // were both accepted - and so was
-          // `function* g(): uint8 { return (0 := uint8); }`, whose bare
-          // annotation "types the yields and returns nothing". That
-          // test failing is how the skip was found: a check that asks no
-          // question shows up only as something that USED to be refused.
-          //
-          // Every form writing `void` as its own return annotation went through
-          // here - declaration, method and `(): void =>` arrow alike. The one
-          // spelling that was refused, an unannotated arrow at a `() => void`
-          // binding, is checked as a whole FUNCTION TYPE and never reaches this
-          // arm, so nothing was compensating for the hole.
+          // Gated on the VALUE, not on the context: `if (!(context.Kind ===
+          // 'void'))` would skip the check WHOLESALE and accept `function f():
+          // void { return "s"; }`, `{ return (1 := uint8); }` and `function*
+          // g(): uint8 { return (0 := uint8); }`, whose bare annotation "types
+          // the yields and returns nothing". Every form writing `void` as its
+          // own return annotation comes through here - declaration, method and
+          // `(): void =>` arrow alike; an unannotated arrow at a `() => void`
+          // binding is checked as a whole FUNCTION TYPE instead and never
+          // reaches this arm, so nothing else compensates.
           const returned = staticTypeIn(expr, context);
           const voidAdmitsUndefined = context && (context as { Kind?: string }).Kind === 'void'
             && returned && (returned as { Name?: string }).Name === 'undefined';
@@ -17049,18 +16995,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
           const isAsyncGen = n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorMethod';
           const ann = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          // The body field for an
-          // AsyncFunctionDeclaration is `AsyncBody`, not `AsyncFunctionBody` - the name
-          // the body EVALUATOR uses. Naming the evaluator's field here found nothing, so
-          // `body` was undefined, the walk never descended, and no `return` inside an
-          // async function was ever checked. Instrumenting the ReturnStatement arm said
-          // so directly: it is reached for a sync body and never for an async one.
+          // The body field for an AsyncFunctionDeclaration is `AsyncBody`,
+          // not `AsyncFunctionBody` (the name the body EVALUATOR uses); naming
+          // the wrong one finds nothing, the walk never descends, and no
+          // `return` inside an async function is checked.
+          //
           // #sec-inferred-result-type: "_R_ is the join of its return
-          // contributions". Where no annotation supplies _R_, it was defaulted
-          // to `void` BEFORE the body was walked, so a `return` was checked
-          // against `void` and `function* g() { yield 1; return "done"; }` -
-          // ordinary JavaScript - was refused with "a literal type of string is
-          // not assignable to void".
+          // contributions". Where no annotation supplies _R_, it must not be
+          // defaulted to `void` BEFORE the body is walked, or every `return`
+          // is checked against `void` and `function* g() { yield 1; return
+          // "done"; }` - ordinary JavaScript - is refused with "a literal type
+          // of string is not assignable to void".
           //
           // The contributions are collected first, by the same walk
           // `do*` expressions already use (#sec-do-generator-expressions, where
