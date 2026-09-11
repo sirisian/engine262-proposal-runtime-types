@@ -2204,7 +2204,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A block or switch introduces a scope; a binding declared inside shadows
     // an outer one without disturbing it. Overwriting in the same frame stays
     // sound because an unknown type is any.
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push(emptyFrame());
     // The ~void~ form: a deferral
     // opened by an assertion statement covers the rest of ITS block and no
     // further, so the depth is restored with the frame it belongs to.
@@ -9404,9 +9404,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (topic) {
           bindings.set(TOPIC_NAME, topic);
         }
-        frames.push({
-          bindings, constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
-        });
+        frames.push({ ...emptyFrame(), bindings });
         try {
           return staticType(p.Body);
         } finally {
@@ -12640,14 +12638,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // invalidates a type-level one.
       const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
       if (resolved) {
-        const newFrame = () => ({
-          bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map(),
-        });
-        frames.push(newFrame());
+        frames.push(emptyFrame());
         declareNarrowed(request!.name, resolved.whenTrue);
         walk(whenTrueNode);
         frames.pop();
-        frames.push(newFrame());
+        frames.push(emptyFrame());
         declareNarrowed(request!.name, resolved.whenFalse);
         walk(whenFalseNode);
         frames.pop();
@@ -14833,7 +14828,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null) => {
-    frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+    frames.push(emptyFrame());
     // A `return` is compared against
     // what the function RETURNS, and for a generator that is the _R_ of
     // `Generator.<Y, R, N>` - not the annotation, which types the values
@@ -15519,7 +15514,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // declarative environment per clause" at run time - so the checker
           // gives it a frame and declares the pattern's bindings in it, which is
           // what stops one arm's binding from leaking into the next.
-          frames.push({ bindings: new Map(), constLiterals: new Set<string>(), constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), letConstants: new Set<string>(), immutableNames: new Set<string>(), declaredNames: new Set<string>(), aliases: new Map(), enums: new Map(), enumBindings: new Map() });
+          frames.push(emptyFrame());
           // The SUBJECT's static type is what a top-level binding takes.
           // Computed once for the whole `match`, since every clause matches the
           // same subject.
