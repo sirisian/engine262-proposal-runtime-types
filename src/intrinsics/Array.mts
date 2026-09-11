@@ -6,6 +6,8 @@ import {
   type ValueCompletion,
   type ValueEvaluator,
 } from '../completion.mts';
+import { StampTypedArray } from '../abstract-ops/array-view.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   NumberValue,
   ObjectValue,
@@ -107,7 +109,28 @@ function* ArrayConstructor(values: Arguments, { NewTarget }: FunctionCallContext
 /** https://tc39.es/ecma262/#sec-array.from */
 function* Array_from([items = Value.undefined, mapper = Value.undefined, thisArg = Value.undefined]: Arguments, { thisValue }: FunctionCallContext) {
   const constructor = thisValue;
-  let mapping;
+  // STAMPED FROM THE SOURCE. `#sec-overloading-of-the-standard-library` states
+  // `Array.from(items: Iterable.<T>): [].<T>` - the result's element type IS the
+  // source's - so where the source carries one, the result can carry it too, and
+  // a typed program keeps its types through `from`. Where the source is an
+  // ordinary array it carries none and the result is left alone, which is the
+  // gradual rule everywhere else: a result carries a type when its input did.
+  //
+  // NOT with a mapping callback. Then the spec says `[].<U>` for the callback's
+  // U, which is known only where the callback's return type is - a decision
+  // deferred deliberately, since a builtin whose result depends on how its
+  // ARGUMENT was written is harder to explain than one depending on its source.
+  const stampFromSource = (out: Value) => {
+    if (mapping) {
+      return;
+    }
+    const element = (items as unknown as { TypedElement?: TypeRecord }).TypedElement;
+    if (element && out instanceof ObjectValue) {
+      StampTypedArray(out, element);
+    }
+  };
+
+  let mapping: boolean;
   let array;
   if (mapper === Value.undefined) {
     mapping = false;
@@ -135,6 +158,7 @@ function* Array_from([items = Value.undefined, mapper = Value.undefined, thisArg
       const next = Q(yield* IteratorStepValue(iteratorRecord));
       if (next === 'done') {
         Q(yield* Set(array, Value('length'), F(k), Value.true));
+        stampFromSource(array);
         return array;
       }
       let mappedValue;
@@ -171,6 +195,7 @@ function* Array_from([items = Value.undefined, mapper = Value.undefined, thisArg
     k += 1;
   }
   Q(yield* Set(array, Value('length'), F(len), Value.true));
+  stampFromSource(array);
   return array;
 }
 

@@ -281,7 +281,13 @@ function* GetOwnPropertyKeys(O: Value, type: 'String' | 'Symbol'): ValueEvaluato
 /** https://tc39.es/ecma262/#sec-object.getownpropertynames */
 function* Object_getOwnPropertyNames([O = Value.undefined]: Arguments): ValueEvaluator {
   // 1. Return ? GetOwnPropertyKeys(O, string).
-  return Q(yield* GetOwnPropertyKeys(O, 'String'));
+  const names = Q(yield* GetOwnPropertyKeys(O, 'String'));
+  // STAMPED as `[].<string>`, the same case as `Object.keys`: the builtin fixes
+  // the element type itself, answering Strings whatever it is given, so the
+  // value can carry what the checker already claims. Without the stamp its
+  // `length` was a Number where a declared array's is the index type.
+  StampTypedArray(names as ObjectValue, makePrimitive('string'));
+  return names;
 }
 
 /** https://tc39.es/ecma262/#sec-object.getownpropertysymbols */

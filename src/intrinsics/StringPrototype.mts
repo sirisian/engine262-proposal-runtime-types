@@ -7,6 +7,8 @@ import {
   type FunctionCallContext,
   UndefinedValue,
 } from '../value.mts';
+import { StampTypedArray } from '../abstract-ops/array-view.mts';
+import { makePrimitive } from '../type-system/records.mts';
 import {
   GetSubstitution,
   TrimString,
@@ -552,6 +554,12 @@ function* StringProto_split([separator = Value.undefined, limit = Value.undefine
   }
   const S = Q(yield* ToString(O));
   const A = X(ArrayCreate(0));
+  // STAMPED as `[].<string>`. `split` answers Strings whatever it is given, the
+  // same case as `Object.keys` and `Object.getOwnPropertyNames`: the builtin
+  // fixes the element type, so the value can carry what the checker claims.
+  // Stamped at CREATION rather than at each of the three returns below, since
+  // the element type does not depend on what is put in it.
+  StampTypedArray(A, makePrimitive('string'));
   let lengthA = 0;
   let lim;
   if (limit === Value.undefined) {

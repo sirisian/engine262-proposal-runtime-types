@@ -1091,6 +1091,39 @@ test('Object.keys answers a value that carries its element type', () => {
   expect(evaluated('const o = { a: 1 }; String(typeof Object.keys(o).window);')).toBe('function');
 });
 
+test('the other builtin-FIXED array results carry their element type too', () => {
+  // `Object.getOwnPropertyNames` and `split` answer Strings whatever they are
+  // given, the same case as `Object.keys`: the builtin fixes the element type,
+  // so the value can carry what the checker already claims.
+  expect(evaluated('const o = { a: 1 }; String(Reflect.typeOf(Object.getOwnPropertyNames(o).length));')).toBe('uint.<64>');
+  expect(evaluated('String(Reflect.typeOf("a,b".split(",").length));')).toBe('uint.<64>');
+  expect(evaluated('String(Reflect.typeOf("a,b".split(",")));')).toBe('[].<string>');
+  // An EMPTY result keeps the element type - it comes from the builtin, not the
+  // contents, which is what separates this from inferring at construction.
+  expect(evaluated('String(Reflect.typeOf("".split(",")));')).toBe('[].<string>');
+  expect(evaluated('const o = { a: 1, b: 2 }; Object.getOwnPropertyNames(o).join(",");')).toBe('a,b');
+  expect(evaluated('"a,b,c".split(",").join("|");')).toBe('a|b|c');
+});
+
+test('Array.from carries its SOURCE element type', () => {
+  // `#sec-overloading-of-the-standard-library`: `Array.from(items:
+  // Iterable.<T>): [].<T>` - the result's element type IS the source's.
+  expect(evaluated('let a: [].<uint8> = [1,2]; String(Reflect.typeOf(Array.from(a).length));')).toBe('uint.<64>');
+  // THE ROW THAT DISTINGUISHES "from the source" FROM "inferred from contents":
+  // an EMPTY typed source still yields a typed result, where inference would
+  // have nothing to look at and answer `[].<any>`.
+  expect(evaluated('let a: [].<uint8> = []; String(Reflect.typeOf(Array.from(a)));')).toBe('[].<uint.<8>>');
+});
+
+test('Array.from leaves untyped sources and mapped results alone', () => {
+  // A result carries a type when its input did.
+  expect(evaluated('String(Reflect.typeOf(Array.from([1,2]).length));')).toBe('number');
+  // With a MAPPING CALLBACK the spec says `[].<U>` for the callback's U, known
+  // only where its return type is - deferred deliberately.
+  expect(evaluated('let a: [].<uint8> = [1]; String(Reflect.typeOf(Array.from(a, x => x).length));')).toBe('number');
+  expect(evaluated('Array.from([1,2,3]).join(",");')).toBe('1,2,3');
+});
+
 test('what stamping Object.keys does not change', () => {
   // The array still behaves as one.
   expect(evaluated('const o = { a: 1, b: 2 }; Object.keys(o).join(",");')).toBe('a,b');
