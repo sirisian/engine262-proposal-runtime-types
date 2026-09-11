@@ -2569,6 +2569,14 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         // the same reason; `number` is now consistent with it.
         return Value(+0);
       }
+      // #table-primitive-defaults gives `rational` zero, and it is an OBJECT
+      // rather than a TypedNumber, so it answers before the numeric arm below.
+      // The branch keyed on `LibraryName === 'rational'` further down answered
+      // this while rational records were nominal; once they were built as
+      // primitives that test stopped matching and the type lost its default.
+      if (name === 'rational') {
+        return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord);
+      }
       if (name === 'int' || name === 'uint' || name === 'float16' || name === 'float32' || name === 'float64') {
         return new TypedNumberValue(0, t);
       }

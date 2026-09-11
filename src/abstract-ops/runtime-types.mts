@@ -23,6 +23,7 @@ import { LayoutOf } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
+import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
 import { containsComputedType } from '../type-system/runtime.mts';
@@ -1794,6 +1795,29 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
           return Value(BigInt(bn));
         }
         break;
+      }
+      // A NUMBER converts to a rational by its exact value - a finite double IS a
+      // dyadic rational - so nothing rounds.
+      //
+      // The NON-LITERAL path deliberately. A literal written in a rational
+      // position never arrives here: the checker records its digits and
+      // `NumericValue` builds 1/10 from them. A Number that was never in a
+      // rational position is a double by then, so its exact value is right for it.
+      case 'rational': {
+        if (!(value instanceof NumberValue) || isTypedNumber(value)) {
+          break;
+        }
+        const x = R(value) as number;
+        if (!Number.isFinite(x)) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
+        let num = x;
+        let den = 1n;
+        while (!Number.isInteger(num)) {
+          num *= 2;
+          den *= 2n;
+        }
+        return CreateRationalValue(BigInt(num), den, surroundingAgent.currentRealmRecord);
       }
       case 'uint':
       case 'int':
