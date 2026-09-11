@@ -16035,6 +16035,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (conversionTarget !== undefined) {
           const argNodes = (c.Arguments ?? []).filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
           if (argNodes.length === 1) {
+            // #sec-conversions: "the numeric conversions are keyed on NUMERIC
+            // families, so a numeric target has a conversion available only when
+            // the value is itself numeric." `uint32("s")` was a RUNTIME TypeError
+            // only - it raised nothing in a dead branch - though both sides are
+            // written down.
+            //
+            // Reported only where the argument's type is KNOWN and is definitely
+            // not a conversion source. Argument types are frequently null in this
+            // pass, and refusing an unknown type would reject programs the
+            // runtime accepts.
+            const argType = staticType(argNodes[0]!);
+            const argBase = argType && argType.Kind === 'literal'
+              ? (argType as { Base?: TypeRecord }).Base
+              : argType;
+            if (argBase && numericFamilyOf(conversionTarget as Known) !== null
+                && argBase.Kind === 'primitive' && argBase.Name === 'string') {
+              const completion = Throw.StaticTypeError(
+                'a string is not a conversion source for $1; use its parse form',
+                Value(displayType(conversionTarget)),
+              );
+              errors.push(completion.Value as ObjectValue);
+            }
             // The argument is typed IN the target's context, which is what
             // `uint32(f())` needed: the overload resolves because the position
             // says `uint32`.

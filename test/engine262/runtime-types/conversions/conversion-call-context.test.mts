@@ -79,3 +79,21 @@ test('...but the POSITION wins where it converts', () => {
     + ' String(h(uint32(f())));')).toBe('1');
   expect(evaluated('function h(a: uint8) { return 1; } const v = uint32(1); String(h(v));')).toBe('1');
 });
+
+test('a bad conversion source is a STATIC error', () => {
+  // `#sec-conversions`: "the numeric conversions are keyed on NUMERIC families,
+  // so a numeric target has a conversion available only when the value is itself
+  // numeric." `uint32("s")` was a runtime TypeError only - it raised nothing in
+  // a dead branch - though both sides are written down.
+  expectThrown('if (false) { uint32("s"); }', 'not a conversion source');
+  expectThrown('uint32("s");', 'not a conversion source');
+});
+
+test('...reported only where the argument type is KNOWN', () => {
+  // Argument types are frequently null in this pass, and refusing an unknown
+  // type would reject programs the runtime accepts. A numeric source and a
+  // string TARGET are both untouched.
+  expect(evaluated('String(Number(uint32(1)));')).toBe('1');
+  expect(evaluated('let n = 1; String(Number(uint32(n)));')).toBe('1');
+  expect(evaluated('String(string(1));')).toBe('1');
+});
