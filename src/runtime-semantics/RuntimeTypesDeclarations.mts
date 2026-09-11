@@ -1548,10 +1548,70 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         // matrix caught the live-object check reading it a second time, which
         // the earlier probes structurally could not see.
         const snapshot = Q(yield* SnapshotMetadataValue(v));
-        if (!Q(yield* IsOfType(MetadataAsObject(snapshot), claimShape))) {
+        // A literal in a default takes the type its claim shape gives the key.
+        //
+        // `meta D { default = { m: 0 } }` against `type D = { m: int32 }` was
+        // refused: by the time the membership test below runs, `{ m: 0 }` holds a
+        // plain number, and a plain number is not an `int32`. Writing
+        // `{ m: (0 := int32) }` passed, which made the default the one place a
+        // literal had to state a type the declaration beside it already fixed.
+        // #sec-literal-propagation gives a literal the type of its context, and a
+        // claim shape is exactly that.
+        //
+        // Converted here rather than at the default's evaluation because the
+        // SNAPSHOT is what the rule protects, and the comment above records why
+        // that matters: judging the snapshot keeps a getter on the default to
+        // exactly one read. Reading the live object again to convert it would
+        // spend a second.
+        //
+        // The snapshot is a null-prototype record of engine Values (lists are
+        // real Arrays), so this walks its own string keys and converts the leaves
+        // the claim shape names. A key the shape does not name is left alone and
+        // still faces the membership test.
+        // The snapshot is FROZEN - it is the artifact portions are built from -
+        // so this builds a converted copy rather than writing through it.
+        let converted = snapshot;
+        if (claimShape.Kind === 'object' && snapshot !== null && typeof snapshot === 'object'
+            && !Array.isArray(snapshot)) {
+          const source = snapshot as unknown as Record<string, Value>;
+          const copy: Record<string, Value> = Object.create(null);
+          for (const k of Object.keys(source)) {
+            copy[k] = source[k]!;
+          }
+          let changed = false;
+          for (const property of claimShape.Properties) {
+            const keyName = typeof property.key === 'string' ? property.key : undefined;
+            if (keyName === undefined || !(keyName in copy)) {
+              continue;
+            }
+            const target = property.type as TypeRecord | undefined;
+            if (!target) {
+              continue;
+            }
+            // Only LEAVES convert. `MetadataAsObject` tells the forms apart by
+            // shape: a nested metadata record has a null prototype, a list is a
+            // real Array, and everything else is an engine Value. A range and a
+            // pattern are carried as null-prototype markers, and handing one to
+            // `ConvertValue` asks it to make a primitive of a marker object.
+            const leaf = copy[keyName]!;
+            if (leaf !== null && typeof leaf === 'object'
+                && (Array.isArray(leaf) || Object.getPrototypeOf(leaf) === null)) {
+              continue;
+            }
+            const promoted = EnsureCompletion(yield* ConvertValue(leaf, target));
+            if (promoted.Type === 'normal') {
+              copy[keyName] = promoted.Value as Value;
+              changed = true;
+            }
+          }
+          if (changed) {
+            converted = Object.freeze(copy) as unknown as Value;
+          }
+        }
+        if (!Q(yield* IsOfType(MetadataAsObject(converted), claimShape))) {
           return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
         }
-        RegisterMetaDefaultSnapshot(typeObject, snapshot);
+        RegisterMetaDefaultSnapshot(typeObject, converted);
       }
       sawDefault = true;
     } else {
