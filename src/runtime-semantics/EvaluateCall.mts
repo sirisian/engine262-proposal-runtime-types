@@ -4,6 +4,8 @@ import {
 import { Q, Completion, AbruptCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
+import { isTypeObject } from '../type-system/intern.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { TakeStaticCallResolution } from '../type-system/check.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
 import { signatureInView } from './ArgumentListEvaluation.mts';
@@ -53,8 +55,32 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   // and the arguments are mapped to positions. The positional path is unchanged.
   const argsIsNamed = surroundingAgent.feature('runtime-types')
     && Array.isArray(args) && hasNamedArguments(args as ParseNode.Arguments);
+  // proposal-runtime-types #sec-conversions: a call whose callee is a TYPE OBJECT
+  // is a conversion, and its argument is evaluated IN that type's context.
+  //
+  // The runtime has its own contextual-type stack, pushed by a binding
+  // declaration, a property definition, a field initializer and a return
+  // position - but not by a conversion. So `const a: string = f()` resolved an
+  // overloaded `f` at run time and `uint32(f())` did not, though the type is
+  // written down in both. The checker learned this separately; this is the other
+  // half.
+  const conversionContext = surroundingAgent.feature('runtime-types')
+    && func instanceof ObjectValue && isTypeObject(func)
+    ? (func as { TypeRecord?: TypeRecord }).TypeRecord
+    : undefined;
   let argList;
-  if (!argsIsNamed) {
+  if (conversionContext !== undefined && Array.isArray(args)) {
+    // Keyed on the ARGUMENT EXPRESSION, because `contextualTypeFor` is asked for
+    // a call node: the inner `f()` in `uint32(f())` looks itself up, not the
+    // argument list that holds it.
+    const only = (args as readonly ParseNode[])[0];
+    pushContextualType(conversionContext, only as unknown as object);
+    try {
+      argList = Q(yield* ArgumentListEvaluation(args as ParseNode.Arguments));
+    } finally {
+      popContextualType();
+    }
+  } else if (!argsIsNamed) {
     // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
     // type of a call is the type its position requires", and an argument
     // position requires the callee's parameter type - "`g(f())` selects the
