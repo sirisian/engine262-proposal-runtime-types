@@ -44,6 +44,7 @@ export { SerializeTypeTable, DeserializeTypeTable, TYPE_TABLE_VERSION, type Type
 export { ModuleGraphInventory, type GraphEntry } from './type-system/module-graph.mts';
 export { ProduceArtifact, ReadArtifact, SEMANTICS_ID, type Artifact } from './type-system/produce.mts';
 export { Sha256, EncodeGraphInventory, GraphKey } from './type-system/graph-key.mts';
+export { DocumentationFor, type OriginDocumentation } from './type-system/documentation.mts';
 export { ExportedTypesOf, ExportedAliasesOf } from './type-system/check.mts';
 
 

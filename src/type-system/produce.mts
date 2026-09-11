@@ -1,6 +1,8 @@
 import { SerializeTypeTable, DeserializeTypeTable, type TypeTable } from './artifact.mts';
 import { ModuleGraphInventory, type GraphEntry } from './module-graph.mts';
 import { GraphKey } from './graph-key.mts';
+import { GetTypeObject } from './intern.mts';
+import { DocumentationFor, type OriginDocumentation } from './documentation.mts';
 import { ExportedTypesOf, ExportedAliasesOf } from './check.mts';
 
 /**
@@ -48,6 +50,17 @@ export interface Artifact {
    * symptom is that artifacts never help.
    */
   readonly key: string;
+  /**
+   * The text written above each exported type's declaration, keyed by the name
+   * the artifact exports it under - an ARTIFACT-LOCAL table, so it cannot go
+   * stale relative to the key the contract already checks.
+   *
+   * #sec-expansion-artifact: "a dependency's sources are exactly what a consumer
+   * does not have on disk, which is the one thing provenance alone cannot
+   * supply." An origin says where a type was written; on a published dependency
+   * that file is not there, so the text travels or the origin points at nothing.
+   */
+  readonly documentation: Readonly<Record<string, readonly OriginDocumentation[]>>;
 }
 
 /**
@@ -114,11 +127,21 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
   // into a public surface needs to know rather than to receive nothing silently.
   const table = SerializeTypeTable(roots);
   const graph = ModuleGraphInventory(module);
+  const documentation: Record<string, readonly OriginDocumentation[]> = {};
+  for (const [name, type] of roots) {
+    // Through the interned Type Object: provenance is keyed there, because
+    // canonicalization rebuilds records and a record is not a stable identity.
+    const docs = DocumentationFor(GetTypeObject(type as never) as unknown as object, graph);
+    if (docs.length > 0) {
+      documentation[name] = docs;
+    }
+  }
   return {
     table,
     graph,
     semantics: SEMANTICS_ID,
     key: GraphKey(graph),
+    documentation,
   };
 }
 
