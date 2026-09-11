@@ -1678,13 +1678,16 @@ export function CheckScript(script: ParseNode.Script): ObjectValue[] {
  * The caller commits `next` only if it accepts the entry - a rejected entry must
  * leave no declarations behind - which is why the session is not mutated here.
  *
- * ONE pass, where CheckScript runs two: the inference asymmetry checkInTwoPasses
- * describes therefore applies to a body that reads a binding its own entry
- * declares.
+ * Two passes, as CheckScript runs, and for the reason checkInTwoPasses gives:
+ * an entry is a statement list whose own bindings anchor inferences within it.
+ * `let arr: [].<uint8> = [1]; function f() { return arr[0]; } let s: string =
+ * f();` as ONE entry is refused exactly as it is at script scope; a single pass
+ * would accept it, and a lexical binding has no run-time boundary to catch it
+ * afterwards.
  */
 export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession): { errors: ObjectValue[], next: CheckSession } {
   const next: CheckSession = { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) };
-  const errors = CheckStatementList(script.ScriptBody?.StatementList ?? null, script, next);
+  const errors = checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script, next);
   return { errors, next };
 }
 
@@ -1777,8 +1780,12 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * first pass found errors never reaches linking. Every error this pass finds is
  * one that needed an import to see.
  *
- * ONE pass, where CheckModule runs two: the inference asymmetry checkInTwoPasses
- * describes applies to what this pass adds.
+ * Two passes here as well (checkInTwoPasses): an import can be what TYPES a
+ * module's own binding - `let c: C = new C()` for an imported class `C` - and
+ * an inference anchored by that binding is decided from the frame the pass
+ * starts with. The imports are seeded into it below; the module's own
+ * bindings are only there on the second pass. `function f() { return c.x; }
+ * let s: string = f();` is refused because of that second pass.
  */
 export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string): ObjectValue[] {
   if (imported.size === 0) {
@@ -1803,7 +1810,7 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   const outerBuilders = importedBuilderNodes;
   importedBuilderNodes = builders;
   try {
-    const errors = CheckStatementList(module.ModuleBody?.ModuleItemList ?? null, module, session);
+    const errors = checkInTwoPasses(module.ModuleBody?.ModuleItemList ?? null, module, session);
     // Recorded HERE and not only on the plain path: this pass has the module's
     // imports, so it is the one that can resolve a type built over one, and its
     // answer is the complete one.
