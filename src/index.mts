@@ -46,6 +46,7 @@ export { ProduceArtifact, ReadArtifact, SEMANTICS_ID, type Artifact } from './ty
 export { Sha256, EncodeGraphInventory, GraphKey } from './type-system/graph-key.mts';
 export { DocumentationFor, type OriginDocumentation } from './type-system/documentation.mts';
 export { ExportedTypesOf, ExportedAliasesOf } from './type-system/check.mts';
+export { HasSlotInsideApplication } from './type-system/relations.mts';
 
 
 export {

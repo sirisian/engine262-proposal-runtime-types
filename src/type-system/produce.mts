@@ -61,6 +61,23 @@ export interface Artifact {
    * that file is not there, so the text travels or the origin points at nothing.
    */
   readonly documentation: Readonly<Record<string, readonly OriginDocumentation[]>>;
+  /**
+   * Exported names an artifact does NOT carry, and why.
+   *
+   * #sec-expansion-artifact: "An artifact contains no open application."
+   * `partial(T)` in an exported generic "evaluates against the consumer's T, at
+   * the consumer, so the evaluator is not removed by the artifact and cannot
+   * be." Carrying one would ask a consumer to evaluate a builder against an
+   * unbound slot, which is the inversion no operation of the specification
+   * performs.
+   *
+   * Skipped rather than refusing the whole artifact: the clause says an artifact
+   * contains no open application, not that a module holding one cannot have an
+   * artifact. A consumer that finds nothing for a name evaluates, which is always
+   * correct - omission is the absence of a shortcut, not silence about meaning.
+   * Named rather than dropped quietly, so a producer can say what it left out.
+   */
+  readonly skipped: Readonly<Record<string, string>>;
 }
 
 /**
@@ -71,6 +88,48 @@ export interface Artifact {
  * should not invalidate every artifact in existence.
  */
 export const SEMANTICS_ID = 'proposal-runtime-types/1';
+
+/**
+ * Whether a record carries an unbound type parameter anywhere.
+ *
+ * #sec-expansion-artifact forbids an OPEN APPLICATION: `partial(T)` in an
+ * exported generic "evaluates against the consumer's T, at the consumer, so the
+ * evaluator is not removed by the artifact and cannot be."
+ *
+ * Measured, this engine never puts one in a record: `mk(T)` in a return position
+ * resolves away, and what survives is a bare ~parameter~. So the clause's rule
+ * holds here without being enforced - and the shape that actually reaches a root
+ * is the generic SIGNATURE, whose parameter is unbound for the same reason the
+ * clause gives. What stands in its place is the consumer's.
+ *
+ * So the test is for an unbound parameter rather than for an application
+ * containing one. That subsumes the clause's case - a parameter inside an
+ * application is a parameter - and covers the one this engine actually produces.
+ */
+function carriesUnboundParameter(record: unknown): boolean {
+  const seen = new Set<object>();
+  const walk = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object' || seen.has(node as object)) {
+      return false;
+    }
+    seen.add(node as object);
+    if (Array.isArray(node)) {
+      return node.some(walk);
+    }
+    const kind = (node as { Kind?: string }).Kind;
+    if (kind === 'parameter') {
+      return true;
+    }
+    const prototype = Object.getPrototypeOf(node);
+    if (prototype !== Object.prototype && prototype !== null) {
+      // A declaration, a constructor, an engine value: not a record to walk, and
+      // walking one does not terminate.
+      return false;
+    }
+    return Object.entries(node).some(([key, child]) => key !== 'Declaration' && walk(child));
+  };
+  return walk(record);
+}
 
 /**
  * Build an artifact for a checked module, or *undefined* where one cannot be
@@ -117,6 +176,16 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
       roots.set(exportedAs, bound as object);
     }
   }
+  // Before serializing, not after it fails. A type parameter is not MEANT to be
+  // encodable - what stands in its place is the consumer's - so letting the leaf
+  // refusal answer first reports an encoding gap where the clause has a rule.
+  const skipped: Record<string, string> = {};
+  for (const [name, type] of [...roots]) {
+    if (carriesUnboundParameter(type)) {
+      skipped[name] = 'an unbound type parameter, which stands for the consumer\'s type';
+      roots.delete(name);
+    }
+  }
   if (roots.size === 0) {
     // Nothing to precompute. An empty artifact is worse than none: a consumer
     // would verify a hash and read nothing.
@@ -142,6 +211,7 @@ export function ProduceArtifact(module: unknown): Artifact | undefined {
     semantics: SEMANTICS_ID,
     key: GraphKey(graph),
     documentation,
+    skipped,
   };
 }
 
