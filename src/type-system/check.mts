@@ -2884,15 +2884,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     const m = lhs as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
-    // A WRITE THROUGH `this` INSIDE A CONSTRUCTOR IS EXEMPT FROM THE READONLY
-    // RULE. A `readonly` field is filled by the class itself - `class C {
-    // readonly v: uint8; constructor() { this.v = 7; } }` is the form the
-    // modifier exists for. The rule is about what a class's USERS may write,
-    // and `constructorDepth` is what keeps the exemption to the constructor:
-    // `m() { this.v = 1; }` is a user of the field like any other.
-    if ((m.MemberExpression as { type?: string } | undefined)?.type === 'ThisExpression' && constructorDepth > 0) {
-      return;
-    }
     // A SEALED INSTANCE CANNOT GAIN A MEMBER. #sec-typed-storage: a class with a
     // typed field is "automatically sealed, as if PreventExtensions had been
     // performed on each of its instances ... a property may not be added or
@@ -2939,6 +2930,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         errors.push(completion.Value as ObjectValue);
         return;
       }
+    }
+    // A WRITE THROUGH `this` INSIDE A CONSTRUCTOR IS EXEMPT FROM THE READONLY
+    // RULE, and from that rule ONLY. A `readonly` field is filled by the class
+    // itself - `class C { readonly v: uint8; constructor() { this.v = 7; } }`
+    // is the form the modifier exists for. The rule is about what a class's
+    // USERS may write, and `constructorDepth` is what keeps the exemption to
+    // the constructor: `m() { this.v = 1; }` is a user of the field like any
+    // other.
+    //
+    // It sits BELOW the sealed-member judgment because the two are different
+    // questions. Returning before that one exempted the constructor from it as
+    // well, so `constructor() { this.other = 1; }` on a typed class was the one
+    // place an undeclared member could be added - the same write in a method or
+    // a getter being refused all along, and the instance being sealed a moment
+    // later either way.
+    if ((m.MemberExpression as { type?: string } | undefined)?.type === 'ThisExpression' && constructorDepth > 0) {
+      return;
     }
     const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
     if (!objType || objType.Kind !== 'object') {

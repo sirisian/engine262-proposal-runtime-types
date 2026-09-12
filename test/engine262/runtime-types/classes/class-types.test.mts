@@ -313,3 +313,41 @@ test('what the static merge does not claim', () => {
   // The INSTANCE path is a separate merge and is untouched.
   expectStatic('class B7 { v: uint8 = 0; } class D7 extends B7 { } const d = new D7(); let s: string = d.v;');
 });
+
+test('a sealed instance cannot gain a member, the CONSTRUCTOR included', () => {
+  // #sec-typed-storage: a class with a typed field is "automatically sealed, as
+  // if PreventExtensions had been performed on each of its instances ... a
+  // property may not be added or removed". A method and a getter were refused
+  // all along; the constructor was not, because the exemption that lets a
+  // `readonly` field be FILLED there returned before this judgment was reached.
+  // The two are different questions - what may be written, and what is a member
+  // at all.
+  expectStatic('class S1 { x: uint8 = uint8(1); constructor() { this.other = 1; } }');
+  expectStatic('class S2 { x: uint8 = uint8(1); m() { this.other = 1; } }');
+  expectStatic('class S3 { x: uint8 = uint8(1); get g(): uint8 { this.other = 1; return uint8(1); } }');
+  expectStatic('class S4 { x: uint8 = uint8(1); } const c = new S4(); c.other = 1;');
+
+  // The exemption it sits above is intact: a `readonly` field is filled by the
+  // constructor, which is the form the modifier exists for, and refused
+  // anywhere else.
+  expect(evaluated('class S5 { readonly v: uint8 = uint8(0); constructor() { this.v = uint8(7); } }'
+    + ' String(new S5().v);')).toBe('7');
+  expectStatic('class S6 { readonly v: uint8 = uint8(0); m() { this.v = uint8(7); } }');
+
+  // And what a constructor may legitimately write is unaffected: its own
+  // declared field, an inherited one, a private one, and an accessor that
+  // carries no annotation and so contributes no Property to the structure.
+  expect(evaluated('class S7 { x: uint8 = uint8(1); constructor() { this.x = uint8(2); } }'
+    + ' String(new S7().x);')).toBe('2');
+  expect(evaluated('class B8 { b: uint8 = uint8(1); } class D8 extends B8 { d: uint8 = uint8(2);'
+    + ' constructor() { super(); this.b = uint8(3); this.d = uint8(4); } }'
+    + ' const d = new D8(); String(d.b) + "," + String(d.d);')).toBe('3,4');
+  expect(evaluated('class S9 { #p: uint8 = uint8(1); constructor() { this.#p = uint8(2); }'
+    + ' read(): uint8 { return this.#p; } } String(new S9().read());')).toBe('2');
+  expect(evaluated('class SA { x: uint8 = uint8(1); get w() { return 1; } set w(v) { }'
+    + ' constructor() { this.w = 1; } } "ok";')).toBe('ok');
+
+  // An UNTYPED class is not sealed (#sec-typed-storage reaches only a class with
+  // a typed field), so adding to one is ordinary JavaScript.
+  expect(evaluated('class SB { constructor() { this.whatever = 1; } } String(new SB().whatever);')).toBe('1');
+});
