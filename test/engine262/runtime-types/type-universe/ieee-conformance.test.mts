@@ -425,6 +425,31 @@ test('every shift is performed at the type\'s own width', () => {
   }
 });
 
+test('a negative shift distance throws, at every width', () => {
+  // #sec-integer-operations: "If the distance is negative, the operators throw a
+  // *RangeError* exception." A negative distance names no result - reading it as
+  // an exact power would make the answer depend on the operand's parity, since
+  // 2**-1 times an even value is an integer and times an odd one is not - so it
+  // throws for the reason a zero divisor does.
+  //
+  // Reachable only for a signed type, an unsigned count having no negative
+  // value to hold. Each of the three carriers used to answer differently and
+  // none of them meaningfully: `1 << -1` was 0 at `int8`, -(2**31) at `int32`,
+  // and -(2**39), -(2**63), -(2**127) at the wider three, each the width's own
+  // mask applied to a distance that has no business being masked.
+  for (const ty of ['int8', 'int32', 'int.<40>', 'int64', 'int128']) {
+    for (const op of ['<<', '>>', '>>>']) {
+      expect(
+        evaluated(`let a: ${ty} = 8; let s: ${ty} = -1; `
+          + `try { a ${op} s; "no throw"; } catch (e) { e.constructor.name; }`),
+        `${ty} 8 ${op} -1`,
+      ).toBe('RangeError');
+    }
+  }
+  // And a distance of zero is not negative.
+  expect(evaluated('let a: int8 = 8; let s: int8 = 0; String(a << s);')).toBe('8');
+});
+
 test('the right shifts read the operand at the width', () => {
   // `>>` passing before the fix was a coincidence - sign extension agrees at
   // every width for -1 - so both are asserted over operands where they differ.

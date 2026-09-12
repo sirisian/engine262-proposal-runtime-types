@@ -306,6 +306,24 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
     // left `1 << 64` at `uint64` answering 1 while `1 << 40` at `uint.<40>`
     // answered 0 - the same divergence one carrier along.
     const count = payloadExact(y);
+    // A NEGATIVE distance names no result, so it throws as a zero divisor does.
+    // #sec-integer-operations: "If the distance is negative, the operators throw
+    // a *RangeError* exception."
+    //
+    // Reading it as an exact power would make the answer depend on the operand -
+    // 2**-1 times an even value is an integer and times an odd one is not - and
+    // the reduction step has nothing to say about a non-integer. What the three
+    // carriers did instead was each its own thing: `1 << -1` answered 0 at
+    // `int8` (JS masks -1 to 31, then the wrap), -(2**31) at `int32`, and
+    // -(2**39), -(2**63), -(2**127) at `int.<40>`, `int64` and `int128`, each
+    // the width's own mask. Five types, three answers, none of them meaningful.
+    //
+    // Reachable only for a signed type, since an unsigned count cannot hold a
+    // negative value - which is the same reason Go had to add this check when it
+    // let shift counts be signed.
+    if (count < 0n) {
+      return Throw.RangeError('the shift distance is negative') as ThrowCompletion;
+    }
     if (count >= BigInt(width)) {
       const negative = op === '>>' && payloadExact(x) < 0n;
       return new TypedNumberValue(wrapToType(negative ? -1 : 0, target), target);

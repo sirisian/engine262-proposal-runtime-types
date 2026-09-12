@@ -9965,6 +9965,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rightLit = literalOperand(rightNode) ?? constUse(rightNode);
         const leftT = leftLit ? null : staticType(leftNode);
         const rightT = rightLit ? null : staticType(rightNode);
+        // A DEGENERATE LITERAL OPERAND, refused where the checker can see it.
+        // #sec-integer-operations states two such rules, and neither was
+        // enforced: "It is a type error if the divisor of `/` or `%` is a
+        // literal zero and the operands are of an integer type of this
+        // proposal", and, for the shifts, "it is a type error if [the distance]
+        // is a literal that is negative or at least _N_".
+        //
+        // Both are the same judgment - a literal operand that makes the
+        // operation meaningless at a statically known integer type - so they are
+        // written once. The run time refuses both as well (a *RangeError* for a
+        // zero divisor and for a negative distance, 0 for a distance past the
+        // width), so this is diagnosis ahead of a defined failure rather than
+        // the only thing standing between the program and nonsense. That is why
+        // it reports rather than guessing a result type: the arm below carries
+        // on and the expression keeps whatever type it would have had.
+        //
+        // The operand type is read from whichever side is NOT the literal, which
+        // is what "the operands are of an integer type" means for `a / 0`: the
+        // literal takes the other operand's type, so the other operand is where
+        // the type is.
+        {
+          const operandType = (leftT ?? rightT) as TypeRecord | null;
+          if (isIntegerValueType(operandType)) {
+            const op = node.type === 'MultiplicativeExpression'
+              ? (node as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator
+              : (node as unknown as { operator?: string }).operator;
+            const distance = rightLit ? foldIntegerConstant(rightNode, constExactValue) : null;
+            if (distance !== null && (op === '/' || op === '%') && distance === 0n) {
+              errors.push((Throw.StaticTypeError('a literal zero divisor is not a division at $1', Value(displayType(operandType!))) as ThrowCompletion).Value as ObjectValue);
+            }
+            if (distance !== null && node.type === 'ShiftExpression') {
+              const bits = (operandType as { Arguments?: readonly (TypeRecord | number)[] }).Arguments?.[0];
+              if (distance < 0n) {
+                errors.push((Throw.StaticTypeError('a shift distance of $1 is negative', Value(String(distance))) as ThrowCompletion).Value as ObjectValue);
+              } else if (typeof bits === 'number' && distance >= BigInt(bits)) {
+                errors.push((Throw.StaticTypeError('a shift distance of $1 shifts every bit out of $2', Value(String(distance)), Value(displayType(operandType!))) as ThrowCompletion).Value as ObjectValue);
+              }
+            }
+          }
+        }
         // AN OPERATOR OVERLOAD DECLARES ITS OPERAND'S TYPE, and that was
         // checked only at the run time - `v + 5` for a `class V { operator+(o:
         // V) }` was "5 is not assignable to \"V\"" when the program ran, though
