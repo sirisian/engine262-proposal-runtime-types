@@ -4129,8 +4129,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // TypeScript and the run time accept it, rather than refused with "C,
     // which declares no member a".
     const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
-    const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
-      ? (heritage as { name: string }).name
+    // `extends Box.<uint8>` is a |TypeArgumentsExpression| WRAPPING the name,
+    // not an |IdentifierReference|, so reading the heritage as a name alone left
+    // `baseName` *null* and the record with no [[Base]] at all. The relation
+    // walks [[Base]] for the inheritance chain, so `let b: Box.<uint8> = new
+    // IntBox()` was refused for a `class IntBox extends Box.<uint8>` while
+    // `instanceof` answered *true*, which is the disagreement this record exists
+    // to end - and the same omission the library-nominal case above was fixed
+    // for, one spelling along.
+    const heritageArgs = heritage && (heritage as { type?: string }).type === 'TypeArgumentsExpression'
+      ? (heritage as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode.Type[] } }).TypeArguments?.TypeArgumentList
+      : undefined;
+    const heritageName = heritageArgs
+      ? (heritage as unknown as { Expression?: { type?: string, name?: string } }).Expression
+      : (heritage as { type?: string, name?: string } | null | undefined);
+    const baseName = heritageName && heritageName.type === 'IdentifierReference'
+      ? (heritageName as { name: string }).name
       : null;
     // A class may extend a LIBRARY nominal - `class MyErr extends Error` - and
     // `classTypeOf` finds only classes declared in source, so the library
@@ -4140,7 +4154,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // the same class imported from another module, which this pass cannot see
     // and so abstains on, is accepted, so the program's meaning would depend
     // on which file its class was written in.
-    const base = baseName ? (classTypeOf(baseName) ?? libraryTypeRecord(baseName)) : null;
+    const bareBase = baseName ? (classTypeOf(baseName) ?? libraryTypeRecord(baseName)) : null;
+    // The SPECIALIZATION, not the declaration. The arguments a heritage clause
+    // supplies are what #sec-issubtype compares against the target's, so a base
+    // recorded without them relates to no instantiation of itself.
+    // ALL OR NOTHING. An argument that names one of this class's own type
+    // parameters - `class Sub<T> extends Box.<T>` - does not resolve here, the
+    // parameter having no binding at the declaration, and dropping it silently
+    // left a base of `Box` with NO arguments: a record that looks like a
+    // concrete instantiation and matches none. Better to record the bare base,
+    // which is what this did before and is honestly incomplete.
+    //
+    // The remaining case is that one: a generic subclass of a generic base
+    // relates to no instantiation of its base, because the base is recorded
+    // unparameterized and specializing the subclass does not substitute into it.
+    // Fixing it means substituting the subclass's arguments into [[Base]] where
+    // the specialization is built, which is a change to where specializations
+    // are made rather than to how a heritage clause is read.
+    // Resolved UNDER THE CLASS'S OWN TYPE PARAMETERS, so that
+    // `class Sub<T> extends Box.<T>` records a base of `Box.<T>` - the argument
+    // being a ~parameter~ record - rather than nothing at all. Without the scope
+    // `T` resolves to null here, the all-or-nothing rule below then keeps the
+    // BARE base, and a specialization of `Sub` relates to no instantiation of
+    // `Box`.
+    const pushedForHeritage = pushTypeParameterScopeOf(cls, 'type-only');
+    let heritageArgRecords;
+    try {
+      heritageArgRecords = heritageArgs
+        ? heritageArgs.map((a) => resolveType(a))
+        : undefined;
+    } finally {
+      if (pushedForHeritage) {
+        typeParameterScopes.pop();
+      }
+    }
+    const base = bareBase && bareBase.Kind === 'nominal'
+      && heritageArgRecords && heritageArgRecords.length > 0
+      && heritageArgRecords.every((t): t is TypeRecord => !!t)
+      ? { ...bareBase, Arguments: heritageArgRecords as readonly TypeRecord[] } as Known
+      : bareBase;
     const baseStructure = base && base.Kind === 'nominal'
       ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
       : null;
@@ -4919,10 +4971,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return true;
     }
     const coverage = switchEnumCoverage(n);
-    if (!coverage) {
+    if (coverage) {
+      return coverage.names.every((nm) => coverage.covered.has(nm));
+    }
+    // A SEALED CLASS discriminant is a closed set too. #sec-divergence counts
+    // "every enumerator, EVERY DIRECT SUBCLASS, or a `default`" alike, and this
+    // read only the enumerators - so a `switch` over a sealed class with a case
+    // for each atom was not exhaustive here while the same arms in a `match`
+    // were, one rule answered two ways by two operations over one closed set.
+    //
+    // The atoms come from `Atoms` through the same hook the `match` path
+    // supplies, so the two agree by construction, the base included where the
+    // class is instantiable.
+    const disc = (n as { Expression?: ParseNode }).Expression;
+    const subjectType = disc ? staticType(disc) : null;
+    if (!subjectType || subjectType.Kind !== 'nominal') {
       return false;
     }
-    return coverage.names.every((nm) => coverage.covered.has(nm));
+    const atoms = Atoms(subjectType as TypeRecord, undefined, (t) => {
+      const d = (t as { Declaration?: ParseNode }).Declaration;
+      const subs = d ? sealedSubclasses.get(d) : undefined;
+      return subs?.map((c) => ({
+        name: (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?',
+        declaration: c,
+      }));
+    });
+    const wanted = atoms.map((a) => a.declaration).filter((d): d is ParseNode => d !== undefined);
+    if (wanted.length === 0) {
+      return false;
+    }
+    // A `case T:` label is an EXPRESSION naming the class, not a type
+    // reference - the shape a `match` arm does not have - so the declaration is
+    // reached through the class binding rather than through `resolveType`.
+    const sw = n as { CaseBlock?: { CaseClauses_a?: readonly ParseNode[], CaseClauses_b?: readonly ParseNode[] } };
+    const labelled = new Set<ParseNode>();
+    for (const clause of [...(sw.CaseBlock?.CaseClauses_a ?? []), ...(sw.CaseBlock?.CaseClauses_b ?? [])]) {
+      const label = (clause as { Expression?: ParseNode }).Expression;
+      if (!label || label.type !== 'IdentifierReference') {
+        continue;
+      }
+      const named = classTypeOf((label as { name: string }).name);
+      const d = named && named.Kind === 'nominal'
+        ? (named as unknown as { Declaration?: ParseNode }).Declaration
+        : undefined;
+      if (d) {
+        labelled.add(d);
+      }
+    }
+    return wanted.every((d) => labelled.has(d));
   };
 
   // ---- type aliases and the resolution of a written type ------------
@@ -5483,6 +5579,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // a `const` reaches. Both attach arguments and both must validate
             // them, through the one helper - a rule enforced in one and not the
             // other is a rule that holds in some positions.
+            // EACH ARGUMENT AGAINST ITS PARAMETER'S CONSTRAINT.
+            // #sec-bindtypearguments carries the step - "If _constraint_ is not
+            // ~none~ and IsSubtype(_v_, _constraint_, a new empty List) is
+            // *false*, throw a *TypeError* exception" - inside the one operation
+            // "every application site performs: A TYPE REFERENCE, an
+            // expression-position application, `new`, a heritage clause, an
+            // explicit call".
+            //
+            // A type reference performed none of it: the arguments were attached
+            // as written, so `<T: uint8>` was enforced for `f.<string>(x)` at a
+            // call and ignored by `Box.<string>`, `new Box.<string>()` and
+            // `type B = Box.<string>`. A constraint that binds where a caller
+            // reads and not where a declaration does is the wrong way round: the
+            // body is checked ONCE against the constraint, so an application
+            // that ignores it gets a body checked for a type it does not have.
+            //
+            // A ~literal~ argument is left to the binder, which converts it into
+            // the constraint rather than comparing it, the order the binding
+            // steps take.
+            const constrained = (userClass as unknown as { Declaration?: {
+              TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] },
+            } }).Declaration?.TypeParameters?.TypeParameterList ?? [];
+            for (let i = 0; i < constrained.length && i < args.length; i += 1) {
+              const q = constrained[i]!;
+              const argument = args[i];
+              if (!q.TypeParameterConstraint || typeof argument === 'number' || argument.Kind === 'literal') {
+                continue;
+              }
+              const constraint = resolveType(q.TypeParameterConstraint);
+              if (constraint && !IsAssignable(argument, constraint)) {
+                const completion = Throw.StaticTypeError(
+                  '$1 is not assignable to $2, the constraint of $3',
+                  Value(displayType(argument)),
+                  Value(displayType(constraint)),
+                  Value(q.BindingIdentifier?.name ?? '?'),
+                ) as ThrowCompletion;
+                errors.push(completion.Value as ObjectValue);
+              }
+            }
             const bad = badKindedArgument(userClass, args);
             if (bad) {
               // The specific diagnostics, not the generic assignability one.
@@ -9309,9 +9444,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return sig;
             }
           }
-          // An iterating receiver: a Generator, an AsyncGenerator, or one of the
-          // iteration interfaces. The element is the first type argument in
-          // every case, which is what the shared shorthand guarantees.
+          // A receiver KNOWN TO CARRY THE HELPERS: a Generator, an
+          // AsyncGenerator, or one of the helper carriers a chain returns. The
+          // element is the first type argument in every case, which is what the
+          // shared shorthand guarantees.
+          //
+          // NOT the iteration interfaces, which an earlier comment here claimed.
+          // #sec-iteration-types lists exactly what each protocol declares -
+          // `Iterator.<T, R, N>` declares "`next` ... and optionally `return`
+          // and `throw`", `Iterable.<T>` declares `[Symbol.iterator]` - and the
+          // helpers are none of them: they live on `Iterator.prototype` in the
+          // base language. The protocols are "satisfied STRUCTURALLY", so a
+          // hand-written object with a `next` method is an `Iterator.<T>` and
+          // has no `map`. Typing one as though it did would be unsound, which is
+          // why this list is the carriers and not the protocols.
           if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
               && (receiver.LibraryName === 'Generator' || receiver.LibraryName === 'AsyncGenerator'
                 || receiver.LibraryName === 'IteratorHelper' || receiver.LibraryName === 'AsyncIteratorHelper')) {
@@ -9820,6 +9966,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     : null))
                 .filter((a): a is TypeRecord => !!a);
               if (args.length === spec.TypeArguments.TypeArgumentList.length) {
+                // The CONSTRAINTS, as the annotation path checks them.
+                // #sec-bindtypearguments names `new` among the application sites
+                // its step covers, so `new Box.<string>()` at `<T: uint8>` is
+                // refused exactly as `let b: Box.<string>` is. Written here as
+                // well as there because the two paths attach arguments
+                // separately; a rule enforced in one is a rule that holds in
+                // some positions.
+                // POSITIONAL arguments only. A named list - `new Buffer.<Name:
+                // 'a', Size: 2, T: uint16>()` - is not reordered at this site,
+                // so pairing `args[i]` with `params[i]` would compare each
+                // argument against the wrong parameter's constraint, which is
+                // how this first reported `uint16` against the constraint of
+                // `Name`. The annotation path above pairs against an ordered
+                // list and has no such restriction; ordering this one is the
+                // remaining work.
+                const anyNamed = spec.TypeArguments.TypeArgumentList
+                  .some((a) => typeArgumentNameOfShared(a as unknown as ParseNode.Type) !== undefined);
+                const specParams = anyNamed ? [] : ((base as unknown as { Declaration?: {
+                  TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] },
+                } }).Declaration?.TypeParameters?.TypeParameterList ?? []);
+                for (let i = 0; i < specParams.length && i < args.length; i += 1) {
+                  const q = specParams[i]!;
+                  const argument = args[i]!;
+                  if (!q.TypeParameterConstraint || argument.Kind === 'literal') {
+                    continue;
+                  }
+                  const constraint = resolveType(q.TypeParameterConstraint);
+                  if (constraint && !IsAssignable(argument, constraint)) {
+                    errors.push((Throw.StaticTypeError(
+                      '$1 is not assignable to $2, the constraint of $3',
+                      Value(displayType(argument)),
+                      Value(displayType(constraint)),
+                      Value(q.BindingIdentifier?.name ?? '?'),
+                    ) as ThrowCompletion).Value as ObjectValue);
+                  }
+                }
                 // A NUMERIC argument is a value, not a literal type. The
                 // annotation path already converts one - `let a: SoA.<P, 0>`
                 // reads `0` as the number - and this path did not, so
@@ -11768,7 +11950,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * is what a discriminated chain needs.
    */
   const structuralPatternCovers = (pattern: ParseNode, atom: TypeRecord): boolean => {
-    const p = pattern as unknown as { type?: string, Type?: ParseNode.Type };
+    const p = pattern as unknown as { type?: string, Type?: ParseNode.Type, Literal?: ParseNode };
+    // A LITERAL pattern covers the atom whose value it names.
+    // #sec-match-exhaustiveness reads "*true*, *false*, `null`, and `undefined`
+    // atoms as their literal patterns and types", so `when true:` covers the
+    // *true* atom of a `boolean` subject exactly as a type pattern naming the
+    // literal type would. Only type patterns were read here, so a `match (b)`
+    // with arms for both `true` and `false` was reported as covering neither.
+    if (p.type === 'MatchLiteralPattern' && p.Literal) {
+      if (atom.Kind !== 'literal') {
+        return false;
+      }
+      const lit = p.Literal as unknown as { type?: string, value?: unknown };
+      const want = (atom as { Value: unknown }).Value;
+      if (lit.type === 'BooleanLiteral') {
+        return want === (lit.value === true ? Value.true : Value.false)
+          || want === (lit.value === true);
+      }
+      if (lit.type === 'NullLiteral') {
+        return want === Value.null;
+      }
+      return false;
+    }
     if (p.type !== 'MatchTypePattern' || !p.Type) {
       return false;
     }
@@ -13733,7 +13936,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // four typed-generator and typed-promise corpus programs the moment they
       // were routed through the checked path, which is what the measurement showed.
       && !resumable
-      && canCompleteNormally(body as ParseNode)
+      && canCompleteNormally(body as ParseNode, switchCoversDiscriminant)
       // `void` is the annotation for a function that returns nothing, and
       // `IsAssignable(undefined, void)` is false - the two are different types.
       // It admits the implicit return by meaning, not by assignability.
@@ -14306,7 +14509,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // members is declared required by the atom" - which is what makes
         // `when { c: 'US' }` cover a branch.
         const chainAtoms = AtomsOfType(subjectType ?? undefined);
-        if (chainAtoms.length > 0 && enumAtoms.length === 0) {
+        // EVERY subject whose atoms are not an enum's runs this path, not only a
+        // dependent record type. The gate read `enumAtoms.length === 0`, and
+        // `enumAtoms` is this same list, so a subject WITH atoms that are not
+        // enumerators - `boolean`, `{a} | {b}`, `A | null`, a composite member -
+        // fell between the two paths: the enum path below no-ops because those
+        // atoms carry no `owner`, and this one was skipped because they exist.
+        // #sec-match-exhaustiveness names all of them, and `Atoms` computes all
+        // of them; only the routing was missing.
+        const overEnumerators = enumAtoms.some((a) => a.owner !== undefined);
+        if (chainAtoms.length > 0 && !overEnumerators) {
           const coveredAtoms = new Set<string>();
           let chainDefault = false;
           for (const clause of me.Clauses) {
@@ -14399,10 +14611,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             declaration: c,
           }));
         });
-        const subclasses = sealedAtoms
+        // The BASE is among them where it is instantiable.
+        // #sec-match-exhaustiveness: a sealed class's atoms are "its direct
+        // subclasses and, where instantiable, itself", and `Atoms` yields the
+        // base unless the declaration is `abstract`. This dropped it again, so a
+        // `match` over a plain `sealed class S` with an arm for every subclass
+        // was called exhaustive and then threw "matched no clause" when handed
+        // `new S()`. #sec-sealed-classes draws the line from the other side: a
+        // `sealed abstract` class's subclasses are "a closed set WITH NO CASE
+        // AMONG THEM FOR THE BASE", a sentence with nothing to say unless a
+        // plain `sealed` base needs one.
+        //
+        // Nothing else changes: the loop below collects each arm's declaration,
+        // so `when S:` covers the base atom as `when T:` covers a subclass, and
+        // a sealed class with no subclasses at all is now the closed set of
+        // exactly itself rather than no set.
+        const atomDecls = sealedAtoms
           .map((a) => a.declaration)
-          .filter((d): d is ParseNode => d !== undefined && d !== sealedDecl?.Declaration);
-        if (subclasses.length > 0) {
+          .filter((d): d is ParseNode => d !== undefined);
+        // Not for an ENUM subject, whose atoms are enumerators rather than
+        // classes and whose coverage the path above decides. The removed filter
+        // was doing this job by accident: an enumerator atom carries the ENUM's
+        // declaration, which is also the subject's, so filtering the subject's
+        // own declaration emptied the list for an enum and skipped this block.
+        // Dropping the filter to admit a sealed BASE therefore let every enum
+        // subject fall in here, where no arm resolves to a class declaration and
+        // all of them looked uncovered.
+        if (atomDecls.length > 0 && !overEnumerators) {
           const coveredClasses = new Set<ParseNode>();
           let sealedDefault = false;
           for (const clause of me.Clauses) {
@@ -14422,7 +14657,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (!sealedDefault) {
-            const missingClasses = subclasses.filter((c) => !coveredClasses.has(c));
+            const missingClasses = atomDecls.filter((c) => !coveredClasses.has(c));
             if (missingClasses.length > 0) {
               const shown = missingClasses
                 .map((c) => (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?')

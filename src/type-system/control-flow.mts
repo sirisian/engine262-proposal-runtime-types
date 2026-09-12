@@ -25,7 +25,19 @@ import type { TypeRecord } from './records.mts';
  * Syntactic. It recognises the shapes a reader would call
  * obviously total; anything else is assumed to complete.
  */
-export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean => {
+export const canCompleteNormally = (
+  stmt: ParseNode | null | undefined,
+  /**
+   * Whether a `switch` is exhaustive over its discriminant, which only the
+   * checker knows: it reads the enum's members or the sealed class's subclasses.
+   * #sec-divergence counts "every enumerator, every direct subclass, or a
+   * `default`" alike, and without this only the `default` was visible here - so
+   * a `switch` covering every enumerator, each clause returning, was still told
+   * it can complete without a return.
+   */
+  covers?: (n: ParseNode) => boolean,
+): boolean => {
+  const again = (n: ParseNode | null | undefined) => canCompleteNormally(n, covers);
   if (!stmt) {
     return true;
   }
@@ -50,7 +62,7 @@ export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean
         return true;
       }
       // A block completes normally when its LAST reachable statement does.
-      return canCompleteNormally(list[list.length - 1]);
+      return again(list[list.length - 1]);
     }
     case 'IfStatement': {
       const alt = n.Statement_b as ParseNode | undefined;
@@ -58,21 +70,21 @@ export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean
         // No `else`: the test may be false, so control reaches the tail.
         return true;
       }
-      return canCompleteNormally(n.Statement_a as ParseNode)
-        || canCompleteNormally(alt);
+      return again(n.Statement_a as ParseNode)
+        || again(alt);
     }
     case 'TryStatement': {
       const block = n.Block as ParseNode | undefined;
       const handler = (n.Catch as { Block?: ParseNode })?.Block;
       const fin = (n.Finally as { Block?: ParseNode })?.Block ?? n.Finally as ParseNode | undefined;
       // A `finally` that cannot complete decides the whole statement.
-      if (fin && !canCompleteNormally(fin)) {
+      if (fin && !again(fin)) {
         return false;
       }
       if (handler) {
-        return canCompleteNormally(block) || canCompleteNormally(handler);
+        return again(block) || again(handler);
       }
-      return canCompleteNormally(block);
+      return again(block);
     }
     case 'WhileStatement': {
       // `while (true)` with no reachable `break` cannot complete. A `break`
@@ -94,12 +106,19 @@ export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean
         DefaultClause?: ParseNode,
         CaseClauses_b?: readonly ParseNode[],
       } | undefined;
-      if (!cb?.DefaultClause) {
+      // An exhaustive `switch` needs no `default`: #sec-divergence counts
+      // "every enumerator, every direct subclass, or a `default`", and the
+      // checker is what can tell. Without the hook only the `default` was seen.
+      if (!cb?.DefaultClause && !(covers?.(stmt) === true)) {
         return true;
       }
+      // The `default` is only present when there IS one: an exhaustive switch
+      // reaches here without one, and splicing an *undefined* into the list
+      // crashed the walk below on its `StatementList`. The early return above
+      // used to guarantee it.
       const clauses = [
         ...(cb.CaseClauses_a ?? []),
-        cb.DefaultClause,
+        ...(cb.DefaultClause ? [cb.DefaultClause] : []),
         ...(cb.CaseClauses_b ?? []),
       ];
       for (const c of clauses) {
@@ -109,7 +128,7 @@ export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean
         if (!list || list.length === 0) {
           continue;
         }
-        if (canCompleteNormally(list[list.length - 1]!)) {
+        if (again(list[list.length - 1]!)) {
           return true;
         }
         if (containsBreak(c as ParseNode)) {
@@ -143,7 +162,7 @@ export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean
       if (alwaysTrue) {
         return containsBreak(body);
       }
-      return canCompleteNormally(body) || containsBreak(body);
+      return again(body) || containsBreak(body);
     }
     case 'LabelledStatement': {
       // A `break` naming the label resumes after the labelled statement, so it
@@ -153,7 +172,7 @@ export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean
       // toward "can complete", and that withholds an error rather than raising
       // a wrong one.
       const item = n.LabelledItem as ParseNode | undefined;
-      return canCompleteNormally(item) || containsBreak(item);
+      return again(item) || containsBreak(item);
     }
     default:
       return true;

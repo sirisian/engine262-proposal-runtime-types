@@ -75,7 +75,21 @@ test('a SEALED class is a closed set too', () => {
   // is whatever the declaration list holds.
   const outcome8 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   const S = 'sealed class S {} class T extends S {} class U extends S {} ';
-  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('ACCEPTED');
+  // The BASE is one of the atoms, since a plain `sealed` class can be
+  // constructed: #sec-match-exhaustiveness says "its direct subclasses AND,
+  // WHERE INSTANTIABLE, ITSELF". This asserted ACCEPTED for the subclass arms
+  // alone, and the program it accepted threw "matched no clause" when handed a
+  // `new S()` - an exhaustiveness claim that the run time contradicted.
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('StaticTypeError');
+  expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U: 2; when S: 0; }; } f(new T());`)).toBe('ACCEPTED');
+  // `sealed abstract` is the other side of the same rule: #sec-sealed-classes
+  // has its concrete subclasses "a closed set WITH NO CASE AMONG THEM FOR THE
+  // BASE", so the subclass arms alone are exhaustive there.
+  const SA = 'sealed abstract class S {} class T extends S {} class U extends S {} ';
+  expect(outcome8(`${SA} function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('ACCEPTED');
+  // A sealed class with no subclasses at all is the closed set of exactly
+  // itself, rather than no set.
+  expect(outcome8('sealed class Z {} function f(z: Z) { return match (z) { when Z: 1; }; } f(new Z());')).toBe('ACCEPTED');
   expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('StaticTypeError');
   expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; default: 0; }; } f(new T());`)).toBe('ACCEPTED');
   // A guarded arm proves nothing, for the same reason it proves nothing over an
@@ -95,7 +109,9 @@ test('the shape a class instance type carries', () => {
   //
   // Keying by node also settles shadowing for free, which a name could not.
   const outcome9 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome9('sealed class S {} class T extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('ACCEPTED');
+  // Covering the base as well as the subclass, so that what this test measures
+  // is the KEYING and not the base rule the test above covers.
+  expect(outcome9('sealed class S {} class T extends S {} function f(s: S) { return match (s) { when T: 1; when S: 0; }; } f(new T());')).toBe('ACCEPTED');
   // A subclass declared BEFORE its sealed base is still collected, since the
   // set is fixed when the MODULE finishes rather than when a declaration is
   // reached - which is why the linking is a second pass.

@@ -264,5 +264,9 @@ test('the two pre-existing sources still work, through the same operation', () =
   expect(outcome(`${E}function f(e: E) { return match (e) { when E.A: 1; when E.B: 2; }; } f(E.A);`)).toBe('ACCEPTED');
   const S = 'sealed class S {} class T extends S {} class U extends S {} ';
   expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('StaticTypeError');
-  expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('ACCEPTED');
+  // The subclass arms alone no longer suffice for a PLAIN `sealed` base, which
+  // #sec-match-exhaustiveness counts among the atoms "where instantiable";
+  // covering it as well is what makes this exhaustive.
+  expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('StaticTypeError');
+  expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; when U: 2; when S: 0; }; } f(new T());`)).toBe('ACCEPTED');
 });

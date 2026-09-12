@@ -1492,7 +1492,40 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // now, so this reads a field rather than hoping for one.
       const { Base: base } = s;
       if (base) {
-        return IsSubtype(base, t, next);
+        // The base at THIS specialization's arguments. A `class Sub<T> extends
+        // Box.<T>` records a base of `Box.<T>`, and `Sub.<uint8>` is a subtype
+        // of `Box.<uint8>` only once `T` has been replaced by what this record
+        // binds it to - otherwise a generic subclass of a generic base relates
+        // to no instantiation of it, while a concrete one (`class IntBox extends
+        // Box.<uint8>`) does, which is one relation answered two ways by how the
+        // base happened to be spelled.
+        //
+        // One level, over the base's own arguments, which is the shape a
+        // heritage clause can write: `extends Box.<T>` and `extends Box.<uint8>`
+        // both land here. A nested parameter - `extends Box.<[T]>` - is not
+        // reached, and is left for the substitution operation proper rather than
+        // duplicated here, which would put a second implementation of
+        // SubstituteType in the relation module.
+        const params = (s.Declaration as { TypeParameters?: {
+          TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[],
+        } } | null | undefined)?.TypeParameters?.TypeParameterList;
+        let walked = base;
+        if (params && s.Arguments.length > 0 && base.Kind === 'nominal' && base.Arguments.length > 0) {
+          const bound = new Map<string, TypeRecord | number>();
+          params.forEach((q, i) => {
+            const nm = q.BindingIdentifier?.name;
+            if (nm && i < s.Arguments.length) {
+              bound.set(nm, s.Arguments[i]!);
+            }
+          });
+          walked = {
+            ...base,
+            Arguments: base.Arguments.map((a) => (typeof a !== 'number' && a.Kind === 'parameter'
+              ? bound.get((a as { Name: string }).Name) ?? a
+              : a)),
+          } as TypeRecord;
+        }
+        return IsSubtype(walked, t, next);
       }
       return false;
     }
