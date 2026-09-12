@@ -14915,6 +14915,59 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (sig) {
             const chosen = sig;
+            // A PARAMETER THE CALL SUPPLIES NOTHING FOR. The run time already
+            // makes this judgment - it reports "undefined is not assignable to
+            // uint.<8>" from the binding of the missing parameter - and both
+            // sides are written down at the call, so #sec-type-errors makes it
+            // determinable.
+            //
+            // Only where the parameter REQUIRES a value: an `Optional` one, one
+            // with a default, and a `Rest` are each satisfied by nothing, and a
+            // type admitting *undefined* is satisfied by the *undefined* the
+            // call leaves. An untyped parameter is `any`, which admits it too.
+            //
+            // A SPREAD argument suspends the count entirely. `f(...r)` supplies
+            // as many arguments as `r` has elements, which is a run-time fact
+            // for a dynamic array, so a call carrying one is not judged here -
+            // the run time reports it, as it does today.
+            //
+            // An OVERLOADED name does not reach this: `resolveOverloadByTypes`
+            // has already answered, and where no arm accepts the count it
+            // reports "no declared signature accepts an argument of type ...",
+            // which is the better diagnostic for a set.
+            {
+              const suppliedNodes = (c.Arguments ?? []);
+              // A NAMED argument supplies a parameter by name, so the positional
+              // count says nothing about which parameters were filled:
+              // `f(b: "a")` fills `b` and leaves a defaulted `a` alone. A REST
+              // anywhere breaks the mapping too, because a rest may be FOLLOWED
+              // by parameters - `function f(...a: [].<number>, b: string)` fills
+              // `b` from the last argument, whatever the count - so the index of
+              // a parameter is not the index of its argument.
+              const unmapped = suppliedNodes.some((a) => {
+                const k = (a as { type?: string }).type;
+                return k === 'AssignmentRestElement' || k === 'NamedArgument';
+              }) || (chosen.Parameters as readonly ParameterRecord[]).some((pr) => pr.Rest);
+              const supplied = suppliedNodes.length;
+              if (!unmapped) {
+                (chosen.Parameters as readonly ParameterRecord[]).forEach((pr, i) => {
+                  if (i < supplied || pr.Optional || pr.Initial !== undefined) {
+                    return;
+                  }
+                  const wanted = pr.Type as Known;
+                  if (!wanted || wanted.Kind === 'any'
+                    || NarrowFrom(wanted as TypeRecord, undefinedType) !== wanted) {
+                    return;
+                  }
+                  const completion = Throw.StaticTypeError(
+                    '$1 is required by $2 and is not supplied',
+                    Value(pr.Name || `parameter ${i + 1}`),
+                    Value(displayType(wanted as TypeRecord)),
+                  ) as ThrowCompletion;
+                  errors.push(completion.Value as ObjectValue);
+                });
+              }
+            }
             // Arguments are mapped to parameters by `assignArguments`, the SAME
             // operation this file's overload ranking uses and which wraps the
             // `SequenceAssignment` the run time calls. This proposal allows
@@ -15251,6 +15304,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             .filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
           const sig = selectConstructSignature(sigList, sigArgNodes.map((a) => staticType(a) ?? anyTypeRecord));
           if (sig) {
+            // A CONSTRUCTOR PARAMETER THE CONSTRUCTION SUPPLIES NOTHING FOR,
+            // on the terms the call applies: an Optional parameter, one with a
+            // default, a Rest, and a type admitting *undefined* are each
+            // satisfied by nothing, and a SPREAD argument suspends the count.
+            // A constructor set is resolved by `selectConstructSignature`, so
+            // like an overloaded call this reports against the signature the
+            // arguments chose.
+            {
+              const ctorNodes = (ne.Arguments ?? []);
+              const ctorUnmapped = ctorNodes.some((a) => {
+                const k = (a as { type?: string }).type;
+                return k === 'AssignmentRestElement' || k === 'NamedArgument';
+              }) || (sig.Parameters as readonly ParameterRecord[]).some((pr) => pr.Rest);
+              if (!ctorUnmapped) {
+                (sig.Parameters as readonly ParameterRecord[]).forEach((pr, i) => {
+                  if (i < ctorNodes.length || pr.Optional || pr.Initial !== undefined) {
+                    return;
+                  }
+                  const wanted = pr.Type as Known;
+                  if (!wanted || wanted.Kind === 'any'
+                    || NarrowFrom(wanted as TypeRecord, undefinedType) !== wanted) {
+                    return;
+                  }
+                  const completion = Throw.StaticTypeError(
+                    '$1 is required by $2 and is not supplied',
+                    Value(pr.Name || `parameter ${i + 1}`),
+                    Value(displayType(wanted as TypeRecord)),
+                  ) as ThrowCompletion;
+                  errors.push(completion.Value as ObjectValue);
+                });
+              }
+            }
             // The parameter types are read AT THE BINDINGS the construction
             // makes, so `new Box(1)` at a `Box.<uint8>` context checks `1` at
             // `uint8` and `new Box("s")` there is refused here rather than at
