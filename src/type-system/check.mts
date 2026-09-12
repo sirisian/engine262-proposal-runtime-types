@@ -8342,6 +8342,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'UnaryExpression': {
         const unary = node as unknown as { operator?: string, UnaryExpression?: ParseNode };
         const inner = unary.UnaryExpression;
+        // #table-family-operations: a binary floating-point type "does not
+        // define bitwiseNOT, the shifts, and the bitwise operations". The binary
+        // forms are judged in the arithmetic arm; `~` is the unary one, and the
+        // run time refused it alone - `~(1.5 := float32)` answered -2 before it
+        // did.
+        if (unary.operator === '~' && inner) {
+          const operand = staticType(inner);
+          if (operand && operand.Kind === 'primitive'
+            && /^float(16|32|64|128)$/.test((operand as { Name?: string }).Name ?? '')) {
+            const completion = Throw.StaticTypeError(
+              'this operator is not defined for a binary floating-point type',
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         if ((unary.operator === '-' || unary.operator === '+')
           && inner && (inner as { type?: string }).type === 'NumericLiteral'
           && !(inner as { Imaginary?: boolean }).Imaginary) {
@@ -10074,6 +10089,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const asValueType = (t: Known): TypeRecord | null => (t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null);
         const lv = asValueType(leftT);
         const rv = asValueType(rightT);
+
+        // #table-family-operations: a binary floating-point type "does not
+        // define bitwiseNOT, the shifts, and the bitwise operations, since each
+        // would require converting the operand to an integer type". The run time
+        // refuses them - `(4 := float32) << (1 := float32)` is "this operator is
+        // not defined for a binary floating-point type" - and an operand's type
+        // is what decides it, so the judgment is determinable wherever that type
+        // is written down.
+        //
+        // Asked of EITHER operand: the mixing rule below would catch a float
+        // against an integer anyway, but `f | f` is two floats of one type and
+        // reaches nothing else. The decimal family refuses these operations by
+        // its own rule.
+        {
+          const bitwise = node.type === 'BitwiseANDExpression' || node.type === 'BitwiseORExpression'
+            || node.type === 'BitwiseXORExpression' || node.type === 'ShiftExpression';
+          // Asked of `leftT`/`rightT` rather than `lv`/`rv`: a binary float is
+          // not a value type by `isNumericValueTypeName`, so it is absent from
+          // both, and every rule below that reads them passes a float by. That
+          // is also why `f | n` reached the run time while `n | i` did not.
+          const isBinaryFloat = (t: Known) => !!t && t.Kind === 'primitive'
+            && /^float(16|32|64|128)$/.test((t as { Name?: string }).Name ?? '');
+          if (bitwise && (isBinaryFloat(leftT) || isBinaryFloat(rightT))) {
+            const completion = Throw.StaticTypeError(
+              'this operator is not defined for a binary floating-point type',
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         // "one that doesn't fit is a compile-time TypeError rather than a silent
         // truncation" - the README's `a + 300` at a `uint8`. The literal takes
         // the type here, so it is checked here; this was a RangeError at run
