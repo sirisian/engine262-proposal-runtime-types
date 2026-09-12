@@ -10179,6 +10179,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const completion = Throw.StaticTypeError('$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(operandTypes[0] as TypeRecord)), Value(displayType(operandTypes[1] as TypeRecord)), Value(strictOperator === '===' ? 'false' : 'true')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
+        // TWO DIFFERENT NUMERIC TYPES DO NOT COMPARE. Spec 3149 makes it a type
+        // error when the operands of "an arithmetic, bitwise, shift, or
+        // RELATIONAL operator are numeric types that are not the same type",
+        // and the relational arm reached none of it: `n < i` for a `uint8` and
+        // an `int32` was the run time's error where `n * i` was an Early Error,
+        // one clause answering two ways by which operator was written.
+        //
+        // Judged HERE and not by routing the relational nodes through the
+        // arithmetic arm, which is where the rule for the other three lives: a
+        // comparison's result is a `boolean` rather than the operand type, and
+        // that arm ends by ANSWERING the operand type and by adopting a literal
+        // into it. Only the mixing judgment belongs to a comparison.
+        //
+        // The ORDERING operators only. `===` and `!==` compare without
+        // converting, so two numeric types are not a mistake there - they are
+        // the disjointness question just above, which answers *false* rather
+        // than refusing. A LITERAL operand adopts the other side's type, as it
+        // does everywhere, so `n < 5` is ordinary and the guard the disjoint
+        // rule already uses serves here too.
+        if ((strictOperator === '<' || strictOperator === '>'
+            || strictOperator === '<=' || strictOperator === '>=')
+            && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
+            && !literalOperandType(operandTypes[0]) && !literalOperandType(operandTypes[1])) {
+          const lvc = operandTypes[0]!.Kind === 'primitive'
+            && isNumericValueTypeName((operandTypes[0] as { Name?: string }).Name)
+            ? operandTypes[0] as TypeRecord : null;
+          const rvc = operandTypes[1]!.Kind === 'primitive'
+            && isNumericValueTypeName((operandTypes[1] as { Name?: string }).Name)
+            ? operandTypes[1] as TypeRecord : null;
+          if (lvc && rvc && !SameType(lvc, rvc)) {
+            const completion = Throw.StaticTypeError(
+              '$1 and $2 are different numeric types and do not mix',
+              Value(displayType(lvc)), Value(displayType(rvc)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         // An operand whose type is not known could be a vector, so the answer is
         // withheld rather than guessed: an unknown operand keeps the comparison
         // unknown.
