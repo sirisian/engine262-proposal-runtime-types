@@ -1273,15 +1273,27 @@ function innermostLiteral(node: ParseNode): ParseNode {
 }
 
 /**
- * Whether a primitive type name is a numeric VALUE type (not `number`). The
- * integer and float records are named by family with the width as an argument
- * (`uint` at 64); the decimal records carry the width IN the name
- * (`decimal64`), which is why `decimal` alone matched nothing and a literal
- * beside a decimal was never adopted - "a decimal operand requires a decimal on
- * both sides" where decimal.md says "the literal 3 takes the decimal type".
+ * Whether a primitive type name is a numeric VALUE type (not `number`).
+ *
+ * The INTEGER records are named by family with the width as an argument -
+ * `uint` at 64 - so the family name is what matches them. The DECIMAL and
+ * BINARY FLOAT records carry the width IN the name, `decimal64` and `float64`,
+ * so each width is named here. `decimal` alone matching nothing is what kept a
+ * literal beside a decimal from being adopted - "a decimal operand requires a
+ * decimal on both sides" where decimal.md says "the literal 3 takes the decimal
+ * type" - and `float` alone matched nothing for the same reason, which kept
+ * every binary float out of every rule reading this: `float64 * float32` was
+ * the run time's "different numeric types" where `uint8 * int32` was an Early
+ * Error, one rule answering two ways by the family of its operands.
+ *
+ * `float` is kept beside the widths because the family name reaches the
+ * predicate from paths that build a record from it, and matching it costs
+ * nothing.
  */
 function isNumericValueTypeName(name: string | undefined): boolean {
-  return name === 'uint' || name === 'int' || name === 'float'
+  return name === 'uint' || name === 'int'
+    || name === 'float' || name === 'float16' || name === 'float32'
+    || name === 'float64' || name === 'float128'
     || name === 'decimal' || name === 'decimal32' || name === 'decimal64' || name === 'decimal128';
 }
 
