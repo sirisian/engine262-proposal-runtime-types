@@ -14614,6 +14614,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           return builtinTypeRecord(ce.name, []) ?? undefined;
         })();
+        // A VALUE OF A PRIMITIVE TYPE IS NOT CALLABLE. #sec-type-errors makes a
+        // determinable violation an Early Error, and this one is as determinable
+        // as they come: `let n: uint8 = uint8(1); n();` has the callee's type
+        // written at its declaration. It was the run time's "n is not a
+        // function".
+        //
+        // A CONVERSION is exempted because its callee names a TYPE, and a type
+        // object's Static Type is an ~object~ rather than the primitive it
+        // denotes - `uint32(1)` is a call of `uint32`, not of a `uint.<32>`. The
+        // test below is on the primitive itself, so it does not reach a
+        // conversion either way; the exemption is stated so a later reader does
+        // not have to rediscover why one is safe.
+        //
+        // Deliberately narrow: only a primitive and a literal over one. An
+        // ~object~ or a ~nominal~ may carry call signatures - an interface
+        // declaring `(): uint8` is callable, and so is a type object - so
+        // "has no function structure" is not the same question and is left
+        // alone.
+        //
+        // A COMPUTED member callee is left alone. `a[Symbol.iterator]()` reads a
+        // well-known method, and the element-read rules type a computed access
+        // on an array as its ELEMENT whatever the key is - so the callee comes
+        // back `uint.<8>` and this judgment would refuse a correct program. The
+        // element typing is what is wrong there, not the call; until a symbol
+        // key stops reading as an index, a computed callee is not asked.
+        const computedCallee = (c.CallExpression as { type?: string }).type === 'MemberExpression'
+          && !!(c.CallExpression as unknown as { Expression?: ParseNode | null }).Expression;
+        if (conversionTarget === undefined && callee && !computedCallee) {
+          const base = callee.Kind === 'literal'
+            ? ((callee as { Base?: TypeRecord }).Base ?? null)
+            : callee;
+          if (base && base.Kind === 'primitive') {
+            const completion = Throw.StaticTypeError(
+              'a value of $1 is not callable',
+              Value(displayType(callee as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         if (conversionTarget !== undefined) {
           const argNodes = (c.Arguments ?? []).filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
           if (argNodes.length === 1) {
@@ -15050,6 +15089,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'NewExpression': {
         const ne = n as unknown as { MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
         const target = ne.MemberExpression;
+        // A VALUE OF A PRIMITIVE TYPE IS NOT A CONSTRUCTOR, for the reason a
+        // value of one is not callable: `new n()` for a `uint8` n was the run
+        // time's "1 (typed) is not a constructor", and the type is written at
+        // the declaration. A conversion cannot appear here - `new uint32(1)` is
+        // not a conversion - so this needs no exemption of its own.
+        //
+        // Asked only of an IDENTIFIER that names no class. Typing the target is
+        // not free: `staticType` of a generic class's name reaches the rule that
+        // refuses a BARE generic, so asking it about `new Box()` inside `class
+        // Box<T> { static default = new Box(); }` reports a type parameter that
+        // is not determined - a diagnostic this judgment never wanted to
+        // provoke. A class is not a primitive, so skipping one costs nothing.
+        if (target && (target as { type?: string }).type === 'IdentifierReference'
+            && !classTypeOf((target as unknown as { name: string }).name)) {
+          const constructee = callableForm(staticType(target));
+          const cbase = constructee && constructee.Kind === 'literal'
+            ? ((constructee as { Base?: TypeRecord }).Base ?? null)
+            : constructee;
+          if (cbase && cbase.Kind === 'primitive') {
+            const completion = Throw.StaticTypeError(
+              'a value of $1 is not a constructor',
+              Value(displayType(constructee as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+        // AN ABSTRACT CLASS CANNOT BE INSTANTIATED. #sec-typed-classes: the
+        // class exists to be extended, and its abstract members have no body to
+        // run. The run time refuses it - "$1 is an abstract class and cannot be
+        // instantiated" - and the modifier is on the declaration, so a `new`
+        // naming the class directly is decidable here.
+        //
+        // Only where the class is NAMED. `const K = A; new K()` reaches the
+        // same class through a binding, and the run time is what answers there.
+        if (target && (target as { type?: string }).type === 'IdentifierReference') {
+          const named = classTypeOf((target as unknown as { name: string }).name);
+          const namedDecl = named && named.Kind === 'nominal'
+            ? (named as unknown as { Declaration?: ParseNode }).Declaration
+            : null;
+          const modifiers = (namedDecl as unknown as { ClassModifiers?: readonly string[] | null } | null)?.ClassModifiers ?? [];
+          if (modifiers.includes('abstract')) {
+            const completion = Throw.StaticTypeError(
+              '$1 is an abstract class and cannot be instantiated',
+              Value((target as unknown as { name: string }).name),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         // A CONSTRUCTION's written type arguments are counted against the
         // class's parameters, as a call's are against the function's.
         if (target && (target as { type?: string }).type === 'TypeArgumentsExpression') {
