@@ -108,8 +108,19 @@ test('rational is a usable type name', () => {
   expect(evaluated('let r: rational = rational(3, 4); r.toString();')).toBe('3/4');
 });
 
-test('a non-rational value is not assignable to rational', () => {
-  expectThrown('let r: rational = 5; "ok";');
+test('a numeric literal at a rational position IS a rational; a string is not', () => {
+  // The bare name is an APPLICATION, not an unapplied parameterized primitive:
+  // #table-default-type-arguments gives `rational` the default `rational.<64>`,
+  // as it gives `complex` one. So `rational` denotes a type wherever it is
+  // written - the width itself is deferred with the rest of `rational.<N>` -
+  // and a literal in that position is representable exactly.
+  // #sec-literal-types: "The mathematical value of a literal is exact ... `0.1`
+  // ... in a `rational` position is 1/10." An integer is the same rule at a
+  // unit denominator.
+  expect(evaluated('let r: rational = 5; r.toString();')).toBe('5');
+  expect(evaluated('let r: rational = 5; String(Reflect.typeOf(r));')).toBe('rational');
+  expect(evaluated('let r: rational = 0.1; r.toString();')).toBe('1/10');
+  // A value with no exact rational is refused, as at any other numeric type.
   expectThrown('let r: rational = "abc"; "ok";');
 });
 

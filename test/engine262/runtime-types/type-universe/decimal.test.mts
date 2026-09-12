@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-decimal-floating-point-types (Decimal Floating-Point Types) -
@@ -166,17 +166,24 @@ test('`==` and `<` compare NUMERICAL VALUE, Object.is does not', () => {
   expect(evaluated(`String(${D('2.5')} >= ${D('2.50')});`)).toBe('true');
 });
 
-test('a decimal mixes with nothing implicitly', () => {
+test('a decimal mixes with no other TYPE, but a literal is not another type', () => {
   const D = (x: string) => `decimal128("${x}")`;
-  // The other operand would have to be converted, and `float64` -> decimal is
-  // the conversion the specification flags as hard - "the difficulty is not
-  // arithmetic but WHICH COHORT MEMBER RESULTS". Until that conversion is
-  // given a cohort-member rule the engine refuses the mix, the same answer
-  // `decimal128(0.1)` gets.
-  expect(evaluated(`try { ${D('1.0')} + 1; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
-  expect(evaluated(`try { ${D('1.0')} * uint8(2); "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
+  // A LITERAL operand adapts, because it needs no conversion to begin with:
+  // #sec-literal-types makes a literal's mathematical value exact, and the
+  // contextual-type rule reads an operand at the type its partner carries, so
+  // the `1` here IS the decimal one rather than a float64 awaiting a
+  // cohort-member rule.
+  expect(evaluated(`(${D('1.0')} + 1).toString();`)).toBe('2.0');
+  // A value of ANOTHER numeric type is the case that would need the
+  // conversion the specification flags as hard - "the difficulty is not
+  // arithmetic but WHICH COHORT MEMBER RESULTS" - so the mix is refused, and
+  // refused EARLY: both operand types are written down, so #sec-type-errors
+  // makes it determinable and the script never runs.
+  expectThrown(`${D('1.0')} * uint8(2); "ok";`, 'do not mix');
   // And an operator with no decimal meaning is refused rather than answered.
-  expect(evaluated(`try { ${D('1.0')} ** ${D('2.0')}; "ACCEPTED"; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
+  // This one is the RUN TIME's: both operands are decimals, so nothing about
+  // the types is wrong and there is no determinable error to raise early.
+  expectThrownKind(`${D('1.0')} ** ${D('2.0')};`, 'TypeError');
 });
 test('a literal at a decimal type is read from its SOURCE TEXT', () => {
   // "In a decimal context the literal `0.1` is the decimal one tenth, where in a
@@ -283,9 +290,12 @@ test('a decimal field stores and reads, cohort intact', () => {
   expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128("2.50"); c.d.toString();')).toBe('2.50');
   expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128("2.50"); '
     + 'String(Object.is(c.d, decimal128("2.50")));')).toBe('true');
-  // A wrong-width value is refused, as any typed field refuses one.
-  expect(evaluated('class C { d: decimal32 = 1.0; } const c = new C(); '
-    + 'try { c.d = decimal128("2.5"); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+  // A wrong-width value is refused, as any typed field refuses one - and
+  // refused EARLY, since #sec-type-errors makes a determinable type error an
+  // Early Error and both the field's type and the value's are written down.
+  // The script does not run, so there is nothing for a `try` to catch.
+  expectThrown('class C { d: decimal32 = 1.0; } const c = new C(); c.d = decimal128("2.5"); "ok";',
+    'is not assignable to');
 });
 
 test('the buffer round-trip claim was measuring a DEFAULT', () => {
