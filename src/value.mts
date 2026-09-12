@@ -41,15 +41,18 @@ import {
  * carries - an array's `length`, `capacity`, index and view length, and a `Map`'s
  * or `Set`'s `size`. Named once so the width is stated in one place.
  *
- * It was named `ARRAY_LENGTH_TYPE` and its comment claimed to be the only copy;
- * neither survived contact. The scope widened when the keyed collections were
- * typed, so a name saying `ARRAY` said the wrong thing - and the claim was
- * already false, `ArrayPrototype.mts` having a second identical constant. That
- * one now imports this. A third lives in `type-system/check.mts` as
- * `indexTypeRecord()`, which cannot import from here without a cycle; it is the
- * CHECKER's record and this is the RUNTIME's, and the two are kept honest by
- * `collections/size-and-counts.test.mts`, which asserts a count read at run time
- * has the type the checker gave it.
+ * This is the RUNTIME's record, attached to the values the intrinsics answer
+ * with; the CHECKER's is `indexTypeRecord()` in `type-system/index-type.mts`.
+ * The two are structurally identical, and are kept honest by
+ * `collections/size-and-counts.test.mts`, which asserts a count read at run
+ * time has the type the checker gave it.
+ *
+ * They are separate because this one is FROZEN and allocated once, where the
+ * checker builds a fresh record per call as it does for every other type it
+ * compares. Merging them is possible - `index-type.mts` could re-export this,
+ * the import direction being the safe one - but it would hand frozen records to
+ * a walk that has not been audited for mutation, so the duplication is
+ * deliberate rather than accidental.
  */
 export const INDEX_TYPE = Object.freeze({ Kind: 'primitive', Name: 'uint', Arguments: [64] }) as unknown as never;
 
