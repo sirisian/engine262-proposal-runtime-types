@@ -8743,7 +8743,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const spreadBase = spread && spread.Kind === 'literal'
               ? ((spread as { Base?: TypeRecord }).Base ?? null)
               : spread;
+            // A `Composite` is left to the run time here for the reason the
+            // `for`-`of` rule gives: the kind is not carried through a call, a
+            // TUPLE composite spreads (#sec-composite-getiterator reaches
+            // "`for`-`of`, SPREAD, and array destructuring" alike), and a record
+            // composite throws one step later from the operation that can tell.
             if (spreadBase && spreadBase.Kind === 'primitive'
+              && (spreadBase as { Name?: string }).Name !== 'Composite'
               && (spreadBase as { Name?: string }).Name !== 'string') {
               const completion = Throw.StaticTypeError(
                 'a value of $1 is not iterable',
@@ -10033,22 +10039,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // well as there because the two paths attach arguments
                 // separately; a rule enforced in one is a rule that holds in
                 // some positions.
-                // POSITIONAL arguments only. A named list - `new Buffer.<Name:
-                // 'a', Size: 2, T: uint16>()` - is not reordered at this site,
-                // so pairing `args[i]` with `params[i]` would compare each
-                // argument against the wrong parameter's constraint, which is
-                // how this first reported `uint16` against the constraint of
-                // `Name`. The annotation path above pairs against an ordered
-                // list and has no such restriction; ordering this one is the
-                // remaining work.
-                const anyNamed = spec.TypeArguments.TypeArgumentList
-                  .some((a) => typeArgumentNameOfShared(a as unknown as ParseNode.Type) !== undefined);
-                const specParams = anyNamed ? [] : ((base as unknown as { Declaration?: {
+                // A NAMED list is paired by name, not by position. `new
+                // Buffer.<Name: 'a', Size: 2, T: uint16>()` writes its arguments
+                // in whatever order reads best, so `args[i]` is the i-th
+                // ARGUMENT and not the i-th parameter - pairing the two
+                // positionally compared `uint16` against the constraint of
+                // `Name`, which is what this restriction was first added to
+                // avoid. The name a parameter was given decides which argument
+                // is its own, and an unnamed argument keeps its position.
+                const specParams = ((base as unknown as { Declaration?: {
                   TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] },
                 } }).Declaration?.TypeParameters?.TypeParameterList ?? []);
-                for (let i = 0; i < specParams.length && i < args.length; i += 1) {
+                const argNameAt = spec.TypeArguments.TypeArgumentList
+                  .map((a) => typeArgumentNameOfShared(a as unknown as ParseNode.Type));
+                for (let i = 0; i < specParams.length; i += 1) {
                   const q = specParams[i]!;
-                  const argument = args[i]!;
+                  const named = q.BindingIdentifier?.name;
+                  const byName = named === undefined
+                    ? -1
+                    : argNameAt.findIndex((n) => n === named);
+                  const at = byName >= 0 ? byName : (argNameAt[i] === undefined ? i : -1);
+                  if (at < 0 || at >= args.length) {
+                    continue;
+                  }
+                  const argument = args[at]!;
                   if (!q.TypeParameterConstraint || argument.Kind === 'literal') {
                     continue;
                   }
@@ -14132,7 +14146,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const overBase = over && over.Kind === 'literal'
           ? ((over as { Base?: TypeRecord }).Base ?? null)
           : over;
-        if (overBase && overBase.Kind === 'primitive'
+        // A TUPLE COMPOSITE iterates, though it is a ~primitive~-kinded record
+        // named "Composite" like every composite. #sec-composite-getiterator
+        // inserts a step for exactly this: "A tuple composite has a *null*
+        // prototype, so no `%Symbol.iterator%` can reach it by lookup, and being
+        // frozen it cannot receive one. The inserted step recognizes the kind
+        // directly, so `for`-`of`, spread, and array destructuring iterate a
+        // tuple composite." The run time has that step
+        // (`iterator-operations.mts`); the checker refused first, so the
+        // statement never reached it.
+        // Left to the run time, which knows the kind. A composite's static type
+        // here is the bare `Composite` - the checker does not carry the record
+        // or tuple shape through a call - and the two kinds differ: a tuple
+        // composite iterates and a record composite does not.
+        //
+        // This rule refuses a primitive because the run time would refuse it
+        // anyway, so refusing a `Composite` is only right for half of them, and
+        // it was the wrong half for `for (const x of Composite([1, 2, 3]))`,
+        // which #sec-composite-getiterator gives an inserted step and which
+        // `iterator-operations.mts` already implements. A record composite still
+        // throws, one step later and from the operation that can tell.
+        const tupleComposite = !!overBase && overBase.Kind === 'primitive'
+          && (overBase as { Name?: string }).Name === 'Composite';
+        if (overBase && overBase.Kind === 'primitive' && !tupleComposite
           && (overBase as { Name?: string }).Name !== 'string') {
           const completion = Throw.StaticTypeError(
             'a value of $1 is not iterable',
@@ -15064,7 +15100,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const fromBase = from && from.Kind === 'literal'
               ? ((from as { Base?: TypeRecord }).Base ?? null)
               : from;
+            // A `Composite` is left to the run time, as at the `for`-`of` and
+            // spread sites: #sec-composite-getiterator reaches all three
+            // together - "`for`-`of`, spread, and ARRAY DESTRUCTURING iterate a
+            // tuple composite" - and the kind is not carried through a call.
             if (fromBase && fromBase.Kind === 'primitive'
+              && (fromBase as { Name?: string }).Name !== 'Composite'
               && (fromBase as { Name?: string }).Name !== 'string') {
               const completion = Throw.StaticTypeError(
                 'a value of $1 is not iterable',
