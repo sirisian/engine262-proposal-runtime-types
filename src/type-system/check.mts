@@ -16567,6 +16567,69 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ClassDeclaration':
       case 'ClassExpression': {
+        // A DECORATOR IS AN ORDINARY EXPRESSION, and no judgment reached one:
+        // `Decorator` appeared nowhere in this file, so `@f` and `@g(x)` were
+        // unchecked everywhere. `@n` for a `uint8` n was the run time's "1
+        // (typed) is not a function" though `n()` is refused, and a decorator
+        // call's arguments went unchecked though an ordinary call's are.
+        //
+        // Walked HERE, from the class body, rather than from a case of their
+        // own: a decorator hangs off its element rather than standing in the
+        // body, and the element cases are not where the walk descends. The
+        // rules are written already and were missing an operand, which is the
+        // shape the pipeline body had.
+        //
+        // The three subtypes hold the expression under different names
+        // (#prod-Decorator): a member expression for `@f` and `@a.b`, a call for
+        // `@g(x)`, and a parenthesized expression for `@(e)`. The class's OWN
+        // decorators are walked with its elements'.
+        {
+          const walkDecorators = (host: ParseNode | null | undefined) => {
+            for (const d of (host as unknown as { Decorators?: readonly ParseNode[] | null } | null | undefined)?.Decorators ?? []) {
+              const dec = d as unknown as {
+                MemberExpression?: ParseNode | null,
+                CallExpression?: ParseNode | null,
+                ParenthesizedExpression?: ParseNode | null,
+              };
+              // The FACTORY form is not walked as an ordinary call, and the
+              // suite is what said so: #sec-decorator-application appends the
+              // CONTEXT as a trailing argument, so `@f(7)` on
+              // `f(n: uint8, c: Reflect.ClassField)` supplies both and the
+              // missing-argument rule reported `c` as absent. Five tests
+              // failed. Judging a decorator call needs that implicit argument
+              // modelled, which is its own piece of work; until then the call
+              // is left alone rather than judged by rules written for a
+              // different shape.
+              const expr = dec.MemberExpression ?? dec.ParenthesizedExpression;
+              walk(expr);
+              // A DECORATOR IS CALLED. The protocol invokes it with the context,
+              // so `@n` for a `uint8` n is the mistake `n()` is - and it needs
+              // saying separately, because `@n` is a MEMBER EXPRESSION rather
+              // than a call and reaches no call rule.
+              //
+              // The CallExpression subtype is the factory form, `@g(x)`, whose
+              // decorator is the call's RESULT rather than `g`; the call itself
+              // is judged by walking it, and what it answers is left alone.
+              {
+                const decType = expr ? callableForm(staticType(expr)) : null;
+                const decBase = decType && decType.Kind === 'literal'
+                  ? ((decType as { Base?: TypeRecord }).Base ?? null)
+                  : decType;
+                if (decBase && decBase.Kind === 'primitive') {
+                  const completion = Throw.StaticTypeError(
+                    'a value of $1 is not callable',
+                    Value(displayType(decType as TypeRecord)),
+                  ) as ThrowCompletion;
+                  errors.push(completion.Value as ObjectValue);
+                }
+              }
+            }
+          };
+          walkDecorators(n);
+          for (const el of (n as unknown as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
+            walkDecorators(el);
+          }
+        }
         // A class DECLARATION is registered
         // by name in `classNodes` and forced with the others, which is what
         // publishes its instance type for the runtime record to read. A class
