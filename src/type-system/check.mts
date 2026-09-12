@@ -5244,6 +5244,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     ? (m as { Declaration?: unknown }).Declaration
     : undefined);
 
+  /**
+   * The type a judgment about a VALUE should read, with the markers that do not
+   * change what the value is removed.
+   *
+   * #sec-shared-types: `shared T` is a marker over its target, so a
+   * `shared uint8` is a `uint8` for every question about what the value can DO -
+   * whether it mixes with an `int32`, whether it can be called, whether it can
+   * be iterated. `SameTypeWithAssumptions` and `AreDisjoint` look through it
+   * already; the judgments here did not, so each reached a plain `uint8` and a
+   * `type A = uint8` alias and stopped at `shared uint8`.
+   *
+   * A LITERAL is unwrapped to its base for the same reason: `1` is a `number`
+   * when the question is what it can do.
+   */
+  const erasedForJudgment = (t: Known): Known => {
+    let at = t;
+    for (let i = 0; at && i < 8; i += 1) {
+      if (at.Kind === 'shared') {
+        at = (at as { Target?: TypeRecord }).Target ?? null;
+      } else if (at.Kind === 'literal') {
+        at = (at as { Base?: TypeRecord }).Base ?? null;
+      } else {
+        return at;
+      }
+    }
+    return at;
+  };
+
   const reportedEmptyIntersections = new Set<object>();
 
   /**
@@ -8787,9 +8815,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Spreading a value of a primitive type, `string` excepted, is the
             // for-of rule at another syntax: `[...n]` for a `uint8` n was the
             // run time's "1 (typed) is not iterable".
-            const spreadBase = spread && spread.Kind === 'literal'
-              ? ((spread as { Base?: TypeRecord }).Base ?? null)
-              : spread;
+            const spreadBase = erasedForJudgment(spread);
             // A `Composite` is left to the run time here for the reason the
             // `for`-`of` rule gives: the kind is not carried through a call, a
             // TUPLE composite spreads (#sec-composite-getiterator reaches
@@ -10567,8 +10593,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return makePrimitive('string') as Known;
         }
         const asValueType = (t: Known): TypeRecord | null => (t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null);
-        const lv = asValueType(leftT);
-        const rv = asValueType(rightT);
+        // Through `shared` and a literal's base: a `shared uint8` is a `uint8`
+        // for every question about what the value can do.
+        const lv = asValueType(erasedForJudgment(leftT));
+        const rv = asValueType(erasedForJudgment(rightT));
 
         // #table-family-operations: a binary floating-point type "does not
         // define bitwiseNOT, the shifts, and the bitwise operations, since each
@@ -14279,9 +14307,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the method all reach here as nominals and are untouched.
       if (f.AssignmentExpression) {
         const over = staticType(f.AssignmentExpression);
-        const overBase = over && over.Kind === 'literal'
-          ? ((over as { Base?: TypeRecord }).Base ?? null)
-          : over;
+        const overBase = erasedForJudgment(over);
         // A TUPLE COMPOSITE iterates, though it is a ~primitive~-kinded record
         // named "Composite" like every composite. #sec-composite-getiterator
         // inserts a step for exactly this: "A tuple composite has a *null*
@@ -15233,9 +15259,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const pattern = (n as { BindingPattern?: ParseNode | null }).BindingPattern;
           if (pattern && (pattern as { type?: string }).type === 'ArrayBindingPattern' && n.Initializer) {
             const from = staticType(n.Initializer);
-            const fromBase = from && from.Kind === 'literal'
-              ? ((from as { Base?: TypeRecord }).Base ?? null)
-              : from;
+            const fromBase = erasedForJudgment(from);
             // A `Composite` is left to the run time, as at the `for`-`of` and
             // spread sites: #sec-composite-getiterator reaches all three
             // together - "`for`-`of`, spread, and ARRAY DESTRUCTURING iterate a
@@ -15398,9 +15422,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // call look like calling a `uint.<8>`; a symbol key no longer reads as
         // an index, so `a[0]()` is judged again on the element's own type.
         if (conversionTarget === undefined && callee) {
-          const base = callee.Kind === 'literal'
-            ? ((callee as { Base?: TypeRecord }).Base ?? null)
-            : callee;
+          const base = erasedForJudgment(callee);
           if (base && base.Kind === 'primitive') {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not callable',
@@ -15975,9 +15997,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && !classTypeOf((target as unknown as { name: string }).name))
               || (target as { type?: string }).type === 'TopicReference')) {
           const constructee = callableForm(staticType(target));
-          const cbase = constructee && constructee.Kind === 'literal'
-            ? ((constructee as { Base?: TypeRecord }).Base ?? null)
-            : constructee;
+          const cbase = erasedForJudgment(constructee);
           if (cbase && cbase.Kind === 'primitive') {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not a constructor',
@@ -16274,9 +16294,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // further guard.
         if (a.LeftHandSideExpression.type === 'ArrayLiteral') {
           const from = staticType(a.AssignmentExpression);
-          const fromBase = from && from.Kind === 'literal'
-            ? ((from as { Base?: TypeRecord }).Base ?? null)
-            : from;
+          const fromBase = erasedForJudgment(from);
           if (fromBase && fromBase.Kind === 'primitive'
             && (fromBase as { Name?: string }).Name !== 'string') {
             const completion = Throw.StaticTypeError(
