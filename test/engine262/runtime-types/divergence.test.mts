@@ -165,11 +165,30 @@ test('a break targeting the infinite loop stops it diverging', () => {
   expect(diverges('while (true) { const f = function () { while (c) { break; } }; }')).toBe(true);
 });
 
-test('a try is conservatively non-diverging, and composes correctly anyway', () => {
-  // #sec-divergence lists no rule for a `try`, so this reports false even when
-  // every path leaves. That is the conservative direction - reporting "does not
-  // diverge" can only widen a type - and CompletionTypeOf has its own `try`
-  // row that recurses into the blocks, where their tails are analysed here.
-  expect(diverges('try { return 1; } catch { return 2; }')).toBe(false);
+test('a try diverges when no path through it completes', () => {
+  // #sec-divergence gained the rule this test once recorded the absence of: "A
+  // `try` statement diverges when its `finally` block diverges; otherwise, when
+  // its `try` block diverges and, where it has one, its `catch` block diverges
+  // too."
+  expect(diverges('try { return 1; } catch { return 2; }')).toBe(true);
+  // A `try` block that diverges says nothing on its own: the path that threw
+  // reaches the handler, and this handler completes.
+  expect(diverges('try { return 1; } catch { }')).toBe(false);
+  // A `finally` that leaves settles it however the rest behaves, since it runs
+  // on every path out.
+  expect(diverges('try { 1; } finally { return 2; }')).toBe(true);
+  expect(diverges('try { 1; } finally { 2; }')).toBe(false);
+  // No handler at all: nothing catches, so the try block carries the statement.
+  expect(diverges('try { return 1; } finally { 2; }')).toBe(true);
   expect(diverges('{ return 1; }')).toBe(true);   // the block inside it does
+});
+
+test('a do statement diverges with its body', () => {
+  // "A `do` statement diverges when its body does and no `break` targets it,
+  // whatever its condition, since the body runs before the condition is read."
+  // This is what separates it from `while`, whose body may never run at all.
+  expect(diverges('do { return 1; } while (false);')).toBe(true);
+  expect(diverges('do { 1; } while (true);')).toBe(false);
+  // A `break` targeting the loop is a path out of it.
+  expect(diverges('do { break; } while (true);')).toBe(false);
 });

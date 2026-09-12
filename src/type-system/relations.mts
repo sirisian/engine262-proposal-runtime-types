@@ -264,7 +264,24 @@ function sameArgument(a: TypeRecord | number, b: TypeRecord | number, assumption
   if (typeof a === 'number' || typeof b === 'number') {
     return a === b;
   }
-  return SameTypeWithAssumptions(a, b, assumptions);
+  // STRICTLY. #sec-issubtype: "A generic class is invariant in its arguments",
+  // and #sec-sametypewithassumptions compares two arguments structurally - the
+  // specification moved the refinement steps (a literal to its base, a
+  // parameterization to its base) OUT of that operation because "that placement
+  // made them unreachable".
+  //
+  // This engine keeps them, behind `structuralOnly`, for the paths that want a
+  // refining comparison. An argument is not one of those paths: comparing
+  // through the fold made `Map.<"a", uint8>` assignable to `Map.<string,
+  // uint8>` and `Box.<"a">` to `Box.<string>`, so a write through the wider
+  // binding could store a `string` where the narrower type promised the one
+  // literal. Invariance is the whole reason the clause states it.
+  //
+  // Nothing natural is lost: inference already widens a literal argument to its
+  // base, so `new Box("a")` produces `Box.<string>` and not `Box.<"a">`. Only
+  // an explicitly written literal argument is affected, which is the case the
+  // author asked to be held to.
+  return SameTypeStrict(a, b, assumptions);
 }
 
 /** #sec-sameargumentlist */
@@ -571,7 +588,14 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
             // Rest and Optional are part of a
             // signature's identity, not decoration on the type.
             const q = tf.Signatures[i].Parameters[j];
+            // [[Initial]] too. #sec-signature-records: "A parameter's [[Initial]]
+            // is ... part of the identity", and SameFunctionType compares it
+            // with SameValue. It was omitted, so two function types differing
+            // only in a parameter default interned as ONE record - the same
+            // collapse the [[Narrows]] comment below describes, one field along.
+            // `sameDefault` is the comparison the tuple elements already use.
             return p.Rest === q.Rest && p.Optional === q.Optional
+              && sameDefault(p.Initial, q.Initial)
               && SameTypeWithAssumptions(p.Type, q.Type, nextG);
           })
           // [[ThisType]]: both ~none~ is equal; one ~none~ is unequal; both

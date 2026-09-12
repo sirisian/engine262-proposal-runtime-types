@@ -67,21 +67,32 @@ test('a call in a binding position selects by its contextual type', () => {
   expect(evaluated(`${P}const b: uint32 = f(); String(b);`)).toBe('1');
 });
 
-test('the filter runs after ranking, not before', () => {
-  // The clause: "the return type does not participate in ranking; it
-  // participates in filtering". A signature beaten on RANK must stay beaten
-  // however well its return type matches - so the uint8 row wins on rank and
-  // the contextual type cannot promote the any row over it.
+test('the filter runs during viability, not after ranking', () => {
+  // The clause: "The return type does not participate in ranking; it
+  // PARTICIPATES IN VIABILITY, through the contextual type of the call", and
+  // #sec-overload-resolution puts the test inside the viability loop, before any
+  // rank is computed.
+  //
+  // This test asserted the opposite until the clause was re-read: it quoted an
+  // earlier draft ("it participates in filtering") and required a signature
+  // beaten on rank to stay beaten however well its return matched. Its own
+  // second assertion is why that reading cannot be right - see below.
   const P = 'function h(a: uint8): uint32 { return 1; } function h(a: any): string { return "two"; } ';
+  // A context the best-ranked signature satisfies: nothing changes, the uint8
+  // row wins on rank and returns the uint32.
   expect(evaluated(`${P}const s: uint32 = h(1); String(s);`)).toBe('1');
-  // And the same call in a STRING context still runs the uint8 row - the value
-  // is 1, not "two". Ranking already chose, so there is no tie for the filter
-  // to break and the contextual type cannot promote the worse-ranked signature.
-  // This is the assertion that fails if the filter is ever moved before
-  // ranking, and it is the reason it is written as a value rather than as an
-  // acceptance: the assignment succeeds either way, and only the value says
-  // which body ran.
-  expect(evaluated(`${P}const t: string = h(1); String(t);`)).toBe('1');
+  // A context it does NOT satisfy: the uint8 row is not viable, since `uint32`
+  // is not assignable to `string`, so the `any` row is selected and the binding
+  // holds what its type says.
+  //
+  // Under the old ordering this answered `'1'` - the uint8 row ran, and a
+  // `uint32` came to rest in a `const t: string`. The assignment did not even
+  // fail; only `String(t)` revealed it. A rule that lets a value of one type
+  // sit in a binding of another is the thing the boundary exists to prevent,
+  // and it is the clearest evidence that viability, not ranking, is where the
+  // return type belongs.
+  expect(evaluated(`${P}const t: string = h(1); String(t);`)).toBe('two');
+  expect(evaluated(`${P}const t: string = h(1); String(typeof t);`)).toBe('string');
 });
 
 test('an untyped catch-all still ranks last', () => {

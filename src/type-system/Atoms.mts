@@ -139,11 +139,39 @@ export function Atoms(
       // A SEALED class's atoms are its direct subclasses, which live in a map the
       // checker owns - so the caller supplies them, the way it supplies a
       // dependent record type's denotation.
+      //
+      // **And, where instantiable, the class itself.** #sec-match-exhaustiveness:
+      // "for a sealed class, its direct subclasses and, where instantiable,
+      // itself". A plain `sealed class S` CAN be constructed, so `new S()` is a
+      // value of `S` that arms for `T` and `U` do not cover, and a `match` the
+      // checker called exhaustive threw "matched no clause" when handed one.
+      // #sec-sealed-classes draws the same line from the other side: a `sealed
+      // abstract` class "can be neither instantiated nor extended outside its
+      // module. Its concrete subclasses are therefore a closed set WITH NO CASE
+      // AMONG THEM FOR THE BASE" - a sentence that would have nothing to say if
+      // the base never needed one.
+      //
+      // The hook answers *undefined* for a class that is not sealed and an
+      // ARRAY - possibly empty - for one that is, so a sealed class with no
+      // subclasses at all is a closed set of exactly itself rather than no set.
       const subclasses = sealedSubclassesOf?.(t);
-      if (subclasses && subclasses.length > 0) {
-        return subclasses.map((sub) => ({
+      if (subclasses !== undefined) {
+        const atoms: Atom[] = subclasses.map((sub) => ({
           key: sub.name, type: t, declaration: sub.declaration,
         }));
+        const decl = rec.Declaration as (ParseNode & {
+          ClassModifiers?: readonly string[] | null,
+          BindingIdentifier?: { name?: string },
+        }) | undefined;
+        const abstract = (decl?.ClassModifiers ?? []).includes('abstract');
+        if (decl && !abstract) {
+          atoms.push({
+            key: decl.BindingIdentifier?.name ?? '?',
+            type: t,
+            declaration: decl,
+          });
+        }
+        return atoms.length > 0 ? atoms : NO_ATOMS;
       }
       return NO_ATOMS;
     }

@@ -130,7 +130,14 @@ export function EncodeGraphInventory(inventory: readonly GraphEntry[]): Uint8Arr
     writeLength(bytes.length);
     out.push(...bytes);
   };
-  writeLength(inventory.length);
+  // NO COUNT PREFIX. #sec-expansion-artifact fixes the encoding exactly - "for
+  // each module in the graph, reached transitively and ordered by specifier, the
+  // specifier and the source text, each written with its length before it" - and
+  // this wrote a four-byte count of entries ahead of them, from a time when the
+  // clause left the encoding open. The stream is already self-delimiting, so the
+  // count bought nothing and cost the one thing the clause exists to give: two
+  // implementations that agree on what to hash and still cannot read each
+  // other's artifacts.
   for (const entry of inventory) {
     writeString(entry.specifier);
     writeString(entry.source);

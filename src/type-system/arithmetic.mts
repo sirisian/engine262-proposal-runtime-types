@@ -270,6 +270,24 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
       && (op === '<<' || op === '>>' || op === '>>>' || op === '&' || op === '|' || op === '^')) {
     return Throw.TypeError('this operator is not defined for a binary floating-point type') as ThrowCompletion;
   }
+  // proposal-runtime-types #sec-integer-operations: "_T_::divide returns the
+  // exact quotient truncated toward zero. _T_::remainder returns the remainder
+  // whose sign follows the dividend ... If the divisor is zero, both throw a
+  // *RangeError* exception."
+  //
+  // `mathOpExact` answers ~undefined~ for a zero divisor, which the wide path
+  // reads as "fall through to the Number path"; there the quotient is an
+  // Infinity or a NaN and `wrapToType` maps every non-finite to 0. So
+  // `uint8(7) / uint8(0)` answered 0 - a value, silently wrong, for an
+  // operation that has no result at all. The check is placed before either path
+  // so that both widths answer alike, and it is the divisor's ZERO that is
+  // tested rather than the quotient's finiteness: a zero divisor produces no
+  // result to inspect.
+  if ((op === '/' || op === '%')
+      && target.Kind === 'primitive' && (target.Name === 'int' || target.Name === 'uint')
+      && payload(y) === 0) {
+    return Throw.RangeError('the divisor is zero') as ThrowCompletion;
+  }
   if (isWideIntegerType(target)) {
     const bits = widthOf(target) as number;
     const exact = mathOpExact(op, payloadExact(x), payloadExact(y), bits, (target as { Name: string }).Name === 'int');
@@ -444,10 +462,22 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
 }
 
 /** Unary minus and bitwise NOT over a typed number. */
-export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue {
+export function typedUnary(op: '-', x: TypedNumberValue): TypedNumberValue;
+export function typedUnary(op: '~', x: TypedNumberValue): TypedNumberValue | ThrowCompletion;
+export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue | ThrowCompletion {
   // The enum rule of TypedOperandType, at the unary operators: `-C.One` computes
   // in the underlying type and is a value of it.
   const t = UnderlyingOf(x.TypeRecord as TypeRecord);
+  // proposal-runtime-types #table-family-operations: a binary floating-point type
+  // "does not define bitwiseNOT, the shifts, and the bitwise operations, since
+  // each would require converting the operand to an integer type". `typedBinary`
+  // refuses the binary forms for the same reason; the unary one fell through to
+  // Number semantics, so `~(1.5 := float32)` answered -2 for an operation the
+  // table says the type does not have. Negation is unaffected: the table gives
+  // every numeric family negation.
+  if (op === '~' && t.Kind === 'primitive' && /^float(16|32|64|128)$/.test(t.Name)) {
+    return Throw.TypeError('this operator is not defined for a binary floating-point type') as ThrowCompletion;
+  }
   // A WIDE integer type is read exactly, as `typedBinary` reads it. This read
   // the payload through `payload()`, which is a double, so a `uint64` holding
   // `2^53 + 1` was negated as `2^53`: `-(-b)` came back one short, and `-b` on

@@ -2533,8 +2533,6 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       return undefined;
     case 'any':
       return Value.undefined;
-    case 'void':
-      return Value.undefined;
     case 'primitive': {
       // #sec-null-and-undefined-types: each is the type of its one value, so
       // that value is its default. They were literal types before, and the
@@ -2653,8 +2651,16 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
     case 'union': {
       // A union defaults to null or undefined only when it admits one. Both are
       // now PRIMITIVE types named for their value (#sec-null-and-undefined-types),
-      // so the member is recognized by name; the literal and ~void~ forms are
-      // still accepted, since a union may be built from either.
+      // so the member is recognized by name; the literal form is still accepted,
+      // since a union may be built from either.
+      //
+      // A ~void~ member contributes NOTHING here. #sec-void-type: "`void` is the
+      // type with no values ... No value is a value of the `void` type, so no
+      // binding may have it", so a default of *undefined* for it is a value the
+      // boundary then refuses - `let u: uint8 | void;` reported "undefined is
+      // not assignable" where the clause's answer is that the type has no
+      // default at all. `undefined` itself is a ~primitive~ named "undefined"
+      // and is matched below.
       for (const m of t.Members) {
         if ((m.Kind === 'literal' && (m.Value as Value) === Value.null)
             || (m.Kind === 'primitive' && (m as { Name?: string }).Name === 'null')) {
@@ -2662,8 +2668,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         }
       }
       for (const m of t.Members) {
-        if (m.Kind === 'void'
-            || (m.Kind === 'primitive' && (m as { Name?: string }).Name === 'undefined')) {
+        if (m.Kind === 'primitive' && (m as { Name?: string }).Name === 'undefined') {
           return Value.undefined;
         }
       }
@@ -2837,6 +2842,45 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         prototypeForDefault?: unknown,
       } | undefined;
       if (!constructor || !Array.isArray(constructor.Fields)) {
+        return undefined;
+      }
+      // #sec-typed-classes: "A typed class is a VALUE TYPE CLASS when every one
+      // of its fields has a type that is a value type", and the field-wise rule
+      // above is gated on _t_ denoting one. The gate was missing: any class
+      // whose fields all happened to have defaults got an instance, so `class
+      // Node { next: Node | null; v: uint8 }` - the linked-list node the same
+      // clause uses as its example of a class that is NOT one - answered a
+      // zero-filled instance for `let n: Node;`.
+      //
+      // The clause names the disqualifying form itself: "A field that closes
+      // such a cycle is written `T | null`, WHICH IS A REFERENCE." So a field
+      // whose type is a nullable union of a non-value member is a reference
+      // position and its class is not a value type class, whatever defaults its
+      // other fields have. The author's remedy is an initializer, or `Node |
+      // null` at the binding, which has `null` for its default and says what it
+      // means.
+      //
+      // Value-type-ness is NOT read off the layout here. A nullable union is
+      // given a layout by LayoutOf (the reference slot a class holding one
+      // needs), so a layout test would admit exactly the case this refuses.
+      //
+      // Deliberately narrow: an ~object~, ~function~, or dynamic-array field is
+      // arguably a reference position too, but the clause states only this form,
+      // and an instance of a value type class "REMAINS AN OBJECT" - so being an
+      // Object does not by itself disqualify a field's type. The wider question
+      // is recorded rather than guessed at here.
+      const referenceField = constructor.Fields.find((f) => {
+        const r = f.TypeObject?.TypeRecord;
+        if (!r || r.Kind !== 'union') {
+          return false;
+        }
+        const members = (r as { Members: readonly TypeRecord[] }).Members;
+        const nullish = (m: TypeRecord) => (m.Kind === 'void')
+          || (m.Kind === 'primitive' && ((m as { Name?: string }).Name === 'null' || (m as { Name?: string }).Name === 'undefined'))
+          || (m.Kind === 'literal' && (m as { Value?: Value }).Value === Value.null);
+        return members.some(nullish) && members.some((m) => !nullish(m));
+      });
+      if (referenceField !== undefined) {
         return undefined;
       }
       const proto = (constructor as unknown as { properties?: Map<unknown, { Value?: Value }> })
@@ -5591,10 +5635,21 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord {
   if (t.Kind === 'object') {
     const keys: TypeRecord[] = [];
     for (const p of t.Properties) {
-      // The engine's object property keys are Strings; a literal key type has
-      // the String type as its base. (Symbol keys are not yet representable in
-      // object types, so no Symbol base arises here.)
-      keys.push({ Kind: 'literal', Value: propertyKeyValue(p.key), Base: makePrimitive('string') });
+      // proposal-runtime-types #sec-keytypesof: "If _p_.[[Key]] is a String, let
+      // _base_ be the Type Record of the String type. Else, let _base_ be the
+      // Type Record of the Symbol type."
+      //
+      // The comment this replaces said Symbol keys were not yet representable in
+      // object types. They are: a Property Type Record's [[Key]] is `string |
+      // SymbolValue` (records.mts) and `propertyKeyValue` below already returns
+      // either. Giving a Symbol key the `string` base made `keyof { [s]: uint8 }`
+      // report a literal type OF STRING for a key that is not one, so a consumer
+      // reading the base to decide how to index read the wrong answer.
+      keys.push({
+        Kind: 'literal',
+        Value: propertyKeyValue(p.key),
+        Base: makePrimitive(typeof p.key === 'string' ? 'string' : 'symbol'),
+      });
     }
     for (const x of t.IndexSignatures) {
       keys.push(x.Key);

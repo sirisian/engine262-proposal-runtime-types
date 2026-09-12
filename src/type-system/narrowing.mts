@@ -1,7 +1,8 @@
 import {
   makePrimitive, type TypeRecord,
 } from './records.mts';
-import { IsAssignable } from './relations.mts';
+import { AreDisjoint, IsAssignable, IsSubtype } from './relations.mts';
+import { CanonicalizeType } from './intern.mts';
 
 /**
  * proposal-runtime-types (spec, narrowing): NarrowTo and NarrowFrom are the two
@@ -104,12 +105,84 @@ function overlaps(m: TypeRecord, t: TypeRecord): boolean {
   return isAny(m) || isAny(t) || IsAssignable(m, t) || IsAssignable(t, m);
 }
 
-/** The part of _s_ that remains where a test against _t_ succeeds. */
+/**
+ * Whether _m_ and _t_ overlap only through the `typeof` CATEGORY rule, which is
+ * not a subtype relation and so is invisible to the steps below.
+ */
+function categoryOverlap(m: TypeRecord, t: TypeRecord): boolean {
+  return (isNumberCategory(t) && m.Kind === 'primitive' && typeofNumberNames.has(m.Name))
+    || (isNumberCategory(m) && t.Kind === 'primitive' && typeofNumberNames.has(t.Name));
+}
+
+/**
+ * The part of _s_ that remains where a test against _t_ succeeds.
+ *
+ * #sec-narrowto, step for step. This was a member FILTER before: it kept every
+ * member of _s_ that overlapped _t_ and never replaced one with the narrower
+ * _t_, so three of the clause's answers were missing.
+ *
+ *   - An ~any~ source stayed `any` where step 1 returns _t_, so a checked value
+ *     learned nothing from the check.
+ *   - A union member WIDER than _t_ was kept whole where step 2 keeps _t_:
+ *     `if (s === "a")` over a `string | uint8` left `s` at `string`, and
+ *     `let x: "a" = s` inside the branch was refused on the strength of the
+ *     narrowing that had just succeeded.
+ *   - A non-union source overlapping _t_ without either being a subtype came
+ *     back ~empty~ where the final step returns their INTERSECTION, so
+ *     `o is { b: string }` over an `o: { a: uint8 }` was reported as a test that
+ *     can never succeed - dead-code diagnosis of live code, the same fault the
+ *     nullish rows carried before.
+ *
+ * The `typeof` category is carried through as a fourth way to keep a member.
+ * It has to be: the clause's own example narrows `uint8 | string` by
+ * `typeof v === "number"`, and #sec-numeric-types-of-this-proposal makes
+ * `number` disjoint from every sized numeric type, so neither subtype test
+ * above can see the overlap and the plain algorithm would drop both members.
+ */
 export function NarrowTo(s: TypeRecord, t: TypeRecord): NarrowResult {
-  if (isAny(s) || isAny(t)) {
+  if (isAny(s)) {
+    return t;
+  }
+  // Not a step of its own: IsSubtype(_s_, ~any~) holds, so the third step would
+  // return _s_ anyway. Written out because it is reached far more often than it
+  // is derived.
+  if (isAny(t)) {
     return s;
   }
-  return fromMembers(membersOf(s).filter((m) => overlaps(m, t)));
+  if (s.Kind === 'union') {
+    const kept: TypeRecord[] = [];
+    let tKept = false;
+    for (const m of (s as { Members: readonly TypeRecord[] }).Members) {
+      if (IsSubtype(m, t, [])) {
+        kept.push(m);
+      } else if (IsSubtype(t, m, [])) {
+        // The narrower of the two, and once however many members admit it.
+        if (!tKept) {
+          kept.push(t);
+          tKept = true;
+        }
+      } else if (categoryOverlap(m, t)) {
+        kept.push(m);
+      }
+    }
+    if (kept.length === 0) {
+      return empty;
+    }
+    return fromMembers(kept);
+  }
+  if (IsSubtype(s, t, [])) {
+    return s;
+  }
+  if (IsSubtype(t, s, [])) {
+    return t;
+  }
+  if (categoryOverlap(s, t)) {
+    return s;
+  }
+  if (AreDisjoint(s, t)) {
+    return empty;
+  }
+  return CanonicalizeType({ Kind: 'intersection', Members: [s, t] } as TypeRecord);
 }
 
 /**

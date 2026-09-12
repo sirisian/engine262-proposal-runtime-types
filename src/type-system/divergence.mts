@@ -151,12 +151,59 @@ function divergesFrom(node: ParseNode, ctx: DivergenceContext, frame: Frame): bo
       return !containsEscapingBreak(n.Statement, emptyFrame());
     }
 
+    // #sec-divergence: "A `do` statement diverges when its body does and no
+    // `break` targets it, whatever its condition, since the body runs before the
+    // condition is read." Unlike `while (true)`, the loop itself proves nothing:
+    // a `do` whose body completes normally reads its condition and may leave.
+    case 'DoWhileStatement': {
+      const n = node as { Statement: ParseNode };
+      const inner: Frame = {
+        labels: new Set(frame.labels),
+        breakables: frame.breakables + 1,
+        continuables: frame.continuables + 1,
+      };
+      return divergesFrom(n.Statement, ctx, inner)
+        && !containsEscapingBreak(n.Statement, emptyFrame());
+    }
+    // #sec-divergence: "A `try` statement diverges when its `finally` block
+    // diverges; otherwise, when its `try` block diverges and, where it has one,
+    // its `catch` block diverges too. A `try` block that diverges says nothing
+    // on its own, since the path that threw reaches the handler."
+    //
+    // A `finally` that diverges settles it whatever the rest does, since it runs
+    // on every path out. With several typed catch clauses
+    // (#sec-typed-catch) EVERY one must diverge: any of them may be the one that
+    // runs, so one that completes normally is a path out of the statement.
+    case 'TryStatement': {
+      const n = node as {
+        Block: ParseNode,
+        Catch?: { Block?: ParseNode } | null,
+        CatchClauses?: readonly { Block?: ParseNode }[] | null,
+        Finally?: ParseNode | null,
+      };
+      if (n.Finally && divergesFrom(n.Finally, ctx, frame)) {
+        return true;
+      }
+      if (!divergesFrom(n.Block, ctx, frame)) {
+        return false;
+      }
+      const clauses = n.CatchClauses ?? (n.Catch ? [n.Catch] : []);
+      if (clauses.length === 0) {
+        // `try`/`finally` with no handler: nothing catches, so the try block's
+        // own divergence carries the statement.
+        return true;
+      }
+      return clauses.every((c) => c.Block !== undefined && divergesFrom(c.Block, ctx, frame));
+    }
     default:
       // Every other statement form completes normally as far as this analysis
       // is concerned, which is the conservative direction: reporting "does not
-      // diverge" can only make a type wider. A `try` is deliberately among
-      // them - CompletionTypeOf has its own rule for one and recurses into the
-      // blocks, where their own tails are analysed here.
+      // diverge" can only make a type wider.
+      //
+      // `try` used to be among them, left to the do-expression's own completion
+      // rule, which recurses into the blocks so their tails are analysed here.
+      // #sec-divergence now states a rule for one, so it is answered above; the
+      // completion rule still reaches the blocks and the two agree.
       return false;
   }
 }

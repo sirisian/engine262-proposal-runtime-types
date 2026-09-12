@@ -1572,6 +1572,18 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // cycle rather than where a size is later asked for.
         return Throw.TypeError('$1 contains itself through field $2, so it has no finite layout', className as Value, Value(computed.cycle));
       }
+      if (computed !== null && 'overflow' in computed) {
+        // #sec-natural-alignment: "It is a type error for a field to be placed
+        // outside the size a `size` fixes." Reported at the declaration, beside
+        // the cycle above, since both are facts about the layout the class asks
+        // for rather than about any later use of it.
+        return Throw.TypeError(
+          '$1 declares size $2 but its fields need $3 bytes',
+          className as Value,
+          Value(String(computed.overflow.size)),
+          Value(String(computed.overflow.need)),
+        );
+      }
       (F as { InstanceLayout?: ClassLayout | null }).InstanceLayout = computed;
       // The INPUTS as well as the answer, so a generic class can be laid out per
       // application (LayoutOf's nominal arm). The answer computed here has the

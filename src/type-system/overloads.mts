@@ -559,9 +559,33 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
   const viable: { sig: OverloadSignature, tiers: Tier[] }[] = [];
   for (const sig of signatures) {
     const tiers = signatureTiers(sig, argTypes);
-    if (tiers !== null) {
-      viable.push({ sig, tiers });
+    if (tiers === null) {
+      continue;
     }
+    // #sec-overloading-on-return-type: "The return type does not participate in
+    // ranking; it PARTICIPATES IN VIABILITY, through the contextual type of the
+    // call", and #sec-overload-resolution places the test inside the viability
+    // loop: "If _contextualType_ is not ~none~ and IsAssignable(_sig_.[[Return]],
+    // _contextualType_) is *false*, then Continue."
+    //
+    // It ran only as a tie-break below, on the strength of an earlier draft that
+    // read "it participates in filtering" - so a signature whose return the
+    // context cannot accept still won on a better parameter match, and the call
+    // failed at the assignment instead of selecting the signature that fits.
+    // Given `f(a: uint8): string` and `f(a: any): uint8`, `let x: uint8 = f(u)`
+    // chose the `string` one and then refused its own result.
+    //
+    // The DECLARED return is what is read: the clause says "a published inferred
+    // return type does not make a signature viable or non-viable, so which
+    // signature a call selects never depends on a function body", which is why a
+    // signature carrying no declared return is left alone here rather than
+    // filtered out.
+    if (contextualType !== undefined
+        && sig.ReturnType !== undefined
+        && !IsAssignable(sig.ReturnType, contextualType)) {
+      continue;
+    }
+    viable.push({ sig, tiers });
   }
   if (viable.length === 0) {
     return { Kind: 'none' };
@@ -596,11 +620,12 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
     }
   }
   if (tie) {
-    // #sec-overloading-on-return-type: the return type filters what ranking
-    // left tied. "The return type does not participate in ranking; it
-    // participates in filtering" - so this runs HERE, after the ranking above
-    // has finished, and never before it. Filtering first would let a return
-    // type outrank a better parameter match, which the clause forbids.
+    // Every candidate here already passed the contextual test above, so this
+    // separates only what that test could not: signatures carrying NO declared
+    // return, which viability leaves alone. Where one of those ties with a
+    // signature whose declared return the context accepts, the declared one is
+    // taken; where two remain, the call is ~ambiguous~, which is what
+    // #sec-overloading-on-return-type says of a tie the context cannot break.
     if (contextualType) {
       const surviving = viable.filter(
         (candidate) => compareTiers(candidate.tiers, best.tiers) === 0

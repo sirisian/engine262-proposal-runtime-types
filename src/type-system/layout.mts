@@ -342,7 +342,7 @@ export function ComputeClassLayout(
   fields: readonly { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[],
   controls: ClassControls = {},
   declaringClass?: unknown,
-): ClassLayout | null | { cycle: string } {
+): ClassLayout | null | { cycle: string } | { overflow: { need: number, size: number } } {
   // #sec-natural-alignment states this as a BIT cursor, not a byte one, because
   // a sub-byte field advances by bits: "Let a bit cursor begin at 0, at the end
   // of the layout of the class it extends where it extends one and at 0
@@ -457,6 +457,18 @@ export function ComputeClassLayout(
     byteLength += alignment - (byteLength % alignment);
   }
   if (controls.size !== undefined) {
+    // #sec-natural-alignment: "It is a type error for a field to be PLACED
+    // OUTSIDE THE SIZE A `size` FIXES." The size was applied by overwrite with
+    // no check, so `size(2)` over a class whose fields reach byte 8 reported a
+    // `byteLength` of 2 while six bytes of field lived past the end of it -
+    // every array of that class then overlapped its neighbour.
+    //
+    // The cursor's furthest extent is in BITS, so the comparison rounds it up to
+    // a byte before measuring it against the size, which is in bytes: a class of
+    // one `uint.<5>` under `size(1)` fits.
+    if (Math.ceil(furthest / 8) > controls.size) {
+      return { overflow: { need: Math.ceil(furthest / 8), size: controls.size } };
+    }
     byteLength = controls.size;
   }
   return { bitLength, byteLength, alignment, fields: placed };
