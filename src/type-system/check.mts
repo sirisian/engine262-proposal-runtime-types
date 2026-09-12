@@ -15491,6 +15491,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                       Value(pr.Name || `parameter ${i + 1}`),
                     ) as ThrowCompletion;
                     errors.push(completion.Value as ObjectValue);
+                    return;
+                  }
+                  // THE REFERENT'S TYPE IS CHECKED AND NEVER CONVERTED.
+                  // #sec-reference-parameters-and-arguments: "A type annotation
+                  // on a `ref` parameter is checked against the referent and
+                  // never converts it ... because a borrow that converted its
+                  // referent would silently change storage it does not own." So
+                  // this is not the ordinary argument check, which adapts a
+                  // literal and admits a conversion: the referent's type must
+                  // BE the parameter's.
+                  //
+                  // `SameType` rather than assignability, for that reason. A
+                  // subtype would be admitted by assignability and is still
+                  // wrong here - the callee may write the parameter's type into
+                  // a location that holds the narrower one.
+                  if (pr.Ref === true && (arg as { type?: string }).type === 'RefExpression') {
+                    const borrowed = staticType((arg as unknown as { Expression?: ParseNode }).Expression ?? arg);
+                    const wantedRef = pr.Type as Known;
+                    if (borrowed && wantedRef && borrowed.Kind !== 'any' && wantedRef.Kind !== 'any'
+                      && !SameType(borrowed as TypeRecord, wantedRef as TypeRecord)) {
+                      const completion = Throw.StaticTypeError(
+                        'the argument bound by ref to $1 does not satisfy its type annotation',
+                        Value(pr.Name || `parameter ${i + 1}`),
+                      ) as ThrowCompletion;
+                      errors.push(completion.Value as ObjectValue);
+                    }
                   }
                 });
               }

@@ -49,3 +49,35 @@ test('what the rule does not reach', () => {
   // An untyped callee is not judged.
   expect(ok(dead('let g: any = (x) => x; let n: uint8 = uint8(1); let q = g(n);'))).toBe(true);
 });
+
+test("a ref parameter's annotation is checked against the REFERENT", () => {
+  // #sec-reference-parameters-and-arguments: "A type annotation on a `ref`
+  // parameter is checked against the referent and never converts it ... because
+  // a borrow that converted its referent would silently change storage it does
+  // not own."
+  expectThrown(dead('function f(ref a: uint8) { } let s: string = "x"; f(ref s);'),
+    'does not satisfy its type annotation');
+  expectThrown(dead('function f(ref a: uint8) { } let i: int32 = int32(1); f(ref i);'),
+    'does not satisfy its type annotation');
+
+  // SameType, not assignability: the conversion an ordinary argument would get
+  // is exactly what a borrow must not have, so a type that merely converts is
+  // still refused.
+  expectThrown(dead('function f(ref a: float64) { } let n: uint8 = uint8(1); f(ref n);'),
+    'does not satisfy its type annotation');
+
+  // The matching referent, and the cases the checker cannot judge.
+  expect(ok(dead('function f(ref a: uint8) { } let n: uint8 = uint8(1); f(ref n);'))).toBe(true);
+  expect(ok(dead('function f(ref a) { a++; } let a = 0; f(ref a);'))).toBe(true);
+  expect(ok(dead('function f(ref a: uint8) { } let x: any = uint8(1); f(ref x);'))).toBe(true);
+  expect(ok(dead('const o = { a: 0 }; function f(ref a) { a++; } f(ref o.a);'))).toBe(true);
+});
+
+test('borrowing a const is permitted; the WRITE is what fails', () => {
+  // The spec names what has no location - "a value, a private member, a super
+  // property, and a property of a primitive" - and a `const` binding is not
+  // among them. It has a location, so the borrow is taken; a callee that writes
+  // through it gets "Assignment to constant variable" at run time, and one that
+  // only reads is an ordinary program.
+  expect(ok(dead('function f(ref a: uint8) { } const n: uint8 = uint8(1); f(ref n);'))).toBe(true);
+});
