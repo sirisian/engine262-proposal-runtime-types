@@ -305,6 +305,29 @@ const FIXED_STATIC_PROPERTIES: Record<string, (() => TypeRecord) | undefined> = 
   'Number.POSITIVE_INFINITY': () => makePrimitive('number'),
   'Number.NEGATIVE_INFINITY': () => makePrimitive('number'),
   'Number.NaN': () => makePrimitive('number'),
+  // The WELL-KNOWN SYMBOLS. Each is a `symbol`, and saying so is what lets a
+  // computed key be recognised as one: without a type here `a[Symbol.iterator]`
+  // is a key of unknown type, and the element-read rules answer a computed
+  // access on an array with its ELEMENT whatever the key is - so the read came
+  // back `uint.<8>`, claiming an element where a method stands.
+  //
+  // `Symbol.for` and `Symbol.keyFor` are results of CALLS and live in
+  // FIXED_STATIC_RESULTS; these are properties, read without calling.
+  'Symbol.iterator': () => makePrimitive('symbol'),
+  'Symbol.asyncIterator': () => makePrimitive('symbol'),
+  'Symbol.hasInstance': () => makePrimitive('symbol'),
+  'Symbol.isConcatSpreadable': () => makePrimitive('symbol'),
+  'Symbol.match': () => makePrimitive('symbol'),
+  'Symbol.matchAll': () => makePrimitive('symbol'),
+  'Symbol.replace': () => makePrimitive('symbol'),
+  'Symbol.search': () => makePrimitive('symbol'),
+  'Symbol.species': () => makePrimitive('symbol'),
+  'Symbol.split': () => makePrimitive('symbol'),
+  'Symbol.toPrimitive': () => makePrimitive('symbol'),
+  'Symbol.toStringTag': () => makePrimitive('symbol'),
+  'Symbol.unscopables': () => makePrimitive('symbol'),
+  'Symbol.dispose': () => makePrimitive('symbol'),
+  'Symbol.asyncDispose': () => makePrimitive('symbol'),
 };
 
 /**
@@ -332,6 +355,10 @@ const FIXED_GLOBAL_RESULTS: Record<string, (() => TypeRecord) | undefined> = {
   // `structuredClone<T>(value: T): T` is NOT here: its result is its argument's
   // type, which is an IDENTITY signature rather than a fixed one. It is written
   // in `builtinGlobalIdentitySignature` below.
+  // `Symbol(...)` answers a `symbol` whatever it is passed - the argument is a
+  // description, not a type. Named here rather than among the STATIC results
+  // because the callee is the bare identifier, as `parseInt` is.
+  Symbol: () => makePrimitive('symbol'),
   parseInt: () => makePrimitive('number'),
   parseFloat: () => makePrimitive('number'),
   encodeURI: () => makePrimitive('string'),
@@ -9539,6 +9566,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // only half of it was.
         if (m.Expression && m.MemberExpression) {
           const receiver = staticType(m.MemberExpression);
+          // A SYMBOL KEY IS NOT AN INDEX. Every rule below decides a numeric
+          // one - a literal index against an extent, a tuple position, a
+          // computed index at the index type - and the array arm ends by
+          // returning [[Element]] for WHATEVER key it was given. So
+          // `a[Symbol.iterator]` on a `[].<uint8>` read as a `uint8`, claiming
+          // an element where a method stands.
+          //
+          // Nothing depended on the wrong answer while an element type was only
+          // compared against another element type. It surfaced when a rule asked
+          // what the type can DO: `a[Symbol.iterator]()` looked like calling a
+          // `uint8`, and the callability and iterability rules each had to be
+          // scoped away from computed receivers to avoid refusing a correct
+          // program.
+          //
+          // ~any~ rather than a guess, because the well-known members carry no
+          // types here yet: the honest answer is that the checker does not know
+          // what `a[Symbol.iterator]` is.
+          const computedKey = staticType(m.Expression);
+          const computedKeyBase = computedKey && computedKey.Kind === 'literal'
+            ? ((computedKey as { Base?: TypeRecord }).Base ?? null)
+            : computedKey;
+          if (computedKeyBase && computedKeyBase.Kind === 'primitive'
+            && (computedKeyBase as { Name?: string }).Name === 'symbol') {
+            return null;
+          }
           // #sec-span-type: an element read through a WINDOW has the element
           // type, exactly as one through the array it windows. There is no
           // extent to decide a literal index against - a window's length is a
@@ -14757,15 +14809,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // "has no function structure" is not the same question and is left
         // alone.
         //
-        // A COMPUTED member callee is left alone. `a[Symbol.iterator]()` reads a
-        // well-known method, and the element-read rules type a computed access
-        // on an array as its ELEMENT whatever the key is - so the callee comes
-        // back `uint.<8>` and this judgment would refuse a correct program. The
-        // element typing is what is wrong there, not the call; until a symbol
-        // key stops reading as an index, a computed callee is not asked.
-        const computedCallee = (c.CallExpression as { type?: string }).type === 'MemberExpression'
-          && !!(c.CallExpression as unknown as { Expression?: ParseNode | null }).Expression;
-        if (conversionTarget === undefined && callee && !computedCallee) {
+        // A COMPUTED member callee is asked like any other. It was exempt while
+        // `a[Symbol.iterator]` read as the array's ELEMENT, which made a correct
+        // call look like calling a `uint.<8>`; a symbol key no longer reads as
+        // an index, so `a[0]()` is judged again on the element's own type.
+        if (conversionTarget === undefined && callee) {
           const base = callee.Kind === 'literal'
             ? ((callee as { Base?: TypeRecord }).Base ?? null)
             : callee;
