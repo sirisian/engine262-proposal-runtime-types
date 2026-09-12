@@ -8516,6 +8516,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             t = makePrimitive('undefined');
           } else if (el.type === 'SpreadElement') {
             const spread = staticType((el as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
+            // Spreading a value of a primitive type, `string` excepted, is the
+            // for-of rule at another syntax: `[...n]` for a `uint8` n was the
+            // run time's "1 (typed) is not iterable".
+            const spreadBase = spread && spread.Kind === 'literal'
+              ? ((spread as { Base?: TypeRecord }).Base ?? null)
+              : spread;
+            if (spreadBase && spreadBase.Kind === 'primitive'
+              && (spreadBase as { Name?: string }).Name !== 'string') {
+              const completion = Throw.StaticTypeError(
+                'a value of $1 is not iterable',
+                Value(displayType(spread as TypeRecord)),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
             t = spread && spread.Kind === 'array' ? (spread as { Element: TypeRecord }).Element : null;
           } else {
             t = staticType(el);
@@ -13739,6 +13753,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // range-counter treatment beside it is the precedent - a loop variable
       // already carries something the source proves - and the two compose, a
       // counter over a literal range getting both its bound and its type.
+      // A VALUE OF A PRIMITIVE TYPE IS NOT ITERABLE, `string` excepted - it
+      // iterates its characters (#sec-iteration-types). The run time refuses the
+      // rest with "1 (typed) is not iterable", and the operand's type is written
+      // at its declaration, so #sec-type-errors makes the judgment determinable.
+      //
+      // Deliberately narrow, for the reason callability is: an ~object~ or a
+      // ~nominal~ may carry `Symbol.iterator`, and a computed symbol member is
+      // exactly what this checker models least well - `a[Symbol.iterator]` still
+      // reads as an array's ELEMENT type - so "no iterator in the structure" is
+      // not a question worth asking yet. A range, a generator, a Map, a Set and
+      // a user class declaring the method all reach here as nominals and are
+      // untouched.
+      if (f.AssignmentExpression) {
+        const over = staticType(f.AssignmentExpression);
+        const overBase = over && over.Kind === 'literal'
+          ? ((over as { Base?: TypeRecord }).Base ?? null)
+          : over;
+        if (overBase && overBase.Kind === 'primitive'
+          && (overBase as { Name?: string }).Name !== 'string') {
+          const completion = Throw.StaticTypeError(
+            'a value of $1 is not iterable',
+            Value(displayType(over as TypeRecord)),
+          ) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        }
+      }
       const element = f.AssignmentExpression ? iteratedElementType(f.AssignmentExpression) : null;
       walk(f.AssignmentExpression);
       // ...and the binding's own ANNOTATION, where it writes one, so that
