@@ -77,17 +77,33 @@ test('overloads: the flat parameter forms refuse an overloaded target', () => {
     + " String(Reflect.getReflection.<Reflect.ClassMethodParameter, C>('constructor', 0).name);")).toBe('a');
 });
 
-test('overloads: a constructor may not be overloaded', () => {
-  // base ECMAScript's rule, which this proposal does not relax: the arms would
-  // have to agree on the instance they initialise, and `super` binds to one
-  expectThrown('class A { constructor(a: uint8) {} constructor(a: string) {} }');
+test('overloads: a constructor IS overloaded on distinct annotated signatures', () => {
+  // #sec-constructor-overloading: "A class may declare more than one
+  // `constructor`. The declarations are overloads of one construct signature
+  // set, resolved at a construction on the same terms as a call to an
+  // overloaded function." The base language's Syntax Error for a second
+  // `constructor` "does not apply where the declarations are DISTINCT
+  // SIGNATURES and at least one parameter across the set carries a type
+  // annotation".
+  const A = 'class A { x: string = "?";'
+    + ' constructor(a: uint8) { this.x = "int"; }'
+    + ' constructor(a: string) { this.x = "str"; } } ';
+  expect(evaluated(`${A}"ok";`)).toBe('ok');
+  // and the construction resolves by the argument's type, as a call does
+  expect(evaluated(`${A}new A(uint8(1)).x;`)).toBe('int');
+  expect(evaluated(`${A}new A("s").x;`)).toBe('str');
+  // "two constructors whose parameter types are the same are ONE SIGNATURE
+  // DECLARED TWICE. That is a type error at the class"
+  expectThrown('class A { constructor(a: uint8) {} constructor(a: uint8) {} }');
+  // "A class body carrying no annotation on any constructor parameter is
+  // exactly what it was: a second `constructor` is a Syntax Error, so a
+  // program with no types in it is unaffected in either direction."
+  expectThrown('class A { constructor(a) {} constructor(a) {} }');
 });
 
-test('overloads: a constructor carries the one entry the table gives it', () => {
-  // #table-reflection-contexts: a constructor "may not be overloaded, so its
-  // `signatures` has exactly one entry". The record passed no type at all, so
-  // the reflection had none of the field every `ClassMethod` is given - a gap
-  // the caveat above made visible.
+test('overloads: an unoverloaded constructor carries the one entry the table gives it', () => {
+  // A constructor's reflection is built by the operation every other member's
+  // is, so it carries the `type` field a ClassMethod is given.
   const R = (cls: string) => `class A ${cls}`
     + " const r = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor'); ";
   expect(evaluated(`${R('{ constructor(a: uint8) {} }')}String(r.signatures.length);`)).toBe('1');
