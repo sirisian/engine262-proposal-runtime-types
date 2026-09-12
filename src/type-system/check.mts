@@ -9734,7 +9734,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (objType && objType.Kind === 'object') {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
             if (prop) {
-              return prop.type;
+              // #sec-object-types: "Reading a property that a declaration marked
+              // OPTIONAL yields the union of its type with `undefined`, which is
+              // what reading an absent property gives." The declaration is what
+              // says the property may be absent, so the read carries the
+              // possibility whether or not the value at hand has it.
+              //
+              // Answering the declared type alone made `{ a?: string }` and
+              // `{ a: string | undefined }` disagree about the SAME read: the
+              // second refused `let s: string = x.a` and the first accepted it,
+              // though the marker is exactly what says the value may not be
+              // there.
+              return prop.optional
+                ? CanonicalizeType({ Kind: 'union', Members: [prop.type, makePrimitive('undefined')] } as TypeRecord) as Known
+                : prop.type;
             }
             // An INDEX SIGNATURE answers where no declared property does.
             // Without this a read through one was ~any~, so
@@ -15944,13 +15957,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // An OBJECT pattern reads properties rather than iterating and is
         // untouched, and `string` iterates its characters.
         //
-        // The LHS arrives as an ~ArrayLiteral~: the grammar refines it to an
-        // ArrayAssignmentPattern only where a destructuring assignment is
-        // EVALUATED, so the walk sees the literal it was parsed as. Both
-        // spellings are named, since an array literal is not a valid assignment
-        // target in any other position.
-        if (a.LeftHandSideExpression.type === 'ArrayLiteral'
-          || a.LeftHandSideExpression.type === 'ArrayAssignmentPattern') {
+        // The LHS is an ~ArrayLiteral~ and only that: the grammar refines it to
+        // an ArrayAssignmentPattern where a destructuring assignment is
+        // EVALUATED, so the walk sees the literal it was parsed as, and the
+        // pattern node never reaches here - naming it as well was a comparison
+        // the Parse Node union has no overlap with. An array literal is not a
+        // valid assignment target in any other position, so the test needs no
+        // further guard.
+        if (a.LeftHandSideExpression.type === 'ArrayLiteral') {
           const from = staticType(a.AssignmentExpression);
           const fromBase = from && from.Kind === 'literal'
             ? ((from as { Base?: TypeRecord }).Base ?? null)
