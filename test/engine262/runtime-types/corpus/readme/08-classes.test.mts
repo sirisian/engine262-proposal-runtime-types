@@ -115,7 +115,7 @@ test('Constructor Overloading: a class may declare more than one constructor', (
   expect(ok('class A { constructor(x: float32) {} constructor(x: float32, y: uint32) {} }')).toBe(true);
   // The README's own version of this example assigns a `uint32` parameter to a
   // `float32` field, which is a separate type error and not what this tests:
-  // `class A { x: float32; … constructor(y: uint32) { this.x = y; } }` refuses
+  // `class A { x: float32; ... constructor(y: uint32) { this.x = y; } }` refuses
   // with "uint.<32>" is not assignable to "float32". The overload set parses;
   // the body does not check.
   expect(ok('class A { constructor(a: uint32) {} constructor(a, b) {} }')).toBe(true);

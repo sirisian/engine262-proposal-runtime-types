@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
-// PLAN-callable-runtime-type, the §2 rows as a conformance table. A callable's
+// PLAN-callable-runtime-type, the section 2 rows as a conformance table. A callable's
 // runtime type is its signature at EVERY depth (#sec-runtimetypeof, the
 // callable step), the function case of membership checks that signature
 // (#sec-isoftype), and inference reaches through a callable property as it

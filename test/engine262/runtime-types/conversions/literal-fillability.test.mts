@@ -5,7 +5,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * #sec-literal-propagation states an INVARIANT, not only a rule:
  *
  *   "A contextual type that is a ~literal~ Type Record whose [[Base]] is a
- *    numeric value type admits a numeric literal on the same terms … WITHOUT
+ *    numeric value type admits a numeric literal on the same terms ... WITHOUT
  *    THIS SUCH A TYPE IS NAMEABLE AND NOT FILLABLE."
  *
  * An invariant is a promise about every case, and the promise was largely

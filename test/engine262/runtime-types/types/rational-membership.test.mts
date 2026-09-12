@@ -15,9 +15,9 @@ import { evaluated, expectThrown } from '../harness.mts';
  * the literal machinery produces exactly such an object.
  *
  * The literal side was already correct and is pinned here too: #sec-literal-types
- * says "`0.1` … in a `rational` position is 1/10", and the checker records the
+ * says "`0.1` ... in a `rational` position is 1/10", and the checker records the
  * literal's DIGITS (`rationalLiterals`) so `NumericValue` builds 1/10 rather than
- * the double nearest it — which a rational, not rounding, would otherwise hold as
+ * the double nearest it - which a rational, not rounding, would otherwise hold as
  * 3602879701896397/36028797018963968.
  */
 

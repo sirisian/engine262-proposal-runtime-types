@@ -14,7 +14,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  *
  * The engine did neither. A class with a kinded parameter was EXCLUDED from
  * specialization, on a comment reasoning that a kinded argument "is not
- * resolvable as a type… the nominal instantiation below carries such arguments as
+ * resolvable as a type... the nominal instantiation below carries such arguments as
  * it always has". The second half was false: `Reflect.typeOf(new B.<Identity>())`
  * reported bare `B`, so every kinded application of one class was the same type
  * at run time - which the clause forbids in as many words.
