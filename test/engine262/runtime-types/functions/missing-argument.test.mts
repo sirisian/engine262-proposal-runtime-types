@@ -66,3 +66,39 @@ test('an OVERLOADED name is answered by resolution, not by this rule', () => {
   // diagnostic for a set than one parameter's name.
   expectThrown(dead(`${O}let q = f();`), 'no declared signature accepts');
 });
+
+test('a METHOD signature carries its parameters as a function does', () => {
+  // A FunctionTypeParameter carries its NAME, and whether it is OPTIONAL, a
+  // REST, or has a default. A record built from its type alone loses all four:
+  // the name is only a diagnostic, but the other three decide whether a call
+  // must supply anything, so an interface or object-type method declaring
+  // `b?: uint8` had `b` reported as required and a correct call refused.
+  expect(ok(dead('interface I { m(a: uint8, b?: uint8): void }'
+    + ' function h(i: I) { i.m(uint8(1)); }'))).toBe(true);
+  expect(ok(dead('let o: { m(a: uint8, b?: uint8): void } = { m(a, b) {} }; o.m(uint8(1));'))).toBe(true);
+  expect(ok(dead('interface I { m(a: uint8, ...r: [].<uint8>): void }'
+    + ' function h(i: I) { i.m(uint8(1)); }'))).toBe(true);
+  expect(ok(dead('let o: { m(a: uint8, b: uint8 = uint8(2)): void } = { m(a, b) {} };'
+    + ' o.m(uint8(1));'))).toBe(true);
+  // A required one is still required, through either declaration.
+  expectThrown(dead('interface I { m(a: uint8, b: uint8): void }'
+    + ' function h(i: I) { i.m(uint8(1)); }'), 'is not supplied');
+  expectThrown(dead('let o: { m(a: uint8, b: uint8): void } = { m(a, b) {} }; o.m(uint8(1));'),
+    'is not supplied');
+});
+
+test('every signature kind names the parameter it reports', () => {
+  // The message said "parameter 2" for a method where a function said "b",
+  // because the class, interface and object-type builders dropped the name.
+  for (const source of [
+    'function f(a: uint8, b: uint8) {} f(uint8(1));',
+    'class C { m(a: uint8, b: uint8) {} } new C().m(uint8(1));',
+    'class C { static m(a: uint8, b: uint8) {} } C.m(uint8(1));',
+    'class C { constructor(a: uint8, b: uint8) {} } let c = new C(uint8(1));',
+    'let g: (a: uint8, b: uint8) => void = (a, b) => {}; g(uint8(1));',
+    'interface I { m(a: uint8, b: uint8): void } function h(i: I) { i.m(uint8(1)); }',
+    'let o: { m(a: uint8, b: uint8): void } = { m(a, b) {} }; o.m(uint8(1));',
+  ]) {
+    expectThrown(dead(source), '"b" is required');
+  }
+});

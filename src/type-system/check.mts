@@ -3492,8 +3492,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const pushedMethodScope = pushTypeParameterScopeOf(tm.MethodSignature as unknown as ParseNode);
         const Parameters: ParameterRecord[] = [];
         for (const p of tm.MethodSignature.FunctionTypeParameterList ?? []) {
-          const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          Parameters.push(parameter((ann ? resolveType(ann.Type) : null) ?? anyTypeRecord));
+          const mp = p as {
+            TypeAnnotation?: ParseNode.TypeAnnotation | null,
+            BindingIdentifier?: { name?: string } | null,
+            Optional?: boolean, Rest?: boolean, Initializer?: ParseNode | null,
+          };
+          // A FunctionTypeParameter carries its NAME, and whether it is
+          // OPTIONAL, a REST, or has a default; a record built from its type
+          // alone loses all four. The name is only a diagnostic, but the other
+          // three decide whether a call must supply anything for it, so an
+          // `m(a: uint8, b?: uint8)` declared by an interface or an object type
+          // reported `b` as required and refused a correct call.
+          Parameters.push(parameter((mp.TypeAnnotation ? resolveType(mp.TypeAnnotation.Type) : null) ?? anyTypeRecord, {
+            Name: mp.BindingIdentifier?.name ?? '',
+            Optional: mp.Optional === true || !!mp.Initializer,
+            Rest: mp.Rest === true,
+          }));
         }
         const Return = tm.MethodSignature.TypeAnnotation ? resolveType(tm.MethodSignature.TypeAnnotation.Type) : null;
         if (pushedMethodScope) {
@@ -3900,10 +3914,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               usable = false;
               break;
             }
-            const pp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null, Optional?: boolean };
+            const pp = p as {
+              TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null,
+              Optional?: boolean, BindingIdentifier?: { name?: string } | null,
+            };
             const resolved = pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null;
             annotated.push(resolved);
-            Parameters.push(parameter(resolved ?? anyTypeRecord, { Optional: pp.Optional === true || !!pp.Initializer }));
+            // The NAME as well as the flags. It is only a diagnostic, but a
+            // record without it left every message about a method's parameter
+            // saying "parameter 2" where a function's said "b".
+            Parameters.push(parameter(resolved ?? anyTypeRecord, {
+              Name: pp.BindingIdentifier?.name ?? '',
+              Optional: pp.Optional === true || !!pp.Initializer,
+            }));
           }
         } finally {
           if (pushedMethodScope) {
@@ -6238,8 +6261,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             try {
               Parameters = [];
               for (const p of asMethod.FunctionTypeParameterList ?? []) {
-                const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-                Parameters.push(parameter((ann ? resolveType(ann.Type) : null) ?? anyTypeRecord));
+                const mp = p as {
+                  TypeAnnotation?: ParseNode.TypeAnnotation | null,
+                  BindingIdentifier?: { name?: string } | null,
+                  Optional?: boolean, Rest?: boolean, Initializer?: ParseNode | null,
+                };
+                // As above: the name, and the three flags that decide whether a
+                // call must supply anything for this parameter.
+                Parameters.push(parameter((mp.TypeAnnotation ? resolveType(mp.TypeAnnotation.Type) : null) ?? anyTypeRecord, {
+                  Name: mp.BindingIdentifier?.name ?? '',
+                  Optional: mp.Optional === true || !!mp.Initializer,
+                  Rest: mp.Rest === true,
+                }));
               }
               Return = asMethod.TypeAnnotation ? resolveType(asMethod.TypeAnnotation.Type) : null;
             } finally {
