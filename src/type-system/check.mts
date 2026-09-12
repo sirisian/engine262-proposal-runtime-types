@@ -14576,7 +14576,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // The argument is typed IN the target's context, which is what
             // `uint32(f())` needed: the overload resolves because the position
             // says `uint32`.
-            staticTypeIn(argNodes[0]!, conversionTarget as Known);
+            //
+            // EXCEPT a numeric literal at a DECIMAL or RATIONAL target, which is
+            // typed bare. Those two positions make `staticTypeIn` re-read the
+            // literal's SOURCE TEXT, because `let d: decimal128 = 0.1` states
+            // the decimal one tenth rather than the double nearest it. A
+            // CONVERSION is the opposite operation: decimal.md settles it as
+            // "`decimal128(f)` CARRIES WHATEVER `f` ALREADY HOLDS, so a binary
+            // `0.1` stays slightly off", and `decimal128(0.1) ==
+            // decimal128("0.1")` must answer *false* or the conversion launders
+            // a binary approximation into an exact-looking decimal. Reading the
+            // source text also produced a `rational` where `rational(5)` wants
+            // the INTEGER 5, the numerator its constructor asks for.
+            //
+            // Integer targets keep the context: `uint64(9007199254740993)` needs
+            // the exact digits, the double having already lost them.
+            const numericLiteralArgument = (argNodes[0] as { type?: string }).type === 'NumericLiteral';
+            const carriesTheValue = conversionTarget.Kind === 'primitive'
+              && (conversionTarget.Name === 'rational' || decimalWidthOf(conversionTarget) !== undefined);
+            if (numericLiteralArgument && carriesTheValue) {
+              staticType(argNodes[0]!);
+            } else {
+              staticTypeIn(argNodes[0]!, conversionTarget as Known);
+            }
           }
         }
         // A WRITTEN TYPE ARGUMENT MUST SATISFY ITS PARAMETER'S CONSTRAINT.
