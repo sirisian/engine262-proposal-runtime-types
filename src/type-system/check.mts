@@ -5194,6 +5194,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // The statically resolvable subset of types: built-ins and aliases declared
   // in the program. An unresolvable type is unknown, and unknown is ~any~.
   /** Nodes already reported by the empty-intersection Early Error. */
+  /**
+   * The CLASS declaration a nominal names, or *undefined* where it names none.
+   *
+   * ~nominal~ also covers an interface and an enum, and the judgments that use
+   * this must not reach either: a value satisfies any number of interfaces and a
+   * class may implement them, and an enum's values are those of its underlying
+   * type. Only a class declaration answers.
+   */
+  const classDeclarationOf = (m: TypeRecord): unknown => ((m.Kind === 'nominal'
+    && (m as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration')
+    ? (m as { Declaration?: unknown }).Declaration
+    : undefined);
+
   const reportedEmptyIntersections = new Set<object>();
 
   /**
@@ -5981,10 +5994,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Restricted to CLASS declarations. ~nominal~ also covers an interface
           // and an enum, and both must keep overlapping: a value satisfies any
           // number of interfaces, and a class may implement them.
-          const classDeclarationOf = (m: TypeRecord): unknown => ((m.Kind === 'nominal'
-            && (m as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration')
-            ? (m as { Declaration?: unknown }).Declaration
-            : undefined);
           for (let i = 0; i < Members.length && !reportedEmptyIntersections.has(node); i += 1) {
             for (let j = i + 1; j < Members.length && !reportedEmptyIntersections.has(node); j += 1) {
               if (classDeclarationOf(Members[i]) === undefined || classDeclarationOf(Members[j]) === undefined) {
@@ -10246,10 +10255,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Refusing it is defensible and would break a test that states the
         // opposite intent, so it is left for whoever reconciles the two.
         const literalOperandType = (t: Known): boolean => !!t && (t.Kind === 'literal' || t.Kind === 'void');
+        // TWO UNRELATED CLASSES have no common value, and the comparison is
+        // therefore always the same. The judgment is the one the empty-
+        // intersection rule already makes, for the reason recorded there:
+        // JavaScript has single inheritance and #sec-runtimetypeof gives a value
+        // the ~nominal~ record of ONE class, so no value is an instance of two
+        // classes neither of which extends the other.
+        //
+        // Made HERE rather than in `AreDisjoint`, which is the same choice that
+        // rule made and for the same reason: `AreDisjoint` runs from
+        // CanonicalizeType, where `IsSubtype` would recurse into type arguments
+        // and back into canonicalization. This pass is already running
+        // `IsSubtype`, so the judgment costs nothing at either site.
+        //
+        // A class against an INTERFACE or an ENUM is not this case - a class may
+        // implement any number of interfaces, and an enum's values are those of
+        // its underlying type - which `classDeclarationOf` is what excludes.
+        const classPair = operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
+          && classDeclarationOf(operandTypes[0] as TypeRecord) !== undefined
+          && classDeclarationOf(operandTypes[1] as TypeRecord) !== undefined
+          && !IsSubtype(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord, [])
+          && !IsSubtype(operandTypes[1] as TypeRecord, operandTypes[0] as TypeRecord, []);
         if ((strictOperator === '===' || strictOperator === '!==')
             && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
             && !literalOperandType(operandTypes[0]) && !literalOperandType(operandTypes[1])
-            && AreDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord)) {
+            && (classPair || AreDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord))) {
           const completion = Throw.StaticTypeError('$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(operandTypes[0] as TypeRecord)), Value(displayType(operandTypes[1] as TypeRecord)), Value(strictOperator === '===' ? 'false' : 'true')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }

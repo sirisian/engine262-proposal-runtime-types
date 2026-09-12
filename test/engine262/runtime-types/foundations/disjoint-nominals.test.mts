@@ -44,10 +44,30 @@ test('an enum follows its UNDERLYING type, not its nominal kind', () => {
   expect(ok(dead('enum F: int32 { A = 1 } let f: F = F.A; let i: int32 = int32(1); let q = f === i;'))).toBe(true);
 });
 
+test('two unrelated CLASSES have no common value', () => {
+  // The judgment the empty-intersection rule already made, at the comparison
+  // site as well: JavaScript has single inheritance and #sec-runtimetypeof
+  // gives a value the nominal record of ONE class, so no value is an instance
+  // of two classes neither of which extends the other.
+  expectThrown(dead(`${D}let q = c === d;`), 'disjoint');
+  expectThrown(dead(`${D}let q = d !== c;`), 'disjoint');
+
+  // A RELATED pair shares values and is spared, in both directions.
+  expect(ok(dead('class A { } class B extends A { } let a: A = new A(); let b: B = new B();'
+    + ' let q = a === b;'))).toBe(true);
+  expect(ok(dead('class A { } class B extends A { } let a: A = new A(); let b: B = new B();'
+    + ' let q = b === a;'))).toBe(true);
+  expect(ok(dead(`${D}let q = c === c;`))).toBe(true);
+
+  // A class against an INTERFACE is not this case: a class may implement any
+  // number of them.
+  expect(ok(dead('interface I { a: uint8 } class K implements I { a: uint8 = uint8(1); }'
+    + ' let k: K = new K(); function f(i: I) { let q = k === i; }'))).toBe(true);
+});
+
 test('what the rule does not claim', () => {
-  // Two object-like types are not judged: the rule is primitive-against-object,
-  // and whether two nominals can share a value is a different question.
-  expect(ok(dead(`${D}let q = c === d;`))).toBe(true);
+  // A LIBRARY nominal is not a ClassDeclaration, so the class rule does not
+  // reach it - the same limit the empty-intersection rule has.
   expect(ok(dead('let a: Map.<string, uint8> = new Map(); let b: Set.<uint8> = new Set();'
     + ' let q = a === b;'))).toBe(true);
   // A nullable type admits the null, so the comparison decides something.
