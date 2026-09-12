@@ -10375,6 +10375,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const rvc = operandTypes[1]!.Kind === 'primitive'
             && isNumericValueTypeName((operandTypes[1] as { Name?: string }).Name)
             ? operandTypes[1] as TypeRecord : null;
+          // A vector is not a numeric VALUE type either, so it reaches neither
+          // `lvc` nor `rvc`; two vectors of different types are the same
+          // mistake at a comparison as at an arithmetic operator.
+          const lvv = operandTypes[0]!.Kind === 'primitive'
+            && (operandTypes[0] as { Name?: string }).Name === 'vector'
+            ? operandTypes[0] as TypeRecord : null;
+          const rvv = operandTypes[1]!.Kind === 'primitive'
+            && (operandTypes[1] as { Name?: string }).Name === 'vector'
+            ? operandTypes[1] as TypeRecord : null;
+          if (lvv && rvv && !SameType(lvv, rvv)) {
+            const completion = Throw.StaticTypeError(
+              '$1 and $2 are different numeric types and do not mix',
+              Value(displayType(lvv)), Value(displayType(rvv)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
           if (lvc && rvc && !SameType(lvc, rvc)) {
             const completion = Throw.StaticTypeError(
               '$1 and $2 are different numeric types and do not mix',
@@ -10566,6 +10582,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // against an integer anyway, but `f | f` is two floats of one type and
         // reaches nothing else. The decimal family refuses these operations by
         // its own rule.
+        // TWO VECTORS MUST BE THE SAME TYPE. #sec-vector-types: an operator over
+        // two vectors is lane-wise, so it needs one lane type and one lane
+        // count; the run time refuses the rest as "not assignable to
+        // vector.<float32, 4>". Both types are written down, so the judgment is
+        // determinable.
+        //
+        // Asked of `leftT`/`rightT` rather than `lv`/`rv`, and for the reason
+        // recorded where the binary floats are: a vector is not a numeric VALUE
+        // type by `isNumericValueTypeName`, so it is absent from both and every
+        // rule reading them passes a vector by.
+        //
+        // Only where BOTH operands are vectors. A vector against its own LANE
+        // type is a lane-wise operation against a scalar and is ordinary, and a
+        // vector against an unknown type is not judged.
+        {
+          const isVector = (t: Known) => !!t && t.Kind === 'primitive'
+            && (t as { Name?: string }).Name === 'vector';
+          if (isVector(leftT) && isVector(rightT)
+            && !SameType(leftT as TypeRecord, rightT as TypeRecord)) {
+            const completion = Throw.StaticTypeError(
+              '$1 and $2 are different numeric types and do not mix',
+              Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         {
           const bitwise = node.type === 'BitwiseANDExpression' || node.type === 'BitwiseORExpression'
             || node.type === 'BitwiseXORExpression' || node.type === 'ShiftExpression';
