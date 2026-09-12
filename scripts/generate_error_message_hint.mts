@@ -17,7 +17,14 @@ async function* readdir(dir: string): AsyncGenerator<string> {
   }
 }
 
-const list = ['EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Error', 'AggregateError'];
+// The error constructors whose calls are scanned. `StaticTypeError` is one of
+// them: proposal-runtime-types #sec-type-errors makes a decidable type
+// violation an Early Error rather than a thrown *TypeError*, but it is thrown
+// through the same `Throw` object with the same message format, so its messages
+// belong in the same list. Omitting it dropped every message no OTHER
+// constructor also used - silently, because the interface ends in a catch-all
+// overload that accepts any string.
+const list = ['EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Error', 'AggregateError', 'StaticTypeError'];
 const messages = new Set<string>();
 const promises: Promise<void>[] = [];
 function isErrorCall(node: PropertyAccessExpression) {
