@@ -42,3 +42,19 @@ test('the METHODS are left to the run time', () => {
     + ' const m: boolean32x4 = a < b; String(m.any());')).toBe(true);
   expect(ok(`${A}let q = a.lane.<0>();`)).toBe(true);
 });
+
+test('a lane WRITE takes the type the read answers', () => {
+  // `a.x = s` for a string was the run time's "a string is not a conversion
+  // source for float32", though `a.x` answers `float32` here. One accessor,
+  // one type, whichever side of the assignment it is on.
+  expectThrown(dead(`${A}let s: string = "x"; a.x = s;`), 'not assignable');
+  expectThrown(dead('let b: int32x4 = int32x4(int32(1), int32(2), int32(3), int32(4));'
+    + ' let s: string = "x"; b.y = s;'), 'not assignable');
+  expect(ok(dead(`${A}let f: float32 = float32(9); a.x = f;`))).toBe(true);
+
+  // KNOWN LIMIT: a SWIZZLE target is computed - `a.xy` is a
+  // `vector.<float32, 2>` here - but the write is not compared against it, so
+  // assigning a scalar to one is still the run time's. The single-lane write is
+  // what this closes.
+  expect(ok(dead(`${A}let f: float32 = float32(9); a.xy = f;`))).toBe(true);
+});

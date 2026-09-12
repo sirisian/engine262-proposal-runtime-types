@@ -5204,6 +5204,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * class may implement them, and an enum's values are those of its underlying
    * type. Only a class declaration answers.
    */
+  /**
+   * The type a vector's LANE ACCESSOR answers, or *null* where the name is not
+   * one. #sec-vector-types: `a.x` reads a lane and answers the lane type, and a
+   * multi-component accessor - `a.xy`, a swizzle - answers a vector of that many
+   * lanes.
+   *
+   * `componentAccessorIndices` is the run time's own decision about which names
+   * are accessors and which lanes they name, so the two cannot disagree about a
+   * swizzle's width or about what counts as a member.
+   *
+   * Shared by the READ and the WRITE: `a.x` and `a.x = f` name the same lane, so
+   * one of them answering `float32` while the other answered nothing is how the
+   * write came to be unchecked.
+   */
+  const vectorAccessorType = (receiver: Known, name: string): Known => {
+    if (!receiver || receiver.Kind !== 'primitive' || (receiver as { Name?: string }).Name !== 'vector') {
+      return null;
+    }
+    const vecArgs = (receiver as { Arguments?: readonly unknown[] }).Arguments ?? [];
+    const laneType = vecArgs[0] as TypeRecord | undefined;
+    const laneCount = vecArgs[1];
+    if (!laneType || typeof laneCount !== 'number') {
+      return null;
+    }
+    const lanes = componentAccessorIndices(name, laneCount);
+    if (!lanes) {
+      return null;
+    }
+    return lanes.length === 1
+      ? laneType as Known
+      : CanonicalizeType({
+        ...(receiver as object), Arguments: [laneType, lanes.length],
+      } as unknown as TypeRecord) as Known;
+  };
+
   const classDeclarationOf = (m: TypeRecord): unknown => ((m.Kind === 'nominal'
     && (m as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration')
     ? (m as { Declaration?: unknown }).Declaration
@@ -9759,22 +9794,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `componentAccessorIndices` is the run time's own decision about
           // which names are accessors and which lanes they name, so the two
           // cannot disagree about a swizzle's width or about what is a member.
-          if (receiver && receiver.Kind === 'primitive'
-            && (receiver as { Name?: string }).Name === 'vector'
-            && (m.IdentifierName as { name?: string } | undefined)?.name) {
-            const vecArgs = (receiver as { Arguments?: readonly unknown[] }).Arguments ?? [];
-            const laneType = vecArgs[0] as TypeRecord | undefined;
-            const laneCount = vecArgs[1];
-            const accessorName = (m.IdentifierName as { name: string }).name;
-            if (laneType && typeof laneCount === 'number') {
-              const lanes = componentAccessorIndices(accessorName, laneCount);
-              if (lanes) {
-                return lanes.length === 1
-                  ? laneType as Known
-                  : CanonicalizeType({
-                    ...(receiver as object), Arguments: [laneType, lanes.length],
-                  } as unknown as TypeRecord) as Known;
-              }
+          if ((m.IdentifierName as { name?: string } | undefined)?.name) {
+            const accessed = vectorAccessorType(receiver, (m.IdentifierName as { name: string }).name);
+            if (accessed) {
+              return accessed;
+            }
+            {
               // Only the ACCESSORS. `all`, `any` and `lane` are METHODS - the
               // program writes `m.any()` - so a type for the read itself would
               // have to be a function type, and typing them as what they ANSWER
@@ -16266,7 +16291,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const m = a.LeftHandSideExpression as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
           const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
           let target: Known = null;
-          if (objType && objType.Kind === 'object' && m.IdentifierName) {
+          // A LANE WRITE takes the type the lane READ answers. `a.x = s` for a
+          // string was the run time's "a string is not a conversion source for
+          // float32", though `a.x` answers `float32` here.
+          const vectorTarget = m.IdentifierName
+            ? vectorAccessorType(m.MemberExpression ? staticType(m.MemberExpression) : null,
+              (m.IdentifierName as { name: string }).name)
+            : null;
+          if (vectorTarget) {
+            target = vectorTarget;
+          } else if (objType && objType.Kind === 'object' && m.IdentifierName) {
             const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
             // A store satisfies the property's WRITE type where one is declared
             // separately, which is what a setter's parameter gives.
