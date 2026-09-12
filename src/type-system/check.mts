@@ -6,15 +6,16 @@ import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.m
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import {
-  type SignatureRecord, type PropertyTypeRecord, type MetadataRecord, type TypeRecord,
+  type SignatureRecord, type MetadataRecord, type TypeRecord, type Known,
   type ParameterRecord, type TypeParameterRecord,
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
   badKindedArgument, restElementType, parameterTypeRecord,
 } from './records.mts';
+import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
-import { unifyTypeParameters, elementTypeOfIterable } from './unify.mts';
+import { elementTypeOfIterable } from './unify.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
@@ -37,6 +38,20 @@ import { slotReceiving } from './sequence-assignment.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
+import { eraseMetadata, literalFitsNumericType, keyAdmittedBy } from './literal-fit.mts';
+import { joinTypes, logicalResultType } from './logical-types.mts';
+import {
+  effectiveFunctionType, callableForm, ownerNameOf, sameConstructParameter, selectConstructSignature,
+} from './callable-shapes.mts';
+import {
+  canCompleteNormally, endsWithReturn, canCarryDisposal, guardsABranch,
+} from './control-flow.mts';
+import {
+  scopeOfNames, typeParameterNamesOf, mentionsTypeName, mentionsTypeParameter, substituteTypeParameters, bindTypeParametersFromArguments,
+} from './type-parameters.mts';
+import {
+  awaitedElementType, numericFamilyOf, isRangeFamilyName, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
+} from './std-signatures.mts';
 import { R, Throw } from '#self';
 
 /**
@@ -69,8 +84,6 @@ import { R, Throw } from '#self';
  */
 
 // ---- types ----------------------------------------------------------
-
-type Known = TypeRecord | null;
 
 /** An exact decimal: significand * 10^exponent. */
 type Dec = { sig: bigint, exp: number };
@@ -390,16 +403,6 @@ const WEAK_KEY_PARAMETER: Record<string, number> = { WeakMap: 0, WeakSet: 0, Wea
 const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
   'size', 'clear', 'keys', 'values', 'entries', 'forEach',
 ]);
-
-/**
- * #index-type: the type of every count a container reports or accepts - an
- * array's `length` and `capacity`, an element index, a view's length, a keyed
- * collection's `size`. The specification names it once, as `uint64`, so it is
- * referenced here rather than spelled at each site; `INDEX_TYPE` in value.mts is
- * the RUNTIME's record of the same type, and `collections/size-and-counts` pins
- * the two to each other.
- */
-const indexTypeRecord = (): TypeRecord => builtinTypeRecord('uint', [64])!;
 
 // ---- obligations handed to the checking pass (check-pass.mts) -------
 
@@ -2313,27 +2316,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
-  /** A scope of names with no constraints, for a site that has only names. */
-  const scopeOfNames = (names: Iterable<string>): Map<string, Known | null> => {
-    const scope = new Map<string, Known | null>();
-    for (const n of names) {
-      scope.set(n, null);
-    }
-    return scope;
-  };
-
-  /** Read _declaration_'s type parameter names, or ~none~ where it binds none. */
-  const typeParameterNamesOf = (declaration: ParseNode | null | undefined): readonly string[] | null => {
-    const list = (declaration as unknown as {
-      TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] },
-    } | null | undefined)?.TypeParameters?.TypeParameterList;
-    if (!list || list.length === 0) {
-      return null;
-    }
-    const names = list.map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
-    return names.length > 0 ? names : null;
-  };
-
   // ---- the function context -----------------------------------------
 
   const returnTypes: Known[] = [];
@@ -2581,89 +2563,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // ---- assignability and conversions --------------------------------
 
-  // #sec-contextual-types: a numeric literal whose value fits a numeric value
-  // type is assignable to it; the boundary constructs the typed value. This is
-  // the permanent contextual-typing rule (not a stopgap): after R1/R3 the value
-  // space is genuinely distinct, and this is how a plain literal enters it.
-  const literalFitsNumericType = (sourceRaw: TypeRecord, targetRaw: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean => {
-    // `shared uint8` is `uint8` for the purpose of this rule. `IsSubtype` looks
-    // through the marker (relations.mts), but a numeric literal reaches a
-    // numeric type by CONVERSION rather than by subtyping, so this path has to
-    // look through it as well, or `let s: shared uint8 = 1;` is refused the
-    // moment the annotation resolves while the runtime converts and admits it.
-    // Looking through here is what lets a `shared` annotation be resolved at
-    // all rather than left unchecked to keep the peace.
-    const source = sourceRaw.Kind === 'shared' ? sourceRaw.Target as TypeRecord : sourceRaw;
-    const target = targetRaw.Kind === 'shared' ? targetRaw.Target as TypeRecord : targetRaw;
-    if (source.Kind === 'literal' && target.Kind === 'primitive'
-        && ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'bigint', 'rational'].includes(target.Name)
-        && source.Value instanceof NumberValue
-        && fitsNumericType(R(source.Value) as number, target.Name, target.Arguments)) {
-      return true;
-    }
-    // A BigInt literal at `bigint` is the same rule with the other literal
-    // kind: the value is already of the target type.
-    if (source.Kind === 'literal' && target.Kind === 'primitive' && target.Name === 'bigint'
-        && source.Value instanceof BigIntValue) {
-      return true;
-    }
-    if (target.Kind === 'union') {
-      // A union that contains ITSELF terminates here too. This is the
-      // SECOND unguarded recursion over [[Members]] on this path: guarding
-      // `eraseMetadata` alone moved the overflow rather than removing it, and
-      // the frame count named this one next.
-      //
-      // `false` on a revisit is the honest answer - an arm already being asked
-      // about supplies no new way for the literal to fit.
-      if (seen.has(target)) {
-        return false;
-      }
-      seen.add(target);
-      return target.Members.some((m) => literalFitsNumericType(source, m, seen));
-    }
-    return false;
-  };
-
-  // Metadata erased: a ~parameterized~ record replaced by its base, through
-  // unions and intersections. This is exactly the view resolveType gave before
-  // it learnt to build ~parameterized~ records, and judging non-deferred shapes
-  // on it keeps this pass's diagnostics byte-identical to what they were: the
-  // one new judgment added here, the metadata subtype judgment, is the
-  // checking pass's, not this one's.
-  const eraseMetadata = (t: TypeRecord, seen: Set<TypeRecord> = new Set()): TypeRecord => {
-    // A member that is the union ITSELF terminates the walk.
-    //
-    // `type R = { a: int32 } | R` has no finite layout, and the declaration says
-    // so - "R contains itself through field, so it has no finite layout", from
-    // `FirstInlineCycle`. The LITERAL path never reached that message: it went
-    // through `requireAssignable`, which erases both sides first, and this walk
-    // recursed through [[Members]] with no guard until the HOST stack gave out.
-    //
-    // A RangeError is not a throw completion, so nothing downstream could catch
-    // or report it - and it fired at CHECK time, so `if (false) { … }` around
-    // the literal did not avoid it either.
-    //
-    // Returning `t` on a revisit leaves the cycle in place for the comparison
-    // that follows rather than pretending the type is finite. The comparison is
-    // reached, answers, and the declaration's own diagnostic is what the program
-    // sees.
-    //
-    // An ~object~ is returned untouched here as before, so the four shapes of
-    // LEGITIMATE recursion - a nullable member, an array element, two aliases of
-    // one shape, an interface - do not pass through this arm at all.
-    if (t.Kind === 'parameterized') {
-      return eraseMetadata(t.Base, seen);
-    }
-    if (t.Kind === 'union' || t.Kind === 'intersection') {
-      if (seen.has(t)) {
-        return t;
-      }
-      seen.add(t);
-      return { Kind: t.Kind, Members: t.Members.map((m) => eraseMetadata(m, seen)) };
-    }
-    return t;
-  };
-
   /**
    * Whether _target_ is a class with a one-parameter constructor admitting
    * _source_ - the first declaring form of sec-user-defined-conversions. One
@@ -2792,33 +2691,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     return false;
-  };
-
-  /**
-   * #sec-published-return-types, the second reading: subtyping and
-   * assignability read the DECLARED return where one is declared and the
-   * PUBLISHED one otherwise.
-   *
-   * The published type lives in its own field so that identity, overload-set
-   * formation, and ranking keep reading the declared one; a comparison of two
-   * function types has to be told to look at the other field, and this
-   * materializes a record that says what the function actually returns. It is
-   * what lets an unannotated method satisfy an annotated interface, and an
-   * unannotated function be refused by a function-typed position it does not
-   * fit.
-   */
-  const effectiveFunctionType = (t: Known): Known => {
-    if (!t || t.Kind !== 'function') {
-      return t;
-    }
-    const sigs = t.Signatures as readonly { Return: Known, InferredReturn?: Known }[];
-    if (!sigs.some((g) => !g.Return && g.InferredReturn)) {
-      return t;
-    }
-    return {
-      ...t,
-      Signatures: sigs.map((g) => (g.Return || !g.InferredReturn ? g : { ...g, Return: g.InferredReturn })),
-    } as unknown as Known;
   };
 
   const requireAssignable = (source: Known, target: Known) => {
@@ -3256,46 +3128,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- interfaces ---------------------------------------------------
 
   const interfaceTypeMemo = new Map<ParseNode, Known>();
-
-  /**
-   * proposal-runtime-types #sec-variance-static-semantics-early-errors: a
-   * covariant parameter is well-formed only in OUTPUT positions and a
-   * contravariant one only in INPUT positions, per #table-variance-positions -
-   * a method return and a `readonly` field are output, a method parameter is
-   * input, and a non-`readonly` field is BOTH, "so only an invariant parameter
-   * may appear".
-   *
-   * This is the half that inference cannot have. A structural type derives its
-   * variance from its members and so cannot be wrong about it; a DECLARATION is
-   * a claim, and without this rule `interface Bad<out T> { value: T }` would
-   * readmit by declaration exactly the unsoundness #sec-isobjectsubtype refuses
-   * structurally - a write through the wider view into a slot the narrower view
-   * believes holds something else.
-   */
-  const mentionsTypeName = (node: ParseNode | null | undefined, name: string): boolean => {
-    if (!node || typeof node !== 'object') {
-      return false;
-    }
-    const n = node as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } };
-    if (n.type === 'TypeReference' && n.TypeName?.IdentifierReference?.name === name) {
-      return true;
-    }
-    for (const key of Object.keys(node)) {
-      if (key === 'parent' || key === 'location') {
-        continue;
-      }
-      const child = (node as unknown as Record<string, unknown>)[key];
-      if (Array.isArray(child)) {
-        if (child.some((c) => mentionsTypeName(c as ParseNode, name))) {
-          return true;
-        }
-      } else if (child && typeof child === 'object' && 'type' in (child as object)
-        && mentionsTypeName(child as ParseNode, name)) {
-        return true;
-      }
-    }
-    return false;
-  };
 
   const checkVariancePositions = (declaration: ParseNode): void => {
     const d = declaration as unknown as {
@@ -4736,60 +4568,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Construct signatures by class node, for checking `new C(...)`. */
   const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }[]>();
 
-  /**
-   * Whether two constructor parameters are the same for signature identity.
-   *
-   * Deliberately narrow: two types are the same when `SameType` says so, and an
-   * ABSENT type equals only an absent one. Treating an unannotated parameter as
-   * `any` would make `constructor(a)` and `constructor(a: uint8)` one signature
-   * and refuse a legal overload set, and treating it as unknown-so-different
-   * would let `constructor(a)` be declared twice.
-   */
-  const sameConstructParameter = (a: Known | null, b: Known | null): boolean => {
-    if (!a || !b) {
-      return !a && !b;
-    }
-    return SameType(a, b);
-  };
-
-  /**
-   * The construct signature a call selects, from a class that may declare more
-   * than one.
-   *
-   * Routed through `resolveOverloadByTypes` rather than matched by arity here,
-   * because the checker and the runtime must not answer this differently. Four
-   * defects in this area have been two sides disagreeing about a type, and a
-   * second matching rule written for constructors would be a fifth waiting to
-   * happen.
-   *
-   * Answers the sole signature where a class declares one, so the common case
-   * pays nothing and behaves exactly as it did.
-   */
-  const selectConstructSignature = (
-    sigs: readonly { Parameters: ParameterRecord[] }[] | undefined,
-    argTypes: readonly TypeRecord[],
-  ): { Parameters: ParameterRecord[] } | undefined => {
-    if (!sigs || sigs.length === 0) {
-      return undefined;
-    }
-    if (sigs.length === 1) {
-      return sigs[0];
-    }
-    const resolution = resolveOverloadByTypes(sigs as never, argTypes as TypeRecord[]);
-    return resolution.Kind === 'resolved'
-      ? (resolution.Signature as unknown as { Parameters: ParameterRecord[] })
-      : undefined;
-  };
-
-  /** The declared name of a nominal receiver, which is what the context holds. */
-  const ownerNameOf = (t: TypeRecord): string | undefined => {
-    if (t.Kind !== 'nominal') {
-      return undefined;
-    }
-    const decl = (t as { Declaration?: { BindingIdentifier?: { name?: string } | null } }).Declaration;
-    return decl?.BindingIdentifier?.name ?? (t as { LibraryName?: string }).LibraryName;
-  };
-
   /** Whether `name` extends `base`, walking the declared heritage chain. */
   const inheritsFrom = (name: string, base: string): boolean => {
     const seen = new Set<string>();
@@ -5302,24 +5080,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Signatures.push(...(one as { Signatures: readonly SignatureRecord[] }).Signatures);
     }
     return { Kind: 'function', Signatures } as unknown as Known;
-  };
-
-  /**
-   * The type a value is CALLED at. A ~nominal~ interface whose [[Structure]] is a
-   * ~function~ record - an interface of call signatures - is called as that
-   * function: #sec-object-types says such an interface "denotes the ~function~
-   * Type Record", and #sec-interfaces that an interface "may also type ... a
-   * function structurally". Both call-checking sites tested `Kind === 'function'`
-   * on the raw type and so saw an interface-typed callee as uncallable-unknown.
-   */
-  const callableForm = (t: Known): Known => {
-    if (t && t.Kind === 'nominal') {
-      const structure = (t as { Structure?: Known }).Structure;
-      if (structure && structure.Kind === 'function') {
-        return structure;
-      }
-    }
-    return t;
   };
 
   const resolveType = (node: ParseNode.Type): Known => {
@@ -6385,275 +6145,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- generics: type parameters at a call --------------------------
 
   /**
-   * Whether _t_ still mentions a type parameter.
-   *
-   * A call that supplies no type arguments binds nothing, and this proposal
-   * does not yet infer a binding from the arguments, so a parameter or return
-   * that names one is UNCONSTRAINED at such a call: comparing an argument
-   * against a bare `T` would refuse `id(5)` for `function id<T>(v: T): T`,
-   * which is the ordinary way a generic is called.
-   */
-  const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): boolean => {
-    if (!t) {
-      return false;
-    }
-    // A record already being asked about contributes no NEW parameter mention
-    //, so `false` is the honest answer on a revisit rather than a guess.
-    //
-    // This is the THIRD walk of this shape: the recursion guard reached `eraseMetadata` and
-    // `literalFitsNumericType` after a self-referential union overflowed the
-    // host stack. Here the cyclic record is a recursive ALIAS reached through a
-    // function PARAMETER inside a BLOCK - at top level the same program is
-    // merely unchecked, and the block takes a path that walks the type
-    // instead of decaying it to `any`.
-    if (seen.has(t)) {
-      return false;
-    }
-    seen.add(t);
-    if (t.Kind === 'parameter') {
-      return true;
-    }
-    const withMembers = t as { Members?: readonly TypeRecord[] };
-    if (withMembers.Members?.some((m) => mentionsTypeParameter(m, seen))) {
-      return true;
-    }
-    const withArgs = t as { Arguments?: readonly (TypeRecord | number)[] };
-    if (withArgs.Arguments?.some((a) => typeof a !== 'number' && mentionsTypeParameter(a, seen))) {
-      return true;
-    }
-    const withElement = t as { Element?: TypeRecord };
-    if (withElement.Element && mentionsTypeParameter(withElement.Element, seen)) {
-      return true;
-    }
-    // A TUPLE's elements, beside the array's singular [[Element]] one line above.
-    // The plural was missing where the singular was handled - one letter
-    // apart - so `type P<T> = [T, string]` read as mentioning no parameter, and
-    // the substitution arm keyed on this predicate never ran for it.
-    const withElements = t as { Elements?: readonly { Type?: TypeRecord }[] };
-    if (withElements.Elements?.some((el) => !!el?.Type && mentionsTypeParameter(el.Type, seen))) {
-      return true;
-    }
-    // An array's EXTENT may be a VALUE PARAMETER - the same omission the
-    // next comment records for a function type's signature.
-    const withExtentM = t as { Extent?: number | 'dynamic' | TypeRecord };
-    if (withExtentM.Extent && typeof withExtentM.Extent === 'object'
-        && mentionsTypeParameter(withExtentM.Extent as TypeRecord, seen)) {
-      return true;
-    }
-    // A FUNCTION type mentions a parameter through its signature. Without this
-    // `() => K` did not count as mentioning `K`, so the guard at the argument
-    // check did not fire and the argument was compared against the UNBOUND
-    // parameter - `"() => uint8" is not assignable to "() => K"`, which reads
-    // like a type error and is really the absence of one.
-    //
-    // The same omission sat in the binding walk beside this, which likewise had
-    // no [[Signatures]] case and so bound nothing from a callback. The two are
-    // one gap seen from both ends: a callback's shape neither constrained a
-    // variable nor was recognised as mentioning one.
-    const withSignatures = t as {
-      Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[],
-    };
-    if (withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type, seen))
-      || (!!sig.Return && mentionsTypeParameter(sig.Return, seen)))) {
-      return true;
-    }
-    // An OBJECT type mentions a parameter through its members. An interface
-    // parameterized on a variable - `Iterable.<T>` - is a structural record with
-    // T inside `[Symbol.iterator]`'s return, so without this it did not count as
-    // mentioning T: the guard at the argument check did not fire, and the
-    // argument was compared against the interface with T still unbound.
-    //
-    // Every field a record can carry a parameter in is walked - Members,
-    // Arguments, Element, Extent, Signatures, Properties and IndexSignatures -
-    // because this predicate GATES the substitution arms: a field the
-    // predicate skips is a field the substitution never reaches, and neither
-    // half fails visibly on its own. An INDEX SIGNATURE mentions a parameter
-    // through either half, since `{ [k: K]: V }` may parameterise either.
-    const withIndexSignatures = t as {
-      IndexSignatures?: readonly { Key?: TypeRecord, Value?: TypeRecord }[],
-    };
-    if (withIndexSignatures.IndexSignatures?.some((ix) => (!!ix?.Key && mentionsTypeParameter(ix.Key, seen))
-      || (!!ix?.Value && mentionsTypeParameter(ix.Value, seen)))) {
-      return true;
-    }
-    const withProperties = t as { Properties?: readonly { type?: TypeRecord }[] };
-    return !!withProperties.Properties?.some((prop) => !!prop?.type && mentionsTypeParameter(prop.type, seen));
-  };
-
-  /**
-   * #sec-generic-functions: _t_ with each type parameter replaced by what the
-   * call bound it to.
-   *
-   * This is what gives a generic call its Static Type on the DECLARED path:
-   * `function first<T>(a: [].<T>): T {}` called as `first.<uint32>([1])` is a
-   * `uint32`, and an assignment of it is checked.
-   */
-  const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
-    if (!t) {
-      return t;
-    }
-    if (t.Kind === 'parameter') {
-      return bindings.get((t as { Name: string }).Name) ?? t;
-    }
-    const withMembers = t as { Members?: readonly TypeRecord[] };
-    if (withMembers.Members) {
-      return {
-        ...t,
-        Members: withMembers.Members.map((m) => substituteTypeParameters(m, bindings) as TypeRecord),
-      } as Known;
-    }
-    const withArgs = t as { Arguments?: readonly (TypeRecord | number)[] };
-    if (withArgs.Arguments && withArgs.Arguments.length > 0) {
-      return {
-        ...t,
-        Arguments: withArgs.Arguments.map((a) => (typeof a === 'number'
-          ? a
-          : substituteTypeParameters(a, bindings) as TypeRecord)),
-      } as Known;
-    }
-    // A TUPLE's elements, beside the array's singular [[Element]] arm below.
-    // `substituteTypeParameters` handled `Element` and not `Elements`,
-    // exactly as `mentionsTypeParameter` did, so `type P<T> = [T, string]` kept
-    // its `T` and `P.<uint8>` was satisfied by nothing - an exact
-    // `[uint8, string]` source included.
-    //
-    // Each element is spread, so a REST or an initial marker rides along
-    // untouched and only [[Type]] is replaced.
-    const withElements = t as { Elements?: readonly { Type?: TypeRecord }[] };
-    if (withElements.Elements) {
-      return {
-        ...t,
-        Elements: withElements.Elements.map((el) => (el?.Type
-          ? { ...el, Type: substituteTypeParameters(el.Type, bindings) }
-          : el)),
-      } as unknown as Known;
-    }
-    const withElement = t as { Element?: TypeRecord };
-    if (withElement.Element) {
-      {
-        // A parameterized EXTENT is substituted alongside the element.
-        // A literal record's [[Value]] is an ENGINE Value, not a JS number, and
-        // a value generic binds the value its constraint admits - `f.<4>` binds
-        // a TYPED uint32 4 - so it is unwrapped rather than read with `typeof`.
-        const withExtentS = t as { Extent?: number | 'dynamic' | TypeRecord };
-        let nextExtent = withExtentS.Extent;
-        if (nextExtent && typeof nextExtent === 'object') {
-          const done = substituteTypeParameters(nextExtent as Known, bindings);
-          const lit = done as { Kind?: string, Value?: unknown } | null;
-          const raw = lit && lit.Kind === 'literal' ? lit.Value : undefined;
-          const asNumber = raw instanceof NumberValue ? R(raw) : undefined;
-          nextExtent = typeof asNumber === 'number' ? asNumber : (done as TypeRecord | undefined) ?? nextExtent;
-        }
-        return {
-          ...t,
-          Element: substituteTypeParameters(withElement.Element, bindings) as TypeRecord,
-          ...(withExtentS.Extent !== undefined ? { Extent: nextExtent } : {}),
-        } as Known;
-      }
-    }
-    // A FUNCTION and an OBJECT type carry variables in their signatures and
-    // members, and neither was substituted. So a bound `T` reached a callback
-    // parameter still spelled `T`: the contextual type recorded for the literal
-    // was the UNBOUND one, and a body reading its parameter saw `"T" is not
-    // assignable to "uint8"`.
-    //
-    // The fourth place the same two shapes were missing. `mentionsTypeParameter`
-    // lacked both, the binding walk lacked both, and so did this - one omission
-    // repeated across every operation that walks a type, which is why each half
-    // looked like a separate defect until the pattern was named.
-    const withSignatures = t as {
-      // The local shape names only what this function READS. It must keep the
-      // record's own field types for the rest: the spreads below preserve every
-      // other field at run time, and a looser annotation makes the `as Known` a
-      // widening TypeScript rejects - `Parameters` would lose `Name`,
-      // `Optional` and `Rest`.
-      Signatures?: readonly SignatureRecord[],
-    };
-    // Guarded on the type actually MENTIONING a variable, so a record with
-    // nothing to substitute is returned as it came: an object type is reached
-    // here constantly, and a fresh record is not always interchangeable with
-    // the one it copies (SoA and window programs depend on the identity).
-    if (withSignatures.Signatures && mentionsTypeParameter(t)) {
-      return {
-        ...t,
-        Signatures: withSignatures.Signatures.map((sig) => ({
-          ...sig,
-          Parameters: (sig.Parameters ?? []).map((prm) => (prm?.Type
-            ? { ...prm, Type: substituteTypeParameters(prm.Type, bindings) }
-            : prm)),
-          Return: sig.Return ? substituteTypeParameters(sig.Return, bindings) : sig.Return,
-        })),
-      } as Known;
-    }
-    // An INDEX SIGNATURE's halves are substituted beside the properties.
-    // This walk had a `Properties` arm and NO `IndexSignatures` arm at all, so
-    // `interface Box<T> { [k: string]: T }` kept its `T` and `Box.<uint8>` was
-    // satisfied by nothing - not even by a source declaring the very signature
-    // it wanted.
-    //
-    // `SubstituteTypeArguments` in `runtime.mts` copies [[IndexSignatures]]
-    // verbatim and has the same gap, but is NOT the site this reaches: traced,
-    // it is not called for these programs at all.
-    const withProperties = t as {
-      Properties?: readonly PropertyTypeRecord[],
-      IndexSignatures?: readonly { Key?: TypeRecord, Value?: TypeRecord }[],
-    };
-    if ((withProperties.Properties || withProperties.IndexSignatures) && mentionsTypeParameter(t)) {
-      return {
-        ...t,
-        ...(withProperties.Properties ? {
-          Properties: withProperties.Properties.map((prop) => (prop?.type
-            ? { ...prop, type: substituteTypeParameters(prop.type, bindings) }
-            : prop)),
-        } : {}),
-        ...(withProperties.IndexSignatures ? {
-          IndexSignatures: withProperties.IndexSignatures.map((ix) => ({
-            ...ix,
-            ...(ix?.Key ? { Key: substituteTypeParameters(ix.Key, bindings) } : {}),
-            ...(ix?.Value ? { Value: substituteTypeParameters(ix.Value, bindings) } : {}),
-          })),
-        } : {}),
-      } as Known;
-    }
-    return t;
-  };
-
-  /**
-   * #sec-generic-functions: bind a signature's type parameters from the
-   * ARGUMENTS of a call that supplies none explicitly.
-   *
-   * `id(5)` says what `T` is as plainly as `id.<uint8>(5)` does, and without
-   * reading it the argument check has nothing to compare against and the call
-   * has no Static Type. Matching walks the parameter type and the argument type
-   * together and binds a parameter position to whatever stands opposite it; the
-   * first binding for a name wins, since a later disagreement is the caller's
-   * error rather than a reason to rebind.
-   *
-   * The matching is the shared walk in unify.mts, over Static Types here, with
-   * this checker's own `mentionsTypeParameter` and `substituteTypeParameters`
-   * supplied where the walk needs them. The run time calls the same walk over
-   * RuntimeTypeOf of its values, which is what makes `f<T>(items: [].<T>)` and
-   * `new L(items)` bind the same `T` on both sides.
-   */
-  const bindTypeParametersFromArguments = (
-    parameters: readonly { Type?: Known }[],
-    argumentTypes: readonly Known[],
-    names: ReadonlySet<string>,
-    into: Map<string, TypeRecord>,
-  ): void => {
-    unifyTypeParameters(
-      parameters as readonly { Type?: TypeRecord | null, Rest?: boolean }[],
-      argumentTypes as readonly (TypeRecord | null)[],
-      names,
-      into,
-      {
-        mentionsTypeParameter: (t) => mentionsTypeParameter(t as Known),
-        substituteTypeParameters: (t, bindings) => substituteTypeParameters(t as Known, bindings) as TypeRecord | null,
-      },
-    );
-  };
-
-  /**
    * Binds a call's EXPLICIT type arguments into `into` by the shared assignment - names, a
    * named pack's run, spreads spliced first, and a variadic parameter bound to
    * the tuple of its run - so the checker's reading of `count.<uint8, string>`
@@ -6732,34 +6223,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   // ---- standard-library signatures ----------------------------------
-
-  /**
-   * What a value contributes once AWAITED: a `Promise.<R, E>` contributes _R_,
-   * and anything else contributes itself.
-   *
-   * `Array.fromAsync` awaits each element, so an array of promises yields an
-   * array of what they resolve with. The union case matters because the design
-   * writes the parameter as `Iterable.<T | Promise.<T, any>>` - a source may mix
-   * bare values and promises, and both arms contribute _T_.
-   */
-  const awaitedElementType = (t: Known): Known => {
-    if (!t) {
-      return null;
-    }
-    if (t.Kind === 'nominal' && t.LibraryName === 'Promise') {
-      const [resolved] = t.Arguments;
-      return typeof resolved === 'number' || resolved === undefined ? null : resolved as Known;
-    }
-    if (t.Kind === 'union') {
-      const members = (t as { Members?: readonly TypeRecord[] }).Members ?? [];
-      const awaited = members.map((member) => awaitedElementType(member as Known));
-      if (awaited.some((x) => !x)) {
-        return null;
-      }
-      return CanonicalizeType({ Kind: 'union', Members: awaited as TypeRecord[] } as TypeRecord) as Known;
-    }
-    return t;
-  };
 
   /** `[].<T>`, the dynamic array of an element type. */
   const arrayOfElement = (element: TypeRecord): Known => ({
@@ -7462,26 +6925,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
-  // #sec-overload-resolution over the numeric library's listing
-  // (table-numeric-library-signatures), driven statically. The listing's
-  // structure collapses the general algorithm: every signature takes its
-  // numeric parameters at ONE type and no numeric value type is assignable to
-  // another, so a typed argument names the only viable family, two different
-  // typed arguments are viable at no signature, and with no typed argument the
-  // contextual type (#sec-contextual-types) selects the family through the
-  // return filter, which is R8's specialized call. The Number signature is
-  // every listed function's default: resolution to it types nothing and
-  // records nothing, so an untyped program stays exactly as silent as before.
-  const numericFamilyOf = (t: Known): (TypeRecord & { Kind: 'primitive' }) | 'bigint' | null => {
-    if (!t || t.Kind !== 'primitive') {
-      return null;
-    }
-    if (isIntegerTypeName(t.Name) || isFloatTypeName(t.Name) || t.Name === 'number') {
-      return t;
-    }
-    return t.Name === 'bigint' ? 'bigint' : null;
-  };
-
   const mathCallName = (call: ParseNode): string | null => {
     const m = (call as { CallExpression?: ParseNode }).CallExpression as { type?: string, MemberExpression?: ParseNode, IdentifierName?: { name: string } | null } | undefined;
     if (!m || m.type !== 'MemberExpression' || !m.MemberExpression || !m.IdentifierName) {
@@ -7599,323 +7042,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return returned;
   };
 
-  /**
-   * The iterator helper methods, on a receiver that iterates.
-   *
-   * #sec-iteration-types. These live on the `Iterator` class at run time, and
-   * are reached here from whatever the receiver's type is - a `Generator`, an
-   * `Iterator`, or anything else the declared-implements table says iterates -
-   * because the receiver's static type is the protocol rather than the class
-   * (a hand-written iterator has to satisfy the annotation too).
-   *
-   * `map` is the method that CHANGES the element type, so its callback's return
-   * is what every downstream step infers from; `toArray` is the one that leaves
-   * the family. The rest keep the element and follow those two.
-   */
-  const iteratorMethodSignature = (name: string, element: TypeRecord): Known => {
-    const boolType = makePrimitive('boolean');
-    const index = indexTypeRecord();
-    const anyT = { Kind: 'any' as const } as TypeRecord;
-    const fn = (params: TypeRecord[], Return: TypeRecord) => ({
-      Kind: 'function',
-      Signatures: [{ Parameters: params.map((t, i) => parameter(t, { Name: `a${i}` })), Return, Untyped: false }],
-    } as unknown as Known);
-    // (value, index) => U, the shape every helper callback takes.
-    const cb = (ret: TypeRecord) => fn([element, index], ret);
-    // The carrier, not the interface: a chain's next step needs a receiver
-    // carrying its element type, and an interface record carries members rather
-    // than arguments. `IteratorHelper` is a library name users do not write, so
-    // `Iterator.<T>` stays the interface a hand-written iterator satisfies.
-    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidType, voidType])!;
-    switch (name) {
-      case 'map': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
-      case 'filter': return fn([cb(boolType) as TypeRecord], iteratorOf(element));
-      case 'take':
-      case 'drop': return fn([index], iteratorOf(element));
-      case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
-      case 'toArray': return fn([], { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord);
-      case 'forEach': return fn([cb(voidType) as TypeRecord], voidType);
-      case 'some':
-      case 'every': return fn([cb(boolType) as TypeRecord], boolType);
-      case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, voidType] } as unknown as TypeRecord);
-      case 'reduce': return fn([fn([anyT, element, index], anyT) as TypeRecord, anyT], anyT);
-      default: return null;
-    }
-  };
-
-  /**
-   * A method of a typed COLLECTION takes its key and value positions at the
-   * declared types, which sec-array-defaults-and-stores states beside the
-   * array's element positions and which the run time enforces. The checker
-   * knowing them is what turns `s.add(300)` on a `Set.<uint8>` from a run-time
-   * RangeError into the Early Error a statically determinable mistake
-   * deserves - the same step the array methods took, and the reason a
-   * collection's methods were the array methods' one remaining asymmetry.
-   *
-   * The signatures are the DESIGN's own, written out in the weak-reference
-   * section of the README rather than invented here: `add(value: T): Set.<T>`,
-   * `has(value: T): boolean`, `delete(value: T): boolean`, and for the keyed
-   * form `get(key: K): V | undefined`, `set(key: K, value: V): Map.<K, V>`.
-   * The `undefined` in `get`'s return is the design's and is load-bearing: a
-   * lookup that finds nothing answers *undefined*, so `let x: uint8 = m.get(k)`
-   * is a mistake the types can see.
-   */
-  const collectionMethodSignature = (library: string, name: string, args: readonly (TypeRecord | number)[], receiver: TypeRecord): Known => {
-    const boolType = makePrimitive('boolean');
-    const anyType = { Kind: 'any' as const };
-    const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
-    const arg = (i: number): TypeRecord => {
-      const a = args[i];
-      return a === undefined || typeof a === 'number' ? anyType as TypeRecord : a;
-    };
-    const sig = (Parameters: TypeRecord[], Return: TypeRecord, optionalFrom = Parameters.length) => ({
-      Kind: 'function',
-      Signatures: [{ Parameters: shapes(Parameters, optionalFrom), Return, Untyped: false }],
-    } as unknown as Known);
-    /**
-     * A pair as a TUPLE record, which is what `entries` yields and what a
-     * `for`-`of` over a `Map` destructures.
-     *
-     * Built the same way `BUILTIN_IMPLEMENTS` builds `Map`'s `Iterable`
-     * argument, and for the reason recorded there: a tuple's Elements are
-     * TupleElementRecords rather than bare types, and writing them as bare types
-     * produces a record nothing matches - which is how `Map` was once silently
-     * not iterable while `Set` was. Two copies of one shape is how that recurs,
-     * so if a third site needs it, hoist it.
-     */
-    const pairOf = (a: TypeRecord, b: TypeRecord) => ({
-      Kind: 'tuple',
-      Elements: [a, b].map((t) => ({ Type: t, Rest: false, Initial: 'none' })),
-    } as unknown as TypeRecord);
-    /**
-     * What `keys`, `values` and `entries` return.
-     *
-     * `IteratorHelper` is the CARRIER, not the interface, and the choice is
-     * forced rather than preferred. The design and the specification say these
-     * return `Iterator.<T>`, and they should: `sec-iteration-types` rules out
-     * per-collection iterator types by name, so there is no `MapIterator` to
-     * name. But in this checker `Iterator.<T>` is a structural OBJECT record
-     * carrying members, with no [[Arguments]] to read - so a chain starting from
-     * one loses its element type at the first step, and `m.values().map(f)`
-     * would be untyped. The carrier is a nominal that keeps the element, and it
-     * is DECLARED to implement `Iterator.<T>`, `IterableIterator.<T>` and
-     * `Iterable.<T>` through `BUILTIN_IMPLEMENTS`, so a value of it goes
-     * everywhere the interface goes.
-     *
-     * The two statements agree rather than conflict: the specification names the
-     * interface a caller may rely on, and the checker returns a record that
-     * satisfies it and can also carry a chain. It is the same choice
-     * `iteratorMethodSignature` already makes for the helpers themselves.
-     */
-    const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidType, voidType])!;
-    /**
-     * `Set.<any>`, the top of the set family: the bound the set operations take
-     * their `other` operand at. Built from the receiver's own Declaration so it
-     * is the same nominal, not a look-alike.
-     */
-    const setOfAny = { ...(receiver as object), Arguments: [{ Kind: 'any' }] } as unknown as TypeRecord;
-    /** `(value, key, collection) => void`, the shape both forEach callbacks take. */
-    const forEachCallback = (first: TypeRecord, second: TypeRecord) => ({
-      Kind: 'function',
-      Signatures: [{
-        Parameters: [first, second, receiver].map((t, i) => parameter(t, { Name: `a${i}`, Optional: i > 0 })),
-        Return: voidType,
-        Untyped: false,
-      }],
-    } as unknown as TypeRecord);
-    if (library === 'Set' || library === 'WeakSet') {
-      const element = arg(0);
-      switch (name) {
-        case 'add': return sig([element], receiver);
-        case 'has':
-        case 'delete': return sig([element], boolType);
-        // The design's set operations. `intersection` and `difference` draw
-        // ONLY from `this`, so the result keeps the receiver's element type
-        // whatever the other side holds - which is why they can be written
-        // here while `union` and `symmetricDifference` cannot.
-        //
-        // The `other` parameter is bound at `Set.<any>`, the COLLECTION FAMILY
-        // TOP. The design writes `union<U>(other: Set.<U>)`, and this is the
-        // spelling of "a Set of some element type" - the thing the checker
-        // previously had no way to say, so the parameter was left ~any~ and
-        // `a.union(1)` type-checked.
-        //
-        // `Set.<any>` is admissible as the top for the reason `[].<any>` is:
-        // a store is checked against the receiver's own declared types at run
-        // time, so writing through the wider view is refused whatever the
-        // static type permitted. Invariance is untouched for every other
-        // argument.
-        //
-        // The RESULT type of `union` and `symmetricDifference` is not decided
-        // here - it depends on the ARGUMENT's type, which a signature written
-        // at the member access cannot express, so it is computed at the call
-        // site. That handler predates this work; only the bound is new.
-        case 'intersection':
-        case 'difference': return sig([setOfAny], receiver);
-        case 'isSubsetOf':
-        case 'isSupersetOf':
-        case 'isDisjointFrom': return sig([setOfAny], boolType);
-        case 'union':
-        case 'symmetricDifference': return sig([setOfAny], receiver);
-        default: break;
-      }
-      // The members a Set has and a WeakSet does not. Guarded rather than
-      // written into the switch above so that a WeakSet reaches the
-      // not-declared-by refusal instead of quietly acquiring an iteration
-      // surface it has no way to implement - a weak collection cannot be
-      // enumerated, which is the point of it.
-      if (library === 'WeakSet') {
-        return null;
-      }
-      switch (name) {
-        case 'clear': return sig([], voidType);
-        // On a Set `keys` IS `values` - the same function object, not merely
-        // the same behaviour - so the two share a signature.
-        case 'keys':
-        case 'values': return sig([], iteratorOf(element));
-        // A Set's `entries` yields [v, v], which is odd and is what the
-        // language does; typing it as the pair it actually yields is what lets
-        // a destructuring `for (const [a, b] of s)` check.
-        case 'entries': return sig([], iteratorOf(pairOf(element, element)));
-        case 'forEach': return sig([forEachCallback(element, element), anyType as TypeRecord], voidType, 1);
-        default: return null;
-      }
-    }
-    const key = arg(0);
-    const value = arg(1);
-    switch (name) {
-      // The design writes the lookup as `V | undefined`, and a union is how the
-      // checker says it: a `Map.<K, V>` that does not hold the key answers
-      // *undefined*, so a binding of type V is not what a lookup produces.
-      case 'get': return sig([key], { Kind: 'union', Members: [value, makePrimitive('undefined')] } as TypeRecord);
-      case 'set': return sig([key, value], receiver);
-      case 'has':
-      case 'delete': return sig([key], boolType);
-      // `getOrInsert` postdates the design's listing, so its return is read off
-      // its own semantics rather than quoted: it answers the value it found or
-      // the one it inserted, and never *undefined*.
-      case 'getOrInsert': return sig([key, value], value);
-      // Same shape, but the value is computed from the key rather than passed.
-      //
-      // The callback's PARAMETER is typed and its RETURN is left ~any~,
-      // deliberately. Constraining the return to V is more precise and refuses
-      // the natural spelling: `m.getOrInsertComputed("a", (k) => 1)` fails with
-      // "a literal type of number is not assignable to uint.<8>", because
-      // inferring a callback's return from the expected type is the
-      // argument-position inference the design lists as deferred. An
-      // annotated callback would work and an unannotated one would not, which
-      // is a worse trade than under-approximating - and the value is checked
-      // at insertion regardless, so a wrong one is refused either way, just at
-      // run time. Same reasoning as the `other` parameter of the set
-      // operations above; when inference from an expected type lands, tighten
-      // both together.
-      case 'getOrInsertComputed': return sig([key, ({
-        Kind: 'function',
-        Signatures: [{ Parameters: [parameter(key, { Name: 'key' })], Return: anyType as TypeRecord, Untyped: false }],
-      } as unknown as TypeRecord)], value);
-      default: break;
-    }
-    if (library === 'WeakMap') {
-      return null;
-    }
-    // README, "Weak References": `register(target: object | symbol, heldValue:
-    // T, unregisterToken?: object | symbol): void` and `unregister(token:
-    // object | symbol): boolean`. The HELD value is the type argument and is
-    // unconstrained; the TARGET and the token must be weakly referenceable, and
-    // a literal or value-typed argument is refused here rather than at run
-    // time, so `register("s", 1)` is an Early Error and not the run time's
-    // TypeError.
-    if (library === 'FinalizationRegistry') {
-      const weaklyHeld = joinTypes(makePrimitive('object') as TypeRecord, makePrimitive('symbol') as TypeRecord) as TypeRecord;
-      const held = arg(0);
-      switch (name) {
-        case 'register': return sig([weaklyHeld, held, weaklyHeld], voidType, 2);
-        case 'unregister': return sig([weaklyHeld], boolType);
-        default: return null;
-      }
-    }
-    switch (name) {
-      case 'clear': return sig([], voidType);
-      case 'keys': return sig([], iteratorOf(key));
-      case 'values': return sig([], iteratorOf(value));
-      case 'entries': return sig([], iteratorOf(pairOf(key, value)));
-      // (value, key, map) - the value FIRST, which is the order the language
-      // chose and the order a reader gets wrong. Typing it is most of the value
-      // of typing `forEach` at all.
-      case 'forEach': return sig([forEachCallback(value, key), anyType as TypeRecord], voidType, 1);
-      default: return null;
-    }
-  };
-
-  /**
-   * #sec-span-type: `Span.<T>` is a library nominal, so a receiver is
-   * recognised by its LibraryName. A window has the READ surface of an array
-   * and none of the operations that change a length or describe an allocation,
-   * because it owns no allocation and its length is fixed.
-   */
-  const spanElementOfReceiver = (r: TypeRecord | null): TypeRecord | null => {
-    if (!r || r.Kind !== 'nominal' || (r as { LibraryName?: string }).LibraryName !== 'Span') {
-      return null;
-    }
-    const args = (r as { Arguments?: readonly TypeRecord[] }).Arguments;
-    return args && args.length > 0 ? args[0] : { Kind: 'any' as const };
-  };
-
-  /** The stated length of a `Span.<T, N>` receiver, or ~undefined~ if unstated. */
-  const spanExtentOfReceiver = (r: TypeRecord | null): number | undefined => {
-    if (!r || r.Kind !== 'nominal' || (r as { LibraryName?: string }).LibraryName !== 'Span') {
-      return undefined;
-    }
-    const args = (r as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
-    const second = args && args.length > 1 ? args[1] : undefined;
-    return typeof second === 'number' ? second : undefined;
-  };
-
   /** Operations a window does not have: they grow, shrink, or name an allocation. */
   const spanForbiddenMembers = new Set([
     'capacity', 'reserve', 'shrinkToFit',
     'push', 'pop', 'shift', 'unshift', 'splice',
   ]);
-
-  /**
-   * `then`, `catch` and `finally` on a `Promise.<R, E>`.
-   *
-   * #table-promise-prototype-signatures. A handler's parameter is the type the
-   * receiver carries, and those positions are the only ones either type is
-   * read from, so `p.then((v) => { let s: string = v; })` on a `Promise.<uint8,
-   * Error>` is refused as the same shape on an array is.
-   *
-   * Every result rejects with `any`: a handler is a function, anything may
-   * throw, and "the reject type is never inferred". So a handled rejection does
-   * NOT narrow - a `never` there would claim a promise cannot reject when a
-   * throwing handler makes it reject - and `finally` widens for the same reason.
-   * `then` and `catch` answer alike because `p.then(f, g)` and
-   * `p.then(f).catch(g)` differ only in spelling.
-   */
-  const promiseMethodSignature = (name: string, resolution: TypeRecord, rejection: TypeRecord): Known => {
-    const anyType = { Kind: 'any' as const } as TypeRecord;
-    const shapes = (types: readonly TypeRecord[], optionalFrom: number): ParameterRecord[] => types.map((t, i) => parameter(t, { Optional: i >= optionalFrom }));
-    const handler = (takes: TypeRecord): TypeRecord => ({
-      Kind: 'function',
-      Signatures: [{ Parameters: [parameter(takes)], Return: anyType, Untyped: false }],
-    } as unknown as TypeRecord);
-    const promiseOf = (r: TypeRecord): TypeRecord => (libraryTypeRecord('Promise', [r, anyType]) ?? anyType) as TypeRecord;
-    // The handlers' RETURN types are independent, and neither is known from the
-    // receiver, so the result resolves with `any` rather than with a union this
-    // arm cannot compute. Naming a narrower type here would be a claim the
-    // signature cannot support - the same error `Promise.resolve`'s pinned `any`
-    // rejection was, one position over.
-    switch (name) {
-      case 'then':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([handler(resolution), handler(rejection)], 0), Return: promiseOf(anyType), Untyped: false }] } as unknown as Known;
-      case 'catch':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([handler(rejection)], 0), Return: promiseOf(anyType), Untyped: false }] } as unknown as Known;
-      case 'finally':
-        return { Kind: 'function', Signatures: [{ Parameters: shapes([{ Kind: 'function', Signatures: [{ Parameters: [], Return: anyType, Untyped: false }] } as unknown as TypeRecord], 0), Return: promiseOf(resolution), Untyped: false }] } as unknown as Known;
-      default:
-        return null;
-    }
-  };
 
   /**
    * README, "Weak References": the type argument of the parameter a weak
@@ -7939,26 +7070,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(shown), Value(libraryName), Value(held)) as ThrowCompletion;
     errors.push(completion.Value as ObjectValue);
   };
-
-  /**
-   * A bound argument's ordinal - `Bound.Closed` is 0 and `Bound.Open` is 1 -
-   * whether it reached the record as the ordinal itself or as a literal record
-   * carrying it, or null where the argument names no bound at all.
-   */
-  const boundOrdinalOf = (arg: TypeRecord | number | undefined): number | null => {
-    if (typeof arg === 'number') {
-      return arg;
-    }
-    const t = arg as { Kind?: string, Value?: unknown } | undefined;
-    if (t?.Kind === 'literal' && t.Value instanceof NumberValue) {
-      return R(t.Value);
-    }
-    return null;
-  };
-
-  /** The names #sec-ranges gives a range value; each carries its element first. */
-  const isRangeFamilyName = (name: string | undefined): boolean => name === 'Range'
-    || name === 'RangeFrom' || name === 'RangeTo' || name === 'RangeFull' || name === 'RangeBounds';
 
   // ---- the static type of an expression -----------------------------
 
@@ -8165,198 +7276,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       default:
         return false;
     }
-  };
-
-  /** The union of two known types, canonicalized so member order never shows. */
-  const joinTypes = (a: TypeRecord, b: TypeRecord): TypeRecord => (SameType(a, b)
-    ? a
-    : CanonicalizeType({ Kind: 'union', Members: [a, b] }));
-
-  /**
-   * Whether a literal type's value is falsy. The set is the language's: *false*,
-   * *undefined*, *null*, `0` and `-0` and NaN, `0n`, and the empty String. A
-   * TYPED number is the same question asked of the number it carries, since a
-   * `uint32` zero is falsy exactly as `0` is.
-   */
-  const isFalsyLiteralValue = (v: Value): boolean => {
-    if (v === Value.false || v === Value.undefined || v === Value.null) {
-      return true;
-    }
-    // A TYPED number carries the Number it was built from, and a `uint32` zero
-    // is falsy exactly as `0` is, so both spellings are unwrapped the same way.
-    const inner = (v as { value?: Value }).value ?? v;
-    if (typeof (inner as { numberValue?: () => number }).numberValue === 'function') {
-      const x = Number((inner as { numberValue(): number }).numberValue()); // eslint-disable-line @engine262/mathematical-value -- a truthiness test, not a mathematical value in the spec sense
-      return x === 0 || Number.isNaN(x);
-    }
-    if (inner instanceof BigIntValue) {
-      return R(inner) === 0n;
-    }
-    if (typeof (inner as { stringValue?: () => string }).stringValue === 'function') {
-      return (inner as { stringValue(): string }).stringValue() === '';
-    }
-    return false;
-  };
-
-  /**
-   * proposal-runtime-types #sec-static-type-of-an-expression: the part of _t_
-   * whose values are FALSY, which is what `a && b` yields when the left decides
-   * the result. A type whose values are all truthy contributes nothing, so
-   * `obj && f()` is just the type of `f()`.
-   *
-   * The parts are stated per KIND rather than per value: where a falsy value of
-   * a kind exists but the system cannot write its literal type - a `uint32`
-   * zero is a typed number, not a Number literal - the whole member stands in
-   * for it. That is the widening license #sec-inferred-result-type already
-   * grants ("an implementation may be imprecise about completion", in the
-   * widening direction only): a wider answer is sound here because it names
-   * more values than can occur, never fewer.
-   */
-  const falsyPartOf = (t: TypeRecord): TypeRecord | typeof empty => {
-    const members = t.Kind === 'union' ? (t as { Members: readonly TypeRecord[] }).Members : [t];
-    const kept: TypeRecord[] = [];
-    for (const m of members) {
-      switch (m.Kind) {
-        // Every object, array, tuple, and function value is truthy.
-        case 'object': case 'array': case 'tuple': case 'function': case 'nominal':
-          break;
-        case 'void':
-          break;
-        case 'literal':
-          // A literal type names ONE value, so it is falsy or it is not.
-          if (isFalsyLiteralValue((m as { Value: Value }).Value)) {
-            kept.push(m);
-          }
-          break;
-        case 'primitive': {
-          const name = (m as { Name: string }).Name;
-          if (name === 'undefined' || name === 'null') {
-            kept.push(m);
-            break;
-          }
-          if (name === 'boolean') {
-            kept.push({ Kind: 'literal', Value: Value.false, Base: m } as TypeRecord);
-            break;
-          }
-          if (name === 'symbol' || name === 'type') {
-            break;
-          }
-          // A numeric, string, or bigint member: `0`, `''`, `0n`, and NaN are
-          // reachable, and the member stands in for them.
-          kept.push(m);
-          break;
-        }
-        default:
-          kept.push(m);
-          break;
-      }
-    }
-    if (kept.length === 0) {
-      return empty;
-    }
-    return kept.length === 1 ? kept[0]! : CanonicalizeType({ Kind: 'union', Members: kept });
-  };
-
-  /** The part of _t_ whose values are TRUTHY, which `a || b` yields. */
-  const truthyPartOf = (t: TypeRecord): TypeRecord | typeof empty => {
-    const members = t.Kind === 'union' ? (t as { Members: readonly TypeRecord[] }).Members : [t];
-    const kept: TypeRecord[] = [];
-    for (const m of members) {
-      switch (m.Kind) {
-        case 'void':
-          break;
-        case 'literal':
-          if (!isFalsyLiteralValue((m as { Value: Value }).Value)) {
-            kept.push(m);
-          }
-          break;
-        case 'primitive': {
-          const name = (m as { Name: string }).Name;
-          // `undefined` and `null` have exactly one value each, and it is falsy,
-          // so neither survives a truthiness test - this is what makes
-          // `x || d` on an optional drop the absent arm.
-          if (name === 'undefined' || name === 'null') {
-            break;
-          }
-          if (name === 'boolean') {
-            kept.push({ Kind: 'literal', Value: Value.true, Base: m } as TypeRecord);
-            break;
-          }
-          kept.push(m);
-          break;
-        }
-        default:
-          kept.push(m);
-          break;
-      }
-    }
-    if (kept.length === 0) {
-      return empty;
-    }
-    return kept.length === 1 ? kept[0]! : CanonicalizeType({ Kind: 'union', Members: kept });
-  };
-
-  /**
-   * The Static Type of `a && b`, `a || b`, and `a ?? b`: the part of the left
-   * that SHORT-CIRCUITS, joined with the right. _typeOf_ is how an operand is
-   * typed, which is what lets the contextual form pass a position's type down
-   * to both operands while the plain form types them in isolation.
-   */
-  const logicalResultType = (node: ParseNode, typeOf: (n: ParseNode) => Known, contextual: Known = null): Known => {
-    let leftNode: ParseNode;
-    let rightNode: ParseNode;
-    if (node.type === 'CoalesceExpression') {
-      const co = node as ParseNode.CoalesceExpression;
-      leftNode = co.CoalesceExpressionHead as ParseNode;
-      rightNode = co.BitwiseORExpression as ParseNode;
-    } else {
-      const lg = node as unknown as {
-        LogicalANDExpression?: ParseNode, LogicalORExpression?: ParseNode, BitwiseORExpression?: ParseNode,
-      };
-      const isAnd = node.type === 'LogicalANDExpression';
-      leftNode = (isAnd ? lg.LogicalANDExpression : lg.LogicalORExpression) as ParseNode;
-      rightNode = (isAnd
-        ? lg.BitwiseORExpression
-        : (node as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression) as ParseNode;
-    }
-    const left = typeOf(leftNode);
-    const right = typeOf(rightNode);
-    if (!left || !right) {
-      return null;
-    }
-    // `a && b` yields the left where it is FALSY, `a || b` where it is TRUTHY,
-    // and `a ?? b` where it is NULLISH - the last being a membership question
-    // the narrowing operations already answer, the same split the `??`
-    // dead-test diagnostic reads. A part that cannot occur contributes nothing,
-    // which is what makes `s || 'anon'` a plain `string`, `x ?? 10` on an
-    // optional a plain `uint32`, and `obj && f()` the type of `f()`.
-    const kept = node.type === 'CoalesceExpression'
-      ? NarrowFrom(left, nullishType())
-      : (node.type === 'LogicalANDExpression' ? falsyPartOf(left) : truthyPartOf(left));
-    // Where the left ALWAYS short-circuits, the right is never evaluated and so
-    // contributes nothing: `undefined && f()` is `undefined`, not
-    // `undefined | uint32`. This is the dual of the case just below, where the
-    // left never short-circuits and contributes nothing itself; between them
-    // the two keep the type to the values the expression can actually produce.
-    const passedOver = node.type === 'CoalesceExpression'
-      ? NarrowTo(left, nullishType())
-      : (node.type === 'LogicalANDExpression' ? truthyPartOf(left) : falsyPartOf(left));
-    if (passedOver === empty && kept !== empty) {
-      return kept as TypeRecord;
-    }
-    // #sec-type-propagation-to-literals: a literal in a contextual position IS
-    // of that position's type where it fits. Elsewhere that is settled by the
-    // assignability check, which reads the literal and the target together; a
-    // literal INSIDE a union never meets the target that way, and `const c:
-    // uint32 = x || 10` would read as `a literal type of number | uint.<32>`
-    // and be refused at its own annotation. Adopting after the short-circuit
-    // split keeps the precision that makes `0 || 10` just the right operand.
-    const adopt = (t: TypeRecord): TypeRecord => (contextual && t.Kind === 'literal'
-      && (IsAssignable(t, contextual) || literalFitsNumericType(t, contextual))
-      ? contextual
-      : t);
-    const adoptedRight = adopt(right);
-    return kept === empty ? adoptedRight : joinTypes(adopt(kept as TypeRecord), adoptedRight);
   };
 
   /**
@@ -11128,29 +10047,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * Whether an index signature's KEY type admits this property name. A `string`
-   * signature admits every string key; a literal or union key type admits the
-   * names it names. Written against the key TYPE rather than testing a value,
-   * since this pass has a name and not a value to test.
-   */
-  const keyAdmittedBy = (key: string | SymbolValue, keyType: TypeRecord): boolean => {
-    if (typeof key !== 'string') {
-      return keyType.Kind === 'primitive' && keyType.Name === 'symbol';
-    }
-    if (keyType.Kind === 'primitive') {
-      return keyType.Name === 'string';
-    }
-    if (keyType.Kind === 'literal') {
-      const v = keyType.Value as { stringValue?(): string };
-      return typeof v?.stringValue === 'function' && v.stringValue() === key;
-    }
-    if (keyType.Kind === 'union') {
-      return keyType.Members.some((m) => keyAdmittedBy(key, m));
-    }
-    return false;
-  };
-
-  /**
    * An array literal at a TUPLE annotation — the ARITY half.
    *
    * The sibling of `checkArrayLiteralAgainst` below, which this pairing had no
@@ -12627,38 +11523,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * Whether a test sits where it decides a branch: the condition of `if`, `while`,
-   * `do`, or `for`, the test of a conditional expression, or inside a parenthesis
-   * or a `!` over one of those. The operands of `&&` and `||` guard in a weaker
-   * sense and the specification does not name them, so they are left out of this
-   * pass along with a test written as an ordinary Boolean value.
-   */
-  const guardsABranch = (node: ParseNode): boolean => {
-    let child: ParseNode = node;
-    let parent = (child as { parent?: ParseNode }).parent;
-    while (parent) {
-      switch (parent.type) {
-        case 'IfStatement':
-        case 'WhileStatement':
-        case 'DoWhileStatement':
-        case 'ConditionalExpression':
-          return (parent as unknown as Record<string, unknown>).Expression === child
-            || (parent as unknown as Record<string, unknown>).ShortCircuitExpression === child;
-        case 'ForStatement':
-          return (parent as unknown as Record<string, unknown>).Expression_b === child;
-        case 'ParenthesizedExpression':
-        case 'UnaryExpression':
-          child = parent;
-          parent = (parent as { parent?: ParseNode }).parent;
-          continue;
-        default:
-          return false;
-      }
-    }
-    return false;
-  };
-
-  /**
    * `sec-match-exhaustiveness`: does an unguarded clause pattern cover an atom?
    *
    * "An unguarded clause covers an atom _a_ when its pattern's PatternType _pt_
@@ -12818,178 +11682,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- control flow and completion ----------------------------------
 
   /**
-   * Whether _stmt_ can complete NORMALLY - that is, without returning or
-   * throwing.
-   *
-   * Distinct from `endsWithReturn` below, and
-   * deliberately not built on it: that helper is conservative in the direction
-   * ELISION wants, where a false negative merely keeps a check that was not
-   * needed. Here a false negative REJECTS A CORRECT PROGRAM, so the
-   * conservatism has to run the other way - when this cannot tell, it answers
-   * *true* ("can complete"), which withholds the error.
-   *
-   * Syntactic. It recognises the shapes a reader would call
-   * obviously total; anything else is assumed to complete.
-   */
-  const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean => {
-    if (!stmt) {
-      return true;
-    }
-    const n = stmt as ParseNode & Record<string, unknown>;
-    if (n.ExpressionBody !== undefined || n.AssignmentExpression !== undefined) {
-      return false;
-    }
-    switch (n.type) {
-      case 'ReturnStatement':
-      case 'ThrowStatement':
-        return false;
-      case 'FunctionBody':
-      case 'Block': {
-        // A function BODY carries `FunctionStatementList`, not `StatementList`,
-        // which is why `endsWithReturn` reads both. Missing it here made every
-        // body fall to `default` and answer "can complete", so the phase-1
-        // count named every annotated function rather than the incomplete ones.
-        const list = (n.FunctionStatementList
-          ?? n.StatementList
-          ?? (n.Block as { StatementList?: readonly ParseNode[] })?.StatementList) as readonly ParseNode[] | undefined;
-        if (!list || list.length === 0) {
-          return true;
-        }
-        // A block completes normally when its LAST reachable statement does.
-        return canCompleteNormally(list[list.length - 1]);
-      }
-      case 'IfStatement': {
-        const alt = n.Statement_b as ParseNode | undefined;
-        if (!alt) {
-          // No `else`: the test may be false, so control reaches the tail.
-          return true;
-        }
-        return canCompleteNormally(n.Statement_a as ParseNode)
-          || canCompleteNormally(alt);
-      }
-      case 'TryStatement': {
-        const block = n.Block as ParseNode | undefined;
-        const handler = (n.Catch as { Block?: ParseNode })?.Block;
-        const fin = (n.Finally as { Block?: ParseNode })?.Block ?? n.Finally as ParseNode | undefined;
-        // A `finally` that cannot complete decides the whole statement.
-        if (fin && !canCompleteNormally(fin)) {
-          return false;
-        }
-        if (handler) {
-          return canCompleteNormally(block) || canCompleteNormally(handler);
-        }
-        return canCompleteNormally(block);
-      }
-      case 'WhileStatement': {
-        // `while (true)` with no reachable `break` cannot complete. A `break`
-        // anywhere inside is enough to assume it can, which is the conservative
-        // reading.
-        const test = n.Expression as { type?: string, value?: unknown } | undefined;
-        const alwaysTrue = test?.type === 'BooleanLiteral' && test.value === true;
-        if (!alwaysTrue) {
-          return true;
-        }
-        return containsBreak(n.Statement as ParseNode);
-      }
-      case 'SwitchStatement': {
-        // A `switch` completes normally unless it has a `default` AND no clause
-        // completes normally AND no clause can `break` out. Without a `default`
-        // an unmatched value falls through, so the statement completes.
-        const cb = n.CaseBlock as {
-          CaseClauses_a?: readonly ParseNode[],
-          DefaultClause?: ParseNode,
-          CaseClauses_b?: readonly ParseNode[],
-        } | undefined;
-        if (!cb?.DefaultClause) {
-          return true;
-        }
-        const clauses = [
-          ...(cb.CaseClauses_a ?? []),
-          cb.DefaultClause,
-          ...(cb.CaseClauses_b ?? []),
-        ];
-        for (const c of clauses) {
-          const list = (c as { StatementList?: readonly ParseNode[] }).StatementList;
-          // An EMPTY clause falls through to the next one rather than
-          // completing, so it does not decide the statement.
-          if (!list || list.length === 0) {
-            continue;
-          }
-          if (canCompleteNormally(list[list.length - 1]!)) {
-            return true;
-          }
-          if (containsBreak(c as ParseNode)) {
-            return true;
-          }
-        }
-        return false;
-      }
-      default:
-        return true;
-    }
-  };
-
-  /** Whether a statement contains a `break` that could leave its enclosing loop. */
-  const containsBreak = (node: ParseNode | null | undefined): boolean => {
-    if (!node || typeof node !== 'object') {
-      return false;
-    }
-    const n = node as ParseNode & Record<string, unknown>;
-    if (n.type === 'BreakStatement') {
-      return true;
-    }
-    // Not descending into a nested function, whose `break` is not this loop's.
-    if (typeof n.type === 'string' && /Function|Arrow|Method|Class/.test(n.type)) {
-      return false;
-    }
-    for (const key of Object.keys(n)) {
-      if (key === 'parent' || key === 'location') {
-        continue;
-      }
-      const v = (n as Record<string, unknown>)[key];
-      if (Array.isArray(v)) {
-        if (v.some((x) => containsBreak(x as ParseNode))) {
-          return true;
-        }
-      } else if (v && typeof v === 'object' && containsBreak(v as ParseNode)) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  /**
-   * Whether a function body's straight-line exit is a `return` with a value.
-   *
-   * This is the second half of the return-boundary condition and the half that
-   * is easy to forget: a function whose every explicit return is proven can
-   * STILL fall off the end, and falling off the end hands back *undefined*,
-   * which no numeric or object annotation admits. Requiring the body to end in
-   * a `return` makes that path impossible without a control-flow graph.
-   *
-   * It is deliberately syntactic and therefore conservative. A body ending in
-   * `if (c) return a; else return b;` is not elided even though both arms
-   * return, and a CONCISE arrow body is not elided at all - it has no
-   * ReturnStatement node to prove. Both are misses rather than errors: the
-   * boundary runs and the program is correct, which is the right direction to
-   * be wrong in when the alternative is skipping a check that was needed.
-   */
-  const endsWithReturn = (body: ParseNode | readonly ParseNode[] | null | undefined): boolean => {
-    if (!body) {
-      return false;
-    }
-    const list = Array.isArray(body)
-      ? body as readonly ParseNode[]
-      : (body as { FunctionStatementList?: readonly ParseNode[], StatementList?: readonly ParseNode[] }).FunctionStatementList
-        ?? (body as { StatementList?: readonly ParseNode[] }).StatementList;
-    if (!list || list.length === 0) {
-      return false;
-    }
-    const last = list[list.length - 1]!;
-    return last.type === 'ReturnStatement' && !!(last as { Expression?: ParseNode | null }).Expression;
-  };
-
-  /**
    * The type of a statement list's completion value.
    *
    * Per #sec-completiontypeof: a union over the TAILS, with divergence removing
@@ -13130,46 +11822,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } else if (child && typeof child === 'object' && 'type' in (child as object)) {
         collectGeneratorTypes(child as ParseNode, yielded, returned);
       }
-    }
-  };
-
-  /**
-   * proposal-runtime-types (README, explicit resource management): a `using`
-   * declaration's declared type must be one whose values can carry a disposal
-   * method, since the declaration promises to dispose what it binds. A value type
-   * and `void` never can, so annotating a resource with one is a mistake the
-   * checker reports; `never` is the empty union and falls out of the union arm. `null` and `undefined` ARE admitted, because the
-   * declaration permits them at runtime and registers nothing.
-   *
-   * This is the direction of the README's rule rather than its exact form. The
-   * precise statement is that the declared type must include `[Symbol.dispose]`,
-   * which cannot be checked yet because the type grammar has no symbol-keyed
-   * member: `{ [Symbol.dispose](): void }` is rejected with "a computed member name
-   * is not supported yet", so no type can declare the method to be looked for.
-   * Rejecting every object type instead would make the annotation unusable, so the
-   * checker catches what it provably can and the exact membership check waits on
-   * that grammar.
-   */
-  const canCarryDisposal = (t: TypeRecord): boolean => {
-    switch (t.Kind) {
-      case 'any':
-        return true;
-      case 'union':
-        return (t as { Members: readonly TypeRecord[] }).Members.some(canCarryDisposal);
-      case 'literal': {
-        const v = (t as { Value: unknown }).Value;
-        return v === Value.null || v === Value.undefined;
-      }
-      case 'primitive':
-        // `null` and `undefined` are primitive types named for their one value
-        // (#sec-null-and-undefined-types), and a `using` declaration accepts
-        // either - the disposal is simply skipped. They were literal types
-        // before, and the case above answered for them.
-        return (t as { Name?: string }).Name === 'null' || (t as { Name?: string }).Name === 'undefined';
-      case 'void':
-        return false;
-      default:
-        return true;
     }
   };
 

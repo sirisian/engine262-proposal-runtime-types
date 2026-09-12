@@ -451,6 +451,13 @@ export interface ContractFact {
   readonly LowerBound?: TypeRecord;
 }
 
+/**
+ * A Type Record, or *null* where the checker knows none. The gradual rule makes
+ * the two different: a judgment is made only where both sides are known, so an
+ * absent type is a reason to stay silent rather than a type to compare.
+ */
+export type Known = TypeRecord | null;
+
 export type TypeRecord =
   | { readonly Kind: 'any' }
   /**
