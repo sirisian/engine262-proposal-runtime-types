@@ -4453,6 +4453,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * the annotation path already uses for one, so `new G(4)` and `let g: G.<4>`
    * compare equal.
    */
+  /**
+   * #sec-type-references: a declaration taking _N_ parameters is applied to at
+   * most _N_ arguments, and to at least as many as precede its first default.
+   *
+   * The run time already judges this - `f.<uint8, string>(...)` on a
+   * `function f<T>` reports "the call takes 2 type arguments; T expects one
+   * taking 1", and a construction reports the same against the class - and both
+   * sides are written down wherever the arguments are, so the judgment belongs
+   * here as well. Shared by the call and the construction so the two cannot
+   * drift.
+   *
+   * A PACK takes any number, so a variadic parameter leaves the declaration no
+   * fixed arity to compare against and the count is not judged. A NAMED argument
+   * supplies a parameter by name, so its position says nothing about how many
+   * were supplied; `orderTypeArguments` reports a mistake there. A VALUE
+   * parameter counts like any other - what distinguishes it is what an argument
+   * may BE, which the constraint rules decide.
+   */
+  const requireTypeArgumentArity = (
+    writtenArgs: readonly ParseNode[],
+    params: readonly { Name?: string, Variadic?: boolean, DefaultNode?: ParseNode | null }[],
+    subject: string,
+  ) => {
+    if (params.length === 0) {
+      return;
+    }
+    if (params.some((p) => p.Variadic === true)
+      || writtenArgs.some((a) => (a as { type?: string }).type === 'NamedTypeArgument')) {
+      return;
+    }
+    const firstDefaulted = params.findIndex((p) => p.DefaultNode);
+    const least = firstDefaulted === -1 ? params.length : firstDefaulted;
+    if (writtenArgs.length < least || writtenArgs.length > params.length) {
+      const completion = Throw.StaticTypeError(
+        '$1 takes $2 type arguments; $3 expects one taking $4',
+        Value(subject), Value(String(writtenArgs.length)),
+        Value(params[0]!.Name ?? 'the declaration'), Value(String(params.length)),
+      ) as ThrowCompletion;
+      errors.push(completion.Value as ObjectValue);
+    }
+  };
+
   const constructionArguments = (node: ParseNode, declared: Known): readonly (TypeRecord | number)[] | null => {
     if (!declared || declared.Kind !== 'nominal') {
       return null;
@@ -14657,6 +14699,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // this check.
           const positional = params.every((p) => (p as unknown as { Variadic?: boolean }).Variadic !== true)
             && writtenArgs.every((a) => (a as { type?: string }).type !== 'NamedTypeArgument');
+
+          requireTypeArgumentArity(writtenArgs, params, 'the call');
           writtenArgs.forEach((argNode, i) => {
             if (!positional) {
               return;
@@ -15006,6 +15050,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'NewExpression': {
         const ne = n as unknown as { MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
         const target = ne.MemberExpression;
+        // A CONSTRUCTION's written type arguments are counted against the
+        // class's parameters, as a call's are against the function's.
+        if (target && (target as { type?: string }).type === 'TypeArgumentsExpression') {
+          const inner = (target as unknown as { Expression?: ParseNode }).Expression;
+          const writtenArgs = (target as unknown as {
+            TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
+          }).TypeArguments?.TypeArgumentList ?? [];
+          const named = inner && (inner as { type?: string }).type === 'IdentifierReference'
+            ? classTypeOf((inner as unknown as { name: string }).name)
+            : null;
+          const classDecl = named && named.Kind === 'nominal'
+            ? (named as unknown as { Declaration?: ParseNode }).Declaration
+            : null;
+          const declaredParams = (classDecl as unknown as {
+            TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null,
+          } | null)?.TypeParameters?.TypeParameterList ?? [];
+          if (declaredParams.length > 0) {
+            requireTypeArgumentArity(writtenArgs, typeParameterRecordsOf(declaredParams), (inner as unknown as { name: string }).name);
+          }
+        }
         if (target && target.type === 'IdentifierReference' && Array.isArray(ne.Arguments)) {
           const instance = classTypeOf((target as { name: string }).name);
           const decl = instance && instance.Kind === 'nominal'
