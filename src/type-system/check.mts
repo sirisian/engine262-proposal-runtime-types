@@ -14063,12 +14063,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // at its declaration, so #sec-type-errors makes the judgment determinable.
       //
       // Deliberately narrow, for the reason callability is: an ~object~ or a
-      // ~nominal~ may carry `Symbol.iterator`, and a computed symbol member is
-      // exactly what this checker models least well - `a[Symbol.iterator]` still
-      // reads as an array's ELEMENT type - so "no iterator in the structure" is
-      // not a question worth asking yet. A range, a generator, a Map, a Set and
-      // a user class declaring the method all reach here as nominals and are
-      // untouched.
+      // ~nominal~ may carry `Symbol.iterator`, and the structures here do not
+      // record it, so "no iterator in the structure" would refuse a type that
+      // has one. A range, a generator, a Map, a Set and a user class declaring
+      // the method all reach here as nominals and are untouched.
       if (f.AssignmentExpression) {
         const over = staticType(f.AssignmentExpression);
         const overBase = over && over.Kind === 'literal'
@@ -14993,6 +14991,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the same annotation on a plain `let`. The written annotation is the
         // binding's declared type, taken unwidened for the reason a plain
         // annotation is: it is declared, not inferred from a value.
+        // AN ARRAY PATTERN ITERATES ITS INITIALIZER, so a value of a primitive
+        // type - `string` excepted, which iterates its characters - cannot fill
+        // one. `let [x] = n` for a `uint8` n was the run time's "1 (typed) is
+        // not iterable", the same judgment `for`-`of` and a spread already make
+        // at this type; only the syntax differs, and an OBJECT pattern reads
+        // properties rather than iterating and is untouched.
+        {
+          const pattern = (n as { BindingPattern?: ParseNode | null }).BindingPattern;
+          if (pattern && (pattern as { type?: string }).type === 'ArrayBindingPattern' && n.Initializer) {
+            const from = staticType(n.Initializer);
+            const fromBase = from && from.Kind === 'literal'
+              ? ((from as { Base?: TypeRecord }).Base ?? null)
+              : from;
+            if (fromBase && fromBase.Kind === 'primitive'
+              && (fromBase as { Name?: string }).Name !== 'string') {
+              const completion = Throw.StaticTypeError(
+                'a value of $1 is not iterable',
+                Value(displayType(from as TypeRecord)),
+              ) as ThrowCompletion;
+              errors.push(completion.Value as ObjectValue);
+            }
+          }
+        }
         declarePatternAnnotations((n as { BindingPattern?: ParseNode | null }).BindingPattern);
         walk(n.Initializer);
         return;

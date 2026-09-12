@@ -8,9 +8,9 @@ import { expectThrown, ok } from '../harness.mts';
  * type is written at its declaration, so the judgment is determinable.
  *
  * Deliberately narrow, for the reason callability is: an ~object~ or a
- * ~nominal~ may carry `Symbol.iterator`, and a computed symbol member is what
- * this checker models least well, so "no iterator in the structure" is not a
- * question worth asking yet. Every case is in a function that is never called.
+ * ~nominal~ may carry `Symbol.iterator`, and the structures here do not record
+ * it, so "no iterator in the structure" would refuse a type that has one. Every
+ * case is in a function that is never called.
  */
 
 const dead = (source: string) => `function __never() { ${source} }`;
@@ -50,4 +50,21 @@ test('what the rule does not reach', () => {
   // OBJECT spread and destructuring are not iteration and are untouched.
   expect(ok(dead('let o: { a: uint8 } = { a: uint8(1) }; let p = { ...o };'))).toBe(true);
   expect(ok(dead('let o: { a: uint8 } = { a: uint8(1) }; let { a } = o;'))).toBe(true);
+});
+
+test('an ARRAY PATTERN iterates its initializer', () => {
+  // The same judgment at a third syntax: a pattern fills its elements by
+  // iterating, so a value that cannot be iterated cannot fill one.
+  expectThrown(dead('let n: uint8 = uint8(1); let [x] = n;'), 'is not iterable');
+  expectThrown(dead('let b: boolean = true; let [x] = b;'), 'is not iterable');
+  expectThrown(dead('let n: uint8 = uint8(1); const [x, y] = n;'), 'is not iterable');
+
+  // An ARRAY, a string and an array literal all iterate.
+  expect(ok(dead('let a: [].<uint8> = []; let [x] = a;'))).toBe(true);
+  expect(ok(dead('let s: string = "x"; let [x] = s;'))).toBe(true);
+  expect(ok(dead('let [x] = [1, 2];'))).toBe(true);
+  // An OBJECT pattern reads properties rather than iterating.
+  expect(ok(dead('let o: { x: uint8 } = { x: uint8(1) }; let { x } = o;'))).toBe(true);
+  // A destructured PARAMETER is bound by the call, not by an initializer here.
+  expect(ok(dead('function f([x]: [].<uint8>) { }'))).toBe(true);
 });
