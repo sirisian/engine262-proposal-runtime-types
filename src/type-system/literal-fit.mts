@@ -30,7 +30,7 @@ export const eraseMetadata = (t: TypeRecord, seen: Set<TypeRecord> = new Set()):
   // recursed through [[Members]] with no guard until the HOST stack gave out.
   //
   // A RangeError is not a throw completion, so nothing downstream could catch
-  // or report it - and it fired at CHECK time, so `if (false) { â€¦ }` around
+  // or report it - and it fired at CHECK time, so `if (false) { … }` around
   // the literal did not avoid it either.
   //
   // Returning `t` on a revisit leaves the cycle in place for the comparison
