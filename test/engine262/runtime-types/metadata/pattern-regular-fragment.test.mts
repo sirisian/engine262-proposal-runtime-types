@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent, InspectPattern } from '#self';
 
 /**
- * #sec-metadata, the tier test for R18's decision procedure: "pattern pairs free
+ * #sec-primitive-metadata, the tier test for R18's decision procedure: "pattern pairs free
  * of backreferences and lookaround, within a fixed automaton size, get the exact
  * language-inclusion answer, and pairs beyond the bound get the syntactic one.
  * The tier is decided by syntactic size and NEVER by remaining fuel, so the

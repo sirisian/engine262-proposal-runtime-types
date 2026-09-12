@@ -226,7 +226,7 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   // reached only through the builder can be inferred. The decorator is
   // `Reflect.declareInverse` applied at the declaration; the row checks that
   // the export IS that decorator and that applying it registers the inverse.
-  // #sec-metadata's StringPattern builders. Withheld while the `pattern` claim
+  // #sec-primitive-metadata's StringPattern builders. Withheld while the `pattern` claim
   // looked provisional; the key is claimed by a shipped intrinsic either way, so
   // withholding preserved nothing. Validation is live, which is what they use.
   ['suffixed', 'typeof std.suffixed === "function" && std.suffixed.length === 1', ''],

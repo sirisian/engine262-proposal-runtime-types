@@ -158,7 +158,7 @@ function thisRational(thisValue: Value): RationalObject | undefined {
   return isRationalObject(thisValue) ? thisValue : undefined;
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-type */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
 function* RationalProto_numerator(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRational(thisValue);
   if (!self) {
@@ -166,7 +166,7 @@ function* RationalProto_numerator(_args: Arguments, { thisValue }: FunctionCallC
   }
   return F(Number(self.RationalNumerator));
 }
-/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-type */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
 function* RationalProto_denominator(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRational(thisValue);
   if (!self) {
@@ -174,7 +174,7 @@ function* RationalProto_denominator(_args: Arguments, { thisValue }: FunctionCal
   }
   return F(Number(self.RationalDenominator));
 }
-/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-type */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
 function* RationalProto_reciprocal(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRational(thisValue);
   if (!self) {
@@ -185,7 +185,7 @@ function* RationalProto_reciprocal(_args: Arguments, { thisValue }: FunctionCall
   }
   return CreateRationalValue(self.RationalDenominator, self.RationalNumerator, surroundingAgent.currentRealmRecord);
 }
-/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-type */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
 function* RationalProto_toString(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRational(thisValue);
   if (!self) {

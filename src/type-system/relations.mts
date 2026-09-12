@@ -893,7 +893,7 @@ function licensesLowerBound(
  * "1. If _b_.[[Return]] is ~none~, return *true*. 1. If _b_.[[Return]].[[Kind]]
  * is ~void~, return *true*." The clause gives the reason in the same place - "a
  * caller that has declared it will not use the result" - and
- * #sec-the-void-type puts it as `void` constraining "the CONSUMER of the result
+ * #sec-void-type puts it as `void` constraining "the CONSUMER of the result
  * and not the value leaving the function".
  *
  * Without the ~void~ half, `() => string` was refused at `() => void`: every
@@ -1207,7 +1207,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     if (sourceAlias && t.Kind === 'object') {
       return IsSubtype(sourceAlias, t, next);
     }
-    // #sec-interfaces: an interface "may also type an object, an array, or a
+    // #sec-interfaces-semantics: an interface "may also type an object, an array, or a
     // function structurally", and #sec-object-types: an interface of call
     // signatures denotes a ~function~ record. So the structural form is
     // consulted for a ~function~ source or target where the form IS a function,
@@ -1608,12 +1608,12 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
    * `s.IndexSignatures`, so `{ }` and `{ x: int32 }` were not subtypes of
    * `{ [k: string]: int32 }` while `{ x: int32, [k: string]: int32 }` was.
    *
-   * #sec-type-members gives the meaning the rule follows: `{ [key: string]:
+   * #sec-type-membership gives the meaning the rule follows: `{ [key: string]:
    * uint32 }` is "the type whose remaining string-keyed properties, beyond those
    * declared, are `uint32`". A type whose every such property fits is therefore
    * one of its values, which is what the LITERAL path and the value boundary
    * both already say - `checkObjectLiteralAgainst` consults `keyAdmittedBy`, and
-   * #sec-value-boundary crosses an admitted property "against that element's
+   * #sec-the-boundary-check crosses an admitted property "against that element's
    * value type". Only this relation disagreed, so
    * `let o: { a: uint8 } = ...; f(o)` was refused at a
    * `{ [key: string]: any }` parameter while the same value written INLINE was
@@ -2201,7 +2201,7 @@ export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
   if (t.Kind === 'union') {
     return t.Members.every((m) => AreDisjoint(s, m));
   }
-  // ~void~ is the return type "no binding may hold" (#sec-undefined-and-void),
+  // ~void~ is the return type "no binding may hold" (#sec-void-type),
   // so it shares values with nothing but itself.
   if (s.Kind === 'void' || t.Kind === 'void') {
     return s.Kind !== t.Kind;

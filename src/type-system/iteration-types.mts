@@ -213,7 +213,7 @@ function iteratorResult(T: TypeRecord, R: TypeRecord): TypeRecord {
  */
 /**
  * The members of these interfaces are METHODS, and a method is an OUTPUT
- * position - #sec-variance-annotations groups "a method return or a `readonly`
+ * position - #sec-generic-variance groups "a method return or a `readonly`
  * field" together as exactly that. So they are marked readonly, which is what
  * makes #sec-isobjectsubtype compare them by IsSubtype and let function
  * subtyping decide their variance, rather than by the invariance that clause

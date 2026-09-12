@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 // ---------------------------------------------------------------------------
 // `new.target` HAS THE ~any~ TYPE, DELIBERATELY.
 //
-// `#sec-static-type`'s table says so, and the reason is not that nobody got to
+// `#sec-static-type-of-an-expression`'s table says so, and the reason is not that nobody got to
 // it. Its value is a constructor or *undefined*, and the constructor is NOT
 // bounded by the enclosing function - `Reflect.construct(t, a, newTarget)`
 // supplies an arbitrary one - so a type naming the enclosing class or a subclass

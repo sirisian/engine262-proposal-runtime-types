@@ -80,7 +80,7 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
  * reason the `never` Type Object does: a Type Object needs that prototype.
  */
 /**
- * `subtype(a, b)` - #sec-metadata: the judgment "holds only of patterns whose
+ * `subtype(a, b)` - #sec-primitive-metadata: the judgment "holds only of patterns whose
  * `source` and `flags` are identical, which structural equivalence already makes
  * one type, so the floor is reflexivity and the conservatism is intentional."
  *
@@ -99,7 +99,7 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
 /**
  * The size bound for the exact tier, summed over both patterns.
  *
- * #sec-metadata leaves it open: "the size constant is among the design's open
+ * #sec-primitive-metadata leaves it open: "the size constant is among the design's open
  * budget numbers". Chosen by measuring what real patterns cost, in node counts
  * under this construction:
  *
@@ -145,7 +145,7 @@ function* StringPattern_subtype([a = Value.undefined, b = Value.undefined]: Argu
     // one type.
     return Value.true;
   }
-  // #sec-metadata's sanctioned sharpening: "pattern pairs free of backreferences
+  // #sec-primitive-metadata's sanctioned sharpening: "pattern pairs free of backreferences
   // and lookaround, within a fixed automaton size, get the exact
   // language-inclusion answer, and pairs beyond the bound get the syntactic one.
   // The tier is decided by syntactic size and never by remaining fuel."

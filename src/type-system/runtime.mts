@@ -5312,7 +5312,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // opposite and is left unmarked, which is the distinction the syntax
           // draws.
           // A method's OWN type parameters are in scope across its signature and
-          // nowhere else. #sec-type-members:
+          // nowhere else. #sec-type-membership:
           // `MethodSignature : TypeParameters? '(' … ')' TypeAnnotation?`, and
           // `TypeMember` is the production an object type and an interface body
           // SHARE - so `{ m<T>(v: T): T }` is as grammatical as the interface

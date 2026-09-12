@@ -5,7 +5,7 @@ import {
 import { evaluated } from '../harness.mts';
 
 /**
- * R18's decision procedure, from #sec-metadata: "pattern pairs free of
+ * R18's decision procedure, from #sec-primitive-metadata: "pattern pairs free of
  * backreferences and lookaround, within a fixed automaton size, get the exact
  * language-inclusion answer."
  *

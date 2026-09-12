@@ -715,7 +715,7 @@ test('ref runtime: the `for (const ref p of a)` form binds each element by refer
 // ---------------------------------------------------------------------------
 // A WRITE THROUGH A REF BINDING IS CHECKED AGAINST THE REFERENT'S TYPE.
 //
-// `#sec-ref-bindings`: "A read of b reads through to the location ... `b = v`
+// `#sec-reference-bindings`: "A read of b reads through to the location ... `b = v`
 // writes v to the location", and an annotation on a `ref` binding "is checked
 // against the referent without conversion, as for a `ref` parameter". So a
 // write through the alias meets the same boundary the direct write meets.
@@ -771,7 +771,7 @@ test('a ref binding has the Static Type of the location it aliases', () => {
 });
 
 test('a rebinding must be to a location of the binding\'s type', () => {
-  // `#sec-ref-bindings`: "b is redirected to the location e denotes", and a
+  // `#sec-reference-bindings`: "b is redirected to the location e denotes", and a
   // binding's type is fixed at its declaration - re-typing it at each rebinding
   // would make its type depend on the control flow that reached it, which no
   // other binding here does. The checker had no arm for this statement, which

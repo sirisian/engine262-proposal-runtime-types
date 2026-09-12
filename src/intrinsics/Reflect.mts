@@ -664,7 +664,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       }
       // SnapshotMetadataValue, not a second walk of the same shape. It is the
       // producer of the canonical metadata form the declaration path uses, and
-      // it knows the LEAVES: #sec-metadata says the `StringPattern` meta type
+      // it knows the LEAVES: #sec-primitive-metadata says the `StringPattern` meta type
       // "carries a pattern as metadata, a source and flags rather than a RegExp
       // object", and a range likewise. Walked as an ordinary object instead, a
       // RegExp flattened to its own properties, so
@@ -695,7 +695,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
 }
 
 /**
- * proposal-runtime-types #sec-getreflection: build the reflection node object
+ * proposal-runtime-types #sec-reflect-getreflection: build the reflection node object
  * that describes a Type Record. The node has a `kind` naming the record's Kind
  * and the further properties of the node-shape table; every property that
  * denotes a type holds a Type Object, so a walker recurses by reflecting it in
@@ -998,7 +998,7 @@ function Reflect_getMetadata() {
 }
 
 function Reflect_getReflection([type = Value.undefined]: Arguments) {
-  // proposal-runtime-types #sec-getreflection (the Reflect.Type context).
+  // proposal-runtime-types #sec-reflect-getreflection (the Reflect.Type context).
   //
   // A class DENOTES its type through its constructor - the design's "a class's
   // type object is its constructor" - but the constructor cannot carry

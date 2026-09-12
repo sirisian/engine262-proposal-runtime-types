@@ -128,7 +128,7 @@ function reachedEnd(value: number | bigint, end: number | bigint | undefined, st
   return inclusive ? value < end : value <= end;
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeIteratorPrototype_next(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = thisValue;
   if (!(O instanceof ObjectValue) || !('IteratedIndex' in O)) {
@@ -153,7 +153,7 @@ function thisRange(thisValue: Value): RangeObject | undefined {
   return isRangeObject(thisValue) ? thisValue : undefined;
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_startGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -162,7 +162,7 @@ function* RangeProto_startGetter(_args: Arguments, { thisValue }: FunctionCallCo
   return self.RangeStart ?? Value.undefined;
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_endGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -173,7 +173,7 @@ function* RangeProto_endGetter(_args: Arguments, { thisValue }: FunctionCallCont
 
 // The length of a bounded integer range is the count of its members; a range
 // with an unbounded or non-integer endpoint has no finite length here.
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -220,7 +220,7 @@ function* RangeProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallC
   return F(span > 0 ? span : 0);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_isEmptyGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -242,7 +242,7 @@ function* RangeProto_isEmptyGetter(_args: Arguments, { thisValue }: FunctionCall
 
 // A range is full when it constrains nothing, which is exactly the shape with
 // neither endpoint.
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -299,7 +299,7 @@ function boundMember(bound: RangeBound | undefined): Value {
   return bound === undefined ? Value.undefined : boundValue(bound === 'open' ? 'Open' : 'Closed');
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_startBoundGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -308,7 +308,7 @@ function* RangeProto_startBoundGetter(_args: Arguments, { thisValue }: FunctionC
   return boundMember(self.RangeStartBound);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_endBoundGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -319,7 +319,7 @@ function* RangeProto_endBoundGetter(_args: Arguments, { thisValue }: FunctionCal
 
 // Derived from the two bounds, never stored. Only a two-endpoint range has one of
 // the four interval names; a shape missing an endpoint has no pair to name.
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_intervalGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -364,7 +364,7 @@ function* orderedAtMost(a: Value, b: Value): PlainEvaluator<boolean> {
   return !greater;
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -438,7 +438,7 @@ function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue 
   return Value.true;
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_intersect([other = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -450,7 +450,7 @@ function* RangeProto_intersect([other = Value.undefined]: Arguments, { thisValue
   return rangeIntersect(self, other, surroundingAgent.currentRealmRecord);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_scale([factor = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -545,47 +545,47 @@ function* delegateToIterator(name: string, args: Arguments, thisValue: Value): V
   return Q(yield* Call(fn, it, args));
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_map(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('map', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_filter(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('filter', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_flatMap(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('flatMap', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_reduce(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('reduce', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_toArray(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('toArray', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_forEach(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('forEach', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_some(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('some', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_every(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('every', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_find(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* delegateToIterator('find', args, thisValue);
 }
@@ -652,12 +652,12 @@ function* takeOrDrop(which: 'take' | 'drop', args: Arguments, thisValue: Value):
   );
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_take(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* takeOrDrop('take', args, thisValue);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_drop(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return yield* takeOrDrop('drop', args, thisValue);
 }
@@ -679,7 +679,7 @@ function* RangeProto_iterator(_args: Arguments, { thisValue }: FunctionCallConte
 // order, which is a step of -1 from the last member rather than a range with its
 // endpoints exchanged - exchanging them would give an empty range by the rule
 // above, which is precisely the mistake the rule exists to prevent.
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_reverse(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
@@ -712,7 +712,7 @@ function* RangeProto_reverse(_args: Arguments, { thisValue }: FunctionCallContex
   return CreateRangeIterator(first, start, -1, undefined, stopBound, surroundingAgent.currentRealmRecord);
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-range-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_step([by = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {

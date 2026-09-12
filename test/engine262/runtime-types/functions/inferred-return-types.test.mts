@@ -348,7 +348,7 @@ test('assignability reads the effective return type', () => {
 });
 
 test('a generic call is typed where its return is concrete', () => {
-  // #sec-generic-functions. A generic call had no Static Type at all, because
+  // #sec-generics. A generic call had no Static Type at all, because
   // the CALLEE `g.<uint8>` - a TypeArgumentsExpression - had none, so nothing
   // downstream could be checked however completely the function was annotated.
   expectEarly('function f(): uint32 { return 5; } function g<T>(a: T) { return f(); } const s: string = g.<uint8>(1);', 'uint.<32>');
@@ -356,7 +356,7 @@ test('a generic call is typed where its return is concrete', () => {
 });
 
 test('a return that names a type parameter is bound by the call', () => {
-  // #sec-generic-functions. `T` now denotes the parameter its declaration binds
+  // #sec-generics. `T` now denotes the parameter its declaration binds
   // — for the whole signature and body — and a call that supplies type
   // arguments substitutes them, so `first.<uint32>([1])` is a `uint32`.
   expectEarly('function first<T>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');

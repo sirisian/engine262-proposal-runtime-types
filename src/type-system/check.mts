@@ -2309,7 +2309,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *
    * The scope is pushed BEFORE the constraints resolve and filled in order,
    * because a constraint may read an earlier parameter - `<T, K: keyof T>` is
-   * the ordinary case - and `#sec-generic-functions` evaluates them in
+   * the ordinary case - and `#sec-generics` evaluates them in
    * declaration order for that reason. A parameter is entered with a null
    * constraint before its OWN constraint resolves, so a self-reference
    * terminates rather than recurring.
@@ -3524,7 +3524,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }],
           } as unknown as TypeRecord,
           optional: tm.Optional === true,
-          // A METHOD is an OUTPUT position, which #sec-variance-annotations says
+          // A METHOD is an OUTPUT position, which #sec-generic-variance says
           // in as many words: "a covariant parameter is well-formed only where
           // it appears in output positions of the declaration, A METHOD RETURN
           // OR A `readonly` FIELD". So a method member is compared the way a
@@ -5695,7 +5695,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return userClass;
         }
         const name = node.TypeName.IdentifierReference.name;
-        // #sec-generic-functions: a name a generic declaration BINDS denotes
+        // #sec-generics: a name a generic declaration BINDS denotes
         // that type parameter for the whole of the declaration - its parameter
         // annotations, its return annotation, and its body - so `function
         // first<T>(): T {}` has a return type to read and a call of it is
@@ -6250,7 +6250,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }).MethodSignature;
           if (asMethod) {
             // A method's OWN type parameters are in scope across its signature
-            // and nowhere else. #sec-type-members gives them to the
+            // and nowhere else. #sec-type-membership gives them to the
             // signature - `MethodSignature : TypeParameters? '(' … ')'
             // TypeAnnotation?` - and `TypeMember` is the production an object
             // type and an interface body SHARE, so `{ m<T>(v: T): T }` is as
@@ -6301,7 +6301,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord }] } as unknown as TypeRecord,
               optional: !!(member as unknown as { Optional?: boolean }).Optional,
               // `readonly: true`, as the INTERFACE path sets it for a method and
-              // for the reason it records. #sec-variance-annotations: "a
+              // for the reason it records. #sec-generic-variance: "a
               // covariant parameter is well-formed only where it appears in
               // output positions of the declaration, a METHOD RETURN or a
               // `readonly` field" - so a method is compared by IsSubtype, which
@@ -7820,7 +7820,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // attempt at this reject correct programs: the endpoints' base is `number`,
     // so `let r: ClosedOpenRange.<uint8> = 0..<10` failed as
     // "ClosedOpenRange.<number> is not assignable to ClosedOpenRange.<uint8>".
-    // proposal-runtime-types #sec-type-propagation-to-literals: `&&`, `||`, and
+    // proposal-runtime-types #sec-literal-propagation: `&&`, `||`, and
     // `??` produce one of their OPERANDS, so a contextual type applies to the
     // operands rather than to the operator. `const c: uint32 = x || 10` means
     // the `10` is a `uint32`, the same as `const c: uint32 = 10` does; typing
@@ -7849,7 +7849,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!a || !b) {
         return null;
       }
-      // #sec-type-propagation-to-literals, as for a short-circuit operand: a
+      // #sec-literal-propagation, as for a short-circuit operand: a
       // literal arm IS of the position's type where it fits, and a literal
       // inside the joined union would otherwise never meet the target.
       const adopt = (t: TypeRecord): TypeRecord => (contextual && t.Kind === 'literal'
@@ -7998,7 +7998,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // narrow` has a source type of its own, is assignable, and is elided as
       // before, so a store through the wide view still reaches the narrow
       // array's storage and is checked against its element type
-      // (#sec-array-types).
+      // (#sec-array-and-tuple-types).
       return null;
     }
     if (inner && inner.type === 'ObjectLiteral' && contextual) {
@@ -9117,7 +9117,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const only = callee.Signatures[0] as {
             Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameters?: readonly TypeParameterRecord[],
           };
-          // #sec-generic-functions: a call that supplies type arguments binds
+          // #sec-generics: a call that supplies type arguments binds
           // them to the signature's type parameters, and the return type is
           // read with that binding applied. Without this a generic call had no
           // Static Type at all, however completely it was annotated.
@@ -12542,7 +12542,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /**
    * Whether a TYPE has exactly one value: a ~literal~, or the ~primitive~
-   * `null` or `undefined` (#sec-the-null-and-undefined-types gives those two
+   * `null` or `undefined` (#sec-null-and-undefined-types gives those two
    * [[Kind]]: ~primitive~). Such a type "knows its type perfectly well and
    * still says nothing a program annotated", so a contribution of it is
    * unanchored - see `derivesFromDeclaration`, which reads this first.
@@ -13569,7 +13569,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         typeParameterScopes.pop();
       }
       const signature: { Parameters: unknown, Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[] } = { Parameters, Return: declared, Untyped, ReturnWasWritten: returnWasWritten } as never;
-      // #sec-generic-functions: the type parameters a call binds with its
+      // #sec-generics: the type parameters a call binds with its
       // arguments, as RECORDS - name, kind, variance, arity, and the constraint and
       // default nodes - because a call site needs them to order named
       // arguments and substitute into the return type, and the declaration
@@ -15086,7 +15086,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           // A `ref` BINDING ALIASES A LOCATION, so its Static Type is the
-          // location's: `#sec-ref-bindings` says "a read of _b_ reads through to
+          // location's: `#sec-reference-bindings` says "a read of _b_ reads through to
           // the location" and "`b = v` writes _v_ to the location", and a read
           // of a location has the location's type. Three forms already do this -
           // a `ref` parameter and a `ref` return carry their written types, and
@@ -15154,7 +15154,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       // `ref b = e` REBINDS: "b is redirected to the location e denotes"
-      // (#sec-ref-bindings). A binding's type is fixed at its declaration, so
+      // (#sec-reference-bindings). A binding's type is fixed at its declaration, so
       // the rebinding must be to a location of that type - re-typing the
       // binding at each rebinding would make its type depend on the control
       // flow that reached it, which no other binding here does. The checker had
@@ -15666,7 +15666,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               let param = slot?.Rest
                 ? restElementType(slot.Type as TypeRecord) as Known
                 : slot?.Type;
-              // #sec-generic-functions: a call that supplies type arguments
+              // #sec-generics: a call that supplies type arguments
               // binds them for the whole signature, parameters included. With
               // the return substituted but not the parameters, `first.<uint32>([1])`
               // checked its argument against `[].<T>` - the unbound parameter -
@@ -16317,7 +16317,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (resolved) {
           thisTypeFrames.push(resolved);
         }
-        // #sec-generic-functions: "a name a generic declaration BINDS denotes
+        // #sec-generics: "a name a generic declaration BINDS denotes
         // that type parameter for the whole of the declaration - its parameter
         // annotations, its return annotation, AND ITS BODY". The signature's
         // scope is pushed and popped where the signature is built, so without
@@ -16465,7 +16465,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (instanceType) {
           thisTypeFrames.push(instanceType);
         }
-        // #sec-generic-functions, for a class: a name the class BINDS denotes
+        // #sec-generics, for a class: a name the class BINDS denotes
         // its type parameter for the whole of the body - the constructor's
         // formals, every method, every field initializer - and shadows an
         // outer declaration of the same name. Without the scope the walk

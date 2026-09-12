@@ -260,7 +260,7 @@ export function TokenRecordsFrom(value: Value): readonly TokenRecord[] | undefin
   return out;
 }
 
-/** https://sirisian.github.io/proposal-runtime-types/#sec-token-streams */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-tokenstream-objects */
 function* TokenStreamProto_toString(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isTokenStream(thisValue)) {
     return Throw.TypeError('$1 is not a token stream', thisValue);
@@ -290,7 +290,7 @@ function* TokenStreamProto_toString(_args: Arguments, { thisValue }: FunctionCal
  * nothing sensible to pass, and letting it pass anything invites parsing `await`
  * into a synchronous function.
  */
-/** https://sirisian.github.io/proposal-runtime-types/#sec-token-streams */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-tokenstream-objects */
 function* TokenStreamProto_parse([start = Value.undefined, end = Value.undefined, goal = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isTokenStream(thisValue)) {
     return Throw.TypeError('$1 is not a token stream', thisValue);

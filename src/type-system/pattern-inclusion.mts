@@ -1,5 +1,5 @@
 /**
- * proposal-runtime-types #sec-metadata, R18's decision procedure: "pattern pairs
+ * proposal-runtime-types #sec-primitive-metadata, R18's decision procedure: "pattern pairs
  * free of backreferences and lookaround, within a fixed automaton size, get the
  * exact language-inclusion answer".
  *

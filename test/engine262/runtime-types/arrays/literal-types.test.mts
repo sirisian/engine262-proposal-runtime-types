@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * Spec: #sec-array-types, #sec-tuple-types, #sec-conversions,
+ * Spec: #sec-array-and-tuple-types, #sec-array-and-tuple-types, #sec-conversions,
  * #sec-inference-fixpoint (r19).
  *
  * An array literal has no Static Type today. That is why r19 - the rule that
@@ -116,7 +116,7 @@ test('the return check itself does run', () => {
 });
 
 test('a bare literal has the type of its elements joined', () => {
-  // #sec-array-types. Written where no array type reaches it, a literal is an
+  // #sec-array-and-tuple-types. Written where no array type reaches it, a literal is an
   // array of the widened join of its elements.
   expectThrows('const s: string = [1, 2];');          // [].<number>
   expectThrows('const s: string = [1, 2][0];');       // read: number

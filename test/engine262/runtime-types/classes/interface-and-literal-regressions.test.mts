@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, ok, run } from '../harness.mts';
 
 /**
- * Spec: #sec-literal-freshness, #sec-type-members, #sec-partial-declarations,
+ * Spec: #sec-literal-freshness, #sec-type-membership, #sec-partial-declarations,
  * #sec-type-references, #sec-composite-types.
  *
  * Regression rows for the object-literal and interface defects closed here.
@@ -757,7 +757,7 @@ test('a self-describing contribution does not anchor inference', () => {
   }
 
   // `null` and `undefined` are ~primitive~ Type Records, not ~literal~ ones
-  // (#sec-the-null-and-undefined-types), which is why the old test anchored
+  // (#sec-null-and-undefined-types), which is why the old test anchored
   // them. They have ONE VALUE each, so knowing the type says nothing a
   // declaration supplied - the same reasoning, generalized.
 

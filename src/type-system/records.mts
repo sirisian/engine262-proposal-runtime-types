@@ -308,7 +308,7 @@ export interface SignatureRecord {
    */
   readonly Narrows?: readonly NarrowingRecord[];
   /**
-   * proposal-runtime-types #sec-generic-functions: the signature's declared
+   * proposal-runtime-types #sec-generics: the signature's declared
    * type parameters, absent where it declares none (the spec's
    * [[TypeParameters]], as Records rather than Parse Nodes). Identity is up to
    * renaming - [[Name]] is carried for named arguments and tooling, never
@@ -1464,7 +1464,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     case 'pattern': return `/${t.Source}/${t.Flags}`;
     case 'range': {
       const endpoint = (v: Value | undefined): string => (v === undefined ? '' : String((v as { numberValue?: () => unknown }).numberValue?.() ?? (v as { stringValue?: () => string }).stringValue?.() ?? ''));
-      // The spelling of #sec-range-types: `..` closed-open, `..=` closed-closed,
+      // The spelling of #sec-ranges: `..` closed-open, `..=` closed-closed,
       // and a leading `<` where the start is open.
       const open = t.StartBound === 'open' ? '<' : '';
       const close = t.EndBound === 'closed' ? '=' : '';

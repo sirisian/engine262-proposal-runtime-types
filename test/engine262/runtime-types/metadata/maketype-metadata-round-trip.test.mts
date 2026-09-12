@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * #sec-metadata: the `StringPattern` meta type "carries a pattern as metadata, a
+ * #sec-primitive-metadata: the `StringPattern` meta type "carries a pattern as metadata, a
  * source and flags rather than a RegExp object, so that one pattern written in
  * two modules is one type; a hook that reads it is handed a RegExp built from
  * those."

@@ -331,7 +331,7 @@ test('a parameter shadows an outer binding of the same name', () => {
   // BINDING is not optional.
   //
   // The program below is now REFUSED, and correctly: `a.length` is a `uint64`
-  // for every array (#sec-array-types keeps `length` and `capacity` one type so
+  // for every array (#sec-array-and-tuple-types keeps `length` and `capacity` one type so
   // that "a capacity is at least a length" is stateable), and the function
   // declares `uint32`. Reading the outer `[4].<uint8>` was what made it pass.
   expectThrows('let a: [4].<uint8> = [7, 8, 9, 10];'

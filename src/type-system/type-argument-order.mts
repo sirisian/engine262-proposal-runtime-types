@@ -73,7 +73,7 @@ export function orderTypeArguments<T>(
 /**
  * Library generics carry the parameter names the specification itself writes - `Map.<K, V>`,
  * `Set.<T>` (#sec-keyed-collections), `vector.<T, N>` (#sec-vector-types),
- * `int.<N>` / `uint.<N>` (#sec-parameterized-integers). Names are added here
+ * `int.<N>` / `uint.<N>` (#sec-integer-types). Names are added here
  * only once verified against their clause; a name this table does not know is
  * refused rather than guessed, which is the same rule a misspelling gets.
  * A declared prelude would retire this table.

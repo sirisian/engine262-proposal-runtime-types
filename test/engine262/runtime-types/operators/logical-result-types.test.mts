@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * Spec: #sec-static-type-of-an-expression, #sec-type-propagation-to-literals,
+ * Spec: #sec-static-type-of-an-expression, #sec-literal-propagation,
  * #sec-relational-operators, #sec-equality-operators, #sec-vector-lanes.
  *
  * `&&`, `||`, and `??` evaluate to one of their OPERANDS rather than to a
@@ -77,7 +77,7 @@ test('?? is the non-nullish part of the left joined with the right', () => {
 });
 
 test('a literal operand takes the position\'s type', () => {
-  // #sec-type-propagation-to-literals: `const c: uint32 = x || 10` means the
+  // #sec-literal-propagation: `const c: uint32 = x || 10` means the
   // `10` is a `uint32`, exactly as `const c: uint32 = 10` does. Typed in
   // isolation the result read `a literal type of number | uint.<32>` and the
   // program was refused at its own annotation.

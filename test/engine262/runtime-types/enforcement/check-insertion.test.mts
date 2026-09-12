@@ -857,7 +857,7 @@ test('a BLOCK-bodied callback\'s return type is inferred', () => {
   // A FunctionExpression callback, not only an arrow.
   expectStatic(`${a} { let b: [].<uint8> = a.map(function (x) { return "s"; }); }`);
   // The parameters the position supplies are visible in the body, so the INDEX
-  // TYPE flows into the inference too. That type is `uint64` - #sec-array-types
+  // TYPE flows into the inference too. That type is `uint64` - #sec-array-and-tuple-types
   // defines it, and notes that `standardlibrary.md` writes `uint32` for the
   // callback's second parameter only because it predates the definition. This
   // row asserted the stale spelling.
@@ -1168,7 +1168,7 @@ test('a typed collection takes its needle at the element type', () => {
   // *false*, on the BigInt precedent the language already ships.
   expect(evaluated('const b = [65]; String(b.includes(70000)) + "/" + String(b.includes("hello"));')).toBe('false/false');
   expect(evaluated('const b = [65]; String(b.includes(65)) + "/" + String(b.includes((65 := uint16)));')).toBe('true/false');
-  // #sec-array-types: a bare array literal is an array of the join of its
+  // #sec-array-and-tuple-types: a bare array literal is an array of the join of its
   // elements, so `[1n]` is a `[].<bigint>` and `includes` is read at that
   // element type - which makes the argument a `bigint` position, and literal
   // propagation builds `1` as `1n`. The answer therefore changes from *false*
@@ -1385,7 +1385,7 @@ test('an invariant position still admits any, and a method is an output position
   // make the escape hatch unusable in any writable position.
   expect(evaluated('type A = { x: any }; type B = { x: uint8 };'
     + ' `${Reflect.isAssignable(A, B)}:${Reflect.isAssignable(B, A)}`;')).toBe('true:true');
-  // #sec-variance-annotations groups "a method return or a `readonly` field" as
+  // #sec-generic-variance groups "a method return or a `readonly` field" as
   // OUTPUT positions, so a method is compared by function subtyping rather than
   // by identity - which is what lets a generator satisfy an iteration protocol.
   expect(evaluated('function* g(): uint8 { yield 1; }'
