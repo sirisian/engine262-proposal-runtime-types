@@ -15935,6 +15935,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Every assignment operator writes, so this sits outside the `=` guards
         // below: `v.x += 1` and `v.x ??= 1` are writes as much as `v.x = 1`.
         requireWritableMember(a.LeftHandSideExpression);
+        // AN ARRAY PATTERN ITERATES WHAT IT IS ASSIGNED, exactly as one in a
+        // declaration does. `[x] = n` for a `uint8` n was the run time's "1
+        // (typed) is not iterable"; the declaration form `let [x] = n` is
+        // refused already, and the two differ only in whether the names are
+        // being introduced.
+        //
+        // An OBJECT pattern reads properties rather than iterating and is
+        // untouched, and `string` iterates its characters.
+        //
+        // The LHS arrives as an ~ArrayLiteral~: the grammar refines it to an
+        // ArrayAssignmentPattern only where a destructuring assignment is
+        // EVALUATED, so the walk sees the literal it was parsed as. Both
+        // spellings are named, since an array literal is not a valid assignment
+        // target in any other position.
+        if (a.LeftHandSideExpression.type === 'ArrayLiteral'
+          || a.LeftHandSideExpression.type === 'ArrayAssignmentPattern') {
+          const from = staticType(a.AssignmentExpression);
+          const fromBase = from && from.Kind === 'literal'
+            ? ((from as { Base?: TypeRecord }).Base ?? null)
+            : from;
+          if (fromBase && fromBase.Kind === 'primitive'
+            && (fromBase as { Name?: string }).Name !== 'string') {
+            const completion = Throw.StaticTypeError(
+              'a value of $1 is not iterable',
+              Value(displayType(from as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         // proposal-runtime-types #sec-location-consuming-contexts: an
         // assignment whose target is a call stores through the location the
         // call returned, so the callee must return one. This is the `++`/`--`

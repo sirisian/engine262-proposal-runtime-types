@@ -67,4 +67,13 @@ test('an ARRAY PATTERN iterates its initializer', () => {
   expect(ok(dead('let o: { x: uint8 } = { x: uint8(1) }; let { x } = o;'))).toBe(true);
   // A destructured PARAMETER is bound by the call, not by an initializer here.
   expect(ok(dead('function f([x]: [].<uint8>) { }'))).toBe(true);
+
+  // The ASSIGNMENT form is the same pattern without a declaration. Its left
+  // side arrives as an ~ArrayLiteral~, the grammar refining it to a pattern
+  // only where the assignment is evaluated.
+  expectThrown(dead('let x; let n: uint8 = uint8(1); [x] = n;'), 'is not iterable');
+  expectThrown(dead('let x; let y; let b: boolean = true; [x, y] = b;'), 'is not iterable');
+  expect(ok(dead('let x; let a: [].<uint8> = []; [x] = a;'))).toBe(true);
+  expect(ok(dead('let x; let s: string = "x"; [x] = s;'))).toBe(true);
+  expect(ok(dead('let x; let o: { x: uint8 } = { x: uint8(1) }; ({ x } = o);'))).toBe(true);
 });
