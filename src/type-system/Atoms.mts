@@ -110,6 +110,16 @@ export function Atoms(
         // "for `null` and `undefined`, themselves" - each its own single atom.
         return [{ key: name, type: t }];
       }
+      if (name === 'Composite') {
+        // "an object, tuple, or COMPOSITE member being its own atom"
+        // (#sec-match-exhaustiveness). A composite type is a ~primitive~ record
+        // named "Composite" rather than a kind of its own, so it arrived here
+        // and fell through to no atoms - and a union naming one among its
+        // members lost exhaustiveness for every member, since the union rule
+        // asks each member for its atoms. The object and tuple arms below give
+        // the same answer for the same reason.
+        return [{ key: describe(t), type: t }];
+      }
       return NO_ATOMS;
     }
     case 'nominal': {

@@ -126,14 +126,6 @@ export function wrapToType(math: number | bigint, t: TypeRecord): number | bigin
 }
 
 /** The Type Record a binary operation on two numeric-typed operands produces. */
-export function resultType(a: TypeRecord, b: TypeRecord): TypeRecord {
-  // Same type: that type. This is the common and unambiguous case; mixed-type
-  // arithmetic requires an explicit conversion under the proposal, so a
-  // mismatch keeps the left operand's type as the result and the caller may
-  // have already rejected the mix.
-  return SameType(a, b) ? a : a;
-}
-
 type BinOp = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 
 function mathOp(op: BinOp, x: number, y: number): number {
@@ -287,6 +279,37 @@ export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: bo
       && target.Kind === 'primitive' && (target.Name === 'int' || target.Name === 'uint')
       && payload(y) === 0) {
     return Throw.RangeError('the divisor is zero') as ThrowCompletion;
+  }
+  // A SHIFT DISTANCE AT OR ABOVE THE WIDTH, answered here so that the three
+  // carriers below cannot disagree about it - and they did: `1 << 8` at `uint8`
+  // was 0, `1 << 32` at `uint32` was 1, `1 << 40` at `uint.<40>` was 1, and
+  // `1 << 64` at `uint64` was 1. Three regimes: JS `<<` masks the count by 32
+  // for the widths it backs, and the other two paths mask by the width.
+  //
+  // #sec-integer-operations states ONE rule for every operation: "each
+  // operation computes the exact mathematical result and then reduces it to a
+  // value of _T_ ... modulo 2**_N_". A shift is an operation and its exact
+  // result is `x * 2**k`, so a `k` at or above the width shifts every bit out
+  // and the answer is 0 - or, for an arithmetic `>>` of a negative value, -1,
+  // since flooring a negative quotient never reaches zero.
+  //
+  // Masking the count by the width instead - what Java, C# and Wasm do, and
+  // what the two paths below chose - would make `x << N` answer `x`, and would
+  // break the identity the exact rule otherwise guarantees: `x << k` and
+  // `x * 2**k` are the same computation, and under masking they part company at
+  // exactly this boundary. Masking is also only cheap when the width is a power
+  // of two, and this proposal has `uint.<24>` and `uint.<40>`.
+  const width = widthOf(target);
+  if (width !== null && (op === '<<' || op === '>>' || op === '>>>')) {
+    // The count is read EXACTLY. A width above 53 carries its values as
+    // BigInts, so reading the count as a Number missed the guard entirely and
+    // left `1 << 64` at `uint64` answering 1 while `1 << 40` at `uint.<40>`
+    // answered 0 - the same divergence one carrier along.
+    const count = payloadExact(y);
+    if (count >= BigInt(width)) {
+      const negative = op === '>>' && payloadExact(x) < 0n;
+      return new TypedNumberValue(wrapToType(negative ? -1 : 0, target), target);
+    }
   }
   if (isWideIntegerType(target)) {
     const bits = widthOf(target) as number;

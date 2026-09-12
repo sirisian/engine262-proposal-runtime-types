@@ -77,7 +77,16 @@ test('an iterator from a collection chains into the helpers', () => {
   expect(ok(`${M} let a: [].<uint8> = m.values().filter((v) => true).toArray();`)).toBe(true);
   expectStaticTypeError(`${M} let a: [].<string> = m.values().filter((v) => true).toArray();`);
   expect(ok(`${M} let a: [].<string> = m.keys().take(2).drop(1).toArray();`)).toBe(true);
-  expect(ok(`${S} let n: uint8 | void = s.values().find((v) => true);`)).toBe(true);
+  expect(ok(`${S} let n: uint8 | undefined = s.values().find((v) => true);`)).toBe(true);
+  // `undefined`, not ~void~. This asserted `uint8 | void` until the type was
+  // asked to hold what `find` actually answers: `let n: uint8 | void =
+  // undefined;` is refused - "No value is a value of the `void` type"
+  // (#sec-void-type) - so a `find` that matched nothing produced a value of
+  // NEITHER member of its own declared return. `Map.prototype.get` next door
+  // has spelled the same answer `V | undefined` all along.
+  expectStaticTypeError(`${S} let n: uint8 | void = s.values().find((v) => true);`);
+  expect(evaluated('const s = new Set.<uint8>(); s.add(1); '
+    + 'let n: uint8 | undefined = s.values().find((v) => false); String(n === undefined);')).toBe('true');
   // And it runs, not merely checks.
   expect(evaluated('const m = new Map.<string, uint8>(); m.set("a", 1); m.set("b", 2); m.values().toArray().join(",");')).toBe('1,2');
   expect(evaluated('const m = new Map.<string, uint8>(); m.set("a", 1); m.keys().toArray().join(",");')).toBe('a');

@@ -185,8 +185,16 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // Eight bytes at alignment eight is this implementation's choice, matching
     // a 64-bit pointer. The clause leaves it open deliberately, so nothing here
     // is normative beyond "it has one and the recursion stops".
+    // The nullish member is a ~primitive~ named "null" or "undefined"
+    // (#sec-null-and-undefined-types), and only that. This once also counted a
+    // ~literal~ member and a ~void~ one, from when `null` was a literal type
+    // over ~void~; both outlived that representation. A ~literal~ member made
+    // `A | "x"` a reference position, so a union with a string literal in it
+    // laid out as a pointer and closed an inline cycle that is not closed; a
+    // ~void~ member named a type that has no values to be null-like with. The
+    // third arm was the same call written twice.
     const nullable = t.Members.length === 2
-      && t.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void' || isNullOrUndefinedPrimitive(m) || isNullOrUndefinedPrimitive(m))
+      && t.Members.some((m) => isNullOrUndefinedPrimitive(m))
       && t.Members.some((m) => m.Kind === 'nominal');
     return nullable ? { bitLength: 64, byteLength: 8, alignment: 8 } : null;
   }
@@ -595,7 +603,7 @@ export function FirstInlineCycle(t: TypeRecord): string | null {
           // stops there rather than descending - which is what makes a linked
           // list expressible.
           const nullable = p.type.Kind === 'union'
-            && p.type.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void' || isNullOrUndefinedPrimitive(m) || isNullOrUndefinedPrimitive(m));
+            && p.type.Members.some((m) => isNullOrUndefinedPrimitive(m));
           const found = walk(p.type, within, nullable ? here : crossed, typeof p.key === 'string' ? p.key : String(p.key));
           if (found !== null) {
             return found;
@@ -612,7 +620,7 @@ export function FirstInlineCycle(t: TypeRecord): string | null {
       case 'union':
       case 'intersection': {
         const nullable = record.Kind === 'union'
-          && record.Members.some((m) => m.Kind === 'literal' || m.Kind === 'void' || isNullOrUndefinedPrimitive(m) || isNullOrUndefinedPrimitive(m));
+          && record.Members.some((m) => isNullOrUndefinedPrimitive(m));
         for (const m of record.Members) {
           const found = walk(m, within, nullable ? here : crossed, memberName);
           if (found !== null) {

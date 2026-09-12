@@ -151,7 +151,15 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
     case 'forEach': return fn([cb(voidType) as TypeRecord], voidType);
     case 'some':
     case 'every': return fn([cb(boolType) as TypeRecord], boolType);
-    case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, voidType] } as unknown as TypeRecord);
+    // `undefined`, NOT ~void~. `Iterator.prototype.find` answers *undefined*
+    // where nothing matches, so the type that names that answer is the
+    // `undefined` type - "the type of its one value" - while ~void~ is "the
+    // type with no values" (#sec-void-type) and names no answer at all.
+    // `collectionMethodSignature`'s `get` below already spells it this way, and
+    // the file's own note calls that `undefined` load-bearing; a `T | void` here
+    // let `let x: uint8 = it.find(p)` through, where the same mistake through
+    // `Map.prototype.get` is refused.
+    case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, makePrimitive('undefined')] } as unknown as TypeRecord);
     case 'reduce': return fn([fn([anyT, element, index], anyT) as TypeRecord, anyT], anyT);
     default: return null;
   }

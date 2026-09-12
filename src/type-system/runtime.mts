@@ -713,6 +713,46 @@ export function* BindTypeArgumentRecords(
       }
     } else {
       record = run[0]!;
+      // The CONSTRAINT. #sec-bindtypearguments states it as a step of the one
+      // operation "every application site performs: a type reference, an
+      // expression-position application, `new`, a heritage clause, an explicit
+      // call, and the explicit half of a call whose remaining parameters are
+      // inferred" - "If _constraint_ is not ~none~ and IsSubtype(_v_,
+      // _constraint_, a new empty List) is *false*, throw a *TypeError*
+      // exception."
+      //
+      // This twin checked one only on its variadic path, so `<T: uint8>` was
+      // enforced for `f.<string>(x)` and not here. A constraint that binds in
+      // one position and not another is not a constraint: #sec-generics has a
+      // parameter "a subtype of itself and of its constraint" inside the
+      // declaration, and that reading is sound only where applications honour
+      // it.
+      //
+      // A ~literal~ argument CONVERTS rather than being refused, which is the
+      // same order the node-based binder takes: `Box.<5>` at `<T: uint8>` is the
+      // literal entering the value space, not a mismatch.
+      if (q.TypeParameterConstraint) {
+        pushTypeParameterFrame(frame);
+        let c;
+        try {
+          c = EnsureCompletion(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
+        } finally {
+          popTypeParameterFrame();
+        }
+        if (c.Type !== 'normal') {
+          return c as never;
+        }
+        const constraint = c.Value as TypeRecord;
+        if (record.Kind === 'literal') {
+          const converted = EnsureCompletion(yield* CheckedConvertValue(record.Value as Value, constraint as never));
+          if (converted.Type !== 'normal') {
+            return converted as never;
+          }
+          record = { ...record, Value: converted.Value as Value, Base: constraint } as TypeRecord;
+        } else if (!IsAssignable(record, constraint)) {
+          return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
+        }
+      }
     }
     if (name) {
       frame.set(name, record);

@@ -8,9 +8,12 @@ import { literalFitsNumericType } from './literal-fit.mts';
 import { R } from '#self';
 
 /**
- * proposal-runtime-types #sec-static-type-of-an-expression: `&&`, `||` and `??`
- * produce one of their OPERANDS rather than a boolean, so the type of one is
- * the part of the left operand that short-circuits joined with the right's.
+ * proposal-runtime-types #sec-operator-results, step 1: `&&`, `||` and `??`
+ * produce one of their OPERANDS rather than a boolean, so the Static Type is
+ * "the union of the short-circuiting part of the left operand's Static Type and
+ * the right operand's Static Type, where the short-circuiting part is the falsy
+ * part for `&&`, the truthy part for `||`, and, for `??`, the result of
+ * NarrowFrom applied to that Static Type and `null | undefined`".
  *
  * Splitting a type by truthiness is the same operation narrowing performs on a
  * test, done here over Type Records alone, with the caller supplying the typing
@@ -49,18 +52,18 @@ export const joinTypes = (a: TypeRecord, b: TypeRecord): TypeRecord => (SameType
   : CanonicalizeType({ Kind: 'union', Members: [a, b] }));
 
 /**
- * proposal-runtime-types #sec-static-type-of-an-expression: the part of _t_
- * whose values are FALSY, which is what `a && b` yields when the left decides
- * the result. A type whose values are all truthy contributes nothing, so
+ * proposal-runtime-types #sec-operator-results: the part of _t_ whose values
+ * are FALSY, which is what `a && b` yields when the left decides the result. A type whose values are all truthy contributes nothing, so
  * `obj && f()` is just the type of `f()`.
  *
  * The parts are stated per KIND rather than per value: where a falsy value of
  * a kind exists but the system cannot write its literal type - a `uint32`
  * zero is a typed number, not a Number literal - the whole member stands in
- * for it. That is the widening license #sec-inferred-result-type already
- * grants ("an implementation may be imprecise about completion", in the
- * widening direction only): a wider answer is sound here because it names
- * more values than can occur, never fewer.
+ * for it. The specification states no license for this, and one is worth
+ * asking for: a wider answer is sound here because it names more values than
+ * can occur, never fewer, and the alternative is a literal type the system
+ * cannot spell. (An earlier comment attributed such a license to
+ * #sec-inferred-result-type, which says nothing of the kind.)
  */
 export const falsyPartOf = (t: TypeRecord): TypeRecord | typeof empty => {
   const members = t.Kind === 'union' ? (t as { Members: readonly TypeRecord[] }).Members : [t];
@@ -194,7 +197,7 @@ export const logicalResultType = (node: ParseNode, typeOf: (n: ParseNode) => Kno
   if (passedOver === empty && kept !== empty) {
     return kept as TypeRecord;
   }
-  // #sec-type-propagation-to-literals: a literal in a contextual position IS
+  // #sec-literal-propagation: a literal in a contextual position IS
   // of that position's type where it fits. Elsewhere that is settled by the
   // assignability check, which reads the literal and the target together; a
   // literal INSIDE a union never meets the target that way, and `const c:

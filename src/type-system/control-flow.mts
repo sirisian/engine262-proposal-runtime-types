@@ -118,6 +118,43 @@ export const canCompleteNormally = (stmt: ParseNode | null | undefined): boolean
       }
       return false;
     }
+    case 'ForStatement': {
+      // `for (;;)` is `while (true)` with the test left out, so it reads the
+      // same way: no test at all, and the only way out is a `break`. A `for`
+      // WITH a test completes whenever the test is false, which this analysis
+      // does not evaluate. `for (let i = 0;;)` is the testless form too - an
+      // initializer says nothing about leaving.
+      //
+      // Missing, so `function f(): uint8 { for (;;) { } }` was told it can
+      // complete without a return while `while (true) { }` beside it was not.
+      if (n.Expression_b !== undefined && n.Expression_b !== null) {
+        return true;
+      }
+      return containsBreak(n.Statement as ParseNode);
+    }
+    case 'DoWhileStatement': {
+      // The body runs BEFORE the condition is read, which is what separates
+      // this from `while`: a `while` whose body cannot complete may still
+      // complete by never entering it, and a `do` cannot. So a body that cannot
+      // complete carries the statement, whatever the condition says.
+      const test = n.Expression as { type?: string, value?: unknown } | undefined;
+      const alwaysTrue = test?.type === 'BooleanLiteral' && test.value === true;
+      const body = n.Statement as ParseNode;
+      if (alwaysTrue) {
+        return containsBreak(body);
+      }
+      return canCompleteNormally(body) || containsBreak(body);
+    }
+    case 'LabelledStatement': {
+      // A `break` naming the label resumes after the labelled statement, so it
+      // completes normally however total the statement it labels is.
+      // `containsBreak` counts a labelled `break` as readily as an unlabelled
+      // one, which is what keeps this answer on the safe side: it can only push
+      // toward "can complete", and that withholds an error rather than raising
+      // a wrong one.
+      const item = n.LabelledItem as ParseNode | undefined;
+      return canCompleteNormally(item) || containsBreak(item);
+    }
     default:
       return true;
   }

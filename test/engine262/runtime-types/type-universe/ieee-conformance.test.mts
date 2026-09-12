@@ -405,8 +405,18 @@ test('every shift is performed at the type\'s own width', () => {
   const distances = [0, 1, 31, 32];
   for (const bits of widths) {
     for (const dist of distances.concat([bits - 1, bits, bits + 1])) {
-      const d = BigInt(((dist % bits) + bits) % bits);
-      const expected = BigInt.asUintN(bits, 1n << d).toString();
+      // A distance AT OR ABOVE the width shifts every bit out, so the answer is
+      // 0. This asserted `dist % bits` - masking the count at the width, which
+      // is what Java, C# and Wasm do - and that reading has no support in
+      // #sec-integer-operations, whose one rule for every operation is "the
+      // exact mathematical result ... reduced modulo 2**_N_". Under masking
+      // `x << N` answers `x`, so `x << k` and `x * 2**k` stop being the same
+      // computation at exactly this boundary. The test's original point stands
+      // and is unaffected: the shift is performed at the TYPE's width and never
+      // at 32.
+      const expected = dist >= bits
+        ? '0'
+        : BigInt.asUintN(bits, 1n << BigInt(dist)).toString();
       expect(
         evaluated(`String((1 := uint.<${bits}>) << (${dist} := uint.<${bits}>));`),
         `uint.<${bits}> 1 << ${dist}`,

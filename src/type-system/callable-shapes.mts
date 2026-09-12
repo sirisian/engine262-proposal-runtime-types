@@ -42,7 +42,7 @@ export const effectiveFunctionType = (t: Known): Known => {
  * The type a value is CALLED at. A ~nominal~ interface whose [[Structure]] is a
  * ~function~ record - an interface of call signatures - is called as that
  * function: #sec-object-types says such an interface "denotes the ~function~
- * Type Record", and #sec-interfaces that an interface "may also type ... a
+ * Type Record", and #sec-interfaces-semantics that an interface "may also type ... a
  * function structurally". Both call-checking sites tested `Kind === 'function'`
  * on the raw type and so saw an interface-typed callee as uncallable-unknown.
  */

@@ -7,7 +7,7 @@ import { unifyTypeParameters } from './unify.mts';
 import { R } from '#self';
 
 /**
- * proposal-runtime-types #sec-generic-functions and #sec-parameterized-types:
+ * proposal-runtime-types #sec-generics and #sec-parameterized-types:
  * a type parameter is a name standing in a type, replaced by an argument when
  * the declaration is applied.
  *
@@ -177,7 +177,7 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
 };
 
 /**
- * #sec-generic-functions: _t_ with each type parameter replaced by what the
+ * #sec-generics: _t_ with each type parameter replaced by what the
  * call bound it to.
  *
  * This is what gives a generic call its Static Type on the DECLARED path:
@@ -315,7 +315,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
 };
 
 /**
- * #sec-generic-functions: bind a signature's type parameters from the
+ * #sec-inference-and-function-forms: bind a signature's type parameters from the
  * ARGUMENTS of a call that supplies none explicitly.
  *
  * `id(5)` says what `T` is as plainly as `id.<uint8>(5)` does, and without
