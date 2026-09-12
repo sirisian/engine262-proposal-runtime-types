@@ -15824,8 +15824,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Box<T> { static default = new Box(); }` reports a type parameter that
         // is not determined - a diagnostic this judgment never wanted to
         // provoke. A class is not a primitive, so skipping one costs nothing.
-        if (target && (target as { type?: string }).type === 'IdentifierReference'
-            && !classTypeOf((target as unknown as { name: string }).name)) {
+        // A TOPIC is asked as well as an identifier: it names no class either,
+        // and `n |> new %()` is the same mistake as `new n()`.
+        if (target
+            && (((target as { type?: string }).type === 'IdentifierReference'
+              && !classTypeOf((target as unknown as { name: string }).name))
+              || (target as { type?: string }).type === 'TopicReference')) {
           const constructee = callableForm(staticType(target));
           const cbase = constructee && constructee.Kind === 'literal'
             ? ((constructee as { Base?: TypeRecord }).Base ?? null)
@@ -15988,6 +15992,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // statements, so the same fact applies.
         const c = n as unknown as { ShortCircuitExpression: ParseNode, AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
         walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
+        return;
+      }
+      case 'PipelineExpression': {
+        // The TOPIC has a type inside the body, and the walk has to bind it as
+        // `staticType` does. Without the binding the walk descended into the
+        // body generically, `lookup('%')` answered nothing, and every rule that
+        // reads a type went silent there - `n |> %()` reached the run time's
+        // "% is not a function" though `n()` for the same binding is refused,
+        // and `n |> new %()` the same way.
+        //
+        // `staticType` having the binding was not enough, because the judgments
+        // live in the walk: it types the body correctly - `let s: string = n |>
+        // % + 1` is refused - but a rule that REPORTS rather than answers is
+        // never reached with the frame in place.
+        const pl = n as unknown as { PipelineExpression: ParseNode, Body: ParseNode };
+        walk(pl.PipelineExpression);
+        const topic = staticType(pl.PipelineExpression);
+        const bindings = new Map<string, TypeRecord>();
+        if (topic) {
+          bindings.set(TOPIC_NAME, topic);
+        }
+        frames.push({ ...emptyFrame(), bindings });
+        try {
+          walk(pl.Body);
+        } finally {
+          frames.pop();
+        }
         return;
       }
       // The remaining CONDITION sites, for the reason the `if` and `while` arms
