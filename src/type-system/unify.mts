@@ -177,7 +177,24 @@ export function unifyTypeParameters(
     if (param.Kind === 'parameter') {
       const name = (param as { Name: string }).Name;
       if (names.has(name) && !into.has(name)) {
-        into.set(name, widenForBinding(arg));
+        // A LITERAL-TYPED CONSTRAINT keeps the literal. #sec-type-parameters:
+        // "Where a parameter's evaluated constraint is a literal type or a union
+        // of literal types, the binding inferred for that parameter from a call
+        // argument is the literal type of the argument's value, NOT the widened
+        // base. The binding is then checked against the constraint as any
+        // binding is."
+        //
+        // Widening unconditionally made the rule unreachable: a
+        // `<T: "a" | "b">` bound `T` to `string`, so `let r: "a" = pick("a")`
+        // was refused although the argument is exactly what the constraint
+        // admits, and no argument could ever satisfy the constraint by
+        // inference. An unconstrained parameter still widens, which is what
+        // makes `id("a")` a `string` rather than a one-value type.
+        const constraint = (param as { Constraint?: TypeRecord }).Constraint;
+        const literalConstrained = !!constraint && (constraint.Kind === 'literal'
+          || (constraint.Kind === 'union'
+            && (constraint as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal')));
+        into.set(name, literalConstrained ? arg : widenForBinding(arg));
       }
       return;
     }

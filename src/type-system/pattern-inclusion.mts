@@ -8,10 +8,16 @@
  * accepts in a and not in b. A single such state is a string a admits and b does
  * not, so a is not a subtype of b.
  *
- * The alphabet is SYMBOLIC. Character classes stay as ranges and are cut into
- * disjoint intervals covering both patterns, plus one interval standing for every
- * code point neither mentions. Expanding a class to its members would not survive
- * `[\\s\\S]` under a Unicode flag, which is a range this design's own kit writes.
+ * The alphabet is SYMBOLIC: intervals, cut so that they are disjoint and cover
+ * both patterns, plus one interval standing for every code point neither
+ * mentions. Expanding a class to its members would not survive `[\\s\\S]` under a
+ * Unicode flag, which is a range this design's own kit writes.
+ *
+ * WHAT IS MODELLED is a pattern character, a group, and a non-negated character
+ * class of literal characters and character ranges. Everything else - a negated
+ * class, a class escape (`[\\d]`), a `v`-mode class set, `.`, an assertion -
+ * answers *undefined* and takes the syntactic answer, which the clause provides
+ * for: pairs beyond the bound "get the syntactic one".
  *
  * Construction is a WHITELIST: a node type it does not model returns *undefined*
  * and the caller falls back to the syntactic answer. That is the difference
@@ -74,12 +80,69 @@ function alphabetOf(ranges: readonly Interval[]): Interval[] {
 
 /** The ranges a node matches, or *undefined* where this construction cannot say. */
 function rangesOfClassAtom(node: unknown): Interval[] | undefined {
-  const record = node as { type?: string, value?: number, CharacterValue?: number };
+  const record = node as {
+    type?: string, production?: string, SourceCharacter?: unknown,
+    value?: number, CharacterValue?: number,
+  };
+  // The parser gives `ClassAtom :: SourceCharacter` the RAW CHARACTER, exactly
+  // as it does `Atom :: PatternCharacter`. This read `CharacterValue`/`value`,
+  // which no ClassAtom carries, so it answered *undefined* for every plain
+  // character - and since the collection walk treats that as "cannot say", ANY
+  // pattern containing a class made the whole comparison fall back to the
+  // syntactic answer. It is the same mistake the note on `patternCharacterValue`
+  // below records, made once in each of the two places that read a character.
+  if (record.production === 'SourceCharacter' && typeof record.SourceCharacter === 'string'
+      && record.SourceCharacter.length > 0) {
+    const point = record.SourceCharacter.codePointAt(0)!;
+    return [{ lo: point, hi: point }];
+  }
   const value = record.CharacterValue ?? record.value;
   if (typeof value === 'number') {
     return [{ lo: value, hi: value }];
   }
   return undefined;
+}
+
+/**
+ * The ranges a CharacterClass matches, or *undefined* where this construction
+ * cannot say. CONSERVATIVE BY DESIGN: a negated class, a `v`-mode class set, and
+ * a class escape (`[\\d]`) all answer *undefined* so that the caller falls back
+ * to the syntactic answer. A partial reading of a negation would be the one
+ * thing this module must not do - produce a WRONG answer rather than a weak one.
+ */
+function rangesOfCharacterClass(node: unknown): Interval[] | undefined {
+  const cls = node as {
+    invert?: boolean,
+    ClassContents?: { production?: string, NonemptyClassRanges?: readonly unknown[] },
+  };
+  if (cls.invert) {
+    return undefined;
+  }
+  const contents = cls.ClassContents;
+  if (!contents || contents.production !== 'NonEmptyClassRanges') {
+    return undefined;
+  }
+  const out: Interval[] = [];
+  for (const item of contents.NonemptyClassRanges ?? []) {
+    if (Array.isArray(item)) {
+      // `a-c`, the parser's [atom, atom2] pair. It has already refused an
+      // inverted range (`c-a`) and a class escape as an endpoint, so a pair
+      // here is two literal characters.
+      const lo = item.length === 2 ? rangesOfClassAtom(item[0]) : undefined;
+      const hi = item.length === 2 ? rangesOfClassAtom(item[1]) : undefined;
+      if (!lo || !hi || lo.length !== 1 || hi.length !== 1) {
+        return undefined;
+      }
+      out.push({ lo: lo[0]!.lo, hi: hi[0]!.hi });
+    } else {
+      const one = rangesOfClassAtom(item);
+      if (!one) {
+        return undefined;
+      }
+      out.push(...one);
+    }
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -258,6 +321,24 @@ function compile(ast: unknown, alphabet: readonly Interval[]): Nfa | undefined {
           const start = builder.state();
           const accept = builder.state();
           for (const index of indicesFor([{ lo: value, hi: value }])) {
+            builder.edge(start, index, accept);
+          }
+          return [start, accept];
+        }
+        if (record.production === 'CharacterClass') {
+          // #sec-primitive-metadata R18: a class is the pair a reader most
+          // expects the procedure to decide, and the symbolic interval alphabet
+          // exists for it - `/^[a-c]$/` in `/^[a-z]$/` took the syntactic answer
+          // and was refused while the inclusion plainly held.
+          const classRanges = rangesOfCharacterClass(
+            (record as unknown as { CharacterClass?: unknown }).CharacterClass,
+          );
+          if (!classRanges) {
+            return undefined;
+          }
+          const start = builder.state();
+          const accept = builder.state();
+          for (const index of indicesFor(classRanges)) {
             builder.edge(start, index, accept);
           }
           return [start, accept];

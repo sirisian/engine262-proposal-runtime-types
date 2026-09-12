@@ -1,6 +1,7 @@
 import {
   BigIntValue, NumberValue, ObjectValue, isTypedNumber, type Value,
 } from '../value.mts';
+import { isDecimalObject } from '../intrinsics/Decimal.mts';
 import type { TypeRecord } from './records.mts';
 
 /**
@@ -65,6 +66,52 @@ function bigIntMagnitude(v: bigint): bigint {
  * an untyped call must go on meaning what it means.
  */
 export function numericPredicate(value: Value, which: NumericPredicate, surface: 'global' | 'number-static' = 'global'): boolean | undefined {
+  // A DECIMAL answers by its NUMERICAL VALUE, never by its representation.
+  // table-numeric-predicates gives the decimal column as "*true* where the
+  // numerical value is integral; `1.00` IS INTEGRAL", and a decimal reached none
+  // of the arms below, so every predicate answered *false* for it - including
+  // `isFinite`, which the table makes *true* for every finite decimal.
+  //
+  // The NaN and infinity arms are DEFENSIVE: this engine constructs no non-finite
+  // decimal - `decimal64("NaN")` is a SyntaxError and a division by zero throws -
+  // but the table states those rows ("*true* where the value is the NaN of _T_"),
+  // so the predicate answers them rather than depending on the gap.
+  //
+  // The value is `DecimalSignificand x 10**DecimalExponent`, so a non-negative
+  // exponent is integral outright, and a negative one is integral exactly when
+  // the significand divides evenly by that power of ten - which is what makes
+  // `1.00` (100 x 10**-2) integral and `1.5` (15 x 10**-1) not, without reading
+  // the cohort member the value was written as.
+  if (isDecimalObject(value)) {
+    const significand = (value as unknown as { DecimalSignificand: bigint }).DecimalSignificand;
+    const exponent = (value as unknown as { DecimalExponent: number }).DecimalExponent;
+    const finite = Number.isFinite(exponent);
+    const integral = (): boolean => {
+      if (!finite) {
+        return false;
+      }
+      if (exponent >= 0) {
+        return true;
+      }
+      const scale = 10n ** BigInt(-exponent);
+      return significand % scale === 0n;
+    };
+    switch (which) {
+      case 'isNaN': return !finite && Number.isNaN(exponent);
+      case 'isFinite': return finite;
+      case 'isInteger': return integral();
+      case 'isSafeInteger': {
+        if (!integral()) {
+          return false;
+        }
+        const whole = exponent >= 0
+          ? significand * (10n ** BigInt(exponent))
+          : significand / (10n ** BigInt(-exponent));
+        return whole <= 9007199254740991n && whole >= -9007199254740991n;
+      }
+      default: return undefined;
+    }
+  }
   if (isTypedNumber(value)) {
     const t = value.TypeRecord as TypeRecord;
     if (t.Kind !== 'primitive') {

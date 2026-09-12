@@ -2850,9 +2850,10 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       if ((t as { LibraryName?: string }).LibraryName === 'rational') {
         return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord);
       }
-      // #sec-defaultvalueof: "If _t_ denotes a value type class, return the
-      // instance of _t_ each of whose fields holds the default of the field's
-      // type, or ~none~ if any field's type has no default."
+      // #sec-defaultvalueof: "If _t_.[[Kind]] is ~nominal~ and _t_ denotes a
+      // value type class, return the instance of _t_ each of whose fields,
+      // PUBLIC AND PRIVATE, holds the default of the field's type AS THAT TYPE
+      // STANDS FOR _t_, or ~none~ if any field's type has no default."
       //
       // The instance comes into existence WITHOUT its constructor running,
       // which #sec-typed-classes endorses rather than tolerates: "a value type
