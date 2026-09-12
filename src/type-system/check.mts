@@ -29,7 +29,7 @@ import {
 } from './type-argument-order.mts';
 import { Diverges } from './divergence.mts';
 import { IsSubtype, SameType, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
-import { isBitLaneType } from './vector-ops.mts';
+import { isBitLaneType, componentAccessorIndices } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
@@ -9746,6 +9746,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 errors.push(completion.Value as ObjectValue);
                 return null;
               }
+            }
+          }
+          // A VECTOR'S LANE ACCESSORS. #sec-vector-types: `a.x` reads a lane
+          // and answers the LANE TYPE, and a multi-component accessor - `a.xy`,
+          // a swizzle - answers a vector of that many lanes. The member arm had
+          // no vector case at all, so every one of these was ~any~: `let s:
+          // string = a.x` was accepted on a `float32x4` though the run time
+          // answers a `float32`, and `a.zz` was accepted though the run time
+          // refuses it as "not a member of this vector".
+          //
+          // `componentAccessorIndices` is the run time's own decision about
+          // which names are accessors and which lanes they name, so the two
+          // cannot disagree about a swizzle's width or about what is a member.
+          if (receiver && receiver.Kind === 'primitive'
+            && (receiver as { Name?: string }).Name === 'vector'
+            && (m.IdentifierName as { name?: string } | undefined)?.name) {
+            const vecArgs = (receiver as { Arguments?: readonly unknown[] }).Arguments ?? [];
+            const laneType = vecArgs[0] as TypeRecord | undefined;
+            const laneCount = vecArgs[1];
+            const accessorName = (m.IdentifierName as { name: string }).name;
+            if (laneType && typeof laneCount === 'number') {
+              const lanes = componentAccessorIndices(accessorName, laneCount);
+              if (lanes) {
+                return lanes.length === 1
+                  ? laneType as Known
+                  : CanonicalizeType({
+                    ...(receiver as object), Arguments: [laneType, lanes.length],
+                  } as unknown as TypeRecord) as Known;
+              }
+              // Only the ACCESSORS. `all`, `any` and `lane` are METHODS - the
+              // program writes `m.any()` - so a type for the read itself would
+              // have to be a function type, and typing them as what they ANSWER
+              // made the call look like calling a `boolean`. They are left to
+              // the run time along with anything else it refuses, rather than
+              // given a type this arm would be guessing at.
             }
           }
           const objType = structureOf(receiver);
