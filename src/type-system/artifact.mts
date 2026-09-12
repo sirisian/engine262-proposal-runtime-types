@@ -19,7 +19,7 @@ import { orderKey, type TypeRecord } from './records.mts';
  *     `uint8` - so an eager walk does not terminate on the simplest type in the
  *     language; and
  *   - a recursive type closes a cycle through a nested position, as
- *     `type L = { next: L | void }` reaches itself through its own property.
+ *     `type L = { next: L | null }` reaches itself through its own property.
  *
  * A table represents both without difficulty: an entry names another entry by
  * INDEX rather than by containment, so a cycle is a pair of indices and the

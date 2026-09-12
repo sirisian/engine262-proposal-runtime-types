@@ -34,7 +34,11 @@ const FORMS: readonly (readonly [string, string, string])[] = [
   ['application', 'function mk(T: type): type { return T; }', 'type mk(uint8)'],
   ['generic alias', 'type Box<T> = { v: T };', 'type Box.<uint8>'],
   // `reference` is internal to a recursive type and is exercised through one.
-  ['reference', 'type L = { next: L | void };', 'L'],
+  // The recursion is broken by `null`, not by `void`: sec-the-void-type makes
+  // `void` "the type with no values", so `L | void` reduces to `L` and has no
+  // finite layout - the engine refuses it, correctly, and the type never
+  // reaches the reflection this row is about.
+  ['reference', 'type L = { next: L | null };', 'L'],
 ];
 
 for (const [kind, preamble, expression] of FORMS) {

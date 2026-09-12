@@ -54,7 +54,9 @@ const KINDS: [string, string, string][] = [
   ['parameterized', 'type P = uint32.<{ brand: "X" }>;', 'P'],
   ['pattern meta', 'type Pt = string.<{ pattern: /^a$/ }>;', 'Pt'],
   ['shared', 'type S = shared uint32;', 'S'],
-  ['recursive', 'type L = { next: L | void };', 'L'],
+  // Broken by `null`: `void` is the type with no values, so `L | void` reduces
+  // to `L` and has no finite layout.
+  ['recursive', 'type L = { next: L | null };', 'L'],
   ['nested', 'type N = { a: { b: [].<uint8> } };', 'N'],
 ];
 for (const [n, pre, expr] of KINDS) {
@@ -108,7 +110,7 @@ test('a table survives a real JSON round trip', () => {
   for (const [program, names] of [
     ['type A = "x"; type B = 42; type C = true; type D = 10n;', ['A', 'B', 'C', 'D']],
     ['type O = { a: uint8, b: string };', ['O']],
-    ['type L = { next: L | void };', ['L']],
+    ['type L = { next: L | null };', ['L']],
     ['class U { name: string; }', ['U']],
     ['type P = string.<{ pattern: /^a$/ }>;', ['P']],
   ] as [string, string[]][]) {
