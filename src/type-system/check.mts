@@ -3,6 +3,7 @@ import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.mts';
+import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import {
@@ -4945,6 +4946,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * would have been a second thing to keep in step, and the two would have
    * disagreed the first time either moved.
    */
+  const enumeratorsNotCovered = (enumName: string, names: readonly string[], covered: Set<string>): string[] => {
+    const record = enumNodes.get(enumName) ? enumTypeOf(enumName) : null;
+    const values = record ? (record as unknown as { EnumMembers?: readonly unknown[] }).EnumMembers : undefined;
+    const out: string[] = [];
+    if (!values || values.length !== names.length) {
+      for (let i = 0; i < names.length; i += 1) {
+        if (!covered.has(names[i]!)) {
+          out.push(names[i]!);
+        }
+      }
+      return out;
+    }
+    const seen: unknown[] = [];
+    for (let i = 0; i < names.length; i += 1) {
+      if (covered.has(names[i]!)) {
+        seen.push(values[i]);
+      }
+    }
+    for (let i = 0; i < names.length; i += 1) {
+      if (covered.has(names[i]!)) {
+        continue;
+      }
+      let shared = false;
+      for (let j = 0; j < seen.length; j += 1) {
+        const a = seen[j];
+        const b = values[i];
+        if (a !== undefined && b !== undefined && SameValue(a as Value, b as Value)) {
+          shared = true;
+        }
+      }
+      if (!shared) {
+        out.push(names[i]!);
+      }
+    }
+    return out;
+  };
+
   const switchEnumCoverage = (n: ParseNode): { enumName: string, names: readonly string[], covered: Set<string>, invalid: { shown: string }[] } | null => {
     const sw = n as { Expression?: ParseNode, CaseBlock?: { CaseClauses_a?: readonly ParseNode[], CaseClauses_b?: readonly ParseNode[], DefaultClause?: ParseNode | null } };
     const disc = sw.Expression;
@@ -14881,7 +14919,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (!hasDefault) {
-            const missing = matchInfo.names.filter((nm) => !covered.has(nm));
+            const missing = enumeratorsNotCovered(matchEnumName!, matchInfo.names, covered);
             if (missing.length > 0) {
               const completion = Throw.StaticTypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
@@ -15038,7 +15076,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const hasDefault = n.CaseBlock.DefaultClause !== undefined && n.CaseBlock.DefaultClause !== null;
           if (!hasDefault) {
-            const missing = coverage.names.filter((nm) => !coverage.covered.has(nm));
+            const missing = enumeratorsNotCovered(coverage.enumName, coverage.names, coverage.covered);
             if (missing.length > 0) {
               const completion = Throw.StaticTypeError('switch over enum $1 is missing $2 and has no default', Value(coverage.enumName), Value(missing.join(', '))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
