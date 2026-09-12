@@ -73,6 +73,14 @@ export interface ParameterRecord {
   readonly Type: TypeRecord;
   readonly Optional: boolean;
   readonly Rest: boolean;
+  /**
+   * proposal-runtime-types #sec-reference-parameters: the parameter is declared
+   * `ref`, so the call must supply a reference and the callee writes through to
+   * the caller's location. A call's `ref` and a declaration's must agree, and
+   * both are written down, so the record has to carry it for the checker to
+   * compare them.
+   */
+  readonly Ref?: boolean;
   /** The declared default's value, where it is known at check time. */
   readonly Initial?: Value;
 }
@@ -228,7 +236,7 @@ export function IsReferenceParameter(p: ParameterRecord): boolean {
 /** A parameter record, for the many sites that build a plain positional one. */
 export function parameter(Type: TypeRecord, extra?: Partial<Omit<ParameterRecord, 'Type'>>): ParameterRecord {
   return {
-    Name: extra?.Name ?? '', Type, Optional: extra?.Optional ?? false, Rest: extra?.Rest ?? false, ...(extra?.Initial !== undefined ? { Initial: extra.Initial } : {}),
+    Name: extra?.Name ?? '', Type, Optional: extra?.Optional ?? false, Rest: extra?.Rest ?? false, Ref: extra?.Ref ?? false, ...(extra?.Initial !== undefined ? { Initial: extra.Initial } : {}),
   };
 }
 

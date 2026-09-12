@@ -3495,7 +3495,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const mp = p as {
             TypeAnnotation?: ParseNode.TypeAnnotation | null,
             BindingIdentifier?: { name?: string } | null,
-            Optional?: boolean, Rest?: boolean, Initializer?: ParseNode | null,
+            Optional?: boolean, Rest?: boolean, Ref?: boolean, Initializer?: ParseNode | null,
           };
           // A FunctionTypeParameter carries its NAME, and whether it is
           // OPTIONAL, a REST, or has a default; a record built from its type
@@ -3507,6 +3507,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             Name: mp.BindingIdentifier?.name ?? '',
             Optional: mp.Optional === true || !!mp.Initializer,
             Rest: mp.Rest === true,
+            Ref: mp.Ref === true,
           }));
         }
         const Return = tm.MethodSignature.TypeAnnotation ? resolveType(tm.MethodSignature.TypeAnnotation.Type) : null;
@@ -3916,7 +3917,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const pp = p as {
               TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: ParseNode | null,
-              Optional?: boolean, BindingIdentifier?: { name?: string } | null,
+              Optional?: boolean, Ref?: boolean, BindingIdentifier?: { name?: string } | null,
             };
             const resolved = pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null;
             annotated.push(resolved);
@@ -3926,6 +3927,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             Parameters.push(parameter(resolved ?? anyTypeRecord, {
               Name: pp.BindingIdentifier?.name ?? '',
               Optional: pp.Optional === true || !!pp.Initializer,
+              Ref: pp.Ref === true,
             }));
           }
         } finally {
@@ -6273,7 +6275,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const mp = p as {
                   TypeAnnotation?: ParseNode.TypeAnnotation | null,
                   BindingIdentifier?: { name?: string } | null,
-                  Optional?: boolean, Rest?: boolean, Initializer?: ParseNode | null,
+                  Optional?: boolean, Rest?: boolean, Ref?: boolean, Initializer?: ParseNode | null,
                 };
                 // As above: the name, and the three flags that decide whether a
                 // call must supply anything for this parameter.
@@ -6281,6 +6283,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   Name: mp.BindingIdentifier?.name ?? '',
                   Optional: mp.Optional === true || !!mp.Initializer,
                   Rest: mp.Rest === true,
+                  Ref: mp.Ref === true,
                 }));
               }
               Return = asMethod.TypeAnnotation ? resolveType(asMethod.TypeAnnotation.Type) : null;
@@ -13523,6 +13526,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Parameters.push(parameter(resolved2 ?? anyTypeRecord, {
           Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
           Optional: pp.Optional === true || !!pp.Initializer,
+          Ref: (p as { Ref?: boolean }).Ref === true,
         }));
       }
       if (!usable) {
@@ -15459,6 +15463,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // has already answered, and where no arm accepts the count it
             // reports "no declared signature accepts an argument of type ...",
             // which is the better diagnostic for a set.
+            // A CALL'S `ref` AND A DECLARATION'S MUST AGREE. #sec-reference-
+            // parameters: a `ref` parameter is bound to the caller's LOCATION
+            // and written through, so the call has to name one. Whether the
+            // call writes `ref` is syntax and whether the parameter declares it
+            // is syntax, so neither operand's value is involved - the run time
+            // reported "parameter $1 requires a ref argument" only when the
+            // call ran.
+            {
+              const argsForRef = (c.Arguments ?? []).filter((a) => (a as { type?: string }).type !== 'NamedArgument');
+              const params = chosen.Parameters as readonly ParameterRecord[];
+              if (!argsForRef.some((a) => (a as { type?: string }).type === 'AssignmentRestElement')
+                && !params.some((pr) => pr.Rest)) {
+                argsForRef.forEach((arg, i) => {
+                  const pr = params[i];
+                  if (!pr) {
+                    return;
+                  }
+                  // Only the MISSING direction. The extra one - a `ref`
+                  // argument to a parameter that declares none - is specified
+                  // behaviour rather than a mistake: the reference DECAYS to
+                  // its value, the callee gets the value and cannot write
+                  // through, and the caller is unchanged.
+                  if (pr.Ref === true && (arg as { type?: string }).type !== 'RefExpression') {
+                    const completion = Throw.StaticTypeError(
+                      'parameter $1 requires a ref argument',
+                      Value(pr.Name || `parameter ${i + 1}`),
+                    ) as ThrowCompletion;
+                    errors.push(completion.Value as ObjectValue);
+                  }
+                });
+              }
+            }
             {
               const suppliedNodes = (c.Arguments ?? []);
               // A NAMED argument supplies a parameter by name, so the positional
