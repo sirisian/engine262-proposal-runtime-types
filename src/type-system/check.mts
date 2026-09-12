@@ -9379,6 +9379,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (typeof readKey === 'string') {
               const perArm: TypeRecord[] = [];
               let everyArmDeclaresIt = true;
+              let someArmDeclaresIt = false;
               for (const arm of unionReceiver.Members) {
                 const armShape = structureOf(arm) as { Kind?: string, Properties?: readonly { key: string, type: TypeRecord }[] } | null;
                 const here = armShape?.Kind === 'object'
@@ -9386,21 +9387,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   : undefined;
                 if (!here) {
                   everyArmDeclaresIt = false;
-                  break;
+                  continue;
                 }
+                someArmDeclaresIt = true;
                 perArm.push(here.type);
               }
               if (everyArmDeclaresIt && perArm.length > 0) {
                 return CanonicalizeType({ Kind: 'union', Members: perArm } as TypeRecord) as Known;
               }
-              // A key one arm does NOT declare is an ERROR, not a fall-through to
-              // ~any~. The accessible keys are the INTERSECTION of
+              // A key SOME arm declares and another does not is an ERROR, not a
+              // fall-through to ~any~. The accessible keys are the INTERSECTION of
               // the arms', because the program cannot know which arm it holds:
               // `{ x: int32 } | { y: string }` has an `x` only if it took the first.
-              // Narrowing is the escape, and the DISCRIMINANT still reads, since a key
-              // every arm declares is answered above - which is what makes narrowing
-              // possible at all.
-              if (!everyArmDeclaresIt) {
+              // A `null` member declares nothing, so every read of a nullable
+              // object is this case. Narrowing is the escape, and the DISCRIMINANT
+              // still reads, since a key every arm declares is answered above -
+              // which is what makes narrowing possible at all.
+              //
+              // A key NO arm declares is NOT this case, and the distinction is the
+              // rule's own reasoning: uncertainty about which arm is held decides
+              // nothing when every arm agrees the key is absent. Such a read is
+              // ordinary, and #sec-typed-storage governs it - "READING a property
+              // the type does not declare is unaffected ... `if (o.maybe)`,
+              // `typeof o.maybe`, and `o.absent === undefined` are all ordinary.
+              // The asymmetry is deliberate." Refusing it here made a union the one
+              // receiver in the language where those programs were refused, and
+              // refused inconsistently: `typeof u.zz` and `u?.zz` reach other arms
+              // of this operation and were accepted throughout. It also refused
+              // `u.toString()`, an arm's structure listing no Object.prototype
+              // member.
+              if (!everyArmDeclaresIt && someArmDeclaresIt) {
                 const completion = Throw.StaticTypeError(
                   '$1 is not declared by every member of $2',
                   Value(readKey),
