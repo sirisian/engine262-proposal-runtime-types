@@ -5336,7 +5336,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const rawArgNames = rawArgList.map((a) => typeArgumentNameOfShared(a));
           let orderedArgList: readonly ParseNode.Type[] = rawArgList as readonly ParseNode.Type[];
           if (rawArgNames.some((n) => n !== undefined)) {
-            const libNames = libraryTypeParameterNamesShared(node.TypeName.IdentifierReference.name);
+            // A USER declaration's parameter names too, not only a library
+            // type's. `libraryTypeParameterNames` knows the built-ins, so a
+            // named argument list on a user class or interface - `B.<T: uint8>`
+            // - bailed here and the whole annotation resolved to null: the
+            // binding took `any`, and every judgment the annotation was written
+            // to make went unmade, the constraint check among them.
+            const namedBase = node.TypeName.IdentifierReference.name;
+            const userDeclared = (classTypeOf(namedBase) ?? interfaceTypeOf(namedBase)) as {
+              Declaration?: { TypeParameters?: { TypeParameterList?: readonly {
+                BindingIdentifier?: { name?: string },
+              }[] } },
+            } | null;
+            const userNames = userDeclared?.Declaration?.TypeParameters?.TypeParameterList
+              ?.map((q) => q.BindingIdentifier?.name ?? '');
+            const libNames = libraryTypeParameterNamesShared(namedBase) ?? userNames;
             if (!libNames) {
               return null;
             }

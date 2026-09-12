@@ -6,6 +6,7 @@ import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
   maximumSupply, parameterArgumentType, requiredArity, restElementType,
+  substituteTypeParameters, mentionsTypeParameter,
 } from './records.mts';
 import { builtinImplements, libraryExtends, iterationInterfaceRecord } from './iteration-types.mts';
 
@@ -1500,30 +1501,34 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
         // Box.<uint8>`) does, which is one relation answered two ways by how the
         // base happened to be spelled.
         //
-        // One level, over the base's own arguments, which is the shape a
-        // heritage clause can write: `extends Box.<T>` and `extends Box.<uint8>`
-        // both land here. A nested parameter - `extends Box.<[T]>` - is not
-        // reached, and is left for the substitution operation proper rather than
-        // duplicated here, which would put a second implementation of
-        // SubstituteType in the relation module.
+        // Through SubstituteType's walk, so a nested parameter -
+        // `extends Box.<[].<T>>` - is reached as a bare one is. That walk lives
+        // in `records.mts` precisely so this module can use it: this file is
+        // imported by `unify.mts`, which `type-parameters.mts` imports, so
+        // reaching for it there would close a cycle.
         const params = (s.Declaration as { TypeParameters?: {
           TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[],
         } } | null | undefined)?.TypeParameters?.TypeParameterList;
         let walked = base;
-        if (params && s.Arguments.length > 0 && base.Kind === 'nominal' && base.Arguments.length > 0) {
-          const bound = new Map<string, TypeRecord | number>();
+        // Only where the base MENTIONS one. The one-level version this replaced
+        // was implicitly gated - it required the base to be a nominal carrying
+        // arguments - and substituting unconditionally reached bases that
+        // mention no parameter of this declaration at all, rewriting structural
+        // members whose names merely coincide. `mentionsTypeParameter` is the
+        // same walk's predicate and keeps the substitution to the bases that
+        // need it.
+        if (params && s.Arguments.length > 0 && mentionsTypeParameter(base)) {
+          const bound = new Map<string, TypeRecord>();
           params.forEach((q, i) => {
             const nm = q.BindingIdentifier?.name;
-            if (nm && i < s.Arguments.length) {
-              bound.set(nm, s.Arguments[i]!);
+            const a = i < s.Arguments.length ? s.Arguments[i] : undefined;
+            if (nm && a !== undefined && typeof a !== 'number') {
+              bound.set(nm, a);
             }
           });
-          walked = {
-            ...base,
-            Arguments: base.Arguments.map((a) => (typeof a !== 'number' && a.Kind === 'parameter'
-              ? bound.get((a as { Name: string }).Name) ?? a
-              : a)),
-          } as TypeRecord;
+          if (bound.size > 0) {
+            walked = substituteTypeParameters(base, bound) as TypeRecord;
+          }
         }
         return IsSubtype(walked, t, next);
       }
