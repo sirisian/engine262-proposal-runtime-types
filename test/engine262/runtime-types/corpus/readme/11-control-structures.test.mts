@@ -86,3 +86,24 @@ test('switch: a bare-range case is reserved without the ranges extension', () =>
   // compares by identity here and an integer discriminant falls through.
   expect(evaluated('let a = 5; switch (a) { case 0..<10: "in"; break; default: "out"; } "ran";')).toBe('ran');
 });
+
+test('a bare test narrows a NULLABLE, and nothing else', () => {
+  // table-narrowing-forms: "`v` as the test itself, where _s_ is a ~union~ with
+  // a `null` or an `undefined` member" - NarrowFrom(_s_, `null | undefined`)
+  // where the test succeeds, NarrowTo where it fails.
+  expect(evaluated('function f(n: uint8 | null): uint8 { if (n) { return n; } return (0 := uint8); } `${f(null)}`;')).toBe('0');
+  expect(evaluated('function f(n: uint8 | undefined): uint8 { if (n) { return n; } return (0 := uint8); } `${f(undefined)}`;')).toBe('0');
+  // The else branch is the nullish one, so the binding takes `null` there.
+  expect(evaluated('function f(n: uint8 | null): string { if (n) { return "p"; } else { let x: null = n; return "a"; } } `${f(null)}`;')).toBe('a');
+  // `!v` inverts, and a conditional expression narrows as an `if` does.
+  expect(evaluated('function f(n: uint8 | null): uint8 { if (!n) { return (0 := uint8); } else { return n; } } `${f(null)}`;')).toBe('0');
+  expect(evaluated('function f(n: uint8 | null): uint8 { return n ? n : (0 := uint8); } `${f(null)}`;')).toBe('0');
+  // An object union narrows to the member, so a property read is admitted.
+  expect(evaluated('function f(o: { a: uint8 } | null): uint8 { if (o) { return o.a; } return (0 := uint8); } `${f(null)}`;')).toBe('0');
+  // AND NOTHING ELSE. `0` is a value of `uint8` and the empty String is a value
+  // of `string`, so a test on a type with no nullish member narrows nothing -
+  // `if (count)` must not read as a type test that excludes a number the type
+  // admits. Both arms still see the full type, so both compile.
+  expect(evaluated('function f(n: uint8): uint8 { if (n) { return n; } else { return n; } } `${f(0 := uint8)}`;')).toBe('0');
+  expect(evaluated('function f(s: string): string { if (s) { return s; } else { return s; } } `${f("")}`;')).toBe('');
+});

@@ -39,6 +39,27 @@ test('rung two: a closed SCALAR constraint proposes its inhabitants and exactly 
   expect(evaluated('function pick(B) { return B === type true ? uint8 : string; } function one<B extends boolean>(x: pick(B)): string { return "bound"; } one("s");')).toBe('bound');
 });
 
+// The ceiling is the clause's own and not the host's: "Trials are counted against
+// a ceiling of 64, which is this clause's own and not the host-defined budget of
+// #sec-evaluation-budget ... because the ceiling is fixed rather than
+// host-tunable, whether a program's inference succeeds is a fact about the
+// program." A candidate set's size is a sum over the parameters trialed and each
+// size is fixed by a declaration the program contains, so the boundary is one a
+// reader can compute - which is what this test pins.
+const trialOf = (n: number) => {
+  const lits = Array.from({ length: n }, (_, i) => String(i)).join(' | ');
+  return `function pick(B) { return B === type ${n - 1} ? uint8 : string; } `
+    + `function one<B extends ${lits}>(x: pick(B)): string { return "bound"; } one(1 := uint8);`;
+};
+
+test('rung two: the trial ceiling is 64, and it is a fact about the program', () => {
+  // At the ceiling the trial runs and binds.
+  expect(evaluated(trialOf(64))).toBe('bound');
+  // One past it, the trial does not run at all and the program is told to say
+  // what it meant, rather than being answered differently on a bigger host.
+  expectThrown(trialOf(65), 'explicit type arguments');
+});
+
 test('rung two: a trial-bound literal is the same Type Object as its written spelling', () => {
   // This was a bug in the trial's own patch: the fallback `bound = any` ran
   // unconditionally after the trial had bound the candidate. The binder-built

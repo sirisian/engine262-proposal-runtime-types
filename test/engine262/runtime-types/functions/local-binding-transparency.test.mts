@@ -176,15 +176,19 @@ test('a const numeric constant is judged where the literal would be', () => {
   expect(value('function h(a: uint8) { return a; } const k = 3; `${h(k)}`;')).toBe('3');
   expect(value('const k = 3; let a: uint8 = k; `${a is uint8}`;')).toBe('true');
   expect(value('const K = 3.14; let a: float32 = K; `${a is float32}`;')).toBe('true');
-  // Out of range, at a binding and at an argument, now refused early - the
-  // message names a TYPE where it used to name the value.
-  expect(thrownMessage('const k = 300; let a: uint8 = k;')).toContain('literal type');
-  expect(thrownMessage('function h(a: uint8) { return a; } const k = 300; h(k);')).toContain('literal type');
-  expect(thrownMessage('const k = 1.5; let a: uint8 = k;')).toContain('literal type');
+  // Out of range, at a binding and at an argument, refused EARLY: the
+  // assignability judgment says "is not assignable to", where the boundary below
+  // says "is not in the range of". The marker used to be the words "literal
+  // type", which stopped separating the two once a literal type began rendering
+  // as its value - both messages name 300 now - so this asserts the judgment
+  // that produced the message instead of an artefact of how it prints a type.
+  expect(thrownMessage('const k = 300; let a: uint8 = k;')).toContain('is not assignable to');
+  expect(thrownMessage('function h(a: uint8) { return a; } const k = 300; h(k);')).toContain('is not assignable to');
+  expect(thrownMessage('const k = 1.5; let a: uint8 = k;')).toContain('is not assignable to');
   // A `let` is excluded by the clause - "a binding that may be reassigned must
   // have a type its assignments are checked against" - and its value still
   // reaches the boundary, which reports it there.
-  expect(thrownMessage('let k = 300; let a: uint8 = k;')).toContain('300');
+  expect(thrownMessage('let k = 300; let a: uint8 = k;')).toContain('is not in the range of');
   // And a `const` whose initializer is not a constant expression is untouched.
   expect(thrownMessage('function g(): number { return 300; } const k = g(); let a: uint8 = k;')).toContain('300');
 });

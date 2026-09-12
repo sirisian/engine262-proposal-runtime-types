@@ -11974,6 +11974,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    // `if (v)` ON A NULLABLE, the last row of table-narrowing-forms: "`v` as the
+    // test itself, where _s_ is a ~union~ with a `null` or an `undefined`
+    // member" narrows FROM `null | undefined` where the test succeeds and TO it
+    // where it fails.
+    //
+    // Restricted to a union with a nullish member, which is the point of the row
+    // rather than a limitation of it: where the alternative to a value is `null`
+    // or `undefined` the test and the type question coincide exactly, and
+    // everywhere else they part company - `0` is a value of `uint8` and the
+    // empty String is a value of `string`, so narrowing by truthiness generally
+    // would make `if (count)` read as a type test while excluding a number the
+    // type admits. A test on anything else yields no fact and narrows nothing.
+    if (e.type === 'IdentifierReference') {
+      const name = (e as unknown as { name: string }).name;
+      const t = staticType(e);
+      const nullish = !!t && t.Kind === 'union'
+        && (t as { Members: readonly TypeRecord[] }).Members.some((m) => m.Kind === 'primitive'
+          && ((m as { Name?: string }).Name === 'null' || (m as { Name?: string }).Name === 'undefined'));
+      if (nullish) {
+        // `negated` already carries the `!` count, and the sense here is the
+        // reverse of the nullish comparison's: the TRUE branch is the present
+        // one, so the fact is "is nullish" with the negation flipped.
+        return { name, type: nullishType() as TypeRecord, negated: !negated };
+      }
+    }
     return undefined;
   };
 
@@ -13736,7 +13761,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (pushedTypeParameters) {
         typeParameterScopes.pop();
       }
-      const signature: { Parameters: unknown, Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[] } = { Parameters, Return: declared, Untyped, ReturnWasWritten: returnWasWritten } as never;
+      // A NARROWING PREDICATE is the source spelling of [[Narrows]]
+      // (#sec-declared-narrowing). `function isFish(pet: Pet): pet is Fish`
+      // declares that a *true* answer proves `pet` is a `Fish`; the signature's
+      // own [[Return]] is `boolean`, since that is what the function returns,
+      // and the type after `is` is the Narrowing Record's [[Type]].
+      //
+      // The named target must be a parameter of THIS signature: a claim about
+      // anything else is one no caller could act on, since the narrowing lands
+      // on the argument passed in that position.
+      const predicateName = (fn.TypeAnnotation as unknown as { NarrowsTarget?: string } | null | undefined)?.NarrowsTarget;
+      const predicateNames = (Parameters as readonly { Name?: string }[]).map((prm) => prm.Name);
+      if (predicateName !== undefined && !predicateNames.includes(predicateName)) {
+        errors.push((Throw.StaticTypeError(
+          '$1 is not a parameter of this function, so a return predicate cannot narrow it',
+          Value(predicateName),
+        ) as ThrowCompletion).Value as ObjectValue);
+      }
+      const predicateNarrows = predicateName !== undefined && predicateNames.includes(predicateName) && declared
+        ? [{ Target: predicateName, Type: declared as TypeRecord }]
+        : undefined;
+      const signature: { Parameters: unknown, Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], Narrows?: readonly { Target: string, Type: TypeRecord }[] } = { Parameters, Return: (predicateNarrows ? makePrimitive('boolean') : declared) as Known, Untyped, ReturnWasWritten: returnWasWritten, ...(predicateNarrows ? { Narrows: predicateNarrows } : {}) } as never;
       // #sec-generics: the type parameters a call binds with its
       // arguments, as RECORDS - name, kind, variance, arity, and the constraint and
       // default nodes - because a call site needs them to order named

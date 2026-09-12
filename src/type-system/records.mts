@@ -1365,7 +1365,28 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
     case 'any': return 'any';
     case 'void': return 'void';
     case 'primitive': return t.Arguments.length > 0 ? `${t.Name}.<${t.Arguments.map((a) => displayTypeArgument(a, seen)).join(', ')}>` : t.Name;
-    case 'literal': return `a literal type of ${displayType(t.Base)}`;
+    case 'literal': {
+      // The VALUE, because a literal type IS one value and a diagnostic that
+      // names only the base says nothing a reader can act on: a wrong literal
+      // against a literal union read "a literal type of string is not assignable
+      // to a literal type of string | a literal type of string", where all three
+      // print alike and none is named.
+      //
+      // A String literal takes SINGLE quotes, which is what a Type Object's own
+      // display already uses (`keyof { a: uint8 }` reads `'a'`) and what keeps
+      // the message readable: the formatter wraps each argument in double
+      // quotes, so `JSON.stringify` here would nest one pair inside the other.
+      // Where the value is not a printable leaf the base is still the best
+      // available description.
+      const v = (t as { Value?: { stringValue?(): string } }).Value;
+      if (v && typeof v.stringValue === 'function') {
+        return `'${v.stringValue()}'`;
+      }
+      const shown = displayMetadataValue(v);
+      return shown === 'undefined' || shown === '[object Object]'
+        ? `a literal type of ${displayType(t.Base)}`
+        : shown;
+    }
     case 'union': return t.Members.length === 0 ? 'never' : t.Members.map(displayType).join(' | ');
     case 'intersection': return t.Members.map(displayType).join(' & ');
     // TWO array arms live in this file; fixing one leaves `[[object Object]]`

@@ -260,7 +260,8 @@ test('a literal reaches a literal type over a NUMERIC VALUE TYPE', () => {
   )).toBe('1.5');
 
   // A literal of the wrong VALUE is refused by this type...
-  expectThrown(`${L} let v: L = 6;`, 'is not assignable to "a literal type of uint.<32>"');
+  // The message names the VALUES; see literal-fillability for the same change.
+  expectThrown(`${L} let v: L = 6;`, 'is not assignable to "5"');
   // ...and one the BASE cannot represent is refused by the base's own range
   // rule, which is what makes the conversion the base's rather than a second
   // rule stated here.

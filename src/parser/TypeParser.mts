@@ -690,6 +690,22 @@ export abstract class TypeParser extends ExpressionParser {
     if (allowDecorators && surroundingAgent.feature('runtime-types') && this.test(Token.AT)) {
       node.Decorators = this.parseDecorators();
     }
+    // A NARROWING PREDICATE, `: pet is Fish`, which #sec-declared-narrowing
+    // gives as the source spelling of a signature's [[Narrows]]. Only a RETURN
+    // annotation may carry one, which `allowDecorators` already marks - the five
+    // return sites pass it and nothing else does.
+    //
+    // One token of lookahead settles it: a type cannot be an identifier followed
+    // by `is`, so this is unambiguous against a type that happens to be named
+    // `pet`. The declared return of such a signature is `boolean`; the type
+    // after `is` is what the named parameter narrows to.
+    if (allowDecorators && surroundingAgent.feature('runtime-types')
+        && this.test(Token.IDENTIFIER) && this.testAhead('is')) {
+      node.NarrowsTarget = this.parseIdentifierName().name;
+      this.next();
+      node.Type = this.parseType();
+      return this.finishNode(node, 'TypeAnnotation');
+    }
     node.Type = this.parseType();
     return this.finishNode(node, 'TypeAnnotation');
   }

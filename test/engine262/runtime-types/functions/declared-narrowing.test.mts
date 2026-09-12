@@ -118,3 +118,29 @@ test('the assertion deferral does not swallow errors after an ordinary call', ()
   // And a call through a name whose type IS known keeps reporting too.
   expect(run('function plain(v) { return 1; } plain(1); let s: string = (5 := uint8);').Type).toBe('throw');
 });
+
+test('a narrowing predicate is the SOURCE SPELLING of [[Narrows]]', () => {
+  // #sec-declared-narrowing: `function isFish(pet: Pet): pet is Fish` declares
+  // that a *true* answer proves the named parameter is of that type. Before this
+  // spelling existed a signature acquired [[Narrows]] only by construction, so
+  // the feature's own stated use - a guard a program can write - was unreachable.
+  const G = 'function isU8(v: uint8 | string): v is uint8 { return typeof v === "number"; } ';
+  // The call narrows in the branch it guards, and the else branch the other way.
+  expect(run(`${G} let x: uint8 | string = (4 := uint8); if (isU8(x)) { let n: uint8 = x; }`).Type).toBe('normal');
+  expect(run(`${G} let x: uint8 | string = "s"; if (isU8(x)) { } else { let t: string = x; }`).Type).toBe('normal');
+  // Outside the guard it narrows nothing.
+  expect(run(`${G} let x: uint8 | string = (4 := uint8); let n: uint8 = x;`).Type).toBe('throw');
+  // The signature's own return is `boolean` - the predicate says what a true
+  // answer PROVES, not what the function returns - so the body returning a
+  // boolean is correct and the value reaches the caller.
+  expect(run(`${G} let b: boolean = isU8(3 := uint8);`).Type).toBe('normal');
+  // The named target must be a parameter of this signature: a claim about
+  // anything else is one no caller could act on.
+  expect(run('function bad(v: uint8): q is uint8 { return true; }').Type).toBe('throw');
+  // An ordinary boolean predicate still narrows nothing, which is what makes the
+  // declaration the thing that carries the claim.
+  expect(run('function p(v: uint8 | string): boolean { return true; } '
+    + 'let x: uint8 | string = "s"; if (p(x)) { let n: uint8 = x; }').Type).toBe('throw');
+  // A type that happens to be named like an identifier still parses as a type.
+  expect(run('type pet = uint8; function g(): pet { return (1 := uint8); }').Type).toBe('normal');
+});

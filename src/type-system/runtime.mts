@@ -1170,10 +1170,20 @@ function builderMentioning(formals: readonly ParseNode[], paramName: string): st
  * Rung two (#sec-inference-through-results): the inhabitants of a CLOSED
  * constraint - `boolean`, a literal, a union of those, an enumeration by its
  * members, and a stated-extent array of any of these (the pack case, as
- * tuples) - or null where the constraint is open. Capped, since a trial is a
- * search over a finite set and not a solver.
+ * tuples) - or null where the constraint is open.
+ *
+ * The cap is 64, and it is #sec-inference-through-results' OWN ceiling rather
+ * than a host choice: "Trials are counted against a ceiling of 64, which is this
+ * clause's own and not the host-defined budget ... because the ceiling is fixed
+ * rather than host-tunable, whether a program's inference succeeds is a fact
+ * about the program." A candidate set's size is a sum over the parameters
+ * trialed, and each size is fixed by a declaration the program contains, so this
+ * number is one a reader can compute and every implementation can honour -
+ * unlike the evaluation budget, which meters arbitrary evaluation and is
+ * host-defined for that reason.
  */
-function closedInhabitants(constraint: TypeRecord, cap = 256): TypeRecord[] | null {
+const TRIAL_CEILING = 64;
+function closedInhabitants(constraint: TypeRecord, cap = TRIAL_CEILING): TypeRecord[] | null {
   if (constraint.Kind === 'primitive' && constraint.Name === 'boolean') {
     return [{ Kind: 'literal', Value: Value.true, Base: constraint } as TypeRecord, { Kind: 'literal', Value: Value.false, Base: constraint } as TypeRecord];
   }

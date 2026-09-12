@@ -3372,7 +3372,17 @@ function returnAnnotationOf(fn: AnnotatedFunction): ParseNode.TypeAnnotation | n
   // The return annotation sits on the declaration, which is the code node's
   // parent (the body is the child that carries no annotation).
   const code = fn.ECMAScriptCode as { parent?: { TypeAnnotation?: ParseNode.TypeAnnotation | null } } | null | undefined;
-  return code?.parent?.TypeAnnotation;
+  const annotation = code?.parent?.TypeAnnotation;
+  // A NARROWING PREDICATE annotates what a *true* answer PROVES, not what the
+  // function returns (#sec-declared-narrowing): `function isFish(pet: Pet): pet
+  // is Fish` returns a `boolean`. Reading its `Type` as the return type made
+  // every such function throw at its own `return`, since `false` is not a
+  // `Fish`. The boundary has nothing of its own to check here - a `boolean`
+  // return needs no conversion - so the annotation is dropped.
+  if (annotation && (annotation as { NarrowsTarget?: string }).NarrowsTarget !== undefined) {
+    return null;
+  }
+  return annotation;
 }
 
 /**

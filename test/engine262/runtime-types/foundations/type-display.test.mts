@@ -114,7 +114,13 @@ test('the kinds that already rendered are unchanged', () => {
   expect(message('type C = [].<uint8> & { length: uint32 }; let c: C = 5;')).toContain('[].<uint.<8>> & { length: uint.<32> }');
   // `literal` and `any`. The literal form appears on the SOURCE side of almost
   // every message, and `any` renders where it is nested inside another type.
-  expect(message('type L = 5; let x: L = 6;')).toContain('a literal type of number');
+  //
+  // A literal renders as its VALUE. It read "a literal type of number", which
+  // named neither the value offered nor the one admitted - and when both sides
+  // were literal types of one base they printed alike, so the message compared a
+  // type with itself. A literal type IS one value, and naming it is what the
+  // reader needs.
+  expect(message('type L = 5; let x: L = 6;')).toContain('"6" is not assignable to "5"');
   expect(message('type O = { a: any }; let o: O = 5;')).toContain('{ a: any }');
   expect(message('let a: [].<any> = 5;')).toContain('[].<any>');
 });
@@ -181,6 +187,20 @@ test('StaticTypeError sits directly under Error', () => {
   expect(evaluated('String(new StaticTypeError("boom"));')).toBe('StaticTypeError: boom');
 });
 
+test('a literal type renders as its value, in every kind', () => {
+  // The point of the change: the two sides of a message about literals are
+  // distinguishable. Each case below printed identically before, as "a literal
+  // type of <base>".
+  expect(message('type L = 5; let x: L = 6;')).toContain('"6" is not assignable to "5"');
+  expect(message(`type L = 'a'; let x: L = 'b';`)).toContain(`"'b'" is not assignable to "'a'"`);
+  expect(message('type L = true; let x: L = false;')).toContain('"false" is not assignable to "true"');
+  // A union of literals names every arm, which is what makes a constraint
+  // failure readable.
+  expect(message(`type L = 'a' | 'b'; let x: L = 'c';`)).toContain(`"'a' | 'b'"`);
+  // The base still describes a literal whose value is not a printable leaf.
+  expect(message('let u: uint8 = 300;')).toContain('"300" is not assignable to "uint.<8>"');
+});
+
 test('the four refusals an intersection target gives are distinct', () => {
   // Pinned side by side because they were once ONE message, and because the two
   // that matter most are now raised in different places.
@@ -211,8 +231,11 @@ test('the four refusals an intersection target gives are distinct', () => {
 
   // 3. Wrong type: the member's own assignability failure, naming the two types
   //    and neither the shape nor the arm - the mismatch is at the member.
+  // The String literal renders in SINGLE quotes, matching the Type Object
+  // display (`keyof { a: uint8 }` reads `'a'`) and nesting cleanly inside the
+  // formatter's own double quotes.
   expect(message(`${AB} let c: C = { x: 1, y: "s" };`))
-    .toContain('"a literal type of string" is not assignable to "int.<32>"');
+    .toContain(`"'s'" is not assignable to "int.<32>"`);
 
   // 4. Excess: freshness, against the distributed shape. An intersection
   //    DECLARES the union of its arms' keys, so the shape here is the same one

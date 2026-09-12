@@ -69,7 +69,9 @@ test('a literal type over a non-numeric base admits its literal too', () => {
 });
 
 test('a literal of the wrong VALUE is refused by the literal type', () => {
-  expectThrown(`${lit('5', 'uint32')} let v: L = 6;`, 'is not assignable to "a literal type of uint.<32>"');
+  // The message names the VALUES: "a literal type of uint.<32>" named neither
+  // the value offered nor the one admitted.
+  expectThrown(`${lit('5', 'uint32')} let v: L = 6;`, 'is not assignable to "5"');
 });
 
 test('a literal the BASE cannot hold is refused by the base', () => {

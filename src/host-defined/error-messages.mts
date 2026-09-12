@@ -625,6 +625,7 @@ export interface Throw {
   | '$1 is declared twice with the same parameter types and return type'
   | '$1 is defined as itself, so it denotes no type'
   | '$1 is missing from this composite'
+  | '$1 is not a parameter of this function, so a return predicate cannot narrow it'
   | '$1 is not a Promise constructor'
   | '$1 is not a RegExp object'
   | '$1 is not a TemporalTimeLike object'
