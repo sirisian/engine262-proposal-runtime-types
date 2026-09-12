@@ -5294,13 +5294,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `type A = uint8` alias and stopped at `shared uint8`.
    *
    * A LITERAL is unwrapped to its base for the same reason: `1` is a `number`
-   * when the question is what it can do.
+   * when the question is what it can do. A ~parameterized~ marker - a BRAND - is
+   * unwrapped too: a branded `uint32` is no more callable or iterable than a
+   * `uint32`.
+   *
+   * NOT for MIXING, which is why that rule does not call this. The two markers
+   * differ there and the run time is what says so: `shared uint8 * uint8`
+   * evaluates, so sharing does not change the numeric identity, while
+   * `U * p` for a `type U = uint32.<{ brand: 'B' }>` and a plain `uint32` is
+   * refused as "different numeric types" - a brand IS part of the identity, and
+   * erasing it would admit the program the brand exists to refuse.
    */
   const erasedForJudgment = (t: Known): Known => {
     let at = t;
     for (let i = 0; at && i < 8; i += 1) {
       if (at.Kind === 'shared') {
         at = (at as { Target?: TypeRecord }).Target ?? null;
+      } else if (at.Kind === 'parameterized') {
+        at = (at as { Base?: TypeRecord }).Base ?? null;
       } else if (at.Kind === 'literal') {
         at = (at as { Base?: TypeRecord }).Base ?? null;
       } else {
@@ -10630,7 +10641,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               || stringLiteralOperand(leftNode) || stringLiteralOperand(rightNode))) {
           return makePrimitive('string') as Known;
         }
-        const asValueType = (t: Known): TypeRecord | null => (t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null);
+        // A BRANDED numeric is a value type and keeps its brand here: the
+        // comparison below is `SameType`, and a brand is part of the identity it
+        // compares. So `U * p` for a branded `uint32` and a plain one is refused
+        // as the run time refuses it, and `U * U` is ordinary.
+        const asValueType = (t: Known): TypeRecord | null => {
+          if (t && t.Kind === 'parameterized') {
+            const base = (t as { Base?: TypeRecord }).Base;
+            return base && base.Kind === 'primitive' && isNumericValueTypeName((base as { Name?: string }).Name)
+              ? t as TypeRecord : null;
+          }
+          return t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null;
+        };
         // Through `shared` and a literal's base: a `shared uint8` is a `uint8`
         // for every question about what the value can do.
         const lv = asValueType(erasedForJudgment(leftT));
