@@ -2138,7 +2138,28 @@ function baseOf(t: TypeRecord): TypeRecord {
 
 /** The kinds whose values are objects, and so share none with a ~primitive~. */
 function isObjectLike(t: TypeRecord): boolean {
-  return t.Kind === 'object' || t.Kind === 'function' || t.Kind === 'array' || t.Kind === 'tuple';
+  if (t.Kind === 'object' || t.Kind === 'function' || t.Kind === 'array' || t.Kind === 'tuple') {
+    return true;
+  }
+  // A ~nominal~ is object-like too - a class's instances, and a library type's,
+  // are objects - with ONE exception. An ENUM is a nominal whose values are
+  // those of its underlying type (#sec-enums, "an enum is a subtype of its
+  // underlying type"), so its inhabitants are numbers rather than objects and
+  // it overlaps every numeric type. The record carries `Underlying` for the
+  // subtype relation, and that is what tells the two apart here.
+  //
+  // Without this every nominal fell through to "not disjoint", so a class
+  // instance compared with a string, and an enum compared with a string, were
+  // both silent where `uint8 === string` is refused - one rule reaching the
+  // primitives and stopping there.
+  return t.Kind === 'nominal' && (t as { Underlying?: unknown }).Underlying === undefined;
+}
+
+/** An enum's underlying type, or null where _t_ is not an enum. */
+function enumUnderlying(t: TypeRecord): TypeRecord | null {
+  return t.Kind === 'nominal'
+    ? (((t as { Underlying?: TypeRecord }).Underlying) ?? null)
+    : null;
 }
 
 /** Kinds whose inhabitants are not yet known, and which therefore overlap. */
@@ -2193,6 +2214,18 @@ export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
   const tPrim = tb.Kind === 'literal' ? tb.Base : tb;
   if (sPrim.Kind === 'primitive' && tPrim.Kind === 'primitive') {
     return !SameType(sPrim, tPrim);
+  }
+  // An ENUM against a primitive is decided by its UNDERLYING type: `E === s`
+  // for a string is disjoint because no value of `E` is a string, and
+  // `E === n` for a numeric type is not, the two being able to hold the same
+  // number.
+  const sUnder = enumUnderlying(sPrim);
+  const tUnder = enumUnderlying(tPrim);
+  if (sUnder && tPrim.Kind === 'primitive') {
+    return AreDisjoint(sUnder, tPrim);
+  }
+  if (tUnder && sPrim.Kind === 'primitive') {
+    return AreDisjoint(sPrim, tUnder);
   }
   if (sPrim.Kind === 'primitive' && isObjectLike(tPrim)) {
     return true;
