@@ -15230,6 +15230,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           return builtinTypeRecord(ce.name, []) ?? undefined;
         })();
+        // A LANE INDEX IS IN RANGE. #sec-vector-types: a vector's lane count is
+        // part of its type - `float32x4` is `vector.<float32, 4>` - and the
+        // index of `a.lane.<9>()` is a written type ARGUMENT, so both sides are
+        // syntax and the run time's "lane 9 is out of range for a vector of 4
+        // lanes" is decidable here. It is the array bound rule one type over:
+        // `a[9]` on a `[4].<uint8>` has been an Early Error all along.
+        //
+        // A non-literal index is not judged, a computed lane being a run-time
+        // fact, and neither is a receiver whose type is unknown - `const a =
+        // float32x4(...)` has none, the const inference covering `new` alone.
+        {
+          const ta = c.CallExpression as unknown as {
+            type?: string, Expression?: ParseNode,
+            TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
+          };
+          const asMember = (ta.type === 'TypeArgumentsExpression' ? ta.Expression : undefined) as unknown as {
+            type?: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string },
+          } | undefined;
+          if (asMember?.type === 'MemberExpression' && asMember.IdentifierName?.name === 'lane'
+            && asMember.MemberExpression) {
+            const vec = staticType(asMember.MemberExpression);
+            const lanes = vec && vec.Kind === 'primitive' && (vec as { Name?: string }).Name === 'vector'
+              ? (vec as { Arguments?: readonly unknown[] }).Arguments?.[1]
+              : undefined;
+            if (typeof lanes === 'number') {
+              for (const written of ta.TypeArguments?.TypeArgumentList ?? []) {
+                // A written type argument is a |LiteralType|, the type position's
+                // node for a literal, not the |NumericLiteral| an expression
+                // position carries.
+                const lit = written as { type?: string, value?: unknown };
+                if (lit.type === 'LiteralType' && typeof lit.value === 'number'
+                  && (!Number.isInteger(lit.value) || lit.value < 0 || lit.value >= lanes)) {
+                  const completion = Throw.StaticTypeError(
+                    'lane $1 is out of range for a vector of $2 lanes',
+                    Value(String(lit.value)), Value(String(lanes)),
+                  ) as ThrowCompletion;
+                  errors.push(completion.Value as ObjectValue);
+                }
+              }
+            }
+          }
+        }
         // A VALUE OF A PRIMITIVE TYPE IS NOT CALLABLE. #sec-type-errors makes a
         // determinable violation an Early Error, and this one is as determinable
         // as they come: `let n: uint8 = uint8(1); n();` has the callee's type
