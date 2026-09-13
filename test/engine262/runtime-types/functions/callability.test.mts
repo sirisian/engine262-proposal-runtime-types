@@ -78,3 +78,30 @@ test('what callability does not reach', () => {
   // provoke.
   expect(ok('class Box<T> { x: uint8; static default = new Box(); } "ok";')).toBe(true);
 });
+
+test('an OBJECT is not callable either', () => {
+  // The rule was held to primitives because "an object or a nominal may carry
+  // call signatures". The record shapes say which do: only a ~function~ record
+  // has [[Signatures]], and `callableForm` has already unwrapped a nominal whose
+  // Structure is one. A structure still an ~object~ after that carries no call
+  // signature.
+  expectThrown(dead('class C { } let c: C = new C(); let q = c();'), 'is not callable');
+  expectThrown(dead('class C { x: uint8 = uint8(1); } let c: C = new C(); let q = c();'),
+    'is not callable');
+  expectThrown(dead('let o: { a: uint8 } = { a: uint8(1) }; let q = o();'), 'is not callable');
+  expectThrown(dead('interface I { a: uint8 } function g(i: I) { let q = i(); }'),
+    'is not callable');
+});
+
+test('everything that CAN be called still is', () => {
+  // A callable interface has become a ~function~ and is not reached.
+  expect(ok(dead('interface F { (): uint8 } function g(f: F) { return f(); }'))).toBe(true);
+  expect(ok(dead('let o: { (): uint8 } = (() => uint8(1)); let q = o();'))).toBe(true);
+  expect(ok(dead('let f: () => uint8 = () => uint8(1); let q = f();'))).toBe(true);
+  expect(ok(dead('class C { } let q = new C();'))).toBe(true);
+  expect(ok(dead('let a: any = () => 1; let q = a();'))).toBe(true);
+
+  // KNOWN LIMIT: a LIBRARY nominal is still the run time's - `new Map()` then
+  // `m()` - its structure not being an ~object~ record for this test to see.
+  expect(ok(dead('let m: Map.<string, uint8> = new Map(); let q = m();'))).toBe(true);
+});

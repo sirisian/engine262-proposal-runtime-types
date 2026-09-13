@@ -15624,7 +15624,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // an index, so `a[0]()` is judged again on the element's own type.
         if (conversionTarget === undefined && callee) {
           const base = erasedForJudgment(callee);
-          if (base && base.Kind === 'primitive') {
+          // AN OBJECT IS NOT CALLABLE EITHER. The rule was held to primitives
+          // because "an ~object~ or a ~nominal~ may carry call signatures", and
+          // the record shapes say exactly which do: only a ~function~ record has
+          // [[Signatures]], and `callableForm` has already unwrapped a nominal
+          // whose Structure is one. So a structure that is still an ~object~
+          // after that carries no call signature and cannot be called - a class
+          // instance, a Map, a plain object type - where a callable interface
+          // has become a ~function~ and is not reached.
+          const shape = base ? structureOf(base) : null;
+          if (shape && shape.Kind === 'object') {
+            const completion = Throw.StaticTypeError(
+              'a value of $1 is not callable',
+              Value(displayType(callee as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          } else if (base && base.Kind === 'primitive') {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not callable',
               Value(displayType(callee as TypeRecord)),
