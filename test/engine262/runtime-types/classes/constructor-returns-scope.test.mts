@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectEarlyError as checkEarlyError } from '../harness.mts';
 
 /**
  * proposal-runtime-types: the SCOPE of the constructor-return rule.
@@ -43,7 +43,7 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
  * catchable - which is what `expectStaticTypeError` checks for, wrapping the
  * source in a `try` that a runtime throw would have swallowed.
  */
-const expectEarlyError = (source: string) => expectStaticTypeError(source);
+const expectEarlyError = (source: string) => checkEarlyError(source, 'SyntaxError');
 
 test('an UNTYPED class keeps JavaScript semantics - the superset property', () => {
   // The whole compatibility story in one assertion. If this ever fails, the

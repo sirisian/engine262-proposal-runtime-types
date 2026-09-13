@@ -73,7 +73,7 @@ test('a value generic may be the extent', () => {
   // `[N].<uint8>` RESOLVES, so N binds to 3 at the application and the argument's
   // `[4].<uint8>` is compared against `[3].<uint8>`. Before, the annotation
   // became `any` and nothing about it was checked until the run time.
-  expectStaticTypeError('function f<N: uint32>(a: [N].<uint8>): uint32 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; f.<3>(a);');
+  expectStaticTypeError('function f<N: uint32>(a: [N].<uint8>): uint64 { return a.length; } let a: [4].<uint8> = [7,8,9,10]; f.<3>(a);');
   // A bare value generic index is NOT proven - inside the body nothing relates
   // I to N - so the bounds check does its work.
   expectThrownKind('function f<N: uint32, I: uint32>(a: [N].<uint8>): uint8 { return a[I]; } let a: [4].<uint8> = [7,8,9,10]; f.<4, 9>(a);', 'RangeError');
@@ -135,8 +135,8 @@ test('a value-parameter extent leaves the neighbouring extents alone', () => {
   // A value parameter OUTSIDE an extent - `uint.<N>` - was already checked and
   // is untouched.
   expectStaticTypeError('function g<N: uint32>(x: uint.<N>) { return 1; } g.<8>("no");');
-  // And an unbound name is still no extent at all.
-  expect(ok('if (false) { function h(x: [Q].<uint8>) { return 1; } } 1;')).toBe(true);
+  // A closed annotation with an unbound name is ill-formed even in dead code.
+  expectStaticTypeError('if (false) { function h(x: [Q].<uint8>) { return 1; } } 1;');
 });
 
 test('a ZERO extent has a default whatever its element type', () => {

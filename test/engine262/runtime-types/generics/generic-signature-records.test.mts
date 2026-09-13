@@ -11,7 +11,7 @@ test('a generic method signature in an interface keeps its type parameters', () 
   // so `T` in the parameter types had nothing to resolve to; it now resolves
   // under a frame of ~parameter~ records and the signature record carries them.
   expect(evaluated("interface I { map<T>(x: T): T; } let a: I = { map(x) { return x; } }; 'ok';")).toBe('ok');
-  expect(evaluated("interface Bus { on<T extends Event>(name: string, h: (e: T) => void): void; } 'declared';")).toBe('declared');
+  expect(evaluated("class Event {} interface Bus { on<T extends Event>(name: string, h: (e: T) => void): void; } 'declared';")).toBe('declared');
 });
 
 test('explicit named type arguments bind through the records at a call', () => {

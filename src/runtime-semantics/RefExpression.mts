@@ -8,6 +8,7 @@ import {
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { RebindRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
 import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
+import { ArrayElementIdentity } from '../type-system/array-borrow.mts';
 import { Get, surroundingAgent } from '#self';
 import {
   IsPropertyKey,
@@ -125,7 +126,11 @@ export function* SoAElementLocationFor(location: ReferenceRecord): PlainEvaluato
           IndexOperator: undefined,
           IndexSetOperator: undefined,
           SoAElement: undefined,
-          ArrayBorrow: { Source: location.Base, TakenAt: typed.TypedGeneration ?? 0 },
+          ArrayBorrow: {
+            Source: location.Base, TakenAt: typed.TypedGeneration ?? 0,
+            Key: location.ReferencedName.stringValue(),
+            ElementIdentity: ArrayElementIdentity(location.Base, location.ReferencedName.stringValue()),
+          },
         });
       }
     }

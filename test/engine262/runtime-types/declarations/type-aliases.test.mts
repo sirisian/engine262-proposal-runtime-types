@@ -180,12 +180,12 @@ function thrown(source: string): string {
 test('a recursive alias resolves and its values flow', () => {
   expect(evaluated('type L = { value: uint8, next: L | null };'
     + ' const n: L = { value: 1, next: { value: 2, next: null } };'
-    + ' String(n.next.value);')).toBe('2');
+    + ' String(n.next?.value);')).toBe('2');
 });
 
 test('a cycle may run through other aliases', () => {
   expect(evaluated('type A = { b: B | null }; type B = { a: A | null };'
-    + ' const v: A = { b: { a: null } }; String(v.b.a);')).toBe('null');
+    + ' const v: A = { b: { a: null } }; String(v.b?.a);')).toBe('null');
 });
 
 test('a cycle may run through a dynamic array element', () => {

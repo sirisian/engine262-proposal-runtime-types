@@ -231,13 +231,10 @@ test('a method return is enforced like any other', () => {
 });
 
 test('a function literal publishes for its RETURN, not for its call sites', () => {
-  // A binding without an annotation has the ~any~ Static Type whatever its
-  // initializer, so the call site of an arrow or a function expression stays
-  // legacy - that is the committed no-binding-inference rule, not a gap. An
-  // object literal's method is the same case, since the object reaches its
-  // binding no better than the arrow does.
-  expect(thrown('const k = (a: uint32) => "s"; const n: number = k(5);')).toContain('"s" is not assignable');
-  expect(thrown('const o = { m(a: uint32) { return "s"; } }; const n: number = o.m(1);')).toContain('"s" is not assignable');
+  // Q03 preserves typed function literals and typed object-literal members in
+  // const bindings. Their inferred returns are therefore checked at call sites.
+  expect(thrown('const k = (a: uint32) => "s"; const n: number = k(5);')).toContain('is not assignable to "number"');
+  expect(thrown('const o = { m(a: uint32) { return "s"; } }; const n: number = o.m(1);')).toContain('is not assignable to "number"');
 
   // What publication buys a literal is the RETURN BOUNDARY: a replaced
   // dependency's lie is reported at the function rather than passed on.

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, expectThrown } from '../harness.mts';
+import { evaluated, ok, expectThrown, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-reflect-maketype (Reflect.makeType),
@@ -93,8 +93,8 @@ test('indexed access rejects non-literal and numeric-index keys (documents the g
   // typeprogramming.md: beyond string-literal keys, numeric, tuple, and
   // index-signature access are not covered. Each such form is rejected today; the
   // diagnostic for a non-literal key names the string-literal requirement.
-  expect(evaluated('let m = ""; try { type T = { a: uint8 }; type Z = T[number]; let x: Z = 0; } catch (e) { m = String(e.message.includes("must be a string literal")); } m;')).toBe('true');
-  expect(evaluated('let m = ""; try { type T = { a: uint8 }; type Z = T[string]; let x: Z = 0; } catch (e) { m = String(e.message.includes("must be a string literal")); } m;')).toBe('true');
+  expectStaticTypeError('type T = { a: uint8 }; type Z = T[number];');
+  expectStaticTypeError('type T = { a: uint8 }; type Z = T[string];');
   // a numeric index into a tuple is likewise not resolved
   expectThrown('type T = [uint8, string]; type Z = T[0]; Z;');
 });

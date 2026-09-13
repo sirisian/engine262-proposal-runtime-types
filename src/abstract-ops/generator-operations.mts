@@ -17,6 +17,7 @@ import {
 } from '../evaluator.mts';
 import { __ts_cast__, type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { EnforceResumableReturn } from './runtime-types.mts';
 import {
   Assert,
   AsyncGeneratorYield,
@@ -69,12 +70,18 @@ export function GeneratorStart(generator: GeneratorObject, generatorBody: ParseN
     // d. Else,
     //   i. Assert: generatorBody is an Abstract Closure with no parameters.
     //   ii. Let result be generatorBody().
-    const result = EnsureCompletion(
+    let result = EnsureCompletion(
       // Note: Engine262 can only perform the "If generatorBody is an Abstract Closure" check:
       yield* typeof generatorBody === 'function'
         ? generatorBody()
         : Evaluate(generatorBody),
     );
+    if (surroundingAgent.feature('runtime-types') && (result.Type === 'normal' || result.Type === 'return')) {
+      const converted = EnsureCompletion(yield* EnforceResumableReturn(acGenContext.Function,
+        result.Type === 'return' ? result.Value : Value.undefined, 'generator'));
+      result = converted.Type === 'throw' ? converted
+        : new Completion({ Type: 'return', Value: converted.Value, Target: undefined });
+    }
     // e. Assert: If we return here, the generator either threw an exception or performed either
     //    an implicit or explicit return.
     // f. Remove acGenContext from the execution context stack and restore the execution context

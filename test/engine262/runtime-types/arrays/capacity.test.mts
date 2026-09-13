@@ -36,7 +36,7 @@ test('a copy of a typed array carries its element type', () => {
   }
   // `map` is excluded on purpose: its callback returns whatever it likes, so
   // the result's elements do not come from the receiver.
-  expect(evaluated(`${a} const r = a.map(v => "text"); r[0] = "more text"; r[0];`)).toBe('more text');
+  expect(evaluated(`${a} const r = a.map((v): string => "text"); r[0] = "more text"; r[0];`)).toBe('more text');
 });
 
 test('with() takes its value at the position it writes', () => {

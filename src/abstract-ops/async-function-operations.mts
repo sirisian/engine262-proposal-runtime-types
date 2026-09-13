@@ -1,6 +1,7 @@
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
+import { EnforceResumableReturn } from './runtime-types.mts';
 import {
-  EnsureCompletion, X, ExecutionContext, surroundingAgent, Evaluate, Value, type ParseNode, Assert, Call, PromiseCapabilityRecord, RunSuspendedContext,
+  EnsureCompletion, Completion, X, ExecutionContext, surroundingAgent, Evaluate, Value, type ParseNode, Assert, Call, PromiseCapabilityRecord, RunSuspendedContext,
   type AsyncBuiltinSteps, UndefinedValue,
 } from '#self';
 
@@ -30,6 +31,13 @@ export function* AsyncBlockStart(promiseCapability: PromiseCapabilityRecord, asy
       result = EnsureCompletion(yield* asyncBody());
     } else {
       result = EnsureCompletion(yield* Evaluate(asyncBody));
+    }
+    if (surroundingAgent.feature('runtime-types') && (result.Type === 'normal' || result.Type === 'return')
+        && acAsyncContext.Function !== Value.null) {
+      const converted = EnsureCompletion(yield* EnforceResumableReturn(acAsyncContext.Function,
+        result.Type === 'return' ? result.Value : Value.undefined, 'async'));
+      result = converted.Type === 'throw' ? converted
+        : new Completion({ Type: 'return', Value: converted.Value, Target: undefined });
     }
     // Assert: If we return here, the async function either threw an exception or performed an implicit or explicit return; all awaiting is done.
     surroundingAgent.executionContextStack.pop(acAsyncContext);

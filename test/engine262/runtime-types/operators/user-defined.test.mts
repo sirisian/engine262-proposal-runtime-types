@@ -365,7 +365,7 @@ test('a parameterized primitive block declares operators per parameterization', 
   // same NUMBER as the sum of two mismatched ones, so a test that only adds
   // matching values proves nothing about whether the parameterization does any
   // work - plain arithmetic gives 7 either way.
-  expect(evaluated(`${dim} const d = (5 := float64.<{ m: 2 }>); try { const e = a + d; "no"; } catch (x) { "caught"; }`)).toBe('caught');
+  expect(evaluated(`${dim} const d: any = (5 := float64.<{ m: 2 }>); try { const e = a + d; "no"; } catch (x) { "caught"; }`)).toBe('caught');
   expect(evaluated(`${dim} try { const f = a + 2; "no"; } catch (x) { "caught"; }`)).toBe('caught');
   // The result must be USABLE as its parameterization, not merely computed:
   // without the return-annotation exemption for a primitive-block operator the

@@ -12,9 +12,9 @@ import { evaluated, expectThrown } from '../harness.mts';
 const AB = 'let a: uint32 = 1; let b: uint32 = 2;';
 
 test('a ref rest collects a run: length and indexed reads', () => {
-  expect(evaluated(`function f(ref ...xs: [].<uint32>): uint32 { return xs.length; } ${AB} String(f(ref a, ref b));`)).toBe('2');
+  expect(evaluated(`function f(ref ...xs: [].<uint32>): uint64 { return xs.length; } ${AB} String(f(ref a, ref b));`)).toBe('2');
   expect(evaluated(`function f(ref ...xs: [].<uint32>): uint32 { return xs[1]; } ${AB} String(f(ref a, ref b));`)).toBe('2');
-  expect(evaluated(`function f(ref ...xs: [].<uint32>): uint32 { return xs.length; } String(f());`)).toBe('0');
+  expect(evaluated(`function f(ref ...xs: [].<uint32>): uint64 { return xs.length; } String(f());`)).toBe('0');
 });
 
 test('an indexed write goes through to the caller\'s location', () => {
@@ -52,6 +52,6 @@ test('the static half: a non-constant index, a property, a bare use, and a whole
 });
 
 test('the static half admits the three forms, and a same-named binding elsewhere is not a ref rest', () => {
-  expect(evaluated(`function g(ref ...ys: [].<uint32>): uint32 { return ys.length; } function f(ref ...xs: [].<uint32>): string { return String(xs[0]) + "/" + String(xs.length) + "/" + String(g(...xs)); } ${AB} f(ref a, ref b);`)).toBe('1/2/2');
-  expect(evaluated('function f(ref ...xs: [].<uint32>): uint32 { return xs.length; } const xs = [1, 2, 3]; String(xs.length);')).toBe('3');
+  expect(evaluated(`function g(ref ...ys: [].<uint32>): uint64 { return ys.length; } function f(ref ...xs: [].<uint32>): string { return String(xs[0]) + "/" + String(xs.length) + "/" + String(g(...xs)); } ${AB} f(ref a, ref b);`)).toBe('1/2/2');
+  expect(evaluated('function f(ref ...xs: [].<uint32>): uint64 { return xs.length; } const xs = [1, 2, 3]; String(xs.length);')).toBe('3');
 });

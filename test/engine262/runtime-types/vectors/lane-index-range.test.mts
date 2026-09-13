@@ -28,9 +28,9 @@ test('what the rule does not reach', () => {
   expect(ok(dead(`${A}let q = a.lane.<0>();`))).toBe(true);
   expect(ok(dead(`${A}let q = a.lane.<3>();`))).toBe(true);
 
-  // A receiver with no static type is not judged: `const a = float32x4(...)`
-  // has none, the const inference covering `new` alone. The run time answers.
-  expect(ok(dead('const c = float32x4(1, 2, 3, 4); let q = c.lane.<9>();'))).toBe(true);
+  // Q03 preserves typed calls; an explicit any still defers to runtime.
+  expect(ok(dead('const c = float32x4(1, 2, 3, 4); let q = c.lane.<9>();'))).toBe(false);
+  expect(ok(dead('const c: any = float32x4(1, 2, 3, 4); let q = c.lane.<9>();'))).toBe(true);
 
   // An ordinary call, and a member read that is not `lane`.
   expect(ok(dead(`${A}let q = a.x;`))).toBe(true);

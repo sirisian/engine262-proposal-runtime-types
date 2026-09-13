@@ -1,5 +1,5 @@
 import { sourceTextOf } from '../parser/TokensOf.mts';
-import { Q, X, EnsureCompletion, isEvaluator } from '../completion.mts';
+import { Q, X, EnsureCompletion, isEvaluator, Await } from '../completion.mts';
 // Placed with the other `./` imports and NOT after `../intrinsics/`, which
 // `import-x/order` asks for and which `./all.mts` and `./array-view.mts` below
 // already decline: moved there it forms a cycle through `array-view.mts` and
@@ -9,7 +9,7 @@ import { CopyValueClassInstance } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
-import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, ToLength } from './all.mts';
+import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, ToLength, SameValue } from './all.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -17,7 +17,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
-import { generatorDeclaredType, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
 import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
@@ -3416,7 +3416,57 @@ export function* EnforceYieldType(value: Value, isAsync: boolean): ValueEvaluato
   if (!Y) {
     return value;
   }
+  if (isAsync && value instanceof ObjectValue) {
+    value = Q(yield* Await(value));
+  }
   return Q(yield* RequireType(value, Y));
+}
+
+/** A sync delegate yields a result object; its `.value` crosses the Y boundary. */
+export function* EnforceDelegatedYield(result: ObjectValue): ValueEvaluator<ObjectValue> {
+  const fn = surroundingAgent.runningExecutionContext.Function;
+  if (!returnAnnotationOf(fn as unknown as AnnotatedFunction)) {
+    return result;
+  }
+  const value = Q(yield* Get(result, Value('value')));
+  const converted = Q(yield* EnforceYieldType(value, false));
+  if (SameValue(value, converted)) {
+    return result;
+  }
+  // Do not mutate a delegate's possibly frozen result object.
+  const output = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Object.prototype%'));
+  X(CreateDataPropertyOrThrow(output, Value('value'), converted));
+  X(CreateDataPropertyOrThrow(output, Value('done'), Value.false));
+  return output;
+}
+
+/** The value returned by a resumable BODY, distinct from its call's result. */
+export function* ResumableReturnTypeOf(fn: Value, kind: 'async' | 'generator' | 'async-generator'): PlainEvaluator<TypeRecord | null> {
+  const declared = Q(yield* returnTypeRecordOf(fn));
+  if (!declared) {
+    return null;
+  }
+  if (kind === 'async') {
+    const result = declared.Kind === 'nominal' && declared.LibraryName === 'Promise' ? declared.Arguments[0] : undefined;
+    return result && typeof result !== 'number' ? result : null;
+  }
+  return generatorParameters(generatorDeclaredType(declared, kind === 'async-generator'))?.Return ?? null;
+}
+
+/** Keep the dynamic backstop for an `any` contribution to resolve T / return R. */
+export function* EnforceResumableReturn(fn: Value, value: Value, kind: 'async' | 'generator' | 'async-generator'): ValueEvaluator {
+  const target = Q(yield* ResumableReturnTypeOf(fn, kind));
+  if (!target || target.Kind === 'any') {
+    return value;
+  }
+  // Async return assimilates thenables before its resolution is checked.
+  if (kind !== 'generator' && value instanceof ObjectValue) {
+    value = Q(yield* Await(value));
+  }
+  if (target.Kind === 'void' && value === Value.undefined) {
+    return value;
+  }
+  return Q(yield* RequireType(value, target));
 }
 
 export function functionHasAnnotations(fn: AnnotatedFunction): boolean {

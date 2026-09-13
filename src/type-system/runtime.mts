@@ -3750,7 +3750,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         // instance of the other. Identity is by declaration and arguments, so
         // the instance's OWN class type answers membership as a subtype test.
         if (((t.Arguments as readonly unknown[] | undefined)?.length ?? 0) > 0) {
-          const own = RuntimeTypeOf(value);
+          const own = classInstanceType(value) ?? RuntimeTypeOf(value);
           if (own.Kind === 'nominal' && own.Declaration === t.Declaration) {
             return IsSubtype(own, t, []);
           }
@@ -3840,12 +3840,17 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           }
           return element.Kind === 'any' || SameType(backingElement, element);
         }
-        const ref = Q(yield* ResolveTypeName(Value(t.LibraryName)));
-        const ctor = Q(yield* GetValue(ref));
-        if (!(ctor instanceof ObjectValue)) {
-          return false;
+        let protoValue: Value;
+        if (t.LibraryName === 'Generator' || t.LibraryName === 'AsyncGenerator') {
+          // These type names have intrinsic prototypes but no global constructor.
+          protoValue = surroundingAgent.currentRealmRecord.Intrinsics[t.LibraryName === 'Generator'
+            ? '%GeneratorFunction.prototype.prototype%' : '%AsyncGeneratorFunction.prototype.prototype%'];
+        } else {
+          const ref = Q(yield* ResolveTypeName(Value(t.LibraryName)));
+          const ctor = Q(yield* GetValue(ref));
+          if (!(ctor instanceof ObjectValue)) return false;
+          protoValue = Q(yield* Get(ctor, Value('prototype')));
         }
-        const protoValue = Q(yield* Get(ctor, Value('prototype')));
         if (!(protoValue instanceof ObjectValue)) {
           return false;
         }

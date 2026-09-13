@@ -31,6 +31,7 @@ import {
   SameValue,
   type OrdinaryObject,
 } from './all.mts';
+import { EnforceResumableReturn } from './runtime-types.mts';
 import {
   RunSuspendedContext, Throw, type Realm, surroundingAgent,
   RunCallerContext,
@@ -87,6 +88,11 @@ export function AsyncGeneratorStart(generator: AsyncGeneratorObject, generatorBo
         ? generatorBody()
         : Evaluate(generatorBody),
     ) as YieldCompletion;
+    if (surroundingAgent.feature('runtime-types') && (result instanceof NormalCompletion || result instanceof ReturnCompletion)) {
+      const converted = EnsureCompletion(yield* EnforceResumableReturn(acGenContext.Function,
+        result instanceof ReturnCompletion ? result.Value : Value.undefined, 'async-generator'));
+      result = converted.Type === 'throw' ? converted : ReturnCompletion(converted.Value);
+    }
     // c. Assert: If we return here, the async generator either threw an exception or performed either an implicit or explicit return.
     // d. Remove genContext from the execution context stack and restore the execution context
     //    that is at the top of the execution context stack as the running execution context.

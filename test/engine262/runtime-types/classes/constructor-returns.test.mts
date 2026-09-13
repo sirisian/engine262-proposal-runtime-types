@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
+import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
  * proposal-runtime-types: the constructor-return RULE and the SIGNATURE it
@@ -18,7 +18,7 @@ import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
  */
 
 /** An early error: the program never runs, so the refusal is not catchable. */
-const early = (source: string) => expectStaticTypeError(source);
+const early = (source: string) => expectEarlyError(source, 'SyntaxError');
 
 test('the rule: a typed class constructor may not return a value', () => {
   early('class C { x: uint8 = 1; constructor() { return { a: 1 }; } }');

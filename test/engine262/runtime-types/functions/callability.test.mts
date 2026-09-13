@@ -76,7 +76,7 @@ test('what callability does not reach', () => {
   // A generic class's own name inside a static field: typing the target would
   // reach the rule that refuses a bare generic, which this judgment must not
   // provoke.
-  expect(ok('class Box<T> { x: uint8; static default = new Box(); } "ok";')).toBe(true);
+  expect(ok('class Box<T> { x: uint8; static default = new Box.<uint8>(); } "ok";')).toBe(true);
 });
 
 test('an OBJECT is not callable either', () => {
@@ -146,11 +146,8 @@ test('an INTERSECTION is decided, for the opposite reason a union is', () => {
 test('~void~ has no values, so nothing it describes can be called', () => {
   expectThrown(dead('function f(): void { } let q = f()();'), 'is not callable');
 
-  // KNOWN LIMIT: the construction test asks only about an IDENTIFIER naming no
-  // class, and a topic. That restriction exists because typing an arbitrary
-  // target is not free - `staticType` of a generic class's name reaches the rule
-  // that refuses a bare generic - so `new (f())()` is not reached.
-  expect(ok(dead('function f(): void { } let q = new (f())();'))).toBe(true);
+  // A parenthesized expression resolves to its known value type too.
+  expectThrown(dead('function f(): void { } let q = new (f())();'), 'is not a constructor');
 });
 
 test('construction refuses what calling refuses', () => {

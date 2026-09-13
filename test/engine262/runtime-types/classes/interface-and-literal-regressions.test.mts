@@ -798,8 +798,8 @@ test('a signature is trusted only where the name cannot be replaced', () => {
   // signature must not become not checking at all.
   expect(accepts('function f(): uint32 { return (5 := uint32); } function g2(): uint32 { return f(); } f = function () { return "now-a-string"; }; const n2: uint32 = g2();')).toBe(false);
 
-  // An UNANNOTATED binding is ~any~ and was always deferred - not this fix.
-  expect(accepts('const g = (p: uint32): string => "s"; const q: number = g((1 := uint32));')).toBe(true);
+  // Q03: an unannotated const preserves the typed function initializer.
+  expect(accepts('const g = (p: uint32): string => "s"; const q: number = g((1 := uint32));')).toBe(false);
 });
 
 test('an inference anchored in a nested list still publishes', () => {
@@ -950,9 +950,9 @@ test('a spread supplies members for a MEMBERSHIP question', () => {
   expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s, b: (2 := uint8) };`)).toBe(true);
 
   // The NULL is KEPT where the keys are genuinely unknowable: an UNANNOTATED
-  // operand is ~any~, and a getter cannot be read. Enumerating either
+  // operand explicitly typed ~any~, and a getter that cannot be read. Enumerating either
   // would report every declared member as missing.
-  expect(accepts(`${P}const s = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(true);
+  expect(accepts(`${P}const s: any = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(true);
   expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s, get b() { return (2 := uint8); } };`)).toBe(true);
 
   // An OPTIONAL member the spread does not supply is still fine.
@@ -981,9 +981,9 @@ test('a spread carries its members into the FRESHNESS rule', () => {
   expect(accepts('type E = { a: uint8 }; let e: E = { a: (1 := uint8), zz: "s" };')).toBe(false);
 
   // A spread with nothing excess, and an UNANNOTATED operand whose keys are
-  // unknowable (~any~), are both accepted.
+  // unknowable (explicit ~any~), are both accepted.
   expect(accepts('type E = { a: uint8 }; const u: { a: uint8 } = { a: (1 := uint8) }; let e: E = { ...u };')).toBe(true);
-  expect(accepts('type E = { a: uint8 }; const u = { a: (1 := uint8), zz: "s" }; let e: E = { ...u };')).toBe(true);
+  expect(accepts('type E = { a: uint8 }; const u: any = { a: (1 := uint8), zz: "s" }; let e: E = { ...u };')).toBe(true);
 
   // An INDEX SIGNATURE admits the key, and an OPTIONAL member declares it.
   expect(accepts('type I = { [k: string]: int32 }; const u: { a: int32, zz: int32 } = { a: (1 := int32), zz: (2 := int32) }; let i: I = { ...u };')).toBe(true);
@@ -1015,8 +1015,8 @@ test('the LAST member writing a key decides its type', () => {
   expect(accepts(`${P}${T}${U}let p: P = { ...u, ...t };`)).toBe(false);
   expect(accepts(`${P}${T}${U}let p: P = { ...t, ...u };`)).toBe(true);
 
-  // An UNANNOTATED operand is ~any~ and says nothing about its members.
-  expect(accepts(`${P}const s = { a: "x", b: (2 := uint8) }; let p: P = { ...s };`)).toBe(true);
+  // An explicit ~any~ operand says nothing about its members.
+  expect(accepts(`${P}const s: any = { a: "x", b: (2 := uint8) }; let p: P = { ...s };`)).toBe(true);
 
   // The presence rule and the excess rule are unchanged.
   expect(accepts(`${P}const s: { a: uint8 } = { a: (1 := uint8) }; let p: P = { ...s };`)).toBe(false);
@@ -1093,9 +1093,9 @@ test('one union type selects one arm, whatever the spelling', () => {
   // copy before walking members, so a SELF-REFERENTIAL union does not survive
   // it. These two rows are what caught that.
   expect(evaluated('type L = { value: uint8, next: L | null };'
-    + ' const n: L = { value: 1, next: { value: 2, next: null } }; String(n.next.value);')).toBe('2');
+    + ' const n: L = { value: 1, next: { value: 2, next: null } }; String(n.next?.value);')).toBe('2');
   expect(evaluated('type A2 = { b: B2 | null }; type B2 = { a: A2 | null };'
-    + ' const v: A2 = { b: { a: null } }; String(v.b.a);')).toBe('null');
+    + ' const v: A2 = { b: { a: null } }; String(v.b?.a);')).toBe('null');
 
   // The scalar ranking keeps every answer it had, in either spelling.
   expect(evaluated('let v: uint8 | uint16 = 1; String(Reflect.typeOf(v));')).toBe('uint.<8>');
@@ -1126,9 +1126,9 @@ test('a nested union in an annotation is flattened', () => {
   // members without publishing an in-progress copy - which is why the flattening
   // here is done directly.
   expect(evaluated('type L = { value: uint8, next: L | null };'
-    + ' const n: L = { value: 1, next: { value: 2, next: null } }; String(n.next.value);')).toBe('2');
+    + ' const n: L = { value: 1, next: { value: 2, next: null } }; String(n.next?.value);')).toBe('2');
   expect(evaluated('type A2 = { b: B2 | null }; type B2 = { a: A2 | null };'
-    + ' const v: A2 = { b: { a: null } }; String(v.b.a);')).toBe('null');
+    + ' const v: A2 = { b: { a: null } }; String(v.b?.a);')).toBe('null');
 
   // A nested OBJECT union agrees in either spelling, as the arm ordering left it.
   const G = 'function g(): any { return { x: 1 }; } ';

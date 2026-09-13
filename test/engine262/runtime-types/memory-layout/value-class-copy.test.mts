@@ -57,7 +57,7 @@ test('the copy carries what the instance carries', () => {
   // ...the instance is still sealed, per #sec-typed-storage.
   expect(evaluated(`${V} const a = new P(); const b = a; String(Object.isSealed(b));`)).toBe('true');
   // ...and a store to a field is still checked against its declared type.
-  expect(evaluated(`${V} const a = new P(); const b = a; try { b.x = 300; "no"; } catch (e) { "caught"; }`)).toBe('caught');
+  expect(evaluated(`${V} const a = new P(); const b: any = a; try { b.x = 300; "no"; } catch (e) { "caught"; }`)).toBe('caught');
 });
 
 test('nothing that is NOT a value type class is copied', () => {

@@ -132,8 +132,8 @@ test('C5: a call binds from its context before its arguments, both sides, and a 
   expect(evaluated('function f<K>(cb: () => K): K { return cb(); } let s: uint8 = f(() => (1 := uint8)); String(Reflect.typeOf(s));')).toBe('uint.<8>');
   // The runtime alone (a call the checker cannot see through - a function
   // read out of an untyped array): same answers.
-  expect(evaluated(`${F} const fs = [f]; const r: uint8 = fs[0](1); String(Reflect.typeOf(r));`)).toBe('uint.<8>');
-  expect(evaluated(`${F} const fs = [f]; ${caught('const q: uint8 = fs[0]("s"); r = "admitted";')}`)).toContain('runtime:');
+  expect(evaluated(`${F} const fs: any = [f]; const r: uint8 = fs[0](1); String(Reflect.typeOf(r));`)).toBe('uint.<8>');
+  expect(evaluated(`${F} const fs: any = [f]; ${caught('const q: uint8 = fs[0]("s"); r = "admitted";')}`)).toContain('runtime:');
 });
 
 // -- 2b. Which parameters are reachable --------------------------------------

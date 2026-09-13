@@ -63,7 +63,7 @@ test('V6/V7/V8: a class constructor inside a structure reports its constructor s
 
 test('Q5: a computed-type formal reads any; a failed derivation is the untyped catch-all', () => {
   expect(evaluated('function wrapOf(T) { return T; } const f = (x: wrapOf(uint8)): uint8 => x; String(Reflect.typeOf({ f }));')).toBe('{ f: (x: any) => uint.<8> }');
-  expect(evaluated('const g = [function (x: Nope) {}][0]; String(Reflect.typeOf({ g }));')).toBe('{ g: (x: any) => void }');
+  expectStaticTypeError('const g = [function (x: Nope) {}][0]; String(Reflect.typeOf({ g }));');
 });
 
 // -- 2b. Inference through a callable ---------------------------------------
@@ -84,21 +84,21 @@ test('P7/P15/P17: inference reaches through a callable property, on both sides',
 
 test('P27/P28: a mismatched callable is refused at a function-typed binding, both sides', () => {
   expectStaticTypeError('function g(x: string): string { return "s"; } const f: (x: uint8) => uint8 = g;');
-  expect(evaluated(`const pick = [(x: string) => "s"][0]; ${caught('const f: (x: uint8) => uint8 = pick; r = "admitted";')}`)).toContain('runtime:');
+  expect(evaluated(`const pick: any = [(x: string) => "s"][0]; ${caught('const f: (x: uint8) => uint8 = pick; r = "admitted";')}`)).toContain('runtime:');
   // A const-bound ARROW at the same binding: the checker admits it (a
   // pre-existing gap - it refuses the `function` declaration above), the
   // runtime now refuses it. Recorded in the plan; the program fails.
   expect(ok('const g = (x: string) => "s"; const f: (x: uint8) => uint8 = g;')).toBe(false);
   // P32/P32b: an untyped callback passes (the named unsoundness); a matching typed one passes.
-  expect(evaluated(`const pick = [(x) => x][0]; ${caught('const f: (x: uint8) => uint8 = pick; r = "admitted";')}`)).toBe('admitted');
-  expect(evaluated(`const pick = [(x: uint8): uint8 => x][0]; ${caught('const f: (x: uint8) => uint8 = pick; r = "admitted " + String(f(3));')}`)).toBe('admitted 3');
+  expect(evaluated(`const pick: any = [(x) => x][0]; ${caught('const f: (x: uint8) => uint8 = pick; r = "admitted";')}`)).toBe('admitted');
+  expect(evaluated(`const pick: any = [(x: uint8): uint8 => x][0]; ${caught('const f: (x: uint8) => uint8 = pick; r = "admitted " + String(f(3));')}`)).toBe('admitted 3');
   expect(evaluated('const a: [].<uint8> = [1, 2]; String(a.map((x) => x + 1).length);')).toBe('2');
 });
 
 test('P11/P12/P12b/P13/P24: a mismatched callable MEMBER is refused, and `is` answers false', () => {
   expectStaticTypeError('const o: { f: (x: uint8) => uint8 } = { f: (x: string) => "s" };');
-  expect(evaluated(`const v = { f: (x: string) => "s" }; const pick = [v][0]; ${caught('const o: { f: (x: uint8) => uint8 } = pick; r = "admitted";')}`)).toContain('runtime:');
-  expect(evaluated(`interface I { f(x: uint8): uint8; } const v = { f: (x: string) => "s" }; const pick = [v][0]; ${caught('const o: I = pick; r = "admitted";')}`)).toContain('runtime:');
+  expect(evaluated(`const v = { f: (x: string) => "s" }; const pick: any = [v][0]; ${caught('const o: { f: (x: uint8) => uint8 } = pick; r = "admitted";')}`)).toContain('runtime:');
+  expect(evaluated(`interface I { f(x: uint8): uint8; } const v = { f: (x: string) => "s" }; const pick: any = [v][0]; ${caught('const o: I = pick; r = "admitted";')}`)).toContain('runtime:');
   expect(evaluated('String(({ f: (x: string) => "s" }) is { f: (x: uint8) => uint8 });')).toBe('false');
   expect(evaluated('String(({ f: (a: uint8, b: uint8) => 1 }) is { f: () => uint8 });')).toBe('false');
   expect(evaluated('String(({ f: (x: uint8): uint8 => x }) is { f: (x: uint8) => uint8 });')).toBe('true');
@@ -112,9 +112,9 @@ test('this-adoption at the boundary: a non-arrow function at a this-typed member
   // checker sees it (P-d), and at run time where it does not.
   const BUS = 'interface Bus { on(name: string): void; } ';
   expect(evaluated(`${BUS} let b: Bus = { on(name: string): void {} }; "ok";`)).toBe('ok');
-  expect(evaluated(`${BUS} function on(name: string): void {} const pick = [{ on }][0]; ${caught('const b: Bus = pick; r = "admitted";')}`)).toBe('admitted');
+  expect(evaluated(`${BUS} function on(name: string): void {} const pick: any = [{ on }][0]; ${caught('const b: Bus = pick; r = "admitted";')}`)).toBe('admitted');
   expect(ok(`${BUS} let b: Bus = { on: (name: string): void => {} };`)).toBe(false);
-  expect(evaluated(`${BUS} const v = { on: (name: string): void => {} }; const pick = [v][0]; ${caught('const b: Bus = pick; r = "admitted";')}`)).toContain('runtime:');
+  expect(evaluated(`${BUS} const v = { on: (name: string): void => {} }; const pick: any = [v][0]; ${caught('const b: Bus = pick; r = "admitted";')}`)).toContain('runtime:');
 });
 
 test('a rest typed by a fixed tuple is positional in the relation', () => {

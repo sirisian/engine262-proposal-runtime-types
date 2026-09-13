@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectError, expectThrownKind } from '../harness.mts';
+import { evaluated, expectError, expectStaticTypeError } from '../harness.mts';
 
 /**
  * proposal-runtime-types `#sec-indexed-access-types`.
@@ -38,19 +38,19 @@ test('it is POSTFIX, so it binds tighter than the prefixes and chains', () => {
 
 test('the three error conditions the clause names', () => {
   // A key that is not a String literal type.
-  expectThrownKind('type T = { a: uint8 }; type A = T[number];', 'TypeError');
+  expectStaticTypeError('type T = { a: uint8 }; type A = T[number];');
   // An operand with no properties.
-  expectThrownKind('type A = uint8["a"];', 'TypeError');
+  expectStaticTypeError('type A = uint8["a"];');
   // A property that does not exist.
-  expectThrownKind('type T = { a: uint8 }; type A = T["missing"];', 'TypeError');
+  expectStaticTypeError('type T = { a: uint8 }; type A = T["missing"];');
 });
 
 test('a deferred key form is an ERROR, not an unspecified corner', () => {
   // The restriction is a floor: a later edition may admit these, and a program
   // that writes one today is told so rather than meeting an implementation's
   // guess.
-  expectThrownKind('type T = { a: uint8 }; type A = T[string];', 'TypeError');
-  expectThrownKind('type T = [uint8, string]; type A = T[0];', 'TypeError');
+  expectStaticTypeError('type T = { a: uint8 }; type A = T[string];');
+  expectStaticTypeError('type T = [uint8, string]; type A = T[0];');
 });
 
 test('`T[keyof T]` is the union of the property types', () => {
@@ -68,8 +68,8 @@ test('it does not overlap the INDEX ACCESSORS', () => {
   // type at all, so the two cannot meet in this edition.
   const GRID = 'class Grid { operator [](i: uint8): string { return "cell"; } } ';
   expect(evaluated(`${GRID}const g = new Grid(); String(g[(0 := uint8)]);`)).toBe('cell');
-  expectThrownKind(`${GRID}type A = Grid[uint8];`, 'TypeError');
-  expectThrownKind(`${GRID}type A = Grid["x"];`, 'TypeError');
+  expectStaticTypeError(`${GRID}type A = Grid[uint8];`);
+  expectStaticTypeError(`${GRID}type A = Grid["x"];`);
 });
 
 test('an INTERFACE is reached; a class instance type is not', () => {

@@ -96,9 +96,9 @@ export interface EvaluabilityViolation {
  * `const` would relax it soundly and needs scope resolution this walk does not
  * have; it is a later decision, not a gap in this one.
  */
-export function FirstFreeReference(root: ParseNode): EvaluabilityViolation | undefined {
+export function FirstFreeReference(root: ParseNode, available: ReadonlySet<string> = new Set()): EvaluabilityViolation | undefined {
   let found: EvaluabilityViolation | undefined;
-  const bound = new Set<string>();
+  const bound = new Set<string>(available);
 
   // Two passes: a binding may be used before its declaration is walked - a
   // function declaration is hoisted, and `const a = 1; a;` reads in source order
@@ -112,6 +112,7 @@ export function FirstFreeReference(root: ParseNode): EvaluabilityViolation | und
       return;
     }
     const n = node as ParseNode & { type?: string, name?: string };
+    if (typeof n.type !== 'string') return;
     if (n.type === 'BindingIdentifier' && typeof n.name === 'string') {
       bound.add(n.name);
     }
@@ -132,6 +133,7 @@ export function FirstFreeReference(root: ParseNode): EvaluabilityViolation | und
       return;
     }
     const n = node as ParseNode & { type?: string, name?: string };
+    if (typeof n.type !== 'string') return;
     if (n.type === 'IdentifierReference' && typeof n.name === 'string' && !bound.has(n.name)) {
       found = { name: n.name, why: 'a binding outside the block', node: n };
       return;
@@ -162,6 +164,7 @@ export function FirstEvaluabilityViolation(root: ParseNode): EvaluabilityViolati
       return;
     }
     const n = node as ParseNode & { type?: string, name?: string };
+    if (typeof n.type !== 'string') return;
     // A local binding of a forbidden name is the module's own, not the ambient
     // one, so naming it is not a violation. Tracked coarsely and deliberately:
     // over-permitting a shadowed `Date` is a smaller error than refusing a

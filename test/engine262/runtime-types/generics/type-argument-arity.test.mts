@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrown, ok } from '../harness.mts';
+import { expectThrown, expectStaticTypeError, ok } from '../harness.mts';
 
 /**
  * Spec: #sec-type-references. A declaration taking _N_ type parameters is
@@ -55,7 +55,9 @@ test('what the count does not reach', () => {
 
   // A PACK takes any number, so the declaration has no fixed arity to compare
   // against and the count is not judged.
-  expect(ok(dead('function f<...T>(...x: T) {} f.<uint8, string, boolean>(uint8(1));'))).toBe(true);
+  expect(ok(dead('function f<...T>(...x: T) {} f.<uint8, string, boolean>(uint8(1), "s", true);'))).toBe(true);
+  // Once supplied, the pack is a tuple: the value arguments must fill its slots.
+  expectStaticTypeError(dead('function f<...T>(...x: T) {} f.<uint8, string, boolean>(uint8(1));'));
 
   // A NAMED argument supplies a parameter by name, so its position says nothing
   // about how many were supplied; a mistake there is orderTypeArguments's to

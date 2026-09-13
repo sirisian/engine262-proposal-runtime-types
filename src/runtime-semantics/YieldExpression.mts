@@ -1,4 +1,4 @@
-import { EnforceYieldType } from '../abstract-ops/runtime-types.mts';
+import { EnforceYieldType, EnforceDelegatedYield } from '../abstract-ops/runtime-types.mts';
 import { ObjectValue, Value } from '../value.mts';
 import {
   Await,
@@ -72,9 +72,17 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
         }
         // vi. If generatorKind is async, then set received to AsyncGeneratorYield(? IteratorValue(innerResult)).
         if (generatorKind === 'async') {
-          received = EnsureCompletion(yield* AsyncGeneratorYield(Q(yield* IteratorValue(innerResult))));
+          let outgoing: Value = Q(yield* IteratorValue(innerResult));
+          if (surroundingAgent.feature('runtime-types')) {
+            outgoing = Q(yield* EnforceYieldType(outgoing, true));
+          }
+          received = EnsureCompletion(yield* AsyncGeneratorYield(outgoing));
         } else { // vii. Else, set received to GeneratorYield(innerResult).
-          received = EnsureCompletion(yield* GeneratorYield(innerResult));
+          let outgoing: ObjectValue = innerResult;
+          if (surroundingAgent.feature('runtime-types')) {
+            outgoing = Q(yield* EnforceDelegatedYield(outgoing));
+          }
+          received = EnsureCompletion(yield* GeneratorYield(outgoing));
         }
       } else if (received instanceof ThrowCompletion) { // b. Else if received is a throw completion, then
         // i. Let throw be ? GetMethod(iterator, "throw").
@@ -101,9 +109,17 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
           }
           // 7. If generatorKind is async, then set received to AsyncGeneratorYield(? IteratorValue(innerResult)).
           if (generatorKind === 'async') {
-            received = EnsureCompletion(yield* AsyncGeneratorYield(Q(yield* IteratorValue(innerResult))));
+            let outgoing: Value = Q(yield* IteratorValue(innerResult));
+            if (surroundingAgent.feature('runtime-types')) {
+              outgoing = Q(yield* EnforceYieldType(outgoing, true));
+            }
+            received = EnsureCompletion(yield* AsyncGeneratorYield(outgoing));
           } else { // 8. Else, set received to GeneratorYield(innerResult).
-            received = EnsureCompletion(yield* GeneratorYield(innerResult));
+            let outgoing: ObjectValue = innerResult;
+            if (surroundingAgent.feature('runtime-types')) {
+              outgoing = Q(yield* EnforceDelegatedYield(outgoing));
+            }
+            received = EnsureCompletion(yield* GeneratorYield(outgoing));
           }
         } else { // iii. Else,
           // 1. NOTE: If iterator does not have a throw method, this throw is going to terminate the yield* loop. But first we need to give iterator a chance to clean up.
@@ -156,9 +172,17 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
         }
         // ix. If generatorKind is async, then set received to AsyncGeneratorYield(? IteratorValue(innerResult)).
         if (generatorKind === 'async') {
-          received = EnsureCompletion(yield* AsyncGeneratorYield(Q(yield* IteratorValue(innerReturnResult))));
+          let outgoing: Value = Q(yield* IteratorValue(innerReturnResult));
+          if (surroundingAgent.feature('runtime-types')) {
+            outgoing = Q(yield* EnforceYieldType(outgoing, true));
+          }
+          received = EnsureCompletion(yield* AsyncGeneratorYield(outgoing));
         } else { // ixx. Else, set received to GeneratorYield(innerResult).
-          received = EnsureCompletion(yield* GeneratorYield(innerReturnResult));
+          let outgoing: ObjectValue = innerReturnResult;
+          if (surroundingAgent.feature('runtime-types')) {
+            outgoing = Q(yield* EnforceDelegatedYield(outgoing));
+          }
+          received = EnsureCompletion(yield* GeneratorYield(outgoing));
         }
       }
     }

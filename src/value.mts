@@ -1127,13 +1127,14 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
   * Get(P: PropertyKeyValue, Receiver: Value): ObjectSlotReturn['Get'] {
     const result = Q(yield* OrdinaryGet(this as unknown as OrdinaryObject, P, Receiver));
     // proposal-runtime-types (spec sec-array-defaults-and-stores): "`length` is
-    // a `uint32`" - for a TYPED array, whose element type this object carries.
+    // the index type (`uint64`) for a typed array or tuple.
     // The STORED length stays a plain Number, because the array exotic object's
     // own [[DefineOwnProperty]] asserts that it is one and ArraySetLength
     // computes with it; what the clause constrains is the value a read yields,
     // so the typing is applied at the read.
     if (surroundingAgent.feature('runtime-types')
-        && (this as { TypedElement?: unknown }).TypedElement !== undefined
+        && ((this as { TypedElement?: unknown }).TypedElement !== undefined
+          || (this as { TypedTuple?: unknown }).TypedTuple !== undefined)
         && P instanceof JSStringValue && P.stringValue() === 'length'
         && result instanceof NumberValue) {
       return new TypedNumberValue(R(result) as number, INDEX_TYPE);
@@ -1510,7 +1511,7 @@ export class ReferenceRecord {
   // that GROWTH RELOCATES. The generation the borrow was taken at is compared
   // at every use; a growth past the capacity bumps it and so invalidates every
   // borrow taken before it, exactly as growth of an `SoA` does.
-  readonly ArrayBorrow?: { readonly Source: ObjectValue, readonly TakenAt: number };
+  readonly ArrayBorrow?: { readonly Source: ObjectValue, readonly TakenAt: number, readonly Key: string, readonly ElementIdentity: object };
 
   constructor({
     Base,

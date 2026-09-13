@@ -30,7 +30,7 @@ test('the annotation is enforced, not merely applied', () => {
 });
 
 test('the other non-simple forms are unaffected in their own behaviour', () => {
-  expect(evaluated('function f(...xs: [].<uint8>): uint32 { return xs.length; } String(Number(f(1,2,3)));')).toBe('3');
+  expect(evaluated('function f(...xs: [].<uint8>): uint64 { return xs.length; } String(Number(f(1,2,3)));')).toBe('3');
   expect(evaluated('function f(a: float32, b: float32 = 0.1): float32 { return a; } String(Number(f(0.1)));')).toBe('0.10000000149011612');
   // An untyped function with a default is ordinary JavaScript and unchanged.
   expect(evaluated('function f(x = 1) { return x + 1; } String(f());')).toBe('2');

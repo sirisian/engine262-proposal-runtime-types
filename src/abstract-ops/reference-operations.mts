@@ -11,6 +11,8 @@ import {
   ReferenceValue,
   ReferenceRunValue,
   NumberValue,
+  TypedNumberValue,
+  INDEX_TYPE,
 } from '../value.mts';
 import { VectorValue, type PropertyKeyValue } from '../value.mts';
 import { vectorGet, vectorSet } from '../type-system/vector-ops.mts';
@@ -21,6 +23,7 @@ import {
 import { __ts_cast__ } from '../utils/language.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { ResolvePrivateIdentifier } from '../execution-context/PrivateEnvironment.mts';
+import { ArrayElementIsLive } from '../type-system/array-borrow.mts';
 import {
   Assert,
   ToObject,
@@ -104,7 +107,7 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
   if (V instanceof ReferenceRecord && V.Base instanceof ReferenceRunValue) {
     const element = Q(yield* referenceRunElement(V.Base, V.ReferencedName as Value));
     if (element === 'length') {
-      return Value(V.Base.Locations.length);
+      return new TypedNumberValue(V.Base.Locations.length, INDEX_TYPE);
     }
     return Q(yield* GetValue(element));
   }
@@ -463,6 +466,9 @@ export function RequireArrayBorrowLive(V: ReferenceRecord) {
   const current = (borrow.Source as unknown as { TypedGeneration?: number }).TypedGeneration ?? 0;
   if (current !== borrow.TakenAt) {
     return Throw.TypeError('this reference is into an array that has since grown');
+  }
+  if (!ArrayElementIsLive(borrow.Source, borrow.Key, borrow.ElementIdentity)) {
+    return Throw.TypeError('this reference names an array element that has been removed');
   }
   return undefined;
 }

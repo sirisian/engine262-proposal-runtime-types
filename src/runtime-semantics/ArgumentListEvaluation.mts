@@ -4,10 +4,14 @@ import {
 } from '../value.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
-import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { OutOfRange, isArray } from '../utils/language.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { BindNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
+import { assignArguments } from '../type-system/overloads.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { anyType, type TypeRecord } from '../type-system/records.mts';
 import {
   surroundingAgent,
   Assert,
@@ -226,10 +230,11 @@ export function hasNamedArguments(args: ParseNode.Arguments): boolean {
  * a required parameter left unfilled is an error, since named arguments skip
  * defaulted parameters rather than required ones.
  */
-function parameterInfo(func: Value): { names: string[], omittable: boolean[], restIndex: number } {
+function parameterInfo(func: Value): { names: string[], omittable: boolean[], rests: boolean[], restIndex: number } {
   const formals = ((func as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []);
   const names: string[] = [];
   const omittable: boolean[] = [];
+  const rests: boolean[] = [];
   let restIndex = -1;
   formals.forEach((p, i) => {
     const node = p as {
@@ -239,6 +244,7 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
       Initializer?: unknown,
       TypedInitializer?: unknown,
     };
+    rests.push(node.type === 'BindingRestElement');
     if (node.type === 'BindingRestElement') {
       restIndex = i;
       names.push(node.BindingIdentifier?.name ?? '');
@@ -250,7 +256,7 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
       omittable.push(node.Optional === true || hasDefault);
     }
   });
-  return { names, omittable, restIndex };
+  return { names, omittable, rests, restIndex };
 }
 
 /**
@@ -267,14 +273,16 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
  */
 type SignatureInView = { Parameters: readonly { Name: string, Type?: unknown, Optional: boolean, Rest: boolean, Initial?: Value }[] };
 
-function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omittable: boolean[], restIndex: number, initials: (Value | undefined)[], types: unknown[] } {
+function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omittable: boolean[], rests: boolean[], restIndex: number, initials: (Value | undefined)[], types: unknown[] } {
   const names: string[] = [];
   const omittable: boolean[] = [];
+  const rests: boolean[] = [];
   const initials: (Value | undefined)[] = [];
   const types: unknown[] = [];
   let restIndex = -1;
   sig.Parameters.forEach((p, i) => {
     names.push(p.Name);
+    rests.push(p.Rest);
     if (p.Rest) {
       restIndex = i;
     }
@@ -282,7 +290,7 @@ function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omit
     initials.push(p.Initial);
     types.push(p.Type);
   });
-  return { names, omittable, restIndex, initials, types };
+  return { names, omittable, rests, restIndex, initials, types };
 }
 
 /** The signature in view for a callee reference, or undefined where its binding declares no callable type. */
@@ -310,46 +318,22 @@ export function signatureInView(declaredType: unknown, namedArguments: readonly 
  */
 export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signature?: SignatureInView): PlainEvaluator<Arguments> {
   const info = signature ? parameterInfoOfSignature(signature) : { ...parameterInfo(func), initials: [] as (Value | undefined)[], types: [] as unknown[] };
-  const { names, omittable, restIndex, initials, types } = info;
-  const fixedCount = restIndex === -1 ? names.length : restIndex;
-  const positioned: Value[] = [];
-  const restCollected: Value[] = [];
-  const byName = new Map<string, Value>();
-  // Once a named argument targets the rest parameter, the following positional
-  // arguments continue that rest rather than filling fixed positions: the design's
-  // `f(8, args: 'a', 'b')` gives `args` both 'a' and 'b'.
-  let restOpen = false;
-
-  // A positional value fills the next fixed position, or joins the rest once the
-  // fixed positions are used or the rest has been opened by a named rest argument.
+  const { names, omittable, rests, initials } = info;
+  const types = signature ? info.types : (Q(yield* soleSignatureParameterTypes(func)) ?? []);
+  const items: ArgumentItem<Value>[] = [];
   const placePositional = (value: Value): void => {
-    if (!restOpen && positioned.length < fixedCount) {
-      positioned.push(value);
-    } else {
-      restCollected.push(value);
-    }
+    items.push({ value });
   };
-
-  const placeNamed = (name: string, value: Value): PlainEvaluator<void> => (function* place() {
-    const idx = names.indexOf(name);
-    if (idx === -1) {
-      return Throw.TypeError('no parameter named $1 for this call', Value(name));
-    }
-    if (restIndex !== -1 && idx === restIndex) {
-      restCollected.push(value);
-      restOpen = true;
-    } else {
-      byName.set(name, value);
-    }
-    return undefined;
-  }());
+  const placeNamed = (name: string, value: Value): void => {
+    items.push({ name, value });
+  };
 
   for (const element of args) {
     if ((element as { type?: string }).type === 'NamedArgument') {
       const named = element as ParseNode.NamedArgument;
       const ref = Q(yield* Evaluate(named.AssignmentExpression));
       const value = Q(yield* GetValue(ref));
-      Q(yield* placeNamed(named.Name, value));
+      placeNamed(named.Name, value);
     } else if ((element as { type?: string }).type === 'AssignmentRestElement') {
       const { AssignmentExpression } = element as ParseNode.AssignmentRestElement;
       const spreadRef = Q(yield* Evaluate(AssignmentExpression));
@@ -364,7 +348,7 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
         const keys = Q(yield* EnumerableOwnProperties(spreadObj, 'key'));
         for (const key of keys) {
           const value = Q(yield* Get(spreadObj, key as JSStringValue));
-          Q(yield* placeNamed((key as JSStringValue).stringValue(), value));
+          placeNamed((key as JSStringValue).stringValue(), value);
         }
       } else {
         const iteratorRecord = Q(yield* GetIterator(spreadObj, 'sync'));
@@ -383,54 +367,40 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
     }
   }
 
-  // Assemble the positional list the call receives. Each fixed parameter takes
-  // its positional value, else its named value, else undefined where it may be
-  // omitted (its default applies), else it is a required parameter left unfilled,
-  // an error. The rest parameter, where present, is followed by every collected
-  // rest value in source order.
+  const parameters = names.map((Name, i) => ({
+    Name, Rest: rests[i], Optional: omittable[i], Type: (types[i] ?? anyType) as TypeRecord,
+  }));
+  const placed = BindNamedArguments(parameters, items, (slots, values) => {
+    const argumentTypes = values.map((value): TypeRecord => {
+      const type = RuntimeTypeOf(value);
+      return value instanceof ObjectValue || value instanceof ReferenceValue ? type
+        : { Kind: 'literal', Base: type, Value: value };
+    });
+    return assignArguments(slots, argumentTypes);
+  });
+  if (placed.error === 'unknown-name') {
+    return Throw.TypeError('no parameter named $1 for this call', Value(placed.name!));
+  }
+  if (placed.error) {
+    return Throw.TypeError('the named arguments do not satisfy the signature in view');
+  }
   const result: Value[] = [];
-  for (let i = 0; i < fixedCount; i += 1) {
-    if (i < positioned.length) {
-      result.push(positioned[i]);
-    } else if (byName.has(names[i])) {
-      result.push(byName.get(names[i])!);
-    } else if (omittable[i]) {
-      // The signature in view supplies its default; otherwise the position is
-      // left undefined for the callee's own default.
-      result.push(initials[i] ?? Value.undefined);
-    } else {
-      return Throw.TypeError('no argument for the required parameter $1', Value(names[i] || String(i)));
-    }
-    // With a signature in view, an UNTYPED PRIMITIVE argument takes the
-    // parameter's type by conversion - literal propagation at an argument
-    // position, as a declared parameter performs at its own binding
-    // (IteratorBindingInitialization). The implementer may be untyped and
-    // convert nothing itself; without this, `g(x: 2)` at `(x: uint8, y: uint8 =
-    // 9)` handed it a Number beside a `uint8` default and the two did not mix.
-    const t = types[i] as { Kind?: string } | undefined;
-    const v = result[i];
-    if (signature && t && t.Kind !== undefined && t.Kind !== 'any' && v !== undefined && !(v instanceof ObjectValue) && v !== Value.undefined) {
-      result[i] = Q(yield* ConvertValue(v, t as never));
-    }
-  }
-  for (const v of restCollected) {
-    result.push(v);
-  }
-  // proposal-runtime-types: a rest may be
-  // followed by further parameters, and a named argument may name one of them.
-  // The assembly stopped at the rest, so `f(1, 2, b: "x")` for
-  // `function f(...a: [].<number>, b: string)` dropped the b entirely and the
-  // call failed as unassignable. Values named for parameters after the rest are
-  // appended in parameter order; one that is absent is simply not supplied, and
-  // the binding rejects it if the parameter is required, which is the same
-  // answer by the same rule that governs a positional call.
-  if (restIndex !== -1) {
-    for (let i = restIndex + 1; i < names.length; i += 1) {
-      if (byName.has(names[i])) {
-        result.push(byName.get(names[i])!);
+  for (let i = 0; i < names.length; i += 1) {
+    const values = placed.groups[i];
+    if (values.length === 0 && !rests[i]) {
+      if (!omittable[i]) {
+        return Throw.TypeError('no argument for the required parameter $1', Value(names[i]));
       }
+      values.push(initials[i] ?? Value.undefined);
+    }
+    for (let value of values) {
+      const type = types[i] as TypeRecord | undefined;
+      if (signature && !rests[i] && type && type.Kind !== 'any'
+          && !(value instanceof ObjectValue) && !(value instanceof ReferenceValue) && value !== Value.undefined) {
+        value = Q(yield* ConvertValue(value, type));
+      }
+      result.push(value);
     }
   }
   return result as Arguments;
 }
-

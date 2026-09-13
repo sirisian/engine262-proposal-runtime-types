@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrown, expectThrownKind, ok } from '../harness.mts';
+import { expectThrown, expectThrownKind, expectStaticTypeError, ok } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -29,7 +29,7 @@ test('enums bind objects with sequential member values', () => {
   // enumeration must say so - and #sec-enums gives `B` a value equal to `A`,
   // "where the underlying type declares no prefix increment", rather than 1.
   expect(evaluated('enum S: string { A = "a", B } typeof S.A === "string" && S.B === S.A ? "ok" : "no";')).toBe('ok');
-  expectThrownKind('enum S { A = "a" } S.A;', 'TypeError');
+  expectStaticTypeError('enum S { A = "a" } S.A;');
 });
 
 test('a bare underlying value is not of the enum type; the enum call is the way in', () => {
@@ -184,12 +184,12 @@ test('an enumerator value passes its underlying type', () => {
   // Out of range is a RangeError and a wrong kind a TypeError, which is what
   // the same value assigned to a `uint8` field gives - the enumerator passes
   // the boundary rather than a check of its own.
-  expectThrownKind('enum E: uint8 { A = 300 } E.A;', 'RangeError');
-  expectThrownKind('enum E: uint8 { A = "s" } E.A;', 'TypeError');
+  expectStaticTypeError('enum E: uint8 { A = 300 } E.A;');
+  expectStaticTypeError('enum E: uint8 { A = "s" } E.A;');
   // "The first enumerator, when it has no initializer, takes 0, and it is a
   // type error when the underlying type is not numeric, since a non-numeric
   // enumeration must define its starting value."
-  expectThrownKind('enum E: string { A } E.A;', 'TypeError');
+  expectStaticTypeError('enum E: string { A } E.A;');
   expect(evaluated('enum E: string { A = "x" } String(E.A);')).toBe('x');
   // The values that fit are unchanged.
   expect(evaluated('enum E: uint8 { A, B } String(E.B);')).toBe('1');
@@ -233,7 +233,7 @@ test('an enumerator without an initializer continues from the one before', () =>
   expect(evaluated('enum C: float32 { Zero = 0.5, One } String(C.One);')).toBe('1.5');
   // And continuing past the type's range is the RangeError it would be if
   // written out - which the counter reset had hidden.
-  expectThrownKind('enum E: uint8 { A = 255, B } E.B;', 'RangeError');
+  expectStaticTypeError('enum E: uint8 { A = 255, B } E.B;');
 });
 
 test('an enumerator initialized with a function of two parameters is computed', () => {
@@ -257,7 +257,7 @@ test('a non-numeric enum continues by repeating where the type has no increment'
   // `enum E: string { A = "x", B }` an error where the clause gives B the value
   // of A.
   expect(evaluated('enum E: string { A = "x", B } String(E.B);')).toBe('x');
-  expectThrownKind('enum E: string { A } E.A;', 'TypeError');
+  expectStaticTypeError('enum E: string { A } E.A;');
 });
 
 test('two enumerators of one declaration may not share a name', () => {
@@ -266,8 +266,8 @@ test('two enumerators of one declaration may not share a name', () => {
   // the later enumerator silently won - the same failure the interface
   // duplicate-member check exists to prevent, where the meaning of a
   // declaration depends on which member is read.
-  expectThrownKind('enum E { A, A } E.A;', 'TypeError');
-  expectThrownKind('enum E { A = 1, B, A = 3 } E.A;', 'TypeError');
+  expectStaticTypeError('enum E { A, A } E.A;');
+  expectStaticTypeError('enum E { A = 1, B, A = 3 } E.A;');
   // Distinct names are unaffected, and two enumerators MAY share a value - it is
   // the name that must be unique.
   expect(evaluated('enum E { A, B, C } String(E.C);')).toBe('2');
@@ -351,7 +351,7 @@ test('an enum over string takes sequential functions, and needs a starting value
   // it, and that a non-numeric enumeration must define its starting value.
   expect(evaluated('enum S: string { Zero = (i, n) => n, One, Two = (i, n) => n.toLowerCase(), Three } '
     + 'S.Zero + "," + S.One + "," + S.Two + "," + S.Three;')).toBe('Zero,One,two,three');
-  expectThrownKind('enum S: string { A } S.A;', 'TypeError');
+  expectStaticTypeError('enum S: string { A } S.A;');
   // `string` has no prefix increment either, so an explicit start repeats.
   expect(evaluated('enum S: string { A = "x", B } String(S.B === S.A);')).toBe('true');
 });
@@ -377,7 +377,7 @@ test('the underlying type\'s range and precision are the enum\'s', () => {
   expect(evaluated('enum N: int8 { Neg = -128, Next } String(N.Next);')).toBe('-127');
   // Continuing past the type's range is the RangeError writing the value would
   // be.
-  expectThrownKind('enum U: uint8 { A = 255, B } U.B;', 'RangeError');
+  expectStaticTypeError('enum U: uint8 { A = 255, B } U.B;');
   // A binary float continues by one from a fractional value rather than from
   // the next integer.
   expect(evaluated('enum F: float32 { A = 0.5, B } String(F.B);')).toBe('1.5');
@@ -420,7 +420,7 @@ test('the sequence step is taken IN the underlying type, not through a Number', 
   expect(evaluated('enum D: decimal64 { A = 1.0, B } String(D(D.B) === D.B);')).toBe('true');
 });
 test('two enumerators of one declaration may not share a name', () => {
-  expectThrownKind('enum E { A, A } E.A;', 'TypeError');
+  expectStaticTypeError('enum E { A, A } E.A;');
 });
 
 // -- Enums against the rest of the language -------------------------------------

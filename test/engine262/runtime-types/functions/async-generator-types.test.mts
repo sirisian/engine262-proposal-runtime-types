@@ -83,7 +83,7 @@ test('an async generator REJECTS on a bad yield', () => {
   const settle = (body: string) => settledAfterJobs(`globalThis.settled = 'pending';
     async function* ag(): uint8 { ${body} }
     ag().next().then(() => { globalThis.settled = 'resolved'; }, () => { globalThis.settled = 'rejected'; });`);
-  expect(settle('yield "nope";')).toBe('rejected');
+  expect(settle('let value: any = "nope"; yield value;')).toBe('rejected');
   expect(settle('yield (1 := uint8);')).toBe('resolved');
 });
 
@@ -154,16 +154,14 @@ test('the explicit Generator spelling checks its yields', () => {
     + ' String(g().next().value);')).toBe('1');
 });
 
-test('yield* does NOT check its delegated values', () => {
-  // RECORDED AS CURRENT STATE, NOT AS CORRECT. A plain `yield` of the same
-  // value is refused; delegating it through `yield*` is not.
-  //
-  // The delegation yields the inner iterator's RESULT OBJECT - `{value, done}` -
-  // rather than the value, so `EnforceYieldType` cannot simply be dropped in at
-  // the three `GeneratorYield` sites: the type applies to `.value`.
-  expect(evaluated('function* inner(): string { yield "s"; }'
-    + ' function* outer(): uint8 { yield* inner(); } String(outer().next().value);')).toBe('s');
-  expectThrown('function* outer(): uint8 { yield "s"; } outer().next();');
+test('yield* checks both known and dynamic delegated values', () => {
+  expectThrown('function* inner(): string { yield "s"; }'
+    + ' function* outer(): uint8 { yield* inner(); }');
+  expectThrown('function* inner() { yield "s"; }'
+    + ' function* outer(source: any): uint8 { yield* source; } outer(inner()).next();');
+  expect(evaluated('function* inner() { yield 1; }'
+    + ' function* outer(source: any): uint8 { yield* source; }'
+    + ' String(Reflect.typeOf(outer(inner()).next().value) === uint8);')).toBe('true');
 });
 
 test('an async function REJECTS on a bad return', () => {

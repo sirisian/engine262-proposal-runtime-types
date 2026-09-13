@@ -22,7 +22,7 @@ const message = (src: string): string => {
   return c.Type === 'throw' ? String(c.Value?.HostDefinedMessageString) : `NO THROW: ${src}`;
 };
 
-const FROZEN = 'const o = Object.freeze({ n: 1 });';
+const FROZEN = 'const o: any = Object.freeze({ n: 1 });';
 
 // -- The refusal, at every boundary -------------------------------------------
 
@@ -33,7 +33,7 @@ test('a member that cannot be converted in place is refused, at every boundary',
     `interface I { n: uint32 } ${FROZEN} function f(x: I) { return 1; } f(o);`,
     `${FROZEN} let v: { n: uint32 } = o;`,
     `${FROZEN} function f(): { n: uint32 } { return o; } f();`,
-    'const inner = Object.freeze({ n: 1 }); const outer = { i: inner }; let v: { i: { n: uint32 } } = outer;',
+    'const inner: any = Object.freeze({ n: 1 }); const outer = { i: inner }; let v: { i: { n: uint32 } } = outer;',
     `${FROZEN} let a: [].<{ n: uint32 }> = [o];`,
   ];
   for (const source of boundaries) {
@@ -83,9 +83,9 @@ test('a conversion that was never needed is still not attempted', () => {
   // The `converted !== current` guard is what keeps most non-writable values
   // working, and the refusal must sit BEHIND it rather than in front. These
   // three passed before this change and must still.
-  expect(evaluated('interface I { n: uint32 } const o = Object.freeze({ n: (1 := uint32) });'
+  expect(evaluated('interface I { n: uint32 } const o: any = Object.freeze({ n: (1 := uint32) });'
     + ' function f(x: I) { return 1; } String(f(o));')).toBe('1');
-  expect(evaluated('interface I { s: string } const o = Object.freeze({ s: "a" });'
+  expect(evaluated('interface I { s: string } const o: any = Object.freeze({ s: "a" });'
     + ' function f(x: I) { return 1; } String(f(o));')).toBe('1');
   expect(evaluated('interface I { n: uint32 } const o = { get n() { return (1 := uint32); } };'
     + ' function f(x: I) { return 1; } String(f(o));')).toBe('1');
@@ -121,13 +121,13 @@ test('a member admitted by an INDEX SIGNATURE fails the same way', () => {
   // the declared-member one was fixed, and was found by writing the rule into
   // the specification: saying an index-signature member "crosses by the same
   // steps" made it a claim to check, and it was not yet true.
-  expect(message('const o = Object.freeze({ a: 1 }); let v: { [k: string]: uint32 } = o;'))
+  expect(message('const o: any = Object.freeze({ a: 1 }); let v: { [k: string]: uint32 } = o;'))
     .toContain('not writable');
-  expect(message('const o = Object.freeze({ a: 1 }); let v: { [k: string]: uint32 } = o;'))
+  expect(message('const o: any = Object.freeze({ a: 1 }); let v: { [k: string]: uint32 } = o;'))
     .not.toContain('Cannot set property');
   // ...and the two cases that must not change.
   expect(evaluated('let o = { a: 1 }; let v: { [k: string]: uint32 } = o; String(Number(v.a));')).toBe('1');
-  expect(evaluated('const o = Object.freeze({ a: (1 := uint32) }); let v: { [k: string]: uint32 } = o;'
+  expect(evaluated('const o: any = Object.freeze({ a: (1 := uint32) }); let v: { [k: string]: uint32 } = o;'
     + ' String(Number(v.a));')).toBe('1');
 });
 

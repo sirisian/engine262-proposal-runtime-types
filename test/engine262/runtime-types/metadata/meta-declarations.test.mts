@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { expectStaticTypeError } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -609,13 +610,8 @@ test('a hook signature is its ARITY, which is what the table gives', () => {
     .toMatchObject({ Type: 'throw' });
   expect(run('type ME = { me?: boolean }; meta ME { default = {}; subtype(a, b, c) { return true; } }'))
     .toMatchObject({ Type: 'throw' });
-  // DELIBERATELY accepted, both of them - this test is the record that the
-  // acceptance is a reading of the table rather than an oversight.
-  //
-  // An annotation naming an undefined type: the table states no types for it to
-  // mismatch against.
-  expect(run('type MF = { mf?: boolean }; meta MF { default = {}; subtype(sub: Zzz, sup: MF): boolean { return true; } } "ok";'))
-    .toMatchObject({ Type: 'normal' });
+  // The arity-only hook table does not excuse an ill-formed closed annotation.
+  expectStaticTypeError('type MF = { mf?: boolean }; meta MF { default = {}; subtype(sub: Zzz, sup: MF): boolean { return true; } } "ok";');
   // Parameter names differing from the table's: those names exist so the table's
   // Meaning column can refer to them, and the hook's own NAME is checked by a
   // separate clause.
@@ -662,13 +658,8 @@ test('a hook signature is its ARITY, which is what the table gives', () => {
     .toMatchObject({ Type: 'throw' });
   expect(run('type ME = { me?: boolean }; meta ME { default = {}; subtype(a, b, c) { return true; } }'))
     .toMatchObject({ Type: 'throw' });
-  // DELIBERATELY accepted, both of them - this test is the record that the
-  // acceptance is a reading of the table rather than an oversight.
-  //
-  // An annotation naming an undefined type: the table states no types for it to
-  // mismatch against.
-  expect(run('type MF = { mf?: boolean }; meta MF { default = {}; subtype(sub: Zzz, sup: MF): boolean { return true; } } "ok";'))
-    .toMatchObject({ Type: 'normal' });
+  // The arity-only hook table does not excuse an ill-formed closed annotation.
+  expectStaticTypeError('type MF = { mf?: boolean }; meta MF { default = {}; subtype(sub: Zzz, sup: MF): boolean { return true; } } "ok";');
   // Parameter names differing from the table's: those names exist so the table's
   // Meaning column can refer to them, and the hook's own NAME is checked by a
   // separate clause.

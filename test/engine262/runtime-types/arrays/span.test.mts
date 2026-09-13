@@ -282,7 +282,7 @@ test('the operations a window does not have are absent, not merely refused', () 
   // them either, so the two agree rather than one relying on the other.
   const w = 'function w(s: Span.<uint32>) { return s; } let a: [].<uint32> = [1, 2, 3]; const s = w(a); ';
   for (const member of ['push', 'pop', 'shift', 'unshift', 'splice', 'capacity', 'reserve', 'shrinkToFit']) {
-    expect(evaluated(`${w}String(typeof s.${member});`)).toBe('undefined');
+    expect(evaluated(`${w}String(typeof (s := any).${member});`)).toBe('undefined');
   }
 });
 
@@ -389,9 +389,9 @@ test('a column projection is a window at run time', () => {
   expect(bool(`${s}String(s.fields.x is Span.<float32>);`)).toBe(true);
   expect(evaluated(`${s}String(s.fields.x.length);`)).toBe('2');
   expect(evaluated(`${s}String(s.fields.x[1]);`)).toBe('3');
-  expect(evaluated(`${s}String(typeof s.fields.x.map);`)).toBe('function');
+  expect(evaluated(`${s}String(typeof (s := any).fields.x.map);`)).toBe('function');
   expect(evaluated(`${s}let n = 0; for (const v of s.fields.x) { n += 1; } String(n);`)).toBe('2');
-  expect(evaluated(`${s}String(typeof s.fields.x.push);`)).toBe('undefined');
+  expect(evaluated(`${s}String(typeof (s := any).fields.x.push);`)).toBe('undefined');
   expect(evaluated(`${s}function f(p: Span.<float32>) { return p.length; } String(f(s.fields.x));`)).toBe('2');
 });
 
@@ -669,8 +669,8 @@ test('a window bound by a let has the window surface and not the array one', () 
   // carrying every member the type says it does not have and obeying no
   // liveness rule.
   const o = 'let owned: [].<uint32> = [1, 2, 3]; let w: Span.<uint32> = owned; ';
-  expect(evaluated(`${o}String(typeof w.push);`)).toBe('undefined');
-  expect(evaluated(`${o}String(typeof w.capacity);`)).toBe('undefined');
+  expect(evaluated(`${o}String(typeof (w := any).push);`)).toBe('undefined');
+  expect(evaluated(`${o}String(typeof (w := any).capacity);`)).toBe('undefined');
   expect(evaluated(`${o}w[0] = (9 := uint32); String(owned[0]);`)).toBe('9');
   expectThrownKind(`${o}owned.push((4 := uint32)); w[0];`, 'TypeError');
 });

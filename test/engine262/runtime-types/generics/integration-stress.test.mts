@@ -158,8 +158,8 @@ test('a default reads an earlier pack - function form', () => {
 
 // ---- B.6 The inference ladder, one function per rung ----
 test('rung one - direct, recursive, and through explicit arguments', () => {
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } String(tup(1, "a"));')).toBe('2');
-  expect(evaluated('function pairUp<T, ...Rest>(p: [T, ...Rest]): uint32 { return p.length; } String(pairUp([1, "a", true]));')).toBe('3');
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } String(tup(1, "a"));')).toBe('2');
+  expect(evaluated('function pairUp<T, ...Rest>(p: [T, ...Rest]): uint64 { return p.length; } String(pairUp([1, "a", true]));')).toBe('3');
   expect(evaluated('function lit<...K: [].<string>>(...ks: K): string { return K[1]; } lit("a", "b");')).toBe('b');
 });
 
@@ -170,7 +170,7 @@ test('rung two - trial over a closed pack constraint', () => {
 // The positive half - a builder WITH `@inverse` binding the pack - is in
 // generics/declared-inverses.test.mts (it imports the kit, so it runs as a module).
 test('rung three - a builder with no inverse refuses, NAMING the builder', () => {
-  expectThrown('function wrapOf(Ts) { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint32 { return ps.length; } j3(1);', 'wrapOf declares no inverse');
+  expectThrown('function wrapOf(Ts) { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint64 { return ps.length; } j3(1);', 'wrapOf declares no inverse');
 });
 
 test('a pack refuses to bind from a spread of unknown length', () => {
@@ -179,23 +179,23 @@ test('a pack refuses to bind from a spread of unknown length', () => {
   // checks never fired. A truly dynamic array is a parameter of array type;
   // a const initialized from a literal has an extent the checker may know.
   //` returns the count.)
-  expectThrown('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } function u(dyn: [].<uint32>): uint32 { return tup(...dyn); }', 'statically known length');
+  expectThrown('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } function u(dyn: [].<uint32>): uint32 { return tup(...dyn); }', 'statically known length');
 });
 
 test('a tuple spreads into a pack, and a pack forwards', () => {
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } const two: [uint8, string] = [1, "a"]; String(tup(...two));')).toBe('2');
-  expect(evaluated('function inner<...Ts>(...xs: Ts): uint32 { return xs.length; } function outer<...Ts>(...xs: Ts): uint32 { return inner(...xs); } String(outer(1, "a", true));')).toBe('3');
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } const two: [uint8, string] = [1, "a"]; String(tup(...two));')).toBe('2');
+  expect(evaluated('function inner<...Ts>(...xs: Ts): uint64 { return xs.length; } function outer<...Ts>(...xs: Ts): uint64 { return inner(...xs); } String(outer(1, "a", true));')).toBe('3');
 });
 
 // ---- B.7 Reflection, library names, generic-typed slots ----
 test('named arguments on user and library generics nest, and a generic slot forwards inference', () => {
   expect(evaluated('type Grid<T = float64, Rows: uint32 = 4, Cols: uint32 = 4> = [].<T>; let g: Grid.<Cols: 8> = []; "ok";')).toBe('ok');
   expect(evaluated("let m: Map.<V: uint8, K: string> = new Map(); m.set('k', 1); String(m.get('k'));")).toBe('1');
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } let forward: <...Us>(...xs: Us) => uint32 = tup; String(forward(1, "a"));')).toBe('2');
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } let forward: <...Us>(...xs: Us) => uint64 = tup; String(forward(1, "a"));')).toBe('2');
 });
 
 test('the declaration reflects its whole parameter list', () => {
   expect(evaluated(`${STRESS} const tps = Reflect.getReflection(Reflect.typeOf(stress)).signatures[0].typeParameters; tps.map((t) => t.name).join(",");`)).toBe('T,I,N,S,M');
   expect(evaluated(`${STRESS} const tps = Reflect.getReflection(Reflect.typeOf(stress)).signatures[0].typeParameters; String(tps[1].variadic && tps[3].variadic && !tps[2].variadic);`)).toBe('true');
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint32 { return xs.length; } type TupT = <...Us>(...xs: Us) => uint32; String(Reflect.typeOf(tup) === TupT);')).toBe('true');
+  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } type TupT = <...Us>(...xs: Us) => uint64; String(Reflect.typeOf(tup) === TupT);')).toBe('true');
 });

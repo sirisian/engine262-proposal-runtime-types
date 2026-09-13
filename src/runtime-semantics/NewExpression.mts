@@ -12,7 +12,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { contextualTypeFor, pushContextualType, popContextualType, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { StampTypedCollection, soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
-import { ArgumentListEvaluation } from './all.mts';
+import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
@@ -59,6 +59,8 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // 5. If arguments is empty, let argList be a new empty List.
   if (args === undefined) {
     argList = [];
+  } else if (surroundingAgent.feature('runtime-types') && hasNamedArguments(args)) {
+    argList = Q(yield* ArgumentListEvaluationNamed(args, constructor));
   } else { // 6. Else,
     // a. Let argList be ? ArgumentListEvaluation of arguments.
     //
@@ -332,7 +334,12 @@ export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueE
   if (!ctor || !IsConstructor(ctor)) {
     return Throw.TypeError('$1 is not a constructor', Value(displayType(t)));
   }
-  const argList = Q(yield* ArgumentListEvaluation(node.Arguments));
+  let argList;
+  if (hasNamedArguments(node.Arguments)) {
+    argList = Q(yield* ArgumentListEvaluationNamed(node.Arguments, ctor));
+  } else {
+    argList = Q(yield* ArgumentListEvaluation(node.Arguments));
+  }
   // The target type IS the construction's context: a generic declaration's
   // [[Construct]] binds its parameters from it (#sec-constructing-a-generic-class).
   SetPendingCalleeContext(t);

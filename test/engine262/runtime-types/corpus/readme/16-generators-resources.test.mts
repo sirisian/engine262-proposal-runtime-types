@@ -25,9 +25,9 @@ test('Generators: the yield-type shorthand parses and yields', () => {
 });
 
 test('Generators: the full Generator.<Y, R, N> form parses', () => {
-  expect(evaluated('function* g(): Generator.<int32, string, boolean> { yield (0 := int32); } let it = g(); String(it.next().value);')).toBe('0');
+  expect(evaluated('function* g(): Generator.<int32, string, boolean> { yield (0 := int32); return "done"; } let it = g(); String(it.next().value);')).toBe('0');
   // done flag after exhaustion
-  expect(evaluated('function* g(): Generator.<int32, string, boolean> { yield (0 := int32); } let it = g(); it.next(); String(it.next().done);')).toBe('true');
+  expect(evaluated('function* g(): Generator.<int32, string, boolean> { yield (0 := int32); return "done"; } let it = g(); it.next(); String(it.next().done);')).toBe('true');
 });
 
 test('Generators: a typed generator iterates with for-of', () => {

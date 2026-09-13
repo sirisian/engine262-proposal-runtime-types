@@ -62,5 +62,7 @@ test('the shadow is found even when its TYPE is unknown to the checker', () => {
   // - the shadows that matter most - so the check reads the declared NAMES.
   expect(checker('const Token = uint8; ', 'Token')).toBe('allows');
   expect(checker('let Token; ', 'Token')).toBe('allows');
-  expect(checker('function Token() {} ', 'Token')).toBe('allows');
+  // A closed function declaration is available during type evaluation.
+  // It shadows the intrinsic, but the function value is not itself a type.
+  expect(checker('function Token() {} ', 'Token')).toBe('refuses');
 });

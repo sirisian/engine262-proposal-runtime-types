@@ -73,5 +73,5 @@ test('a bare name that is not a type is refused by the CHECKER', () => {
   // by SameValue". The runtime dispatch is written; it is unreachable for a
   // plain constant because the CHECKER rejects `5 is K` as "K is not a type"
   // before evaluation. Widening that is checker work.
-  expect(outcome('const K = 5; 5 is K;')).toBe('TypeError');
+  expect(outcome('const K = 5; 5 is K;')).toBe('StaticTypeError');
 });

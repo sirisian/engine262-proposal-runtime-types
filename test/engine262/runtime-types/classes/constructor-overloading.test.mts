@@ -46,7 +46,7 @@ test('an unmatched construction is refused, not silently routed', () => {
   // Before dispatch existed the first constructor always ran, so a call meant for
   // the second was refused by the FIRST one's parameter types - a diagnostic
   // naming a type the program never wrote.
-  expectThrown(`${byArity} new C();`, 'no overload of');
+  expectThrown(`${byArity} new C();`, 'no declared signature');
 });
 
 test('`super` reaches the right overload', () => {

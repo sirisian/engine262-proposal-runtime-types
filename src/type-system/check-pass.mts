@@ -1,7 +1,8 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { DefaultValueOf, EvaluateAliasApplicationClauses } from './runtime.mts';
+import { EnsureCompletion, Q, X } from '../completion.mts';
+import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
+import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
-import { EnsureCompletion, Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
 import {
@@ -12,15 +13,17 @@ import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/Prim
 import { Value } from '../value.mts';
 import { SetMetResolution } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
-import { displayType } from './records.mts';
+import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './records.mts';
 import {
-  CheckScript,
+  RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
   TakeDeferredMetadataChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   TakeDefaultRequirements,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
-import { Throw } from '#self';
+import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
+import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
+import { inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
 /**
  * Does this type's default depend on a CLASS declared in this source text?
@@ -157,11 +160,10 @@ function nestedMetaTypeNames(root: ParseNode): Set<string> {
  *    before the body runs.
  *
  * What this pass deliberately does not do yet, pinned rather than implied:
- * enum declarations are not pre-processed (their member initializers are
- * expressions this engine does not yet hold to the compile-time-evaluable
- * discipline, so pre-running them could observe bindings early); declarations
- * nested in blocks or wrapped in `export` are left to body order; the
- * and judgment results are not yet memoized across passes, which
+ * enum declarations with runtime dependencies or decorators, and declarations
+ * nested in blocks or wrapped in `export`, are left to body order. Closed enum
+ * declarations are processed below. Judgment results are not memoized across
+ * passes, which
  * purity and interning license but nothing here needs at this scale.
  */
 export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
@@ -325,7 +327,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
     for (const key of check.keys) {
       if (MetaTypeClaiming(key) === undefined) {
-        return Throw.TypeError('$1 is not claimed by any meta type, in $2', Value(key), Value(check.display));
+        return Throw.StaticTypeError('$1 is not claimed by any meta type, in $2', Value(key), Value(check.display));
       }
     }
   }
@@ -375,8 +377,145 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // become resolvable: the first walk read it as ~any~, and this one reads what
   // it denotes. Gated on that rather than run always, so a text with no such
   // alias pays nothing - the same discipline the narrowing gate applies.
-  if (requests.length > 0 || computedAliasResolved) {
-    const errors = CheckScript(root as ParseNode.Script);
+  const obligations = DeferredTypeChecksOf(root);
+  // Closed enums supply values needed by later type expressions, notably
+  // `keyof Reflect.typeOf(E)`. Run only declarations whose initializer reads
+  // are available here; class instances and ordinary value bindings are still
+  // initialized in body order. Their statically known contributions were
+  // checked by the ordinary walk, including uncalled sequential functions.
+  if ((items ?? []).some((item) => item.type === 'EnumDeclaration')) {
+    const available = new Set(['undefined', 'NaN', 'Infinity', 'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Object', 'Array', 'Math', 'Reflect', 'RegExp']);
+    const typeNames = (node: ParseNode | readonly ParseNode[]): void => {
+      if (Array.isArray(node)) {
+        node.forEach(typeNames);
+        return;
+      }
+      const n = node as ParseNode;
+      if (n.type === 'TypeReference') {
+        const name = n.TypeName.IdentifierReference.name;
+        if (builtinTypeRecord(name)) {
+          available.add(name);
+        }
+      }
+      for (const key of Object.keys(n)) {
+        if (['parent', 'location', 'sourceText'].includes(key)) continue;
+        const child = (n as unknown as Record<string, unknown>)[key];
+        if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in child)) typeNames(child as ParseNode);
+      }
+    };
+    typeNames(items ?? []);
+    for (const item of items ?? []) {
+      if (item.type !== 'EnumDeclaration' || item.Decorators?.length || item.EnumMemberList.some((member) => member.Decorators?.length)
+        || item.EnumMemberList.some((member) => member.Initializer
+        && (FirstNonEvaluableForm(member.Initializer) || FirstFreeReference(member.Initializer, available)))) {
+        continue;
+      }
+      const underlying = item.TypeAnnotation ? EnsureCompletion(yield* TypeNodeToTypeRecord(item.TypeAnnotation.Type)) : undefined;
+      if (underlying && (underlying.Type !== 'normal' || defaultNeedsEvaluatedClass(underlying.Value))) {
+        continue;
+      }
+      BeginFragmentEvaluation();
+      try {
+        const attempt = EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item));
+        if (attempt.Type !== 'normal') {
+          return Throw.StaticTypeError('a closed enum initializer does not satisfy its declaration');
+        }
+        preEvaluatedTypeDeclarations.add(item);
+        const value = Q(yield* surroundingAgent.runningExecutionContext.LexicalEnvironment.GetBindingValue(Value(item.BindingIdentifier.name), Value.true));
+        const record = (value as unknown as { TypeRecord: TypeRecord }).TypeRecord;
+        if (record?.Kind === 'nominal' && record.EnumMembers) SetEvaluatedEnum(item, record, record.EnumMembers);
+      } finally {
+        EndFragmentEvaluation();
+      }
+    }
+  }
+  for (const obligation of obligations) {
+    const context = surroundingAgent.runningExecutionContext;
+    const outer = context.LexicalEnvironment;
+    const scope = new DeclarativeEnvironmentRecord(outer);
+    const bindings = new Map(obligation.constants);
+    const dependencies = new Set<string>();
+    const seenDependencies = new Set<object>();
+    const visitDependencies = (value: unknown): void => {
+      if (!value || typeof value !== 'object' || seenDependencies.has(value)) return;
+      seenDependencies.add(value);
+      if (Array.isArray(value)) {
+        value.forEach(visitDependencies);
+        return;
+      }
+      const node = value as ParseNode;
+      if (typeof node.type !== 'string') return;
+      if (node.type === 'IdentifierReference') dependencies.add(node.name);
+      for (const [key, child] of Object.entries(node)) {
+        if (!['parent', 'location', 'sourceText', 'ContextualType'].includes(key)) visitDependencies(child);
+      }
+    };
+    visitDependencies(obligation.node);
+    // A value binding that has not initialized is a runtime dependency. It
+    // must not be mistaken for an absent type name, nor executed ahead of the
+    // surrounding statements. The ordinary annotation boundary remains.
+    let deferred = false;
+    for (const name of dependencies) {
+      if (bindings.has(name) || obligation.functions.has(name) || obligation.aliases.has(name)) continue;
+      let environment: typeof scope.OuterEnv = outer;
+      let found = false;
+      while (environment) {
+        if (X(environment.HasBinding(Value(name))) === Value.true) {
+          found = true;
+          const value = EnsureCompletion(yield* environment.GetBindingValue(Value(name), Value.true));
+          if (value.Type !== 'normal') deferred = true;
+          break;
+        }
+        environment = environment.OuterEnv;
+      }
+      if (!found && obligation.runtimeNames.has(name)) deferred = true;
+    }
+    // A builder may close over runtime state. Only execute closed builders
+    // here; evaluating such a closure speculatively could mutate that state.
+    const allowed = new Set([...bindings.keys(), ...obligation.aliases.keys(), ...obligation.functions.keys(),
+      'undefined', 'NaN', 'Infinity', 'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Object', 'Array', 'Math', 'Reflect', 'RegExp']);
+    for (const name of dependencies) {
+      const fn = obligation.functions.get(name);
+      if (!fn) continue;
+      const before = new Set(dependencies);
+      visitDependencies(fn);
+      for (const dependency of dependencies) {
+        if (!before.has(dependency) && (builtinTypeRecord(dependency) || BoundTypeRecordForName(dependency))) allowed.add(dependency);
+      }
+      if (FirstFreeReference(fn, allowed)) deferred = true;
+    }
+    if (deferred) continue;
+    for (const [name, type] of obligation.aliases) {
+      bindings.set(name, GetTypeObject(type));
+    }
+    for (const [name, fn] of obligation.functions) {
+      if (fn.type === 'FunctionDeclaration') {
+        bindings.set(name, X(InstantiateFunctionObject(fn, scope, context.PrivateEnvironment)));
+      }
+    }
+    for (const [name, value] of bindings) {
+      X(scope.CreateImmutableBinding(Value(name), Value.true));
+      X(scope.InitializeBinding(Value(name), value));
+    }
+    context.LexicalEnvironment = scope;
+    try {
+      BeginFragmentEvaluation();
+      let result;
+      try {
+        result = EnsureCompletion(yield* TypeNodeToTypeRecord(obligation.node));
+      } finally {
+        EndFragmentEvaluation();
+      }
+      if (result.Type !== 'normal') {
+        return Throw.StaticTypeError('a closed type annotation could not be evaluated to a type: $1', Value(inspect(result.Value)));
+      }
+      SetEvaluatedTypeNode(obligation.node, result.Value);
+    } finally {
+      context.LexicalEnvironment = outer;
+    }
+  }
+  if (requests.length > 0 || computedAliasResolved || HasDeferredGuardChecks(root) || obligations.length > 0) {
+    const errors = RecheckAfterTypeEvaluation(root);
     if (errors.length > 0) {
       return Throw(errors[0]!);
     }
@@ -425,14 +564,14 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // member rule names it: a reader given two constraints still has to find
         // which of the arms' members they came from.
         if (pair.member !== undefined) {
-          return Throw.TypeError(
+          return Throw.StaticTypeError(
             'no value is of both $1 and $2 at member $3, so their intersection is never',
             Value(displayType(pair.left)),
             Value(displayType(pair.right)),
             Value(pair.member),
           );
         }
-        return Throw.TypeError(
+        return Throw.StaticTypeError(
           'no value is of both $1 and $2, so their intersection is never',
           Value(displayType(pair.left)),
           Value(displayType(pair.right)),
@@ -455,7 +594,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   for (const pair of TakeDeferredMetadataChecks(root)) {
     const admits = Q(yield* MetadataSubtypeJudgment(pair));
     if (!admits) {
-      return Throw.TypeError('$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
+      return Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
     }
   }
   // #sec-defaultvalueof: "It is a type error to
@@ -507,9 +646,9 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // display, which is already canonical here.
       const req = requirement.type as TypeRecord | undefined;
       if (req && req.Kind === 'union' && req.Members.length === 0) {
-        return Throw.TypeError('$1 has no values, so no declaration of it can be initialized', Value(requirement.display));
+        return Throw.StaticTypeError('$1 has no values, so no declaration of it can be initialized', Value(requirement.display));
       }
-      return Throw.TypeError('$1 has no default value, so a declaration of it needs an initializer', Value(requirement.display));
+      return Throw.StaticTypeError('$1 has no default value, so a declaration of it needs an initializer', Value(requirement.display));
     }
   }
   // #sec-evaluation-budget: "the evaluation is abandoned, and

@@ -50,6 +50,9 @@ export const canCompleteNormally = (
     case 'ThrowStatement':
       return false;
     case 'FunctionBody':
+    case 'AsyncBody':
+    case 'GeneratorBody':
+    case 'AsyncGeneratorBody':
     case 'Block': {
       // A function BODY carries `FunctionStatementList`, not `StatementList`,
       // which is why `endsWithReturn` reads both. Missing it here made every
@@ -61,8 +64,8 @@ export const canCompleteNormally = (
       if (!list || list.length === 0) {
         return true;
       }
-      // A block completes normally when its LAST reachable statement does.
-      return again(list[list.length - 1]);
+      // Statements after an unconditional abrupt completion are unreachable.
+      return list.every(again);
     }
     case 'IfStatement': {
       const alt = n.Statement_b as ParseNode | undefined;

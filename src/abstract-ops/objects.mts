@@ -15,6 +15,7 @@ import type { Mutable } from '../utils/language.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { RemoveArrayElementIdentity } from '../type-system/array-borrow.mts';
 import {
   Assert,
   Call,
@@ -439,6 +440,9 @@ export function* OrdinaryDelete(O: ObjectValue, P: PropertyKeyValue): ValueEvalu
     return Value.true;
   }
   if (desc.Configurable === Value.true) {
+    if (P instanceof JSStringValue && (O as { TypedElement?: unknown }).TypedElement !== undefined) {
+      RemoveArrayElementIdentity(O, P.stringValue());
+    }
     O.properties.delete(P);
     return Value.true;
   }

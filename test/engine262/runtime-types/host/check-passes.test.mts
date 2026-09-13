@@ -101,3 +101,20 @@ test('link time: a body reading the same-text binding typed by the import is ref
 test('link time: nothing is reported twice, and a correct program still links', () => linkWith(DEP_CLASS,
   'import { C } from "dep";' + NL + 'let c: C = new C();' + NL + 'function f() { return c.x; }' + NL + 'let u: uint8 = f();')
   .then((r) => expect(r).toBe('ok')));
+
+test('console: a typed const initializer retains its type in later entries', () => {
+  expect(consoleThrows([
+    'function value(): uint8 { return 1; } const k = ((value()));',
+    'function unused() { let s: string = k; }',
+  ])).toEqual([false, true]);
+});
+
+test('link time: an imported specialized constructor checks its argument', () => linkWith(
+  'export class C<T> { constructor(x: T) {} }',
+  'import { C } from "dep"; function unused() { new C.<uint8>("s"); }',
+).then((r) => expect(r).toBe('threw')));
+
+test('link time: an imported specialized constructor admits a fitting literal', () => linkWith(
+  'export class C<T> { x: T; constructor(x: T) { this.x = x; } }',
+  'import { C } from "dep"; const c = (new C.<uint8>(1)); let n: uint8 = c.x;',
+).then((r) => expect(r).toBe('ok')));

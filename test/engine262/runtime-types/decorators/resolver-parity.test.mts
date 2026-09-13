@@ -112,7 +112,7 @@ const KNOWN_CHECKER_GAPS = new Set([
   // is resolved and judged - `let s: shared uint8 = "x";` is refused.
   // `PatternType` was here and is closed; see `check.mts`. `ComputedType` needs
   // EVALUATION, so it does not count against that gate - which is now met.
-  'ComputedType',
+  // Closed computed types are now discharged before the final check.
 ]);
 
 /**

@@ -343,13 +343,11 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
     // ELEMENT type, the run-time half. This function did not read its
     // annotation at all - the parameter was not even destructured - so a rest was
     // the ONE position in the language whose declared type the run time ignored.
-    let restElement: TypeRecord | undefined;
     let restDeclared: TypeRecord | undefined;
     if (TypeAnnotation) {
       const resolvedRest = EnsureCompletion(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
       if (resolvedRest.Type !== 'throw' && resolvedRest.Value) {
         restDeclared = resolvedRest.Value as TypeRecord;
-        restElement = restElementType(restDeclared);
       }
     }
     // 2. Let A be ! ArrayCreate(0).
@@ -409,26 +407,14 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
           }
         }
         // i. If environment is undefined, return ? PutValue(lhs, A).
+        // Convert the collected type once, preserving tuple positions and
+        // installing the array's storage contract as well as its element type.
+        let collected: Value = array;
+        if (restDeclared) collected = Q(yield* CheckedConvertValue(array, restDeclared));
         if (environment === Value.undefined) {
-          return Q(yield* PutValue(lhs, array));
+          return Q(yield* PutValue(lhs, collected));
         }
-        // ii. Return InitializeReferencedBinding(lhs, A).
-        return yield* InitializeReferencedBinding(lhs, array);
-      }
-      // `CheckedConvertValue`, which is what `EnforceAnnotation` reaches for a
-      // FIXED parameter - not `IsOfType`. Binding CONVERTS: an untyped literal
-      // adapts to a declared type, so `f("a", 0, 1, 2, 3)` at
-      // `...args: [].<uint32>` is valid and five corpus programs assert it. The
-      // ASSIGNED-PARAMETERS path uses `IsOfType` because it is choosing WHICH
-      // SLOT takes an argument; this path is binding one, and the two questions
-      // want different operations.
-      //
-      // Written as a STATEMENT. `Q` is a macro and is hoisted out of a
-      // short-circuit, so `guard && Q(yield* …)` evaluates the call whatever the
-      // guard says - which called the check with an absent type for every
-      // UNTYPED rest and faulted.
-      if (restElement !== undefined) {
-        next = Q(yield* CheckedConvertValue(next as Value, restElement));
+        return yield* InitializeReferencedBinding(lhs, collected);
       }
       // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
       // proposal-runtime-types (references extension): a rest parameter is an

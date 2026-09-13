@@ -59,14 +59,14 @@ test('a FROZEN argument needing no conversion is accepted', () => {
   // already the target's type crosses without complaint, because nothing has to
   // be written.
   expect(evaluated(`${F} String(f(Object.freeze({ n: (1 := uint8) })));`)).toBe('1');
-  expect(evaluated(`${F} const o = Object.freeze({ n: (1 := uint8) }); String(f(o));`)).toBe('1');
+  expect(evaluated(`${F} const o: any = Object.freeze({ n: (1 := uint8) }); String(f(o));`)).toBe('1');
 });
 
 test('a frozen argument that DOES need conversion is refused at the boundary', () => {
   // The one runtime case. The fresh path survived the checker - an unannotated
   // binding of a call result keeps it - and the in-place conversion then failed
   // because the object is frozen.
-  expectThrown(`${F} const o = Object.freeze({ n: 1 }); f(o);`,
+  expectThrown(`${F} const o: any = Object.freeze({ n: 1 }); f(o);`,
     'cannot be converted to "uint.<8>" in place, because it is not writable');
   // Refusing rather than copying is W1, and this is what it buys: the callee
   // receives the SAME object, so a conversion that cannot happen in place cannot
@@ -77,7 +77,7 @@ test('a frozen argument that DOES need conversion is refused at the boundary', (
   // the existing ones WRITABLE, so the in-place conversion succeeds. The refusal
   // is not about frozen-ness as a category, nor about extensibility - it is about
   // whether this property can be written.
-  expect(evaluated(`${F} const o = Object.seal({ n: 1 }); String(f(o));`)).toBe('1');
+  expect(evaluated(`${F} const o: any = Object.seal({ n: 1 }); String(f(o));`)).toBe('1');
   // ...and a non-writable property refuses without any freezing at all.
   expect(evaluated(`${F} const o = {}; Object.defineProperty(o, "n", { value: 1, writable: false, enumerable: true, configurable: true });`
     + ' try { f(o); "ACCEPTED"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
@@ -88,7 +88,7 @@ test('the two refusals differ in PHASE, and the static one reaches a dead branch
   // the text runs, so it fires for code that never executes; the boundary refusal
   // cannot, because no boundary is crossed.
   expectStaticTypeError(`${F} if (false) { f(Object.freeze({ n: 1 })); }`);
-  expect(evaluated(`${F} if (false) { const o = Object.freeze({ n: 1 }); f(o); } "reached";`)).toBe('reached');
+  expect(evaluated(`${F} if (false) { const o: any = Object.freeze({ n: 1 }); f(o); } "reached";`)).toBe('reached');
   // So the frozen-behind-an-unannotated-binding case is the only refusal here a
   // program can carry without being told. The gap is easy to OVERSTATE: the
   // inline form is rejected statically, but for an unrelated reason - a declared

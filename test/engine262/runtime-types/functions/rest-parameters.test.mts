@@ -299,8 +299,8 @@ test('a rest parameter\'s ELEMENT type is enforced at run time', () => {
   // reports what it could not convert FROM. The fragment asserted here said
   // "not assignable" and was never checked - `expectThrown` took one argument
   // and JavaScript dropped the second.
-  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g("no");', 'not a conversion source');
-  expectThrown('function f(...a: [].<uint32>) { return 1; } const g = f; g((1 := uint32), "no");', 'not a conversion source');
+  expectThrown('function f(...a: [].<uint32>) { return 1; } const g: any = f; g("no");', 'not a conversion source');
+  expectThrown('function f(...a: [].<uint32>) { return 1; } const g: any = f; g((1 := uint32), "no");', 'not a conversion source');
 });
 
 test('BINDING converts, it does not test membership', () => {
@@ -344,11 +344,10 @@ test('the extent rule respects a tuple\'s length RANGE', () => {
   // the CHECKER's flag, set where the resolution is synchronous. Reading the
   // checker's field on this path found nothing and refused a program the clause
   // admits.
-  // The default lowers the MINIMUM; it is not filled into the collected array,
-  // which holds exactly what the call supplied. `[[Initial]]` fills a POSITION of
-  // a tuple value, and a rest's array is built by collection rather than by
-  // conversion to the tuple type - so the length is 1 here and 2 below.
-  expect(evaluated('function f(...a: [uint8, string = "d"]) { return a.length; } String(f((1 := uint8)));')).toBe('1');
+  // The default lowers the call's minimum arity. Building the collected tuple
+  // converts it position-wise and supplies its default (#sec-array-and-tuple-types).
+  expect(evaluated('function f(...a: [uint8, string = "d"]) { return a.length; } String(f((1 := uint8)));')).toBe('2');
+  expect(evaluated('function f(...a: [uint8, string = "d"]) { return a[1]; } f((1 := uint8));')).toBe('d');
   expect(evaluated('function f(...a: [uint8, string = "d"]) { return a[1]; } f((1 := uint8), "z");')).toBe('z');
   // A DYNAMIC extent admits any count, which is the common case.
   expect(evaluated('function f(...a: [].<uint32>) { return a.length; } String(f((1 := uint32), (2 := uint32), (3 := uint32)));')).toBe('3');

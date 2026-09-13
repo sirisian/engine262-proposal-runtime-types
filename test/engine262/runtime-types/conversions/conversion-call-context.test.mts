@@ -77,7 +77,7 @@ test('...but the POSITION wins where it converts', () => {
   const F = 'function f(): uint32 { return 10; } function f(): string { return "10"; } ';
   expect(evaluated(`${F} function h(a: uint8) { return 1; } function h(a: string) { return 2; }`
     + ' String(h(uint32(f())));')).toBe('1');
-  expect(evaluated('function h(a: uint8) { return 1; } const v = uint32(1); String(h(v));')).toBe('1');
+  expect(evaluated('function h(a: uint8) { return 1; } const v: any = uint32(1); String(h(v));')).toBe('1');
 });
 
 test('a bad conversion source is a STATIC error', () => {

@@ -112,14 +112,14 @@ test('the default is evaluated once for the type and converted at the parameter\
 
 test('an untyped primitive argument takes the parameter\'s type, as at a declared parameter', () => {
   expect(evaluated('let g: (x: uint8, y: uint8 = 9) => boolean = (p, q) => p is uint8 && q is uint8; String(g(x: 2));')).toBe('true');
-  expectThrownKind('interface I { (n: uint8, s: string); } function f(a: I) { return a(n: "x", s: "y"); } f((n, s) => n);', 'TypeError');
+  expectStaticTypeError('interface I { (n: uint8, s: string); } function f(a: I) { return a(n: "x", s: "y"); } f((n, s) => n);');
   // An object argument is passed as it is.
   expect(evaluated('interface I { (o: object, n: uint8 = 1); } function f(a: I) { const k = {}; return a(o: k) === k; } String(f((o, n) => o));')).toBe('true');
 });
 
 test('a required parameter left unfilled, and a name the signature lacks, are TypeErrors', () => {
-  expectThrownKind('interface I { (a: uint8, b: uint8); } function f(x: I) { return x(b: 1); } f((a, b) => a);', 'TypeError');
-  expectThrownKind('interface I { (a: uint8, b: uint8); } function f(x: I) { return x(c: 1); } f((a, b) => a);', 'TypeError');
+  expectStaticTypeError('interface I { (a: uint8, b: uint8); } function f(x: I) { return x(b: 1); } f((a, b) => a);');
+  expectStaticTypeError('interface I { (a: uint8, b: uint8); } function f(x: I) { return x(c: 1); } f((a, b) => a);');
 });
 
 test('positional calls through the type are unchanged, and a callee with no type in view reads its own names', () => {

@@ -251,7 +251,7 @@ test('memory layout: a type-position name resolves against its declaration', () 
   expect(evaluated('class M { m(): M | null { return null; } } "ok";')).toBe('ok');
   // The list is usable, not merely declarable.
   const list = 'class N { value: uint32; next: N | null; } const a = new N(); a.value = 5; const b = new N(); b.value = 7; a.next = b; ';
-  expect(evaluated(`${list} String(Number(a.next.value));`)).toBe('7');
+  expect(evaluated(`${list} String(Number(a.next?.value));`)).toBe('7');
   expect(evaluated(`${list} String(b.next);`)).toBe('null');
 
   // A reference field has a WIDTH, so a class holding one has a layout: the

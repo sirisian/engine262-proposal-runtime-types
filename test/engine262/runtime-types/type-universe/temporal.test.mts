@@ -69,9 +69,9 @@ test('temporal: Temporal.Unit members are the unit strings', () => {
   expect(evaluated('Temporal.Unit.Hour;')).toBe('hour');
 });
 
-test('temporal: a Temporal.Unit binding accepts a member and a matching string, rejects a misspelling', () => {
+test('temporal: a Temporal.Unit binding accepts a member and a dynamic matching string, rejects a misspelling', () => {
   expect(evaluated('let u: Temporal.Unit = Temporal.Unit.Second; u;')).toBe('second');
-  expect(evaluated('let u: Temporal.Unit = "second"; u;')).toBe('second');
+  expect(evaluated('let s: any = "second"; let u: Temporal.Unit = s; u;')).toBe('second');
   expect(evaluated('("hour" is Temporal.Unit) ? "y" : "n";')).toBe('y');
   expectThrown('let u: Temporal.Unit = "secnod"; u;');
 });

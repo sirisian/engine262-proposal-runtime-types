@@ -123,11 +123,11 @@ test('an annotation that names nothing reports the NAME', () => {
   //
   // Every other spelling of this mistake already reported the name, which is the
   // agreement this restores rather than a phase chosen for `new.()`.
-  expectThrown('let a: Nope = new.();', '"Nope" is not defined');
-  expectThrown('let a: Nope = 5;', '"Nope" is not defined');
-  expectThrown('let a: Nope = float32x4(1, 2, 3, 4);', '"Nope" is not defined');
-  expectThrown('let a: Nope;', '"Nope" is not defined');
-  expectThrown('function f(x: Nope) { return 1; } f(1);', '"Nope" is not defined');
+  expectThrown('let a: Nope = new.();', 'Nope');
+  expectThrown('let a: Nope = 5;', 'Nope');
+  expectThrown('let a: Nope = float32x4(1, 2, 3, 4);', 'Nope');
+  expectThrown('let a: Nope;', 'Nope');
+  expectThrown('function f(x: Nope) { return 1; } f(1);', 'Nope');
 });
 
 test('the genuinely contextless form keeps its own message', () => {

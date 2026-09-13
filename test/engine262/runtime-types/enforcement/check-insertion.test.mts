@@ -633,7 +633,7 @@ test('a set operation\'s result carries the element type its values can come fro
   // RUN TIME: an UNSTAMPED result switches the typed surface off for
   // everything downstream - `s.union(o).add(300)` accepted on two
   // `Set.<uint8>` operands. The same shape, at a different producer.
-  expect(thrownKind(`${two} const u = a.union(b); u.add("x");`)).toBe('TypeError');
+  expect(thrownKind(`${two} const u: any = a.union(b); u.add("x");`)).toBe('TypeError');
   // 1000 converts at the uint16 arm of the union and the set ALREADY holds
   // that value, so it dedupes: the conversion happening is what makes the two
   // the same value rather than two.
@@ -909,8 +909,8 @@ test('the RETURN boundary elides too, and the condition is a property of the fun
   expect(thrownKind('function anyv() { return 300; } function f(): uint8 { return anyv(); } f();')).toBe('RangeError');
   expect(evaluated('function f(s: uint8): uint8 { return s; } String(f((5 := uint8)) is uint8);')).toBe('true');
   // A `return;` with no expression hands back *undefined*, so the function is
-  // not elided even though it has no unproven expression in it.
-  expect(thrownKind('function anyv() { return 300; } function f(c): uint8 { if (c) { return; } return anyv(); } f(1);')).toBe('TypeError');
+  // rejected statically even though another return has an unknown value.
+  expectStatic('function anyv() { return 300; } function f(c): uint8 { if (c) { return; } return anyv(); } f(1);');
 });
 
 test('the PARAMETER boundary is a different decision, and this is why', () => {
@@ -1161,7 +1161,7 @@ test('a typed collection takes its needle at the element type', () => {
   // A typed needle works, and one of another family converts through the same
   // boundary rather than failing to match.
   expect(evaluated(`${a} const c = (65 := uint16); String(a.includes(c));`)).toBe('true');
-  expect(evaluated(`${a} const c = (65 := uint8); String(a.includes(c));`)).toBe('true');
+  expect(evaluated(`${a} const c: any = (65 := uint8); String(a.includes(c));`)).toBe('true');
   expect(evaluated('let f: [].<float32> = [1.5]; String(f.includes(1.5));')).toBe('true');
   // An UNTYPED array is unchanged - it constrains nothing, so it answers rather
   // than throwing - and asking whether it contains a typed value is still
@@ -1442,13 +1442,9 @@ test('a BLOCK body IS read now, and the two spellings agree', () => {
   // of inferring the block was to make the two agree, and this is that
   // agreement rather than a second assertion of the same thing.
   expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => "wrong");');
-  // Pre-existing and shared by BOTH spellings: a numeric literal return is not
-  // assignable to a numeric value type in a function-type position, so
-  // `h((x) => 1)` is refused too. Measured on a clean build, where the concise
-  // form was already refused and the block form was accepted only because it was
-  // never checked. Asserted here so that fixing it converts both together.
-  expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => 1);');
-  expectStatic('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => { return 1; });');
+  // Both spellings propagate a contextual numeric return type into literals.
+  expect(evaluated('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => 1);')).toBe('took');
+  expect(evaluated('function h(f: (x: uint8) => uint8) { return "took"; } h((x) => { return 1; });')).toBe('took');
   expect(evaluated('let f: (a: uint8) => void = () => {}; f(5); "ok";')).toBe('ok');
   // An object-literal property is a position too, and the return it wants has
   // to TYPE the body rather than replace it: handing the literal that type

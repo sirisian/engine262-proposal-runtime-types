@@ -101,7 +101,7 @@ test('computed array extents evaluate', () => {
 
 test('computed types call their builder', () => {
   expect(evaluated('function pick() { return uint8; } type C = pick(); C === uint8 ? "same" : "different";')).toBe('same');
-  expect(evaluated('function bad() { return 5; } try { type C = bad(); "no"; } catch (e) { "caught"; }')).toBe('caught');
+  expectThrown('function bad() { return 5; } type C = bad();');
 });
 
 test('a type member may have a computed name', () => {

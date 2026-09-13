@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import {
   Agent, ManagedRealm, setSurroundingAgent, FinishLoadingImportedModule,
+  Get, Value, X, ObjectValue, JSStringValue,
 } from '#self';
 
 /**
@@ -146,32 +147,29 @@ export function expectThrown(source: string, messageIncludes?: string) {
   }
 }
 
-/**
- * Assert `source` is rejected STATICALLY: wrapped in a try/catch that would
- * swallow any runtime throw, the script must still fail, which only a
- * rejection before evaluation can produce. The numeric library's resolution
- * failures moved here from catchable runtime TypeErrors; the ~any~ path keeps
- * the runtime dispatch as the backstop, asserted separately.
- */
-export function expectStaticTypeError(source: string) {
-  const completion = run(`try { ${source} } catch (e) {} "ran";`) as { Type: string };
-  expect(completion.Type, `expected a static rejection for: ${source}`).toBe('throw');
-  // ...and that it is a StaticTypeError, not merely SOME failure.
-  //
-  // Until the constructor existed this could assert only that the script did not
-  // run, so a syntax error, a host error or an unrelated throw all satisfied it.
-  // `StaticTypeError` is what #sec-type-errors' Early Error produces, and naming
-  // it is what makes the static/dynamic split testable rather than inferred from
-  // the wrapper - which is the confusion `DISCRIMINATORS` records.
-  //
-  // The name is read by RUNNING the program and asking the value, because a
-  // throw completion carries the error OBJECT and not a constructor name: a
-  // first attempt read `.constructorName`, which does not exist, so the
-  // assertion silently passed for everything.
-  const named = run(`try { ${source} } catch (e) { e.constructor.name; }`) as { Type: string, Value?: { stringValue?(): string } };
-  if (named.Type === 'normal' && typeof named.Value?.stringValue === 'function') {
-    expect(named.Value.stringValue(), `expected a StaticTypeError for: ${source}`).toBe('StaticTypeError');
+/** Assert the error's kind AND rejection before the candidate body executes. */
+export function expectEarlyError(source: string, kind: 'StaticTypeError' | 'SyntaxError') {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  realm.evaluateScriptSkipDebugger('globalThis.__earlyErrorBodyRan = false;');
+  // Keep declarations at script scope: wrapping them in a block would change
+  // which type declarations the pre-evaluation pass can resolve.
+  const completion = realm.evaluateScriptSkipDebugger(`globalThis.__earlyErrorBodyRan = true; ${source}`);
+  expect(completion.Type, `expected an early ${kind} for: ${source}`).toBe('throw');
+  const ran = realm.evaluateScriptSkipDebugger('String(globalThis.__earlyErrorBodyRan);');
+  expect(normalValueString(ran, source), `candidate body ran: ${source}`).toBe('false');
+  const pop = realm.pushTopContext();
+  try {
+    const constructor = X(Get(completion.Value as ObjectValue, Value('constructor')));
+    const name = X(Get(constructor as ObjectValue, Value('name'))) as JSStringValue;
+    expect(name.stringValue(), `expected ${kind} for: ${source}`).toBe(kind);
+  } finally {
+    pop();
   }
+}
+
+export function expectStaticTypeError(source: string) {
+  expectEarlyError(source, 'StaticTypeError');
 }
 
 /** Assert `source` is a parse/early error under the feature (does not run). */

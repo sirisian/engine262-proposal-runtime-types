@@ -32,7 +32,7 @@ test('a variance modifier precedes the pack marker', () => {
 
 test('a generic function type parses and resolves its own parameters', () => {
   expect(evaluated('type Id = <T>(x: T) => T; "ok";')).toBe('ok');
-  expect(evaluated('type Bounded = <T extends Event>(e: T) => void; "ok";')).toBe('ok');
+  expect(evaluated('class Event {} type Bounded = <T extends Event>(e: T) => void; "ok";')).toBe('ok');
   // (a `let` with a function-type annotation needs an initializer - a pre-existing rule - so the forms are aliases)
   expect(evaluated('type G = { g: <T>(x: T) => T }; "ok";')).toBe('ok');
 });

@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, evaluatedFlagOff, expectError, expectThrown, run,
+  evaluated, evaluatedFlagOff, expectError, expectThrown, expectStaticTypeError, run,
 } from '../harness.mts';
 
 /**
@@ -256,17 +256,11 @@ test('sec-ranges: a wrong interval is reported at CHECK time, before the code ru
   expect(evaluated('let a: RangeBounds = 5..; let b: RangeBounds = ..; let c: RangeBounds = ..<3; "ok";')).toBe('ok');
 });
 
-test('sec-ranges: DIVERGENCE - the explicit three-argument spelling is compared at run time only', () => {
-  // `ClosedRange.<uint8>` is compared statically above, because an alias carries
-  // its bounds as ordinals. `Range.<uint8, Range.Bound.Open, Range.Bound.Open>`
-  // is not: a bound written as an enum MEMBER does not reach the record as an
-  // ordinal, so the static comparison skips it and only runtime membership
-  // decides.
-  //
-  // DIVERGENCE: the rejection is correct, just late - and the alias spelling,
-  // which ranges.md prefers anyway, is early.
-  expect(evaluated('if (false) { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; } "ran";')).toBe('ran');
-  expect(evaluated('let k="admitted"; try { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; } catch(e){ k="threw"; } k;')).toBe('threw');
+test('sec-ranges: explicit enum bounds are compared before execution', () => {
+  expectStaticTypeError('if (false) { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; }');
+  expect(evaluated('let r: Range.<uint8, Range.Bound.Closed, Range.Bound.Open> = 0..<10; "ok";')).toBe('ok');
+  // The unknown-source conversion remains checked at its runtime boundary.
+  expect(evaluated('let v: any = 0..<10; let k="admitted"; try { let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = v; } catch(e){ k="threw"; } k;')).toBe('threw');
 });
 
 test('sec-ranges: the four-way name of a pair is an `Interval`', () => {

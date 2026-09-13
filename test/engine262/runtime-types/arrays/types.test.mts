@@ -288,7 +288,7 @@ test('a tuple keeps its arity', () => {
   // declaration, is out of the path - what is under test here is the RUN TIME's choice of
   // position type, not whether the checker catches the store.
   expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a"];'
-    + ' const u = r; u[2] = (5 := uint8); typeof r[2];')).toBe('string');
+    + ' const u: any = r; u[2] = (5 := uint8); typeof r[2];')).toBe('string');
 });
 
 test('the covariance of a tuple is closed at the store', () => {
@@ -320,10 +320,10 @@ test('a tuple carries its type even when it needed no conversion', () => {
   // typed collection's arguments, for the same reason.
   // Through an untyped binding, so the RUN TIME's stamp is what refuses the
   // store rather than the static store rule.
-  expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x]; const u = a;'
+  expect(evaluated('const x = (1 := uint8); let a: [uint8, uint8] = [x, x]; const u: any = a;'
     + ' let m = ""; try { u[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
   // Through `any`, so the boundary certainly runs rather than being elided.
-  expect(evaluated('const x = (1 := uint8); let src: any = [x, x]; let a: [uint8, uint8] = src; const u = a;'
+  expect(evaluated('const x = (1 := uint8); let src: any = [x, x]; let a: [uint8, uint8] = src; const u: any = a;'
     + ' let m = ""; try { u[0] = "bad"; } catch (e) { m = "refused"; } m;')).toBe('refused');
   // The ARITY was missing with it, which is what made this hard to see: a
   // converted tuple refused a `push` and an already-conforming one did not.

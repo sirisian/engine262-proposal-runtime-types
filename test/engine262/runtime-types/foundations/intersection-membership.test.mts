@@ -14,9 +14,9 @@ import { evaluated, expectThrown } from '../harness.mts';
 // assignability, or reflection, and none bound a VALUE. These do.
 
 test('a value belongs to an intersection when it belongs to every member', () => {
-  expect(evaluated('type A = { a: uint8 }; type B = { b: uint8 }; type C = A & B; let c: C = { a: 1, b: 2 }; String(Number(c.a));')).toBe('1');
+  expect(evaluated('type A = { a: uint8 }; type B = { b: uint8 }; type C = A & B; let c: C = { a: 1, b: 2 }; let dynamic: any = c; String(Number(dynamic.a));')).toBe('1');
   expect(evaluated('type C = { a: uint8 } & { b: uint8 }; let c: C = { a: 1, b: 2 }; String(Number(c.b));')).toBe('2');
-  expect(evaluated('interface I { a: uint8 } interface J { b: uint8 } type C = I & J; let c: C = { a: 1, b: 2 }; String(Number(c.a));')).toBe('1');
+  expect(evaluated('interface I { a: uint8 } interface J { b: uint8 } type C = I & J; let c: C = { a: 1, b: 2 }; let dynamic: any = c; String(Number(dynamic.a));')).toBe('1');
   // More than two members.
   expect(evaluated('type A = { a: uint8 }; type B = { b: uint8 }; type D = { d: uint8 }; type C = A & B & D; let c: C = { a: 1, b: 2, d: 3 }; String(Number(c.d));')).toBe('3');
   // And at an argument, not only a binding.
@@ -40,6 +40,6 @@ test('a value failing any member is refused', () => {
 test('the union is unaffected, and differs as it should', () => {
   // A union needs ONE member; the intersection above needs every one. Sited
   // together so the asymmetry is visible if either regresses.
-  expect(evaluated('type A = { a: uint8 }; type B = { b: uint8 }; type C = A | B; let c: C = { a: 1 }; String(Number(c.a));')).toBe('1');
+  expect(evaluated('type A = { a: uint8 }; type B = { b: uint8 }; type C = A | B; let c: C = { a: 1 }; let dynamic: any = c; String(Number(dynamic.a));')).toBe('1');
   expectThrown('type A = { a: uint8 }; type B = { b: uint8 }; type C = A & B; let c: C = { a: 1 };');
 });
