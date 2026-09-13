@@ -100,8 +100,16 @@ test('everything that CAN be called still is', () => {
   expect(ok(dead('let f: () => uint8 = () => uint8(1); let q = f();'))).toBe(true);
   expect(ok(dead('class C { } let q = new C();'))).toBe(true);
   expect(ok(dead('let a: any = () => 1; let q = a();'))).toBe(true);
+});
 
-  // KNOWN LIMIT: a LIBRARY nominal is still the run time's - `new Map()` then
-  // `m()` - its structure not being an ~object~ record for this test to see.
-  expect(ok(dead('let m: Map.<string, uint8> = new Map(); let q = m();'))).toBe(true);
+test('a LIBRARY nominal is not callable either', () => {
+  // This was a KNOWN LIMIT for one change: a library type has no Structure at
+  // all - its members come from the signature tables - so the ~object~ test
+  // could not see it. Asking whether the type is still ~nominal~ AFTER
+  // `callableForm` covers both, and is self-protecting: a callable library type
+  // would have a ~function~ Structure and be unwrapped before this is asked.
+  expectThrown(dead('let m: Map.<string, uint8> = new Map(); let q = m();'), 'is not callable');
+  expectThrown(dead('let s: Set.<uint8> = new Set(); let q = s();'), 'is not callable');
+  expectThrown(dead('let e: Error = new Error("x"); let q = e();'), 'is not callable');
+  expectThrown(dead('let d: Date = new Date(); let q = d();'), 'is not callable');
 });

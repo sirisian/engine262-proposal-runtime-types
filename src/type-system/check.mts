@@ -15632,8 +15632,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // after that carries no call signature and cannot be called - a class
           // instance, a Map, a plain object type - where a callable interface
           // has become a ~function~ and is not reached.
+          // A ~nominal~ that SURVIVES `callableForm` is not callable, whether or
+          // not it has a Structure to look at. `callableForm` unwraps a nominal
+          // whose Structure is a ~function~, so anything still nominal after it
+          // has no call signature - and a LIBRARY nominal has no Structure at
+          // all, its members coming from the signature tables, which is why the
+          // object test alone left `new Map()` then `m()` to the run time.
+          //
+          // Self-protecting against a library type this does not know about: if
+          // one were callable its Structure would be a ~function~ and
+          // `callableForm` would have unwrapped it before this is asked.
           const shape = base ? structureOf(base) : null;
-          if (shape && shape.Kind === 'object') {
+          if ((shape && shape.Kind === 'object') || (base && base.Kind === 'nominal')) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not callable',
               Value(displayType(callee as TypeRecord)),
