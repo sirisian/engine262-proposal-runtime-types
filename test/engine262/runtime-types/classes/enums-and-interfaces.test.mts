@@ -719,3 +719,27 @@ test('the ordering reaches only enumerators of one enum', () => {
   // Two different enums likewise.
   expect(evaluated('enum A: string { X = "b" } enum B: string { Y = "a" } String(A.X < B.Y);')).toBe('false');
 });
+
+test('a CLASS body is judged by table-variance-positions, as an interface is', () => {
+  // #sec-variance-static-semantics-early-errors makes a declared variance "a
+  // claim about where the parameter appears", and #table-variance-positions
+  // names "a method, function, or CONSTRUCTOR parameter" and "a non-`readonly`
+  // field or property" - none of which an interface has a monopoly on. Only the
+  // interface member list was read, so `class Box<out T> { v: T; }` was accepted
+  // while `interface I<out T> { v: T; }` was refused: one rule answered two ways
+  // by which form declared it.
+  //
+  // The variance itself was always right - `out` is covariant, `in` is
+  // contravariant, an undeclared parameter is invariant - so what this adds is
+  // the well-formedness half.
+  expectThrown('class Box<out T> { v: T | null = null; }', 'writable field');
+  expectThrown('class Box<out T> { set(x: T): void { } }', 'input position');
+  expectThrown('class Sink<in T> { get(): T | null { return null; } }', 'output position');
+  expectThrown('class Box<in T> { readonly v: T | null = null; }', 'output position');
+  // The well-formed placements, which must keep compiling.
+  expect(evaluated('class Box<out T> { readonly v: T | null = null; } `${typeof Box}`;')).toBe('function');
+  expect(evaluated('class Box<out T> { get(): T | null { return null; } } `${typeof Box}`;')).toBe('function');
+  expect(evaluated('class Sink<in T> { put(x: T): void { } } `${typeof Sink}`;')).toBe('function');
+  // An undeclared parameter is invariant and may appear anywhere.
+  expect(evaluated('class Box<T> { v: T | null = null; set(x: T): void { } } `${typeof Box}`;')).toBe('function');
+});

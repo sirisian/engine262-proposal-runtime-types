@@ -2202,6 +2202,37 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   if (claimed !== undefined) {
     return claimed;
   }
+  // proposal-runtime-types #sec-decimal-types and #sec-complex-numbers: these
+  // are VALUE TYPES, and a value of one reports its own type. Both fell through
+  // to the shape branches below and answered the literal type of an object with
+  // no own properties, so `Reflect.typeOf(decimal32("1"))` and
+  // `Reflect.typeOf(decimal64("1"))` were the SAME `{}` - while
+  // `decimal32("1") is decimal64` answered *false* and a `decimal32` annotation
+  // refused a `decimal64`. Two answers disagreeing is what
+  // #sec-instanceof-for-type-objects exists to prevent, and it is the gap the
+  // range arm above closes for ranges.
+  //
+  // AFTER `RegisteredEnumOf`, for the reason that operation states about itself:
+  // an enumerator "carries its enum OUTSIDE itself, since the enumerator is the
+  // value the program wrote". A decimal-backed enumerator IS a decimal object,
+  // so an arm keyed on the representation and placed earlier reports
+  // `decimal64` where the program declared an enum - which is what a first
+  // attempt at this did.
+  //
+  // Neither needs a stamp: a decimal carries [[DecimalWidth]] and a complex
+  // carries the Type Record of its component, which names the pair's own width.
+  if (isDecimalObject(value)) {
+    const width = (value as unknown as { DecimalWidth?: 32 | 64 | 128 }).DecimalWidth;
+    if (width === 32 || width === 64 || width === 128) {
+      return makePrimitive(`decimal${width}`);
+    }
+  }
+  if (isComplexObject(value)) {
+    const component = (value as unknown as { ComplexComponent?: TypeRecord }).ComplexComponent;
+    if (component) {
+      return makePrimitive('complex', [component]);
+    }
+  }
   if (value instanceof TypedNumberValue) {
     return (value as TypedNumberValue).TypeRecord as TypeRecord;
   }

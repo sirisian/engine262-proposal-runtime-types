@@ -3181,6 +3181,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const d = declaration as unknown as {
       TypeParameters?: { TypeParameterList?: readonly { Variance?: string, BindingIdentifier?: { name?: string } }[] },
       InterfaceMemberList?: readonly ParseNode[] | null,
+      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
     const params = d.TypeParameters?.TypeParameterList ?? [];
     for (const param of params) {
@@ -3188,6 +3189,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const name = param.BindingIdentifier?.name;
       if (!variance || !name) {
         continue;
+      }
+      // A CLASS BODY is judged by the same table. #sec-variance-static-semantics-
+      // early-errors makes the claim about "the declaration", and
+      // #table-variance-positions names "a method, function, or CONSTRUCTOR
+      // parameter" and "a non-`readonly` field or property" - none of which an
+      // interface has a monopoly on. Only the interface member list was read, so
+      // `class Box<out T> { v: T; }` was accepted while `interface I<out T> { v:
+      // T; }` was refused, one rule answered two ways by which form declared it.
+      for (const element of d.ClassTail?.ClassBody ?? []) {
+        const el = element as unknown as {
+          // A class field spells it `readonly`, lowercase; `Readonly` is the
+          // INTERFACE member's spelling, and reading that here made every
+          // readonly field look writable.
+          type?: string, static?: boolean, readonly?: boolean,
+          TypeAnnotation?: ParseNode.TypeAnnotation | null,
+          UniqueFormalParameters?: readonly ParseNode[] | null,
+          FormalParameters?: readonly ParseNode[] | null,
+        };
+        if (el.type === 'FieldDefinition') {
+          if (!el.TypeAnnotation || !mentionsTypeName(el.TypeAnnotation.Type as ParseNode, name)) {
+            continue;
+          }
+          // A writable field is BOTH polarities, so only an invariant parameter
+          // may appear; a `readonly` one is output alone.
+          if (!el.readonly) {
+            pushCallError(`the ${variance === 'covariant' ? 'covariant' : 'contravariant'} type parameter "${name}" appears in a writable field, which admits only an invariant parameter`);
+          } else if (variance === 'contravariant') {
+            pushCallError(`the contravariant type parameter "${name}" appears in an output position`);
+          }
+          continue;
+        }
+        if (el.type === 'MethodDefinition') {
+          const formals = el.UniqueFormalParameters ?? el.FormalParameters ?? [];
+          if (variance === 'covariant') {
+            for (const fp of formals) {
+              if (mentionsTypeName(fp, name)) {
+                pushCallError(`the covariant type parameter "${name}" appears in an input position`);
+              }
+            }
+          }
+          if (variance === 'contravariant' && el.TypeAnnotation
+              && mentionsTypeName(el.TypeAnnotation.Type as ParseNode, name)) {
+            pushCallError(`the contravariant type parameter "${name}" appears in an output position`);
+          }
+        }
       }
       for (const member of d.InterfaceMemberList ?? []) {
         const tm = member as unknown as {
@@ -14033,6 +14079,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       if (n.type === 'ClassDeclaration') {
+        // #sec-variance-static-semantics-early-errors, as for an interface: a
+        // declared variance is a claim about where the parameter appears, and
+        // a class body has the same positions #table-variance-positions names.
+        checkVariancePositions(n);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
           classNodes.set(name, n);
