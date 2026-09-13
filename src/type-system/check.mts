@@ -17660,8 +17660,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-integer-operations applies to the primitive compound fallback's
         // division/remainder as well as its binary spelling.
         if (a.AssignmentOperator === '/=' || a.AssignmentOperator === '%=') {
-          const operand = a.LeftHandSideExpression.type === 'IdentifierReference'
-            ? lookupDeclared(a.LeftHandSideExpression.name) : staticType(a.LeftHandSideExpression);
+          const operand = locationType(a.LeftHandSideExpression);
           if (isIntegerValueType(operand) && foldIntegerConstant(a.AssignmentExpression, constExactValue) === 0n) {
             errors.push(Throw.StaticTypeError('a literal zero divisor is not a division at $1', Value(displayType(operand!))).Value as ObjectValue);
           }
