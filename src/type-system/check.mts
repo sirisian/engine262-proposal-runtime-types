@@ -15715,8 +15715,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Self-protecting against a library type this does not know about: if
           // one were callable its Structure would be a ~function~ and
           // `callableForm` would have unwrapped it before this is asked.
+          // A UNION is not callable when NO member is. Every member is asked the
+          // same question, so `uint8 | int32` is refused. A union with ONE
+          // callable member is left alone: calling that is unsound, but
+          // narrowing is the escape the language gives, and refusing it would
+          // refuse the program that narrows first.
+          const notCallable = (t: Known): boolean => {
+            const at = erasedForJudgment(callableForm(t));
+            if (!at) {
+              return false;
+            }
+            if (at.Kind === 'union') {
+              const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
+              return members.length > 0 && members.every((mem) => notCallable(mem as Known));
+            }
+            const inner = structureOf(at);
+            return at.Kind === 'primitive'
+              || (!!inner && inner.Kind === 'object')
+              || at.Kind === 'nominal';
+          };
           const shape = base ? structureOf(base) : null;
-          if ((shape && shape.Kind === 'object') || (base && base.Kind === 'nominal')) {
+          if ((base && base.Kind === 'union' && notCallable(base))
+            || (shape && shape.Kind === 'object') || (base && base.Kind === 'nominal')) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not callable',
               Value(displayType(callee as TypeRecord)),

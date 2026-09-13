@@ -113,3 +113,30 @@ test('a LIBRARY nominal is not callable either', () => {
   expectThrown(dead('let e: Error = new Error("x"); let q = e();'), 'is not callable');
   expectThrown(dead('let d: Date = new Date(); let q = d();'), 'is not callable');
 });
+
+test('a UNION is not callable when no member is', () => {
+  expectThrown(dead('let u: uint8 | int32 = uint8(1); let q = u();'), 'is not callable');
+  expectThrown(dead('let u: uint8 | string = uint8(1); let q = u();'), 'is not callable');
+  // Narrowing reaches the member, and the member is judged.
+  expectThrown(dead('let u: uint8 | string = uint8(1); if (u is uint8) { let q = u(); }'),
+    'is not callable');
+
+  // A union with ONE callable member is left alone. Calling it is unsound, but
+  // narrowing is the escape the language gives, and refusing it would refuse the
+  // program that narrows first.
+  expect(ok(dead('let u: uint8 | (() => uint8) = uint8(1); let q = u();'))).toBe(true);
+  // Nor is an intersection or a type parameter judged, neither being a set of
+  // members this can ask.
+  expect(ok(dead('interface I { a: uint8 } interface J { b: uint8 }'
+    + ' function g(v: I & J) { let q = v(); }'))).toBe(true);
+  expect(ok(dead('function g<T extends uint8>(v: T) { let q = v(); }'))).toBe(true);
+});
+
+test('KNOWN LIMIT: ITERABILITY does not reach a union', () => {
+  // `uint8 | int32` cannot be iterated by any value it admits, and is still the
+  // run time's. The four iterability sites each unwrap their operand by hand, so
+  // giving them the union question means one shared predicate rather than one
+  // more condition - an attempt that edited all four at once left a site
+  // referencing a name it no longer declared, which the build did not catch.
+  expect(ok(dead('let u: uint8 | int32 = uint8(1); for (const x of u) { }'))).toBe(true);
+});
