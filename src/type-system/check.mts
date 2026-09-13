@@ -5305,6 +5305,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * refused as "different numeric types" - a brand IS part of the identity, and
    * erasing it would admit the program the brand exists to refuse.
    */
+  /**
+   * As `erasedForJudgment`, but KEEPING a ~parameterized~ marker.
+   *
+   * The rules that ask what a value can DO erase a brand: a branded `uint32` is
+   * no more callable than a `uint32`. The rules that compare two types for
+   * IDENTITY must not, because a brand is part of that identity - `U * p` for a
+   * branded `uint32` and a plain one is refused by the run time as "different
+   * numeric types", and erasing the brand admits the program the brand exists to
+   * refuse.
+   *
+   * `shared` and a literal's base are removed by both: the run time evaluates
+   * `shared uint8 * uint8`, so sharing does not change the numeric identity.
+   */
+  const erasedKeepingBrand = (t: Known): Known => {
+    let at = t;
+    for (let i = 0; at && i < 8; i += 1) {
+      if (at.Kind === 'shared') {
+        at = (at as { Target?: TypeRecord }).Target ?? null;
+      } else if (at.Kind === 'literal') {
+        at = (at as { Base?: TypeRecord }).Base ?? null;
+      } else {
+        return at;
+      }
+    }
+    return at;
+  };
+
   const erasedForJudgment = (t: Known): Known => {
     let at = t;
     for (let i = 0; at && i < 8; i += 1) {
@@ -10444,12 +10471,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || strictOperator === '<=' || strictOperator === '>=')
             && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
             && !literalOperandType(operandTypes[0]) && !literalOperandType(operandTypes[1])) {
-          const lvc = operandTypes[0]!.Kind === 'primitive'
-            && isNumericValueTypeName((operandTypes[0] as { Name?: string }).Name)
-            ? operandTypes[0] as TypeRecord : null;
-          const rvc = operandTypes[1]!.Kind === 'primitive'
-            && isNumericValueTypeName((operandTypes[1] as { Name?: string }).Name)
-            ? operandTypes[1] as TypeRecord : null;
+          // Through `shared` and a literal's base, and KEEPING a brand: the
+          // comparison below is `SameType`, and a brand is part of the identity
+          // it compares, exactly as at an arithmetic operator.
+          const numericForCompare = (t: Known): TypeRecord | null => {
+            const at = erasedKeepingBrand(t);
+            if (!at) {
+              return null;
+            }
+            const base = at.Kind === 'parameterized' ? (at as { Base?: TypeRecord }).Base : at;
+            return base && base.Kind === 'primitive'
+              && isNumericValueTypeName((base as { Name?: string }).Name)
+              ? at as TypeRecord : null;
+          };
+          const lvc = numericForCompare(operandTypes[0] as Known);
+          const rvc = numericForCompare(operandTypes[1] as Known);
           // A vector is not a numeric VALUE type either, so it reaches neither
           // `lvc` nor `rvc`; two vectors of different types are the same
           // mistake at a comparison as at an arithmetic operator.
@@ -10655,8 +10691,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         // Through `shared` and a literal's base: a `shared uint8` is a `uint8`
         // for every question about what the value can do.
-        const lv = asValueType(erasedForJudgment(leftT));
-        const rv = asValueType(erasedForJudgment(rightT));
+        const lv = asValueType(erasedKeepingBrand(leftT));
+        const rv = asValueType(erasedKeepingBrand(rightT));
 
         // #table-family-operations: a binary floating-point type "does not
         // define bitwiseNOT, the shifts, and the bitwise operations, since each

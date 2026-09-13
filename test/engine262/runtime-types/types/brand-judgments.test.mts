@@ -40,12 +40,15 @@ test('SHARED is erased for mixing, which a brand is not', () => {
     'do not mix');
 });
 
-test('KNOWN LIMIT: a brand against another brand, or against its own base', () => {
-  // `u * v` for two different brands, and `u * p` for a branded and a plain
-  // `uint32`, are both refused by the run time and not yet by the checker: the
-  // records reach `SameType` and compare equal there, so the mixing rule sees
-  // one type. Recorded rather than left to be rediscovered.
+test('a brand against another brand, or against its own base', () => {
+  // Both are refused by the run time, and both are refused here. This was a
+  // KNOWN LIMIT for one change: the brand never reached the comparison, because
+  // the mixing rule read the eraser that REMOVES a brand. Two erasers now - one
+  // for what a value can DO, one for what two types ARE.
   const V = "type V = uint32.<{ brand: 'C' }>; let v: V = V((7 := uint32)); ";
-  expect(ok(dead(`${U}${V}let q = u * v;`))).toBe(true);
-  expect(ok(dead(`${U}let p: uint32 = uint32(7); let q = u * p;`))).toBe(true);
+  expectThrown(dead(`${U}${V}let q = u * v;`), 'do not mix');
+  expectThrown(dead(`${U}let p: uint32 = uint32(7); let q = u * p;`), 'do not mix');
+  // A comparison decides it the same way.
+  expectThrown(dead(`${U}let p: uint32 = uint32(7); let q = u < p;`), 'do not mix');
+  expect(ok(dead(`${U}let q = u <= u;`))).toBe(true);
 });
