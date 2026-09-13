@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import {
   Agent, ManagedRealm, setSurroundingAgent, FinishLoadingImportedModule,
-  Get, Value, X, ObjectValue, JSStringValue,
+  EnsureCompletion, Get, Value, X, ObjectValue, JSStringValue,
 } from '#self';
 
 /**
@@ -154,7 +154,7 @@ export function expectEarlyError(source: string, kind: 'StaticTypeError' | 'Synt
   realm.evaluateScriptSkipDebugger('globalThis.__earlyErrorBodyRan = false;');
   // Keep declarations at script scope: wrapping them in a block would change
   // which type declarations the pre-evaluation pass can resolve.
-  const completion = realm.evaluateScriptSkipDebugger(`globalThis.__earlyErrorBodyRan = true; ${source}`);
+  const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(`globalThis.__earlyErrorBodyRan = true; ${source}`));
   expect(completion.Type, `expected an early ${kind} for: ${source}`).toBe('throw');
   const ran = realm.evaluateScriptSkipDebugger('String(globalThis.__earlyErrorBodyRan);');
   expect(normalValueString(ran, source), `candidate body ran: ${source}`).toBe('false');
@@ -164,7 +164,7 @@ export function expectEarlyError(source: string, kind: 'StaticTypeError' | 'Synt
     const name = X(Get(constructor as ObjectValue, Value('name'))) as JSStringValue;
     expect(name.stringValue(), `expected ${kind} for: ${source}`).toBe(kind);
   } finally {
-    pop();
+    pop?.();
   }
 }
 

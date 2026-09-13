@@ -104,7 +104,7 @@ const rows: readonly Row[] = [
  * `typeof x` is valid, and the checker's inability to read it is a property of
  * when the checker runs, not a defect in the program.
  */
-const KNOWN_CHECKER_GAPS = new Set([
+const KNOWN_CHECKER_GAPS = new Set<string>([
   // `SharedType` was here, and is closed: resolving it once made
   // `let s: shared uint8 = 1;` an early error because the checker's CONVERSION
   // path did not look through the marker, so the annotation was left unreadable
