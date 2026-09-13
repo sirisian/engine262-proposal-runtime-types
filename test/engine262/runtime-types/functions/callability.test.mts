@@ -166,3 +166,18 @@ test('construction refuses what calling refuses', () => {
   expect(ok(dead('class C { } let q = new C();'))).toBe(true);
   expect(ok(dead('let m = new Map.<string, uint8>();'))).toBe(true);
 });
+
+test('the call syntaxes this rule does NOT yet reach', () => {
+  // The same sweep, one operand through every syntax that calls. Both are their
+  // own sites rather than a condition on the call arm: an OPTIONAL call is an
+  // OptionalExpression, and a TAGGED TEMPLATE is a TaggedTemplateExpression
+  // whose tag is the callee.
+  expect(ok(dead('let n: uint8 = uint8(1); let q = n?.();'))).toBe(true);
+  expect(ok(dead('let n: uint8 = uint8(1); let q = n`x`;'))).toBe(true);
+
+  // The syntaxes it does reach, for contrast.
+  expectThrown(dead('let n: uint8 = uint8(1); let q = (n)();'), 'is not callable');
+  expectThrown(dead('let n: uint8 = uint8(1); let r: [].<uint8> = []; let q = n(...r);'),
+    'is not callable');
+  expectThrown(dead('let n: uint8 = uint8(1); let q = n |> %();'), 'is not callable');
+});

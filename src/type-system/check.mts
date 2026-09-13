@@ -15661,6 +15661,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // resolution (mixed families, a family with no row, an unfitting
         // literal beside a typed argument) apply at every call site.
         checkNumericCall(n, null);
+        // A SPREAD ARGUMENT iterates, exactly as a spread in an array literal
+        // does. `f(...n)` for a `uint8` n was the run time's "1 (typed) is not
+        // iterable" while `[...n]` was refused here - one rule, two syntaxes,
+        // and only one of them reached.
+        for (const arg of (n as unknown as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
+          if ((arg as { type?: string }).type !== 'AssignmentRestElement') {
+            continue;
+          }
+          const spreadArg = (arg as unknown as { AssignmentExpression?: ParseNode }).AssignmentExpression;
+          const spreadArgType = spreadArg ? staticType(spreadArg) : null;
+          if (spreadArgType && notIterable(spreadArgType)) {
+            const completion = Throw.StaticTypeError(
+              'a value of $1 is not iterable',
+              Value(displayType(spreadArgType as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = callableForm(staticType(c.CallExpression));
         // proposal-runtime-types #sec-conversions: a call whose callee names a

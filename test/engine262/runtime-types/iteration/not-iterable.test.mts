@@ -92,3 +92,29 @@ test('a UNION cannot be iterated when no member can', () => {
   expect(ok(dead('let u: uint8 | [].<uint8> = uint8(1); for (const x of u) { }'))).toBe(true);
   expect(ok(dead('let u: uint8 | string = "x"; for (const x of u) { }'))).toBe(true);
 });
+
+test('a SPREAD ARGUMENT iterates, as a spread in an array literal does', () => {
+  expectThrown(dead('let n: uint8 = uint8(1); function f() { } f(...n);'), 'is not iterable');
+  expectThrown(dead('let b: boolean = true; function f() { } f(...b);'), 'is not iterable');
+  expect(ok(dead('let a: [].<uint8> = []; function f() { } f(...a);'))).toBe(true);
+  expect(ok(dead('let s: string = "x"; function f() { } f(...s);'))).toBe(true);
+});
+
+test('the iteration syntaxes this rule does NOT yet reach', () => {
+  // Found by sweeping one operand through every syntax that iterates. Recorded
+  // as assertions so each fails the day it is closed, rather than as a list
+  // someone has to re-derive.
+  //
+  // `yield*` delegates to an iterable, and `for await` needs an async or a sync
+  // one; a `uint8` is neither. Both are their own sites - `YieldExpression` has
+  // an arm in `staticType` and none in the walk, and `ForAwaitStatement` appears
+  // nowhere in check.mts - so neither is one more condition on an existing
+  // check.
+  expect(ok(dead('let n: uint8 = uint8(1); function* g() { yield* n; }'))).toBe(true);
+  expect(ok(dead('let n: uint8 = uint8(1);'
+    + ' async function g() { for await (const x of n) { } }'))).toBe(true);
+
+  // An OBJECT spread is correctly untouched: it copies properties rather than
+  // iterating, and `{ ...1 }` is ordinary JavaScript.
+  expect(ok(dead('let n: uint8 = uint8(1); let o = { ...n };'))).toBe(true);
+});
