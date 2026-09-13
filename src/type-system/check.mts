@@ -5386,6 +5386,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * array pattern in a declaration and in an assignment - which each unwrapped
    * their operand by hand and so each had to be taught the union separately.
    */
+  /**
+   * Whether a value of _t_ certainly cannot be called.
+   *
+   * A UNION is not callable when NO member is; an INTERSECTION likewise, for the
+   * opposite reason - a value of `I & J` satisfies both, so it is callable where
+   * either member is. ~void~ describes no values at all. A structure still an
+   * ~object~ after `callableForm`, or a type still ~nominal~ after it, carries
+   * no call signature: only a ~function~ record has [[Signatures]].
+   *
+   * Shared by the CALL and the TAGGED TEMPLATE, whose tag is invoked with the
+   * strings and the substitutions and is as much a callee as `f` in `f()`.
+   */
+  const notCallable = (t: Known): boolean => {
+    const at = erasedForJudgment(callableForm(t));
+    if (!at) {
+      return false;
+    }
+    if (at.Kind === 'union' || at.Kind === 'intersection') {
+      const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
+      return members.length > 0 && members.every((mem) => notCallable(mem as Known));
+    }
+    if (at.Kind === 'void') {
+      return true;
+    }
+    const inner = structureOf(at);
+    return at.Kind === 'primitive'
+      || (!!inner && inner.Kind === 'object')
+      || at.Kind === 'nominal';
+  };
+
   const notIterable = (t: Known): boolean => {
     const at = erasedForJudgment(t);
     if (!at) {
@@ -15791,35 +15821,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Self-protecting against a library type this does not know about: if
           // one were callable its Structure would be a ~function~ and
           // `callableForm` would have unwrapped it before this is asked.
-          // A UNION is not callable when NO member is. Every member is asked the
-          // same question, so `uint8 | int32` is refused. A union with ONE
-          // callable member is left alone: calling that is unsound, but
-          // narrowing is the escape the language gives, and refusing it would
-          // refuse the program that narrows first.
-          const notCallable = (t: Known): boolean => {
-            const at = erasedForJudgment(callableForm(t));
-            if (!at) {
-              return false;
-            }
-            // An INTERSECTION is decided the same way and for a different
-            // reason: a value of `I & J` satisfies BOTH, so it is callable where
-            // EITHER member is, and not callable only where neither is. A union
-            // reaches the same test because the value is one member or the
-            // other and neither would serve.
-            if (at.Kind === 'union' || at.Kind === 'intersection') {
-              const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
-              return members.length > 0 && members.every((mem) => notCallable(mem as Known));
-            }
-            // ~void~ is "the type with no values", so nothing it describes can
-            // be called - `f()()` for a `f(): void` was the run time's.
-            if (at.Kind === 'void') {
-              return true;
-            }
-            const inner = structureOf(at);
-            return at.Kind === 'primitive'
-              || (!!inner && inner.Kind === 'object')
-              || at.Kind === 'nominal';
-          };
           // The predicate is the whole test. Enumerating kinds at the guard is
           // what kept an INTERSECTION and a ~void~ out of it while the predicate
           // below already decided them.
@@ -16594,6 +16595,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // statements, so the same fact applies.
         const c = n as unknown as { ShortCircuitExpression: ParseNode, AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
         walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
+        return;
+      }
+      case 'TaggedTemplateExpression': {
+        // THE TAG IS CALLED. `` n`x` `` invokes the tag with the strings and the
+        // substitutions, so a tag that cannot be called is the mistake `n()` is -
+        // and it was the run time's, this being a different node from a call.
+        const tt = n as unknown as { MemberExpression?: ParseNode, TemplateLiteral?: ParseNode };
+        const tagType = tt.MemberExpression ? erasedForJudgment(callableForm(staticType(tt.MemberExpression))) : null;
+        if (tagType && notCallable(tagType)) {
+          const completion = Throw.StaticTypeError(
+            'a value of $1 is not callable',
+            Value(displayType(tagType as TypeRecord)),
+          ) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        }
+        walk(tt.MemberExpression);
+        walk(tt.TemplateLiteral);
         return;
       }
       case 'YieldExpression': {

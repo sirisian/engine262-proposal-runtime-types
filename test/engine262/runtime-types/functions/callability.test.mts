@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrown, ok } from '../harness.mts';
+import { evaluated, expectThrown, ok } from '../harness.mts';
 
 /**
  * Spec: #sec-type-errors. A determinable type violation is an Early Error, so
@@ -168,16 +168,34 @@ test('construction refuses what calling refuses', () => {
 });
 
 test('the call syntaxes this rule does NOT yet reach', () => {
-  // The same sweep, one operand through every syntax that calls. Both are their
-  // own sites rather than a condition on the call arm: an OPTIONAL call is an
-  // OptionalExpression, and a TAGGED TEMPLATE is a TaggedTemplateExpression
-  // whose tag is the callee.
+  // The same sweep, one operand through every syntax that calls. An OPTIONAL
+  // call is its own site rather than a condition on the call arm:
+  // `OptionalExpression` appears nowhere in check.mts.
   expect(ok(dead('let n: uint8 = uint8(1); let q = n?.();'))).toBe(true);
-  expect(ok(dead('let n: uint8 = uint8(1); let q = n`x`;'))).toBe(true);
 
   // The syntaxes it does reach, for contrast.
   expectThrown(dead('let n: uint8 = uint8(1); let q = (n)();'), 'is not callable');
   expectThrown(dead('let n: uint8 = uint8(1); let r: [].<uint8> = []; let q = n(...r);'),
     'is not callable');
   expectThrown(dead('let n: uint8 = uint8(1); let q = n |> %();'), 'is not callable');
+});
+
+test('a TAGGED TEMPLATE calls its tag', () => {
+  // `` n`x` `` invokes the tag with the strings and the substitutions, so a tag
+  // that cannot be called is the mistake `n()` is. It is a different NODE from a
+  // call, which is the only reason it was the run time's; the predicate is the
+  // same one, now shared rather than local to the call arm.
+  expectThrown(dead('let n: uint8 = uint8(1); let q = n`x`;'), 'is not callable');
+  expectThrown(dead('class C { } let c: C = new C(); let q = c`x`;'), 'is not callable');
+
+  // What tagging legitimately takes.
+  expect(ok(dead('function f(s) { return 1; } let q = f`x`;'))).toBe(true);
+  expect(ok(dead('let f: (s: any) => uint8 = (s) => uint8(1); let q = f`x`;'))).toBe(true);
+  expect(ok(dead('class C { m(s) { return 1; } } let c: C = new C(); let q = c.m`x`;'))).toBe(true);
+  expect(ok(dead('let a: any = (s) => 1; let q = a`x`;'))).toBe(true);
+  expect(ok(dead('let q = String.raw`x`;'))).toBe(true);
+
+  // Tagging still works at run time.
+  expect(evaluated('function tag(s, ...v) { return s[0] + ":" + v.length; }'
+    + ' String(tag`a${1}b`);')).toBe('a:1');
 });
