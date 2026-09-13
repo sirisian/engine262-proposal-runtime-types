@@ -10789,6 +10789,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         // Through `shared` and a literal's base: a `shared uint8` is a `uint8`
         // for every question about what the value can do.
+        // A UNION mixes when SOME member does. The run time settles the line:
+        // `(uint8 | int32) * int32` evaluates where the value is the int32 and
+        // refuses where it is the uint8, so the operation is sound for one
+        // member and refusing the union outright would refuse a working
+        // program. A union NO member of which mixes is decided - which a union
+        // of one numeric type is, that canonicalizing to the type itself.
+        const mixesWith = (t: Known, other: TypeRecord): boolean => {
+          const at = erasedKeepingBrand(t);
+          if (at && at.Kind === 'union') {
+            const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
+            return members.some((mem) => mixesWith(mem as Known, other));
+          }
+          const one = asValueType(at);
+          return !one || SameType(one, other);
+        };
         const lv = asValueType(erasedKeepingBrand(leftT));
         const rv = asValueType(erasedKeepingBrand(rightT));
 
@@ -10876,6 +10891,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (rv && leftLit) {
           adopt(leftLit, rv);
           return rv;
+        }
+        {
+          // Either operand may be a UNION, which `asValueType` answers nothing
+          // for, so the pair below never sees one.
+          const leftU = erasedKeepingBrand(leftT);
+          const rightU = erasedKeepingBrand(rightT);
+          const unionSide = leftU && leftU.Kind === 'union' ? leftU : (rightU && rightU.Kind === 'union' ? rightU : null);
+          const otherSide = unionSide === leftU ? rv : lv;
+          if (unionSide && otherSide && !mixesWith(unionSide, otherSide)) {
+            const completion = Throw.StaticTypeError(
+              '$1 and $2 are different numeric types and do not mix',
+              Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
         }
         if (lv && rv) {
           if (SameType(lv, rv)) {
@@ -16349,9 +16379,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (((target as { type?: string }).type === 'IdentifierReference'
               && !classTypeOf((target as unknown as { name: string }).name))
               || (target as { type?: string }).type === 'TopicReference')) {
+          // A UNION is not a constructor when NO member is, which is the line
+          // the call and the iteration draw: one member that could be
+          // constructed leaves the union alone, narrowing being the escape.
+          const notConstructor = (t: Known): boolean => {
+            const at = erasedForJudgment(callableForm(t));
+            if (!at) {
+              return false;
+            }
+            if (at.Kind === 'union') {
+              const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
+              return members.length > 0 && members.every((mem) => notConstructor(mem as Known));
+            }
+            return at.Kind === 'primitive';
+          };
           const constructee = callableForm(staticType(target));
           const cbase = erasedForJudgment(constructee);
-          if (cbase && cbase.Kind === 'primitive') {
+          if (cbase && (cbase.Kind === 'primitive' || (cbase.Kind === 'union' && notConstructor(cbase)))) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not a constructor',
               Value(displayType(constructee as TypeRecord)),
