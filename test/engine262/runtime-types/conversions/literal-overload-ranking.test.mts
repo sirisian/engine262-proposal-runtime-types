@@ -29,20 +29,54 @@ test('a lower rank wins', () => {
   expect(evaluated(two('uint32', 'float32'))).toBe('B');
 });
 
-test('the same rank stays ambiguous', () => {
-  // The controls. `float32` and `float16` are both rank 2, `uint32` and `uint8`
-  // both rank 4: the clause orders the FAMILIES, not the widths within one, so a
-  // fix that resolved these would have invented an order.
-  expectThrown(two('float32', 'float16'), 'ambiguous');
-  expectThrown(two('uint32', 'uint8'), 'ambiguous');
+test('a rank orders its widths, widest first', () => {
+  // This asserted the opposite - that a rank is a set, "the clause orders the
+  // FAMILIES, not the widths within one, so a fix that resolved these would have
+  // invented an order". #table-literal-ranking-completion settles it the other
+  // way, and in as many words: `int.<N>` and `uint.<N>` rank "among the widths of
+  // their family, in the same order: a narrower width after a wider one.
+  // `uint.<24>` ranks after `uint32` and before `uint16`." Placing `uint.<24>`
+  // BETWEEN two named widths says nothing unless those two are ordered.
+  //
+  // The main table agrees once read closely: its column is headed "Types, in
+  // order", and the preamble takes "the FIRST that can represent the literal",
+  // which a set has none of.
+  expect(evaluated(two('float32', 'float16'))).toBe('A');
+  expect(evaluated(two('uint32', 'uint8'))).toBe('A');
+  // Both directions, so this is the ORDER and not the written position.
+  expect(evaluated(two('float16', 'float128'))).toBe('B');
+  expect(evaluated(two('uint8', 'uint128'))).toBe('B');
+  expect(evaluated(two('decimal32', 'decimal128'))).toBe('B');
 });
 
-test('a type the clause does not rank breaks no tie', () => {
-  // The clause records its own omission: it "omits the rational types and the
+test('the completion table places the widths the main table omits', () => {
+  // #table-literal-ranking-completion: `int.<N>` and `uint.<N>` at a width that
+  // is not a named shorthand rank "among the widths of their family, in the same
+  // order: a narrower width after a wider one. `uint.<24>` ranks after `uint32`
+  // and before `uint16`." Both halves of that sentence, which is what pins the
+  // placement to the WIDTH rather than to a list of the five names.
+  expect(evaluated(two('uint32', 'uint.<24>'))).toBe('A');
+  expect(evaluated(two('uint.<24>', 'uint16'))).toBe('A');
+  // And a rational ranks "after every integer type".
+  expect(evaluated(two('uint8', 'rational'))).toBe('A');
+  expect(evaluated(two('int8', 'rational'))).toBe('A');
+  // Without displacing the families above it.
+  expect(evaluated(two('float64', 'rational'))).toBe('A');
+  expect(evaluated(two('decimal64', 'rational'))).toBe('A');
+});
+
+test('an omitted width is ranked by the completion table, not left unranked', () => {
+  // This read the main table's omission - it "omits the rational types and the
   // parameterized widths `int.<N>` and `uint.<N>` for an N that is not a named
-  // shorthand". `uint.<7>` is legal and unranked, so the tie stands rather than
-  // being decided by a rule the proposal has not written.
-  expectThrown(two('uint.<7>', 'uint8'), 'ambiguous');
+  // shorthand" - as leaving those types unranked, so the tie stood "rather than
+  // being decided by a rule the proposal has not written".
+  //
+  // The rule IS written, one clause away: #table-literal-ranking-completion
+  // exists precisely for "the types it omits, which are the ones a call may
+  // nonetheless select", and gives every one of them a place. `uint.<7>` is
+  // narrower than `uint8`, so it ranks after it.
+  expect(evaluated(two('uint.<7>', 'uint8'))).toBe('B');
+  expect(evaluated(two('uint8', 'uint.<7>'))).toBe('A');
 });
 
 test('a TYPED argument is unaffected', () => {

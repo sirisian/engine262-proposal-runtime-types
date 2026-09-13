@@ -439,24 +439,60 @@ function literalRank(t: TypeRecord): number | undefined {
   // `uint32` is Name `uint` with Arguments [32] and `int32` is Name `int` with
   // Arguments [32]. A table switching on the name alone silently ranks the
   // floats and leaves every integer unranked.
+  // The rank AND the position within it. A row of #table-literal-ranking is a
+  // SEQUENCE, not a set: its column is headed "Types, in order", the preamble
+  // ranks "in the order of" that table and takes "the FIRST that can represent
+  // the literal", and #table-literal-ranking-completion says so outright for the
+  // widths - `int.<N>` and `uint.<N>` rank "among the widths of their family, in
+  // the same order: a narrower width after a wider one. `uint.<24>` ranks after
+  // `uint32` and before `uint16`". Placing `uint.<24>` BETWEEN two named widths
+  // is meaningless unless those two are themselves ordered.
+  //
+  // Returning the rank alone made every same-rank pair tie, so `f(5)` against
+  // `uint8` and `uint128` overloads was reported ambiguous rather than taking
+  // `uint128`.
+  //
+  // Encoded as rank * 10 + position so the existing worse-is-larger comparison
+  // needs no change; no rank lists more than five types.
   switch (t.Name) {
-    case 'float64': return 1;
-    case 'float128': case 'float32': case 'float16': return 2;
-    case 'decimal128': case 'decimal64': case 'decimal32': return 3;
+    case 'float64': return 10;
+    case 'float128': return 20;
+    case 'float32': return 21;
+    case 'float16': return 22;
+    case 'decimal128': return 30;
+    case 'decimal64': return 31;
+    case 'decimal32': return 32;
     default: break;
+  }
+  // A RATIONAL ranks after every integer type, "a wider _N_ before a narrower
+  // one" (#table-literal-ranking-completion). Unranked before this, so `f(5)`
+  // against `uint8` and `rational` overloads was ambiguous where the table gives
+  // the integer.
+  if (t.Name === 'rational') {
+    const n = (t as { Arguments?: readonly unknown[] }).Arguments?.[0];
+    const width = typeof n === 'number' && n > 0 && n <= 128 ? n : 128;
+    return 60 + (128 - width) / 128;
   }
   if (t.Name !== 'uint' && t.Name !== 'int') {
     return undefined;
   }
   const width = (t as { Arguments?: readonly unknown[] }).Arguments?.[0];
-  // Only the NAMED shorthands are in the clause's table. `uint.<7>` is a legal
-  // width and is not one of them, and the clause records the omission: it
-  // "omits the rational types and the parameterized widths `int.<N>` and
-  // `uint.<N>` for an N that is not a named shorthand".
-  if (width !== 8 && width !== 16 && width !== 32 && width !== 64 && width !== 128) {
+  // Every width, named or not. #table-literal-ranking omits the widths that are
+  // not named shorthands, and #table-literal-ranking-completion supplies them:
+  // they rank "among the widths of their family, IN THE SAME ORDER: a narrower
+  // width after a wider one. `uint.<24>` ranks after `uint32` and before
+  // `uint16`." Bailing out on them left `f(5)` against `uint.<24>` and `uint16`
+  // ambiguous, where the completion table gives the answer directly.
+  //
+  // A width is placed by its VALUE rather than by a table of the five names, so
+  // an unnamed width falls where its size puts it. 128 is the widest the family
+  // admits, so `(128 - width) / 8` counts down from 0 and stays inside the
+  // rank's decade for every width from 8 up.
+  if (typeof width !== 'number' || width <= 0 || width > 128) {
     return undefined;
   }
-  return t.Name === 'uint' ? 4 : 5;
+  const position = (128 - width) / 128;
+  return (t.Name === 'uint' ? 40 : 50) + position;
 }
 
 /**
