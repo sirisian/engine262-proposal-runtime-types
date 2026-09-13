@@ -1,10 +1,9 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { NumberValue } from '../value.mts';
-import type {
-  PropertyTypeRecord, SignatureRecord, TypeRecord, Known,
-} from './records.mts';
+// `NumberValue`, `R`, `PropertyTypeRecord` and `SignatureRecord` left with
+// `substituteTypeParameters` and `mentionsTypeParameter` when those moved to
+// `records.mts`; nothing here reads them now.
+import type { TypeRecord, Known } from './records.mts';
 import { unifyTypeParameters } from './unify.mts';
-import { R } from '#self';
 
 /**
  * proposal-runtime-types #sec-generics and #sec-parameterized-types:

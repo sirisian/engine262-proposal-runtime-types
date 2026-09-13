@@ -109,7 +109,13 @@ export const canCompleteNormally = (
       // An exhaustive `switch` needs no `default`: #sec-divergence counts
       // "every enumerator, every direct subclass, or a `default`", and the
       // checker is what can tell. Without the hook only the `default` was seen.
-      if (!cb?.DefaultClause && !(covers?.(stmt) === true)) {
+      // `cb` is tested on its own so that the walk below sees it as present.
+      // The earlier form - `!cb?.DefaultClause` - narrowed it as a side effect,
+      // and adding the exhaustiveness hook to the condition took that away: a
+      // switch covered by the hook now reaches the walk, and could in principle
+      // reach it with no CaseBlock at all. No block means no clause to fall out
+      // of, which completes normally.
+      if (!cb || (!cb.DefaultClause && !(covers?.(stmt) === true))) {
         return true;
       }
       // The `default` is only present when there IS one: an exhaustive switch

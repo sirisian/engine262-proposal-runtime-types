@@ -85,29 +85,18 @@ function isNumberCategory(t: TypeRecord): boolean {
   return t.Kind === 'primitive' && t.Name === 'number';
 }
 
-function overlaps(m: TypeRecord, t: TypeRecord): boolean {
-  // A `typeof` test names a CATEGORY of types, not one type. The
-  // specification is explicit that `number` is disjoint from the sized numeric
-  // types - "no other numeric type is assignable to it and it is assignable to
-  // no other numeric type" - which is right for ASSIGNMENT and wrong here: it
-  // made `typeof v === "number"` narrow `uint8 | string` to nothing, and the
-  // checker rejected the clause's own example as dead code.
-  //
-  // Applied at `overlaps` because it is the single decision both `NarrowTo` and
-  // `NarrowFrom` reach, so the true and false branches stay each other's
-  // complement.
-  if (isNumberCategory(t) && m.Kind === 'primitive' && typeofNumberNames.has(m.Name)) {
-    return true;
-  }
-  if (isNumberCategory(m) && t.Kind === 'primitive' && typeofNumberNames.has(t.Name)) {
-    return true;
-  }
-  return isAny(m) || isAny(t) || IsAssignable(m, t) || IsAssignable(t, m);
-}
 
 /**
  * Whether _m_ and _t_ overlap only through the `typeof` CATEGORY rule, which is
  * not a subtype relation and so is invisible to the steps below.
+ *
+ * This superseded an `overlaps` that answered the whole question - assignability
+ * in either direction, with ~any~ overlapping everything - which was left behind
+ * unused when the steps below took that general half over directly. Why the
+ * category half still needs stating is unchanged: a `typeof` test names a
+ * CATEGORY of types rather than one type, and the specification makes `number`
+ * disjoint from the sized numeric types, which is right for assignment and wrong
+ * for a `typeof` narrowing.
  */
 function categoryOverlap(m: TypeRecord, t: TypeRecord): boolean {
   return (isNumberCategory(t) && m.Kind === 'primitive' && typeofNumberNames.has(m.Name))

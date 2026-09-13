@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated } from '../harness.mts';
 
 /**
  * #sec-literal-overload-ranking, which states the case this file tests:

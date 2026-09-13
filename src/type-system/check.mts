@@ -4249,7 +4249,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // `T` resolves to null here, the all-or-nothing rule below then keeps the
     // BARE base, and a specialization of `Sub` relates to no instantiation of
     // `Box`.
-    const pushedForHeritage = pushTypeParameterScopeOf(cls, 'type-only');
+    // The NODE, not the structural view of it above: `cls` is a bare cast for
+    // reading two fields and is not a |ParseNode|, which is what this helper
+    // reads its |TypeParameters| from.
+    const pushedForHeritage = pushTypeParameterScopeOf(n as ParseNode, 'type-only');
     let heritageArgRecords;
     try {
       heritageArgRecords = heritageArgs

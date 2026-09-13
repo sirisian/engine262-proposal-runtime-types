@@ -2817,6 +2817,14 @@ export namespace ParseNode {
     readonly type: 'TypeAnnotation';
     /** proposal-runtime-types (decorators.md): a return position's decorators. */
     readonly Decorators?: readonly Decorator[] | null;
+    /**
+     * proposal-runtime-types #sec-declared-narrowing: the parameter a NARROWING
+     * PREDICATE names, for the second form of |TypeAnnotation| -
+     * `: pet is Fish`. Present only in a return position; `Type` is then what a
+     * *true* answer proves the named parameter to be, and the signature's own
+     * return is `boolean`.
+     */
+    readonly NarrowsTarget?: string;
     readonly Type: Type;
   }
 

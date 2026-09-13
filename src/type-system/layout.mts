@@ -170,7 +170,16 @@ export function LayoutOf(t: TypeRecord): Layout | null {
       key: f.key, type: substituteForLayout!(f.type, declaration, args), controls: f.controls,
     }));
     const recomputed = ComputeClassLayout(inputs.baseLayout, fields, inputs.controls, inputs.parent);
-    return (recomputed !== null && 'cycle' in recomputed) ? null : recomputed;
+    // `ComputeClassLayout` reports two NON-LAYOUTS beside a layout - a `cycle`
+    // and an `overflow` - and only the first was filtered here, so the second
+    // was returned as though it were a Layout. A caller reading `byteLength` off
+    // it would have found nothing. Neither is a layout: a type whose fields
+    // overrun the size its controls fix has none, exactly as one that contains
+    // itself has none.
+    if (recomputed !== null && ('cycle' in recomputed || 'overflow' in recomputed)) {
+      return null;
+    }
+    return recomputed;
   }
   if (t.Kind === 'union') {
     // #sec-memory-layout's table, row "a reference type, INCLUDING A NULLABLE
