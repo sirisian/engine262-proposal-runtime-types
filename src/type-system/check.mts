@@ -5364,6 +5364,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `shared` and a literal's base are removed by both: the run time evaluates
    * `shared uint8 * uint8`, so sharing does not change the numeric identity.
    */
+  /**
+   * Whether a value of _t_ certainly cannot be iterated.
+   *
+   * A value of a primitive type cannot, with two exceptions: `string` iterates
+   * its characters, and a tuple COMPOSITE is a ~primitive~-kinded record that
+   * iterates its elements.
+   *
+   * A UNION cannot when NO member can, so `uint8 | int32` is decided. A union
+   * with an ARRAY member is left alone: iterating it is unsound, but narrowing
+   * is the escape the language gives, and refusing it would refuse the program
+   * that narrows first - the same line the callability rule draws.
+   *
+   * An ~object~ or a ~nominal~ may carry `Symbol.iterator` and the structures
+   * here do not record it, so neither is judged.
+   *
+   * Shared by the four syntaxes that iterate - `for`-`of`, a spread, and an
+   * array pattern in a declaration and in an assignment - which each unwrapped
+   * their operand by hand and so each had to be taught the union separately.
+   */
+  const notIterable = (t: Known): boolean => {
+    const at = erasedForJudgment(t);
+    if (!at) {
+      return false;
+    }
+    if (at.Kind === 'union') {
+      const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
+      return members.length > 0 && members.every((mem) => notIterable(mem as Known));
+    }
+    const name = at.Kind === 'primitive' ? (at as { Name?: string }).Name : undefined;
+    return name !== undefined && name !== 'string' && name !== 'Composite';
+  };
+
   const erasedKeepingBrand = (t: Known): Known => {
     let at = t;
     for (let i = 0; at && i < 8; i += 1) {
@@ -8960,15 +8992,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Spreading a value of a primitive type, `string` excepted, is the
             // for-of rule at another syntax: `[...n]` for a `uint8` n was the
             // run time's "1 (typed) is not iterable".
-            const spreadBase = erasedForJudgment(spread);
             // A `Composite` is left to the run time here for the reason the
             // `for`-`of` rule gives: the kind is not carried through a call, a
             // TUPLE composite spreads (#sec-composite-getiterator reaches
             // "`for`-`of`, SPREAD, and array destructuring" alike), and a record
             // composite throws one step later from the operation that can tell.
-            if (spreadBase && spreadBase.Kind === 'primitive'
-              && (spreadBase as { Name?: string }).Name !== 'Composite'
-              && (spreadBase as { Name?: string }).Name !== 'string') {
+            if (notIterable(spread)) {
               const completion = Throw.StaticTypeError(
                 'a value of $1 is not iterable',
                 Value(displayType(spread as TypeRecord)),
@@ -14521,7 +14550,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the method all reach here as nominals and are untouched.
       if (f.AssignmentExpression) {
         const over = staticType(f.AssignmentExpression);
-        const overBase = erasedForJudgment(over);
         // A TUPLE COMPOSITE iterates, though it is a ~primitive~-kinded record
         // named "Composite" like every composite. #sec-composite-getiterator
         // inserts a step for exactly this: "A tuple composite has a *null*
@@ -14542,10 +14570,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // which #sec-composite-getiterator gives an inserted step and which
         // `iterator-operations.mts` already implements. A record composite still
         // throws, one step later and from the operation that can tell.
-        const tupleComposite = !!overBase && overBase.Kind === 'primitive'
-          && (overBase as { Name?: string }).Name === 'Composite';
-        if (overBase && overBase.Kind === 'primitive' && !tupleComposite
-          && (overBase as { Name?: string }).Name !== 'string') {
+        if (notIterable(over)) {
           const completion = Throw.StaticTypeError(
             'a value of $1 is not iterable',
             Value(displayType(over as TypeRecord)),
@@ -15533,14 +15558,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const pattern = (n as { BindingPattern?: ParseNode | null }).BindingPattern;
           if (pattern && (pattern as { type?: string }).type === 'ArrayBindingPattern' && n.Initializer) {
             const from = staticType(n.Initializer);
-            const fromBase = erasedForJudgment(from);
             // A `Composite` is left to the run time, as at the `for`-`of` and
             // spread sites: #sec-composite-getiterator reaches all three
             // together - "`for`-`of`, spread, and ARRAY DESTRUCTURING iterate a
             // tuple composite" - and the kind is not carried through a call.
-            if (fromBase && fromBase.Kind === 'primitive'
-              && (fromBase as { Name?: string }).Name !== 'Composite'
-              && (fromBase as { Name?: string }).Name !== 'string') {
+            if (notIterable(from)) {
               const completion = Throw.StaticTypeError(
                 'a value of $1 is not iterable',
                 Value(displayType(from as TypeRecord)),
@@ -16625,9 +16647,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // further guard.
         if (a.LeftHandSideExpression.type === 'ArrayLiteral') {
           const from = staticType(a.AssignmentExpression);
-          const fromBase = erasedForJudgment(from);
-          if (fromBase && fromBase.Kind === 'primitive'
-            && (fromBase as { Name?: string }).Name !== 'string') {
+          if (notIterable(from)) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not iterable',
               Value(displayType(from as TypeRecord)),

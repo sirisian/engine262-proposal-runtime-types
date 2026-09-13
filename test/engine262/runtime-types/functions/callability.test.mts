@@ -131,12 +131,3 @@ test('a UNION is not callable when no member is', () => {
     + ' function g(v: I & J) { let q = v(); }'))).toBe(true);
   expect(ok(dead('function g<T extends uint8>(v: T) { let q = v(); }'))).toBe(true);
 });
-
-test('KNOWN LIMIT: ITERABILITY does not reach a union', () => {
-  // `uint8 | int32` cannot be iterated by any value it admits, and is still the
-  // run time's. The four iterability sites each unwrap their operand by hand, so
-  // giving them the union question means one shared predicate rather than one
-  // more condition - an attempt that edited all four at once left a site
-  // referencing a name it no longer declared, which the build did not catch.
-  expect(ok(dead('let u: uint8 | int32 = uint8(1); for (const x of u) { }'))).toBe(true);
-});

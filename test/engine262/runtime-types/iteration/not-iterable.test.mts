@@ -77,3 +77,18 @@ test('an ARRAY PATTERN iterates its initializer', () => {
   expect(ok(dead('let x; let s: string = "x"; [x] = s;'))).toBe(true);
   expect(ok(dead('let x; let o: { x: uint8 } = { x: uint8(1) }; ({ x } = o);'))).toBe(true);
 });
+
+test('a UNION cannot be iterated when no member can', () => {
+  // The four syntaxes share one predicate now, so each learned the union at
+  // once rather than needing its own condition.
+  expectThrown(dead('let u: uint8 | int32 = uint8(1); for (const x of u) { }'), 'is not iterable');
+  expectThrown(dead('let u: uint8 | int32 = uint8(1); let a = [...u];'), 'is not iterable');
+  expectThrown(dead('let u: uint8 | int32 = uint8(1); let [x] = u;'), 'is not iterable');
+  expectThrown(dead('let u: uint8 | boolean = uint8(1); let y; [y] = u;'), 'is not iterable');
+
+  // A union with an ITERABLE member is left alone: iterating it is unsound, but
+  // narrowing is the escape, and refusing it would refuse the program that
+  // narrows first - the line the callability rule draws too.
+  expect(ok(dead('let u: uint8 | [].<uint8> = uint8(1); for (const x of u) { }'))).toBe(true);
+  expect(ok(dead('let u: uint8 | string = "x"; for (const x of u) { }'))).toBe(true);
+});
