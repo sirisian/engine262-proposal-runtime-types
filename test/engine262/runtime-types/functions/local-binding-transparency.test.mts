@@ -189,7 +189,7 @@ test('a const numeric constant is judged where the literal would be', () => {
   // have a type its assignments are checked against" - and its value still
   // reaches the boundary, which reports it there.
   expect(thrownMessage('let k = 300; let a: uint8 = k;')).toContain('is not in the range of');
-  // Q03 also preserves the declared return type of a typed call initializer.
+  // #sec-static-type-of-an-expression: const preserves a typed call's result.
   expect(thrownMessage('function g(): number { return 300; } const k = g(); let a: uint8 = k;')).toContain('is not assignable');
 });
 test('a const initialized with a literal publishes the widened type', () => {

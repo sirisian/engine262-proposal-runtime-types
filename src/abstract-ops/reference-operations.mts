@@ -1,3 +1,4 @@
+import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import { isValueParameterBinding, lookupTypeParameter, ValuePackView } from '../type-system/runtime.mts';
@@ -177,7 +178,13 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
     if (V.IndexOperator !== undefined) {
       // #sec-class-operators: the accessor receives every index the access
       // supplied, which for a single-index access is a list of one.
-      const operatorResult = Q(yield* Call(V.IndexOperator, V.Base as Value, (V.IndexArguments ?? [V.ReferencedName as Value]) as Value[]));
+      let operatorResult: Value;
+      SetPendingCalleeContext(V.IndexContext);
+      try {
+        operatorResult = Q(yield* Call(V.IndexOperator, V.Base as Value, (V.IndexArguments ?? [V.ReferencedName as Value]) as Value[]));
+      } finally {
+        SetPendingCalleeContext(undefined);
+      }
       // proposal-runtime-types (references extension): an index operator that
       // returns a borrow (`return ref this.data[i]`) reads through to the
       // referent, so the access yields the element's current value.

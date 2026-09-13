@@ -4,10 +4,12 @@ import {
   ThrowCompletion,
   IfAbruptRejectPromise,
   ReturnCompletion,
+  EnsureCompletion,
 } from '../completion.mts';
 import { Value, type Arguments, type FunctionCallContext } from '../value.mts';
 import { __ts_cast__ } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
+import { EnforceGeneratorNextArgument } from '../abstract-ops/runtime-types.mts';
 import { surroundingAgent } from '#self';
 import {
   Assert,
@@ -33,6 +35,12 @@ function* AsyncGeneratorPrototype_next([value = Value.undefined]: Arguments, { t
   // 4. IfAbruptRejectPromise(result, promiseCapability).
   IfAbruptRejectPromise(result, promiseCapability);
   __ts_cast__<AsyncGeneratorObject>(generator);
+  const input = EnsureCompletion(yield* EnforceGeneratorNextArgument(generator, value));
+  if (input.Type === 'throw') {
+    X(Call(promiseCapability.Reject, Value.undefined, [input.Value]));
+    return promiseCapability.Promise;
+  }
+  value = input.Value;
   // 5. Let state be generator.[[AsyncGeneratorState]].
   const state = generator.AsyncGeneratorState;
   // 6. If state is completed, then

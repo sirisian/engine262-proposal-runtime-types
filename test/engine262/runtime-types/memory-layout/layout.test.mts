@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-memory-layout (Memory Layout), #sec-natural-alignment,
@@ -286,7 +286,7 @@ test('memory layout: a class may not contain itself by value', () => {
   // ordinary temporal dead zone before any layout was computed, so the
   // condition held by accident; resolving a type-position name against its
   // declaration removes the accident and leaves the clause to be enforced.
-  expectThrownKind('class C { self: C; }', 'TypeError');
+  expectStaticTypeError('class C { self: C; }');
   // The distinction the clause draws: a REFERENCE to the same class closes the
   // cycle and is fine, because the recursion stops at a type with no layout of
   // its own rather than descending.

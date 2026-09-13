@@ -798,7 +798,7 @@ test('a signature is trusted only where the name cannot be replaced', () => {
   // signature must not become not checking at all.
   expect(accepts('function f(): uint32 { return (5 := uint32); } function g2(): uint32 { return f(); } f = function () { return "now-a-string"; }; const n2: uint32 = g2();')).toBe(false);
 
-  // Q03: an unannotated const preserves the typed function initializer.
+  // #sec-static-type-of-an-expression: const preserves a typed initializer.
   expect(accepts('const g = (p: uint32): string => "s"; const q: number = g((1 := uint32));')).toBe(false);
 });
 

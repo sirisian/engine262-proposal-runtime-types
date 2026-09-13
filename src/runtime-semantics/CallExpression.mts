@@ -1,3 +1,4 @@
+import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
 import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
@@ -1278,6 +1279,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         pushTypeParameterFrame(frame);
         try {
           for (const clause of whereClauses) {
+            if (GenericWhereVerified(clause, frame)) continue;
             const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
             if (!predicate) {
               continue;

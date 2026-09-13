@@ -1,3 +1,4 @@
+import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import {
   isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow, CreateComplexValue,
   type ComplexObject,
@@ -54,7 +55,7 @@ function metadataAsObjectRecord(metadata: MetadataRecord): TypeRecord {
 
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
-export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }) {
+export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }, contextualType?: TypeRecord) {
   (globalThis as { __a?: string[] }).__a?.push(`apply ${opText}`);
   // proposal-runtime-types #sec-vector-types: a vector's values are "the
   // sequences of N values of T", so an operator over two vectors of one shape
@@ -87,9 +88,11 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       // receiver is the left operand and the declaration's single parameter is
       // the right operand. Dispatch with this = lval and arguments = [rval].
       EnterOperatorBody();
+      SetPendingCalleeContext(contextualType);
       try {
         return Q(yield* Call(opFn as never, lval, [rval]));
       } finally {
+        SetPendingCalleeContext(undefined);
         LeaveOperatorBody();
       }
     }

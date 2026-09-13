@@ -1,7 +1,8 @@
+import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
-import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord } from './runtime.mts';
+import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame, EvaluateRefinementPredicate, ValuePackView } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
@@ -17,7 +18,7 @@ import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './record
 import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
   TakeDeferredMetadataChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
-  TakeDefaultRequirements,
+  TakeDefaultRequirements, GenericWhereChecksOf,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
@@ -159,12 +160,10 @@ function nestedMetaTypeNames(root: ParseNode): Set<string> {
  *    meta type refuses is a type error naming both parameterizations, thrown
  *    before the body runs.
  *
- * What this pass deliberately does not do yet, pinned rather than implied:
- * enum declarations with runtime dependencies or decorators, and declarations
+ * Enum declarations with runtime dependencies or decorators, and declarations
  * nested in blocks or wrapped in `export`, are left to body order. Closed enum
- * declarations are processed below. Judgment results are not memoized across
- * passes, which
- * purity and interning license but nothing here needs at this scale.
+ * declarations are processed below. Metadata judgments are not memoized across
+ * passes.
  */
 export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   // #sec-evaluation-budget: this pass runs a source text's own type
@@ -306,6 +305,65 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (attempt.Type === 'normal') {
         preEvaluatedTypeDeclarations.add(item);
       }
+    }
+  }
+  for (const check of GenericWhereChecksOf(root)) {
+    const parameters = check.declaration.TypeParameters!.TypeParameterList;
+    const frame = new Map<string, TypeRecord>();
+    for (const parameter of parameters) {
+      const name = parameter.BindingIdentifier.name;
+      bindTypeParameter(frame, name, check.bindings.get(name)!, parameter);
+    }
+    const available = new Set(frame.keys());
+    for (const clause of check.clauses) {
+      const predicate = clause.RefinementPredicate;
+      if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate) || FirstFreeReference(predicate, available)) continue;
+      // Runtime subjects and writes require their evaluation-time environment.
+      const hasRuntimeSubject = (node: ParseNode): boolean => {
+        if (['ThisExpression', 'ContractReturn', 'AssignmentExpression', 'UpdateExpression'].includes(node.type)
+          || (node.type === 'UnaryExpression' && node.operator === 'delete')) return true;
+        return Object.entries(node).some(([key, child]) => {
+          if (['parent', 'location', 'sourceText'].includes(key)) return false;
+          return Array.isArray(child) ? child.some((part) => part && typeof part === 'object' && 'type' in part && hasRuntimeSubject(part))
+            : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
+        });
+      };
+      if (hasRuntimeSubject(predicate)) continue;
+      const context = surroundingAgent.runningExecutionContext;
+      const outer = context.LexicalEnvironment;
+      const scope = new DeclarativeEnvironmentRecord(null);
+      for (const parameter of parameters) {
+        const name = parameter.BindingIdentifier.name;
+        const bound = frame.get(name)!;
+        let value: Value;
+        if (parameter.IsValueParameter && bound.Kind === 'literal') {
+          value = bound.Value;
+        } else if (parameter.IsValueParameter && bound.Kind === 'tuple') {
+          value = Q(yield* ValuePackView(bound));
+        } else {
+          value = GetTypeObject(bound);
+        }
+        X(scope.CreateImmutableBinding(Value(name), Value.true));
+        X(scope.InitializeBinding(Value(name), value));
+      }
+      context.LexicalEnvironment = scope;
+      pushTypeParameterFrame(frame);
+      BeginFragmentEvaluation();
+      let result;
+      try {
+        result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, Value.undefined));
+      } finally {
+        EndFragmentEvaluation();
+        popTypeParameterFrame();
+        context.LexicalEnvironment = outer;
+      }
+      if (result.Type === 'throw') {
+        if (IsBudgetExhausted()) return result;
+        // Layouts and decorated types may not have evaluated yet.
+        continue;
+      }
+      if (!result.Value) return Throw.StaticTypeError('a $1 clause is not satisfied by this application', Value('where'));
+      MarkGenericWhereVerified(clause, frame);
     }
   }
   // The unclaimed-key error, adjudicated HERE and not in the walk: claims

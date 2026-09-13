@@ -9,6 +9,7 @@ import {
   Value, type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
+import { EnforceGeneratorNextArgument } from '../abstract-ops/runtime-types.mts';
 import {
   GeneratorResume,
   GeneratorResumeAbrupt,
@@ -20,6 +21,7 @@ import {
 function* GeneratorProto_next([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   // 1. Let g be the this value.
   const g = thisValue;
+  value = Q(yield* EnforceGeneratorNextArgument(g, value));
   // 2. Return ? GeneratorResume(g, value, empty).
   return Q(yield* GeneratorResume(g, value, undefined));
 }

@@ -249,16 +249,16 @@ test.fails('the remainder: a range counter and a destructuring head are still un
   expect(ok('let a: [].<[uint8, string]> = []; for (const [n, s2] of a) { let x: string = n; }')).toBe(false);
 });
 
-test('a spread of a typed source takes its element type', () => {
-  // Was a `test.fails` marker: "spread is the same derivation in expression
-  // position and is not done". It is done now - a spread's ARITY is unknowable,
-  // which is why the length checks skip it, but its ELEMENT TYPE is not, and was
-  // checked nowhere. `const b: [].<string> = [...a]` for an `a: [].<uint8>` was
-  // admitted whole, so the binding held `uint8`s at a `string` element type.
-  expect(ok('let a: [].<uint8> = [1,2,3]; let b: [].<string> = [...a];')).toBe(false);
-  expect(ok(`${S} let b: [].<string> = [...s];`)).toBe(false);
-  // A matching spread still composes, alone and beside ordinary elements, and an
-  // untyped source still has no element type to judge.
+test('a spread uses its iteration contract and checks unknown values at the boundary', () => {
+  // #sec-static-iteration-contribution: replaceable iteration cannot be
+  // inferred from indexed storage or a collection's element argument.
+  // The unknown values reach RequireType, including its numeric-to-text rule.
+  expect(evaluated('let a: [].<uint8> = [1,2,3]; let b: [].<string> = [...a]; String(typeof b[0]) + ":" + b.join(",");')).toBe('string:1,2,3');
+  expect(evaluated(`${S} s.add(1); let b: [].<string> = [...s]; String(typeof b[0]);`)).toBe('string');
+  expect(ok('let a: [].<string> = ["wrong"]; let b: [].<uint8> = [...a];')).toBe(false);
+  // A declared iterator result supplies a static contribution.
+  expectStaticTypeError('function f(a: Iterable.<uint8>) { let b: [].<string> = [...a]; }');
+  // A matching spread composes with ordinary elements.
   expect(ok('let a: [].<uint8> = [1,2,3]; let b: [].<uint8> = [...a];')).toBe(true);
   expect(ok('let a: [].<uint8> = [1]; let b: [].<uint8> = [0, ...a, 2];')).toBe(true);
   expect(ok('let a = [1]; let b: [].<uint8> = [...a];')).toBe(true);

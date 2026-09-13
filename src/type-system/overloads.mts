@@ -232,6 +232,14 @@ function isNumericValueType(t: TypeRecord): boolean {
     || n === 'decimal32' || n === 'decimal64' || n === 'decimal128';
 }
 
+/** #sec-user-defined-operators: every numeric type can select an index accessor. */
+export function IsNumericIndexType(type: TypeRecord): boolean {
+  if (type.Kind === 'literal' || type.Kind === 'parameterized') return IsNumericIndexType(type.Base);
+  if (type.Kind === 'union') return type.Members.length > 0 && type.Members.every(IsNumericIndexType);
+  if (type.Kind === 'nominal' && type.EnumMembers && type.Base) return IsNumericIndexType(type.Base);
+  return isNumericValueType(type) || (type.Kind === 'primitive' && (type.Name === 'bigint' || type.Name === 'vector'));
+}
+
 /**
  * Whether a literal argument's VALUE fits a numeric value type: the integer
  * families check their range, and every other numeric family is representable
@@ -675,4 +683,22 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
     return { Kind: 'ambiguous' };
   }
   return { Kind: 'resolved', Signature: best.sig };
+}
+
+export function operatorTableKey(e: ParseNode.OperatorDefinition): string {
+  const name = e.OperatorName ?? '';
+  // proposal-runtime-types #sec-class-operators: an index accessor is keyed by
+  // its INDEX COUNT as well as its name. A class may declare more than one -
+  // the design's grid declares `[i]` and `[x, y]` together - and a table keyed
+  // by name alone let the second overwrite the first, so only one of them was
+  // ever reachable. The write direction takes the indices and then the value,
+  // so its index count is one less than its parameter count.
+  const params = e.FormalParameters?.length ?? 0;
+  if (name === '[]' && e.AccessorKind === 'set') {
+    return `[]=#${Math.max(0, params - 1)}`;
+  }
+  if (name === '[]') {
+    return `[]#${params}`;
+  }
+  return params === 0 ? `unary ${name}` : name;
 }

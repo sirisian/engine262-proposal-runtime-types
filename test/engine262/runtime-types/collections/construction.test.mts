@@ -150,14 +150,11 @@ test('an untyped constructor is unaffected', () => {
 });
 
 test('a collection type still has no default value', () => {
-  // Unchanged, and asserted because the construction path is where a default
-  // would have had to come from.
-  // The rule fires at the DECLARATION for a binding, and at INSTANTIATION for a
-  // field - declaring the class is fine, constructing it is not, since that is
-  // where the field would have to be given a value.
+  // #sec-defaultvalueof applies to bindings and fields, including a class
+  // declaration whose constructor is never called.
   expect(ok('let m: Map.<string, uint8>;')).toBe(false);
   expect(ok('class C { m: Map.<string, uint8>; } new C();')).toBe(false);
-  expect(ok('class C { m: Map.<string, uint8>; }')).toBe(true);
+  expectStaticTypeError('class C { m: Map.<string, uint8>; }');
   expect(evaluated('class C { m: Map.<string, uint8> = new Map(); } const c = new C(); String(c.m.size);')).toBe('0');
 });
 

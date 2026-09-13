@@ -1,4 +1,6 @@
-import { Value, ReferenceRecord, ObjectValue, NumberValue, TypedNumberValue } from '../value.mts';
+import { contextualTypeFor, RuntimeTypeOf } from '../type-system/runtime.mts';
+import { IsNumericIndexType } from '../type-system/overloads.mts';
+import { Value, ReferenceRecord, ObjectValue } from '../value.mts';
 import { Evaluate, type ReferenceEvaluator } from '../evaluator.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import { Q, type PlainCompletion } from '../completion.mts';
@@ -46,25 +48,20 @@ export function* EvaluatePropertyAccessWithExpressionKey(baseValue: Value, expre
   // single index already followed: a key of another kind stays an ordinary
   // property access, so a class that declares an accessor keeps its methods and
   // its string-keyed properties reachable.
-  const allNumeric = indexValues.every((v) => v instanceof NumberValue || v instanceof TypedNumberValue);
   if (surroundingAgent.feature('runtime-types')
-      && baseValue instanceof ObjectValue
-      && allNumeric) {
+      && baseValue instanceof ObjectValue) {
     // Resolution is by the number of indices supplied, so `[i]` and `[x, y]`
     // declared on one class are each reached by the access that matches.
     const arity = indexValues.length;
     const op = LookupClassOperator(baseValue, `[]#${arity}`);
-    if (op) {
-      indexOperator = op;
-      indexArguments = indexValues;
-    }
     // proposal-runtime-types (operatoroverloading.md): the write half. Carried on
     // the reference beside the read half so that `m[i] = v` reaches the class's own
     // declaration rather than quietly creating an ordinary property the dispatching
     // read would never look at.
     const setOp = LookupClassOperator(baseValue, `[]=#${arity}`);
-    if (setOp) {
-      indexSetOperator = setOp;
+    if ((op || setOp) && indexValues.every((value) => IsNumericIndexType(RuntimeTypeOf(value)))) {
+      indexOperator = op ?? undefined;
+      indexSetOperator = setOp ?? undefined;
       indexArguments = indexValues;
     }
   }
@@ -76,6 +73,7 @@ export function* EvaluatePropertyAccessWithExpressionKey(baseValue: Value, expre
     ThisValue: undefined,
     IndexOperator: indexOperator,
     IndexArguments: indexArguments,
+    IndexContext: indexOperator ? contextualTypeFor(expression.parent) : undefined,
     IndexSetOperator: indexSetOperator,
   });
 }

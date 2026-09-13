@@ -1494,6 +1494,7 @@ export class ReferenceRecord {
   // accessor with both, and the single-index case carries a list of one.
   readonly IndexArguments?: readonly Value[];
   readonly IndexSetOperator?: Value;
+  readonly IndexContext?: TypeRecord;
 
   // proposal-runtime-types #sec-soa-references: set when this reference denotes
   // an element of an `SoA` - a COLUMN SET AND AN INDEX rather than a property
@@ -1521,9 +1522,10 @@ export class ReferenceRecord {
     IndexOperator,
     IndexArguments,
     IndexSetOperator,
+    IndexContext,
     SoAElement,
     ArrayBorrow,
-  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexArguments' | 'IndexSetOperator' | 'SoAElement' | 'ArrayBorrow'>) {
+  }: Pick<ReferenceRecord, 'Base' | 'ReferencedName' | 'Strict' | 'ThisValue' | 'IndexOperator' | 'IndexArguments' | 'IndexSetOperator' | 'IndexContext' | 'SoAElement' | 'ArrayBorrow'>) {
     this.Base = Base;
     this.ReferencedName = ReferencedName;
     this.Strict = Strict;
@@ -1531,6 +1533,7 @@ export class ReferenceRecord {
     this.IndexOperator = IndexOperator;
     this.IndexArguments = IndexArguments;
     this.IndexSetOperator = IndexSetOperator;
+    this.IndexContext = IndexContext;
     this.SoAElement = SoAElement;
     this.ArrayBorrow = ArrayBorrow;
   }

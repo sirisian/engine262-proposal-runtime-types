@@ -1,3 +1,5 @@
+import { currentTypeParameterFrame } from '../type-system/runtime.mts';
+import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator, Await } from '../completion.mts';
 // Placed with the other `./` imports and NOT after `../intrinsics/`, which
@@ -2197,6 +2199,25 @@ export function RegisterClassOperator(proto: Value, opText: string, fn: Value): 
   table.set(opText, fn);
 }
 
+/** #sec-user-defined-operators: typed declarations sharing a key form an overload set. */
+export function* AddClassOperator(proto: Value, key: string, fn: Value): PlainEvaluator<void> {
+  const previous = classOperatorTables.get(proto)?.get(key);
+  if (previous) {
+    const functions = (previous as unknown as OverloadSlots).OverloadFunctions ?? [previous];
+    const typed = (value: Value) => {
+      const declaration = ((value as unknown as AnnotatedFunction).ECMAScriptCode as { parent?: ParseNode.OperatorDefinition } | undefined)?.parent;
+      return !!declaration?.TypeAnnotation || (declaration?.FormalParameters ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation);
+    };
+    if (functions.some(typed) || typed(fn)) {
+      const overloaded = Q(yield* MakeOverloadedFunction(Value(key), [...functions, fn]));
+      RegisterClassOperator(proto, key, overloaded);
+      return undefined;
+    }
+  }
+  RegisterClassOperator(proto, key, fn);
+  return undefined;
+}
+
 /**
  * proposal-runtime-types #sec-primitive-operator-blocks: the operators a
  * `primitive` block declares, keyed by the primitive the block names and then
@@ -3385,6 +3406,22 @@ function returnAnnotationOf(fn: AnnotatedFunction): ParseNode.TypeAnnotation | n
   return annotation;
 }
 
+const generatorProtocolTypes = new WeakMap<object, TypeRecord>();
+
+/** #sec-generator-types: resolve the protocol while the generator's bindings are in scope. */
+export function SetGeneratorProtocolType(generator: ObjectValue, declared: TypeRecord | null, isAsync: boolean): void {
+  const protocol = declared ? generatorDeclaredType(declared, isAsync) : null;
+  if (protocol) generatorProtocolTypes.set(generator, protocol);
+}
+
+/** #sec-iteration-types: next has an optional N argument, checked before resumption. */
+export function* EnforceGeneratorNextArgument(generator: Value, value: Value): ValueEvaluator {
+  const protocol = generatorProtocolTypes.get(generator);
+  const nextType = protocol ? generatorParameters(protocol)?.Next : null;
+  if (!nextType || nextType.Kind === 'any' || value === Value.undefined) return value;
+  return Q(yield* RequireType(value, nextType));
+}
+
 /**
  * Checks a yielded value against the enclosing generator's declared YIELD type.
  *
@@ -3994,6 +4031,7 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
     return Value.undefined;
   }
   for (const clause of clauses) {
+    if (GenericWhereVerified(clause, currentTypeParameterFrame() ?? new Map())) continue;
     const predicate = (clause as unknown as { RefinementPredicate?: object }).RefinementPredicate;
     if (!predicate) {
       continue;

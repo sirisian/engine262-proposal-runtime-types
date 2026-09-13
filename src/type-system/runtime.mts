@@ -2221,6 +2221,11 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   //
   // Neither needs a stamp: a decimal carries [[DecimalWidth]] and a complex
   // carries the Type Record of its component, which names the pair's own width.
+  // #sec-binary-floating-point-types: binary128's object representation still
+  // denotes its numeric type when selecting an overloaded operator.
+  if (isFloat128Object(value)) {
+    return makePrimitive('float128');
+  }
   if (isDecimalObject(value)) {
     const width = (value as unknown as { DecimalWidth?: 32 | 64 | 128 }).DecimalWidth;
     if (width === 32 || width === 64 || width === 128) {
@@ -3097,7 +3102,7 @@ function* EvaluatePredicateExpression(expression: ParseNode.AssignmentExpression
  * control flow: its test selects the branch to check, and an `if` with no `else`
  * imposes no constraint when the test is false.
  */
-function* EvaluateRefinementPredicate(predicate: ParseNode.RefinementPredicate, value: Value): PlainEvaluator<boolean> {
+export function* EvaluateRefinementPredicate(predicate: ParseNode.RefinementPredicate, value: Value): PlainEvaluator<boolean> {
   if (predicate.type === 'ConditionalRefinement') {
     const testResult = Q(yield* EvaluatePredicateExpression(predicate.Test, value));
     const testHolds = ToBoolean(testResult) === Value.true;

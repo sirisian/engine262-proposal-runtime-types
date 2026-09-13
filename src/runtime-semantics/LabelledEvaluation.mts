@@ -27,6 +27,9 @@ import { OutOfRange } from '../utils/language.mts';
 import { JSStringSet } from '../utils/container.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { CreateRefBinding } from '../execution-context/Environment.mts';
+import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
 import {
   Evaluate_SwitchStatement,
@@ -602,6 +605,22 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
     // a. Assert: lhs is a LeftHandSideExpression.
     assignmentPattern = refineLeftHandSideExpression(lhs as DestructuringParseNode);
   }
+  // #sec-type-annotations and #sec-typed-bindings: each annotated loop binding
+  // checks its incoming value and retains its type for later writes.
+  const binding = lhs.type === 'ForDeclaration' ? lhs.ForBinding : lhsKind === 'varBinding' ? lhs as ParseNode.ForBinding : null;
+  const annotation = surroundingAgent.feature('runtime-types') ? binding?.TypeAnnotation : null;
+  const storeIterationValue = function* (reference: ReferenceRecord | Value, value: Value, initialize: boolean): PlainEvaluator {
+    const declared = annotation ? Q(yield* TypeNodeToTypeRecord(annotation.Type)) : null;
+    const checked = declared ? Q(yield* RequireType(value, declared)) : value;
+    let result;
+    if (initialize) {
+      result = Q(yield* InitializeReferencedBinding(reference as ReferenceRecord, CopyValueClassInstance(checked)));
+    } else {
+      result = Q(yield* PutValue(reference, checked));
+    }
+    if (declared) recordDeclaredType(reference, declared);
+    return result;
+  };
   while (true) {
     let nextResult = Q(yield* Call(iteratorRecord.NextMethod, iteratorRecord.Iterator));
     if (iteratorKind === 'async') nextResult = Q(yield* Await(nextResult));
@@ -633,7 +652,7 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
           if (resolved instanceof AbruptCompletion) {
             status = resolved;
           } else {
-            status = EnsureCompletion(yield* PutValue(resolved as ReferenceRecord | Value, nextValue));
+            status = EnsureCompletion(yield* storeIterationValue(resolved as ReferenceRecord | Value, nextValue, false));
           }
         }
       }
@@ -661,7 +680,7 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
         // copied there; this is the plain-identifier head, which is a third path
         // again - the fourth distinct binding evaluation this rule has had to be
         // stated at.
-        status = EnsureCompletion(yield* InitializeReferencedBinding(lhsRef, CopyValueClassInstance(nextValue)));
+        status = EnsureCompletion(yield* storeIterationValue(lhsRef, nextValue, true));
       }
     }
     Assert(typeof status! !== 'undefined');

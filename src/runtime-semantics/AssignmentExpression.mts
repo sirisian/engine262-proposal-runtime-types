@@ -1,7 +1,7 @@
 import { copiesOnBinding } from './LexicalDeclaration.mts';
 import { JSStringValue, NumberValue, ObjectValue, ReferenceRecord, TypedNumberValue, Value } from '../value.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
-import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, ObjectEnvironmentRecord } from '../execution-context/Environment.mts';
 import { Q, X } from '../completion.mts';
@@ -441,7 +441,12 @@ export function* Evaluate_AssignmentExpression({
         // `operator+` returns a new value rather than updating the receiver.
         // That is why one form works on a `const` binding and the other does
         // not, and it is a difference the author of the class chooses.
-        return Q(yield* Call(compoundOp, lval, [rval]));
+        SetPendingCalleeContext(contextualTypeFor(LeftHandSideExpression.parent));
+        try {
+          return Q(yield* Call(compoundOp, lval, [rval]));
+        } finally {
+          SetPendingCalleeContext(undefined);
+        }
       }
     }
     // 6. Let opText be the sequence of Unicode code points associated with assignmentOpText in the following table:

@@ -1,3 +1,4 @@
+import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord } from '../type-system/check.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
@@ -2405,6 +2406,7 @@ function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNo
     pushTypeParameterFrame(frame);
     try {
       for (const clause of whereClauses) {
+            if (GenericWhereVerified(clause, frame)) continue;
         const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
         if (!predicate) {
           continue;

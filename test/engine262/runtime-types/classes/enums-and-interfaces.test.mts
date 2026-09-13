@@ -658,8 +658,8 @@ test('an enumerator keys a Map and a Set by its own identity', () => {
 test('an enum types a class field, and lays out as its underlying type', () => {
   expect(evaluated('enum C { Zero, One } class K { c: C = C.One; } String(new K().c === 1);')).toBe('true');
   // #sec-memory-layout: the field costs what the underlying type costs.
-  expect(evaluated('enum C: uint8 { Zero } class K { c: C; } String((type K).byteLength);')).toBe('1');
-  expect(evaluated('enum C: uint32 { Zero } class K { c: C; } String((type K).byteLength);')).toBe('4');
+  expect(evaluated('enum C: uint8 { Zero } class K { c: C = C.Zero; } String((type K).byteLength);')).toBe('1');
+  expect(evaluated('enum C: uint32 { Zero } class K { c: C = C.Zero; } String((type K).byteLength);')).toBe('4');
 });
 
 test('an enum types an array element, and a bare literal does not reach it', () => {

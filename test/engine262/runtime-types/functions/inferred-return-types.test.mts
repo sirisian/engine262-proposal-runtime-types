@@ -230,9 +230,9 @@ test('a method return is enforced like any other', () => {
     new C().m();`)).toMatchObject({ Type: 'throw' });
 });
 
-test('a function literal publishes for its RETURN, not for its call sites', () => {
-  // Q03 preserves typed function literals and typed object-literal members in
-  // const bindings. Their inferred returns are therefore checked at call sites.
+test('a const-bound function literal publishes its return type', () => {
+  // #sec-static-type-of-an-expression: const preserves typed function literals
+  // and object-literal members, so their inferred returns apply at call sites.
   expect(thrown('const k = (a: uint32) => "s"; const n: number = k(5);')).toContain('is not assignable to "number"');
   expect(thrown('const o = { m(a: uint32) { return "s"; } }; const n: number = o.m(1);')).toContain('is not assignable to "number"');
 

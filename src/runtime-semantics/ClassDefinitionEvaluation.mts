@@ -1,3 +1,4 @@
+import { operatorTableKey } from '../type-system/overloads.mts';
 import { IsSubtype } from '../type-system/relations.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
@@ -60,7 +61,7 @@ import { Evaluate_PropertyName } from './PropertyName.mts';
 import {
   surroundingAgent,
   OrdinaryFunctionCreate,
-  RegisterClassOperator,
+  RegisterClassOperator, AddClassOperator,
   DeclarativeEnvironmentRecord,
   PrivateEnvironmentRecord,
 
@@ -542,24 +543,6 @@ export function reservedOnlyDecorators(decorators: readonly ParseNode.Decorator[
   return undefined;
 }
 
-function operatorTableKey(e: ParseNode.OperatorDefinition): string {
-  const name = e.OperatorName ?? '';
-  // proposal-runtime-types #sec-class-operators: an index accessor is keyed by
-  // its INDEX COUNT as well as its name. A class may declare more than one -
-  // the design's grid declares `[i]` and `[x, y]` together - and a table keyed
-  // by name alone let the second overwrite the first, so only one of them was
-  // ever reachable. The write direction takes the indices and then the value,
-  // so its index count is one less than its parameter count.
-  const params = e.FormalParameters?.length ?? 0;
-  if (name === '[]' && e.AccessorKind === 'set') {
-    return `[]=#${Math.max(0, params - 1)}`;
-  }
-  if (name === '[]') {
-    return `[]#${params}`;
-  }
-  return params === 0 ? `unary ${name}` : name;
-}
-
 export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator<FunctionObject> {
   const { ClassHeritage, ClassBody } = ClassTail;
   // 1. Let env be the LexicalEnvironment of the running execution context.
@@ -898,7 +881,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-          RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
+          Q(yield* AddClassOperator(e.static ? F : proto, operatorTableKey(e), opFn));
         }
         continue;
       }
@@ -1174,7 +1157,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-          RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
+          Q(yield* AddClassOperator(e.static ? F : proto, operatorTableKey(e), opFn));
         }
         // sec-user-defined-conversions form 2: `operator` T `()`, a parameterless
         // member declaring a conversion FROM this class to T.
@@ -1676,7 +1659,7 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
         const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
         const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters, e.FunctionBody, 'non-lexical-this', env, privEnv);
-        RegisterClassOperator(e.static ? F : proto, operatorTableKey(e), opFn);
+        Q(yield* AddClassOperator(e.static ? F : proto, operatorTableKey(e), opFn));
       }
       // An AbstractMethodDefinition is
       // intercepted here and never reaches ClassElementEvaluation, which is

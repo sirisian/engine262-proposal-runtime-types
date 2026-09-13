@@ -1,3 +1,4 @@
+import { contextualTypeFor } from '../type-system/runtime.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import { IsConstLiteralUse, IsLetConstantUse } from '../type-system/check.mts';
@@ -87,5 +88,5 @@ export function* EvaluateStringOrNumericBinaryExpression(leftOperand: ParseNode.
     // adopt, deliberately, but it is the one failure with a one-word fix.
     leftLetConst: IsLetConstantUse(leftOperand as object),
     rightLetConst: IsLetConstantUse(rightOperand as object),
-  }));
+  }, contextualTypeFor(leftOperand.parent)));
 }

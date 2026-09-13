@@ -18,7 +18,7 @@ import {
 } from './all.mts';
 import { surroundingAgent } from '#self';
 import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
-import { returnTypeRecordOf } from '../abstract-ops/runtime-types.mts';
+import { returnTypeRecordOf, SetGeneratorProtocolType } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
   Assert,
@@ -253,6 +253,10 @@ export function* EvaluateBody_GeneratorBody(GeneratorBody: ParseNode.GeneratorBo
   // 4. Set G.[[GeneratorState]] to suspended-start.
   G.GeneratorState = 'suspendedStart';
   // 5. Perform GeneratorStart(G, FunctionBody).
+  if (surroundingAgent.feature('runtime-types')) {
+    const declared = Q(yield* returnTypeRecordOf(functionObject));
+    SetGeneratorProtocolType(G, declared, false);
+  }
   GeneratorStart(G, GeneratorBody);
   // 6. Return ReturnCompletion(G).
   return ReturnCompletion(G);
@@ -275,6 +279,10 @@ export function* EvaluateBody_AsyncGeneratorBody(FunctionBody: ParseNode.AsyncGe
   generator.GeneratorBrand = undefined;
   generator.AsyncGeneratorState = 'suspendedStart';
   // 4. Perform ! AsyncGeneratorStart(generator, FunctionBody).
+  if (surroundingAgent.feature('runtime-types')) {
+    const declared = Q(yield* returnTypeRecordOf(functionObject));
+    SetGeneratorProtocolType(generator, declared, true);
+  }
   X(AsyncGeneratorStart(generator, FunctionBody));
   // 5. Return Completion { [[Type]]: return, [[Value]]: generator, [[Target]]: empty }.
   return new Completion({ Type: 'return', Value: generator, Target: undefined });

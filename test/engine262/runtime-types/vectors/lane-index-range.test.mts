@@ -28,7 +28,8 @@ test('what the rule does not reach', () => {
   expect(ok(dead(`${A}let q = a.lane.<0>();`))).toBe(true);
   expect(ok(dead(`${A}let q = a.lane.<3>();`))).toBe(true);
 
-  // Q03 preserves typed calls; an explicit any still defers to runtime.
+  // #sec-static-type-of-an-expression: const preserves a typed call's result;
+  // an explicit any annotation still defers the judgment to runtime.
   expect(ok(dead('const c = float32x4(1, 2, 3, 4); let q = c.lane.<9>();'))).toBe(false);
   expect(ok(dead('const c: any = float32x4(1, 2, 3, 4); let q = c.lane.<9>();'))).toBe(true);
 
