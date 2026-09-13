@@ -81,3 +81,24 @@ test('range elements: NaN is refused for a reason that will survive', () => {
   expectThrown('NaN..=5;');
   expectThrown('1..=NaN;');
 });
+
+test('a range reports its own type, not the shape of the object carrying it', () => {
+  // #sec-ranges: a range is "a value type class over an ordered element type and
+  // a bound at each endpoint it has", so `Reflect.typeOf` answers
+  // `Range.<T, S, E>`. It used to fall through to the shape branches and report
+  // the literal type of an object with no own properties - `{}` - while
+  // `(0..<5) is Range.<uint8>` answered *true*, which is the two answers
+  // disagreeing that #sec-instanceof-for-type-objects exists to prevent.
+  expect(evaluated('let a: uint8 = 0; let b: uint8 = 5; `${Reflect.typeOf(a..<b)}`;')).toBe('ClosedOpenRange.<uint.<8>>');
+  expect(evaluated('let a: uint8 = 0; let b: uint8 = 5; `${Reflect.typeOf(a..=b)}`;')).toBe('ClosedRange.<uint.<8>>');
+  // The bounds come from the range's own endpoints, so the answer INTERNS with
+  // the written parameterization rather than merely printing like it.
+  expect(evaluated('let a: uint8 = 0; let b: uint8 = 5; '
+    + '`${Reflect.typeOf(a..<b) === (type Range.<uint8, Range.Bound.Closed, Range.Bound.Open>)}`;')).toBe('true');
+  // The element is the type of an endpoint, so untyped endpoints give `number`
+  // - the runtime answer for a plain Number, not the narrower type a literal
+  // takes statically.
+  expect(evaluated('`${Reflect.typeOf(0..<5)}`;')).toBe('ClosedOpenRange.<number>');
+  // Membership agreed all along and still does.
+  expect(evaluated('`${(0..<5) is Range.<uint8>}`;')).toBe('true');
+});

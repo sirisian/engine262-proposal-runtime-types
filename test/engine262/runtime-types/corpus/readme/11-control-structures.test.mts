@@ -107,3 +107,24 @@ test('a bare test narrows a NULLABLE, and nothing else', () => {
   expect(evaluated('function f(n: uint8): uint8 { if (n) { return n; } else { return n; } } `${f(0 := uint8)}`;')).toBe('0');
   expect(evaluated('function f(s: string): string { if (s) { return s; } else { return s; } } `${f("")}`;')).toBe('');
 });
+
+test('a guard clause carries its fact to the statements after it', () => {
+  // #sec-narrowing: the Static Type at a point is the declared type "refined by
+  // the narrowing facts that HOLD THERE". Where one branch cannot complete, the
+  // other branch's fact holds after the `if` - reaching that point is what the
+  // taken branch made impossible. Only the `else` spelling worked before.
+  expect(evaluated('function f(n: uint8 | null): uint8 { if (n === null) { return (0 := uint8); } return n; } `${f(null)}`;')).toBe('0');
+  expect(evaluated('function f(n: uint8 | null): uint8 { if (n === null) { throw new Error("x"); } return n; } `${f(7 := uint8)}`;')).toBe('7');
+  // Either direction: an `else` that leaves carries the TRUE branch's fact.
+  expect(evaluated('function f(n: uint8 | null): uint8 { if (n != null) { } else { return (0 := uint8); } return n; } `${f(null)}`;')).toBe('0');
+  // And through the bare-test row as well as an explicit comparison.
+  expect(evaluated('function f(n: uint8 | null): uint8 { if (!n) { return (0 := uint8); } return n; } `${f(null)}`;')).toBe('0');
+  // AN ASSIGNMENT STILL ENDS IT. This is the case that makes the fact's frame
+  // matter: `invalidateNarrowing` deletes the entry from whichever frame holds
+  // it, so the fact must live in a frame PUSHED for the remaining statements -
+  // put in the frame that holds the declaration, the same deletion would remove
+  // the declaration itself and the binding would read as untyped.
+  expectThrown('function f(n: uint8 | null): uint8 { if (n === null) { return (0 := uint8); } n = null; return n; }', 'is not assignable to');
+  // Neither branch leaving means control joins, so no fact holds after.
+  expectThrown('function f(n: uint8 | null): uint8 { if (n === null) { } return n; }', 'is not assignable to');
+});

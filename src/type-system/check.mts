@@ -14568,7 +14568,67 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // any of it is walked, which is what lets `f(300)` above `function
       // f(v: uint8) {}` be the Early Error it should be.
       declareFunctionSignatures(node as readonly ParseNode[], false);
-      node.forEach((n) => walk(n));
+      // A GUARD CLAUSE carries its fact to the statements after it.
+      // #sec-narrowing: "The Static Type of a reference to a binding at a given
+      // point is its declared type refined by the narrowing facts that HOLD
+      // THERE." Where one branch of an `if` cannot complete, the other branch's
+      // fact holds for everything following it, because reaching that point is
+      // what the taken branch made impossible:
+      //
+      //   if (n === null) { return 0; } return n;   // `n` is not null here
+      //
+      // Only the `else` spelling worked before, so the commonest form of the
+      // idiom was the one refused. The fact is declared in a PUSHED frame
+      // covering the remaining statements, which is what makes it both outlive
+      // the `if` and stay droppable: `invalidateNarrowing` deletes the entry
+      // from whichever frame holds it, so in a pushed frame a later assignment
+      // reveals the outer declaration, while in the declaring frame it would
+      // remove the declaration itself.
+      const carriedGuardFact = (stmt: ParseNode | undefined): { name: string, type: Known } | null => {
+        if (!stmt || (stmt as { type?: string }).type !== 'IfStatement') {
+          return null;
+        }
+        const g = stmt as unknown as { Expression: ParseNode, Statement_a: ParseNode, Statement_b?: ParseNode | null };
+        const fact = narrowingFactOf(g.Expression);
+        if (!fact || fact.sense) {
+          return null;
+        }
+        const source = lookup(fact.name);
+        if (!source) {
+          return null;
+        }
+        const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
+        const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+        const leaves = (b: ParseNode | null | undefined) => (b
+          ? !canCompleteNormally(b, switchCoversDiscriminant)
+          : false);
+        // Exactly one branch may leave: if neither does, control joins and no
+        // fact holds after; if both do, nothing after is reachable.
+        const trueLeaves = leaves(g.Statement_a);
+        const falseLeaves = g.Statement_b ? leaves(g.Statement_b) : false;
+        if (trueLeaves && !falseLeaves && whenFalse !== empty) {
+          return { name: fact.name, type: whenFalse as Known };
+        }
+        if (falseLeaves && !trueLeaves && whenTrue !== empty) {
+          return { name: fact.name, type: whenTrue as Known };
+        }
+        return null;
+      };
+      const walkSequence = (list: readonly ParseNode[], from: number): void => {
+        for (let i = from; i < list.length; i += 1) {
+          const stmt = list[i]!;
+          walk(stmt);
+          const carried = carriedGuardFact(stmt);
+          if (carried) {
+            pushBlock(() => {
+              declareNarrowed(carried.name, carried.type);
+              walkSequence(list, i + 1);
+            });
+            return;
+          }
+        }
+      };
+      walkSequence(node as readonly ParseNode[], 0);
       // The list's own bindings are declared by now, so an inference anchored by
       // one of them has something to read: `let s: string = "s"; function g(){
       // return s; }` in a block publishes `string` as it does at top level.

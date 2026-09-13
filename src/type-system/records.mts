@@ -1768,6 +1768,27 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
  * This is what gives a generic call its Static Type on the DECLARED path:
  * `function first<T>(a: [].<T>): T {}` called as `first.<uint32>([1])` is a
  * `uint32`, and an assignment of it is checked.
+ *
+ * TWO OBLIGATIONS ARE THE CALLER'S, and #sec-substitutetype gives both to the
+ * operation itself:
+ *
+ *   1. CANONICALIZE the result. The clause's last step is
+ *      `CanonicalizeType(_u_)`.
+ *   2. EVALUATE a deferred ~application~ that substitution has CLOSED. The
+ *      clause evaluates the builder call once no argument mentions a parameter.
+ *
+ * Neither can live here, and the reason is the module layering rather than an
+ * oversight: `intern.mts` imports this file, so this file cannot import
+ * `CanonicalizeType` back without closing a cycle - and this function lives here
+ * precisely so that `relations.mts` can reach it without one (it is imported by
+ * `unify.mts`, which `type-parameters.mts` imports).
+ *
+ * Every caller today discharges both, and the suite covers it: a substituted
+ * union interns with the written one, and a deferred application closed by
+ * substitution evaluates to the same record a direct call produces. A caller
+ * that only COMPARES the result may skip canonicalization, because union and
+ * intersection identity here is set-wise rather than positional - which is why
+ * the [[Base]] walk in `relations.mts` is correct without it.
  */
 export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
   if (!t) {

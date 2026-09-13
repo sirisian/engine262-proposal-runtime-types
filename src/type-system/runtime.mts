@@ -14,6 +14,7 @@ import {
 import { VectorValue } from '../value.mts';
 import { CreateDecimalValue, isDecimalObject } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
 import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X , ThrowCompletion } from '../completion.mts';
@@ -2023,6 +2024,37 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     const stamped = (value as { BrandTypeRecord?: TypeRecord }).BrandTypeRecord;
     if (stamped !== undefined) {
       return stamped;
+    }
+  }
+  // proposal-runtime-types #sec-ranges: a range is "a value type class over an
+  // ordered element type and a bound at each endpoint it has", so its type is
+  // `Range.<T, S, E>` and not the shape of the object carrying it. This fell
+  // through to the shape branches below and reported the literal type of an
+  // object with no own properties - `Reflect.typeOf(0..<5)` answered `{}` while
+  // `(0..<5) is Range.<uint8>` answered *true*, the two answers disagreeing that
+  // #sec-instanceof-for-type-objects exists to prevent.
+  //
+  // Unlike a collection this needs no stamp: the element type is the type of an
+  // endpoint, and the bounds are the ordinals of `Range.Bound` the object
+  // already carries. Only the two-endpoint shape is answered here, which is the
+  // one whose arguments are all recoverable; `RangeFrom`, `RangeTo` and
+  // `RangeFull` keep the previous answer rather than getting a guessed element.
+  if (isRangeObject(value)) {
+    const r = value as unknown as {
+      RangeStart?: Value, RangeEnd?: Value,
+      RangeStartBound?: 'closed' | 'open', RangeEndBound?: 'closed' | 'open',
+    };
+    if (r.RangeStart !== undefined && r.RangeEnd !== undefined
+        && r.RangeStartBound !== undefined && r.RangeEndBound !== undefined) {
+      const element = RuntimeTypeOf(r.RangeStart);
+      const record = libraryTypeRecord('Range', [
+        element,
+        r.RangeStartBound === 'open' ? 1 : 0,
+        r.RangeEndBound === 'open' ? 1 : 0,
+      ]);
+      if (record) {
+        return record;
+      }
     }
   }
   if (value instanceof ObjectValue) {
