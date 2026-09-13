@@ -16597,6 +16597,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
         return;
       }
+      case 'OptionalExpression': {
+        // `n?.()` CALLS, and `OptionalExpression` appeared nowhere in this file -
+        // reached by neither `staticType` nor the walk - so no judgment saw it.
+        // The optional part is whether the base is nullish, not whether what it
+        // holds can be called: `n?.()` on a `uint8` that is present calls a
+        // `uint8`, which is the mistake `n()` is.
+        //
+        // Only the FIRST link is judged. The chain nests to the left, and a
+        // later link's callee is the previous link's RESULT, which is not typed
+        // here - `staticType` has no arm for this node either, so a chain's type
+        // is unknown past the base.
+        const oe = n as unknown as { MemberExpression?: ParseNode, OptionalChain?: ParseNode };
+        const chain = oe.OptionalChain as unknown as {
+          Arguments?: readonly ParseNode[] | null, OptionalChain?: ParseNode | null,
+        } | undefined;
+        if (oe.MemberExpression && chain?.Arguments && !chain.OptionalChain) {
+          const calleeType = erasedForJudgment(callableForm(staticType(oe.MemberExpression)));
+          if (calleeType && notCallable(calleeType)) {
+            const completion = Throw.StaticTypeError(
+              'a value of $1 is not callable',
+              Value(displayType(calleeType as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+        walk(oe.MemberExpression);
+        for (const arg of chain?.Arguments ?? []) {
+          walk(arg);
+        }
+        return;
+      }
       case 'TaggedTemplateExpression': {
         // THE TAG IS CALLED. `` n`x` `` invokes the tag with the strings and the
         // substitutions, so a tag that cannot be called is the mistake `n()` is -
