@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrown, ok } from '../harness.mts';
+import { evaluated, expectThrown, ok } from '../harness.mts';
 
 /**
  * Spec: #sec-iteration-types with #sec-type-errors. A value of a primitive
@@ -105,16 +105,35 @@ test('the iteration syntaxes this rule does NOT yet reach', () => {
   // as assertions so each fails the day it is closed, rather than as a list
   // someone has to re-derive.
   //
-  // `yield*` delegates to an iterable, and `for await` needs an async or a sync
-  // one; a `uint8` is neither. Both are their own sites - `YieldExpression` has
-  // an arm in `staticType` and none in the walk, and `ForAwaitStatement` appears
-  // nowhere in check.mts - so neither is one more condition on an existing
-  // check.
-  expect(ok(dead('let n: uint8 = uint8(1); function* g() { yield* n; }'))).toBe(true);
+  // `for await` needs an async or a sync iterable; a `uint8` is neither. It is
+  // its own site - `ForAwaitStatement` appears nowhere in check.mts - so it is
+  // not one more condition on an existing check.
   expect(ok(dead('let n: uint8 = uint8(1);'
     + ' async function g() { for await (const x of n) { } }'))).toBe(true);
 
   // An OBJECT spread is correctly untouched: it copies properties rather than
   // iterating, and `{ ...1 }` is ordinary JavaScript.
   expect(ok(dead('let n: uint8 = uint8(1); let o = { ...n };'))).toBe(true);
+});
+
+test('`yield*` delegates to an iterable', () => {
+  // `YieldExpression` had an arm in `staticType` and none in the walk, which is
+  // the shape the pipeline body had: the judgments live in the walk, and a node
+  // it does not name is reached only by the generic descent, which asks nothing.
+  expectThrown(dead('let n: uint8 = uint8(1); function* g() { yield* n; }'), 'is not iterable');
+  expectThrown(dead('let b: boolean = true; function* g() { yield* b; }'), 'is not iterable');
+
+  // What delegation legitimately takes.
+  expect(ok(dead('let a: [].<uint8> = []; function* g() { yield* a; }'))).toBe(true);
+  expect(ok(dead('let s: string = "x"; function* g() { yield* s; }'))).toBe(true);
+  expect(ok(dead('function* h() { yield uint8(1); } function* g() { yield* h(); }'))).toBe(true);
+  expect(ok(dead('let a: [].<uint8> = []; async function* g() { yield* a; }'))).toBe(true);
+
+  // A PLAIN yield hands over one value and iterates nothing.
+  expect(ok(dead('let n: uint8 = uint8(1); function* g() { yield n; }'))).toBe(true);
+  expect(ok(dead('function* g() { yield; }'))).toBe(true);
+
+  // Delegation still works at run time.
+  expect(evaluated('function* h() { yield 1; yield 2; } function* g() { yield* h(); }'
+    + ' String([...g()]);')).toBe('1,2');
 });

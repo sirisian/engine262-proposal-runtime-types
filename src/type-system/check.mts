@@ -16593,6 +16593,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
         return;
       }
+      case 'YieldExpression': {
+        // `yield*` DELEGATES to an iterable, so its operand is iterated and the
+        // rule that decides that applies. `yield* n` for a `uint8` n was silent:
+        // `YieldExpression` had an arm in `staticType` and none here, which is
+        // the shape the pipeline body below had - the judgments live in the
+        // walk, and a node the walk does not name is reached only by the generic
+        // descent, which asks nothing of its own.
+        //
+        // A plain `yield` hands over one value and iterates nothing.
+        const y = n as unknown as { hasStar?: boolean, AssignmentExpression?: ParseNode | null };
+        if (y.hasStar && y.AssignmentExpression) {
+          const yielded = staticType(y.AssignmentExpression);
+          if (yielded && notIterable(yielded)) {
+            const completion = Throw.StaticTypeError(
+              'a value of $1 is not iterable',
+              Value(displayType(yielded as TypeRecord)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+        walk(y.AssignmentExpression);
+        return;
+      }
       case 'PipelineExpression': {
         // The TOPIC has a type inside the body, and the walk has to bind it as
         // `staticType` does. Without the binding the walk descended into the
