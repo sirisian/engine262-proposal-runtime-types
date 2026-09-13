@@ -100,19 +100,33 @@ test('a SPREAD ARGUMENT iterates, as a spread in an array literal does', () => {
   expect(ok(dead('let s: string = "x"; function f() { } f(...s);'))).toBe(true);
 });
 
-test('the iteration syntaxes this rule does NOT yet reach', () => {
-  // Found by sweeping one operand through every syntax that iterates. Recorded
-  // as assertions so each fails the day it is closed, rather than as a list
-  // someone has to re-derive.
-  //
-  // `for await` needs an async or a sync iterable; a `uint8` is neither. It is
-  // its own site - `ForAwaitStatement` appears nowhere in check.mts - so it is
-  // not one more condition on an existing check.
-  expect(ok(dead('let n: uint8 = uint8(1);'
-    + ' async function g() { for await (const x of n) { } }'))).toBe(true);
+test('every iteration syntax reaches the rule', () => {
+  // One operand through every syntax that iterates, which is the sweep that
+  // found the spread argument, `yield*` and `for await`. All of them decide it.
+  const N = 'let n: uint8 = uint8(1); ';
+  expectThrown(dead(`${N}for (const x of n) { }`), 'is not iterable');
+  expectThrown(dead(`${N}let a = [...n];`), 'is not iterable');
+  expectThrown(dead(`${N}let [x] = n;`), 'is not iterable');
+  expectThrown(dead(`${N}let x; [x] = n;`), 'is not iterable');
+  expectThrown(dead(`${N}function f() { } f(...n);`), 'is not iterable');
+  expectThrown(dead(`${N}function* g() { yield* n; }`), 'is not iterable');
+  expectThrown(dead(`${N}async function g() { for await (const y of n) { } }`), 'is not iterable');
+});
 
-  // An OBJECT spread is correctly untouched: it copies properties rather than
-  // iterating, and `{ ...1 }` is ordinary JavaScript.
+test('`for await` takes an async iterable or a sync one', () => {
+  // The same statement as `for`-`of` with the same fields and a different node
+  // name, which is why it was reached by nothing: a ~ForAwaitStatement~
+  // appeared nowhere in check.mts.
+  expect(ok(dead('async function* h() { yield uint8(1); }'
+    + ' async function g() { for await (const x of h()) { } }'))).toBe(true);
+  expect(ok(dead('let a: [].<uint8> = []; async function g() { for await (const x of a) { } }'))).toBe(true);
+  expect(ok(dead('let s: string = "x"; async function g() { for await (const x of s) { } }'))).toBe(true);
+  expect(ok(dead('let a: any = []; async function g() { for await (const x of a) { } }'))).toBe(true);
+});
+
+test('an OBJECT spread is correctly untouched', () => {
+  // It copies properties rather than iterating, and `{ ...1 }` is ordinary
+  // JavaScript.
   expect(ok(dead('let n: uint8 = uint8(1); let o = { ...n };'))).toBe(true);
 });
 

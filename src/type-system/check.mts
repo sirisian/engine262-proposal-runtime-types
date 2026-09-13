@@ -14583,7 +14583,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!node) {
       return;
     }
-    if (!Array.isArray(node) && (node as ParseNode).type === 'ForOfStatement') {
+    // `for await` is the same statement with the same fields and a different
+    // node name, and a ~ForAwaitStatement~ appeared nowhere in this file. It
+    // takes an ASYNC iterable or a sync one, so a value that is neither is the
+    // mistake `for`-`of` refuses - an async generator arrives as a ~nominal~ and
+    // is not judged either way.
+    if (!Array.isArray(node)
+      && ((node as ParseNode).type === 'ForOfStatement' || (node as ParseNode).type === 'ForAwaitStatement')) {
       const f = node as unknown as {
         AssignmentExpression?: ParseNode, ForDeclaration?: ParseNode,
         ForBinding?: ParseNode, Statement?: ParseNode,
