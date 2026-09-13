@@ -52,9 +52,19 @@ test('a lane WRITE takes the type the read answers', () => {
     + ' let s: string = "x"; b.y = s;'), 'not assignable');
   expect(ok(dead(`${A}let f: float32 = float32(9); a.x = f;`))).toBe(true);
 
-  // KNOWN LIMIT: a SWIZZLE target is computed - `a.xy` is a
-  // `vector.<float32, 2>` here - but the write is not compared against it, so
-  // assigning a scalar to one is still the run time's. The single-lane write is
-  // what this closes.
+  // A SWIZZLE target is compared too, and every TYPE mismatch into one is
+  // decided: a vector of the wrong width, and a vector of the wrong lane type.
+  expectThrown(dead(`${A}a.xy = a;`), 'not assignable');
+  expectThrown(dead(`${A}a.xyz = a.xy;`), 'not assignable');
+  expectThrown(dead(`${A}let b: int32x4 = int32x4(int32(1), int32(2), int32(3), int32(4));`
+    + ' a.xy = b.xy;'), 'not assignable');
+  expect(ok(dead(`${A}a.xy = a.zw;`))).toBe(true);
+
+  // Assigning a SCALAR to a swizzle is refused by the run time and is NOT a type
+  // error: a scalar is assignable to a vector - `a = f` and a `float32x4`
+  // parameter given a `float32` are both ordinary, the value being splatted
+  // across the lanes - so the type says yes and a rule about swizzle ASSIGNMENT
+  // says no. An earlier note here called this a limit of the checker; it is not.
   expect(ok(dead(`${A}let f: float32 = float32(9); a.xy = f;`))).toBe(true);
+  expect(ok(dead(`${A}let f: float32 = float32(9); a = f;`))).toBe(true);
 });
