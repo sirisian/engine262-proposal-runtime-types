@@ -31,14 +31,32 @@ test('the ordinary decorators are untouched', () => {
   expect(ok(dead('const o = { f(c) { } }; class A { @o.f a: uint8 = uint8(1); }'))).toBe(true);
 });
 
-test('the FACTORY form is not judged as an ordinary call', () => {
+test("a factory's WRITTEN arguments are judged", () => {
+  // The written arguments are an ordinary argument list once the implicit
+  // context is accounted for, so a wrong type among them is refused.
+  expectThrown(dead('function g(n: uint8) { return (c) => c; }'
+    + ' class C { @g("s") x: uint8 = uint8(1); }'), 'not assignable');
+  expect(ok(dead('function g(n: uint8) { return (c) => c; }'
+    + ' class C { @g(uint8(1)) x: uint8 = uint8(1); }'))).toBe(true);
+});
+
+test('the CONTEXT lands last, and is not demanded of the call', () => {
   // #sec-decorator-application appends the CONTEXT as a trailing argument, so
-  // `@f(7)` on `f(n: uint8, c: Reflect.ClassField)` supplies both. Walking the
-  // call as an ordinary one reported `c` as not supplied, and five tests said
-  // so. Judging a decorator call needs that implicit argument modelled.
+  // `@f(7)` on `f(n: uint8, c: Reflect.ClassField)` supplies both.
+  //
+  // It lands LAST, not next, which a DEFAULT before it is what shows: `@f()` on
+  // `f(n: uint8 = 5, c: Reflect.ClassField)` fills `n` from its default and `c`
+  // from the context. Counting the context as "one more supplied" fills the
+  // wrong slot there; the final parameter being satisfied is the right model.
   expect(ok('let got = "never";'
     + ' function f(n: uint8, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); }'
     + ' class A { @f(7) a: uint8; } got;')).toBe(true);
   expect(ok('const l = []; function f(c: Reflect.ClassField) { l.push(String(c.name)); }'
     + ' class A { @f a: uint8; @f() b: uint8; } l.join(",");')).toBe(true);
+});
+
+test('a DEFAULT before the context still leaves the context last', () => {
+  expect(ok('let got = "never";'
+    + ' function f(n: uint8 = 5, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); }'
+    + ' class A { @f() a: uint8; } got;')).toBe(true);
 });

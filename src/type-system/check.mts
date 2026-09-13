@@ -5348,6 +5348,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return at;
   };
 
+  /**
+   * The calls that are DECORATOR FACTORIES, `@g(x)`.
+   *
+   * #sec-decorator-application appends the CONTEXT as a trailing argument, so
+   * such a call supplies one more than it writes: `@f(7)` on
+   * `f(n: uint8, c: Reflect.ClassField)` supplies both. Rules written for an
+   * ordinary call report the last parameter as missing, and overload resolution
+   * matches against one argument too few.
+   *
+   * The context's TYPE depends on the decorator's position - a field's is
+   * different from a method's - and the contexts are not modelled here, so an
+   * ~any~ stands in for it: enough to make the count right and to let the
+   * WRITTEN arguments be judged, without claiming a type this cannot determine.
+   */
+  const decoratorCalls = new Set<object>();
+
   const reportedEmptyIntersections = new Set<object>();
 
   /**
@@ -15790,6 +15806,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const t = staticType(a);
               return t && t.Kind === 'literal' ? t.Base : t;
             });
+            if (decoratorCalls.has(c as unknown as object)) {
+              argTypes.push(anyTypeRecord as TypeRecord);
+            }
             if (argTypes.every((t) => t !== null)) {
               // The parameters ARE the records
               // now, so the zip of a Shapes sidecar with a type list is gone.
@@ -15927,9 +15946,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return k === 'AssignmentRestElement' || k === 'NamedArgument';
               }) || (chosen.Parameters as readonly ParameterRecord[]).some((pr) => pr.Rest);
               const supplied = suppliedNodes.length;
+              // A decorator factory's context lands LAST, not next: `@f()` on
+              // `f(n: uint8 = 5, c: Reflect.ClassField)` fills `n` from its
+              // default and `c` from the context. So the final parameter is
+              // satisfied whatever the written count, rather than the count
+              // being one higher - which fills the wrong slot the moment a
+              // default sits before the context.
+              const contextFills = decoratorCalls.has(c as unknown as object)
+                ? (chosen.Parameters as readonly ParameterRecord[]).length - 1
+                : -1;
               if (!unmapped) {
                 (chosen.Parameters as readonly ParameterRecord[]).forEach((pr, i) => {
-                  if (i < supplied || pr.Optional || pr.Initial !== undefined) {
+                  if (i < supplied || i === contextFills || pr.Optional || pr.Initial !== undefined) {
                     return;
                   }
                   const wanted = pr.Type as Known;
@@ -16835,15 +16863,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 CallExpression?: ParseNode | null,
                 ParenthesizedExpression?: ParseNode | null,
               };
-              // The FACTORY form is not walked as an ordinary call, and the
-              // suite is what said so: #sec-decorator-application appends the
-              // CONTEXT as a trailing argument, so `@f(7)` on
-              // `f(n: uint8, c: Reflect.ClassField)` supplies both and the
-              // missing-argument rule reported `c` as absent. Five tests
-              // failed. Judging a decorator call needs that implicit argument
-              // modelled, which is its own piece of work; until then the call
-              // is left alone rather than judged by rules written for a
-              // different shape.
+              // The FACTORY form IS walked, with its implicit argument recorded
+              // in `decoratorCalls`. The count and overload resolution both read
+              // that, so the WRITTEN arguments are judged while the context is
+              // neither demanded nor typed.
+              if (dec.CallExpression) {
+                decoratorCalls.add(dec.CallExpression as unknown as object);
+                walk(dec.CallExpression);
+              }
               const expr = dec.MemberExpression ?? dec.ParenthesizedExpression;
               walk(expr);
               // A DECORATOR IS CALLED. The protocol invokes it with the context,
