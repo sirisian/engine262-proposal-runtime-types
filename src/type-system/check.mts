@@ -5388,9 +5388,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!at) {
       return false;
     }
-    if (at.Kind === 'union') {
+    if (at.Kind === 'union' || at.Kind === 'intersection') {
       const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
       return members.length > 0 && members.every((mem) => notIterable(mem as Known));
+    }
+    if (at.Kind === 'void') {
+      return true;
     }
     const name = at.Kind === 'primitive' ? (at as { Name?: string }).Name : undefined;
     return name !== undefined && name !== 'string' && name !== 'Composite';
@@ -15777,18 +15780,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!at) {
               return false;
             }
-            if (at.Kind === 'union') {
+            // An INTERSECTION is decided the same way and for a different
+            // reason: a value of `I & J` satisfies BOTH, so it is callable where
+            // EITHER member is, and not callable only where neither is. A union
+            // reaches the same test because the value is one member or the
+            // other and neither would serve.
+            if (at.Kind === 'union' || at.Kind === 'intersection') {
               const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
               return members.length > 0 && members.every((mem) => notCallable(mem as Known));
+            }
+            // ~void~ is "the type with no values", so nothing it describes can
+            // be called - `f()()` for a `f(): void` was the run time's.
+            if (at.Kind === 'void') {
+              return true;
             }
             const inner = structureOf(at);
             return at.Kind === 'primitive'
               || (!!inner && inner.Kind === 'object')
               || at.Kind === 'nominal';
           };
-          const shape = base ? structureOf(base) : null;
-          if ((base && base.Kind === 'union' && notCallable(base))
-            || (shape && shape.Kind === 'object') || (base && base.Kind === 'nominal')) {
+          // The predicate is the whole test. Enumerating kinds at the guard is
+          // what kept an INTERSECTION and a ~void~ out of it while the predicate
+          // below already decided them.
+          if (base && notCallable(base)) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not callable',
               Value(displayType(callee as TypeRecord)),
@@ -16387,15 +16401,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!at) {
               return false;
             }
-            if (at.Kind === 'union') {
+            if (at.Kind === 'union' || at.Kind === 'intersection') {
               const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
               return members.length > 0 && members.every((mem) => notConstructor(mem as Known));
             }
-            return at.Kind === 'primitive';
+            // The same shapes callability refuses. A class INSTANCE is not a
+            // constructor any more than it is callable, and a class NAME is not
+            // reached - its Static Type is a ~function~, which is what `new C()`
+            // needs.
+            const innerC = structureOf(at);
+            return at.Kind === 'primitive' || at.Kind === 'void'
+              || (!!innerC && innerC.Kind === 'object') || at.Kind === 'nominal';
           };
           const constructee = callableForm(staticType(target));
           const cbase = erasedForJudgment(constructee);
-          if (cbase && (cbase.Kind === 'primitive' || (cbase.Kind === 'union' && notConstructor(cbase)))) {
+          if (cbase && notConstructor(cbase)) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not a constructor',
               Value(displayType(constructee as TypeRecord)),

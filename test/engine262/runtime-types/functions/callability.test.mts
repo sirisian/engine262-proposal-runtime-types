@@ -125,9 +125,44 @@ test('a UNION is not callable when no member is', () => {
   // narrowing is the escape the language gives, and refusing it would refuse the
   // program that narrows first.
   expect(ok(dead('let u: uint8 | (() => uint8) = uint8(1); let q = u();'))).toBe(true);
-  // Nor is an intersection or a type parameter judged, neither being a set of
-  // members this can ask.
-  expect(ok(dead('interface I { a: uint8 } interface J { b: uint8 }'
-    + ' function g(v: I & J) { let q = v(); }'))).toBe(true);
+  // A TYPE PARAMETER is not judged - it stands for something not yet known.
   expect(ok(dead('function g<T extends uint8>(v: T) { let q = v(); }'))).toBe(true);
+});
+
+test('an INTERSECTION is decided, for the opposite reason a union is', () => {
+  // A value of `I & J` satisfies BOTH, so it is callable where EITHER member is
+  // and not callable only where neither is. A union reaches the same test
+  // because the value is one member or the other and neither would serve - the
+  // same answer from opposite reasoning.
+  expectThrown(dead('interface I { a: uint8 } interface J { b: uint8 }'
+    + ' function g(v: I & J) { let q = v(); }'), 'is not callable');
+  expectThrown(dead('interface I { a: uint8 } interface J { b: uint8 }'
+    + ' function g(v: I & J) { let q = new v(); }'), 'is not a constructor');
+  // One callable member makes the intersection callable.
+  expect(ok(dead('interface F { (): uint8 } interface J { b: uint8 }'
+    + ' function g(v: F & J) { let q = v(); }'))).toBe(true);
+});
+
+test('~void~ has no values, so nothing it describes can be called', () => {
+  expectThrown(dead('function f(): void { } let q = f()();'), 'is not callable');
+
+  // KNOWN LIMIT: the construction test asks only about an IDENTIFIER naming no
+  // class, and a topic. That restriction exists because typing an arbitrary
+  // target is not free - `staticType` of a generic class's name reaches the rule
+  // that refuses a bare generic - so `new (f())()` is not reached.
+  expect(ok(dead('function f(): void { } let q = new (f())();'))).toBe(true);
+});
+
+test('construction refuses what calling refuses', () => {
+  // The two tests had drifted: callability reached an object structure and a
+  // nominal, construction only a primitive.
+  expectThrown(dead('class C { } let c: C = new C(); let q = new c();'), 'is not a constructor');
+  expectThrown(dead('interface I { a: uint8 } function g(v: I) { let q = new v(); }'),
+    'is not a constructor');
+  expectThrown(dead('let m: Map.<string, uint8> = new Map(); let q = new m();'),
+    'is not a constructor');
+  // A class NAME is not reached: its Static Type is a ~function~, which is what
+  // `new C()` needs.
+  expect(ok(dead('class C { } let q = new C();'))).toBe(true);
+  expect(ok(dead('let m = new Map.<string, uint8>();'))).toBe(true);
 });
