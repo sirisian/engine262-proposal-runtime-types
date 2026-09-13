@@ -5349,7 +5349,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * The calls that are DECORATOR FACTORIES, `@g(x)`.
+   * The decorator applications WRITTEN WITH ARGUMENTS, `@g(x)`.
+   *
+   * NOT a factory, and the name matters because the proposal dropped that model:
+   * sec-decorator-application says "giving one an argument is editing its
+   * parameter list rather than rewriting it into a factory", and `@f` and `@f()`
+   * are one form. `@g(x)` calls `g` itself with the written arguments and the
+   * context - it does not call `g` to obtain a decorator, so `g`'s RETURN is not
+   * applied to anything and a non-callable one is no mistake.
    *
    * #sec-decorator-application appends the CONTEXT as a trailing argument, so
    * such a call supplies one more than it writes: `@f(7)` on
@@ -15946,7 +15953,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return k === 'AssignmentRestElement' || k === 'NamedArgument';
               }) || (chosen.Parameters as readonly ParameterRecord[]).some((pr) => pr.Rest);
               const supplied = suppliedNodes.length;
-              // A decorator factory's context lands LAST, not next: `@f()` on
+              // A decorator's context lands LAST, not next: `@f()` on
               // `f(n: uint8 = 5, c: Reflect.ClassField)` fills `n` from its
               // default and `c` from the context. So the final parameter is
               // satisfied whatever the written count, rather than the count
@@ -16863,10 +16870,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 CallExpression?: ParseNode | null,
                 ParenthesizedExpression?: ParseNode | null,
               };
-              // The FACTORY form IS walked, with its implicit argument recorded
-              // in `decoratorCalls`. The count and overload resolution both read
-              // that, so the WRITTEN arguments are judged while the context is
-              // neither demanded nor typed.
+              // An application WRITTEN WITH ARGUMENTS is walked, with its
+              // implicit argument recorded in `decoratorCalls`. The count and
+              // overload resolution both read that, so the WRITTEN arguments are
+              // judged while the context is neither demanded nor typed.
               if (dec.CallExpression) {
                 decoratorCalls.add(dec.CallExpression as unknown as object);
                 walk(dec.CallExpression);
@@ -16878,9 +16885,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // saying separately, because `@n` is a MEMBER EXPRESSION rather
               // than a call and reaches no call rule.
               //
-              // The CallExpression subtype is the factory form, `@g(x)`, whose
-              // decorator is the call's RESULT rather than `g`; the call itself
-              // is judged by walking it, and what it answers is left alone.
+              // The CallExpression subtype is `@g(x)`, which calls `g` ITSELF
+              // with the written arguments and the context - not a factory whose
+              // result becomes the decorator, a model sec-decorator-application
+              // dropped. So `g`'s return is applied to nothing and is not asked
+              // to be callable; the callability test above is for `@g`, where
+              // the name IS the decorator.
               {
                 const decType = expr ? callableForm(staticType(expr)) : null;
                 const decBase = decType && decType.Kind === 'literal'

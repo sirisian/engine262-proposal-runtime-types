@@ -31,7 +31,7 @@ test('the ordinary decorators are untouched', () => {
   expect(ok(dead('const o = { f(c) { } }; class A { @o.f a: uint8 = uint8(1); }'))).toBe(true);
 });
 
-test("a factory's WRITTEN arguments are judged", () => {
+test('a decorator WRITTEN WITH ARGUMENTS has them judged', () => {
   // The written arguments are an ordinary argument list once the implicit
   // context is accounted for, so a wrong type among them is refused.
   expectThrown(dead('function g(n: uint8) { return (c) => c; }'
@@ -59,4 +59,20 @@ test('a DEFAULT before the context still leaves the context last', () => {
   expect(ok('let got = "never";'
     + ' function f(n: uint8 = 5, c: Reflect.ClassField) { got = String(n) + ":" + String(c.name); }'
     + ' class A { @f() a: uint8; } got;')).toBe(true);
+});
+
+test('a decorator that RETURNS a non-function is not a mistake', () => {
+  // There is no factory model here. sec-decorator-application: "giving one an
+  // argument is editing its parameter list rather than rewriting it into a
+  // factory", and `@f` and `@f()` are one form. So `@g()` calls `g` with the
+  // context and `g`'s return is applied to nothing - a `uint8` return is as
+  // ordinary as no return.
+  //
+  // This was reported as a finding, on the strength of the JS decorators
+  // factory model rather than this one. The run time accepts it, which is what
+  // withdrew it.
+  expect(ok('function g(): uint8 { return uint8(1); }'
+    + ' class B { @g() x: uint8 = uint8(1); } "ok";')).toBe(true);
+  expect(ok('function g(c: Reflect.ClassField): uint8 { return uint8(1); }'
+    + ' class B { @g x: uint8 = uint8(1); } "ok";')).toBe(true);
 });
