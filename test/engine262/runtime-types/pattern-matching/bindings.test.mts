@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectEarlyError } from '../harness.mts';
 
 /**
  * Spec: #sec-patternmatches (PatternMatches) - the BINDING half.
@@ -23,7 +23,8 @@ test('a binding binds, and the arm sees it', () => {
 test('an ANNOTATED binding tests before it binds', () => {
   // Which is `catch (e: TypeError)` in a new position.
   expect(evaluated('String(match (uint8(5)) { when let x: uint8: "typed"; default: "no"; });')).toBe('typed');
-  expect(evaluated('String(match (5) { when let x: uint8: "typed"; default: "no"; });')).toBe('no');
+  expectEarlyError('match (5) { when let x: uint8: "typed"; default: "no"; };', 'StaticTypeError');
+  expect(evaluated('let subject: any = 5; String(match (subject) { when let x: uint8: "typed"; default: "no"; });')).toBe('no');
 });
 
 test('bindings work in every structural position', () => {
@@ -64,7 +65,8 @@ test('the binding COLON is resolved by CONTEXT, not by lookahead', () => {
   // `is` position, where there is no clause colon to find.
   expect(outcome2('if (uint8(1) is let x: uint8) {}')).toBe('ACCEPTED');
   expect(evaluated('String((uint8(1) is let x: uint8) && true);')).toBe('true');
-  expect(evaluated('String((1 is let x: uint8) && true);')).toBe('false');
+  expectEarlyError('String((1 is let x: uint8) && true);', 'StaticTypeError');
+  expect(evaluated('let subject: any = 1; String((subject is let x: uint8) && true);')).toBe('false');
   expect(evaluated('String((1 is let x) && true);')).toBe('true');
 });
 
@@ -114,7 +116,7 @@ test('a LOOP rebinds per iteration', () => {
   expect(evaluated('let n = 0; const log = []; while ((n += 1) is let c and 1..<5) { log.push(String(c)); } log.join(",");')).toBe('1,2,3,4');
   expect(evaluated('const log = []; for (const q of [1, 2, 3]) { if (q is let c) { log.push(String(c)); } } log.join(",");')).toBe('1,2,3');
   // A MISS binds nothing and the governed position does not run.
-  expect(evaluated('let out = "ok"; if (5 is let x: string) { out = "matched"; } out;')).toBe('ok');
+  expect(evaluated('let subject: any = 5; let out = "ok"; if (subject is let x: string) { out = "matched"; } out;')).toBe('ok');
 });
 
 test('an ABRUPT COMPLETION leaves a block arm and means what it means outside', () => {

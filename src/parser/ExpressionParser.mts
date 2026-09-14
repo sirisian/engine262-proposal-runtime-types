@@ -126,6 +126,7 @@ const FUNCTION_BOUNDARIES = new Set([
   'FunctionExpression', 'FunctionDeclaration', 'ArrowFunction', 'GeneratorExpression',
   'GeneratorDeclaration', 'AsyncFunctionExpression', 'AsyncFunctionDeclaration',
   'AsyncArrowFunction', 'AsyncGeneratorExpression', 'AsyncGeneratorDeclaration',
+  'MethodDefinition', 'GeneratorMethod', 'AsyncMethod', 'AsyncGeneratorMethod',
   'ClassExpression', 'ClassDeclaration',
 ]);
 
@@ -139,7 +140,8 @@ function containsMatching(node: unknown, predicate: (type: string, n: unknown) =
     return false;
   }
   const n = node as { type?: string };
-  if (n.type && FUNCTION_BOUNDARIES.has(n.type)) {
+  if (n.type && (FUNCTION_BOUNDARIES.has(n.type)
+    || (n.type === 'DoExpression' && (node as ParseNode.DoExpression).star))) {
     return false;
   }
   if (n.type && predicate(n.type, node)) {
@@ -272,6 +274,70 @@ function firstWriteIn(node: object, depth = 0): string | undefined {
 }
 
 export abstract class ExpressionParser extends FunctionParser {
+  private readonly matchBoundNames = new WeakMap<ParseNode.MatchPattern, ReadonlySet<string>>();
+
+  /** #sec-match-patterns: alternatives bind alike; simultaneous patterns bind each name once. */
+  private validateMatchBindings(pattern: ParseNode.MatchPattern): ReadonlySet<string> {
+    const cached = this.matchBoundNames.get(pattern);
+    if (cached) return cached;
+    const names = new Set<string>();
+    const merge = (child: ParseNode.MatchPattern) => {
+      for (const name of this.validateMatchBindings(child)) {
+        if (names.has(name)) {
+          this.addEarlyError(Throw.SyntaxError('duplicate pattern binding $1', Value(name)), child);
+        }
+        names.add(name);
+      }
+    };
+    switch (pattern.type) {
+      case 'MatchBindingPattern': names.add(pattern.Name); break;
+      case 'MatchOrPattern': {
+        const left = this.validateMatchBindings(pattern.Left);
+        const right = this.validateMatchBindings(pattern.Right);
+        if (left.size !== right.size || [...left].some((name) => !right.has(name))) {
+          this.addEarlyError(Throw.SyntaxError('or pattern alternatives must bind the same names'), pattern);
+        }
+        for (const name of left) names.add(name);
+        break;
+      }
+      case 'MatchAndPattern': merge(pattern.Left); merge(pattern.Right); break;
+      case 'MatchNotPattern': merge(pattern.Operand); break;
+      case 'MatchObjectPattern':
+        pattern.Properties.forEach((property) => merge(property.Pattern));
+        if (pattern.Rest) merge(pattern.Rest);
+        break;
+      case 'MatchArrayPattern':
+      case 'MatchExtractorPattern': pattern.Elements.forEach(merge); break;
+      default: break;
+    }
+    this.matchBoundNames.set(pattern, names);
+    return names;
+  }
+
+  /** #sec-match-patterns: refine the literal cover without evaluating its expression. */
+  private validMatchLiteral(node: ParseNode, allowName = false): boolean {
+    switch (node.type) {
+      case 'NumericLiteral': case 'StringLiteral': case 'BooleanLiteral':
+      case 'NullLiteral': case 'RegularExpressionLiteral': return true;
+      case 'TemplateLiteral': return node.ExpressionList.length === 0;
+      case 'UnaryExpression': return (node.operator === '+' || node.operator === '-')
+        && node.UnaryExpression.type === 'NumericLiteral';
+      case 'IdentifierReference': return allowName;
+      case 'MemberExpression':
+      case 'TypeArgumentsExpression': {
+        if (!allowName) return false;
+        let head: ParseNode = node;
+        while (head.type === 'MemberExpression' || head.type === 'TypeArgumentsExpression') {
+          if (head.type === 'MemberExpression') {
+            if (!head.IdentifierName) return false;
+            head = head.MemberExpression;
+          } else head = head.Expression;
+        }
+        return head.type === 'IdentifierReference';
+      }
+      default: return false;
+    }
+  }
   // proposal-runtime-types: while parsing a conditional's consequent a `:` is
   // the conditional's own colon, so arrow return annotations are suppressed
   // there (parenthesize the arrow to annotate it). Parenthesized and argument
@@ -2703,6 +2769,7 @@ export abstract class ExpressionParser extends FunctionParser {
       node.Right = this.parseMatchPattern(colonTerminates);
       left = this.finishNode(node, 'MatchOrPattern');
     }
+    this.validateMatchBindings(left);
     return left;
   }
 
@@ -2772,9 +2839,18 @@ export abstract class ExpressionParser extends FunctionParser {
       // parse error rather than a containment test.
       const literal = this.parseRangeExpression();
       if ((literal as { type?: string }).type === 'RangeExpression') {
+        const bounds = literal as ParseNode.RangeExpression;
+        for (const bound of [bounds.RangeStart, bounds.RangeEnd]) {
+          if (bound && !this.validMatchLiteral(bound, true)) {
+            this.addEarlyError(Throw.SyntaxError('a range pattern endpoint must be a literal or a name'), bound);
+          }
+        }
         const range = this.startNode<ParseNode.MatchRangePattern>(literal);
         range.Range = literal;
         return this.finishNode(range, 'MatchRangePattern');
+      }
+      if (!this.validMatchLiteral(literal)) {
+        this.addEarlyError(Throw.SyntaxError('a literal pattern cannot contain this expression; use an interpolation'), literal);
       }
       node.Literal = literal;
       return this.finishNode(node, 'MatchLiteralPattern');
@@ -3781,7 +3857,16 @@ export abstract class ExpressionParser extends FunctionParser {
     if (this.test(Token.PRIVATE_IDENTIFIER)) {
       return this.parsePrivateIdentifier();
     }
-    return this.parsePropertyName();
+    const name = this.parsePropertyName();
+    // #sec-do-expression-early-errors: an outer function does not authorize a
+    // return from a plain do expression in a computed class element name.
+    if (name.type === 'PropertyName' && containsMatching(name.ComputedPropertyName, (type, node) => {
+      if (type !== 'DoExpression' || (node as ParseNode.DoExpression).star) return false;
+      return containsMatching((node as ParseNode.DoExpression).Block, (childType) => childType === 'ReturnStatement');
+    })) {
+      this.addEarlyError(Throw.SyntaxError('a do expression in a computed class name may not return'), name);
+    }
+    return name;
   }
 
   // PropertyDefinition :

@@ -1,14 +1,14 @@
 import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
-import { SelfThisTypeRecord } from '../type-system/check.mts';
+import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses } from '../abstract-ops/runtime-types.mts';
 import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
 import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
-import type { Arguments } from '../value.mts';
+import type { Arguments, ReferenceRecord } from '../value.mts';
 import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
 import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { SameType } from '../type-system/relations.mts';
@@ -32,7 +32,7 @@ import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
-import { InferGenericBindings, TakePendingCalleeContext } from '../type-system/runtime.mts';
+import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
@@ -913,6 +913,8 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
   // order. An abrupt completion still propagates, which is what makes a
   // throwing arm abort the collection - the arms before it have already run.
   const collected: Value[] = [];
+  const contextual = contextualTypeFor(node);
+  const armContext = node.All ? (contextual?.Kind === 'array' ? contextual.Element : null) : contextual ?? null;
   for (const clause of node.Clauses) {
     // "A fresh declarative environment per clause with the clause's BoundNames
     // created" - so a binding of one arm is invisible to the next, and a `const`
@@ -959,7 +961,13 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
       // a declaration is a Syntax Error naming it rather than a silent ~void~.
       // A `return` or `break` inside propagates as the abrupt completion it is,
       // which is what makes the arm a block rather than a function body.
-      const blockResult = EnsureCompletion(yield* Evaluate(clause.Body as never));
+      pushContextualType(armContext, clause.Body);
+      let blockResult;
+      try {
+        blockResult = EnsureCompletion(yield* Evaluate(clause.Body as never));
+      } finally {
+        popContextualType();
+      }
       // The clause environment must be dropped on EVERY exit, not only the ones
       // that fall through to the next clause. Leaving it installed made the
       // running context's LexicalEnvironment a child of the one the surrounding
@@ -977,14 +985,21 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
       if (blockResult.Type !== 'normal') {
         return blockResult as never;
       }
-      const blockValue = (blockResult.Value ?? Value.undefined) as unknown as Value;
+      let blockValue = (blockResult.Value ?? Value.undefined) as unknown as Value;
+      if (armContext) blockValue = Q(yield* CheckedConvertValue(blockValue, armContext));
       if (node.All) {
         collected.push(blockValue);
         continue;
       }
       return blockValue;
     }
-    const bodyRef = EnsureCompletion(yield* Evaluate(clause.Body as never));
+    pushContextualType(clause.IsThrow ? null : armContext, clause.Body);
+    let bodyRef;
+    try {
+      bodyRef = EnsureCompletion(yield* Evaluate(clause.Body as never));
+    } finally {
+      popContextualType();
+    }
     const body = bodyRef.Type === 'normal'
       ? EnsureCompletion(yield* GetValue(bodyRef.Value as never))
       : bodyRef;
@@ -996,7 +1011,9 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
       return ThrowCompletion(body.Value) as never;
     }
     if (node.All) {
-      collected.push(body.Value as Value);
+      let value = body.Value as Value;
+      if (armContext) value = Q(yield* CheckedConvertValue(value, armContext));
+      collected.push(value);
       continue;
     }
     return body.Value as Value;
@@ -1107,7 +1124,9 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
     }
     case 'MatchLiteralPattern': {
       const ref = Q(yield* Evaluate(P.Literal as never));
-      const literal = Q(yield* GetValue(ref as never));
+      let literal = Q(yield* GetValue(ref as never));
+      const position = PatternLiteralTypeOf(P);
+      if (position) literal = Q(yield* CheckedConvertValue(literal, position));
       // The BARE-ZERO step: a bare `0` matches both zeros of the position's
       // type, while an explicit `+0` or `-0` distinguishes them.
       if (P.BareZero && literal instanceof NumberValue && R(literal) === 0
@@ -2430,7 +2449,7 @@ function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNo
   return specialized;
 }
 
-export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsExpression): PlainEvaluator<unknown> {
+export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsExpression, evaluatedReference?: ReferenceRecord): PlainEvaluator<unknown> {
   const asCallee = evaluatingTypeArgumentsCallee;
   evaluatingTypeArgumentsCallee = false;
   // proposal-runtime-types (README "Typed Arrays"): an ARRAY TYPE written in
@@ -2446,7 +2465,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   if (surroundingAgent.feature('runtime-types') && node.Expression.type === 'ArrayLiteral') {
     return Q(yield* ArrayTypeConstructorFor(node));
   }
-  const ref = yield* Evaluate(node.Expression);
+  const ref = evaluatedReference ?? (yield* Evaluate(node.Expression));
   const inspected = EnsureCompletion(ref);
   if (inspected.Type !== 'normal') {
     return ref;

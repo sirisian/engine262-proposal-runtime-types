@@ -1,3 +1,4 @@
+import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -36,7 +37,7 @@ import { Diverges } from './divergence.mts';
 import { IsSubtype, SameType, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType, componentAccessorIndices } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
-import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments } from './runtime.mts';
+import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
 import { BindNamedArguments, type ArgumentItem } from './named-arguments.mts';
@@ -836,6 +837,13 @@ export function TakeStaticCallResolution(node: object): (TypeRecord & { Kind: 'p
  * checker computes it over declarations, before any function object exists.
  */
 const publishedReturnTypes = new WeakMap<object, TypeRecord>();
+
+const patternLiteralTypes = new WeakMap<object, TypeRecord>();
+
+/** #sec-pattern-static-semantics: the numeric literal takes its position's type. */
+export function PatternLiteralTypeOf(pattern: object): TypeRecord | undefined {
+  return patternLiteralTypes.get(pattern);
+}
 
 export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefined {
   return publishedReturnTypes.get(declaration);
@@ -2523,6 +2531,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * null return annotation, and why the type they DO have needs its own frame.
    */
   const generatorTypes: Known[] = [];
+  type GeneratorContributions = { yielded: Known[], returned: Known[] };
+  const generatorContributions: (GeneratorContributions | null)[] = [];
 
   /**
    * The classes whose bodies the walk is inside, innermost last.
@@ -3983,7 +3993,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         continue;
       }
-      if (el.type === 'MethodDefinition') {
+      if (el.type === 'MethodDefinition' || el.type === 'GeneratorMethod'
+        || el.type === 'AsyncMethod' || el.type === 'AsyncGeneratorMethod') {
         const md = el as unknown as {
           TypeAnnotation?: ParseNode.TypeAnnotation | null,
           static?: boolean,
@@ -4113,7 +4124,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const pushedMethodScope = pushTypeParameterScopeOf(md as unknown as ParseNode);
         try {
           for (const p of md.UniqueFormalParameters) {
-            if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
+            if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement' && p.type !== 'BindingRestElement') {
               usable = false;
               break;
             }
@@ -4130,6 +4141,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               Name: pp.BindingIdentifier?.name ?? '',
               Optional: pp.Optional === true || !!pp.Initializer,
               Ref: pp.Ref === true,
+              Rest: p.type === 'BindingRestElement',
             }));
           }
         } finally {
@@ -4157,6 +4169,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             typeParameterScopes.pop();
           }
         }
+        const generator = el.type === 'GeneratorMethod' || el.type === 'AsyncGeneratorMethod';
+        const asyncGenerator = el.type === 'AsyncGeneratorMethod';
+        if (generator && Return) Return = generatorDeclaredType(Return, asyncGenerator);
         const Untyped = !md.TypeAnnotation && annotated.every((t) => t === null);
         const sigs = methods.get(key) ?? [];
         const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[] } = {
@@ -4170,14 +4185,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           inferenceDepth += 1;
           let inferred: Known;
           try {
-            inferred = inferredReturnType(el as ParseNode, annotated, null, anchorage);
+            inferred = inferredReturnType(el as ParseNode, annotated, null, anchorage, generator ? 'yield' : el.type === 'AsyncMethod' ? 'resolve' : 'return');
           } finally {
             inferenceDepth -= 1;
           }
           if (inferred && (annotated.some((t) => t !== null) || anchorage.anchored)) {
-            const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
+            let published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
               ? voidType
               : inferred;
+            if (generator) {
+              const returned = inferredReturnType(el, annotated, null, { anchored: false }, 'generator-return');
+              published = generatorDeclaredType(published, asyncGenerator, returned ?? anyTypeRecord) ?? published;
+            } else if (el.type === 'AsyncMethod') {
+              published = libraryTypeRecord('Promise', [published, anyTypeRecord])!;
+            }
             signature.InferredReturn = published;
             publishedReturnTypes.set(el as unknown as object, published);
           }
@@ -8298,6 +8319,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const inferStaticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (node && expressionViewTypes.has(node)) return expressionViewTypes.get(node)!;
     if (node?.type === 'MatchExpression') return checkMatchExpression(node, contextual);
+    if (node?.type === 'CommaOperator') return staticTypeIn(node.ExpressionList.at(-1), contextual);
     // PARENTHESES ARE TRANSPARENT. A contextual is recorded against the node
     // that reads it - the call, the object literal - and `( … )` is a node of
     // its own in between, so the literal inside is what is recorded against,
@@ -8324,6 +8346,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       inner = next;
     }
     if (inner?.type === 'MatchExpression') return checkMatchExpression(inner, contextual);
+    if (inner?.type === 'DoExpression' && inner.star) return checkDoGenerator(inner, contextual);
     if (inner && contextual) {
       contextualCallTypes.set(inner, contextual);
     }
@@ -9188,11 +9211,72 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => inferStaticType(node));
 
+  const vectorCallType = (node: ParseNode.CallExpression, diagnose: boolean): Known => {
+    const specialized = specializedVectorMethod(node.CallExpression);
+    if (!specialized) return null;
+    const vector = staticType(specialized.receiver);
+    if (vector?.Kind !== 'primitive' || vector.Name !== 'vector') return null;
+    const indexOf = (argument: ParseNode.Type): number | null => {
+      if (argument.type === 'TypeReference' && !argument.TypeArguments && !argument.TypeName.MemberNames.length) {
+        if (typeParameterInScope(argument.TypeName.IdentifierReference.name)) return null;
+        const exact = constExactValue(argument.TypeName.IdentifierReference.name);
+        if (exact !== null) {
+          SetVectorConstantIndex(argument, Number(exact));
+          return Number(exact);
+        }
+        for (let i = frames.length - 1; i >= 0; i -= 1) {
+          const frame = frames[i];
+          const name = argument.TypeName.IdentifierReference.name;
+          if (!frame.declaredNames.has(name)) continue;
+          const literal = frame.constLiteralTypes.get(name);
+          if (literal?.Kind === 'literal') {
+            const value = vectorIndexOf(literal)!;
+            SetVectorConstantIndex(argument, value);
+            return value;
+          }
+          return null;
+        }
+      }
+      return vectorIndexOf(resolveType(argument));
+    };
+    const indices: (number | null)[] = [];
+    for (const argument of specialized.arguments) {
+      if ((argument as { IsSpread?: boolean }).IsSpread) {
+        const type = resolveType(argument);
+        if (!type || type.Kind === 'any' || type.Kind === 'parameter') return null;
+        const elements = spreadElementsOf(type);
+        if (!elements) {
+          if (diagnose && vectorSpecialization(vector, specialized.method, [])) {
+            errors.push(Throw.StaticTypeError('$1', Value('a spread lane argument must be a tuple or an array of stated extent')).Value as ObjectValue);
+          }
+          return null;
+        }
+        indices.push(...elements.map(vectorIndexOf));
+      } else {
+        indices.push(indexOf(argument));
+      }
+    }
+    const resolved = vectorSpecialization(vector, specialized.method, indices);
+    if (!resolved) return null;
+    if (diagnose) {
+      if (resolved.error) errors.push(Throw.StaticTypeError('$1', Value(resolved.error)).Value as ObjectValue);
+      if (resolved.argument) {
+        const args = expandValueSpreads(node.Arguments ?? []);
+        if (args[0]?.type !== 'AssignmentRestElement') requireAssignable(args[0] ? staticTypeIn(args[0], resolved.argument) : undefinedType, resolved.argument);
+      }
+    }
+    return resolved.result;
+  };
+
   const inferStaticType = (node: ParseNode): Known => {
     if (expressionViewTypes.has(node)) {
       return expressionViewTypes.get(node)!;
     }
     switch (node.type) {
+      case 'CommaOperator': {
+        const result = node.ExpressionList.at(-1);
+        return result ? staticType(result) : null;
+      }
       case 'OptionalExpression': {
         const view = optionalChainView(node, false);
         const live = staticType(view.expression);
@@ -9305,18 +9389,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!d.star) {
           return completionTypeOf(d.Block?.StatementList);
         }
-        // #sec-do-generator-expressions: Y, R, and N are found rather than
-        // declared, there being no annotation site. N is `void` unless a
-        // contextual type supplies it, since nothing in a body determines what
-        // a caller will send to `next`.
-        const yielded: TypeRecord[] = [];
-        const returned: TypeRecord[] = [];
-        collectGeneratorTypes(d.GeneratorBody as ParseNode | undefined, yielded, returned);
-        const Y = yielded.length === 0 ? neverType
-          : (yielded.length === 1 ? yielded[0] : CanonicalizeType({ Kind: 'union', Members: yielded }));
-        const R = returned.length === 0 ? voidType
-          : (returned.length === 1 ? returned[0] : CanonicalizeType({ Kind: 'union', Members: returned }));
-        return libraryTypeRecord(d.async ? 'AsyncGenerator' : 'Generator', [Y, R, voidType]);
+        return checkDoGenerator(d, doGeneratorContexts.get(d) ?? null);
       }
       // A unary `+` or `-` over a numeric literal has that literal's type.
       //
@@ -9610,6 +9683,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
 
       case 'CallExpression': {
+        const vectorResult = vectorCallType(node, false);
+        if (vectorResult) return vectorResult;
         // Read HERE, inside `staticType`'s own arm for the node, which is where
         // `contextualReturnTypes` is read for a function literal; the
         // builtin-static call site records it, and this arm is the one that
@@ -9924,13 +9999,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return null;
           }
         }
-        if (callee && callee.Kind === 'function' && callee.Signatures.length === 1) {
+        const selected = callee?.Kind === 'function'
+          ? selectCallSignature(node, expandValueSpreads(node.Arguments ?? []), callee, node, false) : null;
+        if (selected) {
           // #sec-published-return-types: the Static Type of a call is the
           // DECLARED return where one is declared, and the published inferred
           // return otherwise. The two live in separate fields so that identity,
           // overload-set formation, ranking, and viability can read the
           // declared one alone.
-          const only = callee.Signatures[0] as {
+          const only = selected as {
             Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameters?: readonly TypeParameterRecord[],
           };
           // #sec-generics: a call that supplies type arguments binds
@@ -11800,16 +11877,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // spelling refused. Such a key takes `never` in the merged shape -
       // nothing satisfies it, a method included.
       //
-      // Only the KEY is judged here. The method's RETURN is checked where the
-      // body is entered, from the contextual return the target's member gives
-      // it, which is the other half of the same rule.
-      if (member && (member as ParseNode).type === 'MethodDefinition') {
+      // #sec-annotations-on-the-remaining-function-forms: check the method's
+      // signature against its destination, then its body against that signature.
+      if (member && (member.type === 'MethodDefinition' || member.type === 'GeneratorMethod'
+        || member.type === 'AsyncMethod' || member.type === 'AsyncGeneratorMethod')) {
         const methodName = (member as unknown as {
           ClassElementName?: { name?: string, value?: string } | null,
         }).ClassElementName;
         const methodKey = methodName?.name ?? methodName?.value;
         if (typeof methodKey === 'string') {
           const wantedForMethod = target.Properties.find((prop) => prop.key === methodKey);
+          const sourceShape = objectLiteralShape(node);
+          const sourceMethod = sourceShape?.Kind === 'object' ? sourceShape.Properties.find((prop) => prop.key === methodKey)?.type : null;
+          if (wantedForMethod && sourceMethod) requireAssignable(sourceMethod, wantedForMethod.type);
           const wantedKind = (wantedForMethod?.type as { Kind?: string, Members?: readonly unknown[] } | undefined);
           const wantedIsNever = wantedKind?.Kind === 'union' && (wantedKind.Members ?? []).length === 0;
           // An INTERSECTION is refused for the same reason `never` is. Method
@@ -12221,32 +12301,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return collectWanted(wanted, new Set()).type;
     };
     for (const member of members) {
-      // A METHOD written in shorthand contributes a member rather than voiding
-      // the whole shape: a literal with no shape has NOTHING checked, not the
-      // method and not its siblings, and `{ m(): uint8 }` would accept `{ m()
-      // { return "s"; } }` while refusing the arrow spelling `{ m: () => "s"
-      // }`.
-      //
-      // The member is typed as a function whose signature is UNKNOWN: an
-      // unannotated body's return is not inferred here, so `~any~` is the honest
-      // answer for it. That is enough to make the member EXIST - so freshness,
-      // the missing-member rule and a non-function value all see it - without
-      // claiming a return type this pass has not computed. Checking the body
-      // against the declared signature is the other half and is not this.
-      if (member && member.type === 'MethodDefinition') {
-        const asMethodDefinition = member as unknown as {
-          ClassElementName?: { name?: string, value?: string } | null,
-        };
-        const methodKey = asMethodDefinition.ClassElementName?.name
-          ?? asMethodDefinition.ClassElementName?.value;
-        if (typeof methodKey !== 'string') {
-          return null;
-        }
-        // The member the TARGET declares gives this method its return type
-        // (the body half), recorded against the method node and read by
-        // `enterFunction` - which otherwise enforces a return only where one was
-        // written.
-        if (!member.UniqueFormalParameters) {
+      if (member && (member.type === 'MethodDefinition' || member.type === 'GeneratorMethod'
+        || member.type === 'AsyncMethod' || member.type === 'AsyncGeneratorMethod')) {
+        const methodKey = classElementKey(member.ClassElementName);
+        if (typeof methodKey !== 'string') return null;
+        if (member.type === 'MethodDefinition' && !member.UniqueFormalParameters) {
           const getter = !member.PropertySetParameterList;
           const annotation = getter ? member.TypeAnnotation : member.PropertySetParameterList?.[0]?.TypeAnnotation;
           const valueType = annotation ? resolveType(annotation.Type) : null;
@@ -12256,39 +12315,60 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           else prior.readonly = false;
           continue;
         }
+        // #sec-annotations-on-the-remaining-function-forms: a method keeps its
+        // declarations; context supplies only positions without annotations.
         const wantedMethod = wantedOf(methodKey);
-        const wantedSignatures = (wantedMethod as { Kind?: string, Signatures?: readonly { Return?: TypeRecord | null }[] } | null);
-        if (wantedSignatures?.Kind === 'function' && wantedSignatures.Signatures?.length === 1) {
-          const wantedReturn = wantedSignatures.Signatures[0].Return;
-          if (wantedReturn) {
-            contextualMethodReturns.set(member as ParseNode, wantedReturn as Known);
+        const expected = wantedMethod?.Kind === 'function' && wantedMethod.Signatures.length === 1
+          ? wantedMethod.Signatures[0] : null;
+        const contextual = expected?.Parameters.map((parameter) => parameter.Type) ?? [];
+        contextualParameterTypes.set(member, contextual.map((type, index) => expected?.Parameters[index]?.Optional
+          && expected.Parameters[index].Initial === undefined ? joinTypes(type, undefinedType) : type));
+        if (expected?.Return) contextualMethodReturns.set(member, expected.Return);
+        const scope = pushTypeParameterScopeOf(member);
+        try {
+          const params = member.UniqueFormalParameters ?? [];
+          const annotations = params.map((prm) => prm.TypeAnnotation ? resolveType(prm.TypeAnnotation.Type) : null);
+          const parameterTypes = annotations.map((type, index) => type ?? contextual[index] ?? null);
+          const Parameters = params.map((prm, index) => parameter(parameterTypes[index] ?? anyTypeRecord, {
+            Name: (prm as ParseNode.SingleNameBinding).BindingIdentifier?.name ?? '',
+            Optional: (prm as ParseNode.SingleNameBinding).Optional === true || !!(prm as ParseNode.SingleNameBinding).Initializer
+              || (!prm.TypeAnnotation && expected?.Parameters[index]?.Optional === true),
+            Rest: prm.type === 'BindingRestElement',
+            Ref: (prm as { Ref?: boolean }).Ref === true,
+          }));
+          const generator = member.type === 'GeneratorMethod' || member.type === 'AsyncGeneratorMethod';
+          const asyncGenerator = member.type === 'AsyncGeneratorMethod';
+          let Return = member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null;
+          if (Return && generator) Return = generatorDeclaredType(Return, asyncGenerator);
+          const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null } = {
+            Parameters, Return,
+            ...(expected?.ThisType ? { ThisType: expected.ThisType } : {}),
+            Untyped: !member.TypeAnnotation && annotations.every((type) => !type) && !expected,
+            ...(member.TypeParameters?.TypeParameterList?.length
+              ? { TypeParameters: typeParameterRecordsOf(member.TypeParameters.TypeParameterList) } : {}),
+          };
+          if (!Return) {
+            const mode = generator ? 'yield' : member.type === 'AsyncMethod' ? 'resolve' : 'return';
+            const context = generator ? generatorParameters(expected?.Return)?.Yield ?? null
+              : member.type === 'AsyncMethod' ? awaitedElementType(expected?.Return ?? null) : expected?.Return ?? null;
+            const anchorage = { anchored: false };
+            let inferred = inferredReturnType(member, parameterTypes, context, anchorage, mode);
+            if (inferred && (annotations.some((type) => type) || expected || anchorage.anchored)) {
+              if (generator) {
+                const returned = inferredReturnType(member, parameterTypes, generatorParameters(expected?.Return)?.Return ?? null, { anchored: false }, 'generator-return');
+                inferred = expected?.Return ?? generatorDeclaredType(inferred, asyncGenerator, returned ?? anyTypeRecord);
+              } else if (member.type === 'AsyncMethod') {
+                inferred = libraryTypeRecord('Promise', [inferred, anyTypeRecord]);
+              }
+              signature.InferredReturn = inferred;
+              if (inferred && !mentionsTypeParameter(inferred)) publishedReturnTypes.set(member, inferred);
+            }
+            if (expected) signature.Return = expected.Return;
           }
+          Properties.push({ key: methodKey, type: { Kind: 'function', Signatures: [signature] }, optional: false, readonly: false });
+        } finally {
+          if (scope) typeParameterScopes.pop();
         }
-        // The member takes the signature the TARGET wants, where one is wanted.
-        // `Signatures: []` was introduced here deliberately - "without claiming
-        // a return type this pass has not computed" - which is right for the
-        // member WALK, where each member is compared on its own, and fails at an
-        // EXACT-MATCH comparison, where a signature-less function is not the
-        // same type as any signature. That was recorded as a limit; a union
-        // target is where it came due, since a union reaches
-        // neither `checkObjectLiteralAgainst` nor the merge.
-        //
-        // The WANTED signature, not an inferred one, so the honesty is kept:
-        // this pass still does not infer a body's return. It records what the
-        // position asks for, exactly as `contextualMethodReturns` above already
-        // does - and the BODY is checked against that return independently, so
-        // adopting the signature does not excuse a wrong body.
-        //
-        // Where nothing is wanted the stub stays, which is also the path this
-        // shape takes when built with no contextual type at all.
-        Properties.push({
-          key: methodKey,
-          type: (wantedSignatures?.Kind === 'function' && (wantedSignatures.Signatures?.length ?? 0) === 1
-            ? wantedMethod
-            : { Kind: 'function', Signatures: [] }) as unknown as TypeRecord,
-          optional: false,
-          readonly: false,
-        });
         continue;
       }
       if (!member || member.type !== 'PropertyDefinition') {
@@ -13130,49 +13210,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** #sec-pattern-static-semantics: annotations test and narrow; other bindings inherit their position's known type. */
-  const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType?: Known): void => {
-    if (!pattern) {
-      return;
-    }
+  const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType: Known = null, subPattern = false): Known => {
+    if (!pattern) return positionType;
+    const narrow = (target: Known, diagnose: boolean): Known => {
+      if (!target) return positionType;
+      if (!positionType || positionType.Kind === 'any') return target;
+      // A dynamic array may satisfy a tuple's length test at evaluation.
+      if (positionType.Kind === 'array' && positionType.Extent === 'dynamic' && target.Kind === 'tuple'
+        || positionType.Kind === 'tuple' && target.Kind === 'array' && target.Extent === 'dynamic') return target;
+      const result = NarrowTo(positionType, target);
+      if (result !== empty) return result;
+      if (diagnose) errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType))).Value as ObjectValue);
+      return neverType;
+    };
     switch (pattern.type) {
-      case 'MatchBindingPattern':
-        if (pattern.TypeAnnotation) {
-          // An ANNOTATED binding types as its annotation, which is the
-          // narrowing the pattern itself justifies.
-          const t = resolveType(pattern.TypeAnnotation);
-          if (t) {
-            declare(pattern.Name, t);
-          }
-        } else if (positionType) {
-          // An unannotated binding inherits only the facts its position establishes.
-          declare(pattern.Name, positionType);
-        } else {
-          declare(pattern.Name, null);
-        }
-        break;
+      case 'MatchBindingPattern': {
+        const type = pattern.TypeAnnotation ? narrow(resolveType(pattern.TypeAnnotation), true) : positionType;
+        declare(pattern.Name, type);
+        return type;
+      }
+      case 'MatchTypePattern':
+        return narrow(resolveType(pattern.Type), subPattern);
       case 'MatchOrPattern': {
         const bindingsOf = (alternative: ParseNode.MatchPattern) => pushBlock(() => {
-          declareMatchPatternBindings(alternative, positionType);
-          return new Map(frames[frames.length - 1].bindings);
+          const type = declareMatchPatternBindings(alternative, positionType, subPattern);
+          return { type, bindings: new Map(frames[frames.length - 1].bindings) };
         });
         const left = bindingsOf(pattern.Left);
         const right = bindingsOf(pattern.Right);
         for (const { Name } of PatternBindingNames(pattern.Left)) {
-          const a = left.get(Name);
-          const b = right.get(Name);
+          const a = left.bindings.get(Name);
+          const b = right.bindings.get(Name);
           declare(Name, a && b ? CanonicalizeType({ Kind: 'union', Members: [a, b] }) : null);
         }
-        break;
+        return left.type && right.type ? CanonicalizeType({ Kind: 'union', Members: [left.type, right.type] }) : null;
       }
-      case 'MatchAndPattern':
-        // A combinator does not change the POSITION, so both sides see the
-        // same type. `and` could narrow the right side by the left, which is
-        // the refinement still outstanding.
-        declareMatchPatternBindings(pattern.Left, positionType);
-        declareMatchPatternBindings(pattern.Right, positionType);
-        break;
+      case 'MatchAndPattern': {
+        const left = declareMatchPatternBindings(pattern.Left, positionType, subPattern);
+        return declareMatchPatternBindings(pattern.Right, left, true);
+      }
       case 'MatchNotPattern':
-        declareMatchPatternBindings(pattern.Operand, positionType);
+        declareMatchPatternBindings(pattern.Operand, positionType, subPattern);
         break;
       case 'MatchLiteralPattern': {
         // proposal-runtime-types: "a numeric literal takes the CONTEXTUAL TYPE
@@ -13196,6 +13274,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           numeric = lit.operator === '-' ? -magnitude : magnitude;
         }
         if (numeric !== null && positionType) {
+          const numericTypes = (positionType.Kind === 'union' ? positionType.Members : [positionType])
+            .filter((type) => type.Kind === 'primitive' && (isNumericValueTypeName(type.Name) || type.Name === 'number' || type.Name === 'bigint'));
+          if (numericTypes.length === 1) {
+            patternLiteralTypes.set(pattern, numericTypes[0]);
+            staticTypeIn(pattern.Literal, numericTypes[0]);
+          }
           const numericFamilies = ['uint', 'int', 'float16', 'float32', 'float64', 'float128'];
           if (positionType.Kind === 'primitive' && numericFamilies.includes(positionType.Name)
               && !fitsNumericType(numeric, positionType.Name, positionType.Arguments)) {
@@ -13221,30 +13305,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
       case 'MatchObjectPattern':
-        // The subject's type is WALKED ALONGSIDE the pattern: each member's
-        // sub-pattern sees the type of the property it names, so `{ a: let n }`
-        // against `{ a: uint8 }` types `n` as `uint8`. Passing the whole
-        // subject type down would have typed `n` as the OBJECT, which is worse
-        // than leaving it loose - it would be confidently wrong.
         pattern.Properties.forEach((prop) => {
-          let memberType: Known = null;
-          const shape = positionType && positionType.Kind === 'object'
-            ? positionType
-            : (positionType as { Structure?: TypeRecord } | undefined)?.Structure;
-          if (shape && shape.Kind === 'object') {
-            const declared = shape.Properties.find((pr) => pr.key === prop.Key);
-            memberType = declared ? (declared.type as Known) : null;
-          }
-          declareMatchPatternBindings(prop.Pattern, memberType ?? undefined);
+          const members = positionType?.Kind === 'union' ? positionType.Members : [positionType];
+          const types = members.map((member) => {
+            const shape = structureOf(member);
+            return shape?.Kind === 'object' ? shape.Properties.find((property) => property.key === prop.Key)?.type ?? null : null;
+          });
+          const memberType = types.length && types.every((type) => type)
+            ? CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] }) : null;
+          declareMatchPatternBindings(prop.Pattern, memberType, true);
         });
-        declareMatchPatternBindings(pattern.Rest ?? null, null);
+        declareMatchPatternBindings(pattern.Rest ?? null, null, true);
         break;
       case 'MatchArrayPattern': {
         // #sec-static-iteration-contribution: matching consumes the selected
         // iterator, whose output need not have the indexed storage's type.
         const contribution = StaticIterationContribution(positionType ?? null, structureOf);
         pattern.Elements.forEach((el, index) => {
-          declareMatchPatternBindings(el, contribution.positions?.[index] ?? contribution.element);
+          declareMatchPatternBindings(el, contribution.positions?.[index] ?? contribution.element, true);
         });
         break;
       }
@@ -13278,13 +13356,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         pattern.Elements.forEach((element, index) => {
           const types = fits.map((tuple) => tuple.Elements[index]?.Type ?? tuple.Elements.find((slot) => slot.Rest)?.Type)
             .filter((type): type is TypeRecord => !!type);
-          declareMatchPatternBindings(element, types.length ? CanonicalizeType({ Kind: 'union', Members: types }) : null);
+          declareMatchPatternBindings(element, types.length ? CanonicalizeType({ Kind: 'union', Members: types }) : null, true);
         });
         break;
       }
       default:
         break;
     }
+    return positionType;
   };
 
   const matchContexts = new WeakMap<ParseNode, Known>();
@@ -13328,7 +13407,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // are in scope, and forward the enclosing context to every value-producing arm.
   const checkMatchExpression = (me: ParseNode.MatchExpression, contextual: Known): Known => {
     if (contextual) matchContexts.set(me, contextual);
-    contextual = me.All ? null : contextual;
+    const armContext = me.All ? (contextual?.Kind === 'array' ? contextual.Element : null) : contextual;
     const cached = matchResults.get(me);
     if (cached?.revision === typeRevision && cached.contextual === contextual) return cached.type;
     if (checkingMatches.has(me)) return null;
@@ -13346,7 +13425,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const matched = arms.filter((arm) => structuralPatternCovers(clause.Pattern!, arm));
           if (matched.length) {
             selected = CanonicalizeType({ Kind: 'union', Members: matched });
-            if (!clause.Guard) {
+            if (!me.All && !clause.Guard) {
               const rest = NarrowFrom(remaining, selected);
               remaining = rest === empty ? neverType : rest;
             }
@@ -13357,10 +13436,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (clause.Guard) {
           walk(clause.Guard as ParseNode);
         }
-        if (clause.IsBlock) markCompletionContext(clause.Body, contextual);
+        if (clause.IsBlock) markCompletionContext(clause.Body, armContext);
         const result = clause.IsThrow ? neverType
-          : clause.IsBlock ? null : staticTypeIn(clause.Body, contextual);
-        if (!clause.IsThrow && !clause.IsBlock) requireAssignable(result, contextual);
+          : clause.IsBlock ? null : staticTypeIn(clause.Body, armContext);
+        if (!clause.IsThrow && !clause.IsBlock) requireAssignable(result, armContext);
         walk(clause.Body as ParseNode);
         armTypes.push(clause.IsThrow ? neverType : clause.IsBlock
           ? completionTypeOf((clause.Body as ParseNode.Block).StatementList) : result);
@@ -13369,7 +13448,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const enumAtoms = Atoms(subjectType ?? undefined);
       const chainAtoms = AtomsOfType(subjectType ?? undefined);
       const overEnumerators = enumAtoms.some((a) => a.owner !== undefined);
-      if (chainAtoms.length > 0 && !overEnumerators) {
+      if (!me.All && chainAtoms.length > 0 && !overEnumerators) {
         const coveredAtoms = new Set<string>();
         let chainDefault = false;
         for (const clause of me.Clauses) {
@@ -13400,7 +13479,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const matchEnumName = enumAtoms.length > 0 ? enumAtoms[0].owner ?? null : null;
       const matchInfo = matchEnumName ? { names: enumAtoms.map((a) => a.key) } : null;
-      if (matchInfo) {
+      if (!me.All && matchInfo) {
         const covered = new Set<string>();
         let hasDefault = false;
         for (const clause of me.Clauses) {
@@ -13448,7 +13527,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const atomDecls = sealedAtoms
         .map((a) => a.declaration)
         .filter((d): d is ParseNode => d !== undefined);
-      if (atomDecls.length > 0 && !overEnumerators) {
+      if (!me.All && atomDecls.length > 0 && !overEnumerators) {
         const coveredClasses = new Set<ParseNode>();
         let sealedDefault = false;
         for (const clause of me.Clauses) {
@@ -13477,12 +13556,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
-      const type = me.All || armTypes.some((arm) => !arm) ? null
-        : CanonicalizeType({ Kind: 'union', Members: armTypes as TypeRecord[] });
+      const adapt = (type: TypeRecord): TypeRecord => {
+        if (type.Kind === 'union') return CanonicalizeType({ Kind: 'union', Members: type.Members.map(adapt) });
+        return armContext && type.Kind === 'literal' && (IsAssignable(type, armContext) || literalFitsNumericType(type, armContext)) ? armContext : type;
+      };
+      const element = armTypes.some((arm) => !arm) ? null
+        : CanonicalizeType({ Kind: 'union', Members: (armTypes as TypeRecord[]).map(adapt) });
+      // #sec-pattern-static-semantics: collection length depends on evaluation;
+      // an unknown arm loses the element type, not the known array result.
+      const type: Known = me.All ? { Kind: 'array', Element: armContext ?? element ?? anyTypeRecord, Extent: 'dynamic' } : element;
       matchResults.set(me, { revision: typeRevision, contextual, type });
       return type;
     } finally {
       checkingMatches.delete(me);
+    }
+  };
+
+  const doGeneratorContexts = new Journaled<Known>();
+  const doGeneratorResults = new WeakMap<ParseNode, { revision: number, contextual: Known, type: Known }>();
+  const checkingDoGenerators = new Set<ParseNode>();
+
+  /** #sec-do-generator-expressions: context supplies Y/R/N; the body is a function boundary. */
+  const checkDoGenerator = (node: ParseNode.DoExpression, contextual: Known): Known => {
+    if (contextual) doGeneratorContexts.set(node, contextual);
+    const cached = doGeneratorResults.get(node);
+    if (cached?.revision === typeRevision && cached.contextual === contextual) return cached.type;
+    if (checkingDoGenerators.has(node)) return contextual;
+    checkingDoGenerators.add(node);
+    try {
+      if (!contextual) {
+        let position: ParseNode = node;
+        while (position.parent?.type === 'ParenthesizedExpression') position = position.parent;
+        const binding = position.parent as { Initializer?: ParseNode, TypeAnnotation?: ParseNode.TypeAnnotation } | undefined;
+        if (binding?.Initializer === position && binding.TypeAnnotation) contextual = resolveType(binding.TypeAnnotation.Type);
+        if (contextual) doGeneratorContexts.set(node, contextual);
+      }
+      const name = node.async ? 'AsyncGenerator' : 'Generator';
+      const expected = contextual?.Kind === 'nominal' && contextual.LibraryName === name ? contextual : null;
+      const checkingType = expected ?? libraryTypeRecord(name, [anyTypeRecord, anyTypeRecord, voidType]);
+      const contributions: GeneratorContributions = { yielded: [], returned: [] };
+      enterFunction([], null, node.GeneratorBody, true, undefined, checkingType, true, expected, contributions);
+      const join = (types: Known[], fallback: TypeRecord): TypeRecord => types.length === 0 ? fallback
+        : types.some((type) => !type || type.Kind === 'any') ? anyTypeRecord
+          : CanonicalizeType({ Kind: 'union', Members: types.map((type) => widen(type!)!) });
+      const returned = join(contributions.returned, voidType);
+      const result = expected ?? libraryTypeRecord(name, [join(contributions.yielded, neverType),
+        returned.Kind === 'primitive' && returned.Name === 'undefined' ? voidType : returned, voidType]);
+      if (result && !mentionsTypeParameter(result)) publishedReturnTypes.set(node, result);
+      doGeneratorResults.set(node, { revision: typeRevision, contextual, type: result });
+      return result;
+    } finally {
+      checkingDoGenerators.delete(node);
     }
   };
 
@@ -13655,7 +13779,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || n.type === 'ArrowFunction' || n.type === 'GeneratorExpression'
       || n.type === 'GeneratorDeclaration' || n.type === 'AsyncFunctionExpression'
       || n.type === 'AsyncArrowFunction' || n.type === 'ClassExpression'
-      || n.type === 'ClassDeclaration' || n.type === 'DoExpression') {
+      || n.type === 'ClassDeclaration' || n.type === 'AsyncFunctionDeclaration'
+      || n.type === 'AsyncGeneratorDeclaration' || n.type === 'AsyncGeneratorExpression'
+      || n.type === 'MethodDefinition' || n.type === 'GeneratorMethod' || n.type === 'AsyncMethod'
+      || n.type === 'AsyncGeneratorMethod' || n.type === 'DoExpression' && (node as ParseNode.DoExpression).star) {
       return;
     }
     if (n.type === 'YieldExpression') {
@@ -14147,7 +14274,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *  - Returns inside a NESTED function belong to that function and are not
    *    collected; the walk stops at every function form.
    */
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' = 'return'): Known => {
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' | 'generator-return' = 'return'): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
@@ -14161,7 +14288,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && fn.type !== 'AsyncArrowFunction' && fn.type !== 'AsyncMethod') {
         return null;
       }
-    } else if (mode === 'yield') {
+    } else if (mode === 'yield' || mode === 'generator-return') {
       // #sec-inference-and-function-forms: a generator's _Y_ is the join of what
       // its `yield` operands contribute. The walk is the same one the return
       // contributions use - it stops at a nested function for the same reason -
@@ -14263,11 +14390,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!n || typeof n !== 'object' || unknown) {
           return;
         }
+        if (PatternScopeOf(n).length && !activePatternScopes.has(n)) {
+          withPatternScope(n, () => collect(n));
+          return;
+        }
         if (n.type === 'ArrowFunction' || n.type === 'FunctionExpression' || n.type === 'FunctionDeclaration'
           || n.type === 'GeneratorExpression' || n.type === 'GeneratorDeclaration'
+          || n.type === 'AsyncGeneratorExpression' || n.type === 'AsyncGeneratorDeclaration'
           || n.type === 'AsyncFunctionExpression' || n.type === 'AsyncFunctionDeclaration'
           || n.type === 'AsyncArrowFunction' || n.type === 'MethodDefinition'
-          || n.type === 'ClassDeclaration' || n.type === 'ClassExpression') {
+          || n.type === 'GeneratorMethod' || n.type === 'AsyncGeneratorMethod' || n.type === 'AsyncMethod'
+          || n.type === 'ClassDeclaration' || n.type === 'ClassExpression'
+          || n.type === 'DoExpression' && n.star) {
           return;
         }
         if (mode === 'yield') {
@@ -14289,7 +14423,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (derivesFromDeclaration(y.AssignmentExpression as ParseNode, t)) {
               anchorage.anchored = true;
             }
-            contributions.push(widen(t));
+            const yielded = fn.type === 'AsyncGeneratorMethod' ? awaitedElementType(t) ?? t : t;
+            contributions.push(widen(yielded));
             // Fall through: a `yield` may contain another in its operand.
           }
         } else if (n.type === 'LexicalDeclaration' || n.type === 'VariableStatement') {
@@ -14487,7 +14622,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               (anchorage.origins ??= []).push({ type: widen(t) as TypeRecord, from: origin });
             }
           }
-          if (mode === 'resolve' && t.Kind === 'nominal' && t.LibraryName === 'Promise'
+          if ((mode === 'resolve' || mode === 'generator-return' && fn.type === 'AsyncGeneratorMethod')
+              && t.Kind === 'nominal' && t.LibraryName === 'Promise'
               && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
             // A promise contribution contributes what it RESOLVES with: an
             // async function returning a promise resolves with that promise's
@@ -15598,7 +15734,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return type;
   };
 
-  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null) => {
+  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null, contributions?: GeneratorContributions) => {
     frames.push(emptyFrame());
     varFrames.push(frames[frames.length - 1]);
     // #sec-annotations-on-the-remaining-function-forms: a generator's return
@@ -15645,8 +15781,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : (asyncResolution as Known | null) ?? declaredForReturn);
     // `declaredForReturn` above is `returnAnnotation ? … : contextualReturn`, so
     // the origin is known HERE and nowhere downstream.
-    returnContextIsContextual.push(!returnAnnotation && !!contextualReturn);
+    returnContextIsContextual.push(!generatorType && !returnAnnotation && !!contextualReturn);
     generatorTypes.push(generatorType ?? null);
+    generatorContributions.push(contributions ?? null);
     asyncReturns.push((!!resumable && !generatorType) || (generatorType?.Kind === 'nominal' && generatorType.LibraryName === 'AsyncGenerator'));
     returnsProven.push(true);
     let index = 0;
@@ -15766,6 +15903,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     returnTypes.pop();
     returnContextIsContextual.pop();
     generatorTypes.pop();
+    generatorContributions.pop();
     asyncReturns.pop();
     varFrames.pop();
     frames.pop();
@@ -15831,8 +15969,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return unknownPosition ? [] : [{ value: arg }];
     });
-    const placed = BindNamedArguments(slots, items, (remaining, values) =>
-      assignArguments(remaining, values.map((value) => staticType(value) ?? anyTypeRecord)));
+    const placed = BindNamedArguments(slots, items, (remaining, values) => {
+      const unambiguous = remaining.every((parameter) => !parameter.Rest && !parameter.Optional);
+      return assignArguments(remaining, values.map((value, index) => {
+        const position = remaining[index]?.Type;
+        return (unambiguous && position && !mentionsTypeParameter(position)
+          ? staticTypeIn(value, position) : staticType(value)) ?? anyTypeRecord;
+      }));
+    });
     const { groups } = placed;
     if (placed.error === 'unknown-name') {
       errors.push(Throw.StaticTypeError('no parameter named $1 for this call', Value(placed.name!)).Value as ObjectValue);
@@ -15847,10 +15991,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const checkedCallSignatures = new WeakMap<object, SignatureRecord>();
-  const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
-  if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
-    const supplied = expandValueSpreads(c.Arguments);
-    let sig: { Parameters: readonly ParameterRecord[] } | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
+  // #sec-published-return-types: selection uses declared signatures alone;
+  // result inference and argument checking ask the same resolver in the current context.
+  const selectCallSignature = (c: object, supplied: readonly ParseNode[], callee: TypeRecord & { Kind: 'function' }, n: ParseNode, diagnose: boolean): SignatureRecord | null => {
+    let sig: SignatureRecord | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
     const namedNames = supplied.filter((a): a is ParseNode.NamedArgument => a.type === 'NamedArgument').map((a) => a.Name);
     if (namedNames.length > 0) {
       // The signature in view is selected by names, as at the runtime named
@@ -15904,13 +16048,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // its position gave one. The return type does not participate
           // in ranking - it filters what ranking left tied - so this is
           // read only by that tie-break.
-          (n as unknown as { ContextualType?: TypeRecord }).ContextualType,
+          contextualCallTypes.get(n) ?? (n as unknown as { ContextualType?: TypeRecord }).ContextualType,
         );
-        if (resolution.Kind === 'none') {
+        if (diagnose && resolution.Kind === 'none') {
           // "It is a type error if ResolveOverload returns ~none~."
-          const completion = Throw.StaticTypeError('no declared signature accepts an argument of type $1', Value(displayType(argTypes[0] as TypeRecord))) as ThrowCompletion;
+          const completion = Throw.StaticTypeError('no declared signature accepts an argument of type $1', Value(argTypes.length ? displayType(argTypes[0] as TypeRecord) : '()')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
-        } else if (resolution.Kind === 'ambiguous') {
+        } else if (diagnose && resolution.Kind === 'ambiguous') {
           // "and it is a type error if it returns ~ambiguous~."
           const completion = Throw.StaticTypeError('the call is ambiguous between two declared signatures') as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
@@ -15920,6 +16064,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    return sig;
+  };
+
+  const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
+  if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
+    const supplied = expandValueSpreads(c.Arguments);
+    checkedCallSignatures.delete(c);
+    const sig = selectCallSignature(c, supplied, callee, n, true);
     if (sig) {
       checkedCallSignatures.set(c, sig as SignatureRecord);
       const chosen = sig;
@@ -17318,48 +17470,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           return builtinTypeRecord(ce.name, []) ?? undefined;
         })();
-        // A LANE INDEX IS IN RANGE. #sec-vector-types: a vector's lane count is
-        // part of its type - `float32x4` is `vector.<float32, 4>` - and the
-        // index of `a.lane.<9>()` is a written type ARGUMENT, so both sides are
-        // syntax and the run time's "lane 9 is out of range for a vector of 4
-        // lanes" is decidable here. It is the array bound rule one type over:
-        // `a[9]` on a `[4].<uint8>` has been an Early Error all along.
-        //
-        // A non-literal index is not judged, a computed lane being a run-time
-        // fact, and neither is a receiver whose type is unknown - `const a =
-        // float32x4(...)` has none, the const inference covering `new` alone.
-        {
-          const ta = c.CallExpression as unknown as {
-            type?: string, Expression?: ParseNode,
-            TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
-          };
-          const asMember = (ta.type === 'TypeArgumentsExpression' ? ta.Expression : undefined) as unknown as {
-            type?: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string },
-          } | undefined;
-          if (asMember?.type === 'MemberExpression' && asMember.IdentifierName?.name === 'lane'
-            && asMember.MemberExpression) {
-            const vec = staticType(asMember.MemberExpression);
-            const lanes = vec && vec.Kind === 'primitive' && (vec as { Name?: string }).Name === 'vector'
-              ? (vec as { Arguments?: readonly unknown[] }).Arguments?.[1]
-              : undefined;
-            if (typeof lanes === 'number') {
-              for (const written of ta.TypeArguments?.TypeArgumentList ?? []) {
-                // A written type argument is a |LiteralType|, the type position's
-                // node for a literal, not the |NumericLiteral| an expression
-                // position carries.
-                const lit = written as { type?: string, value?: unknown };
-                if (lit.type === 'LiteralType' && typeof lit.value === 'number'
-                  && (!Number.isInteger(lit.value) || lit.value < 0 || lit.value >= lanes)) {
-                  const completion = Throw.StaticTypeError(
-                    'lane $1 is out of range for a vector of $2 lanes',
-                    Value(String(lit.value)), Value(String(lanes)),
-                  ) as ThrowCompletion;
-                  errors.push(completion.Value as ObjectValue);
-                }
-              }
-            }
-          }
-        }
+        vectorCallType(n as ParseNode.CallExpression, true);
         // A VALUE OF A PRIMITIVE TYPE IS NOT CALLABLE. #sec-type-errors makes a
         // determinable violation an Early Error, and this one is as determinable
         // as they come: `let n: uint8 = uint8(1); n();` has the callee's type
@@ -17723,6 +17834,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(n.TemplateLiteral);
         return;
       }
+      case 'DoExpression':
+        if (n.star) checkDoGenerator(n, doGeneratorContexts.get(n) ?? null);
+        else walk(n.Block);
+        return;
       case 'YieldExpression': {
         // `yield*` DELEGATES to an iterable, so its operand is iterated and the
         // rule that decides that applies. `yield* n` for a `uint8` n was silent:
@@ -17749,7 +17864,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const produced = y.hasStar && y.AssignmentExpression
             ? iteratedElementType(y.AssignmentExpression)
             : y.AssignmentExpression ? staticTypeIn(y.AssignmentExpression, yieldedType) : undefinedType;
-          requireAssignable(generator?.Kind === 'nominal' && generator.LibraryName === 'AsyncGenerator' ? awaitedType(produced) : produced, yieldedType);
+          const yielded = generator?.Kind === 'nominal' && generator.LibraryName === 'AsyncGenerator' ? awaitedType(produced) : produced;
+          generatorContributions.at(-1)?.yielded.push(yielded);
+          requireAssignable(yielded, yieldedType);
         }
         walk(y.AssignmentExpression);
         return;
@@ -18021,6 +18138,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // reaches this arm, so nothing else compensates.
           const contribution = staticTypeIn(expr, context);
           const returned = asyncReturns.at(-1) ? awaitedType(contribution) : contribution;
+          generatorContributions.at(-1)?.returned.push(returned);
           const voidAdmitsUndefined = context && (context as { Kind?: string }).Kind === 'void'
             && returned && (returned as { Name?: string }).Name === 'undefined';
           // A CONTEXTUAL `void` requires nothing of the body. The target
@@ -18043,6 +18161,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           walk(expr);
         } else if (context) {
+          generatorContributions.at(-1)?.returned.push(undefinedType);
           if (context.Kind !== 'void') {
             requireAssignable(undefinedType, context);
           }
@@ -18192,7 +18311,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'MethodDefinition': {
         enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
-          undefined, undefined, undefined, contextualMethodReturns.get(n as ParseNode) ?? null);
+          contextualParameterTypes.get(n), undefined, undefined, contextualMethodReturns.get(n) ?? null);
         return;
       }
       case 'ClassDeclaration':
@@ -18561,9 +18680,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           const declared = gen
-            ? generatorDeclaredType(ann ? resolveType(ann.Type) : null, isAsyncGen, inferredGeneratorReturn)
+            ? generatorDeclaredType(ann ? resolveType(ann.Type) : contextualMethodReturns.get(n) ?? null, isAsyncGen, inferredGeneratorReturn)
             : null;
-          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncBody?: ParseNode }).AsyncBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, undefined, declared, true);
+          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncBody?: ParseNode }).AsyncBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, contextualParameterTypes.get(n), declared, true, contextualMethodReturns.get(n) ?? null);
           } finally {
             if (pushed) {
               typeParameterScopes.pop();

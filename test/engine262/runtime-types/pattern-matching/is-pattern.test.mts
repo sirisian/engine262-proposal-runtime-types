@@ -35,7 +35,9 @@ test('LITERAL patterns compare by MatchConstant', () => {
   expect(evaluated('String(null is null);')).toBe('true');
   // MatchConstant is *false* where the operands' TYPES differ - it is a third
   // relation beside SameValue and SameValueZero, not either of them.
-  expect(evaluated('String(uint8(5) is 5);')).toBe('false');
+  // #sec-pattern-static-semantics: a literal takes the known position type.
+  expect(evaluated('String(uint8(5) is 5);')).toBe('true');
+  expect(evaluated('String(uint8(5) is ${5});')).toBe('false');
   expect(evaluated('String("5" is 5);')).toBe('false');
 });
 

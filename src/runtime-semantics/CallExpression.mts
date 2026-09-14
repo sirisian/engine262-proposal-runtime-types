@@ -1,3 +1,4 @@
+import { specializedVectorMethod } from '../type-system/vector-specialization.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
 import { IsInTailPosition } from '../static-semantics/all.mts';
@@ -13,7 +14,9 @@ import { RuntimeTypeOf, BindTypeArgumentsInto } from '../type-system/runtime.mts
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import { displayType } from '../type-system/records.mts';
-import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee } from './RuntimeTypesDeclarations.mts';
+import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression } from './RuntimeTypesDeclarations.mts';
+import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
+import { EvaluatePropertyAccessWithExpressionKey, EvaluatePropertyAccessWithIdentifierKey } from './EvaluatePropertyAccess.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
@@ -148,6 +151,24 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // Answered BEFORE the callee is evaluated. `a.lane` is not a property a
   // vector has - evaluating it reaches the member refusal - so the whole form
   // has to be recognized from the node rather than from a function value.
+  const specializedVector = surroundingAgent.feature('runtime-types') ? specializedVectorMethod(memberExpr) : null;
+  let specializedMemberRef: ReferenceRecord | undefined;
+  if (specializedVector) {
+    const receiverRef = Q(yield* Evaluate(specializedVector.receiver));
+    const receiver = Q(yield* DereferenceReferenceValue(Q(yield* GetValue(receiverRef))));
+    if (receiver.type === 'Vector') {
+      const argList = Q(yield* ArgumentListEvaluation(args));
+      return Q(yield* vectorConstantLane(receiver as VectorValue, specializedVector.method,
+        specializedVector.arguments, argList as readonly Value[]));
+    }
+    // Property access preserves its evaluated base when the receiver has an ordinary method.
+    const member = specializedVector.member;
+    if (member.Expression) {
+      specializedMemberRef = Q(yield* EvaluatePropertyAccessWithExpressionKey(receiver, member.Expression, member.strict));
+    } else {
+      specializedMemberRef = X(EvaluatePropertyAccessWithIdentifierKey(receiver, member.IdentifierName!, member.strict));
+    }
+  }
   if (surroundingAgent.feature('runtime-types')
       && memberExpr.type === 'TypeArgumentsExpression'
       && ((memberExpr as unknown as { Expression?: { type?: string } }).Expression)?.type === 'MemberExpression') {
@@ -194,21 +215,6 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         return Q(yield* Call(method, receiver, [Value(start), Value(start + count)]));
       }
     }
-    if (methodName === 'lane' || methodName === 'withLane'
-        || methodName === 'swizzle' || methodName === 'shuffle') {
-      const receiverRef = Q(yield* Evaluate(inner.MemberExpression));
-      const receiver = Q(yield* GetValue(receiverRef));
-      if (receiver.type === 'Vector') {
-        const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
-        const argList = Q(yield* ArgumentListEvaluation(args));
-        return Q(yield* vectorConstantLane(
-          receiver as VectorValue,
-          methodName as 'lane' | 'withLane' | 'swizzle' | 'shuffle',
-          typeArgs as readonly ParseNode.Type[],
-          argList as readonly Value[],
-        ));
-      }
-    }
   }
   // proposal-runtime-types #sec-span-type: `Span.<T>(buffer, byteOffset,
   // byteElementLength)` is a VIEW over bytes that already exist, and it is a
@@ -240,7 +246,11 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   }
   let ref;
   try {
-    ref = Q(yield* Evaluate(memberExpr));
+    if (specializedMemberRef && specializedVector) {
+      ref = Q(yield* Evaluate_TypeArgumentsExpression(specializedVector.callee, specializedMemberRef)) as Value | ReferenceRecord;
+    } else {
+      ref = Q(yield* Evaluate(memberExpr));
+    }
   } finally {
     ClearTypeArgumentsCallee();
   }

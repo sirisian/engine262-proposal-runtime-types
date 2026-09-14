@@ -3406,6 +3406,13 @@ function returnAnnotationOf(fn: AnnotatedFunction): ParseNode.TypeAnnotation | n
   return annotation;
 }
 
+const contextualGeneratorFunctions = new WeakMap<object, TypeRecord>();
+
+/** #sec-do-generator-expressions: keep the instantiated contextual protocol per closure. */
+export function SetContextualGeneratorType(fn: object, type: TypeRecord): void {
+  contextualGeneratorFunctions.set(fn, type);
+}
+
 const generatorProtocolTypes = new WeakMap<object, TypeRecord>();
 
 /** #sec-generator-types: resolve the protocol while the generator's bindings are in scope. */
@@ -3440,11 +3447,8 @@ export function* EnforceYieldType(value: Value, isAsync: boolean): ValueEvaluato
   if (!fn) {
     return value;
   }
-  const annotation = returnAnnotationOf(fn as unknown as AnnotatedFunction);
-  if (!annotation) {
-    return value;
-  }
-  const declared = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+  const declared = Q(yield* returnTypeRecordOf(fn));
+  if (!declared) return value;
   // The async flag matters: `generatorDeclaredType` builds `AsyncGenerator` for
   // an async generator and `Generator` otherwise, and passing the wrong one
   // finds no _Y_ - which silently skipped the check for `async function*`.
@@ -3462,9 +3466,9 @@ export function* EnforceYieldType(value: Value, isAsync: boolean): ValueEvaluato
 /** A sync delegate yields a result object; its `.value` crosses the Y boundary. */
 export function* EnforceDelegatedYield(result: ObjectValue): ValueEvaluator<ObjectValue> {
   const fn = surroundingAgent.runningExecutionContext.Function;
-  if (!returnAnnotationOf(fn as unknown as AnnotatedFunction)) {
-    return result;
-  }
+  if (!fn) return result;
+  const declared = Q(yield* returnTypeRecordOf(fn));
+  if (!declared) return result;
   const value = Q(yield* Get(result, Value('value')));
   const converted = Q(yield* EnforceYieldType(value, false));
   if (SameValue(value, converted)) {
@@ -4386,6 +4390,11 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
       ReturnType = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
     }
   }
+  const code = (fn as { ECMAScriptCode?: { type?: string } }).ECMAScriptCode;
+  if (ReturnType && (code?.type === 'GeneratorBody' || code?.type === 'AsyncGeneratorBody')) {
+    // #sec-generator-types: the callable returns the protocol, not a yielded value.
+    ReturnType = generatorDeclaredType(ReturnType, code.type === 'AsyncGeneratorBody') ?? undefined;
+  }
   return {
     Parameters: params,
     Function: fn,
@@ -4850,6 +4859,8 @@ export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeR
  * a generic function's annotation names a parameter that is not bound yet.
  */
 export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null> {
+  const contextual = contextualGeneratorFunctions.get(fn);
+  if (contextual) return contextual;
   const annotation = returnAnnotationOf(fn as AnnotatedFunction);
   if (!annotation) {
     // A CONCISE arrow body never produces a `return` completion, so the return

@@ -1,3 +1,5 @@
+import { vectorSpecialization, VectorConstantIndexOf, vectorIndexOf } from './vector-specialization.mts';
+import { TypeNodeToTypeRecord, spreadElementsOf } from './runtime.mts';
 import {
   Value, VectorValue, JSStringValue, ObjectValue, type PropertyKeyValue,
 } from '../value.mts';
@@ -262,6 +264,23 @@ export function* vectorConstantLane(
     return Q(Throw.TypeError('$1 is not a member of this vector', Value(method))) as Value;
   }
 
+  const indices: number[] = [];
+  for (const arg of typeArgs) {
+    const constant = VectorConstantIndexOf(arg);
+    if (constant !== undefined) {
+      indices.push(constant);
+      continue;
+    }
+    const record = Q(yield* TypeNodeToTypeRecord(arg));
+    const elements = (arg as { IsSpread?: boolean }).IsSpread ? spreadElementsOf(record) : [record];
+    if (!elements) return Q(Throw.TypeError('$1', Value('a spread lane argument must be a tuple or an array of stated extent')));
+    for (const element of elements) {
+      indices.push(vectorIndexOf(element) ?? NaN);
+    }
+  }
+  const specialization = vectorSpecialization(v.TypeRecord as TypeRecord, method, indices)!;
+  if (specialization.error) return Q(Throw.TypeError('$1', Value(specialization.error)));
+
   // proposal-runtime-types #sec-vector-permutation. `swizzle` names a lane of
   // the receiver for each lane of its result and `shuffle` draws from two
   // sources, where "an index below N selects that lane of the receiver, and an
@@ -270,10 +289,6 @@ export function* vectorConstantLane(
   // The result's lane count is the NUMBER OF INDICES rather than the
   // receiver's, so a permutation narrows and widens as readily as it reorders.
   if (method === 'swizzle' || method === 'shuffle') {
-    const bound = method === 'shuffle' ? shape.laneCount * 2 : shape.laneCount;
-    if (typeArgs.length < 1) {
-      return Q(Throw.TypeError('$1 takes one lane index', Value(method))) as Value;
-    }
     let other: VectorValue | undefined;
     if (method === 'shuffle') {
       const supplied = args[0];
@@ -283,15 +298,7 @@ export function* vectorConstantLane(
       other = supplied as VectorValue;
     }
     const lanes: Value[] = [];
-    for (const arg of typeArgs) {
-      const at = laneIndexOf(arg);
-      if (at === undefined || at >= bound) {
-        return Q(Throw.TypeError(
-          'lane $1 is out of range for a vector of $2 lanes',
-          Value(at === undefined ? '?' : String(at)),
-          Value(String(shape.laneCount)),
-        )) as Value;
-      }
+    for (const at of indices) {
       lanes.push(at < shape.laneCount
         ? v.lanes[at] as Value
         : (other as VectorValue).lanes[at - shape.laneCount] as Value);
@@ -303,30 +310,7 @@ export function* vectorConstantLane(
     } as unknown as TypeRecord));
   }
 
-  if (typeArgs.length !== 1) {
-    return Q(Throw.TypeError('$1 takes one lane index', Value(method))) as Value;
-  }
-  // The index is written as a type argument because it is a value generic in
-  // the design - `lane<I: uint32>()` - so it arrives as a type node and its
-  // literal value is read from it rather than evaluated.
-  // The index arrives as a LiteralType, not a NumericLiteral: it is written in
-  // a TYPE argument position, so the parser reads it as the literal TYPE of
-  // that number rather than as an expression. `negated` carries the sign, which
-  // a lane index may not have.
-  const node = typeArgs[0] as unknown as { type?: string, kind?: string, value?: unknown, negated?: boolean };
-  const index = node?.type === 'LiteralType' && node.kind === 'number' && !node.negated
-    ? node.value as number
-    : undefined;
-  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
-    return Q(Throw.TypeError('$1 takes one lane index', Value(method))) as Value;
-  }
-  if (index >= shape.laneCount) {
-    return Q(Throw.TypeError(
-      'lane $1 is out of range for a vector of $2 lanes',
-      Value(String(index)),
-      Value(String(shape.laneCount)),
-    )) as Value;
-  }
+  const index = indices[0];
   if (method === 'lane') {
     return v.lanes[index] as Value;
   }
@@ -384,16 +368,6 @@ export function isBitLaneType(laneType: TypeRecord): boolean {
     && laneType.Name === 'uint'
     && laneType.Arguments.length === 1
     && laneType.Arguments[0] === 1;
-}
-
-
-/** The lane index a type argument names, or undefined where it is not one. */
-function laneIndexOf(node: ParseNode.Type): number | undefined {
-  const literal = node as unknown as { type?: string, kind?: string, value?: unknown, negated?: boolean };
-  return literal?.type === 'LiteralType' && literal.kind === 'number' && !literal.negated
-    && Number.isInteger(literal.value as number) && (literal.value as number) >= 0
-    ? literal.value as number
-    : undefined;
 }
 
 

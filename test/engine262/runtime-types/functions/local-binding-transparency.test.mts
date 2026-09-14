@@ -311,13 +311,14 @@ test('an object literal initializer is read for the transparency', () => {
 });
 
 test('the object shape is conservative where it cannot read a member', () => {
-  // A spread, a computed key, and a method each yield NOTHING rather than an
+  // A spread and a computed key each yield NOTHING rather than an
   // object type that omits what could not be read - such a type would describe
   // a value with fewer members than it has, and the contribution would state
   // it.
   expectNotInferred('const base = { p: g() }; const o = { ...base }; return o.p;');
   expectNotInferred('const k = "p"; const o = { [k]: g() }; return o.p;');
-  expectNotInferred('const o = { m() { return g(); } }; return o.m();');
+  // #sec-inference-and-function-forms: a method publishes an anchored result.
+  expectInferred('const o = { m() { return g(); } }; return o.m();');
   // A `let` holding a literal that the function reassigns publishes nothing,
   // for the reason every other reassigned binding does.
   expectNotInferred('let o = { p: g() }; o = { p: 5 }; return o.p;');

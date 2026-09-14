@@ -1,3 +1,6 @@
+import { SetContextualGeneratorType } from '../abstract-ops/runtime-types.mts';
+import { contextualTypeFor } from '../type-system/runtime.mts';
+import { PublishedReturnTypeOf } from '../type-system/check.mts';
 import { Value, Descriptor } from '../value.mts';
 import {
   EnsureCompletion, Q, X, type Completion, type ValueCompletion, type ValueEvaluator,
@@ -100,6 +103,10 @@ function* EvaluateDoGenerator(node: ParseNode.DoExpression): ValueEvaluator {
     scope,
     privateScope,
   );
+  const contextual = contextualTypeFor(node);
+  const protocol = contextual?.Kind === 'nominal' && contextual.LibraryName === (node.async ? 'AsyncGenerator' : 'Generator')
+    ? contextual : PublishedReturnTypeOf(node);
+  if (protocol) SetContextualGeneratorType(closure, protocol);
   const prototype = X(OrdinaryObjectCreate(surroundingAgent.intrinsic(protoIntrinsic)));
   X(DefinePropertyOrThrow(closure, Value('prototype'), Descriptor({
     Value: prototype,

@@ -141,7 +141,24 @@ export function contextualTypeFor(node: object | undefined): TypeRecord | undefi
     }
     const pt = (parent as { type?: string }).type;
     const p = parent as { ShortCircuitExpression?: object, Expression?: object, ExpressionList?: readonly object[] };
-    const transparent = pt === 'ParenthesizedExpression'
+    // #sec-completiontypeof: context reaches only the value-producing tails.
+    const completion = parent as { Expression?: object, StatementList?: readonly ParseNode[],
+      Statement_a?: object, Statement_b?: object, LabelledItem?: object, Block?: object,
+      Catch?: object, CatchClauses?: readonly object[], CaseBlock?: object,
+      CaseClauses_a?: readonly object[], CaseClauses_b?: readonly object[], DefaultClause?: object, star?: boolean };
+    const statements = completion.StatementList;
+    const last = statements?.at(-1);
+    const tail = last?.type === 'BreakStatement' && !last.LabelIdentifier ? statements?.at(-2) : last;
+    const completionChild = pt === 'ExpressionStatement' && completion.Expression === n
+      || (pt === 'Block' || pt === 'CaseClause' || pt === 'DefaultClause') && tail === n
+      || pt === 'IfStatement' && (completion.Statement_a === n || completion.Statement_b === n)
+      || pt === 'LabelledStatement' && completion.LabelledItem === n
+      || pt === 'TryStatement' && (completion.Block === n || completion.Catch === n || completion.CatchClauses?.includes(n))
+      || pt === 'Catch' && completion.Block === n
+      || pt === 'SwitchStatement' && completion.CaseBlock === n
+      || pt === 'CaseBlock' && (completion.DefaultClause === n || completion.CaseClauses_a?.includes(n) || completion.CaseClauses_b?.includes(n))
+      || pt === 'DoExpression' && !completion.star && completion.Block === n;
+    const transparent = completionChild || pt === 'ParenthesizedExpression'
       || (pt === 'ConditionalExpression' && n !== p.ShortCircuitExpression)
       || pt === 'LogicalANDExpression' || pt === 'LogicalORExpression' || pt === 'CoalesceExpression'
       || (pt === 'CommaOperator' && p.ExpressionList !== undefined && p.ExpressionList[p.ExpressionList.length - 1] === n);
