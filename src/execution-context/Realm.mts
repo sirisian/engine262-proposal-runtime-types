@@ -1,4 +1,5 @@
 import { AddRestrictedFunctionProperties, type Intrinsics } from '../abstract-ops/realms.mts';
+import { RegisterGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { bootstrapAggregateError } from '../intrinsics/AggregateError.mts';
 import { bootstrapAggregateErrorPrototype } from '../intrinsics/AggregateErrorPrototype.mts';
 import { bootstrapAbstractModuleSource } from '../intrinsics/AbstractModuleSource.mts';
@@ -656,5 +657,21 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       Enumerable: Value.false,
       Configurable: Value.true,
     })));
+  }
+  if (surroundingAgent.feature('runtime-types')) {
+    for (const name of ['Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'SoA', 'Composite', 'ThreadLocal'] as const) {
+      const constructor = realmRec.Intrinsics[`%${name}%`];
+      if (constructor) RegisterGenericBuiltin(constructor);
+    }
+    for (const [owner, names] of [
+      ['JSON', ['parse']], ['Math', ['random']], ['Promise', ['withResolvers']],
+      ['Reflect', ['getReflection', 'getByIndex', 'getMetadata']], ['SoA', ['withCapacity']],
+    ] as const) {
+      const object = realmRec.Intrinsics[`%${owner}%`];
+      for (const name of names) {
+        const fn = object?.properties.get(Value(name))?.Value;
+        if (fn) RegisterGenericBuiltin(fn as ObjectValue);
+      }
+    }
   }
 }

@@ -52,9 +52,21 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   // proposal-runtime-types: an argument list with named arguments is resolved
   // against the called function's parameter names, so where the syntax is present
   // and the callee is an ordinary function the callability check is taken first
-  // and the arguments are mapped to positions. The positional path is unchanged.
+  // and the arguments are mapped to positions. Defaults in the declared
+  // function type use the same binder even for a positional call.
+  let signature;
+  if (surroundingAgent.feature('runtime-types') && Array.isArray(args)
+      && ref instanceof ReferenceRecord && ref.Base instanceof EnvironmentRecord) {
+    const holder = ref.Base as unknown as { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined }, DeclarativeRecord?: { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined } } };
+    const binding = holder.bindings?.get(ref.ReferencedName) ?? holder.DeclarativeRecord?.bindings?.get(ref.ReferencedName);
+    if (binding?.declaredType !== undefined) {
+      const named = (args as ParseNode.Arguments).filter((a) => a.type === 'NamedArgument').map((a) => (a as ParseNode.NamedArgument).Name);
+      signature = signatureInView(binding.declaredType, named);
+    }
+  }
   const argsIsNamed = surroundingAgent.feature('runtime-types')
-    && Array.isArray(args) && hasNamedArguments(args as ParseNode.Arguments);
+    && Array.isArray(args) && (hasNamedArguments(args as ParseNode.Arguments)
+      || signature?.Parameters.some((p) => p.Initial !== undefined) === true);
   // proposal-runtime-types #sec-conversions: a call whose callee is a TYPE OBJECT
   // is a conversion, and its argument is evaluated IN that type's context.
   //
@@ -137,17 +149,6 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     // position with the interface's default, so `(a, b) => b` receives
     // `('5', 10)`. Without a declared type in view, the callee's own parameter
     // list is read, as before.
-    let signature;
-    if (ref instanceof ReferenceRecord && ref.Base instanceof EnvironmentRecord) {
-      const holder = ref.Base as unknown as { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined }, DeclarativeRecord?: { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined } } };
-      const binding = holder.bindings?.get(ref.ReferencedName) ?? holder.DeclarativeRecord?.bindings?.get(ref.ReferencedName);
-        if (binding?.declaredType !== undefined) {
-        const named = (args as ParseNode.Arguments)
-          .filter((a) => (a as { type?: string }).type === 'NamedArgument')
-          .map((a) => (a as unknown as { Name: string }).Name);
-        signature = signatureInView(binding.declaredType, named);
-      }
-    }
     argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func, signature));
   }
   // 6. If tailPosition is true, perform PrepareForTailCall().
@@ -155,7 +156,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     PrepareForTailCall();
   }
   // 7. Let result be Call(func, thisValue, argList).
-  // proposal-runtime-types (PLAN-v3 Q2-c, calls): the CALL's own contextual
+  // proposal-runtime-types #sec-contextual-types: the call's own contextual
   // type - read from its position, which this expression node names - is
   // handed to the callee, whose body binds its type parameters from it before
   // the arguments (#sec-constructing-a-generic-class, the same ladder for a

@@ -46,6 +46,8 @@ export interface PropertyTypeRecord {
    * of one key did not intern together.
    */
   readonly initial?: Value;
+  /** Source of an unevaluated default, retained by the static checker. */
+  readonly InitializerNode?: ParseNode;
 }
 
 /**
@@ -353,8 +355,8 @@ export interface TupleElementRecord {
    * The run time evaluates the initializer — `sec-array-and-tuple-types`' "a
    * tuple's trailing position may carry a default" needs the VALUE, to fill the
    * position — and that evaluation is a generator step. `resolveType` in the
-   * checker is synchronous and cannot take it, so [[Initial]] there is always
-   * ~none~ however the type was written.
+   * checker is synchronous and cannot take it, so [[Initial]] can remain
+   * ~none~ for a default whose expression has not been evaluated.
    *
    * The ARITY rule does not need the value, only the fact: a tuple's minimum
    * length is its positions less its trailing defaults. This field carries that
@@ -362,6 +364,8 @@ export interface TupleElementRecord {
    * evaluate or the record carry a half-built value.
    */
   readonly DeclaredDefault?: boolean;
+  /** Source of the default until the pre-evaluation check can evaluate it. */
+  readonly InitializerNode?: ParseNode;
 }
 
 /**

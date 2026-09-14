@@ -440,7 +440,7 @@ function packElementTypeOf(constraint: TypeRecord): TypeRecord | null {
  * takes the type of its position, so `0` joins a `[].<uint32>` run as it fills
  * a `uint32` parameter; the binding's conversion is the exact judgment after).
  */
-function packElementAdmits(record: TypeRecord, elementBound: TypeRecord): boolean {
+export function packElementAdmits(record: TypeRecord, elementBound: TypeRecord): boolean {
   if (IsAssignable(record, elementBound)) {
     return true;
   }
@@ -463,7 +463,7 @@ function packElementAdmits(record: TypeRecord, elementBound: TypeRecord): boolea
  * rule the split used, so a converted value element passes as its scalar twin
  * does. A constraint that is no collection at all is the E2 type error.
  */
-function packConstraintRefuses(elements: readonly TypeRecord[], constraint: TypeRecord): boolean {
+export function packConstraintRefuses(elements: readonly TypeRecord[], constraint: TypeRecord): boolean {
   if (constraint.Kind === 'array') {
     const extent = (constraint as { Extent?: number | null }).Extent;
     if (typeof extent === 'number' && elements.length !== extent) {
@@ -1289,7 +1289,7 @@ function builderSiteMentioning(formals: readonly ParseNode[], paramName: string)
 }
 
 /**
- * proposal-runtime-types (PLAN-v3 Q6): the ARGUMENTS the shared inference core
+ * proposal-runtime-types #sec-inference-through-results: the ARGUMENTS the shared inference core
  * reads, behind an oracle.
  *
  * One matching rule, two callers. The runtime binds a generic call's or
@@ -1327,7 +1327,7 @@ export function valueArguments(args: readonly Value[]): InferenceArguments {
     length: args.length,
     * typeOf(i) {
       // A callable argument's type is its signature, as RuntimeTypeOf now
-      // answers at any depth (PLAN-callable Q1); the case this once carried by
+      // answers at any depth (#sec-function-types); the case this once carried by
       // hand for a top-level callback is the same path.
       return RuntimeTypeOf(Q(yield* referent(i)));
     },
@@ -1678,7 +1678,7 @@ export function* InferGenericBindingsFrom(
         // `any` here instead gave `new Registry()` a `Registry.<any>` the
         // program never named and could not see it had - an unchecked
         // specialization by accident - and `f<A, B>(x: A)` a `B` that admitted
-        // everything. (PLAN-v3 Q4.) The message names the parameter and the
+        // everything. (#sec-bindtypearguments). The message names the parameter and the
         // remedy.
         if (bound === null) {
           const kinded = ((tp as { Arity?: number }).Arity ?? 0) > 0;
@@ -2374,7 +2374,7 @@ function runtimeObjectType(value: ObjectValue, seen: Set<ObjectValue>): TypeReco
   // #sec-runtimetypeof, the callable step: "If value is callable and is not a
   // Type Object, return the ~function~ Type Record whose [[Signatures]] are its
   // declared signatures" - a step OF RuntimeTypeOf, so it holds at every depth
-  // (PLAN-callable Q1): `{ f: (x: uint8) => 1 }` is `{ f: (x: uint8) => … }`,
+  // (#sec-function-types): `{ f: (x: uint8) => 1 }` is `{ f: (x: uint8) => … }`,
   // an array of callbacks is an array of their signatures, and a generic call
   // binds through a callable property as it binds through a callback argument.
   // Walking a function's own enumerable properties instead answered `{}` for
@@ -2436,7 +2436,7 @@ function makeObjectType(): TypeRecord {
 }
 
 /**
- * PLAN-callable Q2, Q4, Q5: a callable's ~function~ Type Record, derived on
+ * #sec-function-type-identity-and-subtyping: a callable's ~function~ Type Record, derived on
  * first demand and cached on the function object.
  *
  * Deriving a signature needs the evaluator - an annotation resolves through
@@ -2459,7 +2459,7 @@ function makeObjectType(): TypeRecord {
  * (#sec-inferred-return-types), both as Reflect.typeOf has always reported
  * them; this is that construction, moved to where every reader shares it.
  *
- * One slot per function object (Q4): a closure's captured frame and
+ * One slot per function object: a closure's captured frame and
  * environment are fixed at creation, so the answer does not vary by caller.
  */
 export function SignatureTypeOf(value: ObjectValue): TypeRecord {
@@ -2960,7 +2960,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // Field-wise regardless of LAYOUT: a class holding a `string` field has
       // no layout and still has a default, so this reads the field list rather
       // than the layout walk's result.
-      // proposal-runtime-types (PLAN-v3 Q7-a): an INSTANTIATION's default is an
+      // proposal-runtime-types (#sec-type-references): an INSTANTIATION's default is an
       // instance of the specialization, with its prototype. The annotation record
       // for `A.<uint8>` carries the declaration's constructor until the
       // specialization exists, and a default built on that prototype reported
@@ -3982,8 +3982,8 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // RuntimeTypeOf now answers for a callable, and the admission of an
       // untyped one being #sec-issignaturesubtype step 1 (an [[Untyped]]
       // signature is the catch-all). Callability alone admitted a
-      // `(x: string) => string` at a `(x: uint8) => uint8` slot (PLAN-callable
-      // P12, P27); the checker refused the same where it could see it.
+      // `(x: string) => string` at a `(x: uint8) => uint8` slot; the checker
+      // refused the same where it could see it.
       if (!IsCallable(value)) {
         return false;
       }
@@ -4919,7 +4919,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         if (baseRecord.Kind === 'nominal') {
           const declParamsC = (baseRecord.Declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })?.TypeParameters?.TypeParameterList;
           // proposal-runtime-types #sec-parameterized-types, #sec-type-references
-          // (PLAN-v3 Q7-a): a parameter no argument reaches "takes its
+          // (#sec-type-references): a parameter no argument reaches "takes its
           // |TypeParameterDefault|; it is a type error where a parameter has
           // none". That is one rule for three spellings - a trailing position
           // left empty (`Grid.<8>` is `Grid.<8, 4>`), the empty list `A.<>`, and

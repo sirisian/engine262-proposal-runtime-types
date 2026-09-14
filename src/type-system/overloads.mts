@@ -402,13 +402,7 @@ function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[])
     if (!param) {
       return null;
     }
-    // A rest parameter's element type is not read here, so an argument it
-    // receives matches at the catch-all tier.
-    if (param.Rest) {
-      tiers.push(Tier.CatchAll);
-      continue;
-    }
-    const tier = argumentTier(argTypes[i], param.Type);
+    const tier = argumentTier(argTypes[i], param.Rest ? restElementType(param.Type) : param.Type);
     if (tier === null) {
       return null;
     }
@@ -521,6 +515,7 @@ function literalRank(t: TypeRecord): number | undefined {
 function compareByLiteralRank(
   a: { sig: OverloadSignature, tiers: readonly Tier[] },
   b: { sig: OverloadSignature, tiers: readonly Tier[] },
+  argTypes: readonly TypeRecord[],
 ): number {
   let sign = 0;
   const positions = Math.min(a.tiers.length, b.tiers.length);
@@ -528,8 +523,10 @@ function compareByLiteralRank(
     if (a.tiers[i] !== Tier.Literal || b.tiers[i] !== Tier.Literal) {
       continue;
     }
-    const aType = a.sig.Parameters[i]?.Type;
-    const bType = b.sig.Parameters[i]?.Type;
+    const ap = parameterReceiving(a.sig.Parameters, argTypes, i);
+    const bp = parameterReceiving(b.sig.Parameters, argTypes, i);
+    const aType = ap?.Rest ? restElementType(ap.Type) : ap?.Type;
+    const bType = bp?.Rest ? restElementType(bp.Type) : bp?.Type;
     if (!aType || !bType) {
       continue;
     }
@@ -562,17 +559,26 @@ function compareTiers(a: readonly Tier[], b: readonly Tier[]): number {
   return 0;
 }
 
-/**
- * Whether a signature has a rest parameter. A signature that matches a call using
- * its fixed parameters alone is more specific than one that matches only by
- * absorbing arguments into a rest parameter, so where two signatures are otherwise
- * equally ranked the fixed one is preferred.
- */
-function hasRest(sig: OverloadSignature): boolean {
-  // ANY rest, not only a trailing one. The
-  // tiebreak is about matching by absorption rather than by fixed parameters,
-  // and where a rest sits has nothing to do with that.
-  return sig.Parameters.some((p) => p.Rest);
+/** The parameter receiving an argument under SequenceAssignment. */
+export function parameterReceiving(params: readonly ParameterRecord[], args: readonly TypeRecord[], index: number): ParameterRecord | undefined {
+  const assigned = assignArguments(params, args);
+  if (!assigned) return undefined;
+  const slot = slotReceiving(assigned, index);
+  return slot === -1 ? undefined : params[slot];
+}
+
+/** #sec-overload-resolution: fixed-position specificity is pointwise. */
+function compareFixedPositions(a: OverloadSignature, b: OverloadSignature, args: readonly TypeRecord[]): number {
+  let sign = 0;
+  for (let i = 0; i < args.length; i += 1) {
+    const ap = parameterReceiving(a.Parameters, args, i);
+    const bp = parameterReceiving(b.Parameters, args, i);
+    if (!ap || !bp || ap.Rest === bp.Rest) continue;
+    const here = ap.Rest ? 1 : -1;
+    if (sign !== 0 && sign !== here) return 0;
+    sign = here;
+  }
+  return sign;
 }
 
 /** The outcome of resolving a call against a set of signatures. */
@@ -625,7 +631,7 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
     // signature carrying no declared return is left alone here rather than
     // filtered out.
     if (contextualType !== undefined
-        && sig.ReturnType !== undefined
+        && sig.ReturnType !== undefined && sig.ReturnType !== null
         && !IsAssignable(sig.ReturnType, contextualType)) {
       continue;
     }
@@ -634,36 +640,14 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
   if (viable.length === 0) {
     return { Kind: 'none' };
   }
-  let best = viable[0];
-  let tie = false;
-  for (let i = 1; i < viable.length; i += 1) {
-    let cmp = compareTiers(viable[i].tiers, best.tiers);
-    if (cmp === 0) {
-      // Equal by tier: a signature matching on its fixed parameters is more
-      // specific than one matching only by absorbing arguments into a rest
-      // parameter, so the fixed signature is preferred and the tie is resolved.
-      const iRest = hasRest(viable[i].sig);
-      const bestRest = hasRest(best.sig);
-      if (iRest !== bestRest) {
-        cmp = iRest ? 1 : -1;
-      }
-    }
-    if (cmp === 0) {
-      // #sec-literal-overload-ranking: an untyped literal can take either
-      // parameter's type, so both score Tier.Literal and the tiers tie. The
-      // ranking is the second key, and the clause's own example is this one:
-      // "Given `f(a: float32)` and `f(a: uint32)`, the call `f(1)` selects the
-      // `float32` signature."
-      cmp = compareByLiteralRank(viable[i], best);
-    }
-    if (cmp < 0) {
-      best = viable[i];
-      tie = false;
-    } else if (cmp === 0) {
-      tie = true;
-    }
-  }
-  if (tie) {
+  const compare = (a: typeof viable[number], b: typeof viable[number]) =>
+    compareTiers(a.tiers, b.tiers)
+      || compareByLiteralRank(a, b, argTypes)
+      || compareFixedPositions(a.sig, b.sig, argTypes);
+  // Specificity is a partial order: retain every undominated candidate so an
+  // incomparable signature cannot disappear merely because it was declared first.
+  const best = viable.filter((candidate) => !viable.some((other) => compare(other, candidate) < 0));
+  if (best.length !== 1) {
     // Every candidate here already passed the contextual test above, so this
     // separates only what that test could not: signatures carrying NO declared
     // return, which viability leaves alone. Where one of those ties with a
@@ -671,18 +655,17 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
     // taken; where two remain, the call is ~ambiguous~, which is what
     // #sec-overloading-on-return-type says of a tie the context cannot break.
     if (contextualType) {
-      const surviving = viable.filter(
-        (candidate) => compareTiers(candidate.tiers, best.tiers) === 0
-          && candidate.sig.ReturnType !== undefined
+      const surviving = best.filter(
+        (candidate) => candidate.sig.ReturnType !== undefined && candidate.sig.ReturnType !== null
           && IsAssignable(candidate.sig.ReturnType, contextualType),
       );
-        if (surviving.length === 1) {
+      if (surviving.length === 1) {
         return { Kind: 'resolved', Signature: surviving[0]!.sig };
       }
     }
     return { Kind: 'ambiguous' };
   }
-  return { Kind: 'resolved', Signature: best.sig };
+  return { Kind: 'resolved', Signature: best[0]!.sig };
 }
 
 export function operatorTableKey(e: ParseNode.OperatorDefinition): string {

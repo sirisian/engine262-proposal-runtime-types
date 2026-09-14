@@ -1,9 +1,10 @@
 import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
+import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
-import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses } from '../abstract-ops/runtime-types.mts';
+import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters } from '../abstract-ops/runtime-types.mts';
 import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
@@ -1920,7 +1921,7 @@ export function* MaterializeSpecialization(
 }
 
 /**
- * proposal-runtime-types (PLAN-v3 Q1, Q5): the DECLARATION of a generic class,
+ * proposal-runtime-types #sec-constructing-a-generic-class: the DECLARATION of a generic class,
  * where _ctor_ is that declaration's own constructor and not one of its
  * specializations; undefined for anything else.
  *
@@ -1952,7 +1953,7 @@ export function GenericClassDeclarationOf(ctor: Value): ParseNode.ClassDeclarati
 }
 
 /**
- * proposal-runtime-types (PLAN-v3 Q2-c): the bindings a construction's
+ * proposal-runtime-types #sec-constructing-a-generic-class: the bindings a construction's
  * CONTEXTUAL type supplies before its arguments are looked at.
  *
  * #sec-contextual-types names the positions; generics.md "Inferring from the
@@ -2006,7 +2007,7 @@ export function contextualBindingsFor(
 }
 
 /**
- * proposal-runtime-types (PLAN-v3 Q1, Q2, Q4, Q5): the specialization a BARE
+ * proposal-runtime-types #sec-constructing-a-generic-class: the specialization a BARE
  * construction of a generic class constructs.
  *
  * The ladder: a binding the contextual type fixes, then one inferred from the
@@ -2061,7 +2062,7 @@ export function* SpecializationForConstruction(
 }
 
 /**
- * proposal-runtime-types (PLAN-v3 Q7-a): the specialization a generic class
+ * proposal-runtime-types #sec-constructing-a-generic-class: the specialization a generic class
  * names when written BARE in a type position - every parameter at its default -
  * built for `class S extends Box { }`, where the heritage is an expression
  * that evaluated to the declaration's constructor. A parameter with no default
@@ -2099,7 +2100,7 @@ export function* DefaultSpecializationOf(
 }
 
 /**
- * proposal-runtime-types (PLAN-v3 Q7-i): whether some object on _O_'s prototype
+ * proposal-runtime-types #sec-constructing-a-generic-class: whether some object on _O_'s prototype
  * chain is the prototype of a SPECIALIZATION of _declaration_.
  *
  * A specialization is a fresh class object whose prototype chain does not pass
@@ -2516,6 +2517,11 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     if (!asCallee && !kindedFn && fnParams && fnParams.length > 0 && !LookupClassType(value as unknown as object)) {
       return Q(yield* SpecializeGenericFunction(value, inspected.Value, node, fnParams));
     }
+    if (fnParams?.length && !LookupClassType(value as unknown as object)) return ref;
+    // MakeOverloadedFunction's dispatcher keeps the declarations in its slots;
+    // its own ECMAScriptCode is absent. A generic member can bind at the call.
+    const members = (value as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
+    if (asCallee && members?.some((member) => functionTypeParameters(member as never)?.length)) return ref;
   }
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
     const classType = LookupClassType(value as unknown as object);
@@ -2579,6 +2585,10 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     if (record.Kind === 'nominal') {
       return GetTypeObject(CanonicalizeType({ ...record, Arguments: argRecords }));
     }
+  }
+  if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
+    if (IsGenericBuiltin(value)) return ref;
+    return Throw.TypeError('type arguments require a generic function');
   }
   return ref;
 }

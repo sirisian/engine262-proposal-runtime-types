@@ -43,7 +43,7 @@ test('the pack reflects with its variadic flag', () => {
 
 // ---- B.2 ECS: ref-distribution, two same-bound packs, named runs, forwarding ----
 test('two same-bound adjacent type packs bind by names and positionally', () => {
-  const W = 'class Transform {} class Velocity {} class Frozen {} class World { each<...Cs extends [].<any>, ...Not extends [].<any>>(): string { return String(Reflect.getReflection(Cs).elements.length) + "/" + String(Reflect.getReflection(Not).elements.length); } }';
+  const W = 'class Component {} class Transform extends Component {} class Velocity extends Component {} class Frozen extends Component {} class World { each<...Cs extends [].<Component>, ...Not extends [].<Component>>(): string { return String(Reflect.getReflection(Cs).elements.length) + "/" + String(Reflect.getReflection(Not).elements.length); } }';
   expect(evaluated(`${W} new World().each.<Cs: Transform, Not: Frozen>();`)).toBe('1/1');
   expect(evaluated(`${W} new World().each.<Transform, Velocity>();`)).toBe('2/0');
 });

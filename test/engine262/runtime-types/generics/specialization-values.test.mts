@@ -58,7 +58,7 @@ test('a VALUE argument displays as it was written', () => {
   // class whose fields are all defaultable now HAS one - which is what this
   // assertion used to rely on.
   expectThrown('class D<N: uint32> { u: uint8 | string; b: [N].<uint8>; } let d: D.<4>;',
-    '"D.<4>" has no default value');
+    '"uint.<8> | string" has no default value');
 
   // A TYPE argument is unchanged, and so is a mixed list.
   expect(evaluated('class B<T> { v: T; } String(type B.<uint8>);')).toBe('B.<uint.<8>>');

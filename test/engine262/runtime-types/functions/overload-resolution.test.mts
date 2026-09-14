@@ -63,9 +63,12 @@ test('an optional parameter admits a shorter argument list', () => {
 
 // A rest parameter absorbs any number of trailing arguments.
 test('a rest parameter absorbs the trailing arguments in resolution', () => {
-  const two = 'function g(a: uint8): string { return "one"; } function g(a: uint8, ...rest: [].<uint8>): string { return "rest" + String(rest.length); }';
+  const two = 'function g(a: uint8): string { return "one"; } function g(...rest: [].<uint8>): string { return "rest" + String(rest.length); }';
   expect(evaluated(`${two} g((1 := uint8));`)).toBe('one');
-  expect(evaluated(`${two} g((1 := uint8), (2 := uint8), (3 := uint8));`)).toBe('rest2');
+  expect(evaluated(`${two} g((1 := uint8), (2 := uint8), (3 := uint8));`)).toBe('rest3');
+  // An empty rest receives no argument and cannot break a tie between two
+  // otherwise identical fixed prefixes.
+  expectStaticTypeError('function g(a: uint8): void {} function g(a: uint8, ...rest: [].<uint8>): void {}');
 });
 
 // -- length and name -----------------------------------------------------------

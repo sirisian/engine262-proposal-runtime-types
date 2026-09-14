@@ -5,7 +5,7 @@ import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability
 import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame, EvaluateRefinementPredicate, ValuePackView } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   typeDeclarationNamesInPass,
@@ -18,13 +18,13 @@ import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './record
 import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
   TakeDeferredMetadataChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
-  TakeDefaultRequirements, GenericWhereChecksOf,
+  TakeDefaultRequirements, GenericWhereChecksOf, DefaultConversionChecksOf, GenericDefaultChecksOf, SetEvaluatedGenericDefault,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
-import { inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
+import { Evaluate, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
 /**
  * Does this type's default depend on a CLASS declared in this source text?
@@ -305,6 +305,75 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (attempt.Type === 'normal') {
         preEvaluatedTypeDeclarations.add(item);
       }
+    }
+  }
+  // #sec-bindtypearguments: a default can read earlier bindings. Evaluate
+  // closed defaults per application, then publish the instantiated signature.
+  // Rechecking can expose a later default that depends on the one just filled.
+  for (;;) {
+    let resolved = false;
+    for (const check of GenericDefaultChecksOf(root)) {
+      const available = new Set(check.bindings.keys());
+      if (FirstNonEvaluableForm(check.node) || FirstFreeReference(check.node, available)) continue;
+      const context = surroundingAgent.runningExecutionContext;
+      const outer = context.LexicalEnvironment;
+      const scope = new DeclarativeEnvironmentRecord(null);
+      const frame = new Map<string, TypeRecord>();
+      for (const parameter of check.parameters) {
+        const bound = check.bindings.get(parameter.Name);
+        if (!bound) continue;
+        bindTypeParameter(frame, parameter.Name, bound, parameter.Declaration);
+        let value: Value;
+        if (parameter.Kind === 'value' && bound.Kind === 'literal') value = bound.Value;
+        else if (parameter.Kind === 'value' && bound.Kind === 'tuple') value = Q(yield* ValuePackView(bound));
+        else value = GetTypeObject(bound);
+        X(scope.CreateImmutableBinding(Value(parameter.Name), Value.true));
+        X(scope.InitializeBinding(Value(parameter.Name), value));
+      }
+      context.LexicalEnvironment = scope;
+      pushTypeParameterFrame(frame);
+      BeginFragmentEvaluation();
+      let result;
+      try {
+        result = EnsureCompletion(yield* TypeNodeToTypeRecord(check.node));
+      } finally {
+        EndFragmentEvaluation();
+        popTypeParameterFrame();
+        context.LexicalEnvironment = outer;
+      }
+      if (result.Type !== 'normal') {
+        if (IsBudgetExhausted()) return result;
+        return Throw.StaticTypeError('a generic default could not be evaluated: $1', Value(inspect(result.Value)));
+      }
+      SetEvaluatedGenericDefault(check.application, check.node, result.Value);
+      resolved = true;
+    }
+    if (!resolved) break;
+    const errors = RecheckAfterTypeEvaluation(root);
+    if (errors.length) return Throw(errors[0]);
+  }
+  for (const check of DefaultConversionChecksOf(root)) {
+    let value = check.value;
+    if (value === undefined && check.initializer) {
+      if (FirstNonEvaluableForm(check.initializer) || FirstFreeReference(check.initializer, new Set())) continue;
+      BeginFragmentEvaluation();
+      try {
+        const result = EnsureCompletion(yield* Evaluate(check.initializer));
+        if (result.Type !== 'normal') continue;
+        if (result.Value === undefined) continue;
+        const read = EnsureCompletion(yield* GetValue(result.Value));
+        if (read.Type !== 'normal') continue;
+        value = read.Value;
+      } finally {
+        EndFragmentEvaluation();
+      }
+    }
+    if (value === undefined) continue;
+    const converted = EnsureCompletion(yield* (check.checked
+      ? CheckedConvertValue(value, check.type) : ConvertValue(value, check.type)));
+    if (converted.Type !== 'normal') {
+      if (IsBudgetExhausted()) break;
+      return Throw.StaticTypeError('a default is not convertible to $1', Value(displayType(check.type)));
     }
   }
   for (const check of GenericWhereChecksOf(root)) {
@@ -768,7 +837,7 @@ function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Valu
       continue;
     }
     const portion = MetadataPortion(subject.Metadata, metaType);
-    // Q3: a `narrow` hook that THROWS leaves the binding un-narrowed rather than
+    // #sec-metadata-narrowing: a `narrow` hook that THROWS leaves the binding un-narrowed rather than
     // failing the program. `subtype` answers a JUDGMENT, so one that cannot be
     // made must refuse; `narrow` produces KNOWLEDGE, and the clause already
     // sanctions the outcome of learning nothing - a meta type defining no

@@ -13,11 +13,8 @@ import { evaluated, ok } from '../harness.mts';
  */
 
 test('6.5 a rest-carrying signature competes with a fixed one', () => {
-  // #sec-resolveoverload's own example: `f(a: float32)` and
-  // `f(...a: [].<float32>)` are ambiguous for a one-argument call, because "a
-  // default or a rest parameter expands a signature into a family of arities,
-  // and it is the family that must not collide". Declaring both is admitted;
-  // the fixed row wins the call it can take.
+  // #sec-resolveoverload: equal type ranks prefer an actual fixed position
+  // over an argument collected by a rest.
   expect(ok('function f(a: number): void {} function f(...a: [].<number>): void {}')).toBe(true);
   expect(evaluated(`
     function f(a: number) { return "fixed"; }

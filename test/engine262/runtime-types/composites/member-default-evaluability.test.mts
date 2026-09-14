@@ -29,16 +29,9 @@ test('and refuses the forms it excludes, by name', () => {
   expectStaticTypeError('type S = { p?: any = new Proxy({}, {}) };');
 });
 
-test('an interface member is held to the same rule, at a different moment', () => {
-  // An object type "is the inline form of an interface", so a default written in
-  // one is the default written in the other and every walk applies the test.
+test('an interface member is checked before evaluation, even when unused', () => {
   expect(ok('interface I { p?: uint8 = 9 }')).toBe(true);
-  expect(ok('interface I { p?: uint8 = eval("5") }')).toBe(false);
-  // WHEN differs, and the asymmetry is the checker's rather than the rule's: an
-  // object type is resolved where it is written, so a bad default there is an
-  // early error against the source, while an interface is resolved when it is
-  // USED, so an unused one is refused as the declaration runs instead. Both
-  // refuse; only the first is static.
-  expectStaticTypeError('type S = { p?: uint8 = eval("5") };');
-  expect(ok('interface I { p?: uint8 = eval("5") } let v: I = { };')).toBe(false);
+  expectStaticTypeError('interface I { p?: uint8 = eval("5") }');
+  expectStaticTypeError('function unused() { interface I { p?: uint8 = eval("5") } }');
+  expectStaticTypeError('interface I { p?: uint8 = eval("5") } let v: I = { };');
 });
