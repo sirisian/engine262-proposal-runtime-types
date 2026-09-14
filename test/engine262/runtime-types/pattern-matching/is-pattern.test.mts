@@ -68,11 +68,9 @@ test('COMBINATORS: not binds tightest, then and, then or', () => {
   expect(evaluated('String("s" is not uint8);')).toBe('true');
 });
 
-test('the forms still outstanding', () => {
-  // BINDINGS work: `is` creates a declarative environment for
-  // them exactly as a clause does. Their SCOPE - "in exactly the positions the
-  // truth of the test governs" - is still the checker's business.
-  expect(evaluated('String(1 is let x);')).toBe('true');
+test('bindings require governed positions and array patterns retain matching', () => {
+  // #sec-is-pattern: the successful match governs the right operand of &&.
+  expect(evaluated('String((1 is let x) && true);')).toBe('true');
   // ARRAY patterns, and the `[[Iterations]]` half of the cache with them.
   // `[1, 2]` currently parses as a TUPLE TYPE of two literal types, so the
   // answer coincides with what an array pattern would give - the same

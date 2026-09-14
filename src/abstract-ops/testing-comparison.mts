@@ -342,6 +342,7 @@ export function CopyValueClassInstance(v: Value): Value {
   const source = v as unknown as {
     ConstructedBy?: unknown[],
     TypedProperties?: Map<unknown, object>,
+    ReadonlyFields?: Map<unknown, unknown>,
     BrandTypeRecord?: TypeRecord,
   };
   // `OrdinaryGetPrototypeOf`, NOT `v.GetPrototypeOf()`: the slot is a GENERATOR
@@ -355,12 +356,17 @@ export function CopyValueClassInstance(v: Value): Value {
   const target = copy as unknown as {
     ConstructedBy?: unknown[],
     TypedProperties?: Map<unknown, object>,
+    ReadonlyFields?: Map<unknown, unknown>,
   };
   if (source.ConstructedBy !== undefined) {
     target.ConstructedBy = [...source.ConstructedBy];
   }
   if (source.TypedProperties !== undefined) {
     target.TypedProperties = new Map(source.TypedProperties);
+  }
+  // #sec-value-type-copying preserves the declaring constructor's readonly fields.
+  if (source.ReadonlyFields !== undefined) {
+    target.ReadonlyFields = new Map(source.ReadonlyFields);
   }
   if (source.BrandTypeRecord !== undefined) {
     Object.defineProperty(copy, 'BrandTypeRecord', {

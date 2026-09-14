@@ -122,21 +122,16 @@ test('THE SPECULATION DECLINES what a type can express', () => {
   expect(evaluated("String({ kind: 'c' } is { kind: 'a' | 'b' });")).toBe('false');
 });
 
-test('what the structural core still lacks', () => {
+test('structural bindings use governed positions', () => {
   const bindings = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  // BINDINGS and the REST binding need the scoping rule - "in scope in exactly
-  // the positions the truth of the test governs" - which is checker work.
-  expect(evaluated('String(1 is let x);')).toBe('true');
+  // #sec-is-pattern: a binding is visible only in a governed position.
+  expect(evaluated('String((1 is let x) && true);')).toBe('true');
   // A REST BINDING works in `is` position: it "collects the
   // remaining own enumerable members", meaning those the pattern did not NAME.
   expect(evaluated('let out = "X"; if (({ a: 1, b: 2, c: 3 }) is { a: 1, ...let rest }) { out = Object.keys(rest).join(","); } out;')).toBe('b,c');
   expect(evaluated('let out = "X"; if (({ a: 1, b: 2 }) is { a: _, ...let rest }) { out = String(rest.a); } out;')).toBe('undefined');
   expect(evaluated('let out = "X"; if (({ a: 1 }) is { a: 1, ...let rest }) { out = String(Object.keys(rest).length); } out;')).toBe('0');
-  // It does NOT yet work in a `match` CLAUSE: the pattern is read
-  // under the colon-terminates rule and the rest binding's `let` meets it. The
-  // exact failure is left unasserted because it is a host-level one, not a
-  // language error the suite should encode.
-  expect(evaluated('String(({ a: 1, b: 2 }) is { a: 1, ...let rest });')).toBe('true');
+  expect(evaluated('String((({ a: 1, b: 2 }) is { a: 1, ...let rest }) && true);')).toBe('true');
   // A PLAIN binding in a member position does work; the rest binding needs the
   // run-after-the-fixed-elements rule as well.
   expect(evaluated('String(match ({ a: 7 }) { when { a: let v }: v; default: 0; });')).toBe('7');

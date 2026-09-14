@@ -2,6 +2,8 @@ import type { ExecutionContextHostDefined, GCMarker } from '../host-defined/engi
 import { __ts_cast__ } from '../utils/language.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
+import type { DeclarativeEnvironmentRecord } from './Environment.mts';
 import {
   NullValue, type FunctionObject, Value, type GeneratorObject, type AsyncGeneratorObject, AbstractModuleRecord, type ScriptRecord, EnvironmentRecord, PrivateEnvironmentRecord, CallSite, PromiseCapabilityRecord, Realm,
   surroundingAgent,
@@ -54,6 +56,7 @@ export class ExecutionContext {
   // proposal-runtime-types #sec-generics: the specialization bindings a
   // suspended body resumes under, where this context runs one.
   TypeParameterFrame?: Map<string, TypeRecord>;
+  PatternEnvironments?: Map<ParseNode.IsExpression, DeclarativeEnvironmentRecord>;
 
   ScriptOrModule: AbstractModuleRecord | ScriptRecord | NullValue = Value.null;
 
@@ -90,6 +93,7 @@ export class ExecutionContext {
     e.VariableEnvironment = this.VariableEnvironment;
     e.LexicalEnvironment = this.LexicalEnvironment;
     e.PrivateEnvironment = this.PrivateEnvironment;
+    if (this.PatternEnvironments) e.PatternEnvironments = new Map(this.PatternEnvironments);
     e.HostDefined = this.HostDefined;
 
     e.callSite = this.callSite.clone(e);
@@ -106,6 +110,7 @@ export class ExecutionContext {
     m(this.LexicalEnvironment);
     m(this.PrivateEnvironment);
     m(this.promiseCapability);
+    for (const environment of this.PatternEnvironments?.values() ?? []) m(environment);
   }
 }
 

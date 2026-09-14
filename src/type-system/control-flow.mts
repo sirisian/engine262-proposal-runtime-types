@@ -78,21 +78,17 @@ export const canCompleteNormally = (
     }
     case 'TryStatement': {
       const block = n.Block as ParseNode | undefined;
-      const handler = (n.Catch as { Block?: ParseNode })?.Block;
+      const handlers = (n.CatchClauses as readonly ParseNode.Catch[] | undefined)
+        ?? (n.Catch ? [n.Catch as ParseNode.Catch] : []);
       const fin = (n.Finally as { Block?: ParseNode })?.Block ?? n.Finally as ParseNode | undefined;
       // A `finally` that cannot complete decides the whole statement.
       if (fin && !again(fin)) {
         return false;
       }
-      if (handler) {
-        return again(block) || again(handler);
-      }
-      return again(block);
+      return again(block) || handlers.some((handler) => again(handler.Block));
     }
     case 'WhileStatement': {
-      // `while (true)` with no reachable `break` cannot complete. A `break`
-      // anywhere inside is enough to assume it can, which is the conservative
-      // reading.
+      // #sec-divergence: only breaks leaving this loop permit completion.
       const test = n.Expression as { type?: string, value?: unknown } | undefined;
       const alwaysTrue = test?.type === 'BooleanLiteral' && test.value === true;
       if (!alwaysTrue) {
@@ -176,12 +172,8 @@ export const canCompleteNormally = (
     case 'LabelledStatement': {
       // A `break` naming the label resumes after the labelled statement, so it
       // completes normally however total the statement it labels is.
-      // `containsBreak` counts a labelled `break` as readily as an unlabelled
-      // one, which is what keeps this answer on the safe side: it can only push
-      // toward "can complete", and that withholds an error rather than raising
-      // a wrong one.
       const item = n.LabelledItem as ParseNode | undefined;
-      return again(item) || containsBreak(item);
+      return again(item) || containsBreak(item, (n.LabelIdentifier as ParseNode.LabelIdentifier).name);
     }
     default:
       return true;
@@ -189,28 +181,37 @@ export const canCompleteNormally = (
 };
 
 /** Whether a statement contains a `break` that could leave its enclosing loop. */
-export const containsBreak = (node: ParseNode | null | undefined): boolean => {
+export const containsBreak = (node: ParseNode | null | undefined, label?: string,
+  nestedBreakTargets = 0, localLabels: readonly string[] = []): boolean => {
   if (!node || typeof node !== 'object') {
     return false;
   }
   const n = node as ParseNode & Record<string, unknown>;
   if (n.type === 'BreakStatement') {
-    return true;
+    const target = (node as ParseNode.BreakStatement).LabelIdentifier?.name;
+    if (label !== undefined) return target === label;
+    return target === undefined ? nestedBreakTargets === 0 : !localLabels.includes(target);
   }
   // Not descending into a nested function, whose `break` is not this loop's.
   if (typeof n.type === 'string' && /Function|Arrow|Method|Class/.test(n.type)) {
     return false;
   }
+  // Nested loops and switches consume their own unlabelled breaks. A local
+  // labelled statement likewise consumes only breaks naming its label.
+  const depth = nestedBreakTargets + (['WhileStatement', 'DoWhileStatement', 'ForStatement',
+    'ForOfStatement', 'ForInStatement', 'ForAwaitStatement', 'SwitchStatement'].includes(n.type) ? 1 : 0);
+  const labels = n.type === 'LabelledStatement'
+    ? [...localLabels, (node as ParseNode.LabelledStatement).LabelIdentifier.name] : localLabels;
   for (const key of Object.keys(n)) {
     if (key === 'parent' || key === 'location') {
       continue;
     }
     const v = (n as Record<string, unknown>)[key];
     if (Array.isArray(v)) {
-      if (v.some((x) => containsBreak(x as ParseNode))) {
+      if (v.some((x) => containsBreak(x as ParseNode, label, depth, labels))) {
         return true;
       }
-    } else if (v && typeof v === 'object' && containsBreak(v as ParseNode)) {
+    } else if (v && typeof v === 'object' && containsBreak(v as ParseNode, label, depth, labels)) {
       return true;
     }
   }

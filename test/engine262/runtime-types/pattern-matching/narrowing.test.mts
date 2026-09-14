@@ -99,10 +99,9 @@ test('a binding in a STRUCTURAL position types from its slot', () => {
   const outcome5 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   expect(outcome5('function f(v: { a: uint8 }) { return match (v) { when { a: let n }: n; default: uint8(0); }; } f({ a: uint8(1) });')).toBe('ACCEPTED');
   expect(outcome5('function f(v: { a: uint8 }) { return match (v) { when { a: let n }: (() => { const s: string = n; return s; })(); default: ""; }; } f({ a: uint8(1) });')).toBe('StaticTypeError');
-  // A TUPLE subject types each element BY POSITION, so the second element's
-  // type is not the first's.
+  // #sec-static-iteration-contribution: mutable tuple storage does not constrain its iterator.
   expect(outcome5('function f(v: [uint8, string]) { return match (v) { when [let a, let b]: a; default: uint8(0); }; } f([uint8(1), "s"]);')).toBe('ACCEPTED');
-  expect(outcome5('function f(v: [uint8, string]) { return match (v) { when [let a, let b]: (() => { const s: string = a; return s; })(); default: ""; }; } f([uint8(1), "s"]);')).toBe('StaticTypeError');
+  expect(outcome5('function f(v: [uint8, string]) { return match (v) { when [let a, let b]: (() => { const s: string = a; return s; })(); default: ""; }; } f([uint8(1), "s"]);')).toBe('ACCEPTED');
   // The runtime is unchanged throughout.
   expect(evaluated('String(match ({ a: 7 }) { when { a: let n }: n; default: 0; });')).toBe('7');
   expect(evaluated('String(match ([1, 9]) { when [1, let b]: b; default: 0; });')).toBe('9');

@@ -8,6 +8,7 @@ import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.m
 import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
+import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import {
   type SignatureRecord, type MetadataRecord, type TypeRecord, type Known,
@@ -56,7 +57,7 @@ import {
 import {
   awaitedElementType, numericFamilyOf, isRangeFamilyName, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
 } from './std-signatures.mts';
-import { R, Throw } from '#self';
+import { R, Throw, wellKnownSymbols } from '#self';
 
 /**
  * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
@@ -120,6 +121,7 @@ interface Frame {
    * RUN TIME where `let a: uint8 = 300` reports before the program runs.
    */
   readonly constLiteralTypes: Map<string, TypeRecord>;
+  readonly constPropertyKeys: Map<string, string>;
   /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
   readonly constLiteralValues: Map<string, bigint>;
   /** The EXACT decimal value of a `const` whose initializer is a constant expression. */
@@ -160,7 +162,8 @@ function emptyFrame(): Frame {
   return {
     bindings: new Map(),
     constLiterals: new Set<string>(),
-    constLiteralTypes: new Map<string, TypeRecord>(), constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(),
+    constLiteralTypes: new Map<string, TypeRecord>(), constPropertyKeys: new Map<string, string>(),
+    constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(),
     letConstants: new Set<string>(),
     immutableNames: new Set<string>(),
     declaredNames: new Set<string>(),
@@ -187,6 +190,7 @@ function cloneFrame(frame: Frame): Frame {
     bindings: new Map(frame.bindings),
     constLiterals: new Set(frame.constLiterals),
     constLiteralTypes: new Map(frame.constLiteralTypes),
+    constPropertyKeys: new Map(frame.constPropertyKeys),
     constLiteralValues: new Map(frame.constLiteralValues),
     constDecimalValues: new Map(frame.constDecimalValues),
     immutableNames: new Set(frame.immutableNames),
@@ -2207,7 +2211,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
+  let typeRevision = 0;
+
   const declare = (name: string, t: Known, frame = frames[frames.length - 1]) => {
+    typeRevision += 1;
     frame.declaredNames.add(name);
     uninitializedVars.get(frame)?.delete(name);
     if (t) {
@@ -2219,6 +2226,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Record a NARROWING of a name, which an assignment may later invalidate. */
   const declareNarrowed = (name: string, t: Known) => {
+    typeRevision += 1;
     if (!t) {
       return;
     }
@@ -2252,6 +2260,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Drop any narrowing of a name, which an assignment to it invalidates. */
   const invalidateNarrowing = (name: string) => {
+    typeRevision += 1;
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const f = frames[i] as Frame & { narrowed?: Set<string> };
       if (f.narrowed?.has(name)) {
@@ -2524,15 +2533,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * read and not its own surroundings.
    */
   const classContext: string[] = [];
-
-  /**
-   * How many CONSTRUCTORS enclose the node being walked. A `readonly` member may
-   * be written through `this` where the class fills it - which is the
-   * constructor - and nowhere else, so the exemption `requireWritableMember`
-   * grants is gated on this rather than on being inside any method: `class C {
-   * readonly v: uint8 = 0; m() { this.v = 1; } }` is the rule's whole subject.
-   */
-  let constructorDepth = 0;
 
   // ---- diagnostics and provenance -----------------------------------
 
@@ -2900,6 +2900,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // #sec-contextual-types: a numeric literal within a numeric value type's
     // range converts losslessly at the boundary, so it is statically
     // assignable; the run-time boundary constructs the typed value.
+    if (erasedSource.Kind === 'union' && erasedSource.Members.every((member) =>
+      IsAssignable(member, erasedTarget) || literalFitsNumericType(member, erasedTarget))) return;
     if (literalFitsNumericType(erasedSource, erasedTarget)) {
       return;
     }
@@ -3034,7 +3036,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (expression.type === 'ParenthesizedExpression') {
       return memberKey({ Expression: expression.Expression });
     }
+    if (expression.type === 'MemberExpression' && expression.MemberExpression.type === 'IdentifierReference'
+        && expression.MemberExpression.name === 'Symbol' && !frames.some((frame) => frame.declaredNames.has('Symbol'))) {
+      const name = expression.IdentifierName?.name;
+      if (name && Object.hasOwn(wellKnownSymbols, name)) return wellKnownSymbols[name as keyof typeof wellKnownSymbols];
+    }
     if (expression.type === 'IdentifierReference') {
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        const key = frames[i].constPropertyKeys.get(expression.name);
+        if (key !== undefined) return key;
+        if (frames[i].declaredNames.has(expression.name)) break;
+      }
       const symbol = symbolConsts.get(expression.name);
       if (symbol) {
         return symbolKeyFor(symbol);
@@ -3081,75 +3093,74 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return from(staticType(node.MemberExpression));
   };
 
-  const requireWritableMember = (lhs: ParseNode | null | undefined) => {
-    if (!lhs || lhs.type !== 'MemberExpression') {
+  // #sec-typed-classes permits only the running declaring constructor to
+  // initialize a readonly field. Lexical capture of this grants no permission.
+  const constructorMayWrite = (member: ParseNode.MemberExpression): boolean => {
+    if (patternExpression(member.MemberExpression)?.type !== 'ThisExpression') return false;
+    let parent = member.parent;
+    while (parent && !/FunctionDeclaration|FunctionExpression|ArrowFunction|Method|ClassDeclaration|ClassExpression|OperatorDefinition/.test(parent.type)) parent = parent.parent;
+    if (parent?.type !== 'MethodDefinition') return false;
+    if (classElementKey(parent.ClassElementName) !== 'constructor') return false;
+    let owner = parent.parent;
+    while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression') owner = owner.parent;
+    if (!owner) return false;
+    const key = member.PrivateIdentifier?.name ?? memberKey(member);
+    return (owner.ClassTail.ClassBody ?? []).some((field) => field.type === 'FieldDefinition'
+      && classElementKey(field.ClassElementName) === key);
+  };
+
+  const classElementKey = (key: ParseNode.ClassElementName | null | undefined): string | SymbolValue | undefined => {
+    if (!key) return undefined;
+    if (key.type === 'PropertyName') return memberKey({ Expression: key.ComputedPropertyName });
+    if (key.type === 'IdentifierName' || key.type === 'PrivateIdentifier') return key.name;
+    return String(key.value);
+  };
+
+  const requireWritableMember = (expression: ParseNode | null | undefined) => {
+    const lhs = patternExpression(expression ?? undefined);
+    if (lhs?.type === 'IdentifierReference') {
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        if (frames[i].declaredNames.has(lhs.name)) {
+          if (patternBindingFrames.get(frames[i])?.has(lhs.name)) {
+            errors.push(Throw.StaticTypeError('$1 is an immutable pattern binding', Value(lhs.name)).Value as ObjectValue);
+          }
+          break;
+        }
+      }
       return;
     }
-    const m = lhs as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
-    // A SEALED INSTANCE CANNOT GAIN A MEMBER. #sec-typed-storage: a class with a
-    // typed field is "automatically sealed, as if PreventExtensions had been
-    // performed on each of its instances ... a property may not be added or
-    // removed". So `c.nope = 1` cannot work - and in sloppy mode a failed write
-    // is SILENT, so the program was simply wrong with no signal at all, which is
-    // the case an Early Error is worth most.
-    //
-    // The sealing is derived exactly as `typeCanBeHeldWeakly` derives it, from
-    // the declaration, so the two cannot disagree about which classes are
-    // sealed. `dynamic` classes, untyped classes and plain objects are all
-    // untouched.
-    //
-    // Only a NAMED member. A computed or symbol key names nothing the checker
-    // can see; a PRIVATE name is not a member access in this rule's sense and
-    // the member walk skips those keys, so they are never in the structure.
-    //
-    // The `this` form is included deliberately and is the most valuable of the
-    // three: `class C { v: uint8 = 0; m() { this.other = 1; } }` throws at run
-    // time, and the mistake is the class author's own.
-    const sealedReceiver = m.MemberExpression ? staticType(m.MemberExpression) : null;
-    const sealedName = m.IdentifierName as { name: string, type?: string } | null | undefined;
-    if (sealedReceiver && sealedReceiver.Kind === 'nominal' && sealedName
-        && sealedName.type !== 'PrivateIdentifier'
-        && !typeCanBeHeldWeakly(sealedReceiver as TypeRecord)) {
+    if (lhs?.type === 'SuperProperty') {
+      if (superMember(lhs)?.readonly) {
+        errors.push(Throw.StaticTypeError('a readonly member cannot be assigned').Value as ObjectValue);
+      }
+      return;
+    }
+    if (lhs?.type !== 'MemberExpression') return;
+    const m = lhs;
+    const sealedReceiver = staticType(m.MemberExpression);
+    const named = memberKey(m);
+    if (!m.PrivateIdentifier && sealedReceiver?.Kind === 'nominal' && named !== undefined
+        && !typeCanBeHeldWeakly(sealedReceiver) && !indexAccess(m)) {
       const sealedStructure = structureOf(sealedReceiver);
-      const named = sealedName.name;
-      // The DECLARATION is consulted where the structure does not carry the
-      // name, because the structure is a record of TYPED members: an accessor
-      // with no return annotation - `get w() { ... }` - contributes no type and
-      // so no Property, but the class plainly declares `w` and a write to it
-      // must not be refused. The structure answers "what type has this member";
-      // only the declaration answers "does this class have one".
-      const declaresName = (((sealedReceiver as unknown as {
-        Declaration?: { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null },
-      }).Declaration?.ClassTail?.ClassBody) ?? []).some((el) => {
-        const key = (el as unknown as { ClassElementName?: { name?: string, value?: string } | null }).ClassElementName;
-        return (key?.name ?? key?.value) === named;
-      });
-      if (sealedStructure && sealedStructure.Kind === 'object'
-          && !sealedStructure.Properties.some((p) => p.key === named)
-          && !declaresName
-          && (sealedStructure.IndexSignatures ?? []).length === 0) {
-        const completion = Throw.StaticTypeError('$1 is not a member of $2', Value(`"${named}"`), Value(displayType(sealedReceiver as TypeRecord))) as ThrowCompletion;
-        errors.push(completion.Value as ObjectValue);
+      const declaresName = (type: Known, seen = new Set<object>()): boolean => {
+        if (type?.Kind !== 'nominal' || seen.has(type)) return false;
+        seen.add(type);
+        const declaration = type.Declaration as ParseNode.ClassDeclaration | undefined;
+        return (declaration?.ClassTail?.ClassBody ?? []).some((element) => {
+          const key = (element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName;
+          return classElementKey(key) === named;
+        }) || declaresName((type as { Base?: Known }).Base ?? null, seen);
+      };
+      if (sealedStructure?.Kind === 'object'
+          && !sealedStructure.Properties.some((property) => property.key === named)
+          && !declaresName(sealedReceiver)
+          && sealedStructure.IndexSignatures.length === 0) {
+        errors.push(Throw.StaticTypeError('$1 is not a member of $2',
+          typeof named === 'string' ? Value(named) : named, Value(displayType(sealedReceiver))).Value as ObjectValue);
         return;
       }
     }
-    // A WRITE THROUGH `this` INSIDE A CONSTRUCTOR IS EXEMPT FROM THE READONLY
-    // RULE, and from that rule ONLY. A `readonly` field is filled by the class
-    // itself - `class C { readonly v: uint8; constructor() { this.v = 7; } }`
-    // is the form the modifier exists for. The rule is about what a class's
-    // USERS may write, and `constructorDepth` is what keeps the exemption to
-    // the constructor: `m() { this.v = 1; }` is a user of the field like any
-    // other.
-    //
-    // It sits BELOW the sealed-member judgment because the two are different
-    // questions. Returning before that one exempted the constructor from it as
-    // well, so `constructor() { this.other = 1; }` on a typed class was the one
-    // place an undeclared member could be added - the same write in a method or
-    // a getter being refused all along, and the instance being sealed a moment
-    // later either way.
-    if ((m.MemberExpression as { type?: string } | undefined)?.type === 'ThisExpression' && constructorDepth > 0) {
-      return;
-    }
+    if (constructorMayWrite(lhs)) return;
     if (lhs.PrivateIdentifier) {
       if (privateMember(lhs)?.readonly) {
         errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned', Value(lhs.PrivateIdentifier.name)).Value as ObjectValue);
@@ -3324,7 +3335,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return symbolKeyFor(declaration);
       }
     }
-    return undefined;
+    return computed ? memberKey({ Expression: computed as ParseNode }) : undefined;
   };
 
   // ---- interfaces ---------------------------------------------------
@@ -3471,7 +3482,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Identity is by [[Declaration]], so the record handed out here is the
     // same type the completed one denotes; only its members are filled in
     // later, and they are filled into the array this record already holds.
-    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
+    const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
     // An interface's INDEX SIGNATURES, filled beside its members from the
     // IndexSignature members the walk meets, so that `interface I { [k: string]:
     // int32 } let c: I = { x: "s" }` is refused: a signature parsed and then
@@ -3615,7 +3626,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         declaredIn.set(key, declarationIndex);
       }
-      if (key !== undefined && typeof key !== 'string') {
+      if (key !== undefined && typeof key !== 'string' && !tm.MethodSignature) {
         // A SYMBOL-keyed member, keyed by the minted Symbol of the `const` its
         // computed name resolves to. Recorded like any other member from here
         // on, which is what lets a use site be compared against it.
@@ -3646,11 +3657,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               tmInitial = it.Value;
             }
           }
-          Properties.push({ key: key as unknown as string, type: memberType, optional: !!tm.Optional, readonly: !!(tm as { Readonly?: boolean }).Readonly, initial: tmInitial });
+          Properties.push({ key, type: memberType, optional: !!tm.Optional, readonly: !!(tm as { Readonly?: boolean }).Readonly, initial: tmInitial });
         }
         continue;
       }
-      if (typeof key !== 'string') {
+      if (key === undefined) {
         // A COMPUTED key. §6.6 types one whose expression is a symbol literal -
         // a `const` bound to `Symbol(...)` - and nothing else can be typed at
         // all: a `let`, a parameter, or any other expression has no identity a
@@ -3928,13 +3939,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
     const wantStatic = want === 'static';
-    const Properties: { key: string, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
+    const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord, protected?: boolean, initial?: Value }[] = [];
     // Methods, accumulated per name because a method may be OVERLOADED exactly
     // as a function may. A getter contributes its return type as the
     // property's type, since that is what reading the property yields; a setter
     // contributes nothing yet, and is the natural next step for checking a
     // store through an accessor.
-    const methods = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
+    const methods = new Map<string | SymbolValue, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     /**
      * The class's ABSTRACT members, keyed the way the member push below keys
      * everything, so the inherited walk can find them by name.
@@ -3947,15 +3958,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
      * structure and there is nothing to reason about.
      */
     const abstractMembers = new Map<string, TypeRecord | null>();
-    const unusable = new Set<string>();
+    const unusable = new Set<string | SymbolValue>();
     // A class may declare MORE THAN ONE constructor, so this accumulates rather
     // than holds. Before the parser admitted a second, the last one written won
     // by overwriting; now the second would be silently discarded instead, which
     // is worse - it parses, type-checks, and never runs.
     const construct: { Parameters: ParameterRecord[] }[] = [];
-    const accessorKeys = new Set<string>();
-    const getterKeys = new Set<string>();
-    const setterTypes = new Map<string, TypeRecord>();
+    const accessorKeys = new Set<string | SymbolValue>();
+    const getterKeys = new Set<string | SymbolValue>();
+    const setterTypes = new Map<string | SymbolValue, TypeRecord>();
     for (const el of cls.ClassTail?.ClassBody ?? []) {
       if (el.type === 'AbstractMethodDefinition') {
         // A member is abstract because it has no body; the keyword is optional.
@@ -3980,11 +3991,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           UniqueFormalParameters?: readonly ParseNode[] | null,
           PropertySetParameterList?: readonly ParseNode[] | null,
         };
-        const key = md.ClassElementName?.name ?? md.ClassElementName?.value;
+        const key = classElementKey((el as ParseNode.MethodDefinition).ClassElementName);
         // Coerced: `static` is OPTIONAL on the node, so an absent one is
         // `undefined` and `undefined !== false` would skip every instance
         // method.
-        if (!!md.static !== wantStatic || typeof key !== 'string' || (md.ClassElementName?.type === 'PrivateIdentifier') !== privateNames) {
+        if (!!md.static !== wantStatic || key === undefined || (md.ClassElementName?.type === 'PrivateIdentifier') !== privateNames) {
           continue;
         }
         if (key === 'constructor') {
@@ -4207,8 +4218,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!!f.static !== wantStatic) {
         continue;
       }
-      const key = f.ClassElementName?.name ?? f.ClassElementName?.value;
-      if (typeof key !== 'string' || (f.ClassElementName?.type === 'PrivateIdentifier') !== privateNames) {
+      const key = classElementKey((el as ParseNode.FieldDefinition).ClassElementName);
+      if (key === undefined || (f.ClassElementName?.type === 'PrivateIdentifier') !== privateNames) {
         continue;
       }
       // A field with no annotation still declares a member: its type is the one
@@ -4701,6 +4712,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       constructSignatures.set(n, construct);
+    } else if (base?.Kind === 'nominal'
+      && !(cls.ClassTail?.ClassBody ?? []).some((element) => element.type === 'MethodDefinition'
+        && classElementKey(element.ClassElementName) === 'constructor')) {
+      // The default derived constructor forwards its arguments to the base.
+      const inherited = constructSignatures.get(base.Declaration as ParseNode);
+      if (inherited?.length) {
+        const contract = SubstituteTypeArguments({ Kind: 'function', Signatures: inherited.map((signature) => ({ ...signature, Return: instance })) } as TypeRecord,
+          base.Declaration as ParseNode, base.Arguments);
+        if (contract.Kind === 'function') constructSignatures.set(n, contract.Signatures.map((signature) => ({ Parameters: [...signature.Parameters] })));
+      }
     }
     // The RUNTIME builds its own nominal
     // record for this class - at ClassDeclaration, ClassExpression and
@@ -8271,7 +8292,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const staticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
+    return node ? withPatternScope(node, () => inferStaticTypeIn(node, contextual)) : null;
+  };
+
+  const inferStaticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
     if (node && expressionViewTypes.has(node)) return expressionViewTypes.get(node)!;
+    if (node?.type === 'MatchExpression') return checkMatchExpression(node, contextual);
     // PARENTHESES ARE TRANSPARENT. A contextual is recorded against the node
     // that reads it - the call, the object literal - and `( … )` is a node of
     // its own in between, so the literal inside is what is recorded against,
@@ -8297,6 +8323,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       inner = next;
     }
+    if (inner?.type === 'MatchExpression') return checkMatchExpression(inner, contextual);
     if (inner && contextual) {
       contextualCallTypes.set(inner, contextual);
     }
@@ -9056,6 +9083,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return view;
   };
 
+  // #sec-user-defined-operators: compound fallback uses the binary judgment,
+  // including literal propagation and the primitive operation's domain.
+  const compoundBinaryType = (node: ParseNode.AssignmentExpression): Known => {
+    const operator = node.AssignmentOperator.slice(0, -1);
+    const left = typedExpressionView(node.LeftHandSideExpression, locationType(node.LeftHandSideExpression));
+    const right = node.AssignmentExpression;
+    const forms: Record<string, object> = {
+      '+': { type: 'AdditiveExpression', AdditiveExpression: left, MultiplicativeExpression: right },
+      '-': { type: 'AdditiveExpression', AdditiveExpression: left, MultiplicativeExpression: right },
+      '*': { type: 'MultiplicativeExpression', MultiplicativeExpression: left, ExponentiationExpression: right },
+      '/': { type: 'MultiplicativeExpression', MultiplicativeExpression: left, ExponentiationExpression: right },
+      '%': { type: 'MultiplicativeExpression', MultiplicativeExpression: left, ExponentiationExpression: right },
+      '**': { type: 'ExponentiationExpression', UpdateExpression: left, ExponentiationExpression: right },
+      '<<': { type: 'ShiftExpression', ShiftExpression: left, AdditiveExpression: right },
+      '>>': { type: 'ShiftExpression', ShiftExpression: left, AdditiveExpression: right },
+      '>>>': { type: 'ShiftExpression', ShiftExpression: left, AdditiveExpression: right },
+      '&': { type: 'BitwiseANDExpression', A: left, B: right },
+      '^': { type: 'BitwiseXORExpression', A: left, B: right },
+      '|': { type: 'BitwiseORExpression', A: left, B: right },
+    };
+    return forms[operator] ? staticType({ ...forms[operator], operator, MultiplicativeOperator: operator } as unknown as ParseNode) : null;
+  };
+
   // #sec-user-defined-operators: the first operator table in the prototype
   // chain declaring this key supplies the overload set, as LookupClassOperator does.
   const declaredOperator = (receiver: Known, key: string): Known => {
@@ -9136,7 +9186,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return get || set ? { get, set, arguments: indices.map((index, i) => literalOperand(index) ? index : typedExpressionView(index, types[i])) } : null;
   };
 
-  const staticType = (node: ParseNode): Known => {
+  const staticType = (node: ParseNode): Known => withPatternScope(node, () => inferStaticType(node));
+
+  const inferStaticType = (node: ParseNode): Known => {
     if (expressionViewTypes.has(node)) {
       return expressionViewTypes.get(node)!;
     }
@@ -9246,6 +9298,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           frames.pop();
         }
       }
+      case 'MatchExpression':
+        return checkMatchExpression(node, matchContexts.get(node) ?? null);
       case 'DoExpression': {
         const d = node as ParseNode.DoExpression;
         if (!d.star) {
@@ -9287,13 +9341,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'UnaryExpression': {
         const unary = node as unknown as { operator?: string, UnaryExpression?: ParseNode };
         const inner = unary.UnaryExpression;
+        if (unary.operator === 'typeof') return makePrimitive('string');
+        if (unary.operator === 'void') return undefinedType;
+        if (unary.operator === 'delete') return makePrimitive('boolean');
+        const operand = inner ? staticType(inner) : null;
+        const declared = unary.operator ? declaredOperator(operand, `unary ${unary.operator}`) : null;
+        if (declared) return operatorResult(declared, [], node);
+        if (unary.operator === '!') return operand && operand.Kind !== 'any' && operand.Kind !== 'union'
+          && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
         // #table-family-operations: a binary floating-point type "does not
         // define bitwiseNOT, the shifts, and the bitwise operations". The binary
         // forms are judged in the arithmetic arm; `~` is the unary one, and the
         // run time refused it alone - `~(1.5 := float32)` answered -2 before it
         // did.
         if (unary.operator === '~' && inner) {
-          const operand = staticType(inner);
           if (operand && operand.Kind === 'primitive'
             && /^float(16|32|64|128)$/.test((operand as { Name?: string }).Name ?? '')) {
             const completion = Throw.StaticTypeError(
@@ -9311,7 +9372,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ? { Kind: 'literal', Value: Value(signed), Base: makePrimitive('bigint') }
             : { Kind: 'literal', Value: Value(signed), Base: makePrimitive('number') };
         }
-        // Any other unary form has no literal type.
+        const numeric = erasedKeepingBrand(operand);
+        const base = numeric?.Kind === 'parameterized' ? numeric.Base : numeric;
+        if (base?.Kind === 'primitive'
+          && (isNumericValueTypeName(base.Name) || ['number', 'bigint', 'vector', 'complex', 'rational'].includes(base.Name))) {
+          return numeric;
+        }
+        // ToNumber/ToNumeric on other primitive values produces a Number.
+        if (base?.Kind === 'primitive' && ['string', 'boolean', 'null', 'undefined'].includes(base.Name)) {
+          return makePrimitive('number');
+        }
+        return null;
+      }
+      case 'UpdateExpression': {
+        const target = node.LeftHandSideExpression ?? node.UnaryExpression;
+        if (!target) return null;
+        const type = staticType(target);
+        const operand = type?.Kind === 'reference' ? type.Target : type;
+        const declared = declaredOperator(operand, `unary ${node.operator}`);
+        if (declared) {
+          const result = operatorResult(declared, [], node);
+          return node.LeftHandSideExpression ? operand : result;
+        }
+        const numeric = erasedKeepingBrand(operand);
+        const base = numeric?.Kind === 'parameterized' ? numeric.Base : numeric;
+        if (base?.Kind === 'primitive' && (isNumericValueTypeName(base.Name) || base.Name === 'bigint' || base.Name === 'number')) {
+          return numeric;
+        }
         return null;
       }
       case 'NumericLiteral': {
@@ -9355,6 +9442,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // correctly once the reference has its type: false against `uint8`,
         // true against `uint8 | undefined`.
         const referenced = (node as { name: string }).name;
+        checkPatternBindingReference(node);
         if (referenced === 'undefined' && !typeParameterInScope(referenced)) {
           return undefinedType as Known;
         }
@@ -9396,6 +9484,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // frame is the class currently being walked, and `super` is its base.
       case 'SuperProperty':
         return superMember(node)?.type ?? null;
+      case 'SuperCall':
+        return thisTypeFrames.at(-1) ?? null;
       case 'ThisExpression':
         // #sec-this-adoption: within
         // an adopting literal's body, "`this` has that type". Outside one there
@@ -9510,6 +9600,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'AssignmentExpression': {
         const declared = declaredOperator(staticType(node.LeftHandSideExpression), node.AssignmentOperator);
         if (declared) return operatorResult(declared, [node.AssignmentExpression], node);
+        if (!['=', '||=', '&&=', '??='].includes(node.AssignmentOperator)) return compoundBinaryType(node);
+        if (node.AssignmentOperator !== '=') {
+          const left = staticType(node.LeftHandSideExpression);
+          const right = staticType(node.AssignmentExpression);
+          return left && right ? joinTypes(left, right) : null;
+        }
         return staticType(node.AssignmentExpression);
       }
 
@@ -10573,8 +10669,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // what `typed-storage`'s "the rule reaches only positions" asserts. So an
         // index outside the positions is exactly the legal case for a delete, and
         // refusing it as "not an index" would conflate two operations.
-        const isDeleteOperand = ((node as unknown as { parent?: { type?: string, operator?: string } }).parent?.type === 'UnaryExpression')
-          && ((node as unknown as { parent?: { operator?: string } }).parent?.operator === 'delete');
+        let target: ParseNode = node;
+        while (target.parent?.type === 'ParenthesizedExpression') target = target.parent;
+        const isDeleteOperand = target.parent?.type === 'UnaryExpression' && target.parent.operator === 'delete';
         // A COMPUTED access, `a[i]`. This fell through to ~any~, so indexing a
         // typed array was untyped: `let b: boolean = a[0]` type-checked on a
         // `[4].<uint32>`. Element WRITES were checked all along, which made the
@@ -10708,7 +10805,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `new C()` produces an instance of C, so the class's instance type is
         // the expression's type - which is what lets `new C().x` be read at the
         // field's declared type.
-        const target = (node as { MemberExpression?: ParseNode }).MemberExpression;
+        const target = patternExpression((node as { MemberExpression?: ParseNode }).MemberExpression);
         if (target && target.type === 'IdentifierReference') {
           const targetName = (target as { name: string }).name;
           const declared = classTypeOf(targetName);
@@ -12988,6 +13085,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * is what a discriminated chain needs.
    */
   const structuralPatternCovers = (pattern: ParseNode, atom: TypeRecord): boolean => {
+    switch (pattern.type) {
+      case 'MatchWildcardPattern': return true;
+      case 'MatchBindingPattern': {
+        const annotation = pattern.TypeAnnotation ? resolveType(pattern.TypeAnnotation) : null;
+        return annotation ? IsSubtype(atom, annotation, []) : !pattern.TypeAnnotation;
+      }
+      case 'MatchAndPattern': return structuralPatternCovers(pattern.Left, atom) && structuralPatternCovers(pattern.Right, atom);
+      case 'MatchOrPattern': return structuralPatternCovers(pattern.Left, atom) || structuralPatternCovers(pattern.Right, atom);
+      case 'MatchArrayPattern': {
+        const { positions } = StaticIterationContribution(atom, structureOf);
+        return !!positions && positions.length === pattern.Elements.length
+          && pattern.Elements.every((element, index) => !element || structuralPatternCovers(element, positions[index]));
+      }
+      default: break;
+    }
     const p = pattern as unknown as { type?: string, Type?: ParseNode.Type, Literal?: ParseNode };
     // A LITERAL pattern covers the atom whose value it names.
     // #sec-match-exhaustiveness reads "*true*, *false*, `null`, and `undefined`
@@ -13017,16 +13129,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return patternType ? IsSubtype(atom, patternType, []) : false;
   };
 
-  /**
-   * Declare what a pattern binds, at the type the pattern established.
-   *
-   * An ANNOTATED binding types as its annotation - `let x: uint8` makes `x` a
-   * `uint8` - which is the narrowing a pattern can always justify. An
-   * UNANNOTATED binding is left undeclared rather than declared as `any`, so it
-   * resolves outward the way any other free name does; typing it as the
-   * SUBJECT's narrowed type is the remaining work, and declaring `any` here
-   * would silently look like that work was done.
-   */
+  /** #sec-pattern-static-semantics: annotations test and narrow; other bindings inherit their position's known type. */
   const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType?: Known): void => {
     if (!pattern) {
       return;
@@ -13041,15 +13144,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             declare(pattern.Name, t);
           }
         } else if (positionType) {
-          // An UNANNOTATED binding types as the SUBJECT at that position - "a
-          // binding always matches", so it establishes nothing about the value
-          // beyond what the position already said. Left undeclared where the
-          // position's type is unknown rather than declared as `any`, since
-          // `any` would look exactly like this work having been done.
+          // An unannotated binding inherits only the facts its position establishes.
           declare(pattern.Name, positionType);
+        } else {
+          declare(pattern.Name, null);
         }
         break;
-      case 'MatchOrPattern':
+      case 'MatchOrPattern': {
+        const bindingsOf = (alternative: ParseNode.MatchPattern) => pushBlock(() => {
+          declareMatchPatternBindings(alternative, positionType);
+          return new Map(frames[frames.length - 1].bindings);
+        });
+        const left = bindingsOf(pattern.Left);
+        const right = bindingsOf(pattern.Right);
+        for (const { Name } of PatternBindingNames(pattern.Left)) {
+          const a = left.get(Name);
+          const b = right.get(Name);
+          declare(Name, a && b ? CanonicalizeType({ Kind: 'union', Members: [a, b] }) : null);
+        }
+        break;
+      }
       case 'MatchAndPattern':
         // A combinator does not change the POSITION, so both sides see the
         // same type. `and` could narrow the right side by the left, which is
@@ -13123,28 +13237,308 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           declareMatchPatternBindings(prop.Pattern, memberType ?? undefined);
         });
+        declareMatchPatternBindings(pattern.Rest ?? null, null);
         break;
-      case 'MatchArrayPattern':
-        // A TUPLE subject types each element by POSITION; an array subject
-        // types every element the same. An extractor's elements come from a
-        // matcher's return and are not typed here - "that narrowing is a claim
-        // the matcher's author makes", and this walk has no claim to read.
+      case 'MatchArrayPattern': {
+        // #sec-static-iteration-contribution: matching consumes the selected
+        // iterator, whose output need not have the indexed storage's type.
+        const contribution = StaticIterationContribution(positionType ?? null, structureOf);
         pattern.Elements.forEach((el, index) => {
-          let elementType: Known = null;
-          if (positionType && positionType.Kind === 'tuple') {
-            const slot = positionType.Elements[index];
-            elementType = slot ? (slot.Type as Known) : null;
-          } else if (positionType && positionType.Kind === 'array') {
-            elementType = positionType.Element as Known;
-          }
-          declareMatchPatternBindings(el, elementType ?? undefined);
+          declareMatchPatternBindings(el, contribution.positions?.[index] ?? contribution.element);
         });
         break;
-      case 'MatchExtractorPattern':
-        pattern.Elements.forEach((el) => declareMatchPatternBindings(el));
+      }
+      case 'MatchExtractorPattern': {
+        const shape = structureOf(staticType(pattern.Head));
+        const matcher = shape?.Kind === 'object'
+          ? shape.Properties.find((property) => property.key === wellKnownSymbols.customMatcher)?.type : null;
+        let result: Known = null;
+        if (matcher?.Kind === 'function') {
+          const call = { type: 'CallExpression', CallExpression: typedExpressionView(pattern.Head, matcher),
+            Arguments: [typedExpressionView(pattern.Head, positionType ?? null)] } as unknown as ParseNode.CallExpression;
+          checkCallArguments(call, matcher, pattern);
+          const selected = checkedCallSignatures.get(call);
+          if (selected) {
+            const callee = { type: 'ParenthesizedExpression', Expression: pattern.Head } as ParseNode.ParenthesizedExpression;
+            result = staticType({ ...call, CallExpression: typedExpressionView(callee, { Kind: 'function', Signatures: [selected] }) } as ParseNode.CallExpression);
+          }
+        }
+        const candidates = (result?.Kind === 'union' ? result.Members : result ? [result] : [])
+          .filter((type) => !(type.Kind === 'primitive' && type.Name === 'null'));
+        const tuples = candidates.filter((type): type is TypeRecord & { Kind: 'tuple' } => type.Kind === 'tuple');
+        const fits = tuples.filter((tuple) => {
+          const required = tuple.Elements.filter((element) => !element.Rest && !element.DeclaredDefault).length;
+          return pattern.Elements.length >= required
+            && (tuple.Elements.some((element) => element.Rest) || pattern.Elements.length <= tuple.Elements.length);
+        });
+        if (candidates.length && !fits.length && candidates.every((type) => type.Kind === 'tuple'
+          || type.Kind === 'primitive' || type.Kind === 'literal' || type.Kind === 'void')) {
+          errors.push(Throw.StaticTypeError('the custom matcher must return a tuple matching the pattern\'s length').Value as ObjectValue);
+        }
+        pattern.Elements.forEach((element, index) => {
+          const types = fits.map((tuple) => tuple.Elements[index]?.Type ?? tuple.Elements.find((slot) => slot.Rest)?.Type)
+            .filter((type): type is TypeRecord => !!type);
+          declareMatchPatternBindings(element, types.length ? CanonicalizeType({ Kind: 'union', Members: types }) : null);
+        });
         break;
+      }
       default:
         break;
+    }
+  };
+
+  const matchContexts = new WeakMap<ParseNode, Known>();
+  const matchResults = new WeakMap<ParseNode, { revision: number, contextual: Known, type: Known }>();
+  const checkingMatches = new Set<ParseNode>();
+  const completionContexts = new WeakMap<ParseNode, Known>();
+  const completionValues = new WeakMap<ParseNode, Known>();
+
+  const markCompletionContext = (node: ParseNode, contextual: Known): void => {
+    switch (node.type) {
+      case 'ExpressionStatement': completionContexts.set(node, contextual); break;
+      case 'Block': {
+        const tail = node.StatementList?.at(-1);
+        if (tail) markCompletionContext(tail, contextual);
+        break;
+      }
+      case 'IfStatement':
+        markCompletionContext(node.Statement_a, contextual);
+        if (node.Statement_b) markCompletionContext(node.Statement_b, contextual);
+        break;
+      case 'LabelledStatement': markCompletionContext(node.LabelledItem, contextual); break;
+      case 'TryStatement':
+        markCompletionContext(node.Block, contextual);
+        for (const handler of node.CatchClauses ?? (node.Catch ? [node.Catch] : [])) markCompletionContext(handler.Block, contextual);
+        break;
+      case 'SwitchStatement': {
+        const block = node.CaseBlock;
+        for (const clause of [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])]) {
+          const statements = clause.StatementList ?? [];
+          const last = statements.at(-1);
+          const tail = last?.type === 'BreakStatement' && !last.LabelIdentifier ? statements.at(-2) : last;
+          if (tail) markCompletionContext(tail, contextual);
+        }
+        break;
+      }
+      default: break;
+    }
+  };
+
+  // #sec-pattern-static-semantics: infer arm completions while their bindings
+  // are in scope, and forward the enclosing context to every value-producing arm.
+  const checkMatchExpression = (me: ParseNode.MatchExpression, contextual: Known): Known => {
+    if (contextual) matchContexts.set(me, contextual);
+    contextual = me.All ? null : contextual;
+    const cached = matchResults.get(me);
+    if (cached?.revision === typeRevision && cached.contextual === contextual) return cached.type;
+    if (checkingMatches.has(me)) return null;
+    checkingMatches.add(me);
+    try {
+      const armTypes: Known[] = [];
+      walk(me.Expression as ParseNode);
+      const subjectType = staticType(me.Expression as ParseNode);
+      let remaining = subjectType;
+      me.Clauses.forEach((clause) => {
+        frames.push(emptyFrame());
+        let selected = remaining;
+        if (remaining && clause.Pattern) {
+          const arms = remaining.Kind === 'union' ? remaining.Members : [remaining];
+          const matched = arms.filter((arm) => structuralPatternCovers(clause.Pattern!, arm));
+          if (matched.length) {
+            selected = CanonicalizeType({ Kind: 'union', Members: matched });
+            if (!clause.Guard) {
+              const rest = NarrowFrom(remaining, selected);
+              remaining = rest === empty ? neverType : rest;
+            }
+          }
+        }
+        if (selected && me.Expression.type === 'IdentifierReference') declareNarrowed(me.Expression.name, selected);
+        declareMatchPatternBindings(clause.Pattern, selected);
+        if (clause.Guard) {
+          walk(clause.Guard as ParseNode);
+        }
+        if (clause.IsBlock) markCompletionContext(clause.Body, contextual);
+        const result = clause.IsThrow ? neverType
+          : clause.IsBlock ? null : staticTypeIn(clause.Body, contextual);
+        if (!clause.IsThrow && !clause.IsBlock) requireAssignable(result, contextual);
+        walk(clause.Body as ParseNode);
+        armTypes.push(clause.IsThrow ? neverType : clause.IsBlock
+          ? completionTypeOf((clause.Body as ParseNode.Block).StatementList) : result);
+        frames.pop();
+      });
+      const enumAtoms = Atoms(subjectType ?? undefined);
+      const chainAtoms = AtomsOfType(subjectType ?? undefined);
+      const overEnumerators = enumAtoms.some((a) => a.owner !== undefined);
+      if (chainAtoms.length > 0 && !overEnumerators) {
+        const coveredAtoms = new Set<string>();
+        let chainDefault = false;
+        for (const clause of me.Clauses) {
+          if (clause.Pattern === null) {
+            chainDefault = true;
+            continue;
+          }
+          if (clause.Guard) {
+            continue;
+          }
+          for (const atom of chainAtoms) {
+            if (structuralPatternCovers(clause.Pattern, atom.type)) {
+              coveredAtoms.add(atom.key);
+            }
+          }
+        }
+        if (!chainDefault) {
+          const missing = chainAtoms.filter((a) => !coveredAtoms.has(a.key));
+          if (missing.length > 0) {
+            const completion = Throw.StaticTypeError(
+              'match over $1 is missing $2 and has no default',
+              Value(displayType(subjectType!)),
+              Value(missing.map((a) => a.key).join(', ')),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+      }
+      const matchEnumName = enumAtoms.length > 0 ? enumAtoms[0].owner ?? null : null;
+      const matchInfo = matchEnumName ? { names: enumAtoms.map((a) => a.key) } : null;
+      if (matchInfo) {
+        const covered = new Set<string>();
+        let hasDefault = false;
+        for (const clause of me.Clauses) {
+          if (clause.Pattern === null) {
+            hasDefault = true;
+            continue;
+          }
+          if (clause.Guard) {
+            continue;
+          }
+          const pattern = clause.Pattern;
+          if (pattern.type !== 'MatchTypePattern') {
+            continue;
+          }
+          const label = pattern.Type as unknown as {
+            TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly { name: string }[] },
+          };
+          const typeName = label.TypeName;
+          const labelEnum = typeName?.IdentifierReference?.name;
+          const members = typeName?.MemberNames ?? [];
+          if (labelEnum === matchEnumName && members.length === 1) {
+            const member = members[0]!.name;
+            if (matchInfo.names.includes(member)) {
+              covered.add(member);
+            }
+          }
+        }
+        if (!hasDefault) {
+          const missing = enumeratorsNotCovered(matchEnumName!, matchInfo.names, covered);
+          if (missing.length > 0) {
+            const completion = Throw.StaticTypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+      }
+      const sealedDecl = (subjectType as { Kind?: string, Declaration?: ParseNode } | null | undefined);
+      const sealedAtoms = Atoms(subjectType ?? undefined, undefined, (t) => {
+        const d = (t as { Declaration?: ParseNode }).Declaration;
+        const subs = d ? sealedSubclasses.get(d) : undefined;
+        return subs?.map((c) => ({
+          name: (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?',
+          declaration: c,
+        }));
+      });
+      const atomDecls = sealedAtoms
+        .map((a) => a.declaration)
+        .filter((d): d is ParseNode => d !== undefined);
+      if (atomDecls.length > 0 && !overEnumerators) {
+        const coveredClasses = new Set<ParseNode>();
+        let sealedDefault = false;
+        for (const clause of me.Clauses) {
+          if (clause.Pattern === null) {
+            sealedDefault = true;
+            continue;
+          }
+          if (clause.Guard || clause.Pattern.type !== 'MatchTypePattern') {
+            continue;
+          }
+          const armType = resolveType(clause.Pattern.Type);
+          const armDecl = (armType as { Declaration?: ParseNode } | null | undefined)?.Declaration;
+          if (armDecl) {
+            coveredClasses.add(armDecl);
+          }
+        }
+        if (!sealedDefault) {
+          const missingClasses = atomDecls.filter((c) => !coveredClasses.has(c));
+          if (missingClasses.length > 0) {
+            const shown = missingClasses
+              .map((c) => (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?')
+              .join(', ');
+            const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
+            const completion = Throw.StaticTypeError('match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
+        }
+      }
+      const type = me.All || armTypes.some((arm) => !arm) ? null
+        : CanonicalizeType({ Kind: 'union', Members: armTypes as TypeRecord[] });
+      matchResults.set(me, { revision: typeRevision, contextual, type });
+      return type;
+    } finally {
+      checkingMatches.delete(me);
+    }
+  };
+
+  const activePatternScopes = new Set<ParseNode>();
+  const patternBindingFrames = new WeakMap<Frame, Set<string>>();
+  const withPatternScope = <T,>(node: ParseNode, action: () => T): T => {
+    const sites = PatternScopeOf(node);
+    if (!sites.length || activePatternScopes.has(node)) return action();
+    return pushBlock(() => {
+      activePatternScopes.add(node);
+      const frame = frames[frames.length - 1];
+      const names = new Set<string>();
+      patternBindingFrames.set(frame, names);
+      try {
+        for (const site of sites) {
+          declareMatchPatternBindings(site.Pattern ?? null, staticType(site.Expression));
+          for (const binding of PatternBindingNames(site.Pattern ?? null)) {
+            names.add(binding.Name);
+            frame.immutableNames.add(binding.Name);
+          }
+        }
+        return action();
+      } finally {
+        activePatternScopes.delete(node);
+      }
+    });
+  };
+
+  const patternNamesByScope = new WeakMap<ParseNode, Set<string>>();
+  const functionBoundary = (node: ParseNode): boolean => /FunctionDeclaration|FunctionExpression|ArrowFunction|Method|GeneratorDeclaration|GeneratorExpression/.test(node.type);
+  const checkPatternBindingReference = (node: ParseNode.IdentifierReference): void => {
+    if (frames.some((frame) => frame.declaredNames.has(node.name))) return;
+    for (let scope = node.parent; scope; scope = scope.parent) {
+      if (!functionBoundary(scope) && scope.type !== 'ScriptBody' && scope.type !== 'ModuleBody') continue;
+      let names = patternNamesByScope.get(scope);
+      if (!names) {
+        names = new Set();
+        const collect = (child: ParseNode): void => {
+          if (child !== scope && functionBoundary(child)) return;
+          if (child.type === 'IsExpression') {
+            for (const binding of PatternBindingNames(child.Pattern ?? null)) names!.add(binding.Name);
+          }
+          for (const [key, value] of Object.entries(child)) {
+            if (key === 'parent' || key === 'location') continue;
+            if (Array.isArray(value)) {
+              for (const entry of value) if (entry && typeof entry === 'object' && 'type' in entry) collect(entry as ParseNode);
+            } else if (value && typeof value === 'object' && 'type' in value) collect(value as ParseNode);
+          }
+        };
+        collect(scope);
+        patternNamesByScope.set(scope, names);
+      }
+      if (names.has(node.name)) {
+        errors.push(Throw.StaticTypeError('$1 is outside its pattern binding\'s scope', Value(node.name)).Value as ObjectValue);
+        return;
+      }
     }
   };
 
@@ -13185,7 +13579,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     switch (last.type) {
       case 'ExpressionStatement':
-        return last.Expression ? staticType(last.Expression) : undefinedType;
+        return completionValues.has(last) ? completionValues.get(last)! : last.Expression ? staticType(last.Expression) : undefinedType;
       case 'Block':
         return completionTypeOf(last.StatementList);
       case 'LabelledStatement':
@@ -13201,8 +13595,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ]);
       case 'TryStatement': {
         const members: Known[] = [completionTypeOf(last.Block?.StatementList)];
-        if (last.Catch?.Block) {
-          members.push(completionTypeOf(last.Catch.Block.StatementList));
+        for (const handler of last.CatchClauses ?? (last.Catch ? [last.Catch] : [])) {
+          members.push(completionTypeOf(handler.Block.StatementList));
         }
         // A `finally` contributes nothing: its completion is discarded unless
         // it is abrupt.
@@ -15212,7 +15606,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Generator.<Y, void, void>. Object-literal methods can receive a return
     // type from the contextual member without a written annotation.
     const declaredForReturn = checkReturns
-      ? (returnAnnotation ? resolveType(returnAnnotation.Type) : (contextualReturn ?? null))
+      ? (returnAnnotation?.NarrowsTarget ? makePrimitive('boolean')
+        : returnAnnotation ? resolveType(returnAnnotation.Type) : (contextualReturn ?? null))
       : null;
     const hasDeclaredReturn = !!returnAnnotation || !!contextualReturn;
     const generatorReturn = generatorType
@@ -15451,6 +15846,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { entries, counts: groups.map((g) => g.length), spread, named };
   };
 
+  const checkedCallSignatures = new WeakMap<object, SignatureRecord>();
   const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
     const supplied = expandValueSpreads(c.Arguments);
@@ -15525,6 +15921,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (sig) {
+      checkedCallSignatures.set(c, sig as SignatureRecord);
       const chosen = sig;
       const mapped = mapCallArguments(chosen.Parameters, supplied);
       if (mapped.spread && !mapped.named && chosen.Parameters.at(-1)?.Rest && chosen.Parameters.every((parameter) => !parameter.Optional)) {
@@ -15919,7 +16316,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
-    if (!node) {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    if (!Array.isArray(node) && PatternScopeOf(node as ParseNode).length && !activePatternScopes.has(node as ParseNode)) {
+      withPatternScope(node as ParseNode, () => walk(node));
       return;
     }
     if (!Array.isArray(node) && (node as { type: string }).type === 'RefExpression') {
@@ -16164,6 +16565,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const n = node as ParseNode;
     switch (n.type) {
+      case 'IdentifierReference':
+        checkPatternBindingReference(n);
+        return;
       // proposal-runtime-types (spec, narrowing): it is a type error to apply a
       // narrowing form whose test can never succeed or can never fail, those being
       // the branches for which NarrowTo or NarrowFrom is ~empty~, since the branch
@@ -16196,6 +16600,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // not, because this position was never resolved, and this closes that
         // by resolving it here and at the bare cast below.
         const ie = n as ParseNode.IsExpression;
+        if (PatternBindingNames(ie.Pattern ?? null).length && !PatternHasGovernedPosition(ie)) {
+          errors.push(Throw.StaticTypeError('a binding-carrying is pattern must govern a position').Value as ObjectValue);
+        }
+        pushBlock(() => declareMatchPatternBindings(ie.Pattern ?? null, staticType(ie.Expression)));
         walk(ie.Expression as ParseNode);
         const iePattern = ie.Pattern as { type?: string, Type?: ParseNode } | null | undefined;
         const ieType = ie.Type ?? (iePattern?.type === 'MatchTypePattern' ? iePattern.Type : null);
@@ -16334,6 +16742,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
             walk(child as ParseNode);
           }
+        }
+        if (completionContexts.has(n)) {
+          const contextual = completionContexts.get(n)!;
+          const type = staticTypeIn(n.Expression, contextual);
+          requireAssignable(type, contextual);
+          completionValues.set(n, type);
         }
         applyAssertionNarrowing(n);
         return;
@@ -16504,229 +16918,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return;
       }
-      case 'MatchExpression': {
-        // proposal-runtime-types `sec-match-exhaustiveness`: "A `match` over an
-        // enum-typed or sealed-class-typed subject is exhaustive under the same
-        // rules a `switch` is, and this clause adds no new ones - it SHARES
-        // them." So this reads the same enum-name table the `SwitchStatement`
-        // case does rather than building a second one.
-        const me = n as ParseNode.MatchExpression;
-        walk(me.Expression as ParseNode);
-        const subjectType = staticType(me.Expression as ParseNode);
-        let remaining = subjectType;
-        me.Clauses.forEach((clause) => {
-          // proposal-runtime-types `sec-match-narrowing`: an arm sees what its
-          // pattern ESTABLISHED. A clause is its own scope - "a fresh
-          // declarative environment per clause" at run time - so the checker
-          // gives it a frame and declares the pattern's bindings in it, which is
-          // what stops one arm's binding from leaking into the next.
-          frames.push(emptyFrame());
-          // The SUBJECT's static type is what a top-level binding takes.
-          // Computed once for the whole `match`, since every clause matches the
-          // same subject.
-          let selected = remaining;
-          if (remaining && clause.Pattern) {
-            const arms = remaining.Kind === 'union' ? remaining.Members : [remaining];
-            const matched = arms.filter((arm) => structuralPatternCovers(clause.Pattern!, arm));
-            if (matched.length) {
-              selected = CanonicalizeType({ Kind: 'union', Members: matched });
-              if (!clause.Guard) {
-                const rest = NarrowFrom(remaining, selected);
-                remaining = rest === empty ? neverType : rest;
-              }
-            }
-          }
-          if (selected && me.Expression.type === 'IdentifierReference') declareNarrowed(me.Expression.name, selected);
-          declareMatchPatternBindings(clause.Pattern, selected);
-          if (clause.Guard) {
-            // The guard sees the bindings, which is what makes it a refinement
-            // of this clause rather than a second, independent test.
-            walk(clause.Guard as ParseNode);
-          }
-          walk(clause.Body as ParseNode);
-          frames.pop();
-        });
-        // proposal-runtime-types `sec-match-exhaustiveness`: the atoms of the
-        // SUBJECT'S TYPE, through the one operation that knows all of them,
-        // rather than a name lookup on the binding.
-        //
-        // A name lookup would require the subject to be an
-        // |IdentifierReference|; the subject's type covers any expression whose
-        // type is known. KNOWN LIMIT: `match (g())` over an enum-returning call
-        // is not checked, because a call's RETURN annotation does not resolve
-        // to the enum record - the same class of gap one resolution site
-        // further on, recorded so the capability is not claimed before it
-        // exists.
-        const enumAtoms = Atoms(subjectType ?? undefined);
-        // proposal-runtime-types `sec-discriminated-where-chains`: a dependent
-        // record type's atoms are the atoms of the union its chain denotes.
-        // **The coverage rule differs from the enum path's**: an atom here is an
-        // OBJECT type, and `sec-match-exhaustiveness` says such an atom is
-        // "additionally covered by a structural pattern each of whose named
-        // members is declared required by the atom" - which is what makes
-        // `when { c: 'US' }` cover a branch.
-        const chainAtoms = AtomsOfType(subjectType ?? undefined);
-        // EVERY subject whose atoms are not an enum's runs this path, not only a
-        // dependent record type. The gate read `enumAtoms.length === 0`, and
-        // `enumAtoms` is this same list, so a subject WITH atoms that are not
-        // enumerators - `boolean`, `{a} | {b}`, `A | null`, a composite member -
-        // fell between the two paths: the enum path below no-ops because those
-        // atoms carry no `owner`, and this one was skipped because they exist.
-        // #sec-match-exhaustiveness names all of them, and `Atoms` computes all
-        // of them; only the routing was missing.
-        const overEnumerators = enumAtoms.some((a) => a.owner !== undefined);
-        if (chainAtoms.length > 0 && !overEnumerators) {
-          const coveredAtoms = new Set<string>();
-          let chainDefault = false;
-          for (const clause of me.Clauses) {
-            if (clause.Pattern === null) {
-              chainDefault = true;
-              continue;
-            }
-            if (clause.Guard) {
-              continue;
-            }
-            for (const atom of chainAtoms) {
-              if (structuralPatternCovers(clause.Pattern, atom.type)) {
-                coveredAtoms.add(atom.key);
-              }
-            }
-          }
-          if (!chainDefault) {
-            const missing = chainAtoms.filter((a) => !coveredAtoms.has(a.key));
-            if (missing.length > 0) {
-              const completion = Throw.StaticTypeError(
-                'match over $1 is missing $2 and has no default',
-                Value(displayType(subjectType!)),
-                Value(missing.map((a) => a.key).join(', ')),
-              ) as ThrowCompletion;
-              errors.push(completion.Value as ObjectValue);
-            }
-          }
-        }
-        const matchEnumName = enumAtoms.length > 0 ? enumAtoms[0].owner ?? null : null;
-        const matchInfo = matchEnumName ? { names: enumAtoms.map((a) => a.key) } : null;
-        if (matchInfo) {
-          const covered = new Set<string>();
-          let hasDefault = false;
-          for (const clause of me.Clauses) {
-            if (clause.Pattern === null) {
-              hasDefault = true;
-              continue;
-            }
-            // "A GUARDED ARM PROVES NOTHING, since the checker does not evaluate
-            // guards" - so a guarded clause does not count towards coverage
-            // however exhaustive its pattern looks.
-            if (clause.Guard) {
-              continue;
-            }
-            const pattern = clause.Pattern;
-            if (pattern.type !== 'MatchTypePattern') {
-              continue;
-            }
-            // `E.A` as a PATTERN is a |TypeReference| whose |TypeName| carries
-            // an IdentifierReference and a list of MemberNames - NOT the
-            // MemberExpression shape a switch CASE LABEL has, which is an
-            // expression. The same enumerator spelled in the two positions
-            // reaches the checker as two different node shapes, and reading the
-            // label shape here found nothing: every clause looked uncovered and
-            // an exhaustive `match` was reported as missing every member.
-            const label = pattern.Type as unknown as {
-              TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly { name: string }[] },
-            };
-            const typeName = label.TypeName;
-            const labelEnum = typeName?.IdentifierReference?.name;
-            const members = typeName?.MemberNames ?? [];
-            if (labelEnum === matchEnumName && members.length === 1) {
-              const member = members[0]!.name;
-              if (matchInfo.names.includes(member)) {
-                covered.add(member);
-              }
-            }
-          }
-          if (!hasDefault) {
-            const missing = enumeratorsNotCovered(matchEnumName!, matchInfo.names, covered);
-            if (missing.length > 0) {
-              const completion = Throw.StaticTypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
-              errors.push(completion.Value as ObjectValue);
-            }
-          }
-        }
-        // A SEALED-CLASS subject is a closed set too, and `sec-match-exhaustiveness`
-        // names it beside enums - so it is checked here rather than in a second
-        // pass that could disagree about coverage.
-        // Through the same operation the enum path uses. A sealed class's
-        // subclasses live in a map the checker owns, so `Atoms` takes them as a
-        // hook - the way it takes a dependent record type's denotation - rather
-        // than reaching for checker state it cannot see.
-        const sealedDecl = (subjectType as { Kind?: string, Declaration?: ParseNode } | null | undefined);
-        const sealedAtoms = Atoms(subjectType ?? undefined, undefined, (t) => {
-          const d = (t as { Declaration?: ParseNode }).Declaration;
-          const subs = d ? sealedSubclasses.get(d) : undefined;
-          return subs?.map((c) => ({
-            name: (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?',
-            declaration: c,
-          }));
-        });
-        // The BASE is among them where it is instantiable.
-        // #sec-match-exhaustiveness: a sealed class's atoms are "its direct
-        // subclasses and, where instantiable, itself", and `Atoms` yields the
-        // base unless the declaration is `abstract`. This dropped it again, so a
-        // `match` over a plain `sealed class S` with an arm for every subclass
-        // was called exhaustive and then threw "matched no clause" when handed
-        // `new S()`. #sec-sealed-classes draws the line from the other side: a
-        // `sealed abstract` class's subclasses are "a closed set WITH NO CASE
-        // AMONG THEM FOR THE BASE", a sentence with nothing to say unless a
-        // plain `sealed` base needs one.
-        //
-        // Nothing else changes: the loop below collects each arm's declaration,
-        // so `when S:` covers the base atom as `when T:` covers a subclass, and
-        // a sealed class with no subclasses at all is now the closed set of
-        // exactly itself rather than no set.
-        const atomDecls = sealedAtoms
-          .map((a) => a.declaration)
-          .filter((d): d is ParseNode => d !== undefined);
-        // Not for an ENUM subject, whose atoms are enumerators rather than
-        // classes and whose coverage the path above decides. The removed filter
-        // was doing this job by accident: an enumerator atom carries the ENUM's
-        // declaration, which is also the subject's, so filtering the subject's
-        // own declaration emptied the list for an enum and skipped this block.
-        // Dropping the filter to admit a sealed BASE therefore let every enum
-        // subject fall in here, where no arm resolves to a class declaration and
-        // all of them looked uncovered.
-        if (atomDecls.length > 0 && !overEnumerators) {
-          const coveredClasses = new Set<ParseNode>();
-          let sealedDefault = false;
-          for (const clause of me.Clauses) {
-            if (clause.Pattern === null) {
-              sealedDefault = true;
-              continue;
-            }
-            // A guarded arm proves nothing here for the same reason it proves
-            // nothing over an enum: the checker does not evaluate guards.
-            if (clause.Guard || clause.Pattern.type !== 'MatchTypePattern') {
-              continue;
-            }
-            const armType = resolveType(clause.Pattern.Type);
-            const armDecl = (armType as { Declaration?: ParseNode } | null | undefined)?.Declaration;
-            if (armDecl) {
-              coveredClasses.add(armDecl);
-            }
-          }
-          if (!sealedDefault) {
-            const missingClasses = atomDecls.filter((c) => !coveredClasses.has(c));
-            if (missingClasses.length > 0) {
-              const shown = missingClasses
-                .map((c) => (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?')
-                .join(', ');
-              const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
-              const completion = Throw.StaticTypeError('match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
-              errors.push(completion.Value as ObjectValue);
-            }
-          }
-        }
+      case 'MatchExpression':
+        checkMatchExpression(n, matchContexts.get(n) ?? null);
         return;
-      }
       case 'TryStatement': {
         // proposal-runtime-types #sec-typed-catch: "It is a type error if a
         // Catch other than the last of its CatchClauses has no TypeAnnotation."
@@ -16917,6 +17111,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // must be fixed or the reassignment has nothing to check against.
           const isConstDeclaration = (n as ParseNode).type === 'LexicalBinding'
             && (n as unknown as { parent?: { LetOrConst?: string } }).parent?.LetOrConst === 'const';
+          if (isConstDeclaration && n.Initializer) {
+            const key = memberKey({ Expression: n.Initializer });
+            if (typeof key === 'string') bindingFrame.constPropertyKeys.set(n.BindingIdentifier.name, key);
+          }
           if (!n.TypeAnnotation && n.Initializer && isNumericConstantExpression(n.Initializer)) {
             const frame = frames[frames.length - 1];
             (isConstDeclaration ? frame.constLiterals : frame.letConstants)
@@ -17058,8 +17256,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // with the index check and not here).
       case 'UnaryExpression': {
         const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
-        if (u.operator === 'delete' && u.UnaryExpression?.type === 'MemberExpression') {
-          const target = u.UnaryExpression;
+        let target = patternExpression(u.UnaryExpression);
+        if (target?.type === 'OptionalExpression') target = optionalChainView(target, false).expression;
+        if (u.operator === 'delete' && target?.type === 'MemberExpression') {
           const named = memberKey(target);
           const structure = target.MemberExpression ? structureOf(staticType(target.MemberExpression)) : null;
           if (named !== undefined && structure && structure.Kind === 'object'
@@ -17068,6 +17267,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
+        staticType(n);
         walk(u.UnaryExpression);
         return;
       }
@@ -17350,9 +17550,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(c.Arguments);
         return;
       }
+      case 'SuperCall': {
+        const self = thisTypeFrames.at(-1);
+        const base = (self as { Base?: Known } | null | undefined)?.Base;
+        if (base?.Kind === 'nominal') {
+          const signatures = constructSignatures.get(base.Declaration as ParseNode);
+          if (signatures?.length) {
+            const contract = SubstituteTypeArguments({ Kind: 'function', Signatures: signatures.map((signature) => ({ ...signature, Return: self })) } as TypeRecord,
+              base.Declaration as ParseNode, base.Arguments);
+            checkCallArguments({ Arguments: n.Arguments }, contract, n);
+          }
+        }
+        walk(n.Arguments);
+        return;
+      }
       case 'NewExpression': {
         const ne = n as unknown as { MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
-        const target = ne.MemberExpression;
+        const target = patternExpression(ne.MemberExpression);
         let bareTarget = target;
         while (bareTarget?.type === 'ParenthesizedExpression' || bareTarget?.type === 'TypeArgumentsExpression') {
           bareTarget = bareTarget.Expression;
@@ -17408,8 +17622,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // Only where the class is NAMED. `const K = A; new K()` reaches the
         // same class through a binding, and the run time is what answers there.
-        if (target && (target as { type?: string }).type === 'IdentifierReference') {
-          const named = classTypeOf((target as unknown as { name: string }).name);
+        if (bareTarget?.type === 'IdentifierReference') {
+          const named = namedInstance;
           const namedDecl = named && named.Kind === 'nominal'
             ? (named as unknown as { Declaration?: ParseNode }).Declaration
             : null;
@@ -17417,7 +17631,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (modifiers.includes('abstract')) {
             const completion = Throw.StaticTypeError(
               '$1 is an abstract class and cannot be instantiated',
-              Value((target as unknown as { name: string }).name),
+              Value(bareTarget.name),
             ) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
@@ -17580,7 +17794,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ForStatement': {
         const checkLoop = () => {
         const condition = n.type === 'ForStatement'
-          ? (n as unknown as { Expression_b?: ParseNode | null }).Expression_b
+          ? ForPatternPositions(n).test
           : (n as unknown as { Expression?: ParseNode | null }).Expression;
         for (const key of Object.keys(n)) {
           if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
@@ -17646,7 +17860,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `v.x++` and `++v.x` read and then write, so a readonly member refuses
         // them for the same reason it refuses an assignment.
         requireWritableMember(operand);
-        if (operand) locationType(operand);
+        if (operand) {
+          locationType(operand);
+          const declared = declaredOperator(staticType(operand), `unary ${n.operator}`);
+          if (declared) checkStoreResult(operand, typedExpressionView(n, operatorResult(declared, [], n)));
+        }
         walk(operand);
         // #sec-narrowing: an update writes the binding just as an assignment
         // does, so facts about its previous value no longer apply.
@@ -17656,15 +17874,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'AssignmentExpression': {
-        const a = n as unknown as { LeftHandSideExpression: ParseNode, AssignmentExpression: ParseNode, AssignmentOperator: string };
-        // #sec-integer-operations applies to the primitive compound fallback's
-        // division/remainder as well as its binary spelling.
-        if (a.AssignmentOperator === '/=' || a.AssignmentOperator === '%=') {
-          const operand = locationType(a.LeftHandSideExpression);
-          if (isIntegerValueType(operand) && foldIntegerConstant(a.AssignmentExpression, constExactValue) === 0n) {
-            errors.push(Throw.StaticTypeError('a literal zero divisor is not a division at $1', Value(displayType(operand!))).Value as ObjectValue);
-          }
-        }
+        const assignment = n as ParseNode.AssignmentExpression;
+        const a = { ...assignment, LeftHandSideExpression: patternExpression(assignment.LeftHandSideExpression)! };
         // #sec-user-defined-operators: a declared compound invokes its method
         // without storing back to the assignment target.
         const declared = a.AssignmentOperator === '=' ? null
@@ -17687,6 +17898,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             walk(a.AssignmentExpression);
             return;
           }
+          compoundBinaryType(assignment);
         }
         const indexed = patternExpression(a.LeftHandSideExpression);
         if (indexed?.type === 'MemberExpression') {
@@ -17979,20 +18191,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'MethodDefinition': {
-        const methodName = (n as unknown as { ClassElementName?: { name?: string, value?: string } | null })
-          .ClassElementName;
-        const isConstructor = (methodName?.name ?? methodName?.value) === 'constructor';
-        if (isConstructor) {
-          constructorDepth += 1;
-        }
-        try {
-          enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
-            undefined, undefined, undefined, contextualMethodReturns.get(n as ParseNode) ?? null);
-        } finally {
-          if (isConstructor) {
-            constructorDepth -= 1;
-          }
-        }
+        enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
+          undefined, undefined, undefined, contextualMethodReturns.get(n as ParseNode) ?? null);
         return;
       }
       case 'ClassDeclaration':

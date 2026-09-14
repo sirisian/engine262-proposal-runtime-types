@@ -580,7 +580,7 @@ export type TypeRecord =
     // type there, and a getter already claims it. Declared beside [[Base]]
     // because it travels with it - both are relations the record holds for the
     // checker, and both were reached through casts.
-    readonly SetterTypes?: ReadonlyMap<string, TypeRecord>,
+    readonly SetterTypes?: ReadonlyMap<string | SymbolValue, TypeRecord>,
     // proposal-runtime-types: the class constructor whose instances the
     // class type contains. Identity is still by [[Declaration]]; this is the
     // resolved constructor so membership needs no name lookup.

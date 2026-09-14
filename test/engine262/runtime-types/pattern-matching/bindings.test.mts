@@ -42,8 +42,8 @@ test('a GUARD sees the pattern\'s bindings', () => {
 });
 
 test('`is` creates an environment for its bindings too', () => {
-  expect(outcome('const v = 1; v is let x;')).toBe('ACCEPTED');
-  expect(evaluated('String(1 is let x);')).toBe('true');
+  expect(outcome('const v = 1; v is let x;')).toBe('StaticTypeError');
+  expect(evaluated('String((1 is let x) && true);')).toBe('true');
 });
 
 test('the binding COLON is resolved by CONTEXT, not by lookahead', () => {
@@ -62,10 +62,10 @@ test('the binding COLON is resolved by CONTEXT, not by lookahead', () => {
   expect(evaluated('String(match (uint8(1)) { when let x: uint8: "yes"; default: "no"; });')).toBe('yes');
   expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
   // `is` position, where there is no clause colon to find.
-  expect(outcome2('uint8(1) is let x: uint8;')).toBe('ACCEPTED');
-  expect(evaluated('String(uint8(1) is let x: uint8);')).toBe('true');
-  expect(evaluated('String(1 is let x: uint8);')).toBe('false');
-  expect(evaluated('String(1 is let x);')).toBe('true');
+  expect(outcome2('if (uint8(1) is let x: uint8) {}')).toBe('ACCEPTED');
+  expect(evaluated('String((uint8(1) is let x: uint8) && true);')).toBe('true');
+  expect(evaluated('String((1 is let x: uint8) && true);')).toBe('false');
+  expect(evaluated('String((1 is let x) && true);')).toBe('true');
 });
 
 test('what the checker half does not yet do', () => {

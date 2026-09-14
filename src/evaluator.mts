@@ -1,4 +1,5 @@
 import { Throw } from './host-defined/error-messages.mts';
+import { PatternEnvironmentFor } from './runtime-semantics/PatternEnvironment.mts';
 import { InMetaHookEvaluation, CurrentMetaHookSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
 import { FoldedConstantOf, FoldedDecimalOf } from './type-system/check.mts';
@@ -124,6 +125,19 @@ export function Evaluate(node: ParseNode.Module | ParseNode.ScriptBody): ValueEv
 export function Evaluate(node: ParseNode.Expression | ParseNode.RefExpression): ExpressionEvaluator
 export function Evaluate(node: ParseNode): StatementEvaluator
 export function* Evaluate(node: ParseNode): Evaluator<unknown> {
+  const context = surroundingAgent.runningExecutionContext;
+  const environment = surroundingAgent.feature('runtime-types') ? PatternEnvironmentFor(node, context) : undefined;
+  if (!environment) return yield* EvaluateNode(node);
+  const outer = context.LexicalEnvironment;
+  context.LexicalEnvironment = environment;
+  try {
+    return yield* EvaluateNode(node);
+  } finally {
+    context.LexicalEnvironment = outer;
+  }
+}
+
+function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
   surroundingAgent.runningExecutionContext.callSite.setLocation(node);
 
   // #sec-evaluation-budget: "The budget bounds a

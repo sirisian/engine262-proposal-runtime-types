@@ -202,8 +202,8 @@ test('freshness reaches a COMPOSITE and an INTERFACE target', () => {
   expect(accepts('interface I { n: int32 } function f(p: I) { return 1; } f({ n: (1 := int32), u: "s" });')).toBe(false);
   expect(accepts('interface I { n: int32 } let c: I = { n: (1 := int32) };')).toBe(true);
 
-  // A COMPUTED key cannot be matched statically and must not be reported.
-  expect(accepts('const k = "u"; interface I { n: int32 } let c: I = { n: (1 := int32), [k]: "s" };')).toBe(true);
+  // #sec-object-types: a constant computed key participates in the excess-property check.
+  expect(accepts('const k = "u"; interface I { n: int32 } let c: I = { n: (1 := int32), [k]: "s" };')).toBe(false);
 });
 
 test('an INDEX SIGNATURE constrains its values and survives on an interface', () => {

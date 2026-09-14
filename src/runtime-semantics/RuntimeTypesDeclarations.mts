@@ -1,3 +1,4 @@
+import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord } from '../type-system/check.mts';
@@ -55,7 +56,7 @@ import { ClassDefinitionEvaluation } from './ClassDefinitionEvaluation.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
-import { OrdinaryObjectCreate, CreateDataProperty } from '#self';
+import { Assert, OrdinaryObjectCreate, CreateDataProperty } from '#self';
 import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
@@ -795,54 +796,31 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
  * `:=` applies the conversion rule, and `type` produces the interned Type
  * Object.
  */
-export function* Evaluate_IsExpression({ Expression, Type, Pattern }: ParseNode.IsExpression): ValueEvaluator {
+export function* Evaluate_IsExpression(node: ParseNode.IsExpression): ValueEvaluator {
+  const { Expression, Type, Pattern } = node;
   const ref = Q(yield* Evaluate(Expression));
   const value = Q(yield* GetValue(ref));
   // proposal-runtime-types `sec-is-pattern`: "`subject is P` is the one-arm
   // `match`, exactly." A |Type| is one |MatchPattern| form and keeps the path it
   // always had, so every existing `is` is unchanged.
   if (Pattern) {
-    // `sec-is-pattern`: "`v is P` evaluates PatternMatches(P, the value of `v`,
-    // a fresh Match Cache Record, env) ... where env is a new declarative
-    // Environment Record in which P's BoundNames are created as immutable
-    // bindings; the bindings are in scope in exactly the positions THE TRUTH OF
-    // THE TEST GOVERNS ... each such position evaluating in env."
-    //
-    // The bindings are created in the RUNNING environment rather than in a
-    // child that is discarded, because a governed position - an `if`
-    // consequent, a `while` body, the right of `&&` - is evaluated by the
-    // ENCLOSING construct, which knows nothing of a child environment the
-    // operator made and threw away. That is what makes
-    // `while (read() is Ok(let chunk))` a loop whose body sees `chunk`.
-    //
-    // **The restriction is the CHECKER's**, and the clause says so: "it is a
-    // type error to reference one of those bindings anywhere else, and it is a
-    // type error for a binding-carrying `is` to occur where no position is
-    // governed by its truth". The runtime makes them REACHABLE; where they may
-    // be read is a static question. Pinned until that lands.
-    const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
-    for (const { name } of MatchPatternBoundNames(Pattern)) {
-      // IMMUTABLE, as the clause says - `let` and `const` in a pattern mark a
-      // binding SITE rather than a mutability, and neither is assignable after
-      // the test.
-      // MUTABLE at the record level, though the clause calls the binding
-      // immutable: a LOOP re-evaluates its test, and an immutable binding
-      // cannot be initialized twice - `while (read() is Ok(let chunk))` asserted
-      // inside the host on its second iteration. The immutability the clause
-      // wants is against USER ASSIGNMENT, which is the checker's to enforce
-      // along with the scope; what the record needs is to accept a fresh value
-      // per evaluation.
-      const already = EnsureCompletion(yield* env.HasBinding(Value(name)));
-      if (already.Type === 'normal' && already.Value === Value.false) {
-        X(env.CreateMutableBinding(Value(name), Value.false));
-        X(env.InitializeBinding(Value(name), Value.undefined));
+    const context = surroundingAgent.runningExecutionContext;
+    const outer = context.LexicalEnvironment;
+    const env = new DeclarativeEnvironmentRecord(outer);
+    const names = new Set(PatternBindingNames(Pattern).map((binding) => binding.Name));
+    for (const name of names) {
+      X(env.CreateImmutableBinding(Value(name), Value.true));
+    }
+    context.LexicalEnvironment = env;
+    try {
+      const matched = Q(yield* PatternMatches(Pattern, value));
+      if (matched && names.size) {
+        (context.PatternEnvironments ??= new Map()).set(node, env);
       }
+      return matched ? Value.true : Value.false;
+    } finally {
+      context.LexicalEnvironment = outer;
     }
-    const attempt = EnsureCompletion(yield* PatternMatches(Pattern, value));
-    if (attempt.Type !== 'normal') {
-      return attempt as never;
-    }
-    return attempt.Value ? Value.true : Value.false;
   }
   const record = Q(yield* TypeNodeToTypeRecord(Type!));
   const result = Q(yield* IsOfType(value, record));
@@ -910,6 +888,7 @@ function MatchPatternBoundNames(pattern: ParseNode.MatchPattern | null): { name:
         break;
       case 'MatchObjectPattern':
         p.Properties.forEach((prop) => walk(prop.Pattern));
+        walk(p.Rest ?? null);
         break;
       case 'MatchArrayPattern':
         p.Elements.forEach(walk);
@@ -940,7 +919,8 @@ export function* Evaluate_MatchExpression(node: ParseNode.MatchExpression): Valu
     // binding is immutable where a `let` one is not.
     const outerEnv = surroundingAgent.runningExecutionContext.LexicalEnvironment;
     const clauseEnv = new DeclarativeEnvironmentRecord(outerEnv);
-    for (const { name, isConst } of MatchClauseBoundNames(clause)) {
+    const names = new Map(MatchClauseBoundNames(clause).map((binding) => [binding.name, binding.isConst]));
+    for (const [name, isConst] of names) {
       if (isConst) {
         X(clauseEnv.CreateImmutableBinding(Value(name), Value.true));
       } else {
@@ -1087,8 +1067,18 @@ function StructuralMemberTypes(t: TypeRecord): readonly { key: string, type: Typ
 export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache: MatchCacheRecord = NewMatchCache()): PlainEvaluator<boolean> {
   switch (P.type) {
     case 'MatchOrPattern': {
+      const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+      Assert(env instanceof DeclarativeEnvironmentRecord);
+      const bindings = PatternBindingNames(P.Left).map((binding) => {
+        const name = Value(binding.Name);
+        return [name, { ...env.bindings.get(name)! }] as const;
+      });
       if (Q(yield* PatternMatches(P.Left, subject, cache))) {
         return true;
+      }
+      // #sec-patternmatches: retry with the original bindings, retaining effects in the match cache.
+      for (const [name, binding] of bindings) {
+        env.bindings.set(name, binding);
       }
       return Q(yield* PatternMatches(P.Right, subject, cache));
     }
@@ -1112,17 +1102,7 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
         }
       }
       const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
-      // SET rather than initialize where the binding already holds a value: a
-      // loop's test runs once per iteration, and only the first can initialize.
-      const bound = EnsureCompletion(yield* env.HasBinding(Value(P.Name)));
-      if (bound.Type === 'normal' && bound.Value === Value.true) {
-        const set = EnsureCompletion(yield* env.SetMutableBinding(Value(P.Name), subject, Value.false));
-        if (set.Type !== 'normal') {
-          X(env.InitializeBinding(Value(P.Name), subject));
-        }
-      } else {
-        X(env.InitializeBinding(Value(P.Name), subject));
-      }
+      X(env.InitializeBinding(Value(P.Name), subject));
       return true;
     }
     case 'MatchLiteralPattern': {
