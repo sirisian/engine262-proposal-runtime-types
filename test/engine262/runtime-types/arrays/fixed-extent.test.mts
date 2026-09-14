@@ -15,7 +15,7 @@ import { evaluated, expectThrownKind, expectStaticTypeError, ok } from '../harne
 
 test('a fixed-extent array cannot be grown', () => {
   expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a.push(5);', 'TypeError');
-  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a.length = 9;', 'TypeError');
+  expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a.length = 9;');
   // A store past the extent is attempted GROWTH. Written with a LITERAL index it
   // is now decided before the program runs - `#sec-array-and-tuple-types`: a
   // fixed extent "is a compile-time constant, so an index written as a literal
@@ -24,7 +24,7 @@ test('a fixed-extent array cannot be grown', () => {
   expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a.unshift(0);', 'TypeError');
   // the constructed form behaves as the annotated one does
   expectThrownKind('const a = new [4].<float32>(); a.push(5);', 'TypeError');
-  expectThrownKind('const a = new [4].<float32>(); a.length = 9;', 'TypeError');
+  expectStaticTypeError('const a = new [4].<float32>(); a.length = 9;');
 });
 
 test('an out-of-bounds READ is a RangeError', () => {

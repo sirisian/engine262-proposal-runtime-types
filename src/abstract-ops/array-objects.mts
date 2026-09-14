@@ -42,7 +42,7 @@ import {
   GeneratorYield,
   Throw,
 } from '#self';
-import { isTypedArrayObject, RequireType } from '#self';
+import { isTypedArrayObject, RequireType, INDEX_TYPE } from '#self';
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
@@ -185,10 +185,18 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
     return yield* OrdinaryDefineOwnProperty(array, Value('length'), Desc);
   }
   let newLenDesc = Desc;
-  const newLen = R(Q(yield* ToUint32(Desc.Value)));
-  const numberLen = R(Q(yield* ToNumber(Desc.Value)));
-  if (newLen !== numberLen) {
-    return Throw.RangeError('Array length must be uint32.');
+  const typed = array as { TypedElement?: unknown, TypedTuple?: unknown };
+  let newLen: number;
+  if (surroundingAgent.feature('runtime-types') && (typed.TypedElement !== undefined || typed.TypedTuple !== undefined)) {
+    // A dynamic value crosses the same count boundary as a statically typed
+    // length assignment. Preserve the array representation's current limit.
+    const count = Q(yield* RequireType(Desc.Value, INDEX_TYPE));
+    newLen = R(Q(yield* ToNumber(count)));
+    if (newLen > 2 ** 32 - 1) return Throw.RangeError('Array length too big.');
+  } else {
+    newLen = R(Q(yield* ToUint32(Desc.Value)));
+    const numberLen = R(Q(yield* ToNumber(Desc.Value)));
+    if (newLen !== numberLen) return Throw.RangeError('Array length must be uint32.');
   }
   // proposal-runtime-types #sec-array-and-tuple-types: the length of a
   // FIXED-extent array is its type's extent, so assigning another is refused.

@@ -9,6 +9,7 @@ import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.m
 import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
+import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import {
@@ -16,7 +17,7 @@ import {
   type ParameterRecord, type TypeParameterRecord,
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
-  parameter, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
+  parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
   badKindedArgument, restElementType, parameterTypeRecord,
 } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
@@ -26,7 +27,7 @@ import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
-import { IsSharableValueType, SoAColumnsOf } from './layout.mts';
+import { IsSharableValueType, SoAColumnsOf, LayoutOf } from './layout.mts';
 import {
   libraryTypeParameterNames as libraryTypeParameterNamesShared,
   orderTypeArguments as orderTypeArgumentsShared,
@@ -1360,6 +1361,17 @@ function isNumericValueTypeName(name: string | undefined): boolean {
     || name === 'float' || name === 'float16' || name === 'float32'
     || name === 'float64' || name === 'float128'
     || name === 'decimal' || name === 'decimal32' || name === 'decimal64' || name === 'decimal128';
+}
+
+function isFunctionLiteral(node: ParseNode): boolean {
+  return ['FunctionExpression', 'ArrowFunction', 'AsyncFunctionExpression',
+    'AsyncArrowFunction', 'GeneratorExpression', 'AsyncGeneratorExpression'].includes(node.type);
+}
+
+/** Numeric operands include legacy Number/BigInt; literal adoption is narrower. */
+function isNumericOperandName(name: string | undefined): boolean {
+  return isNumericValueTypeName(name) || name === 'number' || name === 'bigint'
+    || name === 'rational' || name === 'complex';
 }
 
 /** Whether a type is an integer value type - `uint` or `int` at any width. */
@@ -3209,6 +3221,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return receiver.Members.flatMap(from);
       }
       const shape = structureOf(receiver);
+      if (key === 'length' && (shape?.Kind === 'array' || shape?.Kind === 'tuple')) return [indexTypeRecord()];
       if (shape?.Kind !== 'object') {
         return [];
       }
@@ -5728,6 +5741,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return published;
     }
     return null;
+  };
+
+  /** Resolve a type-object callee without evaluating a value or a type builder. */
+  const typeObjectTarget = (expression: ParseNode | null | undefined): Known => {
+    const node = patternExpression(expression ?? undefined);
+    const application = node?.type === 'TypeArgumentsExpression' ? node : null;
+    const nameNode = patternExpression((application ? application.Expression : node) ?? undefined);
+    if (nameNode?.type !== 'IdentifierReference') return null;
+    const name = nameNode.name;
+    // A value binding in an inner scope wins over a type alias in an outer one.
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      if (frames[i].aliases.has(name)) break;
+      if (frames[i].declaredNames.has(name)) return null;
+    }
+    if (!lookupAlias(name) && !builtinTypeRecord(name)
+      && !(application && ['int', 'uint', 'rational', 'vector'].includes(name))) return null;
+    if (classTypeOf(name)) return null;
+    const target = !application ? lookupAlias(name) ?? builtinTypeRecord(name) : resolveType({
+      type: 'TypeReference',
+      TypeName: { IdentifierReference: nameNode, MemberNames: [] },
+      TypeArguments: application.TypeArguments,
+    } as unknown as ParseNode.Type);
+    return target && classDeclarationOf(target) !== undefined ? null : target;
   };
 
   /**
@@ -8337,11 +8373,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
-  const typeArithmeticWithin = (node: ParseNode | null | undefined): void => {
+  const recordNumericConstant = (name: string, initializer: ParseNode, frame: Frame): void => {
+    frame.constLiterals.add(name);
+    const literal = staticType(initializer);
+    if (literal?.Kind === 'literal') frame.constLiteralTypes.set(name, literal);
+    const exact = foldConstant(initializer);
+    if (exact !== null) frame.constLiteralValues.set(name, exact);
+    const decimal = foldDecimal(initializer);
+    if (decimal !== null) frame.constDecimalValues.set(name, decimal);
+  };
+
+  // Validate maximal expression roots whose value supplies no destination type.
+  // Reuse inference for operators, and descend only through containers without a
+  // judgment of their own. Function bodies are visited by the scoped walk.
+  const validateDiscardedExpression = (node: ParseNode | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
     }
     switch (node.type) {
+      case 'RelationalExpression':
       case 'AdditiveExpression':
       case 'MultiplicativeExpression':
       case 'ExponentiationExpression':
@@ -8359,9 +8409,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // expression, not to the position it sits in, and `a[9];` is refused as
       // `let u: uint8 = a[9]` is.
       case 'MemberExpression':
-        if ((node as { Expression?: ParseNode | null }).Expression) {
-          staticType(node);
-        }
+        if ((node as { Expression?: ParseNode | null }).Expression) staticType(node);
         return;
       // `new WeakRef(x)` as a statement - the README's own example is written
       // that way - is typed for the static weak-reference check, and so is a
@@ -8389,7 +8437,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         for (const a of (node as unknown as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
-          typeArithmeticWithin(a);
+          validateDiscardedExpression(a);
         }
         return;
       }
@@ -8406,10 +8454,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return;
         }
         for (const a of (node as unknown as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
-          typeArithmeticWithin(a);
+          validateDiscardedExpression(a);
         }
         return;
       }
+      case 'AsyncFunctionExpression':
+      case 'GeneratorExpression':
+      case 'AsyncGeneratorExpression':
+      case 'GeneratorDeclaration':
+      case 'AsyncGeneratorDeclaration':
+      case 'AsyncFunctionDeclaration':
       case 'FunctionExpression':
       case 'ArrowFunction':
       case 'AsyncArrowFunction':
@@ -8426,11 +8480,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (Array.isArray(child)) {
             for (const c of child) {
               if (c && typeof c === 'object' && 'type' in (c as object)) {
-                typeArithmeticWithin(c as ParseNode);
+                validateDiscardedExpression(c as ParseNode);
               }
             }
           } else if (child && typeof child === 'object' && 'type' in (child as object)) {
-            typeArithmeticWithin(child as ParseNode);
+            validateDiscardedExpression(child as ParseNode);
           }
         }
     }
@@ -8649,10 +8703,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // which is not assignable to `{ value: uint8, done: boolean }` however
     // plainly the program meant it. Recorded here, where a node meets its
     // contextual type, and read by the literal's own arm in `staticType`.
-    if ((node.type === 'ArrowFunction' || node.type === 'FunctionExpression')
+    if (isFunctionLiteral(node)
       && contextual && contextual.Kind === 'function' && contextual.Signatures.length === 1) {
+      if (node.type !== 'ArrowFunction' && node.type !== 'FunctionExpression') {
+        contextualParameterTypes.set(node, contextual.Signatures[0].Parameters.map((p) => p.Type));
+      }
       const wanted = contextual.Signatures[0].Return;
-      if (wanted) {
+      if (wanted && wanted.Kind !== 'void') {
         contextualReturnTypes.set(node, wanted as Known);
       }
       // #sec-this-adoption: "Where a
@@ -8669,7 +8726,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // that an arrow nested in an adopting literal sees the OUTER `this` by
       // finding no frame of its own - which is what closing over it means.
       const wantedThis = (contextual.Signatures[0] as { ThisType?: TypeRecord }).ThisType;
-      if (wantedThis !== undefined && node.type === 'FunctionExpression') {
+      if (wantedThis !== undefined && node.type !== 'ArrowFunction' && node.type !== 'AsyncArrowFunction') {
         contextualThisTypes.set(node, wantedThis as Known);
       }
     }
@@ -9479,6 +9536,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  const checkNumericOperation = (operator: string | undefined, type: Known): void => {
+    const erased = erasedForJudgment(type);
+    if (!operator || erased?.Kind !== 'primitive') return;
+    const name = erased.Name;
+    const bitwise = ['~', '&', '|', '^', '<<', '>>', '>>>'].includes(operator);
+    const ordered = ['<', '>', '<=', '>='].includes(operator);
+    const unavailable = (bitwise && (/^(float|decimal)(16|32|64|128)?$/.test(name)
+        || name === 'rational' || name === 'complex'))
+      || (operator === '%' && (name === 'rational' || name === 'complex'))
+      || (ordered && name === 'complex');
+    if (unavailable) {
+      const error = /^float(16|32|64|128)$/.test(name)
+        ? Throw.StaticTypeError('this operator is not defined for a binary floating-point type')
+        : Throw.StaticTypeError('$1 is not defined for $2', Value(operator), Value(displayType(erased)));
+      errors.push(error.Value as ObjectValue);
+    }
+  };
+
   const operatorFailures = new Map<object, 'none' | 'ambiguous'>();
 
   const operatorResult = (callee: Known, args: readonly ParseNode[], node: ParseNode): Known => {
@@ -9515,6 +9590,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const get = declaredOperator(receiver, `[]#${indices.length}`);
     const set = declaredOperator(receiver, `[]=#${indices.length}`);
     return get || set ? { get, set, arguments: indices.map((index, i) => literalOperand(index) ? index : typedExpressionView(index, types[i])) } : null;
+  };
+
+  const pipelineInputType = (expression: ParseNode): Known => {
+    const source = patternExpression(expression);
+    // A literal-only array is an ordinary Array. Publishing its inferred
+    // element shape as a typed topic would give its Number length uint64 type.
+    if (source?.type === 'ArrayLiteral' && !constInitializerParticipates(source)) return null;
+    return staticType(expression);
   };
 
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => inferStaticType(node));
@@ -9593,19 +9676,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TopicReference':
         return lookup(TOPIC_NAME) ?? null;
       case 'ArrowFunction':
-      case 'FunctionExpression': {
-        // proposal-runtime-types #table-check-sites makes an argument and an
-        // annotated binding check sites, so a function LITERAL has a static
-        // type, or nothing could be checked against anything at either; a
-        // function DECLARATION of the same shape is refused at those sites and
-        // a literal must be too.
-        //
-        // Built from what the literal WROTE DOWN: each parameter's annotation,
-        // or the contextual type its position supplied, or ~any~; and the
-        // return annotation, or an inferred one where the body is an
-        // expression. A BLOCK body's return stays ~any~ - imprecise rather than
-        // wrong - which means a block-bodied literal passes every check. That
-        // is the limit of the checker's inference rather than a decision.
+      case 'FunctionExpression':
+      case 'AsyncArrowFunction':
+      case 'AsyncFunctionExpression':
+      case 'GeneratorExpression':
+      case 'AsyncGeneratorExpression': {
         const literal = node as unknown as {
           ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[],
           TypeAnnotation?: ParseNode.TypeAnnotation | null,
@@ -9613,69 +9688,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         const contextual = contextualParameterTypes.get(node) ?? [];
         const wantedReturn = contextualReturnTypes.get(node) ?? null;
+        const generator = node.type === 'GeneratorExpression' || node.type === 'AsyncGeneratorExpression';
+        const asyncGenerator = node.type === 'AsyncGeneratorExpression';
+        const asyncFunction = node.type === 'AsyncFunctionExpression' || node.type === 'AsyncArrowFunction';
         const genericScope = pushTypeParameterScopeOf(node);
         try {
-        // Only an EXPRESSION body's type can be read: the expression IS the
-        // return. A block body needs return-type inference this checker does
-        // not have, and inferring it anyway answers `undefined` for a body that
-        // simply never returns - which is not assignable to `void` and would
-        // refuse `() => {}` at every position wanting one.
-        // Where the literal wrote no return type, its body cannot be read, and
-        // its position wants nothing, there is NOTHING TO SAY - so say nothing
-        // rather than claim ~any~. A claimed `any` is not the same as silence
-        // downstream: `(function () { return ref x; })() = 5` asks whether the
-        // callee returns a ref, and an `any` return answers "no" where an
-        // absent type left the question to the run time.
-        if (!literal.TypeAnnotation && wantedReturn === null
-            && inferredReturnType(node, contextual as readonly Known[], null) === null) {
-          return null;
-        }
-        const params = literal.ArrowParameters ?? literal.FormalParameters ?? [];
-        const Parameters = params.map((prm, i) => {
-          const named = prm as ParseNode.SingleNameBinding;
-          const annotated = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          const resolved = annotated ? resolveType(annotated.Type) : (contextual[i] ?? null);
-          return parameter((resolved ?? anyTypeRecord) as TypeRecord, {
-            Name: named.BindingIdentifier?.name ?? '',
-            Rest: prm.type === 'BindingRestElement',
-            // A parameter is OPTIONAL only where it has a default; the node
-            // carries an Initializer for a defaulted one and nothing otherwise.
-            Optional: (prm as { Initializer?: unknown | null }).Initializer != null,
+          const params = literal.ArrowParameters ?? literal.FormalParameters ?? [];
+          const types = params.map((prm, i) => {
+            const annotation = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+            return annotation ? resolveType(annotation.Type) : contextual[i] ?? null;
           });
-        });
-        const Return = literal.TypeAnnotation
-          ? resolveType(literal.TypeAnnotation.Type)
-          // A BLOCK body's return is inferred too, by the same operation the
-          // concise form uses, so `(v) => { return "k"; }` binds a caller's type
-          // variable as `(v) => "k"` does. Two things make that safe: the JOIN
-          // collapses an all-*undefined* contribution set to `void`
-          // (#sec-inferred-result-type), so an empty body fits a `void`
-          // position; and each `return` is read AT THE WANTED TYPE, as the
-          // concise path is, so a correct body's literal does not widen into a
-          // refusal.
-          : ((inferredReturnType(node, contextual as readonly Known[], wantedReturn))
-            // Where inference answers nothing, the literal still adopts the
-            // return its position wants rather than claiming ~any~: `any` is not
-            // a subtype of every type here, so claiming it would refuse a
-            // callback at every typed position.
-            ?? wantedReturn);
-        // #sec-this-adoption: "the literal's own signature has that
-        // [[ThisType]]". The half that matters downstream - a literal that
-        // adopted a `this` is a method-shaped value, so passing it onward to a
-        // free-function type is refused for the same reason extracting a method
-        // is.
-        const adoptedThis = contextualThisTypes.get(node);
-        return {
-          Kind: 'function',
-          Signatures: [{
-            Parameters,
-            Return: (Return ?? anyTypeRecord) as TypeRecord,
-            Untyped: false,
-            ...(literal.TypeParameters?.TypeParameterList?.length
-              ? { TypeParameters: typeParameterRecordsOf(literal.TypeParameters.TypeParameterList) } : {}),
-            ...(adoptedThis ? { ThisType: adoptedThis as TypeRecord } : {}),
-          }],
-        } as unknown as Known;
+          const Parameters = params.map((prm, i) => parameterFromDeclaration(prm, types[i] ?? anyTypeRecord));
+          let Return = literal.TypeAnnotation ? resolveType(literal.TypeAnnotation.Type) : null;
+          if (Return && generator) Return = generatorDeclaredType(Return, asyncGenerator);
+          if (!literal.TypeAnnotation) {
+            // A resumable literal's result is its carrier, while inference reads
+            // the yielded or resolved values within its body.
+            const mode = generator ? 'yield' : asyncFunction ? 'resolve' : 'return';
+            const wanted = generator ? generatorParameters(wantedReturn)?.Yield ?? null
+              : asyncFunction ? awaitedElementType(wantedReturn) : wantedReturn;
+            const inferred = inferredReturnType(node, types, wanted, { anchored: false }, mode);
+            if (inferred) {
+              if (generator) {
+                const returned = inferredReturnType(node, types, generatorParameters(wantedReturn)?.Return ?? null,
+                  { anchored: false }, 'generator-return');
+                Return = libraryTypeRecord(asyncGenerator ? 'AsyncGenerator' : 'Generator',
+                  [inferred, returned ?? anyTypeRecord, generatorParameters(wantedReturn)?.Next ?? voidType]);
+              } else {
+                Return = asyncFunction ? libraryTypeRecord('Promise', [inferred, anyTypeRecord]) : inferred;
+              }
+            }
+            Return ??= wantedReturn;
+          }
+          // An unknown result must not erase explicit parameter contracts.
+          // Completely untyped literals can still leave their result unknown.
+          if (!Return && !literal.TypeAnnotation && types.every((type) => !type)
+              && !params.some((prm) => (prm as { Ref?: boolean }).Ref)) return null;
+          const adoptedThis = contextualThisTypes.get(node);
+          return {
+            Kind: 'function',
+            Signatures: [{
+              Parameters, Return: Return ?? anyTypeRecord, Untyped: false,
+              ...(literal.TypeParameters?.TypeParameterList?.length
+                ? { TypeParameters: typeParameterRecordsOf(literal.TypeParameters.TypeParameterList) } : {}),
+              ...(adoptedThis ? { ThisType: adoptedThis } : {}),
+            }],
+          } as unknown as Known;
         } finally {
           if (genericScope) typeParameterScopes.pop();
         }
@@ -9686,7 +9744,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // own, so lookup, narrowing, and shadowing by an inner pipeline are the
         // ordinary rules rather than three new ones.
         const p = node as ParseNode.PipelineExpression;
-        const topic = staticType(p.PipelineExpression);
+        const topic = pipelineInputType(p.PipelineExpression);
         const bindings = new Map<string, TypeRecord>();
         if (topic) {
           bindings.set(TOPIC_NAME, topic);
@@ -9738,20 +9796,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (declared) return operatorResult(declared, [], node);
         if (unary.operator === '!') return operand && operand.Kind !== 'any' && operand.Kind !== 'union'
           && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
-        // #table-family-operations: a binary floating-point type "does not
-        // define bitwiseNOT, the shifts, and the bitwise operations". The binary
-        // forms are judged in the arithmetic arm; `~` is the unary one, and the
-        // run time refused it alone - `~(1.5 := float32)` answered -2 before it
-        // did.
-        if (unary.operator === '~' && inner) {
-          if (operand && operand.Kind === 'primitive'
-            && /^float(16|32|64|128)$/.test((operand as { Name?: string }).Name ?? '')) {
-            const completion = Throw.StaticTypeError(
-              'this operator is not defined for a binary floating-point type',
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-          }
-        }
+        checkNumericOperation(unary.operator, operand);
         if ((unary.operator === '-' || unary.operator === '+')
           && inner && (inner as { type?: string }).type === 'NumericLiteral'
           && !(inner as { Imaginary?: boolean }).Imaginary) {
@@ -10087,21 +10132,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (parseCallee?.type === 'MemberExpression'
           && (parseCallee.IdentifierName?.name === 'parse' || parseCallee.IdentifierName?.name === 'tryParse')
           && parseCallee.MemberExpression) {
-          const targetName = parseCallee.MemberExpression.type === 'IdentifierReference'
-            ? (parseCallee.MemberExpression as unknown as { name?: string }).name
-            : undefined;
-          const target = targetName ? builtinTypeRecord(targetName) : null;
-          if (target) {
-            // `parse` answers a value OF the type. `tryParse` answers that or
-            // *null*, and only `parse` is typed here: a union with null needs a
-            // null record this checker does not have, and claiming the bare
-            // type for tryParse would be WRONG in the direction that matters -
-            // it would let `let a: uint8 = uint8.tryParse(s)` pass while the
-            // value may be null.
-            if (parseCallee.IdentifierName.name === 'parse') {
-              return target as Known;
-            }
-          }
+          const target = typeObjectTarget(parseCallee.MemberExpression);
+          if (target) return parseCallee.IdentifierName.name === 'parse' ? target
+            : CanonicalizeType({ Kind: 'union', Members: [target, makePrimitive('null')] });
         }
         const calleeNode = (node as { CallExpression?: ParseNode }).CallExpression;
         // #sec-typed-standard-library-statics: a named STATIC of the standard
@@ -10186,37 +10219,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // is stated rather than guessed.
           return makePrimitive('Composite', []);
         }
-        // CALLING A TYPE OBJECT is the
-        // construction boundary (sec-parameterized-types), and the static type
-        // of that call is the type called: `Email('a@b')` is an `Email`.
-        //
-        // Without this the call typed as its BASE - `string` - so every boundary
-        // downstream inserted a runtime check, and for a non-numeric base that
-        // check cannot pass: a String has nowhere to carry a Type Record, so a
-        // branded string IS a bare string and `IsOfType(bare, Email)` correctly
-        // answers false. A value from a brand's own constructor could not be
-        // passed to a parameter declared with that brand, which made a `string`
-        // or `boolean` brand unusable.
-        //
-        // The runtime check is not what needed fixing, and neither is elision:
-        // where the checker knows the static type IS the target,
-        // #table-check-sites inserts nothing, and `let v: E = e` for a parameter
-        // `e: E` already worked. Only the static type of the CALL was missing -
-        // the same defect as the `Composite` and `T.parse` cases above, whose
-        // comments record it in the same words.
-        //
-        // Matched on the callee's NAME, as `Composite` is, and resolved through
-        // `lookupAlias`: the static type of a bare type name is not the type, so
-        // keying on `staticType(callee)` does not identify a Type Object call.
-        if (calleeNode?.type === 'IdentifierReference') {
-          const named = lookupAlias((calleeNode as { name?: string }).name ?? '');
-          if (named && named.Kind === 'parameterized') {
-            return named as Known;
-          }
+        // A statically resolved conversion supplies its target as the result,
+        // while an ordinary callable keeps its signature's return type.
+        const callee = callableForm(staticType((node as { CallExpression: ParseNode }).CallExpression));
+        const conversion = callee?.Kind === 'function' ? null : typeObjectTarget(calleeNode);
+        // Composite-to-object boundaries have a member-conversion rule; their
+        // nominal result alone is not an assignability judgment for that rule.
+        if (conversion && !(conversion.Kind === 'primitive' && conversion.Name === 'Composite')) {
+          return contextualForCall && numericFamilyOf(conversion) !== null
+            && numericFamilyOf(contextualForCall) !== null ? contextualForCall : conversion;
         }
         // A call's static type is the callee function type's return, when
         // known; the argument check happens in the walk.
-        const callee = callableForm(staticType((node as { CallExpression: ParseNode }).CallExpression));
         // `a.map(cb)` returns an array of the CALLBACK'S return type, which is
         // why it is left ~any~ rather than guessed at. The inference happens
         // HERE rather than through a channel: a declaration asks for its
@@ -10570,39 +10584,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // ExpressionStatement arm.
         for (const a of (node as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
           if ((a as { type?: string }).type === 'AssignmentRestElement') {
-            typeArithmeticWithin((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
+            validateDiscardedExpression((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
           } else {
-            typeArithmeticWithin(a as ParseNode);
-          }
-        }
-        // proposal-runtime-types #sec-conversions: a conversion call answers its
-        // TARGET type - or, where the position supplies a contextual type that
-        // the target CONVERTS to, the position's type.
-        //
-        // The second half is not assignability. `#sec-conversions` keys the
-        // numeric conversions on FAMILIES - "a numeric target has a conversion
-        // available only when the value is itself numeric" - so a `uint32` in a
-        // `uint8` position converts, though `IsAssignable` is false for it. The
-        // runtime converts there (`const v = uint32(1); h(v)` runs), and
-        // README.md:2088 documents `h(uint32(f()))` as a remedy that depends on
-        // it.
-        //
-        // Both halves are needed: with no answer the checker does not know what
-        // `uint32(1)` IS and `const c: string = uint32(1)` passes; with the
-        // target alone as the answer, the remedy is refused.
-        {
-          const ce = (node as { CallExpression?: { type?: string, name?: string } }).CallExpression;
-          if (ce && ce.type === 'IdentifierReference' && ce.name
-              && !frames.some((f) => f.declaredNames.has(ce.name!))) {
-            const asType = builtinTypeRecord(ce.name, []) as Known;
-            if (asType) {
-              if (contextualForCall
-                  && numericFamilyOf(asType) !== null
-                  && numericFamilyOf(contextualForCall) !== null) {
-                return contextualForCall;
-              }
-              return asType;
-            }
+            validateDiscardedExpression(a as ParseNode);
           }
         }
         return null;
@@ -11550,6 +11534,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // until it is, a literal operand cannot be judged for disjointness at
         // all.
         const strictOperator = (node as unknown as { operator?: string }).operator;
+        const declaredComparison = strictOperator ? declaredOperator(operandTypes[0] ?? null, strictOperator) : null;
+        if (declaredComparison && operandNodes[1]) return operatorResult(declaredComparison, [operandNodes[1]], node);
+        for (const operand of operandTypes) checkNumericOperation(strictOperator, operand);
+
 
         // A `void` operand is excluded too, and this one is a genuine tension
         // rather than a limitation. `interface I { (o: object, n: uint8 = 1); }`
@@ -11621,7 +11609,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const base = at.Kind === 'parameterized' ? (at as { Base?: TypeRecord }).Base : at;
             return base && base.Kind === 'primitive'
-              && isNumericValueTypeName((base as { Name?: string }).Name)
+              && isNumericOperandName((base as { Name?: string }).Name)
               ? at as TypeRecord : null;
           };
           const lvc = numericForCompare(operandTypes[0] as Known);
@@ -11660,6 +11648,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return makePrimitive('boolean');
       }
       case 'TemplateLiteral':
+        validateDiscardedExpression(node);
         return makePrimitive('string');
       // proposal-runtime-types #sec-static-type-of-an-expression: `&&`, `||`,
       // and `??` produce one of their OPERANDS, not a boolean, so their type is
@@ -11701,10 +11690,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // and `a: uint64` reads K's exact value, not the binding's double.
         const constUse = (n: ParseNode): ParseNode | null => {
           const inner = innermostLiteral(n);
-          if (inner.type !== 'IdentifierReference') {
-            return null;
-          }
-          const nm = (inner as unknown as { name: string }).name;
+          if (isWellKnownNumericConstant(inner) && !shadowedByProgram('Math')) return n;
+          if (inner.type !== 'IdentifierReference') return null;
+          const nm = inner.name;
           return constExactValue(nm) !== null || constDecimalValue(nm) !== null ? n : null;
         };
         const leftLit = literalOperand(leftNode) ?? constUse(leftNode);
@@ -11793,10 +11781,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const asValueType = (t: Known): TypeRecord | null => {
           if (t && t.Kind === 'parameterized') {
             const base = (t as { Base?: TypeRecord }).Base;
-            return base && base.Kind === 'primitive' && isNumericValueTypeName((base as { Name?: string }).Name)
+            return base && base.Kind === 'primitive' && isNumericOperandName((base as { Name?: string }).Name)
               ? t as TypeRecord : null;
           }
-          return t && t.Kind === 'primitive' && isNumericValueTypeName((t as { Name?: string }).Name) ? t as TypeRecord : null;
+          return t && t.Kind === 'primitive' && isNumericOperandName((t as { Name?: string }).Name) ? t as TypeRecord : null;
         };
         // Through `shared` and a literal's base: a `shared uint8` is a `uint8`
         // for every question about what the value can do.
@@ -11838,7 +11826,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // Asked of `leftT`/`rightT` rather than `lv`/`rv`, and for the reason
         // recorded where the binary floats are: a vector is not a numeric VALUE
-        // type by `isNumericValueTypeName`, so it is absent from both and every
+        // type by `isNumericOperandName`, so it is absent from both and every
         // rule reading them passes a vector by.
         //
         // Only where BOTH operands are vectors. A vector against its own LANE
@@ -11856,22 +11844,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
-        {
-          const bitwise = node.type === 'BitwiseANDExpression' || node.type === 'BitwiseORExpression'
-            || node.type === 'BitwiseXORExpression' || node.type === 'ShiftExpression';
-          // Asked of `leftT`/`rightT` rather than `lv`/`rv`: a binary float is
-          // not a value type by `isNumericValueTypeName`, so it is absent from
-          // both, and every rule below that reads them passes a float by. That
-          // is also why `f | n` reached the run time while `n | i` did not.
-          const isBinaryFloat = (t: Known) => !!t && t.Kind === 'primitive'
-            && /^float(16|32|64|128)$/.test((t as { Name?: string }).Name ?? '');
-          if (bitwise && (isBinaryFloat(leftT) || isBinaryFloat(rightT))) {
-            const completion = Throw.StaticTypeError(
-              'this operator is not defined for a binary floating-point type',
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-          }
-        }
+        checkNumericOperation(token, leftT);
+        checkNumericOperation(token, rightT);
         // "one that doesn't fit is a compile-time TypeError rather than a silent
         // truncation" - the README's `a + 300` at a `uint8`. The literal takes
         // the type here, so it is checked here; this was a RangeError at run
@@ -11896,11 +11870,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         };
         if (lv && rightLit) {
-          adopt(rightLit, lv);
+          if (isNumericValueTypeName(((lv.Kind === 'parameterized' ? lv.Base : lv) as { Name?: string }).Name)) adopt(rightLit, lv);
           return lv;
         }
         if (rv && leftLit) {
-          adopt(leftLit, rv);
+          if (isNumericValueTypeName(((rv.Kind === 'parameterized' ? rv.Base : rv) as { Name?: string }).Name)) adopt(leftLit, rv);
           return rv;
         }
         {
@@ -11918,6 +11892,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
+        // Rational exponentiation takes an integer exponent, not a rational.
+        if (token === '**' && erasedForJudgment(lv)?.Kind === 'primitive'
+          && (erasedForJudgment(lv) as { Name?: string }).Name === 'rational'
+          && rv?.Kind === 'primitive' && ['int', 'uint', 'number', 'bigint'].includes(rv.Name)) return lv;
         if (lv && rv) {
           if (SameType(lv, rv)) {
             return lv;
@@ -14652,8 +14630,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ?? (fn as { FunctionBody?: ParseNode }).FunctionBody
       ?? (fn as { GeneratorBody?: ParseNode }).GeneratorBody
       ?? (fn as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody
-      ?? (fn as { AsyncBody?: ParseNode }).AsyncBody;
-    if (body && body.type === 'ConciseBody') {
+      ?? (fn as { AsyncBody?: ParseNode }).AsyncBody
+      ?? (fn as { AsyncConciseBody?: ParseNode }).AsyncConciseBody;
+    if (body && (body.type === 'ConciseBody' || body.type === 'AsyncConciseBody')) {
       body = (body as unknown as { ExpressionBody: ParseNode }).ExpressionBody;
     }
     if (body && body.type === 'ExpressionBody') {
@@ -14675,7 +14654,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // that record, while `() => "wrong"` at a `uint8` gives a literal string
         // type and is refused. Using the WANTED type as the answer instead
         // would make every unannotated literal trivially conform.
-        const conciseType = wanted ? staticTypeIn(body!, wanted) : staticType(body!);
+        const contribution = wanted ? staticTypeIn(body!, wanted) : staticType(body!);
+        const conciseType = mode === 'resolve' ? awaitedElementType(contribution) ?? contribution : contribution;
         // The concise body IS the return, so it is the contribution, and
         // anchoring is read off it exactly as the block collector reads it off
         // each `return`. Without this a concise arrow never counted as
@@ -14728,7 +14708,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               unknown = true;
               return;
             }
-            const t = y.AssignmentExpression ? staticType(y.AssignmentExpression) : null;
+            const t = y.AssignmentExpression ? staticTypeIn(y.AssignmentExpression, wanted) : null;
             if (!t) {
               unknown = true;
               return;
@@ -14736,8 +14716,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (derivesFromDeclaration(y.AssignmentExpression as ParseNode, t)) {
               anchorage.anchored = true;
             }
-            const yielded = fn.type === 'AsyncGeneratorMethod' ? awaitedElementType(t) ?? t : t;
-            contributions.push(widen(yielded));
+            const yielded = fn.type.startsWith('AsyncGenerator') ? awaitedElementType(t) ?? t : t;
+            contributions.push(wanted && yielded.Kind === 'literal' && literalFitsNumericType(yielded, wanted) ? wanted : widen(yielded));
             // Fall through: a `yield` may contain another in its operand.
           }
         } else if (n.type === 'LexicalDeclaration' || n.type === 'VariableStatement') {
@@ -14791,6 +14771,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const kind = (n as unknown as { LetOrConst?: string }).LetOrConst;
             const cannotChange = kind === 'const' || !assignedNames.has(bname);
             const init = (bound as unknown as { Initializer?: ParseNode | null }).Initializer;
+            if (kind === 'const' && init && isNumericConstantExpression(init)) {
+              recordNumericConstant(bname, init, frames[frames.length - 1]);
+            }
             if (cannotChange && init) {
               const initType = staticType(init) ?? objectLiteralShape(init);
               if (initType) {
@@ -15238,11 +15221,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           annotated.push(restResolved);
-          Parameters.push(parameter(restResolved ?? anyTypeRecord, {
-            Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
-            Rest: true,
-            Ref: (p as { Ref?: boolean }).Ref === true,
-          }));
+          Parameters.push(parameterFromDeclaration(p, restResolved ?? anyTypeRecord));
           continue;
         }
         if (p.type !== 'SingleNameBinding' && p.type !== 'BindingElement') {
@@ -15256,11 +15235,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         const resolved2 = pp.TypeAnnotation ? resolveType(pp.TypeAnnotation.Type) : null;
         annotated.push(resolved2);
-        Parameters.push(parameter(resolved2 ?? anyTypeRecord, {
-          Name: (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '',
-          Optional: pp.Optional === true || !!pp.Initializer,
-          Ref: (p as { Ref?: boolean }).Ref === true,
-        }));
+        Parameters.push(parameterFromDeclaration(p, resolved2 ?? anyTypeRecord));
       }
       if (!usable) {
         rejected.add(name);
@@ -15583,6 +15558,72 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (type.Kind === 'reference') return type.Target;
     errors.push(Throw.StaticTypeError('a call in a location-consuming context must return a ref, and $1 does not', Value(displayType(type))).Value as ObjectValue);
     return null;
+  };
+
+  /** Borrow eligibility is independent of the type stored at a location. */
+  const requireBorrowable = (expression: ParseNode): void => {
+    const target = patternExpression(expression)!;
+    if (target.type === 'IdentifierReference' || target.type === 'CallExpression') {
+      locationType(target);
+      return;
+    }
+    if (target.type === 'SuperProperty' || (target.type === 'MemberExpression' && target.PrivateIdentifier)) {
+      errors.push(Throw.StaticTypeError('cannot take a ref of a private member or a super property').Value as ObjectValue);
+      return;
+    }
+    if (target.type !== 'MemberExpression') {
+      errors.push(Throw.StaticTypeError('cannot take a ref of a value; a ref needs a variable, a property, or an array element').Value as ObjectValue);
+      return;
+    }
+    const receiver = staticType(target.MemberExpression);
+    const primitive = (type: Known): boolean => {
+      const base = erasedForJudgment(type);
+      if (base?.Kind === 'union') return base.Members.every(primitive);
+      return base?.Kind === 'primitive' && (isNumericOperandName(base.Name)
+        || ['string', 'boolean', 'symbol', 'undefined', 'null', 'vector', 'Composite'].includes(base.Name));
+    };
+    if (primitive(receiver)) errors.push(Throw.StaticTypeError('cannot take a ref of a property of a primitive').Value as ObjectValue);
+    const key = memberKey(target);
+    const declaration = receiver && classDeclarationOf(receiver) as ParseNode.ClassDeclaration | undefined;
+    const field = declaration?.ClassTail.ClassBody?.find((element) => element.type === 'FieldDefinition'
+      && classElementKey(element.ClassElementName) === key);
+    if (field?.type === 'FieldDefinition' && field.TypeAnnotation) {
+      const fieldType = resolveType(field.TypeAnnotation.Type);
+      const layout = fieldType ? LayoutOf(fieldType) : null;
+      if (layout && layout.bitLength < 8 && typeof key === 'string') errors.push(Throw.StaticTypeError(
+        'cannot take a ref of $1, which is a bit-field and has no byte address', Value(key),
+      ).Value as ObjectValue);
+    }
+  };
+
+  const cannotRefIterate = (type: Known): boolean => {
+    const base = erasedForJudgment(type);
+    if (!base || base.Kind === 'any' || base.Kind === 'parameter') return false;
+    if (base.Kind === 'union') return base.Members.every(cannotRefIterate);
+    if (base.Kind === 'array' || base.Kind === 'tuple') return false;
+    if (base.Kind === 'nominal') {
+      // A structural type or a user class can hide array storage. Closed
+      // library families expose enough information to settle this question.
+      return !!base.LibraryName && !['Array', 'SoA'].includes(base.LibraryName);
+    }
+    return base.Kind === 'void' || (base.Kind === 'primitive' && base.Name !== 'object');
+  };
+
+  const checkLengthLiteral = (target: ParseNode, value: ParseNode): void => {
+    const member = patternExpression(target);
+    if (member?.type !== 'MemberExpression' || memberKey(member) !== 'length') return;
+    const receiver = structureOf(staticType(member.MemberExpression));
+    const length = foldIntegerConstant(value, constExactValue);
+    if (length === null) return;
+    if (receiver?.Kind === 'array' && typeof receiver.Extent === 'number' && length !== BigInt(receiver.Extent)) {
+      errors.push(Throw.StaticTypeError('a fixed-extent array cannot be grown').Value as ObjectValue);
+    } else if (receiver?.Kind === 'tuple') {
+      const rest = receiver.Elements.findIndex((element) => element.Rest);
+      const fixed = rest < 0 ? receiver.Elements.length : rest;
+      if (rest < 0 ? length !== BigInt(fixed) : length < BigInt(fixed)) errors.push(Throw.StaticTypeError(
+        'a tuple of $1 positions cannot be given a length of $2', Value(String(fixed)), Value(String(length)),
+      ).Value as ObjectValue);
+    }
   };
 
   /** Typed information can pass through syntax without another binding opt-in. */
@@ -16588,7 +16629,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // callback learns the element type. Recorded here and read
         // when the walk reaches the literal.
         if (param && param.Kind === 'function' && param.Signatures.length === 1
-            && (arg.type === 'ArrowFunction' || arg.type === 'FunctionExpression')) {
+            && isFunctionLiteral(arg)) {
           contextualParameterTypes.set(arg, param.Signatures[0].Parameters.map((pr) => pr.Type) as readonly Known[]);
           // The position's RETURN as well as its parameters, so that a
           // block-bodied callback's `return` is read at the wanted type:
@@ -16724,7 +16765,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (!Array.isArray(node) && (node as { type: string }).type === 'RefExpression') {
       const expression = (node as unknown as { Expression: ParseNode }).Expression;
-      locationType(expression);
+      requireBorrowable(expression);
       walk(expression);
       return;
     }
@@ -16744,7 +16785,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const source = enumerating ? f.Expression : f.AssignmentExpression;
       const bound = enumerating ? null : rangeCounterBound(source);
       const decl = (f.ForDeclaration ?? f.ForBinding) as unknown as {
-        ForBinding?: { BindingIdentifier?: { name?: string } },
+        ForBinding?: { BindingIdentifier?: { name?: string }, Ref?: boolean },
+        Ref?: boolean,
         BindingIdentifier?: { name?: string },
       } | undefined;
       const name = decl?.ForBinding?.BindingIdentifier?.name ?? decl?.BindingIdentifier?.name;
@@ -16770,6 +16812,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the method all reach here as nominals and are untouched.
       if (f.AssignmentExpression) {
         const over = staticType(f.AssignmentExpression);
+        if ((decl?.ForBinding?.Ref || decl?.Ref) && cannotRefIterate(over)) errors.push(Throw.StaticTypeError(
+          'a ref for-of loop requires an array or an SoA whose elements can be referenced',
+        ).Value as ObjectValue);
         // A TUPLE COMPOSITE iterates, though it is a ~primitive~-kinded record
         // named "Composite" like every composite. #sec-composite-getiterator
         // inserts a step for exactly this: "A tuple composite has a *null*
@@ -16967,6 +17012,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (scope) typeParameterScopes.pop();
     }
     switch (n.type) {
+      case 'ThrowStatement':
+        validateDiscardedExpression(n.Expression);
+        walk(n.Expression);
+        return;
+      case 'SpreadElement': {
+        const over = staticType(n.AssignmentExpression);
+        if (notIterable(over)) errors.push(Throw.StaticTypeError(
+          'a value of $1 is not iterable', Value(displayType(over!)),
+        ).Value as ObjectValue);
+        walk(n.AssignmentExpression);
+        return;
+      }
+
       case 'IdentifierReference':
         checkPatternBindingReference(n);
         return;
@@ -17130,7 +17188,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // before (a member access through `L | null` in a `String(...)`
         // argument, for one), and that is a separate change with its own
         // consequences. Recorded as a remaining item.
-        typeArithmeticWithin((n as unknown as { Expression: ParseNode }).Expression);
+        validateDiscardedExpression((n as unknown as { Expression: ParseNode }).Expression);
         // The ~void~ form. #sec-declared-narrowing: an assertion narrows "every position the
         // call dominates" rather than a branch, so it is applied AFTER the
         // statement is walked and takes effect for its siblings - which the
@@ -17498,6 +17556,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (n.Initializer) {
+            if ((n as { Ref?: boolean }).Ref) requireBorrowable(n.Initializer);
             withProvenance(n.Initializer, () => requireAssignable(staticTypeIn(n.Initializer, declared), declared));
             walk(n.Initializer);
           }
@@ -17521,26 +17580,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const frame = frames[frames.length - 1];
             (isConstDeclaration ? frame.constLiterals : frame.letConstants)
               .add(n.BindingIdentifier.name);
-            if (isConstDeclaration) {
-              const literal = staticType(n.Initializer);
-              if (literal && literal.Kind === 'literal') {
-                frame.constLiteralTypes.set(n.BindingIdentifier.name, literal);
-              }
-              // The EXACT value, read from the source text before rounding, so
-              // a use of this constant at a wide type is exact. The binding
-              // itself holds a Number - `const K = 9007199254740993` is
-              // `...992` at run time - which is what "behaves as if inlined"
-              // has to route around: a use folds to this value, not to the
-              // binding's.
-              const exact = foldConstant(n.Initializer);
-              if (exact !== null) {
-                frame.constLiteralValues.set(n.BindingIdentifier.name, exact);
-              }
-              const dec = foldDecimal(n.Initializer);
-              if (dec !== null) {
-                frame.constDecimalValues.set(n.BindingIdentifier.name, dec);
-              }
-            }
+            if (isConstDeclaration) recordNumericConstant(n.BindingIdentifier.name, n.Initializer, frame);
           }
           // A `const` cannot be reassigned, so a call through it reaches the
           // function the checker read a signature from (#sec-check-elision).
@@ -17639,6 +17679,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rb = n as unknown as { BindingIdentifier?: { name?: string }, Expression?: ParseNode };
         const name = rb.BindingIdentifier?.name;
         const target = name ? lookup(name) : null;
+        if (rb.Expression) requireBorrowable(rb.Expression);
         const source = rb.Expression ? staticType(rb.Expression) : null;
         // Where either side's type is unknown the judgment is the run time's,
         // as it is for the borrow itself.
@@ -17699,28 +17740,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = callableForm(staticType(c.CallExpression));
-        // proposal-runtime-types #sec-conversions: a call whose callee names a
-        // TYPE is a conversion, and the checker had no handling for one at all -
-        // `uint32("s")` raised nothing statically and `const c: string =
-        // uint32(1)` was ACCEPTED, because neither the argument nor the result
-        // was checked.
-        //
-        // Recognised by three guards, each of which the value side could not
-        // supply: an ordinary function is CALLABLE and a type name is not; a
-        // value binding SHADOWS the type, which `declaredNames` sees where
-        // `lookup` does not; and the name denotes a type, which is the question
-        // the annotation side asks through `builtinTypeRecord`
-        // (<emu-xref> resolveType's TypeReference arm).
-        const conversionTarget = ((): TypeRecord | undefined => {
-          const ce = c.CallExpression as { type?: string, name?: string };
-          if (ce.type !== 'IdentifierReference' || !ce.name || callee) {
-            return undefined;
-          }
-          if (frames.some((f) => f.declaredNames.has(ce.name!))) {
-            return undefined;
-          }
-          return builtinTypeRecord(ce.name, []) ?? undefined;
-        })();
+        // Type-object calls share lexical resolution with result inference.
+        const conversionTarget = callee?.Kind === 'function' ? undefined : typeObjectTarget(c.CallExpression) ?? undefined;
         vectorCallType(n as ParseNode.CallExpression, true);
         // A VALUE OF A PRIMITIVE TYPE IS NOT CALLABLE. #sec-type-errors makes a
         // determinable violation an Early Error, and this one is as determinable
@@ -18081,7 +18102,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // never reached with the frame in place.
         const pl = n as unknown as { PipelineExpression: ParseNode, Body: ParseNode };
         walk(pl.PipelineExpression);
-        const topic = staticType(pl.PipelineExpression);
+        const topic = pipelineInputType(pl.PipelineExpression);
         const bindings = new Map<string, TypeRecord>();
         if (topic) {
           bindings.set(TOPIC_NAME, topic);
@@ -18098,7 +18119,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // give: a condition is an expression whose judgments run from
       // `staticType`, and walking does not call it for one. A `for`'s test is
       // its SECOND clause, `Expression_b`; its initializer and update are
-      // ordinary expressions in statement position and are left to the walk.
+      // validated as discarded expressions in the same loop scope.
       //
       // Neither node type had an arm at all, so the children are walked here
       // explicitly - `parent` excluded, which is the recursion an earlier arm in
@@ -18106,6 +18127,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'DoWhileStatement':
       case 'ForStatement': {
         const checkLoop = () => {
+        if (n.type === 'ForStatement') {
+          if (!n.LexicalDeclaration && !n.VariableDeclarationList) validateDiscardedExpression(n.Expression_a);
+          validateDiscardedExpression(ForPatternPositions(n).update);
+        }
         const condition = n.type === 'ForStatement'
           ? ForPatternPositions(n).test
           : (n as unknown as { Expression?: ParseNode | null }).Expression;
@@ -18200,6 +18225,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return;
         }
         requireWritableMember(a.LeftHandSideExpression);
+        if (a.AssignmentOperator === '=') checkLengthLiteral(a.LeftHandSideExpression, a.AssignmentExpression);
         if (judgedAssignmentOperator(a.AssignmentOperator) && !['=', '||=', '&&=', '??='].includes(a.AssignmentOperator)) {
           const receiver = staticType(a.LeftHandSideExpression);
           const binary = declaredOperator(receiver, a.AssignmentOperator.slice(0, -1));
@@ -18831,7 +18857,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         {
           const ordinary = n.type.endsWith('Declaration') || n.type.endsWith('Expression');
           if (ordinary) {
-            thisTypeFrames.push(null);
+            thisTypeFrames.push(contextualThisTypes.get(n) ?? null);
           }
           const pushed = pushTypeParameterScopeOf(n);
           try {
@@ -18876,9 +18902,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           const declared = gen
-            ? generatorDeclaredType(ann ? resolveType(ann.Type) : contextualMethodReturns.get(n) ?? null, isAsyncGen, inferredGeneratorReturn)
+            ? generatorDeclaredType(ann ? resolveType(ann.Type) : contextualMethodReturns.get(n) ?? contextualReturnTypes.get(n) ?? null, isAsyncGen, inferredGeneratorReturn)
             : null;
-          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncBody?: ParseNode }).AsyncBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, contextualParameterTypes.get(n), declared, true, contextualMethodReturns.get(n) ?? null);
+          enterFunction((n as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters, ann ?? null, (n as { FunctionBody?: ParseNode }).FunctionBody ?? (n as { GeneratorBody?: ParseNode }).GeneratorBody ?? (n as { AsyncBody?: ParseNode }).AsyncBody ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody ?? (n as { AsyncConciseBody?: ParseNode }).AsyncConciseBody, true, contextualParameterTypes.get(n), declared, true, contextualMethodReturns.get(n) ?? contextualReturnTypes.get(n) ?? null);
           } finally {
             if (pushed) {
               typeParameterScopes.pop();

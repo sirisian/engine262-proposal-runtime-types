@@ -300,9 +300,10 @@ test('exponentiation agrees with repeated multiplication', () => {
 });
 
 test('every operation the family denies is refused', () => {
-  // Asserted one at a time: a group passes if any single one throws.
+  // Keep the operands dynamic to exercise runtime dispatch; known operands
+  // are rejected before evaluation. Assert each operation separately.
   for (const op of ['%', '<', '<=', '>', '>=', '<<', '>>', '>>>', '&', '|', '^']) {
-    expect(evaluated(`const a = complex(3, 4), b = complex(1, 2); let m = "accepted";`
+    expect(evaluated(`let a: any = complex(3, 4), b: any = complex(1, 2); let m = "accepted";`
       + ` try { a ${op} b; } catch (e) { m = "refused"; } m;`), op).toBe('refused');
   }
   // And `+` no longer CONCATENATES, which is what it did before the family

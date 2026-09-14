@@ -348,7 +348,7 @@ test('reserve past a fixed extent is refused', () => {
   expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; a.reserve(64);', 'TypeError');
   // Consistency with the operations that were already guarded.
   expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; a.push(5);', 'TypeError');
-  expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; a.length = 9;', 'TypeError');
+  expectThrownKind('let a: [4].<uint32> = [1, 2, 3, 4]; let n: any = 9; a.length = n;', 'TypeError');
 });
 
 test('a reserve within a fixed extent is a no-op rather than an error', () => {

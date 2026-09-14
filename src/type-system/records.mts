@@ -242,6 +242,20 @@ export function parameter(Type: TypeRecord, extra?: Partial<Omit<ParameterRecord
   };
 }
 
+/** Preserve the same parameter contract in declarations and function literals. */
+export function parameterFromDeclaration(node: ParseNode, Type: TypeRecord): ParameterRecord {
+  const declaration = node as {
+    BindingIdentifier?: { name: string }, Optional?: boolean,
+    Initializer?: ParseNode | null, Ref?: boolean,
+  };
+  return parameter(Type, {
+    Name: declaration.BindingIdentifier?.name ?? '',
+    Optional: declaration.Optional === true || !!declaration.Initializer,
+    Rest: node.type === 'BindingRestElement',
+    Ref: declaration.Ref === true,
+  });
+}
+
 /**
  * proposal-runtime-types #sec-signature-records: one declared type parameter of
  * a generic signature or declaration. [[Kind]] distinguishes a VALUE parameter

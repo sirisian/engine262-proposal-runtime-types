@@ -51,8 +51,8 @@ test('what the rule does not reach', () => {
   expect(ok(dead(`${D}let q = 5 < n;`))).toBe(true);
   expect(ok(dead(`${D}let q = 1 < 2;`))).toBe(true);
 
-  // `number` is not a numeric VALUE type, and an unknown operand is not judged.
-  expect(ok(dead(`${D}let x: number = 1; let q = n < x;`))).toBe(true);
+  // A known Number is a different numeric type; an unknown operand defers.
+  expectThrown(dead(`${D}let x: number = 1; let q = n < x;`), 'different numeric types');
   expect(ok(dead(`${D}let a: any = 1; let q = n < a;`))).toBe(true);
   expect(ok(dead('let a = 1; let b = 2; let q = a < b;'))).toBe(true);
 

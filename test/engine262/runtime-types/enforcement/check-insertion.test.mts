@@ -487,8 +487,8 @@ test('the relational operators take the same rule as the arithmetic ones', () =>
   // them together, and comparison does not route through
   // ApplyStringOrNumericBinaryOperator, so it needs the rule separately -
   // without it `(1 := uint8) < (2 := uint16)` answers true.
-  expect(thrownKind('(1 := uint8) < (2 := uint16);')).toBe('TypeError');
-  expect(thrownKind('(1 := uint8) >= (2 := uint16);')).toBe('TypeError');
+  expect(thrownKind('(1 := uint8) < (2 := uint16);')).toBe('StaticTypeError');
+  expect(thrownKind('(1 := uint8) >= (2 := uint16);')).toBe('StaticTypeError');
   expect(thrownKind('function anyv() { return 2; } (1 := uint8) < anyv();')).toBe('TypeError');
   expect(thrownKind('(1 := uint8) < 300;')).toBe('RangeError');
   // A typed value does not compare with a BigInt either, which the comparison
