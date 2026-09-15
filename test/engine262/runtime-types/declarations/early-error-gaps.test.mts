@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { expectEarlyError, expectStaticTypeError, ok } from '../harness.mts';
+import { evaluated, expectEarlyError, expectStaticTypeError, ok } from '../harness.mts';
 
 /**
  * Early errors the specification states and the checker did not raise.
@@ -149,4 +149,60 @@ test('a class that declares its operators satisfies the interface', () => {
   expect(ok('interface I { operator+(o); } class A implements I { operator+(o) { return this; } }')).toBe(true);
   expect(ok('interface I { operator[](i: uint32): uint8; } '
     + 'class A implements I { a: [].<uint8> = [1]; operator[](i: uint32): uint8 { return this.a[i]; } }')).toBe(true);
+});
+
+// ---- #sec-object-types: index signatures -----------------------------
+
+test('an index signature key must be one of the three key types', () => {
+  // "It is a type error if the key type of an IndexSignature is not `string`,
+  // `symbol`, `uint32`, or a union of these."
+  expectStaticTypeError('type T = { [k: float64]: uint8 };');
+  expectStaticTypeError('type T = { [k: uint8]: uint8 };');
+  expectStaticTypeError('type T = { [k: uint64]: uint8 };');
+  expectStaticTypeError('type T = { [k: bigint]: uint8 };');
+  expectStaticTypeError('type T = { [k: any]: uint8 };');
+  expectStaticTypeError("type T = { [k: 'a']: uint8 };");
+  expectStaticTypeError('class K {} type T = { [k: K]: uint8 };');
+  // The interface path carries the same rule as the inline form.
+  expectStaticTypeError('interface I { [k: boolean]: uint8 }');
+});
+
+test('the three key types and their unions stand', () => {
+  expect(ok('type T = { [k: string]: uint8 }; let t: T = {};')).toBe(true);
+  expect(ok('type T = { [k: symbol]: uint8 }; let t: T = {};')).toBe(true);
+  expect(ok('type T = { [k: uint32]: uint8 }; let t: T = {};')).toBe(true);
+  expect(ok('type T = { [k: string | symbol]: uint8 }; let t: T = {};')).toBe(true);
+  // A type parameter says nothing until it is bound, as it does everywhere.
+  expect(ok('type T<V> = { [k: string]: V }; let t: T.<uint8> = {};')).toBe(true);
+});
+
+test('a declared member coexists with a signature its key falls under', () => {
+  // The clause's closing sentence - "a type error if a member declared in the
+  // same ObjectType is not assignable to the signature's value type" -
+  // contradicts its own opening sentence, which gives the signature "the
+  // REMAINING string-keyed properties, beyond those declared", and the opening
+  // one is what this proposal implements everywhere else. These assertions pin
+  // that, so a later reading of the closing sentence does not quietly change
+  // what a program may write. `patches/spec-index-signature-members.patch`
+  // removes the closing sentence for the reason the runtime gives below.
+  expect(ok('type T = { a: string, [k: string]: uint8 }; let t: T = { a: "x" };')).toBe(true);
+  expect(ok('interface I { a: string; [k: string]: uint8; }')).toBe(true);
+  // The declared member wins at a named read, and is not the signature's type.
+  expect(ok('let y: { a: string, [k: string]: uint8 } = { a: "x" }; let s: string = y.a;')).toBe(true);
+  expectStaticTypeError('let y: { a: string, [k: string]: uint8 } = { a: "x" }; let n: uint8 = y.a;');
+  // A literal at the type is filled member by member: the declared member
+  // against its own type, every other key against the signature's.
+  expect(ok('type W = { name: string, [k: string]: number }; let w: W = { name: "n", x: 1 };')).toBe(true);
+  expectStaticTypeError('type W = { name: string, [k: string]: number }; let w: W = { name: "n", x: "s" };');
+});
+
+test('membership answers the same way the checker does', () => {
+  // The decisive reason the closing sentence cannot stand: IsOfType walks the
+  // members, and #sec-interfaces-semantics points at it for exactly this - "an
+  // object that has the members satisfies an interface-typed position". A type
+  // whose ANNOTATION is refused while its MEMBERSHIP PREDICATE accepts values
+  // is incoherent, and these two answers are what the predicate gives.
+  const W = 'type W = { name: string, [k: string]: number }; ';
+  expect(evaluated(`${W}String(({ name: "n", x: 1 } is W));`)).toBe('true');
+  expect(evaluated(`${W}String(({ name: "n", x: "s" } is W));`)).toBe('false');
 });

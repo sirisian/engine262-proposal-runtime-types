@@ -3483,6 +3483,60 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // ---- interfaces ---------------------------------------------------
 
+  /**
+   * #sec-object-types: "It is a type error if the key type of an
+   * |IndexSignature| is not `string`, `symbol`, `uint32`, or a union of these."
+   *
+   * It was applied nowhere. The object-type and interface paths each resolved
+   * the key and value annotations and pushed the record, so `{ [k: float64]:
+   * uint8 }` and `{ [k: MyClass]: uint8 }` were types a program could write and
+   * nothing could ever be keyed by.
+   *
+   * The clause's OTHER rule, that a declared member be assignable to the
+   * signature's value type, is deliberately NOT implemented here, and the
+   * specification has been amended to remove it (see the note now in that
+   * clause). It contradicted the same paragraph's opening sentence, which gives
+   * the signature the properties "beyond those declared", and the opening one is
+   * what the rest of this engine does: `IsOfType` checks a declared member
+   * against its own type and every other key against the signature, and a fresh
+   * literal at the type is filled by the same division. Implementing the closing
+   * sentence made `{ name: string, [k: string]: number }` unwritable while
+   * `{ name: "n", x: 1 } is` that type stayed *true* - an annotation no program
+   * can write whose membership predicate accepts values. What the TypeScript
+   * rule buys is a sound static type for `o[k]` with a computed `k`; this engine
+   * does not give that read the value type statically, so there is nothing to
+   * buy.
+   */
+  const checkIndexSignatures = (signatures: readonly { Key: TypeRecord, Value: TypeRecord }[]): void => {
+    /** Whether _t_ is one of the three key types, or a union of them. */
+    const admissibleKey = (t: TypeRecord): boolean => {
+      const erased = (eraseMetadata(t) ?? t) as TypeRecord;
+      if (erased.Kind === 'union') {
+        return (erased as { Members: readonly TypeRecord[] }).Members.every(admissibleKey);
+      }
+      if (erased.Kind !== 'primitive') {
+        // A ~parameter~ says nothing until it is bound - `{ [k: K]: V }` in a
+        // generic body is checked at its instantiation, as every other judgment
+        // over a parameter is - and the gradual rule applies to it. A WRITTEN
+        // `any` is not that case: it is a resolved type, and it is not one of
+        // the three, so it is refused like `float64`.
+        return erased.Kind === 'parameter';
+      }
+      const { Name, Arguments } = erased as { Name: string, Arguments?: readonly (TypeRecord | number)[] };
+      return Name === 'string' || Name === 'symbol'
+        || (Name === 'uint' && (Arguments ?? [])[0] === 32);
+    };
+    for (const signature of signatures) {
+      if (!admissibleKey(signature.Key)) {
+        errors.push((Throw.StaticTypeError(
+          'an index signature key must be string, symbol, or uint32, and $1 is none of them',
+          Value(displayType(signature.Key)),
+        ) as ThrowCompletion).Value as ObjectValue);
+      }
+    }
+  };
+
+
   const interfaceTypeMemo = new Map<ParseNode, Known>();
 
   const checkVariancePositions = (declaration: ParseNode): void => {
@@ -3902,6 +3956,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // `Properties` is the array inside the record published above, filled in
     // place by the loop, so the published record is already the finished one.
+    // The index signatures are judged HERE rather than where each is pushed,
+    // because a named member may be written either side of one and the rule is
+    // over the whole list.
+    checkIndexSignatures(IndexSignatures);
     return inProgress;
   };
 
@@ -4854,9 +4912,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (found) {
             return found;
           }
-          const inherits = (declaration as unknown as { ClassTail?: { ClassHeritage?: { type?: string, name?: string } | null } | null }).ClassTail?.ClassHeritage;
+          const inherits: { type?: string, name?: string } | null | undefined = (declaration as unknown as {
+            ClassTail?: { ClassHeritage?: { type?: string, name?: string } | null } | null,
+          }).ClassTail?.ClassHeritage;
           declaration = inherits?.type === 'IdentifierReference' && inherits.name
-            ? classNodes.get(inherits.name)
+            ? classNodes.get(inherits.name) as ParseNode | undefined
             : undefined;
         }
         return undefined;
@@ -7380,6 +7440,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           Properties.push({ key, type: r, optional: member.Optional, readonly: member.Readonly, initial, InitializerNode: memberInitializer ?? undefined });
         }
+        checkIndexSignatures(IndexSignatures);
         return { Kind: 'object', Properties, IndexSignatures };
       }
       case 'LiteralType': {
