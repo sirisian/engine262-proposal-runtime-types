@@ -9346,11 +9346,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // arms disagree. Every property refused here is refused under either.
       if (unionFreshArms.length > 0) {
         for (const member of (inner as ParseNode.ObjectLiteral).PropertyDefinitionList ?? []) {
-          if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
+          // A METHOD is an own property too. #sec-literal-freshness makes "an own
+          // PROPERTY the expected type neither declares nor admits" an error, and
+          // a method shorthand parses as a |MethodDefinition| rather than a
+          // |PropertyDefinition| - so skipping on the node type let
+          // `{ zz(q) { return 1; } }` through where `{ zz: 1 }` was refused, for
+          // one object literal against one expected type.
+          //
+          // That is the typo case a declaration-site type exists to catch: a
+          // handler written against `ProxyHandler.<T>` with a trap named `gett`
+          // was accepted, which is the mistake the annotation was added to find.
+          const memberType = member ? (member as ParseNode).type : undefined;
+          if (memberType !== 'PropertyDefinition' && memberType !== 'MethodDefinition') {
             continue;
           }
-          const def = member as unknown as { PropertyName?: { name?: string, value?: string } | null };
-          const key = def.PropertyName?.name ?? def.PropertyName?.value;
+          const def = member as unknown as {
+            PropertyName?: { name?: string, value?: string } | null,
+            ClassElementName?: { name?: string, value?: string } | null,
+          };
+          const named = def.PropertyName ?? def.ClassElementName;
+          const key = named?.name ?? named?.value;
           if (typeof key !== 'string') {
             continue;
           }

@@ -659,7 +659,13 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     })));
   }
   if (surroundingAgent.feature('runtime-types')) {
-    for (const name of ['Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'SoA', 'Composite', 'ThreadLocal'] as const) {
+    // `Proxy` takes a type argument too. #sec-reflection-and-declared-types: "A
+    // Proxy constructed with a type argument _T_ has a [[RuntimeType]] internal
+    // slot", so `new Proxy.<T>(target, handler)` is a construction the run time
+    // must admit. Without the registration the application path refused it with
+    // "type arguments require a generic function", which made every typed proxy
+    // unconstructable and the whole clause unreachable.
+    for (const name of ['Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'Proxy', 'SoA', 'Composite', 'ThreadLocal'] as const) {
       const constructor = realmRec.Intrinsics[`%${name}%`];
       if (constructor) RegisterGenericBuiltin(constructor);
     }

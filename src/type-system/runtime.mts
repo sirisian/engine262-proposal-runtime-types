@@ -3953,6 +3953,18 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       if (!(value instanceof ObjectValue)) {
         return false;
       }
+      // FIRST, the step the ~parameterized~ arm below already applies: "If
+      // IsSubtype(RuntimeTypeOf(value), _t_, << >>) is *true*, return *true*."
+      // A value that already carries a runtime type satisfying the target needs
+      // no structural walk, and for a PROXY the walk is not merely redundant but
+      // wrong: reading each member runs the `get` trap, so binding
+      // `const p: P = new Proxy.<P>(...)` called every trap eagerly, and a
+      // handler answering for one key answered for all of them. The proxy's type
+      // is the one it was given, which is what the slot says.
+      const carriedRuntime = (value as { RuntimeType?: TypeRecord }).RuntimeType;
+      if (carriedRuntime && IsSubtype(carriedRuntime, t, [])) {
+        return true;
+      }
       for (const p of t.Properties) {
         const key = propertyKeyValue(p.key);
         const present = Q(yield* HasProperty(value, key));

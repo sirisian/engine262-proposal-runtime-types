@@ -724,6 +724,7 @@ const libraryTypeNames = new Set([
   // `let e: Error`, `catch (e: TypeError)`, `let m: Map`, and the rest work.
   'AggregateError', 'ArrayBuffer', 'DataView', 'Date', 'Error', 'EvalError',
   'FinalizationRegistry', 'Map', 'Proxy', 'RangeError', 'ReferenceError',
+  'ProxyHandler',
   'RegExp', 'Set', 'SharedArrayBuffer', 'Symbol', 'SyntaxError', 'TypeError',
   'URIError', 'WeakMap', 'WeakRef', 'WeakSet',
   // proposal-runtime-types (decoratorreplacement.md): the stream a replacement
@@ -997,6 +998,61 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     // interning fixes - but it is a ~primitive~ record in the sense of the kinds,
     // being a named type rather than a structural description.
     case 'type': return makePrimitive('type');
+    // proposal-runtime-types #sec-reflection-and-declared-types: the handler a
+    // typed Proxy takes, as an INTERFACE over the type the proxy declares.
+    //
+    // The run-time trap checks bound what a proxy may DO; this tells an author
+    // what they have WRITTEN, and the two are complements rather than
+    // substitutes. A run-time check fires when a trap runs, on the path taken,
+    // with the value that happens to flow - a `get` trap for a rarely-read
+    // property can ship wrong and stay wrong - where an annotation catches every
+    // trap at the declaration. Every other declaration in this proposal is
+    // checked where it is written; a handler should not be the one object
+    // literal exempt.
+    //
+    // Every trap is OPTIONAL: a handler declares the ones it means to intercept
+    // and the rest fall through to the target.
+    case 'ProxyHandler': {
+      const t = (args[0] !== undefined && typeof args[0] !== 'number')
+        ? args[0] as TypeRecord
+        : anyType;
+      const key = makePrimitive('string');
+      const bool = makePrimitive('boolean');
+      const trap = (Parameters: readonly TypeRecord[], Return: TypeRecord) => ({
+        Kind: 'function' as const,
+        Signatures: [{
+          Parameters: Parameters.map((Type, i) => ({ Name: `a${i}`, Type, Optional: false, Rest: false })),
+          Return,
+          Untyped: false,
+        }],
+      } as unknown as TypeRecord);
+      const member = (k: string, type: TypeRecord) => ({ key: k, type, optional: true, readonly: false });
+      return {
+        Kind: 'object',
+        Properties: [
+          // The value traps, over T and the property's own declared type - which
+          // the interface cannot name per-key, so `any` stands where the runtime
+          // check is exact.
+          member('get', trap([t, key, anyType], anyType)),
+          member('set', trap([t, key, anyType, anyType], bool)),
+          member('getOwnPropertyDescriptor', trap([t, key], anyType)),
+          member('defineProperty', trap([t, key, anyType], bool)),
+          // The shape traps.
+          member('has', trap([t, key], bool)),
+          member('deleteProperty', trap([t, key], bool)),
+          member('ownKeys', trap([t], anyType)),
+          // The callable traps.
+          member('apply', trap([t, anyType, anyType], anyType)),
+          member('construct', trap([t, anyType, anyType], anyType)),
+          // The prototype and extensibility traps, at their base-language types.
+          member('getPrototypeOf', trap([t], anyType)),
+          member('setPrototypeOf', trap([t, anyType], bool)),
+          member('isExtensible', trap([t], bool)),
+          member('preventExtensions', trap([t], bool)),
+        ],
+        IndexSignatures: [],
+      } as unknown as TypeRecord;
+    }
     case 'float16': case 'float32': case 'float64': case 'float128':
     case 'decimal32': case 'decimal64': case 'decimal128':
     case 'number': case 'string': case 'boolean': case 'bigint': case 'symbol':
