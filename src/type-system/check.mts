@@ -4766,19 +4766,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } | undefined;
       const ifaceParams = ifaceDecl?.TypeParameters?.TypeParameterList ?? [];
       const ifaceArgNodes = (ref as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } | null }).TypeArguments?.TypeArgumentList ?? [];
-      let istruct = declaredStructure;
-      if (istruct && ifaceParams.length > 0 && ifaceArgNodes.length === ifaceParams.length) {
-        const ifaceBindings = new Map<string, TypeRecord>();
-        ifaceParams.forEach((prm, k) => {
-          const pname = (prm as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
-          const argType = resolveType(ifaceArgNodes[k] as ParseNode.Type);
-          if (pname && argType) {
-            ifaceBindings.set(pname, argType as TypeRecord);
-          }
-        });
-        if (ifaceBindings.size === ifaceParams.length) {
-          istruct = substituteTypeParameters(istruct as Known, ifaceBindings) as typeof istruct;
+      // Built once, and used for the operator members below as well as for the
+      // structure: an operator member names the interface's parameters exactly
+      // as a method member does, and `interface Ordered<T> { operator<(other:
+      // T): boolean; }` - the clause's own example - says nothing about the
+      // implementor until `T` is bound to the argument `implements Ordered.<V>`
+      // supplies.
+      const ifaceBindings = new Map<string, TypeRecord>();
+      ifaceParams.forEach((prm, k) => {
+        const pname = (prm as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
+        const argType = ifaceArgNodes.length === ifaceParams.length ? resolveType(ifaceArgNodes[k] as ParseNode.Type) : null;
+        if (pname && argType) {
+          ifaceBindings.set(pname, argType as TypeRecord);
         }
+      });
+      const bound = ifaceParams.length > 0 && ifaceBindings.size === ifaceParams.length;
+      let istruct = declaredStructure;
+      if (istruct && bound) {
+        istruct = substituteTypeParameters(istruct as Known, ifaceBindings) as typeof istruct;
       }
       if (istruct && istruct.Kind === 'object') {
         // `implements` is VERIFIED, not merely declared. Every member the
@@ -4809,6 +4814,118 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const p of istruct.Properties) {
           if (!Properties.some((own) => own.key === p.key)) {
             Properties.push(p);
+          }
+        }
+      }
+      // #sec-interfaces-semantics: an |InterfaceMember| is a |TypeMember| OR an
+      // |OperatorDefinition| - "additionally operator members, as `interface
+      // Ordered.<T> { operator<(other: T): boolean; }` ... a type satisfies an
+      // operator member by DECLARING the operator" - and the verification is
+      // "every member, OPERATOR MEMBERS INCLUDED, of every listed interface".
+      //
+      // The structure built above keeps only the |TypeMember|s, and rightly: a
+      // Type Record has no field for an operator, since an operator is reached
+      // from the DECLARATION through the operator table (`declaredOperator`)
+      // rather than from the type. So an operator member is in neither
+      // [[Properties]] nor [[IndexSignatures]], the loop above could not see
+      // one, and every `implements` of an `Ordered`-shaped interface was
+      // accepted whatever the class declared - the one member kind the clause
+      // names explicitly being the one nothing checked.
+      //
+      // Read from the DECLARATIONS, plural, so a `partial interface` adding an
+      // operator is verified too; `interfaceDeclarations` is the same list the
+      // member walk uses.
+      const implementor = ((cls as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name) ?? 'the class';
+      // The class's own operator definitions and those of every class it
+      // extends, since an operator a class INHERITS satisfies a member as an
+      // inherited method does. The chain is walked by DECLARATION, as
+      // `declaredOperator` walks it by type; this path has the declaration in
+      // hand and building a nominal record for the class being constructed
+      // would re-enter its own construction.
+      const operatorInChain = (key: string): ParseNode.OperatorDefinition | undefined => {
+        let declaration: ParseNode | undefined = n;
+        const seen = new Set<ParseNode>();
+        while (declaration && !seen.has(declaration)) {
+          seen.add(declaration);
+          const body = (declaration as unknown as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? [];
+          const found = body.find((member): member is ParseNode.OperatorDefinition => member.type === 'OperatorDefinition'
+            && !(member as ParseNode.OperatorDefinition).static
+            && operatorTableKey(member as ParseNode.OperatorDefinition) === key);
+          if (found) {
+            return found;
+          }
+          const inherits = (declaration as unknown as { ClassTail?: { ClassHeritage?: { type?: string, name?: string } | null } | null }).ClassTail?.ClassHeritage;
+          declaration = inherits?.type === 'IdentifierReference' && inherits.name
+            ? classNodes.get(inherits.name)
+            : undefined;
+        }
+        return undefined;
+      };
+      /** The function type of an operator definition, for the comparison below. */
+      const operatorSignatureOf = (operator: ParseNode.OperatorDefinition): Known => ({
+        Kind: 'function',
+        Signatures: [{
+          Parameters: (operator.FormalParameters ?? []).map((formal) => {
+            const p = formal as ParseNode.SingleNameBinding & { Ref?: boolean, Optional?: boolean };
+            return parameter(p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) ?? anyTypeRecord : anyTypeRecord, {
+              Name: p.BindingIdentifier?.name ?? '',
+              Optional: p.Optional === true || !!p.Initializer,
+              Ref: p.Ref === true,
+              Rest: formal.type === 'BindingRestElement',
+            });
+          }),
+          Return: operator.TypeAnnotation ? resolveType(operator.TypeAnnotation.Type) ?? anyTypeRecord : anyTypeRecord,
+        }],
+      } as Known);
+      const ifaceDeclarations = interfaceDeclarations.get(nm) ?? (ifaceDecl ? [ifaceDecl as unknown as ParseNode] : []);
+      for (const declaration of ifaceDeclarations) {
+        const members = (declaration as unknown as { InterfaceMemberList?: readonly ParseNode[] }).InterfaceMemberList ?? [];
+        for (const member of members) {
+          if (member.type !== 'OperatorDefinition') {
+            continue;
+          }
+          const key = operatorTableKey(member as ParseNode.OperatorDefinition);
+          const declared = operatorInChain(key);
+          if (!declared) {
+            errors.push((Throw.StaticTypeError(
+              '$1 is not assignable to $2',
+              Value(`${implementor}, which declares no ${key} operator,`),
+              Value(`${nm}`),
+            ) as ThrowCompletion).Value as ObjectValue);
+            continue;
+          }
+          // The member's own signature, built as `declaredOperator` builds the
+          // class's, so the two are compared as function types: a class
+          // operator must accept what the interface's admits and return what it
+          // promises. An interface operator with no annotations states only
+          // that the operator exists, and the presence check above is then the
+          // whole of it.
+          const ifaceOperator = member as ParseNode.OperatorDefinition;
+          const annotated = !!ifaceOperator.TypeAnnotation
+            || (ifaceOperator.FormalParameters ?? []).some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
+          if (!annotated) {
+            continue;
+          }
+          // Resolved UNDER the interface's own type-parameter scope, as
+          // `declaredOperator` resolves a class's: without it `other: T` is an
+          // unresolved name, becomes ~any~, and admits every implementor -
+          // which is the whole of what the substitution below then has to work
+          // with.
+          const pushedIface = pushTypeParameterScopeOf(declaration);
+          let written: Known;
+          try {
+            written = operatorSignatureOf(ifaceOperator);
+          } finally {
+            if (pushedIface) {
+              typeParameterScopes.pop();
+            }
+          }
+          const wanted = written && bound
+            ? substituteTypeParameters(written, ifaceBindings) as Known
+            : written;
+          const have = operatorSignatureOf(declared);
+          if (wanted && have && !IsAssignable(have as TypeRecord, wanted as TypeRecord)) {
+            report(have as TypeRecord, wanted as TypeRecord);
           }
         }
       }
@@ -13764,6 +13881,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // #sec-pattern-static-semantics: infer arm completions while their bindings
   // are in scope, and forward the enclosing context to every value-producing arm.
+  /**
+   * Whether _t_ is the type with no values, however it was reached: the
+   * `never` record, the narrowing sentinel, or a union that lost every member.
+   */
+  const isEmptyRecord = (t: Known): boolean => t === neverType
+    || (t as unknown) === empty
+    || (t?.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0);
+
   const checkMatchExpression = (me: ParseNode.MatchExpression, contextual: Known): Known => {
     if (contextual) matchContexts.set(me, contextual);
     const armContext = me.All ? (contextual?.Kind === 'array' ? contextual.Element : null) : contextual;
@@ -13779,6 +13904,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       me.Clauses.forEach((clause) => {
         frames.push(emptyFrame());
         let selected = remaining;
+        // What the preceding unguarded clauses left, read before this clause
+        // narrows it, which is what the reachability rule below is decided over.
+        const before = remaining;
         if (remaining && clause.Pattern) {
           const arms = remaining.Kind === 'union' ? remaining.Members : [remaining];
           const matched = arms.filter((arm) => structuralPatternCovers(clause.Pattern!, arm));
@@ -13791,7 +13919,63 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         if (selected && me.Expression.type === 'IdentifierReference') declareNarrowed(me.Expression.name, selected);
-        declareMatchPatternBindings(clause.Pattern, selected);
+        const boundType = declareMatchPatternBindings(clause.Pattern, selected);
+        // #sec-match-exhaustiveness: "It is a type error if a clause can match
+        // nothing the preceding unguarded clauses have left".
+        //
+        // A clause reaches that state two ways, and both are this error. The
+        // subject may be EXHAUSTED before the clause - `when uint8` written a
+        // second time, after `uint8` and `string` have each been taken, or any
+        // clause after an irrefutable one - so nothing is left for any pattern
+        // to match; or what is left may be a type the clause's pattern cannot
+        // narrow to, which is the impossible-test rule of #sec-narrowfrom
+        // applied at the clause rather than at a sub-pattern. The second was
+        // computed already and thrown away: `declareMatchPatternBindings`
+        // narrows to ~empty~ and answers `never`, but diagnoses only WITHIN a
+        // sub-pattern, so a whole clause that could never be taken was silent
+        // where the same pattern one level down was reported.
+        //
+        // A `default` is judged by the first half alone, which is the clause's
+        // own instance of the rule - "a `default` whose preceding clauses cover
+        // every atom of a subject with atoms is that error's instance". Where
+        // the subject has ATOMS rather than union members, the coverage passes
+        // below decide it, since narrowing does not empty an enum or a sealed
+        // base arm by arm.
+        //
+        // `match all` is exempt by its own clause: "no clause of a `match all`
+        // need match ... and a later clause there is reached whether or not an
+        // earlier one matched". A guarded clause narrows nothing, so it never
+        // exhausts the subject for the clauses after it, and is judged for its
+        // own pattern like any other.
+        if (!me.All && before && before.Kind !== 'any') {
+          const impossible = clause.Pattern !== null
+            && boundType === neverType
+            && !isEmptyRecord(selected);
+          // A `default` is NOT judged by narrowing, only by the atom coverage
+          // below, and the difference is deliberate rather than an omission.
+          // Narrowing empties the subject for an IRREFUTABLE clause too - `when
+          // let x` matches every value - so judging a `default` here would
+          // report every `when let x: ...; default: ...`, which is a shape
+          // written throughout this repository's own tests as belt and braces.
+          // The rule as the clause states it reaches that shape, and enforcing
+          // it there is a change to what a reader may write rather than a
+          // missing diagnostic; the instance the clause NAMES is the atom one -
+          // "a `default` whose preceding clauses cover every ATOM of a subject
+          // with atoms" - and that is what the coverage passes below report.
+          // The remaining case is recorded for the design rather than decided
+          // here.
+          if (clause.Pattern !== null && isEmptyRecord(before)) {
+            errors.push((Throw.StaticTypeError(
+              'the $1 clause can match nothing the preceding clauses have left',
+              Value('when'),
+            ) as ThrowCompletion).Value as ObjectValue);
+          } else if (impossible) {
+            errors.push((Throw.StaticTypeError(
+              'the pattern cannot match a position of type $1',
+              Value(displayType(before as TypeRecord)),
+            ) as ThrowCompletion).Value as ObjectValue);
+          }
+        }
         if (clause.Guard) {
           walk(clause.Guard as ParseNode);
         }
@@ -13866,12 +14050,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        const missing = enumeratorsNotCovered(matchEnumName!, matchInfo.names, covered);
         if (!hasDefault) {
-          const missing = enumeratorsNotCovered(matchEnumName!, matchInfo.names, covered);
           if (missing.length > 0) {
             const completion = Throw.StaticTypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
+        } else if (missing.length === 0 && covered.size > 0) {
+          // The other half of #sec-match-exhaustiveness's reachability rule,
+          // where the subject has ATOMS: "a `default` whose preceding clauses
+          // cover every atom of a subject with atoms is that error's instance".
+          // This is what lets the clause pair with exhaustiveness into the one
+          // sentence it claims - "exactly one of 'this match needs a catch-all'
+          // and 'this match must not have one' holds of it".
+          errors.push((Throw.StaticTypeError(
+            'every case of $1 is covered, so the default can never be taken',
+            Value(matchEnumName!),
+          ) as ThrowCompletion).Value as ObjectValue);
         }
       }
       const sealedDecl = (subjectType as { Kind?: string, Declaration?: ParseNode } | null | undefined);
@@ -13903,8 +14098,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             coveredClasses.add(armDecl);
           }
         }
+        const missingClasses = atomDecls.filter((c) => !coveredClasses.has(c));
+        if (sealedDefault && missingClasses.length === 0 && coveredClasses.size > 0) {
+          const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
+          errors.push((Throw.StaticTypeError(
+            'every case of $1 is covered, so the default can never be taken',
+            Value(sealedName),
+          ) as ThrowCompletion).Value as ObjectValue);
+        }
         if (!sealedDefault) {
-          const missingClasses = atomDecls.filter((c) => !coveredClasses.has(c));
           if (missingClasses.length > 0) {
             const shown = missingClasses
               .map((c) => (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?')
@@ -15420,6 +15622,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (modifiers.includes('sealed') && !sealedSubclasses.has(n)) {
           sealedSubclasses.set(n, []);
         }
+      } else if (n.type === 'TypeAliasDeclaration') {
+        // #sec-variance-static-semantics-early-errors is stated over "any
+        // occurrence ... within the declaration that introduces this
+        // TypeParameter", which is EVERY declaration that introduces one. An
+        // alias introduces parameters and is subtyped through them exactly as a
+        // class is - `type O<out T> = { v: T }` claims covariance over a
+        // WRITABLE member, which #table-variance-positions gives ~both~ - so
+        // running the check only over classes and interfaces left the claim
+        // unjudged wherever the shape was written as an alias, which is the
+        // spelling the design uses for most of its structural types.
+        checkVariancePositions(n);
       } else if (n.type === 'InterfaceDeclaration') {
         // #sec-variance-static-semantics-early-errors: a declared variance is a
         // claim about where the parameter appears, and this is where the claim
@@ -16375,6 +16588,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return sig;
   };
 
+  /**
+   * The name a call was written with, for a diagnostic, or *undefined* where
+   * the callee is an expression rather than a name. `f` and `o.m` both name
+   * something a reader can find; `(g())()` does not, and the type is printed
+   * instead.
+   */
+  const namedCallee = (c: { CallExpression?: ParseNode }): string | undefined => {
+    const callee = c.CallExpression as { type?: string, name?: string, IdentifierName?: { name?: string } } | undefined;
+    if (callee?.type === 'IdentifierReference' && typeof callee.name === 'string') {
+      return callee.name;
+    }
+    if (typeof callee?.IdentifierName?.name === 'string') {
+      return callee.IdentifierName.name;
+    }
+    return undefined;
+  };
+
   const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
     const supplied = expandValueSpreads(c.Arguments);
@@ -16506,6 +16736,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           });
+        }
+        // #sec-resolveoverload: a signature "whose arity does not fit" is not
+        // viable, and "It is a type error if ResolveOverload returns ~none~" -
+        // of which the clause's own example is `function f(): void {}`, which
+        // "makes `f(1)` an error".
+        //
+        // Under-supply is the loop above; over-supply was judged NOWHERE for a
+        // callee with ONE signature, because `selectCallSignature` takes a
+        // shortcut for that case and never reaches the resolver. So `f(1, 2)`
+        // for `function f(a: uint8) {}` was accepted and the second argument
+        // silently discarded, while the same mistake against an OVERLOADED name
+        // was refused by the resolver - two spellings of one mistake answering
+        // differently, which is the shape of gap this check closes.
+        //
+        // Judged over EVERY signature rather than the chosen one: a call is an
+        // error only where no signature accepts the count, and the signature
+        // selected for the argument types is not necessarily the widest.
+        //
+        // Four exemptions, each a case where the count is not knowable or not
+        // binding. A signature whose [[Untyped]] is *true* is the catch-all of
+        // #sec-overload-resolution and accepts any arity, which is what makes
+        // `function f() {}` beside `function f(a: uint8) {}` take `f(1, 2)`; a
+        // rest parameter absorbs the surplus; a spread argument has no static
+        // length; and a named argument is bound by BindArguments above, which
+        // reports its own failure. A decorator call is exempt because its
+        // context argument is supplied by the language rather than written, so
+        // its argument count is one short of its parameter count by
+        // construction (`contextFills`).
+        if (!mapped.spread && !mapped.named && contextFills < 0) {
+          const accepts = (parameters: readonly ParameterRecord[], untyped: boolean): number => (untyped || parameters.some((pr) => pr.Rest)
+            ? Infinity
+            : parameters.length);
+          // No signature at all is nothing known rather than an arity of zero:
+          // `Math.max()` of an empty list is -Infinity, which would make every
+          // argument surplus. The gradual rule applies as everywhere else.
+          const most = callee.Signatures.length === 0 ? Infinity : Math.max(...callee.Signatures.map((s) => accepts(
+            s.Parameters as readonly ParameterRecord[],
+            (s as unknown as { Untyped?: boolean }).Untyped === true,
+          )));
+          if (supplied.length > most) {
+            const completion = Throw.StaticTypeError(
+              '$1 takes at most $2 arguments, and $3 were supplied',
+              Value(namedCallee(c) ?? displayType(callee as TypeRecord)),
+              Value(String(most)),
+              Value(String(supplied.length)),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
         }
       }
       // mapCallArguments uses BindNamedArguments and assignArguments to share
@@ -17538,6 +17816,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (n.TypedInitializer) {
             const inferred = staticType(n.TypedInitializer.AssignmentExpression);
+            // #sec-typed-initializers-semantics: "It is a type error if the
+            // Static Type of the initializer is the `any` type, since `let a :=
+            // f();` where `f` is untyped would declare a binding of the `any`
+            // type through a syntax that asks for a type."
+            //
+            // This is the one judgment that INVERTS the gradual rule of this
+            // file's header. Everywhere else an unmodelled expression is ~any~
+            // and silence is sound, because a judgment needs both sides known;
+            // here ~any~ IS the error, so deferring to the gradual rule would
+            // be the rule never firing at all. A *null* Static Type - the
+            // checker's own "I do not know" - is reported for the same reason:
+            // `:=` asks for a type, and a type the checker cannot name is not
+            // one it can give the binding. `let a = ...` remains the spelling
+            // for a binding that does not want one.
+            if (!inferred || inferred.Kind === 'any') {
+              errors.push((Throw.StaticTypeError(
+                'the initializer of a $1 declaration has no static type; annotate the binding or use $2',
+                Value(':='), Value('='),
+              ) as ThrowCompletion).Value as ObjectValue);
+            }
             declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null, bindingFrame);
             walk(n.TypedInitializer.AssignmentExpression);
             return;

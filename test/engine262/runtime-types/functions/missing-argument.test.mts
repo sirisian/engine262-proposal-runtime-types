@@ -52,9 +52,28 @@ test('the count is not the whole story, and where it is not the rule stands down
   expect(ok(dead('function f(...a: [].<number>, b: string) { return b; } let q = f("x");'))).toBe(true);
   expect(ok(dead('function f(...a: [].<number>, b: string) { return b; } let q = f(1, 2, "x");'))).toBe(true);
 
-  // Extra arguments are admitted (spec 3505), and an `any` callee is not judged.
-  expect(ok(dead('function f(a: uint8) {} f(uint8(1), uint8(2));'))).toBe(true);
+  // An `any` callee is not judged.
   expect(ok(dead('let a: any = (x) => x; let q = a();'))).toBe(true);
+
+  // An EXTRA argument at a direct call is a mistake, and this assertion used to
+  // say the opposite. It cited the assignability rule of
+  // #sec-issignaturesubtype - "a function that accepts fewer arguments than the
+  // target supplies is admitted, since ECMAScript already ignores extra
+  // arguments" - for a DIRECT CALL, which is the conflation the note at the end
+  // of that clause exists to settle: "A call of `f` declared as `function f(a:
+  // uint8) {}` with two arguments selects no signature and is an error, because
+  // a signature is viable only for an argument list its arity accepts ... A
+  // direct call is checked against what the author declared, where an extra
+  // argument is a mistake worth catching at the site that made it;
+  // assignability answers what a value can safely receive, where an extra
+  // argument is ignored by the language itself. Both rules stand as written."
+  //
+  // So the two rules answer two questions, and this is the first one.
+  expectThrown(dead('function f(a: uint8) {} f(uint8(1), uint8(2));'), 'takes at most');
+  // And this is the second, unchanged: the wider TYPE is what the call is
+  // checked against, so a call through it supplying what it declares is fine
+  // however few of them `f` itself names.
+  expect(ok(dead('function f(a: uint8) {} let g: (uint8, string) => void = f; g(uint8(1), "x");'))).toBe(true);
 });
 
 test('an OVERLOADED name is answered by resolution, not by this rule', () => {
