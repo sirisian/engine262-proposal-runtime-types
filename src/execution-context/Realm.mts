@@ -665,13 +665,30 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // must admit. Without the registration the application path refused it with
     // "type arguments require a generic function", which made every typed proxy
     // unconstructable and the whole clause unreachable.
-    for (const name of ['Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'Proxy', 'SoA', 'Composite', 'ThreadLocal'] as const) {
+    // #sec-type-arguments-and-placement-new-in-expression-position: "The value
+    // must be generic: a generic function, a generic class, or A PARAMETERIZED
+    // TYPE". This list is how the run time recognizes the built-in members of
+    // that set, and it is hand-maintained, so it drifts: every name missing
+    // from it refused `T.<...>` with "type arguments require a generic
+    // function" - not a diagnosis of the program but of this list.
+    //
+    // `Iterator` is a parameterized type by #sec-generator-types, and was
+    // absent, which is why `Iterator.<uint8>` threw where `Iterable.<uint8>`
+    // (reached as a Type Object rather than as this constructor) did not.
+    // `rational` is the numeric family's callable form and was absent for the
+    // same reason.
+    for (const name of ['Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'Proxy', 'SoA', 'Composite', 'ThreadLocal',
+      'Iterator', 'AsyncIterator', 'Generator', 'AsyncGenerator', 'rational'] as const) {
       const constructor = realmRec.Intrinsics[`%${name}%`];
       if (constructor) RegisterGenericBuiltin(constructor);
     }
     for (const [owner, names] of [
       ['JSON', ['parse']], ['Math', ['random']], ['Promise', ['withResolvers']],
-      ['Reflect', ['getReflection', 'getByIndex', 'getMetadata']], ['SoA', ['withCapacity']],
+      // `getByIndex` names nothing: the method is `getReflectionByIndex`
+      // (#sec-reflection-shapes), so every `Reflect.getReflectionByIndex.<K, T>`
+      // was refused - the name in this list and the name on the object had
+      // simply drifted apart.
+      ['Reflect', ['getReflection', 'getReflectionByIndex', 'getMetadata']], ['SoA', ['withCapacity']],
     ] as const) {
       const object = realmRec.Intrinsics[`%${owner}%`];
       for (const name of names) {
