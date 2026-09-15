@@ -2404,6 +2404,22 @@ function runtimeObjectType(value: ObjectValue, seen: Set<ObjectValue>): TypeReco
   if (arrayType) {
     return arrayType;
   }
+  // A Proxy WITHOUT one is `any`, read AFTER the callable step above. #sec-reflection-and-declared-types: "A Proxy
+  // constructed without one has no such slot and is of the `any` type." It fell
+  // through to the shape walk below, which derives an object type from the
+  // value's own internal property map - a map a proxy never populates, its
+  // properties living on the target behind traps - so every untyped proxy
+  // reported the EMPTY object type. `{}` is not a weaker answer than `any`, it
+  // is a wrong one: it says the value has no members, where `any` says nothing
+  // is known about them.
+  //
+  // After the callable step because that step is stated generally - "if value is
+  // callable and is not a Type Object, return the ~function~ Type Record" - and
+  // a callable proxy is callable: placing this first made every proxy over a
+  // function report `any` instead of its signatures.
+  if ('ProxyHandler' in value) {
+    return anyType;
+  }
   // A class instance reports its class's nominal type, found by walking the
   // prototype chain to a constructor with an associated class Type Object.
   const nominal = classInstanceType(value);

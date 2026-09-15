@@ -11298,6 +11298,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (spec.Expression.type === 'IdentifierReference') {
             const specName = (spec.Expression as unknown as { name: string }).name;
+            // `new Proxy.<T>(...)` has Static Type _T_, not `Proxy.<T>`.
+            // #sec-reflection-and-declared-types gives such a proxy a
+            // [[RuntimeType]] of _T_ "so `Reflect.typeOf` reports _T_ rather than
+            // the shape of its target", and the static answer must agree with the
+            // one the value reports - the disagreement being the defect this
+            // whole clause exists to prevent.
+            //
+            // `Proxy` sits in the list of global constructors usable as type
+            // names, which is right for `Map` and `Error` - "a nominal type whose
+            // values are its instances" - and wrong here: a proxy has no
+            // instances of its own, it stands in for something else. Typing a
+            // construction as `Proxy.<T>` made it assignable to nothing, so a
+            // typed proxy could not be passed to a parameter of _T_ or called
+            // where _T_ is callable.
+            if (specName === 'Proxy') {
+              const written = spec.TypeArguments.TypeArgumentList;
+              const only = written.length === 1 ? resolveType(written[0] as unknown as ParseNode.Type) : null;
+              if (only) {
+                return only;
+              }
+            }
             // The library half. A LIBRARY generic is constructed the same way
             // a user class is, and `new Map.<string, uint8>()` had no Static
             // Type because `classTypeOf` knows only the classes a program

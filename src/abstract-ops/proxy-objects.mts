@@ -1,3 +1,4 @@
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   UndefinedValue, NullValue, ObjectValue, Value,
   type ObjectInternalMethods,
@@ -49,6 +50,73 @@ function typedOwnPropertyType(target: ObjectValue, P: PropertyKeyValue): { TypeR
   return typedProperties.get(P instanceof JSStringValue ? P.stringValue() : P);
 }
 
+
+/**
+ * The type a proxy's member is declared to have, from EITHER source the clause
+ * names: "whether the type is declared by _T_ or carried by the target as a
+ * typed own property" (#sec-reflection-and-declared-types).
+ *
+ * The type argument is consulted first. It is the contract the proxy was given,
+ * and the target is only where the value happens to live - a proxy may report a
+ * type its target does not have, which is the whole point of giving it one.
+ */
+function declaredMemberType(O: { RuntimeType?: TypeRecord }, target: ObjectValue, P: Value): TypeRecord | undefined {
+  const carried = O.RuntimeType;
+  // A JSStringValue holds its characters in `value`. Reading `.string` - a field
+  // it does not have - found no member and silently checked nothing.
+  const key = P instanceof JSStringValue ? P.value : undefined;
+  if (carried && carried.Kind === 'object' && typeof key === 'string') {
+    const member = (carried as unknown as { Properties?: readonly { key: string, type: TypeRecord }[] })
+      .Properties?.find((q) => q.key === key);
+    if (member) {
+      return member.type;
+    }
+  }
+  const own = typedOwnPropertyType(target, P as never);
+  return own === undefined ? undefined : (own.TypeRecord as TypeRecord);
+}
+
+/**
+ * Whether the proxy's declared type REQUIRES the member, which is what a shape
+ * trap may not contradict. An optional member may be absent; a member the type
+ * does not name is free.
+ */
+/**
+ * The return type every signature of a callable declared type agrees on, or
+ * *undefined* where the type is not callable or its signatures disagree.
+ */
+function soleCallableReturn(O: { RuntimeType?: TypeRecord }): TypeRecord | undefined {
+  const carried = O.RuntimeType;
+  if (!carried || carried.Kind !== 'function') {
+    return undefined;
+  }
+  const sigs = (carried as unknown as { Signatures?: readonly { Return?: TypeRecord }[] }).Signatures ?? [];
+  const first = sigs[0]?.Return;
+  if (first === undefined || sigs.length === 0) {
+    return undefined;
+  }
+  return sigs.every((sig) => sig.Return === first) ? first : undefined;
+}
+
+function requiredMemberNames(O: { RuntimeType?: TypeRecord }): string[] {
+  const carried = O.RuntimeType;
+  if (!carried || carried.Kind !== 'object') {
+    return [];
+  }
+  return (carried as unknown as { Properties?: readonly { key: string, optional?: boolean }[] })
+    .Properties?.filter((q) => q.optional !== true).map((q) => q.key) ?? [];
+}
+
+function requiredMemberOf(O: { RuntimeType?: TypeRecord }, P: Value): boolean {
+  const carried = O.RuntimeType;
+  const key = P instanceof JSStringValue ? P.value : undefined;
+  if (!carried || carried.Kind !== 'object' || key === undefined) {
+    return false;
+  }
+  const member = (carried as unknown as { Properties?: readonly { key: string, optional?: boolean }[] })
+    .Properties?.find((q) => q.key === key);
+  return member !== undefined && member.optional !== true;
+}
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-proxy-object-internal-methods-and-internal-slots-getprototypeof */
@@ -229,6 +297,16 @@ const InternalMethods = {
         }
       }
     }
+    // The descriptor's VALUE reaches a caller by another route than `get`, so
+    // leaving it unchecked would be a hole `p.a` does not have:
+    // `Object.getOwnPropertyDescriptor(p, 'a').value` is a value of the member's
+    // declared type however it was obtained.
+    if (surroundingAgent.feature('runtime-types') && IsDataDescriptor(resultDesc) === true) {
+      const declared = declaredMemberType(O as never, target, P);
+      if (declared !== undefined && resultDesc.Value !== undefined) {
+        Q(yield* RequireType(resultDesc.Value, declared as never));
+      }
+    }
     // 18. Return resultDesc.
     return resultDesc;
   },
@@ -254,6 +332,16 @@ const InternalMethods = {
     if (trap === Value.undefined) {
       // a. Return ? target.[[DefineOwnProperty]](P, Desc).
       return Q(yield* target.DefineOwnProperty(P, Desc));
+    }
+    // The INCOMING descriptor, as for `set` and for the same reason: a define
+    // carries a value of the member's declared type toward the proxy, and a trap
+    // that accepts whatever it is handed would leave the proxy reporting a type
+    // its own storage contradicts.
+    if (surroundingAgent.feature('runtime-types') && IsDataDescriptor(Desc) === true) {
+      const declared = declaredMemberType(O as never, target, P);
+      if (declared !== undefined && Desc.Value !== undefined) {
+        Q(yield* RequireType(Desc.Value, declared as never));
+      }
     }
     // 8. Let descObj be FromPropertyDescriptor(Desc).
     const descObj = FromPropertyDescriptor(Desc);
@@ -323,6 +411,17 @@ const InternalMethods = {
       return Q(yield* target.HasProperty(P));
     }
     const booleanTrapResult = ToBoolean(Q(yield* Call(trap, handler, [target, P])));
+    // A REQUIRED member may not be denied. `Reflect.typeOf` reports _T_, so a
+    // `has` answering *false* for a member _T_ requires makes that report false
+    // and a program can observe the contradiction directly. This is the base
+    // language's own shape invariant - a trap may not deny a non-configurable
+    // property - extended to the members a declared type requires.
+    if (surroundingAgent.feature('runtime-types') && booleanTrapResult === Value.false) {
+      const required = requiredMemberOf(O as never, P);
+      if (required) {
+        return Throw.TypeError('$1 is declared by this proxy\'s type and a trap may not deny it', P);
+      }
+    }
     if (booleanTrapResult === Value.false) {
       const targetDesc = Q(yield* target.GetOwnProperty(P));
       if (!(targetDesc instanceof UndefinedValue)) {
@@ -371,9 +470,9 @@ const InternalMethods = {
     // Without this a Proxy is a hole in the guarantee, handing back a value the
     // property itself would have refused.
     if (surroundingAgent.feature('runtime-types')) {
-      const declared = typedOwnPropertyType(target, P);
+      const declared = declaredMemberType(O as never, target, P);
       if (declared !== undefined) {
-        Q(yield* RequireType(trapResult, declared.TypeRecord as never));
+        Q(yield* RequireType(trapResult, declared as never));
       }
     }
     return trapResult;
@@ -392,6 +491,17 @@ const InternalMethods = {
     const trap = Q(yield* GetMethod(handler, Value('set')));
     if (trap === Value.undefined) {
       return Q(yield* target.Set(P, V, Receiver));
+    }
+    // The INCOMING value, before the trap sees it. A `set` carries a value of
+    // the member's declared type in the other direction, so the check belongs
+    // on the way in: a trap that stores whatever it is handed would otherwise
+    // leave the proxy reporting a type its own storage contradicts, and a later
+    // `get` would be refused for a value the `set` accepted.
+    if (surroundingAgent.feature('runtime-types')) {
+      const declared = declaredMemberType(O as never, target, P);
+      if (declared !== undefined) {
+        Q(yield* RequireType(V, declared as never));
+      }
     }
     const booleanTrapResult = ToBoolean(Q(yield* Call(trap, handler, [target, P, V, Receiver])));
     if (booleanTrapResult === Value.false) {
@@ -438,6 +548,12 @@ const InternalMethods = {
     const target = O.ProxyTarget as ObjectValue;
     // 6. Let trap be ? GetMethod(handler, "deleteProperty").
     const trap = Q(yield* GetMethod(handler, Value('deleteProperty')));
+    // A REQUIRED member may not be removed, for the reason `has` may not deny
+    // one: the proxy would go on reporting a type whose members it no longer
+    // has.
+    if (surroundingAgent.feature('runtime-types') && requiredMemberOf(O as never, P)) {
+      return Throw.TypeError('$1 is declared by this proxy\'s type and a trap may not delete it', P);
+    }
     // 7. If trap is undefined, then
     if (trap === Value.undefined) {
       // a. Return ? target.[[Delete]](P).
@@ -484,6 +600,18 @@ const InternalMethods = {
     }
     const trapResultArray = Q(yield* Call(trap, handler, [target]));
     const trapResult = Q(yield* CreateListFromArrayLike(trapResultArray, 'property-key'));
+    // EVERY REQUIRED MEMBER must appear, for the reason `has` may not deny one:
+    // a proxy that reports `{ a: uint8 }` while omitting `a` from its keys makes
+    // that report false, and `Object.keys` is where a program sees it.
+    if (surroundingAgent.feature('runtime-types')) {
+      const listed = new Set(trapResult
+        .filter((k) => k instanceof JSStringValue)
+        .map((k) => (k as JSStringValue).value));
+      const missing = requiredMemberNames(O as never).find((name) => !listed.has(name));
+      if (missing !== undefined) {
+        return Throw.TypeError('$1 is declared by this proxy\'s type and a trap may not omit it', Value(missing));
+      }
+    }
     const noDuplicate = new PropertyKeyMap();
     trapResult.forEach((key) => {
       noDuplicate.set(key, true);
@@ -547,7 +675,21 @@ const InternalMethods = {
       return Q(yield* Call(target, thisArgument, argumentsList));
     }
     const argArray = X(CreateArrayFromList(argumentsList));
-    return Q(yield* Call(trap, handler, [target, thisArgument, argArray]));
+    const applied = Q(yield* Call(trap, handler, [target, thisArgument, argArray]));
+    // A CALLABLE type's RETURN. Where _T_ is a ~function~ type, a call through
+    // the proxy yields a value of its declared return, and an `apply` trap
+    // answering otherwise makes `Reflect.typeOf` reporting _T_ false in the one
+    // way a caller can see. Only where every signature agrees on the return -
+    // an overloaded _T_ says which return belongs to which argument list, and
+    // choosing among them here would be resolving an overload the call has
+    // already resolved.
+    if (surroundingAgent.feature('runtime-types')) {
+      const declaredReturn = soleCallableReturn(O as never);
+      if (declaredReturn !== undefined) {
+        Q(yield* RequireType(applied, declaredReturn as never));
+      }
+    }
+    return applied;
   },
   /** https://tc39.es/ecma262/#sec-proxy-object-internal-methods-and-internal-slots-construct-argumentslist-newtarget */
   * Construct(argumentsList, newTarget) {
@@ -568,6 +710,17 @@ const InternalMethods = {
     const newObj = Q(yield* Call(trap, handler, [target, argArray, newTarget]));
     if (!(newObj instanceof ObjectValue)) {
       return Throw.TypeError('$1 is not an object', newObj);
+    }
+    // A CONSTRUCTED value, as for `apply` and on the same terms: where _T_ is
+    // callable with a single agreed return, the thing a `new` through the proxy
+    // hands back is of that type. An overloaded _T_ is left alone, since
+    // choosing among its returns here would re-resolve an overload the
+    // construction has already resolved.
+    if (surroundingAgent.feature('runtime-types')) {
+      const declaredReturn = soleCallableReturn(O as never);
+      if (declaredReturn !== undefined) {
+        Q(yield* RequireType(newObj, declaredReturn as never));
+      }
     }
     return newObj;
   },
@@ -594,6 +747,18 @@ export function ProxyCreate(target: Value, handler: Value): ValueCompletion<Prox
     const builtBy = (target as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
     if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
       return Throw.TypeError('$1 is a typed class and cannot be proxied', target);
+    }
+    // A TYPED ARRAY for the same reason, which the clause names in the same
+    // breath - "an instance of a typed class OR A TYPED ARRAY" - and which the
+    // design spells out: `new Proxy(Span.<uint8>(new ArrayBuffer(1)), {});
+    // // TypeError: a typed array is layout-backed`. An element read is an
+    // offset load, so there is no point at which a trap could run, exactly as
+    // for a field of a typed class.
+    //
+    // [[TypedElement]] is the stamp a typed array carries, the same one
+    // `RuntimeTypeOf` reads to report `[N].<T>`.
+    if ((target as { TypedElement?: unknown }).TypedElement !== undefined) {
+      return Throw.TypeError('$1 is a typed array and cannot be proxied', target);
     }
   }
   // 3. Let P be ! MakeBasicObject(« [[ProxyHandler]], [[ProxyTarget]] »).

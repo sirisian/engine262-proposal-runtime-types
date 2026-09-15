@@ -2,6 +2,7 @@ import {
   NullValue, ObjectValue, Value, type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { Q, X, type ValueCompletion } from '../completion.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { assignProps } from './bootstrap.mts';
 import {
   surroundingAgent,
@@ -31,13 +32,36 @@ export interface RevocableProxyRevokeFunctionObject extends BuiltinFunctionObjec
   RevocableProxy: ProxyObject | NullValue;
 }
 /** https://tc39.es/ecma262/#sec-proxy-target-handler */
+/**
+ * The type argument a construction supplied, set by the NewExpression intercept.
+ *
+ * proposal-runtime-types #sec-reflection-and-declared-types: "A Proxy
+ * constructed with a type argument _T_ has a [[RuntimeType]] internal slot whose
+ * value is _T_'s Type Record, so `Reflect.typeOf` reports _T_ rather than the
+ * shape of its target, and its traps are checked against _T_."
+ */
+let pendingRuntimeType: TypeRecord | undefined;
+export function SetPendingProxyRuntimeType(t: TypeRecord | undefined): void {
+  pendingRuntimeType = t;
+}
+
 function ProxyConstructor(this: FunctionObject, [target = Value.undefined, handler = Value.undefined]: Arguments, { NewTarget }: FunctionCallContext) {
+  // Read and CLEAR before anything can fail, so a refused construction leaves
+  // nothing for the next one to pick up.
+  const declared = pendingRuntimeType;
+  pendingRuntimeType = undefined;
   // 1. f NewTarget is undefined, throw a TypeError exception.
   if (NewTarget === Value.undefined) {
     return Throw.TypeError('Proxy cannot be invoked without new');
   }
   // 2. Return ? ProxyCreate(target, handler).
-  return ProxyCreate(target, handler);
+  const created = ProxyCreate(target, handler);
+  // A normal completion here IS the value rather than a record wrapping one, so
+  // the slot is set on an ObjectValue and a throw passes through untouched.
+  if (declared !== undefined && created instanceof ObjectValue) {
+    (created as unknown as { RuntimeType?: TypeRecord }).RuntimeType = declared;
+  }
+  return created;
 }
 
 /** https://tc39.es/ecma262/#sec-proxy-revocation-functions */

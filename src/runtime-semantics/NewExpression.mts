@@ -1,5 +1,6 @@
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placement.mts';
+import { SetPendingProxyRuntimeType } from '../intrinsics/Proxy.mts';
 import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
 import { SetPendingThreadLocalTypeArguments } from '../intrinsics/Synchronization.mts';
 import { Q } from '../completion.mts';
@@ -115,6 +116,19 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
           : record);
       }
       SetPendingSoATypeArguments(soaArgs);
+    }
+    // proposal-runtime-types #sec-reflection-and-declared-types: `new
+    // Proxy.<T>(target, handler)` carries T into the [[RuntimeType]] slot, which
+    // is what makes `Reflect.typeOf` report T and the trap checks meaningful.
+    if (baseName === 'Proxy') {
+      const written = spec.TypeArguments.TypeArgumentList;
+      // `Q` is a macro and may not appear in a conditional expression, so the
+      // one-argument case is resolved in a statement of its own.
+      let declared: TypeRecord | undefined;
+      if (written.length === 1) {
+        declared = Q(yield* TypeNodeToTypeRecord(written[0]!));
+      }
+      SetPendingProxyRuntimeType(declared);
     }
     // proposal-runtime-types #sec-threadlocal-objects: `ThreadLocal.<T>` needs
     // its T for the same reason - "an agent that has not written the storage
