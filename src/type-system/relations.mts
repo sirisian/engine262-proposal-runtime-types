@@ -425,6 +425,15 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // covers either name, the pair decides - `<T, U>(x: T)` against
       // `<U, T>(x: T)` must NOT fall back to "same letter" - and where no pair
       // mentions them the names compare as before.
+      // THE SAME PARAMETER FIRST, before any assumption is consulted. A pair
+      // added by the constraint rule below - `{ K, keyof T }` while proving
+      // `K <: keyof T` through `K`'s constraint - covers the target's name on
+      // one side, and consulting it here for `keyof T` against `keyof T` let it
+      // DECIDE: its other side is `K`, not `keyof T`, so the pair said no. Two
+      // references to one parameter relate whatever the assumptions say.
+      if (s.Name === t.Name && (s.Arity ?? 0) === (t.Arity ?? 0)) {
+        return true;
+      }
       const pairs = assumptions.filter((a) => a.First.Kind === 'parameter' && a.Second.Kind === 'parameter');
       if (pairs.some((a) => (a.First as typeof s).Name === s.Name || (a.Second as typeof t).Name === t.Name)) {
         return pairs.some((a) => (a.First as typeof s).Name === s.Name && (a.Second as typeof t).Name === t.Name
@@ -433,7 +442,14 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // Name AND arity: `W<_>` and `W<_, _>` are different parameters even
       // where a declaration reuses the name, since one stands for a
       // one-argument declaration and the other for a two-argument one.
-      return s.Name === t.Name && (s.Arity ?? 0) === (t.Arity ?? 0);
+      // NOT `return false` here. Two parameters with different names may still
+      // relate through the source's CONSTRAINT - `K: keyof T` against a return
+      // of `keyof T` is the case, `K`'s constraint being exactly the target -
+      // and the constraint rule below is the specification's own next step:
+      // "if _s_ is a parameter with a constraint, IsSubtype(constraint, _t_)".
+      // Returning false short-circuited it whenever the target was also a
+      // parameter, which never showed while `keyof T` resolved to nothing and
+      // shows the moment it is a deferred parameter record of its own.
     }
     if (s.Kind === 'parameter' && s.Constraint) {
       return IsSubtype(s.Constraint, t, [...assumptions, { First: s, Second: t }]);

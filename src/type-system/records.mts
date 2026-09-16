@@ -547,6 +547,22 @@ export type TypeRecord =
      * generic declaration of n parameters and is NOT itself a type.
      */
     readonly Arity?: number,
+    /**
+     * A TYPE OPERATOR over a parameter, deferred. `keyof T` and `T[K]` cannot be
+     * computed inside a declaration - nothing is known about `T` there - so each
+     * is a ~parameter~ record with a composed [[Name]], opaque and related only
+     * to itself, exactly as the parameters it is built from. What that record
+     * lacked was a way OUT: it carried no operands, so when a call bound `T` and
+     * `K` the substitution saw a parameter named "T[K]" that matched no binding
+     * and left it alone, and #sec-indexed-access-types' own worked example -
+     * `pluck<T, K: keyof T>(o: T, key: K): T[K]` - did not compile.
+     *
+     * This field carries the operands. Substitution reaches into them and, once
+     * none still mentions a parameter, evaluates the operator - the treatment
+     * #sec-substitutetype already gives a deferred ~application~, "evaluate the
+     * builder call once no argument mentions a parameter".
+     */
+    readonly Deferred?: DeferredOperatorRecord,
   }
   | { readonly Kind: 'primitive', readonly Name: string, readonly Arguments: readonly (TypeRecord | number)[] }
   | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord }
@@ -776,6 +792,23 @@ const libraryTypeNames = new Set([
  * so that records.mts, which every type-system file reaches, does not depend on
  * an intrinsic that depends back on it.
  */
+/** The operands a deferred operator waits on. */
+export type DeferredOperatorRecord =
+  | { readonly Operator: 'keyof', readonly Object: TypeRecord }
+  | { readonly Operator: 'indexed', readonly Object: TypeRecord, readonly Index: TypeRecord };
+
+/**
+ * The evaluator for a deferred operator whose operands have all closed. Held as
+ * a setter for the reason `rangeEnumRecordImpl` below is: the evaluators -
+ * `KeyTypesOf` and `IndexedAccessTypeRecord` - live in `runtime.mts`, which
+ * imports this file, so this file cannot import them back. `runtime.mts`
+ * registers them at load.
+ */
+let deferredOperatorImpl: ((d: DeferredOperatorRecord) => TypeRecord | null) | null = null;
+export function setDeferredOperatorImpl(f: (d: DeferredOperatorRecord) => TypeRecord | null): void {
+  deferredOperatorImpl = f;
+}
+
 let rangeEnumRecordImpl: ((name: 'Bound' | 'Interval') => TypeRecord) | null = null;
 
 export function setRangeEnumRecordImpl(f: (name: 'Bound' | 'Interval') => TypeRecord): void {
@@ -1864,11 +1897,39 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
  * intersection identity here is set-wise rather than positional - which is why
  * the [[Base]] walk in `relations.mts` is correct without it.
  */
+/** The composed name a deferred operator carries: `keyof T`, `T[K]`. */
+export function deferredOperatorName(d: DeferredOperatorRecord): string {
+  const show = (t: TypeRecord): string => (t.Kind === 'parameter' ? (t as { Name: string }).Name : displayType(t));
+  return d.Operator === 'keyof' ? `keyof ${show(d.Object)}` : `${show(d.Object)}[${show(d.Index)}]`;
+}
+
 export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
   if (!t) {
     return t;
   }
   if (t.Kind === 'parameter') {
+    const deferred = (t as { Deferred?: DeferredOperatorRecord }).Deferred;
+    if (deferred) {
+      // A deferred OPERATOR. Substitute into its operands; where one still
+      // mentions a parameter the record stays deferred over the substituted
+      // operands, and where none does the operator is evaluated. The name is
+      // recomposed either way, so `T[K]` with `T` now `P` reads `P[K]`.
+      const object = substituteTypeParameters(deferred.Object, bindings) as TypeRecord;
+      const index = deferred.Operator === 'indexed'
+        ? substituteTypeParameters(deferred.Index, bindings) as TypeRecord
+        : undefined;
+      const still = mentionsTypeParameter(object) || (index !== undefined && mentionsTypeParameter(index));
+      const next: DeferredOperatorRecord = deferred.Operator === 'indexed'
+        ? { Operator: 'indexed', Object: object, Index: index! }
+        : { Operator: 'keyof', Object: object };
+      if (!still && deferredOperatorImpl) {
+        const evaluated = deferredOperatorImpl(next);
+        if (evaluated) {
+          return evaluated;
+        }
+      }
+      return { Kind: 'parameter', Name: deferredOperatorName(next), Deferred: next } as Known;
+    }
     return bindings.get((t as { Name: string }).Name) ?? t;
   }
   const withMembers = t as { Members?: readonly TypeRecord[] };

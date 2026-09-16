@@ -19,6 +19,7 @@ import {
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
   badKindedArgument, restElementType, parameterTypeRecord,
+  deferredOperatorName,
 } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
@@ -6928,7 +6929,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // correctly. A false negative in place of a false positive that made
         // `keyof` over a parameter unwritable.
         if (mentionsTypeParameter(operand)) {
-          return null;
+          // A DEFERRED record rather than null. Null is "no answer", which is
+          // right at the declaration and loses the constraint at every call:
+          // with `K: keyof T` resolving to nothing, `pluck(o, "zz")` was checked
+          // against nothing and reached the run-time binder before the wrong
+          // key was refused. The deferred record carries the operand, so the
+          // substitution evaluates `keyof P` once `T` binds, and the static
+          // check refuses `"zz"` as the binder does - `'zz' is not assignable
+          // to 'a' | 'b'` - at compile time.
+          const deferred = { Operator: 'keyof' as const, Object: operand as TypeRecord };
+          return { Kind: 'parameter', Name: deferredOperatorName(deferred), Deferred: deferred } as unknown as Known;
         }
         return KeyTypesOf(operand) as Known;
       }

@@ -33,7 +33,7 @@ import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue,
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord } from './records.mts';
-import { orderKey, typeParameterRecordsOf } from './records.mts';
+import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -5769,7 +5769,18 @@ export function IndexedAccessTypeRecord(objectType: TypeRecord, indexType: TypeR
   // since `T["n"]` is not an identifier.
   const deferredName = deferredIndexedName(objectType, indexType);
   if (deferredName !== null) {
-    return { Kind: 'parameter', Name: deferredName };
+    // WITH ITS OPERANDS, so that a call can get out of the deferral. The opaque
+    // record was right inside the declaration and had no exit: it carried no
+    // operands, so when a call bound `T` to `P` and `K` to `'a'`,
+    // `substituteTypeParameters` saw a parameter named "T[K]" matching no
+    // binding and left it alone, and #sec-indexed-access-types' own worked
+    // example did not compile. The substitution now reaches into `Deferred`,
+    // and evaluates the access here once neither operand mentions a parameter.
+    return {
+      Kind: 'parameter',
+      Name: deferredName,
+      Deferred: { Operator: 'indexed', Object: objectType, Index: indexType },
+    };
   }
   const arms = objectType.Kind === 'union' ? objectType.Members : [objectType];
   const keys = indexType.Kind === 'union' ? indexType.Members : [indexType];
@@ -6166,3 +6177,11 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
 // walk reads a number, so an uncanonicalized substitution produces a field with
 // no layout and therefore a class with none.
 setLayoutSubstituter((structure, declaration, args) => CanonicalizeType(SubstituteTypeArguments(structure, declaration, args)));
+
+// The evaluator for a deferred type operator whose operands have all closed -
+// `keyof T` and `T[K]` once a call has bound what they mention. Registered here
+// because `records.mts`, where the substitution lives and every type-system
+// file reaches, cannot import this file back; see `setDeferredOperatorImpl`.
+setDeferredOperatorImpl((d) => (d.Operator === 'keyof'
+  ? KeyTypesOf(d.Object)
+  : IndexedAccessTypeRecord(d.Object, d.Index)));

@@ -191,7 +191,17 @@ export function unifyTypeParameters(
         // inference. An unconstrained parameter still widens, which is what
         // makes `id("a")` a `string` rather than a one-value type.
         const constraint = (param as { Constraint?: TypeRecord }).Constraint;
+        // A DEFERRED `keyof` counts as literal-constrained too. `keyof T` is
+        // always a union of literal key types once `T` is known, so the rule
+        // that a literal-typed constraint keeps the literal applies to it -
+        // but the constraint is not yet a union of literals, it is a deferred
+        // record waiting on `T`. Reading only the record's kind widened `'a'`
+        // to `string`, and `T[K]` then evaluated to `P[string]`, which is not a
+        // member access at all.
+        const deferredKeyof = !!constraint && constraint.Kind === 'parameter'
+          && (constraint as { Deferred?: { Operator?: string } }).Deferred?.Operator === 'keyof';
         const literalConstrained = !!constraint && (constraint.Kind === 'literal'
+          || deferredKeyof
           || (constraint.Kind === 'union'
             && (constraint as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal')));
         into.set(name, literalConstrained ? arg : widenForBinding(arg));
