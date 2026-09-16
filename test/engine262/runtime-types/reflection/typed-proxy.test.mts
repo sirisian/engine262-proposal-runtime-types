@@ -101,3 +101,34 @@ test('a callable type constrains what apply and construct hand back', () => {
   expect(evaluated(`${F}const p = new Proxy.<F>(function (x) { return x; }, { apply() { return (7 := uint8); } }); \`\${p(1 := uint8)}\`;`)).toBe('7');
   expectThrown('class A { v: uint8 = 1; } type G = () => A; const p = new Proxy.<G>(A, { construct() { return { nope: 1 }; } }); new p();', 'not assignable to "A"');
 });
+
+test('ProxyHandler.<T> checks a handler where it is written', () => {
+  // The run-time trap checks bound what a proxy may DO; this says what the
+  // author has WRITTEN, and the two are complements. A `get` trap for a
+  // rarely-read property can ship wrong and stay wrong, where an annotation
+  // catches every trap at the declaration.
+  const P = 'type P = { a: uint8 }; ';
+  // A wrong return, a wrong arity, and a mistyped trap NAME - the typo case a
+  // declaration-site type exists to catch.
+  expectThrown(`${P}let h: ProxyHandler.<P> = { has(t, k) { return "nope"; } };`, 'is not assignable to "boolean"');
+  expectThrown(`${P}let h: ProxyHandler.<P> = { isExtensible(t, extra) { return true; } };`, 'is not assignable to');
+  expectThrown(`${P}let h: ProxyHandler.<P> = { gett(t, k) { return 1; } };`, '"gett" is not declared');
+  // Every trap is optional: a handler declares the ones it intercepts.
+  expect(evaluated(`${P}let h: ProxyHandler.<P> = {}; \`\${typeof h}\`;`)).toBe('object');
+  expect(evaluated(`${P}let h: ProxyHandler.<P> = { has(t, k) { return true; } }; \`\${typeof h}\`;`)).toBe('object');
+});
+
+test('the construction checks its arguments against the declared parameters', () => {
+  // `libraryConstructParameters` gives `Proxy` the signature
+  // `(target: T, handler: ProxyHandler.<T>)`, so the INLINE spelling - how a
+  // handler is almost always written - is checked as an annotation is. Before
+  // this, library constructor arguments were not typed at all.
+  const P = 'type P = { a: uint8 }; const t = { a: (1 := uint8) }; ';
+  expectThrown(`${P}new Proxy.<P>(t, { has(t, k) { return "nope"; } });`, 'is not assignable to "boolean"');
+  expectThrown(`${P}new Proxy.<P>(t, { gett(t, k) { return 1; } });`, '"gett" is not declared');
+  expectThrown(`${P}new Proxy.<P>(5, {});`, 'is not assignable to "{ a: uint.<8> }"');
+  expect(evaluated(`${P}const p = new Proxy.<P>(t, { has(t, k) { return true; } }); \`\${"a" in p}\`;`)).toBe('true');
+  // An UNTYPED construction is untouched: an untyped proxy is `any`, and the
+  // base language admits any handler object, unknown trap names included.
+  expect(evaluated('const p = new Proxy({ a: 1 }, { anything() { return 1; } }); `${typeof p}`;')).toBe('object');
+});

@@ -1,7 +1,7 @@
 import { NumberValue } from '../value.mts';
 import {
   type ParameterRecord, type TypeRecord, type Known,
-  libraryTypeRecord, makePrimitive, voidType, parameter,
+  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, parameter,
 } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { isFloatTypeName, isIntegerTypeName } from './numeric-signatures.mts';
@@ -422,6 +422,54 @@ export const promiseMethodSignature = (name: string, resolution: TypeRecord, rej
       return { Kind: 'function', Signatures: [{ Parameters: shapes([handler(rejection)], 0), Return: promiseOf(anyType), Untyped: false }] } as unknown as Known;
     case 'finally':
       return { Kind: 'function', Signatures: [{ Parameters: shapes([{ Kind: 'function', Signatures: [{ Parameters: [], Return: anyType, Untyped: false }] } as unknown as TypeRecord], 0), Return: promiseOf(resolution), Untyped: false }] } as unknown as Known;
+    default:
+      return null;
+  }
+};
+
+/**
+ * A LIBRARY constructor's declared parameters, at the type arguments a
+ * construction wrote - or null where the constructor declares none.
+ *
+ * Library constructor arguments were not typed at all: a user class's
+ * construction is checked against its `constructor` signatures, and a library
+ * construction against nothing, so `new Proxy.<P>(target, 5)` reached the run
+ * time before anything asked what a handler is. TypeScript reaches the same
+ * check through an ordinary declared signature - `new <T extends object>(target:
+ * T, handler: ProxyHandler<T>): T` - with no special case anywhere, and that is
+ * the shape here: one table, read by the construction check, that any library
+ * constructor may join.
+ *
+ * `Proxy` is the first entry. #sec-reflection-and-declared-types gives a typed
+ * proxy the type _T_ it was constructed with, so its target is a _T_ and its
+ * handler is a `ProxyHandler.<T>`; without a type argument both are `any`, since
+ * an untyped proxy IS `any`.
+ */
+export const libraryConstructParameters = (
+  name: string,
+  typeArgs: readonly (TypeRecord | number)[],
+): readonly { Name: string, Type: TypeRecord, Optional: boolean, Rest: boolean }[] | null => {
+  switch (name) {
+    case 'Proxy': {
+      // Only a construction that WROTE a type argument. An untyped proxy is `any`
+      // (#sec-reflection-and-declared-types), and the base language admits any
+      // handler object - unknown trap names are ignored - so constraining a bare
+      // `new Proxy(t, h)` to `ProxyHandler.<any>` would refuse every existing
+      // handler carrying a property that is not a trap.
+      if (typeArgs.length === 0) {
+        return null;
+      }
+      const t = typeArgs[0] !== undefined && typeof typeArgs[0] !== 'number' ? typeArgs[0] : anyType;
+      // `builtinTypeRecord`, not `libraryTypeRecord`: the latter answers a NOMINAL
+      // for every registered library name before any structural case is reached,
+      // and `ProxyHandler.<T>` is the structural interface the annotation path
+      // resolves through `builtinTypeRecord`.
+      const handler = builtinTypeRecord('ProxyHandler', [t]) ?? anyType;
+      return [
+        { Name: 'target', Type: t, Optional: false, Rest: false },
+        { Name: 'handler', Type: handler, Optional: false, Rest: false },
+      ];
+    }
     default:
       return null;
   }

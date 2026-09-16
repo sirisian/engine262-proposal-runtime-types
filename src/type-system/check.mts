@@ -58,6 +58,7 @@ import {
 } from './type-parameters.mts';
 import {
   awaitedElementType, numericFamilyOf, isRangeFamilyName, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
+  libraryConstructParameters,
 } from './std-signatures.mts';
 import { R, Throw, wellKnownSymbols } from '#self';
 
@@ -18441,6 +18442,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } | null)?.TypeParameters?.TypeParameterList ?? [];
           if (declaredParams.length > 0) {
             requireTypeArgumentArity(writtenArgs, typeParameterRecordsOf(declaredParams), (inner as unknown as { name: string }).name);
+          }
+        }
+        // A LIBRARY constructor's arguments, checked against its declared
+        // parameters the way a user class's are checked against its
+        // `constructor` signatures below. `libraryConstructParameters` is the
+        // one table any library constructor may join; `Proxy` is its first entry,
+        // and this is what makes `new Proxy.<P>(target, handler)` refuse a handler
+        // that `ProxyHandler.<P>` refuses at an annotation - the inline spelling,
+        // which is how a handler is almost always written.
+        if (target && !namedInstance && Array.isArray(ne.Arguments)
+            && bareTarget?.type === 'IdentifierReference') {
+          const libraryName = (bareTarget as { name: string }).name;
+          const written = target.type === 'TypeArgumentsExpression'
+            ? ((target as unknown as { TypeArguments: { TypeArgumentList: readonly ParseNode[] } })
+              .TypeArguments.TypeArgumentList.map((a) => resolveType(a as unknown as ParseNode.Type)))
+            : [];
+          const typeArgs = written.every((a): a is TypeRecord => a !== null) ? written : [];
+          const params = libraryConstructParameters(libraryName, typeArgs);
+          if (params) {
+            const argNodes = ne.Arguments.filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
+            argNodes.forEach((arg, i) => {
+              const param = params[i];
+              if (!param) {
+                return;
+              }
+              requireAssignable(staticTypeIn(arg, param.Type as Known), param.Type as Known);
+            });
           }
         }
         if (target && namedInstance && Array.isArray(ne.Arguments)) {
