@@ -1864,7 +1864,18 @@ const classSpecializations = new Map<unknown, Map<string, Value>>();
  * shape. Such an annotation falls through to the record it had, which is right
  * rather than a compromise: the specialization it wants is the one in progress.
  */
-const specializationsInProgress = new Set<unknown>();
+/**
+ * The specializations whose class bodies are being evaluated right now, by
+ * declaration, each with the cache key of the application under way and - once
+ * the body has reached a use of the class's own name - the constructor that
+ * name is bound to.
+ *
+ * The constructor is recorded from the APPLICATION SITE rather than here,
+ * because `SpecializeFromFrame` does not have it until `ClassDefinitionEvaluation`
+ * returns, while a static field initializer inside that evaluation may apply
+ * the class's own name before it does. See `EvaluateTypeArgumentsExpression`.
+ */
+const specializationsInProgress = new Map<unknown, { key: string, ctor?: Value }>();
 
 /**
  * Create the specialization for an application, whatever named it.
@@ -2150,8 +2161,20 @@ function* SpecializeFromFrame(
   if (cached !== undefined) {
     return cached as never;
   }
+  // A SELF-REFERENCE from inside the body being evaluated: `Bx.<T>` written in
+  // a static field initializer of `class Bx<T>`, reached while `Bx.<uint8>` is
+  // being built with `T` bound to `uint8`, names the very class under
+  // construction. Its cache entry is not written until the body finishes, so
+  // without this it missed the cache and re-entered here, and
+  // `classes/declared-zero`'s `static default = new Bx.<T>()` recursed. The
+  // application site records the constructor the inner binding holds (below),
+  // and the same key means the same class.
+  const underWay = specializationsInProgress.get(declaration);
+  if (underWay !== undefined && underWay.key === cacheKey && underWay.ctor !== undefined) {
+    return underWay.ctor as never;
+  }
   pushTypeParameterFrame(frame);
-  specializationsInProgress.add(declaration);
+  specializationsInProgress.set(declaration, { key: cacheKey });
   let specialized;
   try {
     const className = Value(declaration.BindingIdentifier?.name ?? '');
@@ -2159,7 +2182,11 @@ function* SpecializeFromFrame(
       declaration.ClassTail,
       className,
       className,
-      '',
+      // The declaration's own source text, so that the constructor this
+      // evaluation creates can be matched back to the declaration while its
+      // body is still running - the window in which `AssociateClassType`
+      // below has not happened yet and `LookupClassType` answers nothing.
+      (declaration as unknown as { sourceText?: string }).sourceText ?? '',
       [],
     ));
   } finally {
@@ -2525,15 +2552,37 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   }
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
     const classType = LookupClassType(value as unknown as object);
-    const declaration = classType && isTypeObject(classType) && classType.TypeRecord.Kind === 'nominal'
+    let declaration = classType && isTypeObject(classType) && classType.TypeRecord.Kind === 'nominal'
       ? classType.TypeRecord.Declaration as unknown as { type?: string, TypeParameters?: { TypeParameterList?: readonly unknown[] }, ClassTail?: unknown, BindingIdentifier?: { name?: string } }
       : undefined;
+    // A class whose specialization is STILL BEING EVALUATED has no class type
+    // yet: `AssociateClassType` follows `ClassDefinitionEvaluation`, and a
+    // static field initializer runs inside it, after the inner class binding
+    // is initialized to the fresh constructor. So `Bx.<T>` in `static default
+    // = new Bx.<T>()` held a constructor `LookupClassType` knew nothing about,
+    // and fell to the refusal below as a non-generic callable - while the same
+    // expression in a static METHOD, run after the association, worked. The
+    // constructor is matched to its declaration by the source text
+    // `SpecializeFromFrame` now gives it, and recorded on the in-progress
+    // entry so the self-referential case can answer it.
+    if (declaration === undefined && specializationsInProgress.size > 0) {
+      const sourceText = (value as unknown as { SourceText?: string }).SourceText;
+      if (typeof sourceText === 'string' && sourceText.length > 0) {
+        for (const [candidate, entry] of specializationsInProgress) {
+          if ((candidate as { sourceText?: string }).sourceText === sourceText) {
+            entry.ctor = value;
+            declaration = candidate as typeof declaration;
+            break;
+          }
+        }
+      }
+    }
     const params = declaration?.TypeParameters?.TypeParameterList;
     // A kinded parameter no longer excludes specialization: its argument
     // resolves as a declaration above, and `#sec-higher-kinded-parameters`
     // requires that two applications binding different declarations be distinct
     // types.
-    if (params && params.length > 0 && declaration.ClassTail) {
+    if (declaration !== undefined && params && params.length > 0 && declaration.ClassTail) {
       return Q(yield* SpecializeGenericClass(declaration as never, node));
     }
   }

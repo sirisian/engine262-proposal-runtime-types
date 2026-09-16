@@ -95,3 +95,22 @@ test('a declared zero may not write, and the floor is narrower than the rule', (
   // A valid zero is unaffected.
   expect(ok('class E5 { x: uint8; static default = new E5(); }')).toBe(true);
 });
+
+test('a static initializer may apply the class being specialized', () => {
+  // `static default = new Bx.<T>()` runs INSIDE ClassDefinitionEvaluation, after
+  // the inner binding `Bx` is initialized to the fresh constructor and before
+  // AssociateClassType has given that constructor a class type. In that window
+  // `Bx.<T>` used to fall to the non-generic refusal - "type arguments require a
+  // generic function" - while the same expression in a static METHOD, run after
+  // the association, worked. The constructor is now matched to its declaration
+  // by source text through the in-progress registry.
+  const Bx = 'class Bx<T> { x: uint8; static default = new Bx.<T>(); } ';
+  // `T` bound to the application's own argument names the class under
+  // construction, which answers ITSELF rather than re-entering: the zero is an
+  // instance of the specialization it belongs to, and identity is cached.
+  expect(evaluated(`${Bx} const f = Bx.<uint8>; String(f.default instanceof f);`)).toBe('true');
+  expect(evaluated(`${Bx} String(Bx.<uint8> === Bx.<uint8>);`)).toBe('true');
+  // A DIFFERENT key from inside the body is a different specialization.
+  expect(evaluated('class Bx<T> { x: uint8; static other = Bx.<string>; } '
+    + 'const f = Bx.<uint8>; String(f.other === Bx.<string> && f.other !== f);')).toBe('true');
+});
