@@ -49,7 +49,12 @@ test('a base-typed binding holding the subclass is non-extensible', () => {
   // covered: `Object.isExtensible` above states it directly, and the computed
   // key below reaches the same failure by a spelling the checker cannot judge.
   expectStaticTypeError(`${V} class X extends V { } let v: V = new X(); v.extra = 1;`);
-  expect(evaluated(`${V} class X extends V { } let v: V = new X(); const k = 'extra'; v[k] = 1; String(v[k]);`)).toBe('undefined');
+  // A `let` key rather than a `const`: the checker reads an immutably bound
+  // literal as the key it names (`immutablyBound`), so `const k = 'extra'` is
+  // judged exactly as `v.extra` is and refused early - which this line once
+  // relied on it NOT doing. A `let` may be reassigned and is not folded, so the
+  // write reaches the run time, where the non-extensible instance ignores it.
+  expect(evaluated(`${V} class X extends V { } let v: V = new X(); let k = 'extra'; v[k] = 1; String(v[k]);`)).toBe('undefined');
 });
 
 test('an array of the subclass has a layout', () => {

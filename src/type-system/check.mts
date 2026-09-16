@@ -4326,7 +4326,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (cusable) {
-            construct.push({ Parameters: cparams });
+            // [[Untyped]] as #sec-overload-resolution defines it for a function:
+            // a signature with no annotation anywhere is the catch-all, and
+            // accepts any arity. A bare `constructor() {}` beside a typed field
+            // is that shape, so `new C(1)` for it is ordinary ECMAScript - the
+            // extra argument is ignored - and not an arity error. The arity
+            // check reads this flag; without it every unannotated constructor
+            // read as "takes at most 0 arguments", which refused
+            // `classes/constructor-returns` the moment the check landed.
+            construct.push({
+              Parameters: cparams,
+              Untyped: !(md.UniqueFormalParameters ?? []).some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation),
+            } as { Parameters: ParameterRecord[] });
           }
           continue;
         }
@@ -6892,7 +6903,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'KeyOfType': {
         const operand = resolveType(node.Type);
-        return operand ? (KeyTypesOf(operand) as Known) : null;
+        if (!operand) {
+          return null;
+        }
+        // `keyof T` for an UNBOUND `T` is not decidable here, and KeyTypesOf
+        // does not say so: its last arm answers "anything else has no keys,
+        // which is a definite answer" - right for `uint8`, wrong for a
+        // ~parameter~, whose keys are not empty but UNKNOWN until it is bound.
+        // Resolved eagerly, `class Box<T> { v: keyof T; }` was refused at its
+        // declaration with `"never" has no values`, and the `never` was baked
+        // into every later use - `f({ a: 1 }, 'a')` for `f<T>(o: T, k: keyof
+        // T)` reported `'a' is not assignable to never` AFTER binding, because
+        // the checker substitutes into a record that had already been decided.
+        //
+        // The specification carries a deferred computation as a type only for
+        // a CALL (the ~application~ Type Record, #sec-compile-time-evaluability)
+        // and has no such form for a type operator over an unbound parameter,
+        // so KeyTypesOf(~parameter~) is `never` by its own text; that is a gap
+        // in the specification this arm records rather than one in KeyTypesOf.
+        // Until a deferred form exists the answer is the gradual rule of this
+        // file's header: a type the checker cannot decide is ~any~, and the
+        // judgment is the run time's, which specializes by RE-EVALUATING the
+        // body with `T` bound (SpecializeFromFrame) and so reads `keyof T`
+        // correctly. A false negative in place of a false positive that made
+        // `keyof` over a parameter unwritable.
+        if (mentionsTypeParameter(operand)) {
+          return null;
+        }
+        return KeyTypesOf(operand) as Known;
       }
       // typeprogramming.md 4.1: `T[K]`. The walk is shared with the runtime
       // resolver rather than copied - see `IndexedAccessTypeRecord`. It answers
@@ -12951,8 +12989,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             Parameters, Return,
             ...(expected?.ThisType ? { ThisType: expected.ThisType } : {}),
             Untyped: !member.TypeAnnotation && annotations.every((type) => !type) && !expected,
+            // #sec-annotations-on-the-remaining-function-forms: "a method
+            // keeps its declarations; context supplies only positions without
+            // annotations". A method that declares its own type parameters
+            // keeps them. One that declares none, written against a GENERIC
+            // contextual signature, takes the signature's - exactly as it takes
+            // [[ThisType]] above and the parameter types of `contextual`, both
+            // of which already refer to those parameters. Without this the
+            // adopted parameter `x: T` referred to a `T` the signature did not
+            // introduce, so `{ map(x) { return x; } }` against `interface I {
+            // map<T>(x: T): T; }` was `(x: T) => T` beside `<T>(x: T) => T`, and
+            // #sec-signature-records compares the two lists pairwise - zero
+            // parameters against one is not the same signature. The object-type
+            // spelling of the same interface passed only because that path
+            // drops the method's type parameters altogether, which is the
+            // accident the test's name calls out.
             ...(member.TypeParameters?.TypeParameterList?.length
-              ? { TypeParameters: typeParameterRecordsOf(member.TypeParameters.TypeParameterList) } : {}),
+              ? { TypeParameters: typeParameterRecordsOf(member.TypeParameters.TypeParameterList) }
+              : expected?.TypeParameters?.length
+                ? { TypeParameters: expected.TypeParameters }
+                : {}),
           };
           const declaredSignature = { ...signature, Parameters: Parameters.map((p, i) => ({ ...p,
             Type: annotations[i] ?? anyTypeRecord,

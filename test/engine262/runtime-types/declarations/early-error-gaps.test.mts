@@ -42,6 +42,10 @@ test('the arity rule stands down where the count decides nothing', () => {
   expect(ok('function f(a: uint8) {} function f(a: uint8, b: string) {} f(1, "x");')).toBe(true);
   // A decorator's context argument is supplied by the language, not written.
   expect(ok('function d(t) { return t; } class C { @d m() {} }')).toBe(true);
+  // An unannotated CONSTRUCTOR is the catch-all too, a typed field beside it
+  // notwithstanding; `new C(1)` for `constructor() {}` is ordinary ECMAScript.
+  expect(ok('class C { x: uint8 = 1; constructor() {} } String(new C(1) instanceof C);')).toBe(true);
+  expect(ok('class C { constructor() {} } String(new C(1) instanceof C);')).toBe(true);
 });
 
 // ---- #sec-match-exhaustiveness: reachability ------------------------

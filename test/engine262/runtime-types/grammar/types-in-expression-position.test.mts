@@ -210,9 +210,28 @@ test('placement new', () => {
 
 test('expression evaluation', () => {
   expect(evaluated('const v = ("s" := string); v;').stringValue()).toBe('s');
-  expect(evaluated('function f() { return "seven"; } f.<uint8>();').stringValue()).toBe('seven');
+  // A specialization evaluates and calls as the function it specializes. The
+  // callee is GENERIC: #sec-type-arguments-and-placement-new-in-expression-position
+  // says "the value must be generic: a generic function, a generic class, or a
+  // parameterized type", and "where the expression's Static Type shows a value
+  // that is not generic it is a type error". This assertion used to write a
+  // non-generic `f` and expect 'seven', which the engine refuses as the clause
+  // says; the refusal is pinned below and the evaluation is asserted here over
+  // the form the clause admits.
+  expect(evaluated('function f<T>() { return "seven"; } f.<uint8>();').stringValue()).toBe('seven');
   expect(evaluated('((3 := uint8) is uint8) === true && (3 is uint8) === false && ("s" is uint8) === false ? "ok" : "no";').stringValue()).toBe('ok');
-  expect(evaluated('const o = { m() { return this === o ? "bound" : "lost"; } }; o.m.<uint8>();').stringValue()).toBe('bound');
+  // A method's specialization is receiver-independent and a call supplies
+  // `this` as any member call does (#sec-generic-function-values).
+  expect(evaluated('const o = { m<T>() { return this === o ? "bound" : "lost"; } }; o.m.<uint8>();').stringValue()).toBe('bound');
+});
+
+test('a specialization of a non-generic value is refused', () => {
+  // Where the Static Type shows a non-generic value it is a type error...
+  expect(evaluated('try { eval(\'function f() { return "seven"; } f.<uint8>();\'); "ran"; } catch (e) { e.constructor.name; }').stringValue()).toBe('StaticTypeError');
+  // ...and where it does not, "a specialization of a non-generic value throws
+  // a *TypeError* exception" - an object literal's method has no declared
+  // signature the checker can read as non-generic, so it reaches the run time.
+  expect(evaluated('const o = { m() { return 1; } }; try { o.m.<uint8>(); "ran"; } catch (e) { e.constructor.name; }').stringValue()).toBe('TypeError');
 });
 
 test('feature off: the expression forms stay errors', () => {
