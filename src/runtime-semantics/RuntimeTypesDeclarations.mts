@@ -32,7 +32,7 @@ import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../
 import { bindTypeParameter, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { OrderNamedTypeArguments, BindTypeArgumentsInto } from '../type-system/runtime.mts';
+import { OrderNamedTypeArguments, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
@@ -2579,6 +2579,33 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       if (rebuilt) {
         return GetTypeObject(rebuilt);
       }
+    }
+    // #sec-parameterized-types: a single object-typed argument over a base that
+    // takes no type parameters is METADATA, not a type argument - `float32.<{
+    // m: 1 }>` is the same application in expression position that
+    // TypeNodeToTypeRecord reads in type position, and this is that arm's twin.
+    //
+    // Without it a ~primitive~ record matched none of the arms here, fell out of
+    // the Type Object branch entirely, and reached the callable test below,
+    // where a Type Object IS callable (it converts) and is not a registered
+    // generic builtin - so the application was refused with "type arguments
+    // require a generic function". The annotation `let x: float32.<{ m: 1 }>`
+    // worked throughout, so the two positions disagreed about the same source.
+    //
+    // Guarded on the parameter count for the reason the annotation path guards
+    // on it: a GENERIC base takes type arguments, and an object-typed one is a
+    // type argument like any other. `class C<T>` applied to `{ a: uint8 }` must
+    // stay a specialization.
+    const baseTypeParameters = record.Kind === 'nominal'
+      ? ((record.Declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } } | undefined)
+        ?.TypeParameters?.TypeParameterList?.length ?? 0)
+      : 0;
+    if (baseTypeParameters === 0 && argRecords.length === 1 && argRecords[0]!.Kind === 'object') {
+      return GetTypeObject(CanonicalizeType({
+        Kind: 'parameterized',
+        Base: record,
+        Metadata: MetadataObjectFromType(argRecords[0]!),
+      } as unknown as TypeRecord, new Map()));
     }
     // A nominal takes its arguments directly, which is what the annotation path
     // does for the same types.
