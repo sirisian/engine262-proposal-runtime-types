@@ -10,6 +10,24 @@ import { joinTypes } from './logical-types.mts';
 import { R } from '#self';
 
 /**
+ * `T | undefined`, the form of a lookup that may miss - with `any` absorbing.
+ *
+ * Built raw, the union kept its `undefined` arm whatever `T` was, and for
+ * `T = any` that is the wrong type: #sec-canonicalizetype absorbs a member into
+ * one it is a subtype of, every type is a subtype of `any`, and the run time
+ * therefore interns `any | undefined` as `any`. Only that absorption is applied
+ * here, so the written order of every other union survives into diagnostics. The checker's raw record reached
+ * IsSubtype's union rule instead, where `undefined` is not a subtype of
+ * `string`, so `let s: string = m.get(k)` on a `Map.<K, any>` was refused - and
+ * NarrowFrom saw a type whose only non-`any` arm is `undefined`, so `m.get(k)
+ * ?? []` was reported as a nullish test that "can never fail". One helper so
+ * the two lookups that may miss cannot drift apart again.
+ */
+const orUndefined = (t: TypeRecord): TypeRecord => (t.Kind === 'any'
+  ? t
+  : { Kind: 'union', Members: [t, makePrimitive('undefined')] } as TypeRecord);
+
+/**
  * The signatures of the standard library's METHODS, built for the receiver a
  * call was made on: an iterator's, a keyed collection's, a promise's.
  *
@@ -159,7 +177,7 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
     // the file's own note calls that `undefined` load-bearing; a `T | void` here
     // let `let x: uint8 = it.find(p)` through, where the same mistake through
     // `Map.prototype.get` is refused.
-    case 'find': return fn([cb(boolType) as TypeRecord], { Kind: 'union', Members: [element, makePrimitive('undefined')] } as unknown as TypeRecord);
+    case 'find': return fn([cb(boolType) as TypeRecord], orUndefined(element));
     case 'reduce': return fn([fn([anyT, element, index], anyT) as TypeRecord, anyT], anyT);
     default: return null;
   }
@@ -309,7 +327,7 @@ export const collectionMethodSignature = (library: string, name: string, args: r
     // The design writes the lookup as `V | undefined`, and a union is how the
     // checker says it: a `Map.<K, V>` that does not hold the key answers
     // *undefined*, so a binding of type V is not what a lookup produces.
-    case 'get': return sig([key], { Kind: 'union', Members: [value, makePrimitive('undefined')] } as TypeRecord);
+    case 'get': return sig([key], orUndefined(value));
     case 'set': return sig([key, value], receiver);
     case 'has':
     case 'delete': return sig([key], boolType);

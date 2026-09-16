@@ -7147,6 +7147,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.type !== 'UnionType') {
           return CanonicalizeType({ Kind: 'intersection', Members } as TypeRecord) as Known;
         }
+        // A union with an `any` member IS `any`. #sec-canonicalizetype absorbs
+        // a member into one it is a subtype of, and every type is a subtype of
+        // `any` (#sec-issubtype), so the run time interns `any | undefined` as
+        // `any`. Returned raw, the same record reached IsSubtype's union rule -
+        // `s.Members.every(m => IsSubtype(m, t))` - where `undefined` is not a
+        // subtype of `string`, so the annotation refused a value of exactly the
+        // type it denotes while the interned Type Object accepted it; and
+        // NarrowFrom saw a type whose only non-`any` arm is `undefined`, so a
+        // nullish test on it "can never fail" and `v ?? x` was dead code.
+        //
+        // Only this one absorption is applied, and not the whole of
+        // CanonicalizeType, for two reasons that the intersection branch above
+        // does not face. CanonicalizeType COPIES: a recursive alias is built in
+        // place, its body resolved while its own record is a placeholder that
+        // the loop fills afterwards, and a copy of the placeholder taken here
+        // would be `{}` forever - `type L = { next: L | null }` lost its member
+        // that way. And CanonicalizeType ORDERS: the diagnostics print a union as
+        // it was written, and `"uint8 | string" has no default value` should
+        // name the type the author wrote rather than the interned spelling.
+        // Neither cost is paid for the intersection, whose members the merge
+        // above has already folded. The remaining subsumptions (`"a" | string`
+        // is `string`) are left to the judgments, which read them correctly
+        // through IsSubtype; only `any` changes an answer.
+        if (Members.some((m) => m.Kind === 'any')) {
+          return anyTypeRecord;
+        }
         return { Kind: 'union', Members };
       }
       case 'ArrayType': {
@@ -7625,13 +7651,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const constraint = tp.ConstraintNode ? resolveType(tp.ConstraintNode as ParseNode.Type) : null;
           const bound = constraint && substituteTypeParameters(constraint, into);
+          // #sec-the-type-type: "`type` is the type whose values are the Type
+          // Objects ... it is the Static Type of a type name or type expression
+          // in expression position ... a type argument may be constrained to
+          // it, which is what a generic parameter written `T: type` asks for."
+          //
+          // So `f<T: type>` takes a VALUE parameter, like `N: uint32`, and the
+          // argument `f.<uint8>` supplies a value of it - the Type Object
+          // `uint8`, whose Static Type is `type`. The judgment is therefore
+          // `type` against `type`, which holds. This code asked a different
+          // question: it took the record the argument DENOTES, `uint8`, and
+          // asked whether that type is assignable to `type`, so every such
+          // application was refused with `"uint.<8>" is not assignable to
+          // "type"` and the clause's own form was unwritable.
+          //
+          // The same confusion made the "requires a value argument" check below
+          // refuse it a second time, since a type name is not a ~literal~ -
+          // but a Type Object is exactly the value a `type`-typed parameter
+          // takes, so a type argument IS the value argument there.
+          const constrainedToType = bound?.Kind === 'primitive' && (bound as { Name?: string }).Name === 'type';
           if (bound && !mentionsTypeParameter(bound) && !mentionsTypeParameter(supplied)) {
             if (tp.Variadic && supplied.Kind === 'tuple') {
               if (packConstraintRefuses(supplied.Elements.map((element) => element.Type), bound)) report(supplied, bound);
+            } else if (constrainedToType) {
+              // A literal is a value that is not a type, and is the one thing a
+              // `type`-constrained parameter refuses: `f.<4>` for `f<T: type>`.
+              if (supplied.Kind === 'literal') report(supplied, bound);
             } else if (tp.Kind === 'value') requireAssignable(supplied, bound);
             else if (!IsAssignable(supplied, bound)) report(supplied, bound);
           }
-          if (tp.Kind === 'value' && !tp.Variadic && supplied.Kind !== 'literal' && supplied.Kind !== 'parameter') {
+          if (tp.Kind === 'value' && !tp.Variadic && !constrainedToType && supplied.Kind !== 'literal' && supplied.Kind !== 'parameter') {
             errors.push(Throw.StaticTypeError('$1 requires a value argument', Value(tp.Name)).Value as ObjectValue);
           }
         }

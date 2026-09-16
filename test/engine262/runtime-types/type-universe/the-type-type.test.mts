@@ -72,3 +72,22 @@ test('the type alias declaration is unaffected', () => {
   expect(evaluated('type A = uint8; let a: A = (1 := uint8); String(a);')).toBe('1');
   expect(evaluated('type A<T> = [].<T>; let a: A.<uint8> = []; String(a.length);')).toBe('0');
 });
+
+test('a parameter constrained to `type` takes a type as its value', () => {
+  // "Because `type` is itself a type, `type` is a value of `type`, and a type
+  // argument may be constrained to it, which is what a generic parameter
+  // written `T: type` asks for."
+  //
+  // `T: type` is a VALUE parameter, like `N: uint32`, and `f.<uint8>` supplies
+  // its value: the Type Object `uint8`, whose Static Type is `type`. The
+  // checker used to take the record the argument DENOTES instead and ask
+  // whether the type `uint8` is assignable to `type`, so every such
+  // application was refused - the clause's own form was unwritable.
+  expect(evaluated('function f<T: type>() { return 1; } String(f.<uint8>());')).toBe('1');
+  expect(evaluated('function f<T: type>() { return 1; } String(f.<string>());')).toBe('1');
+  expect(evaluated('class A {} function f<T: type>() { return 1; } String(f.<A>());')).toBe('1');
+  // The parameter is usable as the value it is.
+  expect(evaluated('function f<T: type>() { return T; } String(f.<uint8>() === uint8);')).toBe('true');
+  // A literal is a value that is not a type, and is what the constraint refuses.
+  expectThrown('function f<T: type>() { return 1; } String(f.<4>());');
+});
