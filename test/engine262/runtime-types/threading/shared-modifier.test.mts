@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, ok, bool, expectThrown, expectThrownKind,
+  evaluated, ok, bool, expectThrown, expectStaticTypeError,
 } from '../harness.mts';
 
 /**
@@ -46,30 +46,37 @@ test('shared: admits the value types', () => {
   expect(evaluated('type S = shared [4].<uint8>; Reflect.getReflection(S).kind;')).toBe('shared');
 });
 
-// The three refusals are catchable TypeErrors raised where the type expression
-// is evaluated, which is the shape the existing type-expression errors take (the
-// `keyof` of a type with no keys is the nearest neighbour). Whether some of these
-// belong in the checking pass instead is open; the established pattern is what
-// is matched here.
+// The three refusals are EARLY errors. #sec-shared-types states each as "it is
+// a type error if", and #sec-type-errors fixes what that phrase means: "This
+// specification realizes such a violation as an Early Error, and reserves a
+// thrown *TypeError* for" a check that "cannot be resolved statically, because
+// a value reaches a typed position only as the ~any~ type". A written `shared
+// string` is resolved statically by construction - the operand is right there
+// in the source - so it is the checking pass that refuses it, before the body
+// runs. These assertions used to expect a catchable TypeError raised where the
+// type expression is evaluated, with a note that whether they belonged in the
+// checking pass was open; the pass covers them now, and the specification says
+// it should. The evaluation-time refusal still stands behind it, for the
+// deferred case the clause reserves the thrown form for.
 test('shared: a non-value type is refused', () => {
   // An object is ALREADY shared - one heap - so the modifier would claim of it
   // nothing that is not already true, and `shared Map` would falsely suggest a
   // concurrent map rather than the ordinary one under a Lock.
-  expectThrownKind('type S = shared string;', 'TypeError');
-  expectThrownKind('type S = shared any;', 'TypeError');
-  expectThrownKind('type S = shared { a: uint8 };', 'TypeError');
+  expectStaticTypeError('type S = shared string;');
+  expectStaticTypeError('type S = shared any;');
+  expectStaticTypeError('type S = shared { a: uint8 };');
   // A `[].<T>` has no layout as a type: its size is a property of the value.
-  expectThrownKind('type S = shared [].<uint8>;', 'TypeError');
+  expectStaticTypeError('type S = shared [].<uint8>;');
 });
 
 test('shared: nested `shared` is refused', () => {
-  expectThrownKind('type S = shared shared uint32;', 'TypeError');
+  expectStaticTypeError('type S = shared shared uint32;');
 });
 
 test('shared: `shared ref T` is refused', () => {
   // A reference denotes a LOCATION, not a value, and a location is already
   // reachable from wherever the thread holding it can reach.
-  expectThrownKind('type S = shared ref uint32;', 'TypeError');
+  expectStaticTypeError('type S = shared ref uint32;');
 });
 
 // -- The value is a value of the target ----------------------------------------

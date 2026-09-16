@@ -675,8 +675,11 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // `Iterator` is a parameterized type by #sec-generator-types, and was
     // absent, which is why `Iterator.<uint8>` threw where `Iterable.<uint8>`
     // (reached as a Type Object rather than as this constructor) did not.
-    // `rational` is the numeric family's callable form and was absent for the
-    // same reason.
+    // `rational` and `complex` are the numeric families' callable forms - each
+    // is a native function, not a Type Object, so `complex.<float32>` reaches
+    // the callable test - and were absent for the same reason. `typeof
+    // complex.<float32>` is *"function"* exactly as `typeof Map.<string,
+    // uint8>` is; the TYPE is `type complex.<float32>`.
     //
     // Typed as `string[]` rather than `as const`, because several of these are
     // installed as intrinsics without appearing in the `Intrinsics` interface -
@@ -685,7 +688,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // run time. The `if (constructor)` below is what makes a name that is
     // absent harmless, and it already did that work for the original list.
     for (const name of ['Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'Proxy', 'SoA', 'Composite', 'ThreadLocal',
-      'Iterator', 'AsyncIterator', 'Generator', 'AsyncGenerator', 'rational'] as readonly string[]) {
+      'Iterator', 'AsyncIterator', 'Generator', 'AsyncGenerator', 'rational', 'complex'] as readonly string[]) {
       const constructor = (realmRec.Intrinsics as unknown as Record<string, ObjectValue | undefined>)[`%${name}%`];
       if (constructor) RegisterGenericBuiltin(constructor);
     }

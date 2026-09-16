@@ -379,18 +379,21 @@ test('meta: a bare value enters a parameterization only through construction', (
     meta U { default = { unit: 0 }; subtype(a, b) { return true; } validate(v, m) { return true; } }
     String(Number(float32.<{ unit: 1 }>(7)));
   `)).toBe('7');
-  // Pinned as it behaves rather than as it should: a hook that REFUSES does
-  // not yet keep the value out on this path. The judgment is reached and
-  // answers correctly through `is` (covered above), so the gap is between the
-  // Type Object call and the construction boundary rather than in the
-  // judgment - the open half of ConvertParameterization.
+  // A hook that REFUSES keeps the value out. This assertion was pinned to
+  // 'admitted' - "as it behaves rather than as it should" - while
+  // `float32.<{ u2: 1 }>` in expression position never reached the
+  // construction boundary at all: a ~primitive~ base with a metadata argument
+  // matched no arm of the application path and evaluated to the bare `float32`,
+  // whose call has no hook to run. The arm that builds the ~parameterized~
+  // record in expression position (the twin of TypeNodeToTypeRecord's) closed
+  // that, and the judgment now runs where the clause says it does.
   expect(evaluated(`
     type U2 = { u2: number };
     meta U2 { default = { u2: 0 }; subtype(a, b) { return true; } validate(v, m) { return Number(v) > 0; } }
     let m = "";
     try { float32.<{ u2: 1 }>(0 - 5); m = "admitted"; } catch (e) { m = "refused"; }
     m;
-  `)).toBe('admitted');
+  `)).toBe('refused');
 });
 
 test('meta: the brand is shed freely on the way up', () => {

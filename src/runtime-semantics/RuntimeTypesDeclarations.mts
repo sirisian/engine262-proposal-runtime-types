@@ -2607,6 +2607,31 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
         Metadata: MetadataObjectFromType(argRecords[0]!),
       } as unknown as TypeRecord, new Map()));
     }
+    // A parameterized primitive FAMILY re-applied. #sec-complex-numbers: "the
+    // bare name `complex` is `complex.<number>`", so unlike `int`, `uint` and
+    // `vector` - which are not values bare, and reach FamilyApplicationFor by
+    // NAME before anything is evaluated - `complex` evaluates to a Type Object
+    // and arrives HERE with a ~primitive~ record, its default argument already
+    // applied. `complex.<float32>` then matched no arm above and was refused as
+    // a non-generic callable. `builtinTypeRecord` is the one place the families
+    // are enumerated, and it answers a record for a family name with arguments
+    // and *null* for anything else, so asking it by the record's own name is
+    // both the fix and the guard: a primitive that is not a family, `string`
+    // say, gets *null* and falls through to the refusal as before.
+    //
+    // The guard is that the family CONSUMED the arguments: `builtinTypeRecord`
+    // answers `string` for `string.<uint8>` too, ignoring what it was given, and
+    // taking that answer would make a refused application silently evaluate to
+    // its base. A record whose [[Arguments]] are the ones supplied is one the
+    // name actually parameterizes over.
+    if (record.Kind === 'primitive') {
+      const supplied = argRecords.map(toNumericArgument);
+      const reapplied = builtinTypeRecord(record.Name, supplied);
+      if (reapplied && reapplied.Kind === 'primitive'
+        && ((reapplied as { Arguments?: readonly unknown[] }).Arguments?.length ?? 0) === supplied.length) {
+        return GetTypeObject(reapplied);
+      }
+    }
     // A nominal takes its arguments directly, which is what the annotation path
     // does for the same types.
     if (record.Kind === 'nominal') {
