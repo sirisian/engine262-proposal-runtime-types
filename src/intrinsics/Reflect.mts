@@ -967,6 +967,19 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       set('signatures', CreateArrayFromList(signatures));
       break;
     }
+    case 'deferred': {
+      // A deferred computation reflects as what it is: an operator waiting on
+      // operands. One shape for a core operator and a builder call, so a tool
+      // that renders `keyof T` renders `omit(T, 'a')` with the same code; the
+      // operator is the tag for a core one and the builder function for a call.
+      // Before this arm both fell to the default below and reported
+      // `kind: "primitive"`, which is a leaf, and a deferred record is not one.
+      set('kind', Value('deferred'));
+      set('operator', typeof t.Operator === 'string' ? Value(t.Operator) : t.Operator as Value);
+      set('operands', CreateArrayFromList(t.Operands.map((a) => (
+        a && typeof a === 'object' && 'Kind' in a ? typeObj(a as TypeRecord) : a as Value))));
+      break;
+    }
     default:
       set('kind', Value('primitive'));
       set('type', typeObj(t));

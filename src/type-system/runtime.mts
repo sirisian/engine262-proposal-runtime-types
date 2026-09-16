@@ -33,7 +33,7 @@ import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue,
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord } from './records.mts';
-import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl } from './records.mts';
+import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -5648,7 +5648,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // below still runs for everything else, because it raises three DISTINCT
       // errors where the shared helper answers a single null.
       const deferred = IndexedAccessTypeRecord(objectType, indexType);
-      if (deferred && deferred.Kind === 'parameter') {
+      if (deferred && deferred.Kind === 'deferred') {
         return deferred;
       }
       const arms = objectType.Kind === 'union' ? objectType.Members : [objectType];
@@ -5776,11 +5776,7 @@ export function IndexedAccessTypeRecord(objectType: TypeRecord, indexType: TypeR
     // binding and left it alone, and #sec-indexed-access-types' own worked
     // example did not compile. The substitution now reaches into `Deferred`,
     // and evaluates the access here once neither operand mentions a parameter.
-    return {
-      Kind: 'parameter',
-      Name: deferredName,
-      Deferred: { Operator: 'indexed', Object: objectType, Index: indexType },
-    };
+    return { Kind: 'deferred', Operator: 'indexed', Operands: [objectType, indexType] };
   }
   const arms = objectType.Kind === 'union' ? objectType.Members : [objectType];
   const keys = indexType.Kind === 'union' ? indexType.Members : [indexType];
@@ -5812,6 +5808,17 @@ export function IndexedAccessTypeRecord(objectType: TypeRecord, indexType: TypeR
 }
 
 export function KeyTypesOf(t: TypeRecord): TypeRecord {
+  // #sec-keyof, the step before every other: an operand that involves an
+  // unbound parameter has keys that are UNKNOWN rather than absent, so the
+  // operator is carried as a ~deferred~ record and applied once a
+  // specialization binds it. This is the one implementation of `keyof`; the
+  // checker's `KeyOfType` arm calls it, and the run time's annotation path
+  // does too, so `type F = <T>(o: T) => keyof T` reads the same in both -
+  // where before the checker deferred here and the run time reached the
+  // "anything else has no keys" step below and answered `never`.
+  if (mentionsTypeParameter(t)) {
+    return { Kind: 'deferred', Operator: 'keyof', Operands: [t] } as TypeRecord;
+  }
   if (t.Kind === 'object') {
     const keys: TypeRecord[] = [];
     for (const p of t.Properties) {
@@ -6182,6 +6189,6 @@ setLayoutSubstituter((structure, declaration, args) => CanonicalizeType(Substitu
 // `keyof T` and `T[K]` once a call has bound what they mention. Registered here
 // because `records.mts`, where the substitution lives and every type-system
 // file reaches, cannot import this file back; see `setDeferredOperatorImpl`.
-setDeferredOperatorImpl((d) => (d.Operator === 'keyof'
-  ? KeyTypesOf(d.Object)
-  : IndexedAccessTypeRecord(d.Object, d.Index)));
+setDeferredOperatorImpl((operator, operands) => (operator === 'keyof'
+  ? KeyTypesOf(operands[0]!)
+  : IndexedAccessTypeRecord(operands[0]!, operands[1]!)));

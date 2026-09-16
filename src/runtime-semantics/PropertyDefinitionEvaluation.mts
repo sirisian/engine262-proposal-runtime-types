@@ -11,6 +11,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { MemberFunctionTypeRecord, FunctionSignatureReflectionOf } from './ClassDefinitionEvaluation.mts';
 import { CreateArrayFromList, Get } from '../abstract-ops/all.mts';
+import { AdoptTypeParameters } from '../abstract-ops/runtime-types.mts';
 import { RuntimeTypeOf, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
@@ -58,6 +59,53 @@ function objectLiteralContext(definition: object, literal: object | undefined): 
     n = (n as { parent?: object }).parent;
   }
   return literal ? contextualTypeFor(literal) : undefined;
+}
+
+/**
+ * A literal method that declares no type parameters of its own, written
+ * against a contextual member signature that has some, takes the signature's
+ * as the function value's - see `AdoptTypeParameters`. The declarations come
+ * from the signature's Type Parameter Records, which keep the |TypeParameter|
+ * Parse Node each was read from, so the adopted list is what
+ * SpecializeGenericFunction binds by exactly as a declared one is.
+ */
+/** A method's key where it is written as a plain name or string, else *undefined*. */
+function staticMethodKey(PropertyDefinition: ParseNode): string | undefined {
+  // A method's key is its |ClassElementName| (a |PropertyName| node), the same
+  // production in an object literal as in a class body.
+  const key = (PropertyDefinition as { ClassElementName?: { type?: string, name?: string, value?: unknown } }).ClassElementName;
+  if (key?.type === 'IdentifierName' && typeof key.name === 'string') {
+    return key.name;
+  }
+  if (key?.type === 'StringLiteral' && typeof key.value === 'string') {
+    return key.value;
+  }
+  return undefined;
+}
+
+function adoptContextualTypeParameters(PropertyDefinition: ParseNode, closure: ObjectValue): void {
+  if (!surroundingAgent.feature('runtime-types')) {
+    return;
+  }
+  const own = (PropertyDefinition as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList;
+  if (own && own.length > 0) {
+    return;
+  }
+  const literal = (PropertyDefinition as { parent?: ParseNode }).parent;
+  const keyName = staticMethodKey(PropertyDefinition);
+  if (!literal || keyName === undefined) {
+    return;
+  }
+  const ctx = contextualTypeFor(literal as object) as TypeRecord | null | undefined;
+  const member = propertyContextualType(ctx, Value(keyName));
+  if (!member || member.Kind !== 'function') {
+    return;
+  }
+  const signature = (member as { Signatures?: readonly { TypeParameters?: readonly { Declaration?: unknown }[] }[] }).Signatures?.[0];
+  const declarations = signature?.TypeParameters?.map((tp) => tp.Declaration).filter((d): d is ParseNode.TypeParameter => !!d);
+  if (declarations && declarations.length > 0 && declarations.length === signature!.TypeParameters!.length) {
+    AdoptTypeParameters(closure, declarations);
+  }
 }
 
 function propertyContextualType(contextual: TypeRecord | null | undefined, key: unknown): TypeRecord | null {
@@ -229,10 +277,23 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
     case 'AsyncGeneratorMethod': {
       if (surroundingAgent.feature('decorators')) {
         const methodDefinition = Q(yield* MethodDefinitionEvaluation(PropertyDefinition, object));
+        if (methodDefinition.Kind === 'method') {
+          adoptContextualTypeParameters(PropertyDefinition, methodDefinition.Value);
+        }
         Q(yield* DefineMethodProperty(object, methodDefinition, true));
         return undefined;
       } else {
-        return yield* MethodDefinitionEvaluation(PropertyDefinition, object, enumerable);
+        const result = yield* MethodDefinitionEvaluation(PropertyDefinition, object, enumerable);
+        // The evaluation defines the property and returns nothing, so the
+        // closure is read back off the object by its (static) key.
+        const keyName = staticMethodKey(PropertyDefinition);
+        if (keyName !== undefined) {
+          const desc = X(object.GetOwnProperty(Value(keyName)));
+          if (desc !== Value.undefined && (desc as { Value?: unknown }).Value instanceof ObjectValue) {
+            adoptContextualTypeParameters(PropertyDefinition, (desc as { Value: ObjectValue }).Value);
+          }
+        }
+        return result;
       }
     }
     default:

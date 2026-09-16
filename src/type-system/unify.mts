@@ -198,8 +198,8 @@ export function unifyTypeParameters(
         // record waiting on `T`. Reading only the record's kind widened `'a'`
         // to `string`, and `T[K]` then evaluated to `P[string]`, which is not a
         // member access at all.
-        const deferredKeyof = !!constraint && constraint.Kind === 'parameter'
-          && (constraint as { Deferred?: { Operator?: string } }).Deferred?.Operator === 'keyof';
+        const deferredKeyof = !!constraint && constraint.Kind === 'deferred'
+          && (constraint as { Operator?: unknown }).Operator === 'keyof';
         const literalConstrained = !!constraint && (constraint.Kind === 'literal'
           || deferredKeyof
           || (constraint.Kind === 'union'

@@ -464,7 +464,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'any':
     case 'void':
       return true;
-    case 'application':
+    case 'deferred':
       // #sec-issubtype: "If _s_.[[Kind]] is ~application~ ... if _s_.[[Builder]]
       // and _t_.[[Builder]] are not the same function, return *false*; return
       // SameArgumentList(...)". And #sec-computed-types: "A deferred ~application~
@@ -494,14 +494,20 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // is the direction `typeprogramming.md` 6.2 warns is easy to reverse -
       // "checking a generic body that PRODUCES the result needs a lower bound,
       // and for `omit` the true one is `T <: return`".
-      if (t.Kind === 'application' && licensesLowerBound(t, s, assumptions)) {
+      if (t.Kind === 'deferred' && licensesLowerBound(t, s, assumptions)) {
         return true;
       }
-      return t.Kind === 'application'
-        && s.Builder === t.Builder
+      // One identity rule for every deferred computation: the same operator -
+      // a core tag by spelling, a builder by identity - and pairwise the same
+      // operands. This is the rule that used to be stated once here for a
+      // builder call and once more, by composed NAME, for `keyof T` and
+      // `T[K]` carried as parameters; a name is not an identity (two
+      // declarations may both write `T[K]`), and now there is one rule.
+      return t.Kind === 'deferred'
+        && s.Operator === t.Operator
         && SameArgumentList(
-          s.Arguments as readonly (TypeRecord | number)[],
-          t.Arguments as readonly (TypeRecord | number)[],
+          s.Operands as readonly (TypeRecord | number)[],
+          t.Operands as readonly (TypeRecord | number)[],
           next,
         );
     case 'primitive':
@@ -885,7 +891,7 @@ function isNumericLiteralRecord(s: TypeRecord & { Kind: 'literal' }): boolean {
  * evaluation instead, which is the half that already runs.
  */
 function licensesLowerBound(
-  t: TypeRecord & { Kind: 'application' },
+  t: TypeRecord & { Kind: 'deferred' },
   s: TypeRecord,
   assumptions: readonly Assumption[],
 ): boolean {
@@ -968,10 +974,10 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // `typeprogramming.md` 6.2: "checking a generic body that PRODUCES the result
   // needs a lower bound, and for `omit` the true one is `T <: return`".
   //
-  // Here rather than in the `case 'application':` arm of SameTypeWithAssumptions:
+  // Here rather than in the `case 'deferred':` arm of SameTypeWithAssumptions:
   // that arm fires when the application is the SOURCE, and it is reached only
   // after a kind-equality guard that a `~parameter~` source never passes.
-  if (t.Kind === 'application' && licensesLowerBound(t, s, assumptions)) {
+  if (t.Kind === 'deferred' && licensesLowerBound(t, s, assumptions)) {
     return true;
   }
   if (t.Kind === 'any') {
@@ -1747,7 +1753,7 @@ export function HasSlotInsideApplication(pattern: TypeRecord): boolean {
     if (insideApplication && record.Kind === 'parameter') {
       return true;
     }
-    const within = insideApplication || record.Kind === 'application';
+    const within = insideApplication || record.Kind === 'deferred';
     return Object.entries(record).some(([key, child]) => key !== 'Builder' && walk(child, within));
   };
   return walk(pattern, false);
@@ -2185,7 +2191,7 @@ function enumUnderlying(t: TypeRecord): TypeRecord | null {
 
 /** Kinds whose inhabitants are not yet known, and which therefore overlap. */
 function isUndecidable(t: TypeRecord): boolean {
-  return t.Kind === 'any' || t.Kind === 'parameter' || t.Kind === 'application';
+  return t.Kind === 'any' || t.Kind === 'parameter' || t.Kind === 'deferred';
 }
 
 export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {

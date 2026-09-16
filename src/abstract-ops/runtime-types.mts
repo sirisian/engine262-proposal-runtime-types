@@ -3624,10 +3624,36 @@ export function DeclaredInverseOf(builder: Value): Value | undefined {
   return declaredInverses.get(builder as unknown as object);
 }
 
+/**
+ * The type parameters a function value ADOPTED from a generic contextual
+ * signature, keyed by the function object.
+ *
+ * #sec-annotations-on-the-remaining-function-forms: "a method keeps its
+ * declarations; context supplies only positions without annotations". A
+ * literal `{ map(x) { return x; } }` written against `interface J { map<T>(x:
+ * T): T; }` declares no type parameters, so the position is one context
+ * supplies - and the checker's signature for it is `<T>(x: T) => T`. The
+ * VALUE the literal creates has to be that too, or the boundary check's promise
+ * (#sec-the-boundary-check: a value entering a typed position IS of that type)
+ * is broken for exactly one kind of value: `o.map.<uint8>(x)` passed the check
+ * and was refused at run time as a non-generic callable. TypeScript's
+ * contextual signature instantiation is the same commitment.
+ */
+const adoptedTypeParameters = new WeakMap<object, readonly ParseNode.TypeParameter[]>();
+export function AdoptTypeParameters(fn: object, list: readonly ParseNode.TypeParameter[]): void {
+  adoptedTypeParameters.set(fn, list);
+}
+
 export function functionTypeParameters(fn: AnnotatedFunction): readonly ParseNode.TypeParameter[] | null {
+  // Its own declaration first; a function that declares type parameters keeps
+  // them (`#sec-annotations-on-the-remaining-function-forms`).
   const code = fn.ECMAScriptCode as { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } } | null | undefined;
   const list = code?.parent?.TypeParameters?.TypeParameterList;
-  return list && list.length > 0 ? list : null;
+  if (list && list.length > 0) {
+    return list;
+  }
+  const adopted = adoptedTypeParameters.get(fn as unknown as object);
+  return adopted && adopted.length > 0 ? adopted : null;
 }
 
 /**

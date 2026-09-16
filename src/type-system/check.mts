@@ -19,7 +19,6 @@ import {
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
   badKindedArgument, restElementType, parameterTypeRecord,
-  deferredOperatorName,
 } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
@@ -6814,7 +6813,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const pendingLayout = (type: TypeRecord, seen = new Set<TypeRecord>()): boolean => {
           if (seen.has(type)) return false;
           seen.add(type);
-          if (mentionsTypeParameter(type) || type.Kind === 'application') return true;
+          if (mentionsTypeParameter(type) || type.Kind === 'deferred') return true;
           if (type.Kind === 'nominal') {
             return (!type.LibraryName && !type.Constructor)
               || type.Arguments.some((arg) => typeof arg !== 'number' && pendingLayout(arg, seen));
@@ -6900,47 +6899,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             args.push(resolveType(a as ParseNode.Type));
           }
         }
-        return { Kind: 'application', Builder: builderNode, Arguments: args, Facts: facts } as unknown as Known;
+        return { Kind: 'deferred', Operator: builderNode, Operands: args, Facts: facts } as unknown as Known;
       }
       case 'KeyOfType': {
+        // One implementation: `KeyTypesOf` defers an operand that involves an
+        // unbound parameter and computes every other, and the run time's
+        // annotation path calls the same function, so the two positions
+        // cannot disagree about `keyof T`.
         const operand = resolveType(node.Type);
-        if (!operand) {
-          return null;
-        }
-        // `keyof T` for an UNBOUND `T` is not decidable here, and KeyTypesOf
-        // does not say so: its last arm answers "anything else has no keys,
-        // which is a definite answer" - right for `uint8`, wrong for a
-        // ~parameter~, whose keys are not empty but UNKNOWN until it is bound.
-        // Resolved eagerly, `class Box<T> { v: keyof T; }` was refused at its
-        // declaration with `"never" has no values`, and the `never` was baked
-        // into every later use - `f({ a: 1 }, 'a')` for `f<T>(o: T, k: keyof
-        // T)` reported `'a' is not assignable to never` AFTER binding, because
-        // the checker substitutes into a record that had already been decided.
-        //
-        // The specification carries a deferred computation as a type only for
-        // a CALL (the ~application~ Type Record, #sec-compile-time-evaluability)
-        // and has no such form for a type operator over an unbound parameter,
-        // so KeyTypesOf(~parameter~) is `never` by its own text; that is a gap
-        // in the specification this arm records rather than one in KeyTypesOf.
-        // Until a deferred form exists the answer is the gradual rule of this
-        // file's header: a type the checker cannot decide is ~any~, and the
-        // judgment is the run time's, which specializes by RE-EVALUATING the
-        // body with `T` bound (SpecializeFromFrame) and so reads `keyof T`
-        // correctly. A false negative in place of a false positive that made
-        // `keyof` over a parameter unwritable.
-        if (mentionsTypeParameter(operand)) {
-          // A DEFERRED record rather than null. Null is "no answer", which is
-          // right at the declaration and loses the constraint at every call:
-          // with `K: keyof T` resolving to nothing, `pluck(o, "zz")` was checked
-          // against nothing and reached the run-time binder before the wrong
-          // key was refused. The deferred record carries the operand, so the
-          // substitution evaluates `keyof P` once `T` binds, and the static
-          // check refuses `"zz"` as the binder does - `'zz' is not assignable
-          // to 'a' | 'b'` - at compile time.
-          const deferred = { Operator: 'keyof' as const, Object: operand as TypeRecord };
-          return { Kind: 'parameter', Name: deferredOperatorName(deferred), Deferred: deferred } as unknown as Known;
-        }
-        return KeyTypesOf(operand) as Known;
+        return operand ? (KeyTypesOf(operand) as Known) : null;
       }
       // typeprogramming.md 4.1: `T[K]`. The walk is shared with the runtime
       // resolver rather than copied - see `IndexedAccessTypeRecord`. It answers
@@ -18081,7 +18048,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A ~parameter~ is exempt: "nothing is known about what an application
           // will bind, so a generic's field is checked at its specialization".
           // The evaluation-time site has that exemption and this matches it.
-          if (declared && declared.Kind !== 'parameter' && !n.Initializer && !n.TypedInitializer) {
+          // A ~deferred~ record is exempt as a parameter is, and for the same
+          // reason: `v: keyof T` names a type the specialization will bind, so
+          // its default is the specialization's question.
+          if (declared && declared.Kind !== 'parameter' && declared.Kind !== 'deferred' && !n.Initializer && !n.TypedInitializer) {
             checkDefaultInitialization(declared);
             const written = (n.TypeAnnotation?.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } } | undefined);
             defaultsNeeded.push({

@@ -493,24 +493,37 @@ export type Known = TypeRecord | null;
 export type TypeRecord =
   | { readonly Kind: 'any' }
   /**
-   * proposal-runtime-types #table-type-record-kinds: a DEFERRED compile-time
-   * application - "a call of a compile-time-evaluable function at least one of
-   * whose arguments involves an unbound generic parameter, carried as a type
-   * until specialization evaluates it".
+   * A DEFERRED COMPUTATION over a generic parameter - the one kind for every
+   * type-level operation that cannot be performed until a specialization binds
+   * what it is written over.
    *
-   * The kind was listed
-   * among those "declared for the later milestones" and nothing produced one, so
-   * `#sec-computed-types` had nowhere to carry a call it could not evaluate and
-   * a checked contract had nothing to attach its facts to.
+   * [[Operator]] is what will be applied once the operands close: a core
+   * operator of the language (`keyof`; `indexed` for `T[K]`), or a
+   * compile-time-evaluable function - the builder of a |ComputedType| such as
+   * `omit(T, 'a')`. [[Operands]] holds a Type Record or an ECMAScript language
+   * value per operand, at least one of which involves an unbound parameter.
    *
-   * [[Arguments]] holds a Type Record or an ECMAScript language value per
-   * argument, and a ~parameter~ record where the argument reads an unbound
-   * parameter.
+   * Two deferred records are the same when their operators are the same and
+   * their operands are pairwise the same; a deferred record is a subtype of
+   * itself, of `any`, and of its operator's BOUND where the operator has one -
+   * the key universe for `keyof`, `T[keyof T]` for an index, the declared
+   * return of a builder. Nothing finer is known before specialization, so
+   * nothing finer is assumed.
+   *
+   * One kind rather than two - a `~parameter~` carrying a [[Deferred]] field
+   * for the operators beside an `~application~` for the calls - because the
+   * two had one identity rule, one evaluation rule ("once every operand is
+   * closed, apply the operator and replace the record") and one opacity rule,
+   * stated twice and free to drift. And a deferred operator is not a
+   * parameter: a parameter is identified by its [[Declaration]], a derived one
+   * has none, and every reader of that field would have had to know. rustc
+   * reached the same shape - one `Alias` kind with a tag for projections,
+   * opaque types and weak aliases - after living with four bespoke ones.
    */
   | {
-    readonly Kind: 'application',
-    readonly Builder: unknown,
-    readonly Arguments: readonly (TypeRecord | Value)[],
+    readonly Kind: 'deferred',
+    readonly Operator: DeferredOperator,
+    readonly Operands: readonly (TypeRecord | Value)[],
     /**
      * The builder's `where` clauses, as FACTS about this deferred call.
      *
@@ -547,22 +560,6 @@ export type TypeRecord =
      * generic declaration of n parameters and is NOT itself a type.
      */
     readonly Arity?: number,
-    /**
-     * A TYPE OPERATOR over a parameter, deferred. `keyof T` and `T[K]` cannot be
-     * computed inside a declaration - nothing is known about `T` there - so each
-     * is a ~parameter~ record with a composed [[Name]], opaque and related only
-     * to itself, exactly as the parameters it is built from. What that record
-     * lacked was a way OUT: it carried no operands, so when a call bound `T` and
-     * `K` the substitution saw a parameter named "T[K]" that matched no binding
-     * and left it alone, and #sec-indexed-access-types' own worked example -
-     * `pluck<T, K: keyof T>(o: T, key: K): T[K]` - did not compile.
-     *
-     * This field carries the operands. Substitution reaches into them and, once
-     * none still mentions a parameter, evaluates the operator - the treatment
-     * #sec-substitutetype already gives a deferred ~application~, "evaluate the
-     * builder call once no argument mentions a parameter".
-     */
-    readonly Deferred?: DeferredOperatorRecord,
   }
   | { readonly Kind: 'primitive', readonly Name: string, readonly Arguments: readonly (TypeRecord | number)[] }
   | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord }
@@ -792,20 +789,29 @@ const libraryTypeNames = new Set([
  * so that records.mts, which every type-system file reaches, does not depend on
  * an intrinsic that depends back on it.
  */
-/** The operands a deferred operator waits on. */
-export type DeferredOperatorRecord =
-  | { readonly Operator: 'keyof', readonly Object: TypeRecord }
-  | { readonly Operator: 'indexed', readonly Object: TypeRecord, readonly Index: TypeRecord };
+/**
+ * What a deferred record will apply once its operands close: a core operator
+ * tag, or a builder - the function value of a |ComputedType|. Two operators are
+ * the same by `===`: tags by their spelling, builders by identity, which is
+ * what "the same function" means for a builder.
+ */
+export type DeferredOperator = 'keyof' | 'indexed' | object;
+
+/** Whether a deferred record's operator is a core one rather than a builder. */
+export function isCoreOperator(operator: DeferredOperator): operator is 'keyof' | 'indexed' {
+  return operator === 'keyof' || operator === 'indexed';
+}
 
 /**
- * The evaluator for a deferred operator whose operands have all closed. Held as
- * a setter for the reason `rangeEnumRecordImpl` below is: the evaluators -
- * `KeyTypesOf` and `IndexedAccessTypeRecord` - live in `runtime.mts`, which
- * imports this file, so this file cannot import them back. `runtime.mts`
- * registers them at load.
+ * The evaluator for a deferred CORE operator whose operands have all closed.
+ * Held as a setter for the reason `rangeEnumRecordImpl` below is: the
+ * evaluators - `KeyTypesOf` and `IndexedAccessTypeRecord` - live in
+ * `runtime.mts`, which imports this file, so this file cannot import them
+ * back. `runtime.mts` registers them at load. A BUILDER is applied by the call
+ * it defers, at specialization, and is not evaluated here.
  */
-let deferredOperatorImpl: ((d: DeferredOperatorRecord) => TypeRecord | null) | null = null;
-export function setDeferredOperatorImpl(f: (d: DeferredOperatorRecord) => TypeRecord | null): void {
+let deferredOperatorImpl: ((operator: 'keyof' | 'indexed', operands: readonly TypeRecord[]) => TypeRecord | null) | null = null;
+export function setDeferredOperatorImpl(f: (operator: 'keyof' | 'indexed', operands: readonly TypeRecord[]) => TypeRecord | null): void {
   deferredOperatorImpl = f;
 }
 
@@ -1598,16 +1604,31 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       const close = t.EndBound === 'closed' ? '=' : '';
       return `${endpoint(t.Start)}.${open}.${close}${endpoint(t.End)}`;
     }
-    case 'application': {
-      // A deferred application is named by its builder and arguments, because
-      // "two mentions of one deferred call are one type by interning, and two
-      // different calls are unrelated until they evaluate" - so the display has
-      // to distinguish two calls of the same builder.
-      const builderName = (t.Builder as { name?: { stringValue?: () => string } } | undefined)
+    case 'deferred': {
+      // Named by operator and operands, because "two mentions of one deferred
+      // call are one type by interning, and two different calls are unrelated
+      // until they evaluate" - so the display has to distinguish two
+      // applications of one operator. A core operator prints as the language
+      // spells it, `keyof T` and `T[K]`; a builder as `name.<args>`.
+      // A parameter operand shows by its bare name: `T[K]`, not
+      // `T[K: keyof T]`, which is how a reader wrote it and what a diagnostic
+      // should say back.
+      const show = (a: TypeRecord | Value): string => {
+        if (!a || typeof a !== 'object' || !('Kind' in a)) {
+          return String(a);
+        }
+        const r = a as TypeRecord;
+        return r.Kind === 'parameter' ? (r as { Name: string }).Name : displayType(r);
+      };
+      if (t.Operator === 'keyof') {
+        return `keyof ${show(t.Operands[0]!)}`;
+      }
+      if (t.Operator === 'indexed') {
+        return `${show(t.Operands[0]!)}[${show(t.Operands[1]!)}]`;
+      }
+      const builderName = (t.Operator as { name?: { stringValue?: () => string } } | undefined)
         ?.name?.stringValue?.() ?? 'a builder';
-      return `${builderName}.<${t.Arguments.map((a) => (
-        a && typeof a === 'object' && 'Kind' in a ? displayType(a as TypeRecord) : String(a)
-      )).join(', ')}>`;
+      return `${builderName}.<${t.Operands.map(show).join(', ')}>`;
     }
     // A kind with no case above renders as its KIND NAME, which is what
     // produced `is not assignable to "object"` for four kinds at once. The
@@ -1809,6 +1830,13 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
   if (withArgs.Arguments?.some((a) => typeof a !== 'number' && mentionsTypeParameter(a, seen))) {
     return true;
   }
+  // A ~deferred~ record mentions a parameter exactly when an operand does; by
+  // construction one always does, since a closed computation is evaluated
+  // rather than carried.
+  const withOperands = t as { Operands?: readonly (TypeRecord | Value)[] };
+  if (withOperands.Operands?.some((a) => a && typeof a === 'object' && 'Kind' in a && mentionsTypeParameter(a as TypeRecord, seen))) {
+    return true;
+  }
   const withElement = t as { Element?: TypeRecord };
   if (withElement.Element && mentionsTypeParameter(withElement.Element, seen)) {
     return true;
@@ -1897,40 +1925,32 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
  * intersection identity here is set-wise rather than positional - which is why
  * the [[Base]] walk in `relations.mts` is correct without it.
  */
-/** The composed name a deferred operator carries: `keyof T`, `T[K]`. */
-export function deferredOperatorName(d: DeferredOperatorRecord): string {
-  const show = (t: TypeRecord): string => (t.Kind === 'parameter' ? (t as { Name: string }).Name : displayType(t));
-  return d.Operator === 'keyof' ? `keyof ${show(d.Object)}` : `${show(d.Object)}[${show(d.Index)}]`;
-}
 
 export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
   if (!t) {
     return t;
   }
   if (t.Kind === 'parameter') {
-    const deferred = (t as { Deferred?: DeferredOperatorRecord }).Deferred;
-    if (deferred) {
-      // A deferred OPERATOR. Substitute into its operands; where one still
-      // mentions a parameter the record stays deferred over the substituted
-      // operands, and where none does the operator is evaluated. The name is
-      // recomposed either way, so `T[K]` with `T` now `P` reads `P[K]`.
-      const object = substituteTypeParameters(deferred.Object, bindings) as TypeRecord;
-      const index = deferred.Operator === 'indexed'
-        ? substituteTypeParameters(deferred.Index, bindings) as TypeRecord
-        : undefined;
-      const still = mentionsTypeParameter(object) || (index !== undefined && mentionsTypeParameter(index));
-      const next: DeferredOperatorRecord = deferred.Operator === 'indexed'
-        ? { Operator: 'indexed', Object: object, Index: index! }
-        : { Operator: 'keyof', Object: object };
-      if (!still && deferredOperatorImpl) {
-        const evaluated = deferredOperatorImpl(next);
-        if (evaluated) {
-          return evaluated;
-        }
-      }
-      return { Kind: 'parameter', Name: deferredOperatorName(next), Deferred: next } as Known;
-    }
     return bindings.get((t as { Name: string }).Name) ?? t;
+  }
+  if (t.Kind === 'deferred') {
+    // Substitute into the operands; where one still mentions a parameter the
+    // record stays deferred over the substituted operands, and where none does
+    // the operator is applied and the result replaces the record. A core
+    // operator is applied here; a BUILDER is applied by the call it defers, at
+    // specialization, so a closed builder record is left for that step.
+    const Operands = t.Operands.map((a) => (
+      a && typeof a === 'object' && 'Kind' in a
+        ? substituteTypeParameters(a as TypeRecord, bindings) as TypeRecord
+        : a));
+    const still = Operands.some((a) => a && typeof a === 'object' && 'Kind' in a && mentionsTypeParameter(a as TypeRecord));
+    if (!still && isCoreOperator(t.Operator) && deferredOperatorImpl) {
+      const evaluated = deferredOperatorImpl(t.Operator, Operands as readonly TypeRecord[]);
+      if (evaluated) {
+        return evaluated;
+      }
+    }
+    return { ...t, Operands } as Known;
   }
   const withMembers = t as { Members?: readonly TypeRecord[] };
   if (withMembers.Members) {

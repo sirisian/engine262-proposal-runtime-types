@@ -66,3 +66,26 @@ test('inference keeps a literal under a deferred keyof', () => {
   // and `T[K]` evaluated to `P[string]`, which is not a member access.
   expect(evaluated(`${P}${PLUCK}${O}\`\${Reflect.typeOf(pluck(o, "a"))}\`;`)).toBe('uint.<8>');
 });
+
+test('E11: one kind for every deferred computation, and it reflects as one', () => {
+  // A deferred operator is not a parameter - a parameter is identified by its
+  // declaration, a derived one has none - and it is not a leaf. It is an
+  // operator waiting on operands, and that is what Reflect reports, with one
+  // shape for `keyof T`, `T[K]` and a builder call alike.
+  const reflectReturn = (F: string) => `${F} const t = Reflect.getReflection(type F).signatures[0].return.type; const r = Reflect.getReflection(t); `
+    + 'String(t) + " " + r.kind + " " + String(r.operator) + " " + r.operands.length;';
+  expect(evaluated(reflectReturn('type F = <T>(o: T) => keyof T;'))).toBe('keyof T deferred keyof 1');
+  expect(evaluated(reflectReturn('type F = <T, K: keyof T>(o: T, k: K) => T[K];'))).toBe('T[K] deferred indexed 2');
+});
+
+test('E12: the run time and the checker read `keyof T` alike', () => {
+  // `KeyTypesOf` is the one implementation, and it defers an operand that
+  // involves an unbound parameter. Before, the checker deferred and the run
+  // time's annotation path fell to "anything else has no keys" - so the same
+  // function type was `<T>(o: T) => keyof T` to one and `<T>(o: T) => never` to
+  // the other.
+  expect(evaluated('type F = <T>(o: T) => keyof T; String(Reflect.getReflection(type F).signatures[0].return.type);')).toBe('keyof T');
+  // And a specialization still closes it.
+  expect(evaluated("type P = { a: uint8, b: string }; function p<T, K: keyof T>(o: T, k: K): T[K] { return o[k]; } "
+    + "let o: P = { a: (1 := uint8), b: 'x' }; String(p(o, 'a')) + String(p.<P, 'b'>(o, 'b'));")).toBe('1x');
+});

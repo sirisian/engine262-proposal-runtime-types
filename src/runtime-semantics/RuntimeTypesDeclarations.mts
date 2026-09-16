@@ -596,9 +596,16 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         }
         let attempt;
         try {
+          // The method's own type parameters are PASSED, so the signature
+          // record carries [[TypeParameters]] as #sec-signature-records says and
+          // as the object-type spelling of the same member already did. They
+          // were computed above for the frame and then not handed on, so an
+          // interface's generic method was `(x: T) => T` at run time - not
+          // generic, and a literal written against it could adopt nothing.
           attempt = EnsureCompletion(yield* functionRecordFromSignature(
             method.FunctionTypeParameterList,
             method.TypeAnnotation,
+            methodTypeParameters as readonly ParseNode.TypeParameter[],
           ));
         } finally {
           if (methodFrame.size > 0) {
@@ -1909,7 +1916,7 @@ export function* MaterializeSpecialization(
   // function is applied, and specializing on it would build one class for a
   // value the program has not chosen yet.
   const unbound = argRecords.some((a) => typeof a !== 'number'
-    && ((a as { Kind?: string }).Kind === 'parameter' || (a as { Kind?: string }).Kind === 'application'));
+    && ((a as { Kind?: string }).Kind === 'parameter' || (a as { Kind?: string }).Kind === 'deferred'));
   if (declaration.ClassTail === undefined
     || unbound
     || specializationsInProgress.has(declaration)
@@ -2535,8 +2542,10 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
     // A GENERIC FUNCTION (a declaration or a method with its own type
     // parameters) applied in expression position is its specialization value.
-    const fnDeclaration = (value as unknown as { ECMAScriptCode?: { parent?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } | null } | null }).ECMAScriptCode?.parent;
-    const fnParams = fnDeclaration?.TypeParameters?.TypeParameterList;
+    // Read through `functionTypeParameters` rather than the declaration alone,
+    // so a literal that ADOPTED a generic contextual signature is generic here
+    // too (`AdoptTypeParameters`).
+    const fnParams = functionTypeParameters(value as never) ?? undefined;
     // Not for a call's callee (the call binds), and not for a higher-kinded
     // list (#sec-higher-kinded-parameters: its argument is a declaration, bound
     // by the explicit call alone).
