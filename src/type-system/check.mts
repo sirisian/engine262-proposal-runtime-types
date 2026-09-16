@@ -12431,6 +12431,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const sourceShape = objectLiteralShape(node);
           const sourceMethod = sourceShape?.Kind === 'object' ? sourceShape.Properties.find((prop) => prop.key === methodKey)?.type : null;
           if (wantedForMethod && sourceMethod) requireAssignable(sourceMethod, wantedForMethod.type);
+          // FRESHNESS, which this branch compared signatures without ever
+          // applying. #sec-literal-freshness makes "an own PROPERTY the expected
+          // type neither declares nor admits through an index signature" an
+          // error, and a method is an own property - so `{ zz: 1 }` was refused
+          // against `{ a?: uint8 }` and `{ zz(q) { return 1; } }` was not, one
+          // literal against one type answering two ways by how a member was
+          // spelled.
+          //
+          // The same two tests the data case below makes, in the same order.
+          if (fresh && wantedForMethod === undefined
+              && !target.IndexSignatures.some((ix) => keyAdmittedBy(methodKey, ix.Key))) {
+            errors.push((Throw.StaticTypeError(
+              '$1 is not declared by $2', Value(methodKey), Value(displayType(target)),
+            ) as ThrowCompletion).Value as ObjectValue);
+          }
           const wantedKind = (wantedForMethod?.type as { Kind?: string, Members?: readonly unknown[] } | undefined);
           const wantedIsNever = wantedKind?.Kind === 'union' && (wantedKind.Members ?? []).length === 0;
           // An INTERSECTION is refused for the same reason `never` is. Method
