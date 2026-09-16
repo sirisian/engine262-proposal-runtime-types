@@ -7459,7 +7459,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // method's signature has one, and a signature without it did not
               // match - `let o: Shape = new C()` for `type Shape = { read(): uint8 }`
               // began to refuse once this type resolved at all.
-              type: { Kind: 'function', Signatures: [{ Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord }] } as unknown as TypeRecord,
+              // [[TypeParameters]] carried, as the interface path carries them
+              // and as the run time interns them: `type I = { map<T>(x: T): T }`
+              // is `{ map: <T>(x: T) => T }` to Reflect, and identical to its
+              // `<U>` renaming under #sec-signature-records. This path dropped
+              // them, so the member was `(x: T) => T` with a `T` nothing
+              // declared - which accepted an untyped literal by structural
+              // accident and refused `o.map.<uint8>(x)` on an `I`-typed
+              // binding while accepting it on the interface's. The scope push
+              // above already resolved `x: T` against these parameters; only
+              // the record omitted them. See open-questions-round-2, Q2.
+              type: {
+                Kind: 'function',
+                Signatures: [{
+                  Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord,
+                  ...(methodParamNames.length > 0
+                    ? { TypeParameters: typeParameterRecordsOf(asMethod.TypeParameters!.TypeParameterList as readonly ParseNode.TypeParameter[]) }
+                    : {}),
+                }],
+              } as unknown as TypeRecord,
               optional: !!(member as unknown as { Optional?: boolean }).Optional,
               // `readonly: true`, as the INTERFACE path sets it for a method and
               // for the reason it records. #sec-generic-variance: "a
