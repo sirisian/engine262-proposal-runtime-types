@@ -33,6 +33,7 @@ import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue,
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
+import { joinTypes } from './logical-types.mts';
 import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
@@ -1566,12 +1567,24 @@ export function* InferGenericBindingsFrom(
 
       // Find an ordinary parameter annotated with exactly this type parameter.
       let bound: TypeRecord | null = null;
-      const ordIndex = ordinary.findIndex((o) => o.annotationName === paramName);
-      if (ordIndex >= 0 && ordIndex < args.length) {
-        if (literalRule || valueRule) {
-          bound = Q(yield* args.literalTypeOf(ordIndex));
-        } else {
-          bound = Q(yield* args.typeOf(ordIndex));
+      // EVERY ordinary parameter annotated with this type parameter, joined -
+      // not the first. `findIndex` bound from one argument and left the rest to
+      // be checked against it, so `add(200, 100)` for `add<T: uint8>(a: T, b: T)`
+      // was refused - `100` against the `200` the first argument fixed - and the
+      // answer depended on which argument was written first. The checker joins
+      // the same contributions; this is the run time's half of the same rule.
+      const ordIndices: number[] = [];
+      ordinary.forEach((o, i) => {
+        if (o.annotationName === paramName && i < args.length) {
+          ordIndices.push(i);
+        }
+      });
+      if (ordIndices.length > 0) {
+        for (const i of ordIndices) {
+          const contributed = literalRule || valueRule
+            ? Q(yield* args.literalTypeOf(i))
+            : Q(yield* args.typeOf(i));
+          bound = bound === null ? contributed : joinTypes(bound, contributed);
         }
       } else if (restName !== null && restAnnotationName === paramName) {
         // `...parts: S` binds S to the tuple of the trailing arguments' types.

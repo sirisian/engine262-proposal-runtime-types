@@ -1,3 +1,4 @@
+import { joinTypes } from './logical-types.mts';
 import { CanonicalizeType } from './intern.mts';
 import { iterationInterfaceRecord } from './iteration-types.mts';
 import { makePrimitive, type TypeRecord } from './records.mts';
@@ -170,13 +171,20 @@ export function unifyTypeParameters(
   into: Map<string, TypeRecord>,
   helpers: UnifyHelpers,
 ): void {
+  // The names THIS call has bound, as distinct from the ones already in `into`
+  // when it started. A context seed is placed in the map before unification and
+  // wins by being there - "a call binds from its context BEFORE its arguments,
+  // and a seed the argument contradicts is dropped" - so a seed and an argument
+  // are different rungs of the ladder and must not be merged. Only same-rung
+  // contributions join, which is what this set decides.
+  const writtenHere = new Set<string>();
   const match = (param: TypeRecord | null, arg: TypeRecord | null): void => {
     if (!param || !arg) {
       return;
     }
     if (param.Kind === 'parameter') {
       const name = (param as { Name: string }).Name;
-      if (names.has(name) && !into.has(name)) {
+      if (names.has(name) && (writtenHere.has(name) || !into.has(name))) {
         // A LITERAL-TYPED CONSTRAINT keeps the literal. #sec-type-parameters:
         // "Where a parameter's evaluated constraint is a literal type or a union
         // of literal types, the binding inferred for that parameter from a call
@@ -204,7 +212,26 @@ export function unifyTypeParameters(
           || deferredKeyof
           || (constraint.Kind === 'union'
             && (constraint as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal')));
-        into.set(name, literalConstrained ? arg : widenForBinding(arg));
+        // THE JOIN OF EVERY ARGUMENT CONTRIBUTION, not the first. A parameter
+        // in two positions was fixed by whichever argument came first and every
+        // later one checked against it, so `add(200, 100)` for
+        // `add<T: uint8>(a: T, b: T)` was refused - `100` against `200` - and
+        // `both(u, s)` for `both<T>(a: T, b: T)` refused a `string` against a
+        // `uint8` rather than binding their join. A type inferred from several
+        // sources must not depend on the order they were written in.
+        const contributed = literalConstrained ? arg : widenForBinding(arg);
+        // An `any` contributes NOTHING to a join. A callback's unannotated
+        // parameter reaches unification as `any` - `g(a, (v) => ...)` for
+        // `g<T>(a: [].<T>, cb: (v: T) => void)` - and joining it with the
+        // array's `uint8` gave `any`, so the callback body stopped being
+        // checked. The array is what carries the information; the callback is
+        // the position the binding flows INTO.
+        const already = writtenHere.has(name) ? into.get(name) : undefined;
+        if (already !== undefined && contributed.Kind === 'any') {
+          return;
+        }
+        writtenHere.add(name);
+        into.set(name, already === undefined ? contributed : joinTypes(already, contributed));
       }
       return;
     }
