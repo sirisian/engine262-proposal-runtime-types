@@ -89,3 +89,18 @@ test('E12: the run time and the checker read `keyof T` alike', () => {
   expect(evaluated("type P = { a: uint8, b: string }; function p<T, K: keyof T>(o: T, k: K): T[K] { return o[k]; } "
     + "let o: P = { a: (1 := uint8), b: 'x' }; String(p(o, 'a')) + String(p.<P, 'b'>(o, 'b'));")).toBe('1x');
 });
+
+test('C3: a wrong key is refused at compile time', () => {
+  // The constraint check on an INFERRED binding. `pluck.<P, "zz">` was refused
+  // statically and `pluck(o, "zz")` only at run time, because substitution
+  // replaced `K: keyof T` wholesale with K's binding `'zz'` and the argument was
+  // then checked against itself. The binding is now judged against the closed
+  // constraint - `keyof T` at T = P is `'a' | 'b'` - before the substitution.
+  expectThrown(`${P}${PLUCK}${O}pluck(o, "zz");`, '"\'zz\'" is not assignable to "\'a\' | \'b\'"');
+  // And a non-key constraint, which had no static check at all.
+  expectThrown('function f<T: string>(x: T): T { return x; } f(5);', '"number" is not assignable to "string"');
+  // A fitting literal under a SIZED numeric constraint is left to the run time,
+  // which binds T to the constraint and checks the literal's fit; the checker's
+  // binding is the widened `number`, and refusing on it would break `f(200)`.
+  expect(evaluated('function f<T: uint8>(x: T): T { return x; } `${f(200)}`;')).toBe('200');
+});

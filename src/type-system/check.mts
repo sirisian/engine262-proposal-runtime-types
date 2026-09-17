@@ -17150,6 +17150,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  /** Calls whose inferred bindings have been checked against their constraints; see `checkCallArguments`. */
+  const constraintCheckedCalls = new WeakSet<object>();
   const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
     const supplied = expandValueSpreads(c.Arguments);
@@ -17451,6 +17453,87 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               new Set(generic.map((t) => t.Name)),
               bindings,
             );
+          }
+          // AN INFERRED BINDING IS CHECKED AGAINST ITS CONSTRAINT, before the
+          // parameter is substituted away. Substitution replaces `K: keyof T`
+          // WHOLESALE with K's binding, so the argument `"zz"` was checked
+          // against `'zz'` - itself - and the constraint was never consulted:
+          // `pluck(o, "zz")` for `pluck<T, K: keyof T>` reached the run-time
+          // binder before the wrong key was refused, where `pluck.<P, "zz">`
+          // was refused at compile time. #sec-bindtypearguments applies the
+          // constraint to every binding; this is the checker's half of it.
+          //
+          // Once per call rather than once per argument, since the bindings
+          // are complete after the first and the message would only repeat.
+          // The constraint is resolved in the declaration's scope, since it may
+          // name an earlier parameter, and the bindings are substituted into it
+          // first - `keyof T` at `T = P` is `'a' | 'b'`, which is what `'zz'`
+          // is judged against.
+          if (bindings.size > 0 && !constraintCheckedCalls.has(c)) {
+            constraintCheckedCalls.add(c);
+            // The signature record carries no declaration, but each of its
+            // type parameters carries its own node, and `pushTypeParameterScopeOf`
+            // reads only a |TypeParameterList| - so one is assembled from them.
+            const scopeCarrier = {
+              TypeParameters: { TypeParameterList: generic.map((tp) => tp.Declaration) },
+            } as unknown as ParseNode;
+            const pushed = pushTypeParameterScopeOf(scopeCarrier);
+            try {
+              for (const tp of generic) {
+                const bound = bindings.get(tp.Name);
+                const constraintNode = (tp as { ConstraintNode?: ParseNode.Type | null }).ConstraintNode;
+                // A VARIADIC pack's bound applies to each element, not to the
+                // tuple the pack binds to, and is checked where the pack is
+                // bound; applying it to the whole tuple here refused every
+                // bounded pack.
+                if (!bound || !constraintNode || tp.Variadic) {
+                  continue;
+                }
+                const constraint = resolveType(constraintNode);
+                if (!constraint) {
+                  continue;
+                }
+                const closed = substituteTypeParameters(constraint, bindings);
+                if (!closed || mentionsTypeParameter(closed)) {
+                  continue;
+                }
+                // NOT where the binding is a widened `number` against a sized
+                // numeric constraint. The run time binds such a T to the
+                // CONSTRAINT and checks the literal's fit - `f(200)` for
+                // `f<T: uint8>` is a `uint8` call - where the checker's binding
+                // is the literal's widened `number`, which is assignable to no
+                // sized type. Refusing on that mismatch broke every fitting
+                // literal; the literal-fit half is a separate judgment.
+                const widenedNumber = bound.Kind === 'primitive' && (bound as { Name?: string }).Name === 'number';
+                const sizedNumeric = closed.Kind === 'primitive' && (closed as { Name?: string }).Name !== 'number'
+                  && (closed as { Name?: string }).Name !== 'string' && (closed as { Name?: string }).Name !== 'boolean';
+                if (widenedNumber && sizedNumeric) {
+                  continue;
+                }
+                // Nor where the binding is an ARRAY OF LITERALS. The checker
+                // infers `[].<'a' | 'b' | 'c'>` from `("a", "b", "c")` where the
+                // run time infers `[].<string>` from the values, and arrays are
+                // invariant, so the checker's narrower binding is assignable to
+                // `[].<string>` and the run time's is not - the same widening
+                // question as the number above, on an element type.
+                const literalElements = (t: TypeRecord): boolean => {
+                  if (t.Kind === 'array' || t.Kind === 'tuple') {
+                    const el = (t as { Element?: TypeRecord }).Element;
+                    const els = (t as { Elements?: readonly { Type: TypeRecord }[] }).Elements;
+                    const kinds = el ? [el] : (els ?? []).map((e) => e.Type);
+                    return kinds.length > 0 && kinds.every((k) => k.Kind === 'literal'
+                      || (k.Kind === 'union' && (k as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal')));
+                  }
+                  return false;
+                };
+                if (literalElements(bound)) {
+                  continue;
+                }
+                requireAssignable(bound as Known, closed as Known);
+              }
+            } finally {
+              if (pushed) typeParameterScopes.pop();
+            }
           }
           if (bindings.size > 0) {
             param = substituteTypeParameters(param, bindings) as TypeRecord;

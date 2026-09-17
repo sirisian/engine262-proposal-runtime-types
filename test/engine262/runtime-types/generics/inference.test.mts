@@ -48,7 +48,10 @@ test('a parameter constrained to a literal union binds the literal type of the a
 
 test('the literal binding is checked against the constraint', () => {
   // a value outside the literal union fails the constraint check
-  expect(evaluated('function pick<K: "a" | "b">(k: K): K { return k; } try { pick("z"); "no-throw"; } catch (e) { "rejected"; }')).toBe('rejected');
+  // Refused at COMPILE time now, as `pick.<"z">("z")` always was: an inferred
+  // binding is checked against its constraint in the checker, so a `try` in the
+  // program cannot catch it. This assertion used to show the run-time half.
+  expectStaticTypeError('function pick<K: "a" | "b">(k: K): K { return k; } pick("z");');
 });
 
 // -- The headline: String Join (847), runtime generic-call form ----------------
