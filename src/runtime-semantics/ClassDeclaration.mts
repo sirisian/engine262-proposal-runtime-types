@@ -38,7 +38,17 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
     const partialName = StringValue(BindingIdentifier);
     const ref = Q(yield* ResolveBinding(partialName, undefined));
     const existing = Q(yield* GetValue(ref));
-    if (!(existing instanceof ObjectValue) || !IsConstructor(existing)) {
+    // A CLASS, not any constructor: an ordinary function is constructible, and
+    // `partial class f` over `function f() {}` used to pass this test and add
+    // methods to `f.prototype`. #sec-partial-classes: "a value that is not a
+    // class". An ECMAScript function that is not a class constructor is
+    // refused; a built-in constructor - `Array`, which has no
+    // [[IsClassConstructor]] but is a class in every sense the clause means -
+    // is admitted, as `partial class Array` always was.
+    const ordinaryNonClass = existing instanceof ObjectValue
+      && 'ECMAScriptCode' in existing
+      && (existing as { IsClassConstructor?: Value }).IsClassConstructor !== Value.true;
+    if (!(existing instanceof ObjectValue) || !IsConstructor(existing) || ordinaryNonClass) {
       return Throw.TypeError('$1 is not a class and cannot be extended by a partial class', partialName);
     }
     Q(yield* PartialClassMergeEvaluation(existing, ClassTail));

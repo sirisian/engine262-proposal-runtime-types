@@ -210,3 +210,194 @@ test('membership answers the same way the checker does', () => {
   expect(evaluated(`${W}String(({ name: "n", x: 1 } is W));`)).toBe('true');
   expect(evaluated(`${W}String(({ name: "n", x: "s" } is W));`)).toBe('false');
 });
+
+// ---- #sec-type-arguments-and-placement-new-in-expression-position ------
+
+test('a specialization of a non-generic value is refused, in both phases', () => {
+  // "Where the expression's Static Type shows a value that is not generic it
+  // is a type error, and otherwise a specialization of a non-generic value
+  // throws a *TypeError* exception." The static half applied to a non-generic
+  // FUNCTION only; a typed primitive value and a class without type
+  // parameters were accepted - and at run time `A.<uint8>` for `class A {}`
+  // minted a Type Object that was neither `A` nor an error, so `A.<uint8> ===
+  // A` was *false* with no diagnostic, and `x.<uint8>` was silently `x`.
+  expectStaticTypeError('let x: uint8 = 1; x.<uint8>;');
+  expectStaticTypeError('class A {} let B = A.<uint8>;');
+  // The deferred half, for a value the checker cannot see.
+  expect(evaluated('let x = 1; try { x.<uint8>; "ran"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+  expect(evaluated('interface I { a: uint8 } try { I.<uint8>; "ran"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+});
+
+test('every generic form still specializes', () => {
+  expect(ok('class B<T> { v: T | null = null; } String(B.<uint8> === B.<uint8>);')).toBe(true);
+  expect(ok('function f<T>(x: T): T { return x; } String(f.<uint8>(1));')).toBe(true);
+  expect(ok('type Box<T> = { v: T }; let b: Box.<uint8> = { v: 1 }; String(b.v);')).toBe(true);
+  expect(ok('String(typeof Map.<string, uint8>);')).toBe(true);
+  expect(ok('String(int.<8>(1));')).toBe(true);
+  expect(ok('String(typeof complex.<float32>);')).toBe(true);
+  // The array type's own spelling in expression position is a type, not a
+  // specialization of a literal.
+  expect(ok('const a = new [4].<uint8>(); String(a.length);')).toBe(true);
+});
+
+// ---- #sec-typed-classes: overriding ---------------------------------
+
+test('an override may narrow a return but not change it', () => {
+  // "It is a type error if the declared return type of such a method is not
+  // a subtype of the inherited signature's return type." The rule was the
+  // design's (README "Methods and Inheritance", "Covariant Return Types") and
+  // is now the specification's; without it a derived `f(a: uint8): string`
+  // over `f(a: uint8): uint8` was a second overload told apart by return type
+  // alone, which no dispatch slot has room for.
+  expectStaticTypeError('class A { f(a: uint8): uint8 { return a; } } class B extends A { f(a: uint8): string { return "x"; } }');
+  // A numeric NARROWING is a change: `uint8` is not a subtype of `uint16`.
+  expectStaticTypeError('class A { f(): uint16 { return 1; } } class B extends A { f(): uint8 { return 1; } }');
+  // A widening too.
+  expectStaticTypeError('class A { f(): uint8 { return 1; } } class B extends A { f(): uint8 | string { return 1; } }');
+});
+
+test('overriding leaves the shapes it does not reach', () => {
+  // A covariant return, the class itself standing in for the base it extends.
+  expect(ok('class A { f(): A { return this; } } class B extends A { f(): B { return this; } }')).toBe(true);
+  // A union narrowed to a member.
+  expect(ok('class A { f(): uint8 | null { return null; } } class B extends A { f(): uint8 { return 1; } }')).toBe(true);
+  // The same signature restated.
+  expect(ok('class A { f(a: uint8): uint8 { return a; } } class B extends A { f(a: uint8): uint8 { return a; } }')).toBe(true);
+  // Different parameter types are an OVERLOAD, not an override.
+  expect(ok('class A { f(a: uint8): uint8 { return a; } } class B extends A { f(a: string): string { return a; } }')).toBe(true);
+  // An untyped method says nothing.
+  expect(ok('class A { f(a) { return a; } } class B extends A { f(a) { return 1; } }')).toBe(true);
+});
+
+// ---- #sec-resolveoverload: operator declarations ----------------------
+
+test('an operator declared twice for one invocation is refused at the second', () => {
+  // "It is a type error to declare a signature that is viable for the same
+  // argument list as an existing one at the same rank ... one signature
+  // written twice." Functions, methods and constructors were judged; the
+  // operator definitions of a class body were not, so two bodies for one
+  // invocation stood until the call.
+  expectStaticTypeError('class A { operator+(o: A): A { return this; } operator+(o: A): A { return o; } }');
+  expectStaticTypeError('class A { static operator+(a: A, b: A): A { return a; } static operator+(a: A, b: A): A { return b; } }');
+  expectStaticTypeError('class A { operator uint8(): uint8 { return 1; } operator uint8(): uint8 { return 2; } }');
+  expectStaticTypeError('class A { a: [].<uint8> = [1]; operator[](i: uint32): uint8 { return this.a[i]; } operator[](i: uint32): uint8 { return 0; } }');
+});
+
+test('distinct operator declarations stand', () => {
+  // Different operand types are overloads.
+  expect(ok('class A { operator+(o: A): A { return this; } operator+(o: uint8): A { return this; } }')).toBe(true);
+  // `static` and instance definitions are different tables.
+  expect(ok('class A { operator+(o: A): A { return this; } static operator+(a: A, b: A): A { return a; } }')).toBe(true);
+  // Conversions are keyed by target.
+  expect(ok("class A { operator uint8(): uint8 { return 1; } operator string(): string { return 'a'; } }")).toBe(true);
+  // An untyped definition is the catch-all and stands beside anything.
+  expect(ok('class A { operator+(o) { return this; } operator+(o: A): A { return o; } }')).toBe(true);
+  // A generic class's operators resolve under its parameters.
+  expect(ok('class A<T> { v: T | null = null; operator+(o: A.<T>): A.<T> { return this; } }')).toBe(true);
+});
+
+// ---- #sec-declared-zero -------------------------------------------------
+
+test('a declared zero must be a compile-time-evaluable value of its class', () => {
+  // "The expression must be compile-time evaluable" and "It is a type error
+  // if the declared zero is not a value of the class." Neither was judged, so
+  // `static default = 5` was registered as the zero at evaluation and every
+  // default-initialized binding of the class then held a Number.
+  expectStaticTypeError('class A { x: uint8 = 1; static default = 5; }');
+  expectStaticTypeError("class A { x: uint8 = 1; static default = 'x'; }");
+  expectStaticTypeError('class A { x: uint8 = 1; static default = function () { return 1; }; }');
+  expectEarlyError('class A { x: uint8 = 1; static default = Math.random(); }', 'SyntaxError');
+  expectEarlyError('class A { x: uint8 = 1; static default = (globalThis.q = new A()); }', 'SyntaxError');
+});
+
+test('a declared zero of the class itself stands, generic or not', () => {
+  expect(ok('class A { x: uint8 = 1; static default = new A(); } let a: A; String(a.x);')).toBe(true);
+  // A generic class's zero is judged at the specialization, where the
+  // checker stands down and the run time's instance check decides.
+  expect(ok('class Bx<T> { x: uint8; static default = new Bx.<T>(); } const f = Bx.<uint8>; String(f.default instanceof f);')).toBe(true);
+  // A static block assigning the zero is the other spelling.
+  expect(ok('class S { x: uint8 = 1; static { S.default = new S(); } } let s: S; String(s.x);')).toBe(true);
+  // Any other static field is untouched by the rule.
+  expect(ok('class A { x: uint8 = 1; static count = 5; } String(A.count);')).toBe(true);
+});
+
+// ---- #sec-partial-classes ---------------------------------------------
+
+test('a partial class must name a class and may add only methods and operators', () => {
+  // "It is a type error if a `partial` declaration names a value that is not
+  // a class", and a partial over a class "does not re-open the constructor or
+  // add fields". The first went unjudged where the name was a plain function,
+  // which IsConstructor admits; the second was a silent DROP, so `partial
+  // class A { x: uint8 = 7; }` left `new A().x` undefined with no diagnostic.
+  expectStaticTypeError('function f() {} partial class f { m() {} }');
+  expectStaticTypeError('const f = 5; partial class f { m() {} }');
+  expectStaticTypeError('class A {} partial class A { x: uint8 = 1; }');
+  expectStaticTypeError('class A {} partial class A { constructor() {} }');
+  expectStaticTypeError('class A {} partial class A { static { } }');
+  // The deferred half: a name the checker cannot see is judged at evaluation,
+  // and a function value is refused there too.
+  expect(evaluated('globalThis.g = function () {}; try { eval("partial class g { m() {} }"); "ran"; } catch (e) { e.constructor.name; }')).toBe('TypeError');
+});
+
+test('a partial class adds what it may', () => {
+  expect(evaluated('class A { x: uint8 = 1; } partial class A { m(): uint8 { return this.x; } } String(new A().m());')).toBe('1');
+  expect(evaluated('class A { x: uint8 = 1; } partial class A { operator+(o: A): A { return this; } } let a: A = new A(); String((a + a).x);')).toBe('1');
+  expect(evaluated('class A {} partial class A { static make() { return new A(); } } String(A.make() instanceof A);')).toBe('true');
+  expect(evaluated('interface I { a: uint8 } partial interface I { b: uint8 } let i: I = { a: 1, b: 2 }; String(i.b);')).toBe('2');
+});
+
+// ---- #sec-match-exhaustiveness, the two pieces left from round 1 --------
+
+test('a default after true and false is unreachable', () => {
+  // `boolean` has atoms - *true* and *false* - and "a `default` whose
+  // preceding clauses cover every atom of a subject with atoms is that
+  // error's instance". The enum and sealed passes had this branch; the
+  // chain-atom pass, which is where `boolean` is judged, did not.
+  expectStaticTypeError('let b: boolean = true; match (b) { when true: 1; when false: 2; default: 3; };');
+  expect(ok('let b: boolean = true; let r = match (b) { when true: 1; when false: 2; }; String(r);')).toBe(true);
+  expect(ok('let b: boolean = true; let r = match (b) { when true: 1; default: 2; }; String(r);')).toBe(true);
+});
+
+test('a non-numeric literal that cannot match its position is refused', () => {
+  // The impossible-test rule of #sec-pattern-static-semantics applied to a
+  // literal. A numeric literal was judged by fit; a string, a Boolean or
+  // `null` against a numeric position was not judged at all.
+  expectStaticTypeError("let x: uint8 = 1; match (x) { when 'a': 1; default: 2; };");
+  expectStaticTypeError('let x: uint8 = 1; match (x) { when true: 1; default: 2; };');
+  expectStaticTypeError('let x: uint8 = 1; match (x) { when null: 1; default: 2; };');
+  // At a nested position too.
+  expectStaticTypeError("let o: { a: uint8 } = { a: 1 }; match (o) { when { a: 'z' }: 1; default: 2; };");
+  // And through `is`.
+  expectStaticTypeError("let x: uint8 = 1; if (x is 'a') {}");
+  // A literal a union or its own type admits stands.
+  expect(ok("let x: uint8 | string = 'a'; let r = match (x) { when 'a': 1; default: 2; }; String(r);")).toBe(true);
+  expect(ok('let x: uint8 | null = null; let r = match (x) { when null: 1; default: 2; }; String(r);')).toBe(true);
+});
+
+// ---- #sec-meta-declarations ---------------------------------------------
+
+test('a meta declaration is judged for its hooks and its type before it runs', () => {
+  // "a second declaration for one type, a missing `default` or `subtype` ...
+  // is an early error." A missing hook was a TypeError at evaluation; a second
+  // declaration for one TYPE was caught nowhere: the parser's duplicate check
+  // is by name, and `type A = { k: uint8 }; type B = { k: uint8 }` intern to
+  // ONE type, so `meta A` and `meta B` were two declarations for it that the
+  // run time's key-claim check - seeing the same claimant twice - let through.
+  expectStaticTypeError('type Dim = { m: uint8 }; meta Dim { subtype(a, b) { return true; } }');
+  expectStaticTypeError('type Dim = { m: uint8 }; meta Dim { default = { m: 0 }; }');
+  expectStaticTypeError('type A = { k: uint8 }; type B = { k: uint8 }; '
+    + 'meta A { default = { k: 0 }; subtype(a, b) { return true; } } meta B { default = { k: 0 }; subtype(a, b) { return true; } }');
+});
+
+test('meta declarations that are distinct, base-form, or generic stand', () => {
+  // Two shapes with different members are two types.
+  expect(ok('type A = { k: uint8 }; type B = { j: uint8 }; '
+    + 'meta A { default = { k: 0 }; subtype(a, b) { return true; } } meta B { default = { j: 0 }; subtype(a, b) { return true; } } String(1);')).toBe(true);
+  // The base-form of #sec-meta-declarations: a meta over a PRIMITIVE, "a meta
+  // type that constrains a base without naming any field of it".
+  expect(ok('meta uint8 { subtype(a, b) { return true; } default = 0; validate(v, c) { return true; } } String(1);')).toBe(true);
+  // A member type declared in the same list, still resolving during the
+  // pre-scan, must not make two different shapes look like one.
+  expect(ok('type Dim2 = { m?: number, ratio?: number }; meta Dim2 { default = { m: 0, ratio: 1 }; subtype(a, b) { return true; } } '
+    + 'type NBr = { bounds?: RangeBounds }; meta NBr { default = {}; subtype(a, b) { return true; } } String(1);')).toBe(true);
+});

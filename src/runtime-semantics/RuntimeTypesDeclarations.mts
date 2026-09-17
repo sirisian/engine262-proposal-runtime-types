@@ -1414,6 +1414,9 @@ export function* Evaluate_TypeOperatorExpression({ Type }: ParseNode.TypeOperato
  * proposal-runtime-types #sec-meta-hooks: evaluate the `default` hook and
  * register it against the named type's interned Type Object.
  */
+/** The meta declaration each Type Object carries, for the one-per-type rule. */
+const metaDeclarationByType = new WeakMap<object, ParseNode.MetaDeclaration>();
+
 export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): PlainEvaluator {
   if (preEvaluatedTypeDeclarations.has(node)) {
     return undefined;
@@ -1464,6 +1467,20 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   // Checked HERE rather than at the parser because the count on the other side
   // belongs to the constraint shape, which is not known until the |TypeName| is
   // resolved. The parser checks the declaration's own count, which it has.
+  // #sec-meta-declarations: "a second declaration for one type" is an error.
+  // Keyed by the TYPE OBJECT, not the name: `type A = { k: uint8 }` and `type B
+  // = { k: uint8 }` intern to one Type Object, so `meta A` and `meta B` are two
+  // declarations for it - which the parser's by-name duplicate check cannot
+  // see, and which the key-claim check below let through because it found
+  // the same claimant twice. The checker reports it early where both shapes
+  // resolve; this is the deferred half. A re-evaluation of one declaration
+  // (the checking pass pre-evaluates, then evaluation runs) is not a second
+  // declaration, so the registry records the declaration that claimed.
+  const priorDeclaration = metaDeclarationByType.get(typeObject as object);
+  if (priorDeclaration !== undefined && priorDeclaration !== node) {
+    return Throw.TypeError('a second meta declaration for one type: $1', Value(name));
+  }
+  metaDeclarationByType.set(typeObject as object, node);
   const declaredParameterCount = node.TypeParameters?.TypeParameterList?.length ?? 0;
   const shapeParameterCount = aliasDeclaration?.type === 'TypeAliasDeclaration'
     ? (aliasDeclaration.TypeParameters?.TypeParameterList?.length ?? 0)
@@ -2693,12 +2710,43 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     // A nominal takes its arguments directly, which is what the annotation path
     // does for the same types.
     if (record.Kind === 'nominal') {
+      // #sec-type-arguments-and-placement-new-in-expression-position: "The
+      // value must be generic ... otherwise a specialization of a non-generic
+      // value throws a *TypeError* exception." A nominal whose declaration
+      // takes no type parameters is not generic, and applying arguments to it
+      // used to mint a fresh record `{ ...record, Arguments }` - so `A.<uint8>`
+      // for `class A {}` evaluated to a Type Object that was neither `A` nor
+      // an error, and `A.<uint8> === A` was *false* with no diagnostic. The
+      // declaration's own parameter list is the test; a nominal with none
+      // takes none.
+      const nominalParams = (record.Declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)
+        ?.TypeParameters?.TypeParameterList;
+      if (!nominalParams || nominalParams.length === 0) {
+        return Throw.TypeError('$1 is not generic and takes no type arguments', displayType(record));
+      }
       return GetTypeObject(CanonicalizeType({ ...record, Arguments: argRecords }));
     }
+    // A Type Object of any other kind - a primitive that consumed no argument
+    // above, an object type, a union - is not generic either.
+    return Throw.TypeError('$1 is not generic and takes no type arguments', displayType(record));
   }
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
     if (IsGenericBuiltin(value)) return ref;
     return Throw.TypeError('type arguments require a generic function');
+  }
+  // A primitive VALUE - `x.<uint8>` for a `let x: uint8` - is not generic, and
+  // the clause names it: "a specialization of a non-generic value throws a
+  // *TypeError* exception". This was the one shape that reached here and
+  // evaluated to the value itself, so `x.<uint8>` was silently `x`.
+  //
+  // Not in CALLEE position. A built-in application such as
+  // `SoA.withCapacity.<T>(n)` is implemented by the call expression, and the
+  // property is not a value at all - `SoA.withCapacity` reads as *undefined* -
+  // so the reference is handed back for the call to bind, as it always was,
+  // and the call is where a callee that is not a builtin application is
+  // refused (see `RegisterGenericBuiltin`).
+  if (surroundingAgent.feature('runtime-types') && !asCallee) {
+    return Throw.TypeError('a specialization of a non-generic value: type arguments require a generic function, class, or parameterized type');
   }
   return ref;
 }

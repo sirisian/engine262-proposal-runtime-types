@@ -720,7 +720,15 @@ test('a family base is not bound, and a program may bind the name itself', () =>
   // meaning - resolving before the lookup would have changed a working program.
   expect(evaluated('let int = 5; `${int}:${typeof int}`;')).toBe('5:number');
   expect(evaluated('let vector = { m() { return "bound"; } }; vector.m();')).toBe('bound');
-  expect(evaluated('let vector = { m() { return "bound"; } }; String(vector.<float32, 4> === float32x4);')).toBe('false');
+  // ...and a specialization of THAT binding is refused as any non-generic
+  // value's is (#sec-type-arguments-and-placement-new-in-expression-position:
+  // "otherwise a specialization of a non-generic value throws a *TypeError*
+  // exception" - the deferred half, since a mutable `let`'s inferred type is
+  // not carried to its later reads). This assertion used to expect the
+  // application to evaluate to the object itself and compare unequal to
+  // `float32x4` - the binding won, which is the point, but the result was a
+  // silently wrong value where the clause says error.
+  expectThrownKind('let vector = { m() { return "bound"; } }; vector.<float32, 4>;', 'TypeError');
 });
 
 test('the neighbouring forms are unchanged', () => {

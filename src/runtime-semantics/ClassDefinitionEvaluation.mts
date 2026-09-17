@@ -38,7 +38,7 @@ import {
 } from '../completion.mts';
 import { __ts_cast__, OutOfRange, type Mutable } from '../utils/language.mts';
 import type { Location, ParseNode } from '../parser/ParseNode.mts';
-import { DefinePropertyOrThrow } from '../abstract-ops/all.mts';
+import { DefinePropertyOrThrow, OrdinaryHasInstance } from '../abstract-ops/all.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { anyType } from '../type-system/records.mts';
@@ -1074,6 +1074,20 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     // is phases 2 and 3.
       const owner = (ClassTail as { parent?: object }).parent ?? (ClassTail as object);
       const held = Q(yield* Get(F as ObjectValue, Value('default')));
+      // #sec-declared-zero: "It is a type error if the declared zero is not a
+      // value of the class." The checker judges it where the class and the
+      // initializer's type are both known; this is the deferred half, for a
+      // generic class's specialization and for a zero whose type the checker
+      // could not decide. A value of the class is an instance of its
+      // constructor, which is what `instanceof` asks; `AssociateClassType`
+      // has not run yet at this point, so the class's Type Object is not
+      // available for IsOfType, and the constructor is the class.
+      if (!unspecializedGeneric && held !== Value.undefined) {
+        const isInstance = Q(yield* OrdinaryHasInstance(F, held));
+        if (isInstance === Value.false) {
+          return Throw.TypeError('the declared zero of $1 is not a value of it', Value((F as { InitialName?: { stringValue?(): string } }).InitialName?.stringValue?.() ?? 'the class'));
+        }
+      }
       if (!unspecializedGeneric) {
       // Keyed by the ARGUMENTS this
       // specialization was built for, so `Bx.<uint8>` and `Bx.<string>` hold
@@ -1709,9 +1723,17 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
       return undefined;
     };
     if (e.type === 'FieldDefinition' || e.type === 'ClassStaticBlock') {
-      // A partial class adds behaviour, not state. A field or static block in a
-      // partial body is not merged; its members are methods and operators.
-      continue;
+      // A partial class adds behaviour, not state (#sec-partial-classes: it
+      // "does not re-open the constructor or add fields"). This used to
+      // `continue`, dropping the member silently, so a field written in a
+      // partial body left the instance without it and said nothing. Refused
+      // instead: the checker reports it early where it sees the declaration,
+      // and this is the deferred half.
+      return Throw.TypeError('a partial class adds methods and operators only; it cannot declare $1', Value(e.type === 'FieldDefinition' ? 'a field' : 'a static block'));
+    }
+    const constructorKey = (e as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
+    if (e.type === 'MethodDefinition' && constructorKey?.type === 'IdentifierName' && constructorKey.name === 'constructor') {
+      return Throw.TypeError('a partial class adds methods and operators only; it cannot declare $1', Value('a constructor'));
     }
     const target = IsStatic(e) ? (F as ObjectValue) : proto;
     const merged = Q(yield* MethodDefinitionEvaluation(e, target, Value.false));

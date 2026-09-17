@@ -3540,6 +3540,238 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const interfaceTypeMemo = new Map<ParseNode, Known>();
 
+  /**
+   * #sec-resolveoverload, at declaration: "It is a type error to declare a
+   * signature that is viable for the same argument list as an existing one at
+   * the same rank ... one signature written twice, and are a type error at the
+   * second." The rule is over every overloaded NAME, and an operator is an
+   * overloaded name keyed by its operator table entry - `+` with one operand,
+   * `[]` with one index, a conversion to `uint8`. `validateOverloadDeclaration`
+   * already judges functions, methods, static methods and constructors; the
+   * operator definitions of a class body went through none of it, so
+   * `operator+(o: A): A` written twice, or `operator uint8()` twice, was two
+   * bodies for one invocation that nothing refused until the call.
+   *
+   * Grouped by `operatorTableKey`, with `static` and instance definitions kept
+   * apart (a static operator's first operand is what an instance one's `this`
+   * is) and a conversion keyed by its target. Each group runs the same overlap
+   * judgment the method path runs, one definition at a time against those
+   * before it, so the diagnostic lands on the second.
+   */
+  const checkOperatorAmbiguity = (declaration: ParseNode): void => {
+    const body = (declaration as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? [];
+    const groups = new Map<string, DeclaredOverload[]>();
+    const pushed = pushTypeParameterScopeOf(declaration);
+    try {
+      for (const member of body) {
+        if (member.type !== 'OperatorDefinition') {
+          continue;
+        }
+        const operator = member as ParseNode.OperatorDefinition;
+        const formals = operator.FormalParameters ?? [];
+        // A definition with no annotation anywhere is the untyped catch-all
+        // of #sec-overload-resolution, and stands beside anything.
+        const untyped = !operator.TypeAnnotation && !formals.some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
+        if (untyped) {
+          continue;
+        }
+        const conversionTarget = operator.Type ? displayType(resolveType(operator.Type as ParseNode.Type) ?? anyTypeRecord) : null;
+        const key = `${operator.static ? 'static ' : ''}${conversionTarget !== null ? `conversion:${conversionTarget}` : operatorTableKey(operator)}`;
+        const annotated = formals.map((formal) => {
+          const p = formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null };
+          return p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : null;
+        });
+        const Parameters = formals.map((formal, index) => {
+          const p = formal as ParseNode.SingleNameBinding & { Ref?: boolean, Optional?: boolean };
+          return parameter(annotated[index] ?? anyTypeRecord, {
+            Name: p.BindingIdentifier?.name ?? '',
+            Optional: p.Optional === true || !!p.Initializer,
+            Ref: p.Ref === true,
+            Rest: formal.type === 'BindingRestElement',
+          });
+        });
+        const Return = operator.TypeAnnotation ? resolveType(operator.TypeAnnotation.Type) : null;
+        const signature: DeclaredOverload = { Parameters, Return, Untyped: false } as DeclaredOverload;
+        recordOverloadDeclaration(signature, member, annotated.map((t) => t ?? anyTypeRecord));
+        const prior = groups.get(key) ?? [];
+        validateOverloadDeclaration(conversionTarget !== null ? `operator ${conversionTarget}` : `operator ${operatorTableKey(operator)}`, prior, signature);
+        groups.set(key, [...prior, signature]);
+      }
+    } finally {
+      if (pushed) {
+        typeParameterScopes.pop();
+      }
+    }
+  };
+
+  /**
+   * #sec-partial-classes: "It is a type error if a `partial` declaration
+   * names a value that is not a class", and a partial over a class "does not
+   * re-open the constructor or add fields". The first went unjudged where the
+   * name was a plain function - the run time asks IsConstructor, which a
+   * function satisfies - so `partial class f` over `function f() {}` added
+   * methods to `f.prototype`. The second was implemented as a silent DROP: a
+   * field in a partial body was "not merged", so `partial class A { x: uint8
+   * = 7; }` left `new A().x` *undefined* with no diagnostic, which is the
+   * worst reading of "does not add" available. A form the clause says a
+   * partial cannot have is refused, not ignored.
+   *
+   * The name is judged where the checker knows what it names; a name it
+   * cannot see (a global from another script) is left to the run time, which
+   * now asks for a class constructor rather than any constructor.
+   */
+  const checkPartialClass = (declaration: ParseNode, siblings: readonly ParseNode[]): void => {
+    const modifiers = (declaration as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
+    if (!modifiers.includes('partial')) {
+      return;
+    }
+    const name = (declaration as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+    // Judged from the statement list the partial sits in, since this pre-scan
+    // runs before the frame's bindings exist: a sibling that binds the name to
+    // something other than a class - a function declaration, a `let`/`const`/
+    // `var` - is what the name will resolve to.
+    const bindsName = (node: ParseNode): boolean => {
+      if (node.type === 'FunctionDeclaration' || node.type === 'GeneratorDeclaration' || node.type === 'AsyncFunctionDeclaration' || node.type === 'AsyncGeneratorDeclaration') {
+        return (node as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name === name;
+      }
+      if (node.type === 'LexicalDeclaration' || node.type === 'VariableStatement') {
+        const list = ((node as { BindingList?: readonly ParseNode[] }).BindingList
+          ?? (node as { VariableDeclarationList?: readonly ParseNode[] }).VariableDeclarationList) ?? [];
+        return list.some((b) => (b as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name === name);
+      }
+      return false;
+    };
+    // Not `classNodes.has(name)`: the partial registers ITSELF there under
+    // that name on the first of the two passes, so the second pass would find
+    // it and stand down. A sibling non-partial class or interface of the name
+    // is what makes the partial well-formed; a sibling binding the name to
+    // anything else is the error; neither is a name from elsewhere, left to
+    // the run time.
+    const isClassOrInterfaceNamed = (node: ParseNode): boolean => (
+      (node.type === 'ClassDeclaration' && !((node as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('partial'))
+      || node.type === 'InterfaceDeclaration')
+      && (node as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name === name;
+    if (name && !siblings.some(isClassOrInterfaceNamed) && siblings.some(bindsName)) {
+      errors.push((Throw.StaticTypeError('$1 is not a class, so a partial class cannot extend it', Value(name)) as ThrowCompletion).Value as ObjectValue);
+    }
+    const body = (declaration as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? [];
+    for (const member of body) {
+      const keyNode = (member as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
+      const isConstructor = member.type === 'MethodDefinition' && keyNode?.type === 'IdentifierName' && keyNode.name === 'constructor';
+      const what = member.type === 'FieldDefinition' ? 'a field'
+        : member.type === 'ClassStaticBlock' ? 'a static block'
+          : isConstructor ? 'a constructor' : null;
+      if (what !== null) {
+        errors.push((Throw.StaticTypeError(
+          'a partial class adds methods and operators only; $1 declares $2',
+          Value(name ?? 'this partial class'), Value(what),
+        ) as ThrowCompletion).Value as ObjectValue);
+      }
+    }
+  };
+
+  /** The meta declarations seen in this text, by the type each names. */
+  const metaDeclarationsByShape: { shape: TypeRecord, name: string }[] = [];
+
+  /**
+   * #sec-meta-declarations: "a method of any other name is an early error,
+   * as is a second declaration for one type, a missing `default` or
+   * `subtype`, a `default` whose value is not of the constraint shape, or a
+   * hook whose signature does not match the table", and "It is an early error
+   * for a hook not to be compile-time evaluable."
+   *
+   * The parser has the method-name and signature rules. This has the three
+   * the source alone decides: a second declaration for one TYPE - the parser's
+   * duplicate check is by name, and `type A = { k: uint8 }; type B = { k:
+   * uint8 }` intern to ONE type, so `meta A` and `meta B` were two
+   * declarations for it that neither the parser nor the run time's key-claim
+   * check (which saw the same claimant twice) refused; a missing `default` or
+   * `subtype`; and the FORM of the `default` expression. Membership of the
+   * default in the shape, the parameter count, and hook-body evaluability
+   * stay with the run time's evaluation, which the checking pass performs and
+   * defers on failure.
+   *
+   * Two forms of declaration, both legal and both reaching here. A meta over
+   * an OBJECT type declares a constraint shape and claims its keys; a meta
+   * over a PRIMITIVE - `meta float32 { ... }`, or over an alias of one - is
+   * the base-form of L5685, "a meta type that constrains a base without
+   * naming any field of it", which is how a brand is written.
+   */
+  const checkMetaDeclaration = (declaration: ParseNode.MetaDeclaration): void => {
+    const name = declaration.TypeName?.IdentifierReference?.name;
+    if (!name) {
+      return;
+    }
+    // A GENERIC shape (`meta NB<T>` over `type NB<T> = ...`) is not resolved
+    // here: bare `NB` is an application at its defaults, not the shape's
+    // body, and its parameter count is the run time's judgment.
+    const aliasDeclaration = aliasNodes.get(name) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined;
+    const genericShape = (aliasDeclaration?.TypeParameters?.TypeParameterList?.length ?? 0) > 0
+      || (declaration.TypeParameters?.TypeParameterList?.length ?? 0) > 0;
+    let shape: Known = null;
+    if (!genericShape) {
+      const pushed = pushTypeParameterScopeOf(declaration);
+      try {
+        shape = resolveType({ type: 'TypeReference', TypeName: declaration.TypeName } as unknown as ParseNode.Type);
+      } finally {
+        if (pushed) {
+          typeParameterScopes.pop();
+        }
+      }
+    }
+    // What a meta may NAME is not judged here: the clause enumerates its early
+    // errors and "names neither an object type nor a primitive" is not among
+    // them, and a test writes `meta T` over a union as legal-and-irrelevant.
+    // Only a shape RESOLVED to something: during this pre-scan an alias
+    // declared in the same list is a placeholder still being filled - an
+    // empty object record - and two of those compare the same by SameType,
+    // which reported `meta NBr` as a second declaration for `Dim2`. A primitive
+    // base and a filled object shape are decided; an empty object shape is
+    // left to the run time's per-type registry.
+    const settled = shape && shape.Kind !== 'any' && !mentionsTypeParameter(shape)
+      && (shape.Kind === 'primitive' || shape.Kind === 'parameterized'
+        || ((structureOf(shape) as { Properties?: readonly unknown[] } | null)?.Properties?.length ?? 0) > 0);
+    if (settled) {
+      // SameType AND the same printed shape. During the pre-scan a member type
+      // an alias names may not have resolved yet (`RangeBounds` in a shape
+      // declared in the same list), and SameType over a record with a null
+      // member is lenient - it answered *true* for `{ bounds?: RangeBounds }`
+      // against `{ m?: number, ratio?: number }`. The printed form carries the
+      // member names, which are never unresolved, so two shapes that agree on
+      // both are one type and two that differ on either are not.
+      const printed = displayType(shape as TypeRecord);
+      const prior = metaDeclarationsByShape.find((m) => SameType(m.shape, shape as TypeRecord) && displayType(m.shape) === printed);
+      if (prior) {
+        errors.push((Throw.StaticTypeError(
+          'a second meta declaration for one type: $1 names the type $2 already declared a meta type for',
+          Value(name), Value(prior.name),
+        ) as ThrowCompletion).Value as ObjectValue);
+      } else {
+        metaDeclarationsByShape.push({ shape: shape as TypeRecord, name });
+      }
+    }
+    let sawDefault = false;
+    let sawSubtype = false;
+    for (const hook of declaration.MetaHookList) {
+      if (hook.type === 'MetaDefaultHook') {
+        sawDefault = true;
+        checkDefaultEvaluability(hook.AssignmentExpression);
+      } else {
+        const key = (hook as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
+        if (key?.type === 'IdentifierName' && key.name === 'subtype') {
+          sawSubtype = true;
+        }
+      }
+    }
+    if (!sawDefault) {
+      // Worded as the run time's diagnostic is, which a test matches by text.
+      errors.push((Throw.StaticTypeError('a meta declaration for $1 without a default hook', Value(name)) as ThrowCompletion).Value as ObjectValue);
+    }
+    if (!sawSubtype) {
+      errors.push((Throw.StaticTypeError('a meta declaration requires a $1 hook, and $2 has none', Value('subtype'), Value(name)) as ThrowCompletion).Value as ObjectValue);
+    }
+  };
+
   const checkVariancePositions = (declaration: ParseNode): void => {
     const declared = declaration as ParseNode.ClassDeclaration | ParseNode.InterfaceDeclaration;
     const params = declared.TypeParameters?.TypeParameterList ?? [];
@@ -5088,6 +5320,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const merged = baseStructure && baseStructure.Kind === 'object'
       ? [...baseStructure.Properties.filter((p) => !Properties.some((own) => own.key === p.key)), ...Properties]
       : Properties;
+    // #sec-typed-classes, overriding: a method whose parameter types match an
+    // inherited signature's OVERRIDES it, and an override may narrow the return
+    // (covariant returns) but may not change it - "cannot change the return
+    // type of an inherited signature". A derived `f(a: uint8): string` over a
+    // base `f(a: uint8): uint8` would otherwise be a second overload told apart
+    // by return type alone, which no dispatch slot has room for and which
+    // makes `b.f(0)` mean two things for one receiver and argument list. The
+    // rule is the design's (README "Methods and Inheritance", "Covariant
+    // Return Types") and is stated in the specification with this check; Java
+    // and C# have it, and a Rust trait impl must match the trait's signature.
+    //
+    // Same parameter types is decided with `sameConstructParameter`, the
+    // judgment the constructor ambiguity check below already uses for the same
+    // question. A conversion-free subtype is IsSubtype, not IsAssignable: a
+    // return that would only CONVERT to the inherited one is a change.
+    if (baseStructure && baseStructure.Kind === 'object') {
+      for (const own of Properties) {
+        const inherited = baseStructure.Properties.find((p) => p.key === own.key);
+        if (!inherited || own.type?.Kind !== 'function' || inherited.type?.Kind !== 'function') {
+          continue;
+        }
+        for (const sig of (own.type as { Signatures: readonly SignatureRecord[] }).Signatures) {
+          for (const base of (inherited.type as { Signatures: readonly SignatureRecord[] }).Signatures) {
+            const a = sig.Parameters as readonly ParameterRecord[];
+            const b = base.Parameters as readonly ParameterRecord[];
+            if (a.length !== b.length || !a.every((q, k) => sameConstructParameter(q.Type ?? null, b[k]?.Type ?? null))) {
+              continue;
+            }
+            if (!sig.Return || !base.Return || sig.Return.Kind === 'any' || base.Return.Kind === 'any'
+              || mentionsTypeParameter(sig.Return) || mentionsTypeParameter(base.Return)) {
+              continue;
+            }
+            // The class being declared is not yet a registered subtype of its
+            // base - its record is under construction - so a covariant return
+            // naming the class itself (`f(): B` over `f(): A`) stands in for
+            // the base it extends: `B <: bareBase` by construction, and if
+            // `bareBase <: inherited` then so is `B`.
+            const derivedReturn = sig.Return.Kind === 'nominal' && (sig.Return as { Declaration?: unknown }).Declaration === n && bareBase
+              ? bareBase as TypeRecord
+              : sig.Return;
+            if (!IsSubtype(derivedReturn, base.Return, [])) {
+              errors.push((Throw.StaticTypeError(
+                '$1 changes the return type of an inherited signature from $2 to $3; an override may narrow a return but not change it',
+                Value(String(own.key)), Value(displayType(base.Return)), Value(displayType(sig.Return)),
+              ) as ThrowCompletion).Value as ObjectValue);
+            }
+          }
+        }
+      }
+    }
     const instance = {
       Kind: 'nominal',
       Declaration: n,
@@ -10219,7 +10501,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const bindings = new Map<string, TypeRecord>();
             bindExplicitTypeArguments(typeParameterRecordsOf(params), specialization.TypeArguments.TypeArgumentList, bindings);
             checkSpecializedVariadics(declaration, bindings);
+          } else if (specialization.TypeArguments.TypeArgumentList.every((a) => resolveType(a as ParseNode.Type) !== null)) {
+            // #sec-type-arguments-and-placement-new-in-expression-position:
+            // "Where the expression's Static Type shows a value that is not
+            // generic it is a type error". A class named in the source with no
+            // type parameters is that, decided here rather than at the run
+            // time's TypeError - which is the deferred half, for a value the
+            // checker cannot see. Only once every argument resolves: an
+            // argument that names nothing is reported as that, and reported
+            // first, since it is the nearer mistake.
+            errors.push(Throw.StaticTypeError('$1 is not generic and takes no type arguments', Value((bare as { name: string }).name)).Value as ObjectValue);
           }
+          return base;
+        }
+        // The same rule for any other KNOWN, non-generic Static Type: a
+        // primitive, an object type, a tuple, an array - `x.<uint8>` for a `let
+        // x: uint8`. A function has its own arm below, since a signature's
+        // genericity is per signature; `any` and an unmodelled expression say
+        // nothing, by the gradual rule; a type name in expression position is a
+        // Type Object, whose application is the annotation path's business.
+        // An ARRAY LITERAL base is the array type's own spelling in expression
+        // position - `[4].<uint8>` is the type of four `uint8`s, and `new
+        // [4].<uint8>()` constructs one - so its "value" is a type, not a
+        // specialization of a literal.
+        if (base && bare?.type !== 'ArrayLiteral'
+          && base.Kind !== 'function' && base.Kind !== 'any' && base.Kind !== 'parameter' && base.Kind !== 'deferred'
+          && !(base.Kind === 'primitive' && (base as { Name?: string }).Name === 'type')
+          && !mentionsTypeParameter(base)) {
+          errors.push(Throw.StaticTypeError('$1 is not generic and takes no type arguments', Value(displayType(base))).Value as ObjectValue);
           return base;
         }
         if (base?.Kind !== 'function') return base;
@@ -13941,6 +14250,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const magnitude = Number(lit.UnaryExpression.value);
           numeric = lit.operator === '-' ? -magnitude : magnitude;
         }
+        // A NON-NUMERIC literal - a string, a Boolean, `null` - against a
+        // position of known type is the impossible-test rule of
+        // #sec-pattern-static-semantics applied to the literal: "It is a type
+        // error if NarrowTo of a sub-pattern's position type and its
+        // PatternType is ~empty~". A numeric literal is judged below by fit;
+        // a string against a `uint8` fits nothing and was not judged at all,
+        // so `when 'a':` over a numeric subject was a clause that could never
+        // be taken, accepted in silence.
+        // Not against a LITERAL position: `"a" is "b"` is two constants, and
+        // what it answers is MatchConstant's *false*, which a program may want
+        // to observe - the same standing-down the checker applies to a
+        // disjoint `===` it is not guarding a branch with.
+        if (numeric === null && positionType && positionType.Kind !== 'any' && positionType.Kind !== 'literal' && !mentionsTypeParameter(positionType)) {
+          const literalType = staticType(pattern.Literal);
+          if (literalType && literalType.Kind !== 'any' && NarrowTo(positionType, literalType) === empty) {
+            errors.push((Throw.StaticTypeError(
+              'the pattern cannot match a position of type $1',
+              Value(displayType(positionType)),
+            ) as ThrowCompletion).Value as ObjectValue);
+          }
+        }
         if (numeric !== null && positionType) {
           const numericTypes = (positionType.Kind === 'union' ? positionType.Members : [positionType])
             .filter((type) => type.Kind === 'primitive' && (isNumericValueTypeName(type.Name) || type.Name === 'number' || type.Name === 'bigint'));
@@ -14200,8 +14530,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        const missing = chainAtoms.filter((a) => !coveredAtoms.has(a.key));
         if (!chainDefault) {
-          const missing = chainAtoms.filter((a) => !coveredAtoms.has(a.key));
           if (missing.length > 0) {
             const completion = Throw.StaticTypeError(
               'match over $1 is missing $2 and has no default',
@@ -14210,6 +14540,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
+        } else if (missing.length === 0 && coveredAtoms.size > 0
+          && subjectType?.Kind === 'primitive' && (subjectType as { Name?: string }).Name === 'boolean') {
+          // The other half of #sec-match-exhaustiveness's reachability rule,
+          // as the enum and sealed passes below already state it: "a `default`
+          // whose preceding clauses cover every atom of a subject with atoms
+          // is that error's instance". `boolean` has atoms - *true* and
+          // *false* - and `when true; when false; default` is the case.
+          //
+          // For `boolean` ONLY. AtomsOfType answers atoms for other subjects
+          // too - a Composite over a tuple, a sealed chain - and there a
+          // `default` after a pattern that happens to cover them is the
+          // belt-and-braces shape round 1 left undecided (see the note at the
+          // clause loop); `boolean` is the case the clause names, and the
+          // decision on the rest is not made here by the back door.
+          errors.push((Throw.StaticTypeError(
+            'every case of $1 is covered, so the default can never be taken',
+            Value(displayType(subjectType!)),
+          ) as ThrowCompletion).Value as ObjectValue);
         }
       }
       const matchEnumName = enumAtoms.length > 0 ? enumAtoms[0].owner ?? null : null;
@@ -15800,11 +16148,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           functionNodes.set(fnName, n);
         }
       }
+      if (n.type === 'MetaDeclaration') {
+        checkMetaDeclaration(n as ParseNode.MetaDeclaration);
+      }
       if (n.type === 'ClassDeclaration') {
         // #sec-variance-static-semantics-early-errors, as for an interface: a
         // declared variance is a claim about where the parameter appears, and
         // a class body has the same positions #table-variance-positions names.
         checkVariancePositions(n);
+        checkOperatorAmbiguity(n);
+        checkPartialClass(n, list);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
           classNodes.set(name, n);
@@ -18935,6 +19288,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'FieldDefinition': {
+        // #sec-declared-zero: `static default = ...` declares the class's zero.
+        // "The expression must be compile-time evaluable" and "It is a type
+        // error if the declared zero is not a value of the class." Neither was
+        // judged: `static default = 5` and `static default = () => 1` were
+        // registered as the zero at evaluation and every default-initialized
+        // binding of the class then held them.
+        //
+        // Evaluability is the same judgment every default takes
+        // (`checkDefaultEvaluability`); membership compares the initializer's
+        // Static Type with the class's own instance type where both are known,
+        // and defers to the run time's check where the class is generic or the
+        // initializer's type is not decided here (`new Box()` inside `class
+        // Box<T>` is the case the note on `new` below already stands down for).
+        const zeroKey = (n as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
+        if ((n as { static?: boolean }).static && zeroKey?.type === 'IdentifierName' && zeroKey.name === 'default' && n.Initializer) {
+          checkDefaultEvaluability(n.Initializer);
+          const owner = n.parent?.parent as ParseNode | undefined;
+          const ownerName = owner?.type === 'ClassDeclaration' || owner?.type === 'ClassExpression'
+            ? (owner as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name
+            : undefined;
+          const ownerParams = (owner as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
+          const instance = ownerName && !(ownerParams && ownerParams.length > 0) ? classTypeOf(ownerName) : null;
+          const zero = instance ? staticType(n.Initializer) : null;
+          if (instance && zero && zero.Kind !== 'any' && !mentionsTypeParameter(zero) && !IsAssignable(zero, instance)) {
+            errors.push((Throw.StaticTypeError(
+              'the declared zero of $1 is not a value of it: $2',
+              Value(ownerName!), Value(displayType(zero)),
+            ) as ThrowCompletion).Value as ObjectValue);
+          }
+        }
         if (n.TypeAnnotation) {
           const declared = resolveType(n.TypeAnnotation.Type);
           if (n.Initializer) {
