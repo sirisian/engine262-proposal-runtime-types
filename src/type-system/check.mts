@@ -17471,6 +17471,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // is judged against.
           if (bindings.size > 0 && !constraintCheckedCalls.has(c)) {
             constraintCheckedCalls.add(c);
+            // THE CHECKER'S BINDINGS TRAVEL TO THE RUN TIME. The binder infers
+            // from the value it holds, and a declared type the value does not
+            // carry - `q: Q` with `a?: uint8`, holding `{}` - is the checker's
+            // knowledge alone: `pluck(q, "a")` compiled and then threw, the run
+            // time binding T to `{}` and finding no `a`. The explicit spelling
+            // `pluck.<Q, "a">` already runs correctly, because the run time
+            // takes bindings the program wrote rather than recomputing them.
+            // This stamps the ones the checker wrote on the call, for the
+            // evaluation to push as a frame the way it pushes explicit ones.
+            // Only CLOSED bindings: a partial inference still mentioning a
+            // parameter must not be pushed as if fixed. The precedent is
+            // `ContextualType`, set here and read by `contextualTypeFor`.
+            //
+            // And only DECLARED SHAPES - an object type, an interface or alias,
+            // a class - which are what a value cannot carry. A binding inferred
+            // from a literal is where the checker and the run time already
+            // disagree in shape: the checker binds a rest pack to
+            // `[].<'a' | 'b' | 'c'>` where the run time binds a TUPLE, and a
+            // builder reading the tuple's elements broke when handed the array.
+            // Those stay with the run time, which infers them from the value it
+            // holds and has always been right about them.
+            const declaredShape = (t: TypeRecord): boolean => t.Kind === 'object'
+              || (t.Kind === 'nominal' && !(t as { LibraryName?: string }).LibraryName);
+            const closedBindings = new Map<string, TypeRecord>();
+            for (const [name, bound] of bindings) {
+              if (!mentionsTypeParameter(bound) && declaredShape(bound)) {
+                closedBindings.set(name, bound);
+              }
+            }
+            if (closedBindings.size > 0) {
+              (c as { CheckedBindings?: ReadonlyMap<string, TypeRecord> }).CheckedBindings = closedBindings;
+            }
             // The signature record carries no declaration, but each of its
             // type parameters carries its own node, and `pushTypeParameterScopeOf`
             // reads only a |TypeParameterList| - so one is assembled from them.

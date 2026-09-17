@@ -1309,6 +1309,23 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       explicitFrame = frame;
     }
   }
+  // THE CHECKER'S BINDINGS, where the program wrote none. The binder infers a
+  // parameter from the value it holds, and a declared type the value does not
+  // carry - `q: Q` with `a?: uint8`, holding `{}` - is the checker's knowledge
+  // alone: `pluck(q, "a")` compiled, then threw here with T bound to `{}` and
+  // no `a` among its keys. The explicit spelling `pluck.<Q, "a">` already ran
+  // correctly, because the frame above hands the binder what the program
+  // wrote rather than letting it recompute. A call the checker stamped with its
+  // closed bindings (`CheckedBindings`, set in `checkCallArguments`) pushes
+  // them the same way, so the two sides bind identically by construction.
+  // Explicit arguments win where both exist; value inference remains the rule
+  // for a call no checker reached.
+  if (explicitFrame === undefined && surroundingAgent.feature('runtime-types')) {
+    const stamped = (CallExpression as unknown as { CheckedBindings?: ReadonlyMap<string, TypeRecord> }).CheckedBindings;
+    if (stamped && stamped.size > 0) {
+      explicitFrame = new Map(stamped);
+    }
+  }
   // 7. Let thisCall be this CallExpression.
   // 8. Let tailCall be IsInTailPosition(thisCall).
   // 9. Return ? EvaluateCall(func, ref, arguments, tailCall).

@@ -104,3 +104,22 @@ test('C3: a wrong key is refused at compile time', () => {
   // binding is the widened `number`, and refusing on it would break `f(200)`.
   expect(evaluated('function f<T: uint8>(x: T): T { return x; } `${f(200)}`;')).toBe('200');
 });
+
+test('E6: the checker\'s binding travels to the run time for a declared shape', () => {
+  // The binder infers from the value it holds, and a declared type the value
+  // does not carry - `q: Q` with `a?: uint8`, holding `{}` - is the checker's
+  // knowledge alone. `pluck(q, "a")` compiled and then threw, T bound to `{}`
+  // with no `a` among its keys. The checker now stamps its closed bindings on
+  // the call and the evaluation pushes them as a frame, the way an explicit
+  // `.<...>` is pushed, so the two sides bind identically.
+  const PLUCK2 = 'function pluck<T, K: keyof T>(o: T, key: K): T[K] { return o[key]; } ';
+  expect(evaluated(`type Q = { a?: uint8 }; ${PLUCK2}let q: Q = {}; let n: uint8 | undefined = pluck(q, "a"); \`\${n}\`;`)).toBe('undefined');
+  expect(evaluated(`type Q = { a?: uint8 }; ${PLUCK2}let q: Q = { a: (3 := uint8) }; let n: uint8 | undefined = pluck(q, "a"); \`\${n}\`;`)).toBe('3');
+  expect(evaluated(`interface I { a?: uint8; } ${PLUCK2}let q: I = {}; let n: uint8 | undefined = pluck(q, "a"); \`\${n}\`;`)).toBe('undefined');
+  // Only a DECLARED SHAPE is stamped. A binding inferred from a literal is
+  // where the checker and the run time already disagree in shape - the
+  // checker binds a rest pack to an array of a literal union, the run time to a
+  // tuple - and a builder reading the tuple's elements broke when handed the
+  // array. This is the corpus test that caught it, kept here as the guard.
+  expect(evaluated('function literal(v) { return Reflect.makeType({ kind: "literal", value: v, base: Reflect.typeOf(v) }); } function litval(T) { return Reflect.getReflection(T).value; } function joinResult(P, d) { return literal(Reflect.getReflection(P).elements.map(e => litval(e.type)).join(d)); } function join<D: string, P: [].<string>>(delimiter: D, ...parts: P): joinResult(P, delimiter) { return parts.join(delimiter); } Reflect.typeOf(join("-", "a", "b", "c")) === type "a-b-c" ? "ok" : "no";')).toBe('ok');
+});
