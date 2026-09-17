@@ -1057,6 +1057,14 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
         : anyType;
       const key = makePrimitive('string');
       const bool = makePrimitive('boolean');
+      const memberTypes = t.Kind === 'object'
+        ? (t as { Properties: readonly { type: TypeRecord }[] }).Properties.map((p) => p.type)
+        : [];
+      const memberUnion: TypeRecord = memberTypes.length === 0
+        ? anyType
+        : memberTypes.length === 1
+          ? memberTypes[0]!
+          : { Kind: 'union', Members: memberTypes } as unknown as TypeRecord;
       const trap = (Parameters: readonly TypeRecord[], Return: TypeRecord) => ({
         Kind: 'function' as const,
         Signatures: [{
@@ -1072,8 +1080,14 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
           // The value traps, over T and the property's own declared type - which
           // the interface cannot name per-key, so `any` stands where the runtime
           // check is exact.
-          member('get', trap([t, key, anyType], anyType)),
-          member('set', trap([t, key, anyType, anyType], bool)),
+          // `T[keyof T]` - the union of T's member types - for the value a
+          // `get` hands back and a `set` is handed. Coarser than the exact
+          // per-key `T[K]`, which needs a generic member and so a
+          // source-declared library interface, but strictly better than `any`:
+          // a trap returning a type no member of T holds is caught where it is
+          // written. With T concrete here, the union is computed directly.
+          member('get', trap([t, key, anyType], memberUnion)),
+          member('set', trap([t, key, memberUnion, anyType], bool)),
           member('getOwnPropertyDescriptor', trap([t, key], anyType)),
           member('defineProperty', trap([t, key, anyType], bool)),
           // The shape traps.

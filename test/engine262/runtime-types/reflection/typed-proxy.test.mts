@@ -70,7 +70,11 @@ test('the four value traps are checked against the declared type', () => {
   expectThrown(`${P}const p = new Proxy.<P>({ a: 1 }, { defineProperty() { return true; } }); Object.defineProperty(p, "a", { value: "nope" });`, 'uint.<8>');
   // Conforming values pass, and a member the type does not name is free.
   expect(evaluated(`${P}const p = new Proxy.<P>({ a: 1 }, { get() { return (7 := uint8); } }); \`\${p.a}\`;`)).toBe('7');
-  expect(evaluated(`${P}const p = new Proxy.<P>({ a: 1 }, { get() { return "free"; } }); \`\${p.other}\`;`)).toBe('free');
+  // The handler's declared contract - `ProxyHandler.<P>`'s `get` returns
+  // `P[keyof P]` - now refuses a `get` returning a non-member type at the
+  // construction, so the runtime "an undeclared member is free" control is
+  // shown with a CONFORMING handler: the value comes back unchecked.
+  expect(evaluated(`${P}const p = new Proxy.<P>({ a: 1 }, { get() { return (9 := uint8); } }); \`\${p.other}\`;`)).toBe('9');
 });
 
 test('the shape traps may not contradict the declared type', () => {
@@ -131,4 +135,16 @@ test('the construction checks its arguments against the declared parameters', ()
   // An UNTYPED construction is untouched: an untyped proxy is `any`, and the
   // base language admits any handler object, unknown trap names included.
   expect(evaluated('const p = new Proxy({ a: 1 }, { anything() { return 1; } }); `${typeof p}`;')).toBe('object');
+});
+
+test('a value trap is typed over T[keyof T]', () => {
+  // Coarser than the exact per-key T[K] - which needs a generic member and so a
+  // source-declared library interface - and strictly better than `any`: a trap
+  // returning a type no member of T holds is caught where it is written, and a
+  // `set` handed one is too. A handler over a non-object T keeps `any`.
+  const P = 'type P = { a: uint8, b: string }; ';
+  expectThrown(`${P}let h: ProxyHandler.<P> = { get(t, k) { return true; } };`, 'is not assignable to "uint.<8> | string"');
+  expect(evaluated(`${P}let h: ProxyHandler.<P> = { get(t, k) { return "x"; } }; \`\${typeof h}\`;`)).toBe('object');
+  expectThrown(`${P}new Proxy.<P>({ a: (1 := uint8), b: "x" }, { get(t, k) { return true; } });`, 'is not assignable to "uint.<8> | string"');
+  expect(evaluated('let h: ProxyHandler.<any> = { get(t, k) { return true; } }; `${typeof h}`;')).toBe('object');
 });
