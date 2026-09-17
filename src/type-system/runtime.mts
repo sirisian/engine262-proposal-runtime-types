@@ -32,8 +32,8 @@ import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-libra
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
-import type { ParameterRecord, SignatureRecord, TypeRecord } from './records.mts';
-import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter } from './records.mts';
+import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
+import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -3209,6 +3209,16 @@ export function SubstituteTypeArguments(
     }
     if (r.Kind === 'parameter') {
       return byName.get((r as { Name?: string }).Name ?? '') ?? r;
+    }
+    // A DEFERRED operator - `keyof T`, `T[K]` - waits on the parameters it
+    // names, and this walk had no arm for it: an interface instantiated at `P`
+    // substituted `t: T` to `t: P` and left `k: keyof T` as written, so a
+    // literal adopting that shape and the target it was checked against named
+    // different types for one parameter. `substituteTypeParameters` already
+    // substitutes into a deferred record's operands and evaluates once they
+    // close; this walk hands the record to it.
+    if (r.Kind === 'deferred') {
+      return substituteTypeParameters(r as Known, byName) as TypeRecord;
     }
     if (r.Kind === 'object') {
       const out = { Kind: 'object', Properties: r.Properties, IndexSignatures: r.IndexSignatures } as TypeRecord;
