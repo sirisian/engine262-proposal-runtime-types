@@ -267,6 +267,10 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
             }
           }
         }
+        const unreadableField = firstUnreadableControl(node.Decorators);
+        if (unreadableField !== null) {
+          return Throw.TypeError('$1 takes a literal argument', Value(`@${unreadableField}`));
+        }
         (plain as { LayoutControls?: FieldControls }).LayoutControls = readFieldControls(node.Decorators);
         return plain;
       }
@@ -329,12 +333,57 @@ function reservedLayoutControl(decorator: ParseNode.Decorator): { name: string, 
     const target = call?.CallExpression;
     if (target && typeof target.name === 'string') {
       const first = call?.Arguments && call.Arguments.length > 0 ? call.Arguments[0] : undefined;
-      // Only a literal argument is read: a control is part of the layout, which
-      // #sec-layout-properties calls a compile-time constant.
-      const value = first && (first.type === 'NumericLiteral' || first.type === 'StringLiteral')
-        ? (first as { value?: unknown }).value
-        : undefined;
-      return { name: target.name, argument: value };
+      // Only a literal argument is READ. A non-literal one is reported as
+      // NON_LITERAL_ARGUMENT so a caller can refuse it, rather than read as
+      // *undefined* and dropped.
+      //
+      // Dropping was silent and cost the program its layout:
+      // `const N = 2; @size(N) class A { x: float64 = 0; }` took its natural 8
+      // bytes rather than the 2 it asked for, with no diagnostic - and the
+      // overflow rule that a size exists to enforce had nothing to overflow.
+      //
+      // WHAT AN ARGUMENT MAY BE IS AN OPEN SPECIFICATION QUESTION. This comment
+      // used to cite #sec-layout-properties for calling a control a compile-time
+      // constant, and the one above cites #sec-memory-layout for "recognized
+      // syntactically and never evaluated". NEITHER SENTENCE IS IN THE
+      // DOCUMENT: #sec-layout-properties says `byteLength`, `bitLength` and
+      // `alignment` are compile-time evaluable, which is about the layout's
+      // properties rather than a control's argument, and #sec-layout-control
+      // says only that each control "is a property-descriptor key and each has a
+      // decorator of the same name that sets it". The literal-only rule is this
+      // engine's, not the specification's.
+      //
+      // Refusing is the conservative answer while that is open. A program
+      // written against a refusal keeps working if the rule is later widened to
+      // the compile-time-evaluable fragment - which is what `alignas` in C++ and
+      // `_Alignas` in C take, and what this proposal's own fragment would
+      // naturally supply. Accepting first and refusing later is what could not
+      // be undone.
+      if (first && !(first.type === 'NumericLiteral' || first.type === 'StringLiteral')) {
+        return { name: target.name, argument: NON_LITERAL_ARGUMENT };
+      }
+      return { name: target.name, argument: first ? (first as { value?: unknown }).value : undefined };
+    }
+  }
+  return null;
+}
+
+/** A control argument that was written but cannot be read; see `reservedLayoutControl`. */
+const NON_LITERAL_ARGUMENT = Symbol('non-literal layout control argument');
+
+/**
+ * The first layout control whose argument cannot be read, or *null*.
+ *
+ * Kept apart from the two readers so they stay total - they answer what the
+ * layout IS - and so the refusal happens once per decorator list at a caller
+ * that can throw.
+ */
+export function firstUnreadableControl(decorators: readonly ParseNode.Decorator[] | null | undefined): string | null {
+  for (const d of decorators ?? []) {
+    const control = reservedLayoutControl(d);
+    if (control && control.argument === NON_LITERAL_ARGUMENT
+      && (CLASS_CONTROLS.includes(control.name) || FIELD_CONTROLS.includes(control.name))) {
+      return control.name;
     }
   }
   return null;
@@ -1526,7 +1575,12 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const baseLayout = (baseCtor && typeof baseCtor === 'object' && 'InstanceLayout' in baseCtor)
         ? baseCtor.InstanceLayout ?? null
         : null;
-      const classControls = readClassControls((ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators);
+      const classDecorators = (ClassTail as { parent?: { Decorators?: readonly ParseNode.Decorator[] | null } }).parent?.Decorators;
+      const unreadableClass = firstUnreadableControl(classDecorators);
+      if (unreadableClass !== null) {
+        return Throw.TypeError('$1 takes a literal argument', Value(`@${unreadableClass}`));
+      }
+      const classControls = readClassControls(classDecorators);
       const laidOut: { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[] = [];
       const laidOutUnbound: { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[] = [];
       let complete = true;

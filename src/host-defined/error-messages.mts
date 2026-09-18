@@ -934,6 +934,7 @@ export interface Throw {
   | '$1 is out of range for $2'
   | '$1 is required by $2 and is not supplied'
   | '$1 lanes were supplied where $2 are wanted'
+  | '$1 takes a literal argument'
   | '$1 takes $2 type arguments and cannot be used unapplied'
   | 'Cannot create a proxy with a $1 as $2'
   | 'Cannot not delete property $1 on $2'

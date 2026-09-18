@@ -256,19 +256,43 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     for (const member of node.EnumMemberList) {
       let v: Value;
       if (member.Initializer) {
-        const ref = Q(yield* Evaluate(member.Initializer));
-        v = Q(yield* GetValue(ref));
-        // "An enumerator initialized with a function of two parameters is given
-        // the result of calling that function" - with the enumerator's index
-        // and name, which is the design's
-        // `enum Count: float32 { Zero = (index, name) => index * 100, One, Two }`.
-        // The value was being converted as a function and refused.
-        const arity = IsCallable(v)
-          ? Q(yield* Get(v as ObjectValue, Value('length')))
-          : Value.undefined;
-        if (arity instanceof NumberValue && (R(arity) as number) === 2) {
-          generator = v;
-          v = Q(yield* Call(generator, Value.undefined, [Value(memberValues.length), Value(member.IdentifierName.name)]));
+        // #sec-enums: "EVERY INITIALIZER IS EVALUATED IN THE COMPILE-TIME
+        // EVALUABLE FRAGMENT, since an enumerator is a constant of the program."
+        //
+        // It was evaluated outside one, and the checking pass was hiding it:
+        // that pass evaluates a closed initializer under the fragment, so
+        // `enum E { A = Math.random() }` was refused there and never reached
+        // here. An initializer the pass could not resolve - one naming a binding
+        // it cannot read, `const r = Math.random; enum E { A = r() }` - was
+        // skipped there and then evaluated HERE with no fragment in force. It
+        // produced a real random number and failed the range check against it,
+        // so the diagnostic named a different value on every run and the rule
+        // that should have refused it never ran.
+        //
+        // The fragment is enforced on the FUNCTION at the call
+        // (`fragment-library.mts`), which is why this is all that was missing:
+        // the call simply has to happen inside one. The generator-function call
+        // below is inside it too - that function produces the enumerator's
+        // value, so it is as much "the initializer" as the expression that named
+        // it.
+        BeginFragmentEvaluation();
+        try {
+          const ref = Q(yield* Evaluate(member.Initializer));
+          v = Q(yield* GetValue(ref));
+          // "An enumerator initialized with a function of two parameters is given
+          // the result of calling that function" - with the enumerator's index
+          // and name, which is the design's
+          // `enum Count: float32 { Zero = (index, name) => index * 100, One, Two }`.
+          // The value was being converted as a function and refused.
+          const arity = IsCallable(v)
+            ? Q(yield* Get(v as ObjectValue, Value('length')))
+            : Value.undefined;
+          if (arity instanceof NumberValue && (R(arity) as number) === 2) {
+            generator = v;
+            v = Q(yield* Call(generator, Value.undefined, [Value(memberValues.length), Value(member.IdentifierName.name)]));
+          }
+        } finally {
+          EndFragmentEvaluation();
         }
       } else if (previous === undefined) {
         // #sec-enums: "The first enumerator, when it has no initializer, takes
