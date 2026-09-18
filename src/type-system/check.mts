@@ -27,7 +27,7 @@ import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
-import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle } from './layout.mts';
+import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass } from './layout.mts';
 import {
   libraryTypeParameterNames as libraryTypeParameterNamesShared,
   orderTypeArguments as orderTypeArgumentsShared,
@@ -1581,6 +1581,15 @@ function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
       // `dynamic` from (through the tail's parent) - a `dynamic` typed class is
       // not sealed and IS holdable.
       const isDynamic = (decl.ClassModifiers ?? []).includes('dynamic');
+      // A REFERENCE CLASS is held and passed by reference, so it HAS the
+      // identity a weak reference observes and is holdable for the same reason
+      // a `dynamic` class is. The runtime companion of this test lives in
+      // CanBeHeldWeakly, which reads [[ReferenceKind]]; both must agree, or a
+      // `new WeakRef(r)` is refused before the program runs while
+      // `weakMap.set(r, v)` is accepted while it runs.
+      if (IsReferenceClass(t)) {
+        return true;
+      }
       const hasTypedInstanceField = body.some((el) => (el as { type?: string }).type === 'FieldDefinition'
         && !(el as { static?: boolean }).static
         && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
@@ -4964,8 +4973,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (type.Kind !== 'nominal') return undefined;
     const declaration = type.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression;
     if (declaration?.type !== 'ClassDeclaration' && declaration?.type !== 'ClassExpression') return undefined;
+    // A REFERENCE CLASS terminates the inline walk: its instances are reached
+    // through a pointer, so a field of its type is a reference position and a
+    // cycle passing through one is finite. This is what makes `reference class
+    // Node { next: Node | null; }` legal where the same declaration without the
+    // modifier has no finite layout - the inline optional of "Optional values"
+    // having removed the indirection `T | null` used to supply.
     if (declaration.TypeParameters?.TypeParameterList.length || declaration.Decorators?.length
-      || declaration.ClassModifiers?.includes('dynamic')) return null;
+      || declaration.ClassModifiers?.includes('dynamic')
+      || declaration.ClassModifiers?.includes('reference')
+      || declaration.ClassModifiers?.includes('sealed')
+      || declaration.ClassModifiers?.includes('abstract')) return null;
     const fields: InlineField[] = [];
     if (declaration.ClassTail.ClassHeritage) {
       const base = (type as { Base?: TypeRecord }).Base;

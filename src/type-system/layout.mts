@@ -65,6 +65,54 @@ function isNullOrUndefinedPrimitive(t: { Kind?: string, Name?: string }): boolea
   return t.Kind === 'primitive' && (t.Name === 'null' || t.Name === 'undefined');
 }
 
+/**
+ * ecmascript-types README, Reference Classes: a class is a REFERENCE TYPE when
+ * it is declared `reference`, `sealed` or `abstract`. Its instances are held and
+ * passed by reference, so a field of its type is a pointer rather than inline
+ * storage, assigning one aliases rather than copies, and it closes a recursive
+ * cycle that the inline optional of the "Optional values" rules no longer
+ * closes.
+ *
+ * `sealed` and `abstract` are here because the main proposal already declares
+ * them reference types - "A sealed class is a reference type: its instances are
+ * held and passed by reference, which is what lets a `Node`-typed field ... hold
+ * any subclass" - and the engine had implemented neither, laying a sealed class
+ * out inline and refusing `sealed class Node { next: Node; }` as an infinite
+ * layout. `reference` is the modifier an OPEN, non-abstract class needs, since
+ * sealing itself to become a reference type refuses the extension it exists to
+ * offer.
+ *
+ * `dynamic` is deliberately NOT here. It is already excluded everywhere this
+ * predicate is consulted, and it makes a different claim - unsealed, no fixed
+ * layout - from being reached through a reference.
+ */
+export function IsReferenceClass(t: TypeRecord): boolean {
+  // The BASE CHAIN is walked, not just the declaration, because the kind is
+  // inherited: "an abstract class is never a value type and NEITHER IS A
+  // SUBCLASS REACHED THROUGH IT". Reading the modifiers of `t` alone let a
+  // subclass of a reference class be copied at every site that asks, which is
+  // exactly what the polymorphic field exists to prevent - the value stored
+  // into a `Shape | null` field is a `Circle`, and it is `Circle` this is asked
+  // about.
+  let current: TypeRecord | undefined = t;
+  for (let depth = 0; current !== undefined && depth < 1000; depth += 1) {
+    if (current.Kind !== 'nominal' || current.EnumMembers !== undefined) {
+      return false;
+    }
+    const declaration = (current as { Declaration?: { ClassModifiers?: readonly string[] | null } }).Declaration;
+    const modifiers = declaration?.ClassModifiers;
+    if (modifiers
+      && (modifiers.includes('reference') || modifiers.includes('sealed') || modifiers.includes('abstract'))) {
+      return true;
+    }
+    current = (current as { Base?: TypeRecord }).Base;
+  }
+  return false;
+}
+
+/** The layout a reference occupies: this implementation's 64-bit pointer. */
+export const referenceLayout: Layout = { bitLength: 64, byteLength: 8, alignment: 8 };
+
 export function LayoutOf(t: TypeRecord): Layout | null {
   if (t.Kind === 'array') {
     // A fixed-length array lays out as its element repeated; one with no length is
@@ -130,7 +178,41 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     }
     return { bitLength: byteLength * 8, byteLength, alignment };
   }
+  if (t.Kind === 'parameterized') {
+    // #sec-memory-layout: a parameterization REFINES which values its base
+    // admits and does not change how one is represented, so it has its base's
+    // layout - the same reading the enum row below already takes, an enum being
+    // the other refinement of an underlying type.
+    //
+    // This returned *null*, so `brand(uint32, 'NodeIndex').hasLayout` was
+    // *false* and, worse, a field of a branded type took the containing class's
+    // layout away with it: `class Node { left: NodeIndex; }` had none, and
+    // `[1024].<Node>` would not allocate. typeprogramming.md states the
+    // opposite in the same breath as recommending the pattern - "an array of
+    // them has the base's footprint" - and the newtype-index idiom the design
+    // documents reach for is unusable without it.
+    //
+    // A base with no layout still has none: `string.<{ pattern }>` is *null*
+    // here because `LayoutOf(string)` is, so nothing needs to special-case it.
+    return LayoutOf(t.Base);
+  }
   if (t.Kind === 'nominal') {
+    // A REFERENCE CLASS is reached through a pointer, so a field of its type
+    // occupies a reference's width and the field walk below never runs - which
+    // is also what stops the recursion for `reference class Node { next: Node
+    // | null; }`. This mirrors the nullable-union arm at the end of this
+    // function, which already answers a reference's width for the same reason.
+    //
+    // The RELFECTIVE reading of this is wrong and knowingly so:
+    // `table-layout-by-type` gives a reference type NO layout, so
+    // `Node.hasLayout` ought to be *false* while a field of `Node` still costs
+    // eight bytes. One function cannot answer both, which is the conflation the
+    // predicate split (`hasLayout` / `value` / `isPlainData`) exists to undo;
+    // until it lands this follows the precedent the nullable union already set
+    // rather than inventing a second, different inconsistency.
+    if (IsReferenceClass(t)) {
+      return referenceLayout;
+    }
     // #sec-memory-layout's type table, row "an enum": "Yes, its underlying
     // type's." The pin this replaces said the Type Record carried no resolved
     // underlying type; [[Underlying]] was added for the enum subtype relation,

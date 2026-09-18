@@ -35,6 +35,15 @@ export function FirstClassInlineCycle(
       if (record.Kind === 'array') {
         return typeof record.Extent === 'number' && fieldType(record.Element, key);
       }
+      if (record.Kind === 'parameterized') {
+        // A parameterization is stored as its base is, so it is the base that
+        // decides whether this edge is inline and whether it continues a cycle.
+        // Left unwrapped, `brand(SomeValueClass, 'X')` reached the LayoutOf
+        // fallback as an opaque leaf: now that a parameterization HAS a layout,
+        // that fallback would answer *true* and the walk would stop, so a cycle
+        // running through a branded class field would go unreported.
+        return fieldType(record.Base, key);
+      }
       if (record.Kind === 'nominal') {
         const target = collect(record);
         if (target) {

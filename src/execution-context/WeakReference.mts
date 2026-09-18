@@ -82,8 +82,13 @@ export function CanBeHeldWeakly(v: Value): v is ObjectValue | SymbolValue {
     // a constructor that seals its instances (a typed field, not `dynamic`), the
     // same SealInstances flag that also forbids proxying it.
     if (surroundingAgent.feature('runtime-types')) {
-      const builtBy = (v as { ConstructedBy?: readonly { SealInstances?: boolean }[] }).ConstructedBy;
-      if (builtBy && builtBy.some((ctor) => ctor.SealInstances)) {
+      // A REFERENCE CLASS is exempt: the refusal above is about a value type
+      // having no identity to observe, and a `reference`, `sealed` or `abstract`
+      // class is held and passed by reference precisely so that it HAS one. Its
+      // instances are still sealed, so [[SealInstances]] cannot tell the two
+      // apart and [[ReferenceKind]] is what does.
+      const builtBy = (v as { ConstructedBy?: readonly { SealInstances?: boolean, ReferenceKind?: boolean }[] }).ConstructedBy;
+      if (builtBy && builtBy.some((ctor) => ctor.SealInstances) && !builtBy.some((ctor) => ctor.ReferenceKind)) {
         return false;
       }
       // proposal-runtime-types `sec-composite-canbeheldweakly`: a COMPOSITE is

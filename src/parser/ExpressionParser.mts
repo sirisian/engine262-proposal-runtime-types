@@ -387,19 +387,21 @@ export abstract class ExpressionParser extends FunctionParser {
   // for the abstract-method placement check.
   protected currentClassModifiers: readonly string[] | null = null;
 
-  // ClassModifier : one of `abstract` `sealed` `dynamic`
+  // ClassModifier : one of `abstract` `sealed` `reference` `dynamic`
   // True when a run of class modifiers can begin here; the run must reach
   // `class`, so a lone identifier never takes this route.
   protected testClassModifierRun(): boolean {
     if (!surroundingAgent.feature('runtime-types')) {
       return false;
     }
-    if (!(this.test('abstract') || this.test('sealed') || this.test('dynamic') || this.test('partial'))) {
+    if (!(this.test('abstract') || this.test('sealed') || this.test('reference')
+      || this.test('dynamic') || this.test('partial'))) {
       return false;
     }
     return this.testAhead(Token.CLASS)
       || this.testAhead('abstract')
       || this.testAhead('sealed')
+      || this.testAhead('reference')
       || this.testAhead('dynamic')
       || this.testAhead('partial');
   }
@@ -2348,6 +2350,13 @@ export abstract class ExpressionParser extends FunctionParser {
     if (ClassModifiers && ClassModifiers.includes('sealed') && ClassModifiers.includes('dynamic')) {
       this.raise(Throw.SyntaxError('A class cannot be both sealed and dynamic'));
     }
+    // ecmascript-types README, Reference Classes: `reference` with `abstract`,
+    // `sealed` or `dynamic` is REDUNDANT rather than an error - each of those is
+    // already a reference type - so nothing is raised for the combination. The
+    // one pairing that IS contradictory is `reference dynamic`, and it is
+    // already refused by the `dynamic` rules below rather than here: a `dynamic`
+    // class is unsealed and keeps no fixed layout, which is a different claim
+    // from being reached through a reference, so the two do not conflict.
     node.ClassModifiers = ClassModifiers;
     this.expect(Token.CLASS);
     // proposal-runtime-types: a `partial class` re-opens an existing class to add

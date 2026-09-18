@@ -1380,6 +1380,16 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // and `dynamic` still disqualifies either way.
       const baseIsTyped = (constructorParent as { SealInstances?: boolean } | undefined)?.SealInstances === true;
       (F as { SealInstances?: boolean }).SealInstances = (hasTypedInstanceField || baseIsTyped) && !isDynamic;
+      // ecmascript-types README, Reference Classes: a `reference`, `sealed` or
+      // `abstract` class is a REFERENCE TYPE, so its instances have identity.
+      // [[SealInstances]] alone cannot say so - it is *true* for every typed
+      // class, which is what makes an instance unholdable weakly - and a
+      // reference class is typed AND has an identity to observe. The kind is
+      // inherited for the reason it is inherited in the type system: a subclass
+      // reached through a reference class is one too.
+      const baseIsReference = (constructorParent as { ReferenceKind?: boolean } | undefined)?.ReferenceKind === true;
+      (F as { ReferenceKind?: boolean }).ReferenceKind = baseIsReference
+        || modifiers.includes('reference') || modifiers.includes('sealed') || modifiers.includes('abstract');
       // proposal-runtime-types (spec sec-abstract-classes): an abstract class
       // cannot be instantiated - its constructor's [[Construct]] throws a
       // TypeError when NewTarget is that constructor itself, while super() from a
