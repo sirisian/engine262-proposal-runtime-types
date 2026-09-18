@@ -4511,10 +4511,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const am = el as unknown as {
           ClassElementName?: { type?: string, name?: string, value?: string } | null,
           TypeAnnotation?: ParseNode.TypeAnnotation | null,
+          UniqueFormalParameters?: readonly ParseNode[] | null,
         };
         const akey = am.ClassElementName?.name ?? am.ClassElementName?.value;
         if (typeof akey === 'string' && am.ClassElementName?.type !== 'PrivateIdentifier') {
-          abstractMembers.set(akey, am.TypeAnnotation ? resolveType(am.TypeAnnotation.Type) : null);
+          abstractMembers.set(akey, declaredMethodType(am, el));
         }
         continue;
       }
@@ -6510,6 +6511,41 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         else if (!element.Rest) checkDefaultInitialization(element.Type, seen);
       }
     }
+  };
+
+  /**
+   * The declared function type of a method-shaped node, or *null* where it
+   * declares nothing.
+   *
+   * #sec-abstract-classes says an abstract method's "annotation types the
+   * implementations: it is a type error if a subclass implements an inherited
+   * abstract method with a signature the abstract declaration does not accept".
+   * A SIGNATURE, so the comparison is over parameters and return together. Both
+   * sides of that comparison recorded only the RETURN annotation, which is why
+   * the rule caught `m(a: uint8): string` over `m(a: uint8): uint8` and missed
+   * `m(a: string): uint8` and `m(a: uint8, b: uint8): uint8` - one sentence
+   * answered early for one of its cases and at evaluation for the others, by the
+   * full-signature comparison ClassDefinitionEvaluation performs.
+   *
+   * A node carrying NO annotation anywhere declares nothing and is left alone,
+   * which is the rule an untyped method gets everywhere else in this pass.
+   */
+  const declaredMethodType = (node: {
+    TypeAnnotation?: ParseNode.TypeAnnotation | null,
+    UniqueFormalParameters?: readonly ParseNode[] | null,
+  }, declaration: ParseNode): Known => {
+    const parameters = node.UniqueFormalParameters ?? [];
+    const annotated = !!node.TypeAnnotation
+      || parameters.some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
+    if (!annotated) {
+      return null;
+    }
+    return functionTypeFromParts(
+      undefined,
+      parameters as readonly ParseNode.FunctionTypeParameter[],
+      node.TypeAnnotation?.Type ?? null,
+      declaration,
+    );
   };
 
   const functionTypeFromParts = (typeParams: readonly ParseNode.TypeParameter[] | undefined, paramList: readonly ParseNode.FunctionTypeParameter[], returnNode: ParseNode.Type | null | undefined, declaration: ParseNode): Known => {
@@ -19887,11 +19923,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const md = el as unknown as {
               ClassElementName?: { name?: string, value?: string } | null,
               TypeAnnotation?: ParseNode.TypeAnnotation | null,
+              UniqueFormalParameters?: readonly ParseNode[] | null,
               static?: boolean,
             };
             const k = md.ClassElementName?.name ?? md.ClassElementName?.value;
             if (typeof k === 'string' && !md.static) {
-              ownTypes.set(k, md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null);
+              ownTypes.set(k, declaredMethodType(md, el));
             }
           }
           // The NEAREST declaration for a key governs, which is why the chain is
