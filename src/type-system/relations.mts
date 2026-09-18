@@ -2,6 +2,7 @@ import { SameValue, R } from '../abstract-ops/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
+import { IsPlainData, IsValueType } from './layout.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
@@ -2128,6 +2129,20 @@ function parameterAccepts(target: TypeRecord, source: TypeRecord, assumptions: r
 export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
   if (s.Kind === 'any' || t.Kind === 'any') {
     return true;
+  }
+  // The two BOUND types are tops over a predicate rather than over a structure,
+  // so they are answered here rather than by the subtype walk. `value` admits
+  // every value type (#sec-value-types), which is what excludes a `dynamic`
+  // class from a pool; `plain` admits every type that is plain data, which is
+  // the stronger bound a pool actually needs - a class of `string` fields is a
+  // value type with no layout, so `extends value` alone would pass it and the
+  // contiguity the pool advertises would still be lost.
+  if (t.Kind === 'primitive' && (t.Name === 'value' || t.Name === 'plain') && t.Arguments.length === 0) {
+    if (s.Kind === 'primitive' && (s.Name === 'value' || s.Name === 'plain')) {
+      // `plain` is the narrower of the two: everything plain is a value.
+      return t.Name === 'value' || s.Name === 'plain';
+    }
+    return t.Name === 'plain' ? IsPlainData(s) : IsValueType(s);
   }
   return IsSubtype(s, t, []);
 }

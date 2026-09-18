@@ -270,6 +270,85 @@ export function ReportedLayoutOf(t: TypeRecord): Layout | null {
   return LayoutOf(t);
 }
 
+/**
+ * Whether a type is a VALUE TYPE (#sec-value-types): its values have no identity,
+ * two of them that are the same value being indistinguishable.
+ *
+ * This is NOT `IsValueTypeClass` and not `LayoutOf(t) !== null`. A class every one
+ * of whose fields is typed `string` is a value type class with no layout, so a
+ * layout test under-admits exactly the case that separates this question from the
+ * other two. The walk is over the fields for that reason.
+ */
+export function IsValueType(t: TypeRecord): boolean {
+  return valueTypeWalk(t, 0);
+}
+
+function valueTypeWalk(t: TypeRecord, depth: number): boolean {
+  if (depth > 1000) {
+    return false;
+  }
+  switch (t.Kind) {
+    case 'primitive':
+      // Every primitive is a value type, `string` and `bigint` included: "the
+      // existing primitive types are value types in this sense". `object` is the
+      // exception, naming values that are Objects.
+      return t.Name !== 'object';
+    case 'literal':
+    case 'parameterized':
+      return valueTypeWalk(t.Base as TypeRecord, depth + 1);
+    case 'union':
+      return (t as { Members: readonly TypeRecord[] }).Members.every((m) => valueTypeWalk(m, depth + 1));
+    case 'array':
+      // A fixed-length array of value types is laid out inline and copies with
+      // its container; a dynamic-length one owns storage reached by reference.
+      return typeof (t as { Extent?: unknown }).Extent === 'number'
+        && valueTypeWalk((t as { Element: TypeRecord }).Element, depth + 1);
+    case 'nominal':
+      break;
+    default:
+      return false;
+  }
+  if (t.EnumMembers !== undefined) {
+    return true;
+  }
+  if (IsReferenceClass(t)) {
+    return false;
+  }
+  // Read from the DECLARATION, not from the constructor. This question is asked
+  // by the STATIC constraint check, which runs before a class is evaluated, so a
+  // walk over `Constructor.Fields` found nothing there and refused every value
+  // class - while `Reflect.isAssignable` at run time, where the fields exist,
+  // said the opposite about the same type.
+  const declaration = (t as {
+    Declaration?: {
+      ClassModifiers?: readonly string[] | null,
+      ClassTail?: { ClassBody?: readonly unknown[] | null } | null,
+    },
+  }).Declaration;
+  if (!declaration?.ClassTail || declaration.ClassModifiers?.includes('dynamic')) {
+    return false;
+  }
+  const body = declaration.ClassTail.ClassBody ?? [];
+  let typedFields = 0;
+  for (const element of body) {
+    const el = element as { type?: string, static?: boolean, TypeAnnotation?: unknown };
+    if (el.type !== 'FieldDefinition' || el.static) {
+      continue;
+    }
+    // An UNTYPED instance field disqualifies the class outright, which is the
+    // same rule that denies it a layout.
+    if (el.TypeAnnotation === undefined || el.TypeAnnotation === null) {
+      return false;
+    }
+    typedFields += 1;
+  }
+  // The field TYPES are not walked here. Doing so needs the annotation resolver,
+  // which belongs to the checker rather than to this module, and the cases it
+  // would catch - a field annotated with an object or function type - are ones a
+  // class is unlikely to reach by accident. Recorded rather than hidden.
+  return typedFields > 0;
+}
+
 export function IsPlainData(t: TypeRecord): boolean {
   return plainDataWalk(t, 0);
 }
@@ -314,10 +393,18 @@ function plainDataWalk(t: TypeRecord, depth: number): boolean {
       return t.Underlying ? plainDataWalk(t.Underlying, depth + 1) : false;
     }
     const layout = LayoutOf(t) as ClassLayout | null;
-    if (layout === null || layout.fields === undefined) {
+    if (layout !== null && layout.fields !== undefined) {
+      return layout.fields.every((field) => plainDataWalk(field.type, depth + 1));
+    }
+    // No layout computed yet: before the class is evaluated, which is when the
+    // static constraint check asks. The declaration answers the same question -
+    // *null* for a `dynamic` class or one with an untyped field, and otherwise
+    // the field types to walk.
+    const declared = staticFieldsOfDeclaration?.(t);
+    if (!declared || declared.length === 0) {
       return false;
     }
-    return layout.fields.every((field) => plainDataWalk(field.type, depth + 1));
+    return declared.every((field) => plainDataWalk(field.type, depth + 1));
   }
   // Everything else is plain exactly when it is laid out at all: a numeric type,
   // `boolean` and a SIMD vector are, and `string`, `bigint`, `any`, an object
@@ -634,6 +721,28 @@ export interface LayoutInputs {
   readonly fields: readonly { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[];
   readonly controls: ClassControls;
   readonly parent: unknown;
+}
+
+/**
+ * Field types read from a class DECLARATION, injected by the checker.
+ *
+ * Plainness is asked by the STATIC constraint check, which runs before any class
+ * is evaluated, and `LayoutOf` answers from `Constructor.InstanceLayout`, which
+ * only exists afterwards. Without this, `T extends plain` refused every class
+ * while `Reflect.isAssignable(T, plain)` admitted the same one at run time - the
+ * same type with two answers depending on when it was asked.
+ *
+ * The checker already resolves these field types for cycle detection and already
+ * hands that resolver to `FirstClassInlineCycle` as a callback; this is the same
+ * function reached from a place that has no argument to pass it through, wired
+ * the way `setLayoutSubstituter` below already is.
+ */
+let staticFieldsOfDeclaration:
+  | ((t: TypeRecord) => readonly { readonly type: TypeRecord }[] | null | undefined)
+  | null = null;
+
+export function setStaticFieldResolver(fn: typeof staticFieldsOfDeclaration): void {
+  staticFieldsOfDeclaration = fn;
 }
 
 let substituteForLayout:

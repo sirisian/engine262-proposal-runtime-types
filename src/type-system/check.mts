@@ -27,7 +27,7 @@ import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
-import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass } from './layout.mts';
+import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass, setStaticFieldResolver } from './layout.mts';
 import {
   libraryTypeParameterNames as libraryTypeParameterNamesShared,
   orderTypeArguments as orderTypeArgumentsShared,
@@ -5000,6 +5000,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return fields.length > 0 ? fields : null;
   };
+  // Hand the same resolver to the layout module, which asks for plainness from
+  // `IsAssignable` and so has no argument to receive it through. Set per check
+  // run because `resolveType` closes over this run's scope.
+  setStaticFieldResolver(inlineFieldsOf);
 
   const classInstanceType = (n: ParseNode): Known => {
     const acc = classMemberWalk(n, 'instance');

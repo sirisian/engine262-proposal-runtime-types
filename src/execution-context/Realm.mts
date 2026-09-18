@@ -442,6 +442,10 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       // type-values too, so `HelloWorld === string` and the like work in
       // expression position, not only the numeric value types.
       'string', 'number', 'boolean', 'bigint', 'symbol', 'object',
+      // The two bound types, so `T extends value` and `T extends plain` name
+      // something in a type position and `Reflect.isAssignable(T, value)` in an
+      // expression one.
+      'value', 'plain',
       'int8', 'int16', 'int32', 'int64', 'int128',
       'uint8', 'uint16', 'uint32', 'uint64', 'uint128',
       'float16', 'float32', 'float64', 'float128',

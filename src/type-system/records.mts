@@ -1005,6 +1005,21 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     case 'Composite': return makePrimitive('Composite', args.length === 1 && typeof args[0] !== 'number' && isCompositeShapeKind(args[0]) ? [compositeTreeShape(args[0])] : args);
     case 'any': return anyType;
     case 'never': return neverType;
+    // #sec-value-types and #sec-layout-properties: the two BOUND types. `value`
+    // is the type every value type is assignable to, and `plain` every type
+    // that is plain data (#sec-optional-values reads the same predicate for a
+    // niche). They exist because a generic CLASS can only constrain through
+    // `extends`: a class-level `where` is refused on purpose, so the question a
+    // pool needs to ask - "is T laid out and free of references" - has no other
+    // place to be asked. `generationalstore.md` asks for exactly this and names
+    // both halves while asking for one, "implicit `Sized` plus explicit `Copy`".
+    //
+    // There is deliberately no `layout` beside them. Having a layout is a
+    // property of a TYPE rather than of its values - a `string` value is a
+    // perfectly good value, it is the type that has no size - so there is no set
+    // of values for it to name, and nothing wants it as a bound.
+    case 'value': return makePrimitive('value', []);
+    case 'plain': return makePrimitive('plain', []);
     // proposal-runtime-types #sec-null-and-undefined-types: `undefined` is the
     // type whose ONE VALUE is *undefined*, described by
     // { [[Kind]]: ~primitive~, [[Name]]: *"undefined"* }, and it "is distinct
