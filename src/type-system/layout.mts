@@ -113,6 +113,113 @@ export function IsReferenceClass(t: TypeRecord): boolean {
 /** The layout a reference occupies: this implementation's 64-bit pointer. */
 export const referenceLayout: Layout = { bitLength: 64, byteLength: 8, alignment: 8 };
 
+/**
+ * Whether a value of this type is PLAIN DATA: it has a layout, and no position
+ * within it at any depth holds a reference. Only such a type may be reinterpreted
+ * as bytes - viewed through a buffer, copied wholesale, overlapped at an explicit
+ * offset, or written to a wire format by offset.
+ *
+ * This is the third of the three questions `hasLayout` was answering at once.
+ * The other two are "does it stride", which `hasLayout` keeps, and "is it a
+ * value", which `value` answers as a type. They are genuinely independent: a
+ * class of `string` fields is a value type with no layout, and a class holding a
+ * nullable `dynamic` class field has a layout (a pointer's) and is no value type
+ * at all.
+ *
+ * Reading "no references" off `hasLayout` was the bug behind three guard sites.
+ * The closest prior art is C#'s `where T : unmanaged` and Rust's `bytemuck::Pod`,
+ * both of which exist for exactly this and in both of which it is separate from
+ * the size question.
+ */
+/**
+ * A class that is a VALUE TYPE CLASS: assigning one copies it, `===` compares its
+ * fields, and it stores inline.
+ *
+ * This replaces five open-coded spellings of `t.Kind === 'nominal' && t.EnumMembers
+ * === undefined && !IsReferenceClass(t) && LayoutOf(t) !== null`, which is how the
+ * copy sites had been reading value-type-ness off "has a layout" and then patching
+ * the reference-class case back out by hand. Both halves of that were the same
+ * conflation, and naming the concept is what retires it.
+ */
+export function IsValueTypeClass(t: TypeRecord): boolean {
+  return t.Kind === 'nominal'
+    && t.EnumMembers === undefined
+    && !IsReferenceClass(t)
+    && LayoutOf(t) !== null;
+}
+
+/**
+ * The layout a type REPORTS, as distinct from the storage a field of it occupies.
+ *
+ * `table-layout-by-type` gives a reference type - and a nullable union of a value
+ * type class - NO layout: "a reference's width is the implementation's business".
+ * A field of one still occupies eight bytes here, and `LayoutOf` answers that,
+ * because field placement is what most of its callers want. Reading the same
+ * function for `R.hasLayout` therefore reported *true* with a `byteLength` of 8
+ * for a type the specification says has neither.
+ *
+ * Two questions, two functions. This one is the reflective answer and is read by
+ * the Type Object properties; `LayoutOf` stays the storage answer.
+ */
+export function ReportedLayoutOf(t: TypeRecord): Layout | null {
+  if (IsReferenceClass(t)) {
+    return null;
+  }
+  if (t.Kind === 'union') {
+    // The only union with a layout is the nullable one, and that layout is a
+    // reference's - the row this clause is about.
+    return null;
+  }
+  return LayoutOf(t);
+}
+
+export function IsPlainData(t: TypeRecord): boolean {
+  return plainDataWalk(t, 0);
+}
+
+function plainDataWalk(t: TypeRecord, depth: number): boolean {
+  // A class cannot contain itself inline, so this terminates on its own; the
+  // bound is belt and braces against a malformed record rather than a real
+  // cycle.
+  if (depth > 1000) {
+    return false;
+  }
+  if (t.Kind === 'parameterized') {
+    // A parameterization is stored as its base is, so it is plain exactly when
+    // the base is - the same reasoning that gives it the base's layout.
+    return plainDataWalk(t.Base, depth + 1);
+  }
+  if (t.Kind === 'array') {
+    // Only a FIXED extent is laid out inline; a dynamic one is a reference to
+    // storage held elsewhere, and its elements are not this value's bytes.
+    return typeof t.Extent === 'number' && plainDataWalk(t.Element, depth + 1);
+  }
+  if (t.Kind === 'union') {
+    // Today the only union with a layout is the nullable one, and that layout
+    // is a reference's. When the inline optional lands, a `T | null` over a
+    // value type class becomes a discriminant and an inline payload, and is
+    // plain exactly when `T` is - at which point this arm changes with it.
+    return false;
+  }
+  if (t.Kind === 'nominal') {
+    if (IsReferenceClass(t)) {
+      return false;
+    }
+    if (t.EnumMembers !== undefined) {
+      return t.Underlying ? plainDataWalk(t.Underlying, depth + 1) : false;
+    }
+    const layout = LayoutOf(t) as ClassLayout | null;
+    if (layout === null || layout.fields === undefined) {
+      return false;
+    }
+    return layout.fields.every((field) => plainDataWalk(field.type, depth + 1));
+  }
+  // Everything else is plain exactly when it is laid out at all: a numeric type,
+  // `boolean` and a SIMD vector are, and `string`, `bigint`, `any`, an object
+  // type and a function type are not.
+  return LayoutOf(t) !== null;
+}
+
 export function LayoutOf(t: TypeRecord): Layout | null {
   if (t.Kind === 'array') {
     // A fixed-length array lays out as its element repeated; one with no length is

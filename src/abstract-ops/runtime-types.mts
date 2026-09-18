@@ -21,7 +21,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
 import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
-import { IsReferenceClass, LayoutOf } from '../type-system/layout.mts';
+import { IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
@@ -450,8 +450,7 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): Plain
     // the outer copy would share the inner instance and a write through one
     // would be visible through the other, which is the aliasing this exists to
     // prevent one level down.
-    if (held instanceof ObjectValue && field.type.Kind === 'nominal'
-        && !IsReferenceClass(field.type) && LayoutOf(field.type) !== null) {
+    if (held instanceof ObjectValue && IsValueTypeClass(field.type)) {
       held = Q(yield* CopyValueTypeInstance(held, field.type));
     }
     X(CreateDataPropertyOrThrow(copy, key, held));
@@ -468,8 +467,7 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): Plain
     }
     let held = element.Value as Value;
     const declared = layout.fields.find((f) => f.key === element.Key);
-    if (held instanceof ObjectValue && declared && declared.type.Kind === 'nominal'
-        && !IsReferenceClass(declared.type) && LayoutOf(declared.type) !== null) {
+    if (held instanceof ObjectValue && declared && IsValueTypeClass(declared.type)) {
       held = Q(yield* CopyValueTypeInstance(held, declared.type));
     }
     Q(yield* PrivateFieldAdd(copy, element.Key, held));
@@ -901,13 +899,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // a boundary is "where a value acquires a type it did not have", and a
     // value type acquiring its type IS the copy. See CopyValueTypeInstance for
     // why this is the right set of sites and what it does not cover.
-    // A REFERENCE CLASS is excluded even though LayoutOf answers a width for it:
-    // that width is a pointer's, and the whole point of the kind is that
-    // assigning one ALIASES. Reading value-type-ness off `LayoutOf(t) !== null`
-    // is the conflation the predicate split exists to undo; the explicit
-    // exclusion holds the line until it lands.
-    if (t.Kind === 'nominal' && t.EnumMembers === undefined && value instanceof ObjectValue
-        && !IsReferenceClass(t) && LayoutOf(t) !== null) {
+    if (value instanceof ObjectValue && IsValueTypeClass(t)) {
       return Q(yield* CopyValueTypeInstance(value, t));
     }
     // proposal-runtime-types (Capability B): even when the value already
@@ -1227,9 +1219,7 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // not a new rule, only the existing one said on the path that skipped it.
     // An ORDINARY class instance has no layout and is untouched, keeping the
     // identity a return must preserve.
-    if (value instanceof ObjectValue && elided.Kind === 'nominal'
-      && (elided as { EnumMembers?: unknown }).EnumMembers === undefined
-      && !IsReferenceClass(elided) && LayoutOf(elided) !== null) {
+    if (value instanceof ObjectValue && IsValueTypeClass(elided)) {
       return CopyValueClassInstance(value);
     }
     return value;
@@ -1689,13 +1679,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // a boundary is "where a value acquires a type it did not have", and a
     // value type acquiring its type IS the copy. See CopyValueTypeInstance for
     // why this is the right set of sites and what it does not cover.
-    // A REFERENCE CLASS is excluded even though LayoutOf answers a width for it:
-    // that width is a pointer's, and the whole point of the kind is that
-    // assigning one ALIASES. Reading value-type-ness off `LayoutOf(t) !== null`
-    // is the conflation the predicate split exists to undo; the explicit
-    // exclusion holds the line until it lands.
-    if (t.Kind === 'nominal' && t.EnumMembers === undefined && value instanceof ObjectValue
-        && !IsReferenceClass(t) && LayoutOf(t) !== null) {
+    if (value instanceof ObjectValue && IsValueTypeClass(t)) {
       return Q(yield* CopyValueTypeInstance(value, t));
     }
     // proposal-runtime-types (Capability B): even when the value already

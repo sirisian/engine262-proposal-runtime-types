@@ -3,7 +3,7 @@ import { Value, JSStringValue, NumberValue, TypedNumberValue, ObjectValue, Descr
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { LayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
+import { IsPlainData, LayoutOf, ReportedLayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { CreateComplexValue } from './Complex.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
@@ -306,7 +306,9 @@ function layoutOfThis(thisValue: Value, which: 'bitLength' | 'byteLength' | 'ali
   if (!isTypeObject(thisValue)) {
     return Throw.TypeError('$1 is not a type', thisValue);
   }
-  const layout = LayoutOf(thisValue.TypeRecord);
+  // The REPORTED layout, not the storage one: a reference type has none to
+  // report even though a field of it occupies a reference's width.
+  const layout = ReportedLayoutOf(thisValue.TypeRecord);
   if (layout === null) {
     return Throw.TypeError('this type has no layout, so it has no $1', Value(which));
   }
@@ -383,7 +385,28 @@ function* TypeProto_hasLayoutGetter(_args: Arguments, { thisValue }: FunctionCal
   if (!isTypeObject(thisValue)) {
     return Throw.TypeError('$1 is not a type', thisValue);
   }
-  return Value(LayoutOf(thisValue.TypeRecord) !== null);
+  return Value(ReportedLayoutOf(thisValue.TypeRecord) !== null);
+}
+
+/**
+ * Whether a value of this type is PLAIN DATA: laid out, with no reference at any
+ * depth, so it may be reinterpreted as bytes.
+ *
+ * `hasLayout` was answering this too, and wrongly. A class holding a nullable
+ * `dynamic` class field has a layout - a pointer's, eight bytes - and reading
+ * that as permission to view its bytes hands a program the raw bits of a
+ * reference. Three guard sites asked `hasLayout` when they meant this, which is
+ * why the buffer-view guard ended up refusing every class element rather than
+ * exactly the unsafe ones.
+ *
+ * Like `hasLayout` this ASKS rather than asserts, so it never throws: a type
+ * with no layout is simply not plain data.
+ */
+function* TypeProto_isPlainDataGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  return Value(IsPlainData(thisValue.TypeRecord));
 }
 
 /**
@@ -569,6 +592,7 @@ export function InstallTypeObjectSurface(realmRec: Realm, target: ObjectValue): 
     ['bitLength', TypeProto_bitLengthGetter],
     ['alignment', TypeProto_alignmentGetter],
     ['hasLayout', TypeProto_hasLayoutGetter],
+    ['isPlainData', TypeProto_isPlainDataGetter],
     ['family', TypeProto_familyGetter],
   ];
   for (const [name, steps] of members) {
@@ -590,6 +614,7 @@ export function bootstrapTypePrototype(realmRec: Realm) {
     ['byteLength', [TypeProto_byteLengthGetter]],
     ['alignment', [TypeProto_alignmentGetter]],
     ['hasLayout', [TypeProto_hasLayoutGetter]],
+    ['isPlainData', [TypeProto_isPlainDataGetter]],
     ['family', [TypeProto_familyGetter]],
     ['min', [TypeProto_minGetter]],
     ['max', [TypeProto_maxGetter]],

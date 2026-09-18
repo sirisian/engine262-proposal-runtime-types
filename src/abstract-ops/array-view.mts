@@ -4,7 +4,7 @@ import {
   NumberValue, ObjectValue, TypedNumberValue, Value,
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { LayoutOf } from '../type-system/layout.mts';
+import { IsPlainData, LayoutOf } from '../type-system/layout.mts';
 import { ToIndexType } from './runtime-types.mts';
 import { BufferElementType } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
@@ -218,6 +218,18 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   const resolvedExtent = extent !== 'dynamic' ? extent : (givenCount ?? 'dynamic');
   if (stride === 0) {
     return Throw.TypeError('a view element cannot have a zero byte length');
+  }
+  // A view reinterprets a buffer's bytes as its element type, so the element
+  // must be PLAIN DATA. A type holding a reference at any depth must not be laid
+  // over bytes a program controls: the bytes would be read back as a reference,
+  // which hands out a forged one, and read the other way they disclose a real
+  // one. `hasLayout` cannot make this distinction - a class holding a nullable
+  // `dynamic` field has a layout, a pointer's, and is exactly the case to refuse.
+  //
+  // Refused HERE rather than at the first element access, so a view that could
+  // never be read does not construct and report a length first.
+  if (!IsPlainData(element)) {
+    return Throw.TypeError('an element of this type cannot be viewed in a buffer');
   }
   const offset = baseOffset + byteOffset;
   const byteExtent = resolvedExtent === 'dynamic' ? 0 : resolvedExtent * stride;
