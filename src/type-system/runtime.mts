@@ -42,7 +42,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { IsSharableValueType, setLayoutSubstituter } from './layout.mts';
+import { IsReferenceClass, IsSharableValueType, setLayoutSubstituter } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -3086,6 +3086,14 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // and an instance of a value type class "REMAINS AN OBJECT" - so being an
       // Object does not by itself disqualify a field's type. The wider question
       // is recorded rather than guessed at here.
+      // Only a field whose nullable union is a REFERENCE disqualifies the class
+      // from having a zero. This refused EVERY class holding a nullable-union
+      // field, on the rule that `T | null` "is a reference" - which was true
+      // while the optional was the indirection and is not now that it is laid
+      // out inline (#sec-optional-values). A class of optional value-class
+      // fields has a zero, every discriminant of it reading *null*, and without
+      // this `[1024].<Node>` would not allocate for exactly the pools the
+      // optional was made cheap for.
       const referenceField = constructor.Fields.find((f) => {
         const r = f.TypeObject?.TypeRecord;
         if (!r || r.Kind !== 'union') {
@@ -3095,7 +3103,11 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         const nullish = (m: TypeRecord) => (m.Kind === 'void')
           || (m.Kind === 'primitive' && ((m as { Name?: string }).Name === 'null' || (m as { Name?: string }).Name === 'undefined'))
           || (m.Kind === 'literal' && (m as { Value?: Value }).Value === Value.null);
-        return members.some(nullish) && members.some((m) => !nullish(m));
+        if (!(members.some(nullish) && members.some((m) => !nullish(m)))) {
+          return false;
+        }
+        const payload = members.find((m) => !nullish(m))!;
+        return payload.Kind !== 'nominal' || IsReferenceClass(payload);
       });
       if (referenceField !== undefined) {
         return undefined;

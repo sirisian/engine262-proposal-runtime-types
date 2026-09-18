@@ -1,5 +1,5 @@
 import type { TypeRecord } from './records.mts';
-import { LayoutOf } from './layout.mts';
+import { IsReferenceClass, LayoutOf } from './layout.mts';
 
 export interface InlineField {
   readonly key: string;
@@ -43,6 +43,32 @@ export function FirstClassInlineCycle(
         // that fallback would answer *true* and the walk would stop, so a cycle
         // running through a branded class field would go unreported.
         return fieldType(record.Base, key);
+      }
+      if (record.Kind === 'union') {
+        // #sec-optional-values: a `T | null` over a value type class is now
+        // INLINE, so the recursion descends into the payload instead of stopping
+        // at it. Left as a leaf it read as laid out - the optional HAS a layout
+        // now - and `class C { c: C | null; }` was accepted with no finite size.
+        // Over a reference type it still stops, that being where the indirection
+        // moved to.
+        // Descend through `collect`, NOT through `LayoutOf(payload)`. A class
+        // whose layout is still being computed answers *null* to LayoutOf, so
+        // testing it here read a self-referential payload as a reference and
+        // lost the very cycle this walk exists to find. `collect` answers from
+        // the DECLARATION, which is available whether or not the layout is.
+        const payload = record.Members.find((m) => m.Kind === 'nominal');
+        if (payload !== undefined && !IsReferenceClass(payload)) {
+          const target = collect(payload);
+          if (target) {
+            node.edges.push({ target, key });
+            target.incoming.push(node);
+            return true;
+          }
+        }
+        // No collectable payload: a `dynamic` class, one with an untyped field,
+        // or a reference type. The union is then whatever LayoutOf makes it,
+        // which for these is a reference's width.
+        return LayoutOf(record) !== null;
       }
       if (record.Kind === 'nominal') {
         const target = collect(record);

@@ -32,6 +32,11 @@ export interface Layout {
  * `#[repr(align(N))]`'s job, which is `@align` here. Removing the cap makes the
  * vector case fall out of the general rule instead of needing one of its own.
  */
+/** The next multiple of `alignment` at or above `value`. */
+function alignUp(value: number, alignment: number): number {
+  return alignment <= 1 ? value : Math.ceil(value / alignment) * alignment;
+}
+
 function naturalAlignment(byteLength: number): number {
   let a = 1;
   while (a < byteLength) {
@@ -195,11 +200,14 @@ function plainDataWalk(t: TypeRecord, depth: number): boolean {
     return typeof t.Extent === 'number' && plainDataWalk(t.Element, depth + 1);
   }
   if (t.Kind === 'union') {
-    // Today the only union with a layout is the nullable one, and that layout
-    // is a reference's. When the inline optional lands, a `T | null` over a
-    // value type class becomes a discriminant and an inline payload, and is
-    // plain exactly when `T` is - at which point this arm changes with it.
-    return false;
+    // A `T | null` over a value type class is a discriminant and an inline
+    // payload, so it is plain exactly when `T` is. Over a reference type it is a
+    // reference and is not.
+    const payload = t.Members.find((m) => m.Kind === 'nominal');
+    if (payload === undefined || IsReferenceClass(payload) || LayoutOf(payload) === null) {
+      return false;
+    }
+    return plainDataWalk(payload, depth + 1);
   }
   if (t.Kind === 'nominal') {
     if (IsReferenceClass(t)) {
@@ -394,7 +402,36 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     const nullable = t.Members.length === 2
       && t.Members.some((m) => isNullOrUndefinedPrimitive(m))
       && t.Members.some((m) => m.Kind === 'nominal');
-    return nullable ? { bitLength: 64, byteLength: 8, alignment: 8 } : null;
+    if (!nullable) {
+      return null;
+    }
+    const payload = t.Members.find((m) => m.Kind === 'nominal')!;
+    // #sec-optional-values: a `T | null` over a REFERENCE type is a reference,
+    // and over a value type class is laid out INLINE - a discriminant of one
+    // byte, placed so the payload begins at T's alignment, then T's layout.
+    //
+    // The comment above describes what this used to do for both, and the reason
+    // it gave was sound while the optional WAS the indirection that closed a
+    // recursive cycle. It no longer is: a cycle is closed by declaring the class
+    // `reference` (#sec-reference-classes), and the optional pays for storage it
+    // does not need. A one-byte payload cost eight bytes and a separate
+    // allocation with a header; it now costs two.
+    if (IsReferenceClass(payload)) {
+      return referenceLayout;
+    }
+    const inner = LayoutOf(payload);
+    if (inner === null) {
+      // A payload with no inline layout of its own is reached through a
+      // reference whatever its declaration says - a `dynamic` class, or a class
+      // with an untyped or unlaid-out field - so the optional is a reference
+      // too. `IsReferenceClass` does not cover these: it answers a question
+      // about the KIND a class was declared with, and this is a question about
+      // whether there is anything to lay out inline.
+      return referenceLayout;
+    }
+    const payloadOffset = alignUp(1, inner.alignment);
+    const byteLength = alignUp(payloadOffset + inner.byteLength, inner.alignment);
+    return { bitLength: byteLength * 8, byteLength, alignment: inner.alignment };
   }
   if (t.Kind !== 'primitive') {
     // `any` and the remaining forms have no layout by design.

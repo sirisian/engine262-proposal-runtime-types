@@ -241,25 +241,34 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // #sec-layout-finiteness names the case this broke: "a field written `T |
   // null` closes a cycle because it is a reference ... which is why a LINKED
   // LIST IS EXPRESSIBLE and a class containing itself by value is not."
-  expect(evaluated('class N { value: uint32; next: N | null; } "ok";')).toBe('ok');
+  // Was legal while `T | null` was the indirection; the optional is inline now,
+  // so `reference` is what makes a self-referential class declarable.
+  expectThrown('class N { value: uint32; next: N | null; } "ok";', 'contains itself');
+  expect(evaluated('reference class N { value: uint32; next: N | null; } "ok";')).toBe('ok');
   // The refusal was never only about self-reference: a forward reference and
   // mutual recursion went with it, while a METHOD signature naming the same
   // class always worked - which is the diagnostic, since a signature is not
   // resolved at declaration and a field's type is.
   expect(evaluated('class A { b: B | null; } class B { x: uint8; } "ok";')).toBe('ok');
-  expect(evaluated('class P { q: Q | null; } class Q { p: P | null; } "ok";')).toBe('ok');
+  // A cycle through `T | null` is no longer closed by it: the optional is laid
+  // out INLINE (#sec-optional-values), so a class reaching itself through one
+  // has no finite layout. Declaring it `reference` is what closes it now.
+  expectThrown('class P { q: Q | null; } class Q { p: P | null; } "ok";', 'contains itself');
+  expect(evaluated('reference class P { q: Q | null; } reference class Q { p: P | null; } "ok";')).toBe('ok');
   expect(evaluated('class M { m(): M | null { return null; } } "ok";')).toBe('ok');
   // The list is usable, not merely declarable.
-  const list = 'class N { value: uint32; next: N | null; } const a = new N(); a.value = 5; const b = new N(); b.value = 7; a.next = b; ';
+  const list = 'reference class N { value: uint32; next: N | null; } const a = new N(); a.value = 5; const b = new N(); b.value = 7; a.next = b; ';
   expect(evaluated(`${list} String(Number(a.next?.value));`)).toBe('7');
   expect(evaluated(`${list} String(b.next);`)).toBe('null');
 
-  // A reference field has a WIDTH, so a class holding one has a layout: the
-  // table's row "a reference type, including a nullable union of a value type
-  // class" says the width is the implementation's business, and this
-  // implementation spends 8 bytes at alignment 8.
-  expect(evaluated('class B { x: uint8; } class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('8/8');
-  expect(evaluated('class B { x: uint8; } class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, R>("r").offset);')).toBe('16/8');
+  // An optional over a VALUE TYPE CLASS is laid out inline: a one-byte
+  // discriminant placed so the payload starts at the payload's alignment. A
+  // one-byte payload therefore costs two bytes rather than a reference's eight
+  // and a separate allocation.
+  expect(evaluated('class B { x: uint8; } class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('2/1');
+  expect(evaluated('class B { x: uint8; } class R { v: uint32; r: B | null; } String((type R).byteLength) + "/" + String(Reflect.getReflection.<Reflect.ClassFieldLayout, R>("r").offset);')).toBe('8/4');
+  // An optional over a REFERENCE type still spends a reference's width.
+  expect(evaluated('reference class B { x: uint8; } class R { r: B | null; } String((type R).byteLength) + "/" + String((type R).alignment);')).toBe('8/8');
   // KNOWN LIMIT, recorded rather than asserted away: a SELF-referential class
   // declares, constructs, and links, but its own layout is not computed at its
   // declaration. The self-reference resolves to a type built from the
@@ -274,8 +283,15 @@ test('memory layout: a type-position name resolves against its declaration', () 
   // finds the earlier record and COMPLETES it with the constructor rather than
   // being handed a stale one back. The linked list lays out like any other
   // class holding a reference.
-  expect(evaluated('class N { value: uint32; next: N | null; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('16/8');
-  expect(evaluated('class N { value: uint32; next: N | null; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, N>("next").offset);')).toBe('8');
+  // The list is a `reference class` now, `T | null` no longer being the
+  // indirection that closes the cycle. What this test pins is unchanged: the
+  // record built from the declaration and the finished Type Object intern as
+  // one, so the class lays out at its declaration rather than being handed a
+  // stale record back.
+  // Asked of a VALUE class holding the reference, `N` itself being a reference
+  // type now and so having no layout to report. What this pins is unchanged.
+  expect(evaluated('reference class L { value: uint32; next: L | null; } class N { value: uint32; next: L | null; } String((type N).byteLength) + "/" + String((type N).alignment);')).toBe('16/8');
+  expect(evaluated('reference class L { value: uint32; } class N { value: uint32; next: L | null; } String(Reflect.getReflection.<Reflect.ClassFieldLayout, N>("next").offset);')).toBe('8');
 });
 
 test('memory layout: a class may not contain itself by value', () => {
@@ -290,7 +306,8 @@ test('memory layout: a class may not contain itself by value', () => {
   // The distinction the clause draws: a REFERENCE to the same class closes the
   // cycle and is fine, because the recursion stops at a type with no layout of
   // its own rather than descending.
-  expect(evaluated('class D { self: D | null; } "ok";')).toBe('ok');
+  expectThrown('class D { self: D | null; } "ok";', 'contains itself');
+  expect(evaluated('reference class D { self: D | null; } "ok";')).toBe('ok');
   // A FORWARD reference by value is not a cycle. Its layout is simply not
   // computable at that declaration, so the class reports none rather than
   // being refused - being wrong in that direction costs precision, being wrong

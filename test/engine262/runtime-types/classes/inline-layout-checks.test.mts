@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectThrown, expectStaticTypeError } from '../harness.mts';
 
 for (const field of ['x: C;', '#x: C;', 'x: [2].<C>;']) {
   test(`an unused class cannot contain an inline cycle through ${field}`, () => {
@@ -12,8 +12,13 @@ test('cycles through forward class declarations are rejected before evaluation',
   expectStaticTypeError('function unused() { class C { x: D; } class D { x: E; } class E { x: C; } }');
 });
 
-test('nullable and dynamic-array edges end inline recursion', () => {
-  expect(evaluated('class C { x: C | null; } String(new C().x);')).toBe('null');
+test('a dynamic-array edge ends inline recursion, a nullable one no longer does', () => {
+  // `T | null` was an indirection and is now an inline optional
+  // (#sec-optional-values), so it no longer ends the recursion; `reference` is
+  // where the indirection moved to. A dynamic-length array still ends it, its
+  // elements living in storage held elsewhere.
+  expectThrown('class C { x: C | null; } String(new C().x);', 'contains itself');
+  expect(evaluated('reference class C { x: C | null; } String(new C().x);')).toBe('null');
   expect(evaluated('class C { x: [].<C> = []; } String(new C().x.length);')).toBe('0');
 });
 
