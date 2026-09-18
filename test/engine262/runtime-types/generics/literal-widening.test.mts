@@ -36,3 +36,17 @@ test('a context seed still wins over an argument', () => {
   // same-rung contributions join.
   expect(evaluated('function f<T>(x: T): T { return x; } let u: uint8 = f(1 := uint8); `${u}`;')).toBe('1');
 });
+
+test('an UNCONSTRAINED pack widens its elements, as a scalar does', () => {
+  // The pack binds a tuple, and its elements follow the scalar rule: an
+  // unconstrained parameter widens a literal to its base. Taking the arguments'
+  // types unwidened gave `[1, 'a']`, so a builder over the pack produced a
+  // return type of literals and a body returning anything else was refused
+  // against `"1"`.
+  expect(evaluated('function wrap<...Ts>(...xs: Ts): Ts { return xs; } `${Reflect.typeOf(wrap(1, "a"))}`;')).toBe('[].<number | string>');
+  // A builder over the pack sees the widened elements, so a body building other
+  // values from them still satisfies the declared return.
+  expect(evaluated('class Box<T> { v: T; constructor(v: T) { this.v = v; } } '
+    + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); } '
+    + 'function wrap<...Ts>(...xs: Ts): boxesOf(Ts) { return xs.map((x) => new Box(x)); } `${wrap(1, "a").length}`;')).toBe('2');
+});

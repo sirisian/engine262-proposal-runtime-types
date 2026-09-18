@@ -22,7 +22,7 @@ import {
 } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
-import { elementTypeOfIterable } from './unify.mts';
+import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
@@ -17453,7 +17453,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // tuple was fine. A builder reading the pack's `elements` needs
               // the tuple in any case.
               if (pr.Type.Kind === 'parameter') {
-                return { Kind: 'tuple', Elements: supplied.map((t) => ({ Type: t!, Rest: false, Initial: 'none' as const })) } as TypeRecord;
+                // An element follows the SCALAR rule: an unconstrained
+                // parameter widens a literal to its base, a constrained one
+                // keeps it. Taking the arguments' types unwidened gave an
+                // unconstrained pack the tuple `[1, 'a']`, so a builder over it
+                // produced a return type of literals and a body returning
+                // anything else - `xs.map((x) => new Box(x))` - was refused
+                // against `"1"`.
+                const packParam = generic.find((tp) => tp.Name === (pr.Type as { Name: string }).Name);
+                const packConstrained = !!packParam
+                  && !!(packParam as { ConstraintNode?: ParseNode.Type | null }).ConstraintNode;
+                return {
+                  Kind: 'tuple',
+                  Elements: supplied.map((t) => ({
+                    Type: (packConstrained ? t! : widenForBinding(t!)),
+                    Rest: false,
+                    Initial: 'none' as const,
+                  })),
+                } as TypeRecord;
               }
               return supplied.length > 0
                 ? { Kind: 'array', Element: supplied.reduce((a, t) => joinTypes(a!, t!))!, Extent: 'dynamic' } as TypeRecord : null;
@@ -17500,6 +17517,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // builder reading the tuple's elements broke when handed the array.
             // Those stay with the run time, which infers them from the value it
             // holds and has always been right about them.
+            // Still restricted to declared shapes - what a value cannot carry.
+            // Removing it exposes three subjects the stamp is not the cause of;
+            // see `checked-bindings-leak.md`.
             const declaredShape = (t: TypeRecord): boolean => t.Kind === 'object'
               || (t.Kind === 'nominal' && !(t as { LibraryName?: string }).LibraryName);
             const closedBindings = new Map<string, TypeRecord>();
