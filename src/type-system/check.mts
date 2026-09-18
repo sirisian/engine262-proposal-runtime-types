@@ -2462,6 +2462,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const typeParameterInScope = (name: string): boolean => typeParameterScopes.some((scope) => scope.has(name));
 
   /** The innermost resolved constraint bound to _name_, or null where it has none. */
+  /** Parameters whose constraint is written but not resolvable at the declaration. */
+  const computedConstraintNames = new Set<string>();
+  const typeParameterHasConstraintNode = (name: string): boolean => computedConstraintNames.has(name);
   const typeParameterConstraintOf = (name: string): Known | null => {
     for (let i = typeParameterScopes.length - 1; i >= 0; i -= 1) {
       const scope = typeParameterScopes[i];
@@ -2513,7 +2516,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       scope.set(name, null);
       if (tp.TypeParameterConstraint) {
-        scope.set(name, resolveType(tp.TypeParameterConstraint));
+        const resolvedConstraint = resolveType(tp.TypeParameterConstraint);
+        // A COMPUTED constraint - a builder call over an earlier parameter -
+        // resolves to nothing at the declaration, where that parameter is not
+        // yet bound. `null` would then be indistinguishable from "no constraint
+        // at all", and inference reads exactly that distinction: a constrained
+        // parameter keeps the literal a call supplies, an unconstrained one
+        // widens it. Recording the node's presence keeps the two apart.
+        scope.set(name, resolvedConstraint);
+        if (!resolvedConstraint) {
+          computedConstraintNames.add(name);
+        }
       } else if (tp.IsVariadic) {
         // #sec-variadic-parameters: a bare `...Ts` binds a tuple by
         // construction, so its effective constraint is `[].<any>` - a pack of
@@ -7055,8 +7068,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // #sec-issubtype: a parameter is a subtype of its constraint, so the
           // record has to carry one for that step to fire.
           const constraint = typeParameterConstraintOf(name);
+          // A parameter whose constraint is COMPUTED - a builder call over an
+          // earlier parameter - resolves to no record here, since nothing is
+          // known about that parameter at the declaration. Marking the record
+          // as constrained ANYWAY is what lets inference keep a literal for it:
+          // the rule is that a constrained parameter keeps what the program
+          // wrote, and a computed constraint is a constraint. Without the mark,
+          // `K: keysOf(T)` widened `"name"` to `string` while `K: "a" | "b"`
+          // kept it, for the same argument in the same position.
+          const hasComputed = !constraint && typeParameterHasConstraintNode(name);
           return (constraint
             ? { Kind: 'parameter', Name: name, Constraint: constraint }
+            : hasComputed
+              ? { Kind: 'parameter', Name: name, ComputedConstraint: true }
             : { Kind: 'parameter', Name: name }) as Known;
         }
         // `BoundTypeRecordForName` covers `Token` and the 27 metadata interfaces,

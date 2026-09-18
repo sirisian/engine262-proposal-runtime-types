@@ -62,3 +62,16 @@ test('the checker binds from the call\'s context, as the run time does', () => {
   // position requires nothing of the call.
   expect(evaluated('function f<T>(x: T): T { return x; } function g(): uint8 { f("s"); return (1 := uint8); } `${g()}`;')).toBe('1');
 });
+
+test('a COMPUTED constraint keeps the literal, as a written one does', () => {
+  // `keysOf(T)` is a builder call over an earlier parameter: it resolves to
+  // nothing at the declaration, where `T` is not yet bound. Reading only the
+  // resolved record made the parameter look unconstrained, so the literal was
+  // widened - `K: keysOf(T)` gave `string` where `K: "a" | "b"` gave `'name'`,
+  // for the same argument in the same position.
+  expectThrown('function keysOf(T) { return string; } function pluck<T, K: keysOf(T)>(o: T, key: K): K { return key; } '
+    + 'let u = { name: "n" }; let n: uint8 = pluck(u, "name");', '"\'name\'" is not assignable to "uint.<8>"');
+  // The written constraint, unchanged, for comparison.
+  expectThrown('function pick<K: "name" | "age">(k: K): K { return k; } let n: uint8 = pick("name");',
+    '"\'name\'" is not assignable to "uint.<8>"');
+});

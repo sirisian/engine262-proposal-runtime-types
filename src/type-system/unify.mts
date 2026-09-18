@@ -216,11 +216,19 @@ export function unifyTypeParameters(
         // in any typed position, and a constrained parameter is one; the
         // unconstrained case still widens, which is what the ladder's own
         // example (`new Box(1)` is `Box.<number>`) describes.
-        const literalConstrained = !!constraint && (constraint.Kind === 'literal'
+        // A COMPUTED constraint counts as a constraint. It resolves to no
+        // record at the declaration - a builder call over a parameter not yet
+        // bound - so reading only `Constraint` made `K: keysOf(T)` look
+        // unconstrained and widened `"name"` to `string`, where `K: "a" | "b"`
+        // kept it for the same argument in the same position. The constraint
+        // check evaluates the builder once the bindings exist and refuses a
+        // literal that does not fit, so keeping it here is safe.
+        const computedConstraint = (param as { ComputedConstraint?: boolean }).ComputedConstraint === true;
+        const literalConstrained = computedConstraint || (!!constraint && (constraint.Kind === 'literal'
           || deferredKeyof
           || constraint.Kind === 'primitive'
           || (constraint.Kind === 'union'
-            && (constraint as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal')));
+            && (constraint as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal'))));
         // THE JOIN OF EVERY ARGUMENT CONTRIBUTION, not the first. A parameter
         // in two positions was fixed by whichever argument came first and every
         // later one checked against it, so `add(200, 100)` for
