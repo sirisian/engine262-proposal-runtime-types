@@ -34,6 +34,7 @@ import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
 import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
 import { joinTypes } from './logical-types.mts';
+import { literalFitsNumericType } from './literal-fit.mts';
 import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
@@ -1506,6 +1507,24 @@ export function* InferGenericBindings(
  * through a builder, or its declared default. The ladder is the one the
  * specification states and it is the same for a call and for a construction.
  */
+/**
+ * Whether every arm of a binding is a LITERAL that fits the constraint.
+ *
+ * A binding is the join of the arguments that contributed it, so two literals
+ * to one parameter give a union - `add(200, 100)` for `add<T: uint8>` binds
+ * `100 | 200`. Plain assignability refuses that union against `uint8`, since a
+ * literal's widened base is not assignable to a sized type; the literal-fit
+ * rule of #sec-literal-propagation is what admits `200` in a `uint8` position,
+ * and it admits a union of such literals on the same terms.
+ */
+function literalArmsFit(bound: TypeRecord, constraint: TypeRecord): boolean {
+  const arms = bound.Kind === 'union'
+    ? (bound as { Members: readonly TypeRecord[] }).Members
+    : [bound];
+  return arms.length > 0 && arms.every((arm) => arm.Kind === 'literal'
+    && (IsAssignable(arm, constraint) || literalFitsNumericType(arm, constraint)));
+}
+
 export function* InferGenericBindingsFrom(
   typeParameters: readonly ParseNode.TypeParameter[],
   formals: readonly ParseNode[],
@@ -1581,9 +1600,15 @@ export function* InferGenericBindingsFrom(
       });
       if (ordIndices.length > 0) {
         for (const i of ordIndices) {
-          const contributed = literalRule || valueRule
-            ? Q(yield* args.literalTypeOf(i))
-            : Q(yield* args.typeOf(i));
+          // `Q` is a macro and may not appear in a conditional expression; the
+          // ternary this replaced compiled under the test pipeline and broke the
+          // rollup build, leaving a stale bundle that every later probe read.
+          let contributed;
+          if (literalRule || valueRule) {
+            contributed = Q(yield* args.literalTypeOf(i));
+          } else {
+            contributed = Q(yield* args.typeOf(i));
+          }
           bound = bound === null ? contributed : joinTypes(bound, contributed);
         }
       } else if (restName !== null && restAnnotationName === paramName) {
@@ -1730,7 +1755,7 @@ export function* InferGenericBindingsFrom(
               return Throw.TypeError('$1 is not assignable to $2', Value(displayType(el.Type)), Value(displayType(constraint.Element)));
             }
           }
-        } else if (!IsAssignable(bound, constraint)) {
+        } else if (!IsAssignable(bound, constraint) && !literalArmsFit(bound, constraint)) {
           return Throw.TypeError('$1 is not assignable to $2', Value(displayType(bound)), Value(displayType(constraint)));
         }
       }
