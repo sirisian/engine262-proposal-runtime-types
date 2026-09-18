@@ -9363,9 +9363,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * walk reports errors over them. Otherwise `typeof x === 'string' ? x.length
    * : 0` passes as a bare statement and is refused the moment its type is
    * read, with "length is not declared by every member of string | uint8". (An
-   * `is` test needs no such care: its resolution is recorded against the NODE
-   * and read back wherever the member access is typed from; a `typeof` fact is
-   * scoped, so it has to be in scope when the arm is typed.)
+   * `is` test was believed to need no such care, its resolution being
+   * recorded against the NODE and read back wherever the member access is typed
+   * from. That is not what happens: an `is` test in a ternary narrows through
+   * this path like any other, and the one place it did NOT narrow -
+   * `validateDiscardedExpression` - was not this one.)
    *
    * The pipeline row that found this credits the topic's naming for making
    * narrowing reach it. The topic was never the problem; a plain binding in the
@@ -12848,9 +12850,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `typeof x === 'string' ? x.length : 0` at a `number` position was
         // refused with "length is not declared by every member of string |
         // uint8" while the same test in an `if` narrowed. The `is` test was
-        // unaffected because its resolution is recorded against the NODE and
-        // read back by the member access wherever it is typed from; a `typeof`
-        // fact is scoped, so it has to be in scope when the arm is typed.
+        // believed unaffected, its resolution being recorded against the NODE
+        // and read back by the member access wherever it is typed from. It is
+        // not: `is` reaches this path exactly as `typeof` does, and the example
+        // that suggested otherwise - `'' + v.length` on `string | uint8` -
+        // passes with no guard at all, so it never tested narrowing. The one
+        // arm that genuinely missed a fact was an additive expression in a
+        // DISCARDED statement, which `validateDiscardedExpression` types on its
+        // own descent.
         //
         // The pipeline row that found this - `x |> (typeof % === 'string' ?
         // %.length : %)` - credits the topic's naming for making narrowing
