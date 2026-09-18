@@ -208,8 +208,17 @@ export function unifyTypeParameters(
         // member access at all.
         const deferredKeyof = !!constraint && constraint.Kind === 'deferred'
           && (constraint as { Operator?: unknown }).Operator === 'keyof';
+        // A CONSTRAINT KEEPS THE LITERAL. Widening a literal argument to its base
+        // made the binding assignable to no sized type - `f(200)` for
+        // `f<T: uint8>` bound `number` - which is why the constraint check had
+        // to skip such bindings to avoid refusing every fitting literal. The
+        // literal is what the program wrote, `sec-literal-propagation` admits it
+        // in any typed position, and a constrained parameter is one; the
+        // unconstrained case still widens, which is what the ladder's own
+        // example (`new Box(1)` is `Box.<number>`) describes.
         const literalConstrained = !!constraint && (constraint.Kind === 'literal'
           || deferredKeyof
+          || constraint.Kind === 'primitive'
           || (constraint.Kind === 'union'
             && (constraint as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal')));
         // THE JOIN OF EVERY ARGUMENT CONTRIBUTION, not the first. A parameter

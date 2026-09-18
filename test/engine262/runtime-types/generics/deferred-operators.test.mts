@@ -98,11 +98,14 @@ test('C3: a wrong key is refused at compile time', () => {
   // constraint - `keyof T` at T = P is `'a' | 'b'` - before the substitution.
   expectThrown(`${P}${PLUCK}${O}pluck(o, "zz");`, '"\'zz\'" is not assignable to "\'a\' | \'b\'"');
   // And a non-key constraint, which had no static check at all.
-  expectThrown('function f<T: string>(x: T): T { return x; } f(5);', '"number" is not assignable to "string"');
-  // A fitting literal under a SIZED numeric constraint is left to the run time,
-  // which binds T to the constraint and checks the literal's fit; the checker's
-  // binding is the widened `number`, and refusing on it would break `f(200)`.
+  // The literal, not its widened base: a constrained parameter keeps what the
+  // program wrote, so the message names `5` rather than `number`.
+  expectThrown('function f<T: string>(x: T): T { return x; } f(5);', '"5" is not assignable to "string"');
+  // A fitting literal is admitted by literal fit, and an unfitting one is now
+  // refused STATICALLY - `f(300)` reached the run time before the constraint
+  // kept the literal.
   expect(evaluated('function f<T: uint8>(x: T): T { return x; } `${f(200)}`;')).toBe('200');
+  expectThrown('function f<T: uint8>(x: T): T { return x; } f(300);', '"300" is not assignable to "uint.<8>"');
 });
 
 test('E6: the checker\'s binding travels to the run time for a declared shape', () => {

@@ -20,7 +20,9 @@ test('a literal that does not fit is still refused, joined or alone', () => {
   // The join admits a union of FITTING literals; it must not admit one that
   // overflows, or the constraint would mean nothing.
   expectThrown('function add<T: uint8>(a: T, b: T): T { return a; } add(200, 300);', 'is not assignable to "uint.<8>"');
-  expectThrown('function f<T: uint8>(x: T): T { return x; } f(300);', 'is not in the range of "uint.<8>"');
+  // Static now: the constraint keeps the literal, so `300` is judged against
+  // `uint8` at compile time rather than converted at the boundary.
+  expectThrown('function f<T: uint8>(x: T): T { return x; } f(300);', '"300" is not assignable to "uint.<8>"');
 });
 
 test('a single argument is unchanged', () => {

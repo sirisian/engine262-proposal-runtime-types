@@ -17444,7 +17444,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return supplied[0] ?? null;
               }
               if (!supplied.every((t) => t !== null)) return null;
-              if (pr.Type.Kind === 'parameter' && generic.some((tp) => tp.Variadic && tp.Name === (pr.Type as { Name: string }).Name)) {
+              // A TUPLE for any pack bound to a type parameter, not only a
+              // VARIADIC one. The array-of-the-join form gave
+              // `[].<'a' | 'b' | 'c'>` where the run time built a tuple of the
+              // literals, so the two sides named different records for one
+              // binding - and an array is invariant, so the checker's record was
+              // assignable to no `[].<string>` constraint while the run time's
+              // tuple was fine. A builder reading the pack's `elements` needs
+              // the tuple in any case.
+              if (pr.Type.Kind === 'parameter') {
                 return { Kind: 'tuple', Elements: supplied.map((t) => ({ Type: t!, Rest: false, Initial: 'none' as const })) } as TypeRecord;
               }
               return supplied.length > 0
@@ -17529,39 +17537,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 if (!closed || mentionsTypeParameter(closed)) {
                   continue;
                 }
-                // NOT where the binding is a widened `number` against a sized
-                // numeric constraint. The run time binds such a T to the
-                // CONSTRAINT and checks the literal's fit - `f(200)` for
-                // `f<T: uint8>` is a `uint8` call - where the checker's binding
-                // is the literal's widened `number`, which is assignable to no
-                // sized type. Refusing on that mismatch broke every fitting
-                // literal; the literal-fit half is a separate judgment.
-                const widenedNumber = bound.Kind === 'primitive' && (bound as { Name?: string }).Name === 'number';
-                const sizedNumeric = closed.Kind === 'primitive' && (closed as { Name?: string }).Name !== 'number'
-                  && (closed as { Name?: string }).Name !== 'string' && (closed as { Name?: string }).Name !== 'boolean';
-                if (widenedNumber && sizedNumeric) {
-                  continue;
+                // Literal fit, not plain assignability: a binding is the join
+                // of what the arguments contributed, so it may be a literal or
+                // a union of them, and a literal's widened base is assignable
+                // to no sized type. #sec-literal-propagation admits a literal
+                // that fits in any typed position.
+                const arms = bound.Kind === 'union'
+                  ? (bound as { Members: readonly TypeRecord[] }).Members
+                  : [bound];
+                const fitsOne = (arm: TypeRecord, target: TypeRecord): boolean => arm.Kind === 'literal'
+                  && (IsAssignable(arm, target) || literalFitsNumericType(arm, target));
+                // A PACK binds a tuple of literals, and an array constraint is
+                // invariant - `['a', 'b', 'c']` is assignable to no
+                // `[].<string>` - so the element type is what admits it, each
+                // element on the same literal-fit terms as a scalar.
+                const closedRecord = closed as TypeRecord;
+                const element = closedRecord.Kind === 'array'
+                  ? (closedRecord as { Element?: TypeRecord }).Element
+                  : undefined;
+                const everyArmFits = element !== undefined && bound.Kind === 'tuple'
+                  ? (bound as { Elements: readonly { Type: TypeRecord }[] }).Elements
+                    .every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element))
+                  : arms.length > 0 && arms.every((arm) => fitsOne(arm, closedRecord));
+                if (!everyArmFits) {
+                  requireAssignable(bound as Known, closed as Known);
                 }
-                // Nor where the binding is an ARRAY OF LITERALS. The checker
-                // infers `[].<'a' | 'b' | 'c'>` from `("a", "b", "c")` where the
-                // run time infers `[].<string>` from the values, and arrays are
-                // invariant, so the checker's narrower binding is assignable to
-                // `[].<string>` and the run time's is not - the same widening
-                // question as the number above, on an element type.
-                const literalElements = (t: TypeRecord): boolean => {
-                  if (t.Kind === 'array' || t.Kind === 'tuple') {
-                    const el = (t as { Element?: TypeRecord }).Element;
-                    const els = (t as { Elements?: readonly { Type: TypeRecord }[] }).Elements;
-                    const kinds = el ? [el] : (els ?? []).map((e) => e.Type);
-                    return kinds.length > 0 && kinds.every((k) => k.Kind === 'literal'
-                      || (k.Kind === 'union' && (k as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal')));
-                  }
-                  return false;
-                };
-                if (literalElements(bound)) {
-                  continue;
-                }
-                requireAssignable(bound as Known, closed as Known);
+
               }
             } finally {
               if (pushed) typeParameterScopes.pop();
