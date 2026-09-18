@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
  * `instanceof` is a narrowing form. The README says so where it introduces the
@@ -115,4 +115,47 @@ test('an ambiguous private name narrows nothing rather than guessing', () => {
 test('the other relational forms are untouched', () => {
   expect(evaluated(`const o = { a: 1 }; ('a' in o) ? 'yes' : 'no';`)).toBe('yes');
   expect(evaluated(`let n: uint8 = 3; (n < 5) ? 'lt' : 'ge';`)).toBe('lt');
+});
+
+/**
+ * A DISCARDED ternary narrows its arms too. `validateDiscardedExpression` is a
+ * separate descent from `walkGuarded`, and its arithmetic case calls
+ * `staticType` directly, so an arm that happened to be an additive expression
+ * was typed with no narrowing in scope.
+ *
+ * The shape of the bug is why it survived: the same arm narrowed correctly when
+ * bare, in parentheses, as a call argument, or anywhere the ternary's value was
+ * used. Only `(v is A) ? ('' + v.x) : 'no';` as a statement reached the path
+ * that skipped the fact.
+ */
+
+test('a discarded ternary narrows an additive arm', () => {
+  const H = 'class A { x: uint8 = 1; } let v: A | null = new A(); ';
+  expect(evaluated(`${H}(v is A) ? ('' + v.x) : 'no';`)).toBe('1');
+  expect(evaluated(`${H}(v instanceof A) ? (1 + v.x) : 0;`)).toBe('2');
+  expect(evaluated(`${H}(v !== null) ? (1 + v.x) : 0;`)).toBe('2');
+});
+
+test('both arms of a discarded ternary are narrowed, and negation flips them', () => {
+  expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
+    let v: A | B = new B();
+    (v is A) ? (1 + v.x) : (1 + v.y);`)).toBe('3');
+  expect(evaluated(`class A { x: uint8 = 1; } let v: A | null = new A();
+    (!(v is A)) ? 0 : (1 + v.x);`)).toBe('2');
+});
+
+test('the positions that already narrowed still do', () => {
+  const H = 'class A { x: uint8 = 1; } let v: A | null = new A(); ';
+  expect(evaluated(`${H}(v is A) ? v.x : 0;`)).toBe('1');
+  expect(evaluated(`${H}const r: string = (v is A) ? ('' + v.x) : 'no'; r;`)).toBe('1');
+  expect(evaluated(`${H}if (v is A) { '' + v.x; } else { 'no'; }`)).toBe('1');
+});
+
+test('a discarded expression is still checked', () => {
+  // The case that added the arithmetic branch in the first place: a statement
+  // never calls `staticType`, so these checks run from there or not at all.
+  expectThrown('const a: [2].<uint8>; a[9];', 'is not an index of');
+  expectThrown(`class A { x: uint8 = 1; } let v: A | null = new A(); '' + v.x;`,
+    'is not declared by every member');
+  expect(evaluated('let n: uint8 = 3; (n > 1) ? (1 + n) : 0;')).toBe('4');
 });

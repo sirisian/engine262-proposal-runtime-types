@@ -9155,6 +9155,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     switch (node.type) {
+      // A DISCARDED TERNARY guards its arms exactly as an `if` guards two
+      // statements, and this walk is a separate descent from `walkGuarded`, so
+      // without this case the arms were validated with no narrowing in scope.
+      // The arithmetic case below calls `staticType` directly, which is how
+      // `(v is A) ? ('' + v.x) : 'no';` came to be refused as "x is not declared
+      // by every member of A | null" while the same arm in a value position, in
+      // a call argument, in parentheses, or bare, all narrowed correctly.
+      case 'ConditionalExpression': {
+        const c = node as unknown as {
+          ShortCircuitExpression: ParseNode,
+          AssignmentExpression_a: ParseNode,
+          AssignmentExpression_b: ParseNode,
+        };
+        validateDiscardedExpression(c.ShortCircuitExpression);
+        const fact = narrowingFactOf(c.ShortCircuitExpression);
+        if (!fact) {
+          validateDiscardedExpression(c.AssignmentExpression_a);
+          validateDiscardedExpression(c.AssignmentExpression_b);
+          return;
+        }
+        const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
+        const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
+        const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+        pushBlock(() => {
+          if (whenTrue !== empty && fact.sense !== 'false') {
+            declareNarrowed(fact.name, whenTrue as Known);
+          }
+          validateDiscardedExpression(c.AssignmentExpression_a);
+        });
+        pushBlock(() => {
+          if (whenFalse !== empty && fact.sense !== 'true') {
+            declareNarrowed(fact.name, whenFalse as Known);
+          }
+          validateDiscardedExpression(c.AssignmentExpression_b);
+        });
+        return;
+      }
       case 'RelationalExpression':
       case 'AdditiveExpression':
       case 'MultiplicativeExpression':
