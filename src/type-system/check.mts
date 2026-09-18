@@ -18,7 +18,7 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
-  badKindedArgument, restElementType, parameterTypeRecord,
+  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType,
 } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
@@ -6791,6 +6791,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return null;
           }
           const appliedBuiltin = builtinTypeRecord(baseName, args);
+          if (!requireWellFormedVector(appliedBuiltin)) {
+            return null;
+          }
           const bareBuiltin = builtinTypeRecord(baseName);
           const builtinTakesArguments = args.length > 0 && !!appliedBuiltin
             && (!bareBuiltin || !SameType(bareBuiltin, appliedBuiltin));
@@ -6899,6 +6902,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? iterationInterfaceRecord(parameterizedName, args)
             ?? libraryTypeRecord(parameterizedName, args);
           if (builtinOrLibrary) {
+            if (!requireWellFormedVector(builtinOrLibrary)) {
+              return null;
+            }
             return builtinOrLibrary;
           }
           // proposal-runtime-types #sec-generics: a USER class applied in an
@@ -8877,6 +8883,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const shown = typeof key === 'number' ? `a literal type of number` : displayType(key);
     const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(shown), Value(libraryName), Value(held)) as ThrowCompletion;
     errors.push(completion.Value as ObjectValue);
+  };
+
+  /**
+   * #sec-vector-types: refuse a malformed `vector.<T, N>` where its type is
+   * FORMED, which is here as well as in the runtime resolver.
+   *
+   * `validateVectorType` states the rule once and `runtime.mts` was its only
+   * caller, so which diagnostic a program got depended on which resolver
+   * reached the annotation first. A binding, an alias and a field reach the
+   * runtime one and threw a *TypeError* at evaluation; a parameter and a return
+   * annotation are resolved here and were accepted outright, so
+   * `function f(v: vector.<uint8, 0>) {}` declared a parameter of a type that
+   * does not exist. #sec-type-errors makes this an Early Error, and
+   * #sec-evaluatetotypeobject says the two resolvers are one operation - "no
+   * separate evaluator is defined" - so the rule belongs at both.
+   *
+   * Returns *true* when the record is well formed, so a caller can stop.
+   *
+   * A vector whose lane type MENTIONS A TYPE PARAMETER is left alone. Inside
+   * `function f<T>(v: vector.<T, 4>)` the lane is not a lane type YET and is not
+   * a lane type WRONGLY either; which it is becomes known when the declaration
+   * is applied. #sec-evaluatetotypeobject draws the same line - a type reading a
+   * generic parameter that is not bound defers rather than failing - and
+   * #sec-higher-kinded-parameters gives the reason to honour it: a declaration
+   * is "checked once rather than once per application". The application itself
+   * resolves `vector.<uint8, 4>` and is judged there.
+   */
+  const requireWellFormedVector = (record: TypeRecord | null | undefined): boolean => {
+    if (!record || mentionsTypeParameter(record)) {
+      return true;
+    }
+    const problem = validateVectorType(record);
+    if (problem === null) {
+      return true;
+    }
+    errors.push((Throw.StaticTypeError('$1', Value(problem)) as ThrowCompletion).Value as ObjectValue);
+    return false;
   };
 
   // ---- the static type of an expression -----------------------------

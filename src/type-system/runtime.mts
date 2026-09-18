@@ -4865,7 +4865,18 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
         // proposal-runtime-types (spec sec-vector-types): a `vector.<T, N>` is
         // well-formed only when T is a lane type and N a positive integer. A
         // malformed vector is a type error at the point its type is formed.
-        const vectorProblem = validateVectorType(builtin);
+        //
+        // Except where it MENTIONS A TYPE PARAMETER, which is not yet the type
+        // it will be. `class B<T> { v: vector.<T, 4> | null }` and `class G<N:
+        // uint32> { v: vector.<uint8, N> | null }` were both refused at the
+        // declaration - the first because a parameter is not a lane type, the
+        // second because a value parameter is not a number - so a generic could
+        // not carry a vector field at all. #sec-evaluatetotypeobject defers a
+        // type that reads a generic parameter that is not bound instead of
+        // failing it, and #sec-higher-kinded-parameters says why a declaration
+        // is "checked once rather than once per application". The application
+        // resolves the parameters and is judged there.
+        const vectorProblem = mentionsTypeParameter(builtin) ? null : validateVectorType(builtin);
         if (vectorProblem !== null) {
           return Throw.TypeError('$1', Value(vectorProblem));
         }
