@@ -32,6 +32,98 @@ export interface Layout {
  * `#[repr(align(N))]`'s job, which is `@align` here. Removing the cap makes the
  * vector case fall out of the general rule instead of needing one of its own.
  */
+/**
+ * The integer an endpoint of a metadata range denotes, or *null* where it is not
+ * an integer this can read.
+ *
+ * An endpoint is carried as a VALUE rather than as a bare number, and taken at
+ * the type being parameterized rather than at the type its literal would
+ * otherwise have (#sec-primitive-metadata), so `uint8.<{ bounds: 1..=6 }>` has
+ * `uint8` endpoints. Converting one with `BigInt` directly threw
+ * "Cannot convert [object Object] to a BigInt" on every closed bound.
+ */
+function endpointInteger(endpoint: unknown): bigint | null {
+  if (typeof endpoint === 'bigint') {
+    return endpoint;
+  }
+  if (typeof endpoint === 'number') {
+    return Number.isInteger(endpoint) ? BigInt(endpoint) : null;
+  }
+  const holder = endpoint as { numberValue?: () => number, bigintValue?: () => bigint, value?: unknown };
+  if (typeof holder?.bigintValue === 'function') {
+    return holder.bigintValue();
+  }
+  if (typeof holder?.numberValue === 'function') {
+    const n = holder.numberValue();
+    return Number.isInteger(n) ? BigInt(n) : null;
+  }
+  if (typeof holder?.value === 'number') {
+    return Number.isInteger(holder.value) ? BigInt(holder.value) : null;
+  }
+  if (typeof holder?.value === 'bigint') {
+    return holder.value;
+  }
+  return null;
+}
+
+/** The least and greatest value an integer primitive holds, or *null* for anything else. */
+function integerExtremes(t: TypeRecord): { low: bigint, high: bigint } | null {
+  if (t.Kind !== 'primitive' || (t.Name !== 'uint' && t.Name !== 'int')) {
+    return null;
+  }
+  const bits = Number(t.Arguments[0]);
+  if (!Number.isInteger(bits) || bits < 1) {
+    return null;
+  }
+  return t.Name === 'uint'
+    ? { low: 0n, high: (1n << BigInt(bits)) - 1n }
+    : { low: -(1n << BigInt(bits - 1)), high: (1n << BigInt(bits - 1)) - 1n };
+}
+
+/**
+ * Whether a type's declaration excludes at least one value its base could hold,
+ * leaving a bit pattern free to serve as an optional's discriminant.
+ *
+ * Only a DECLARED exclusion counts. An inferred niche, as Rust performs one,
+ * would make `byteLength` depend on whether some nested field's range happened
+ * to have a hole, so adding an enum member could resize a structure declared
+ * elsewhere; `byteLength` is a compile-time constant a program computes with,
+ * places in an array extent and asserts, so it must not move for a reason
+ * written nowhere near it. A `bounds` range is written in the type and checked
+ * at every boundary the value crosses, which is what makes the excluded pattern
+ * genuinely unreachable rather than merely unused.
+ *
+ * Only an INTEGER base is read. A float has no next representable value this can
+ * reason about without stepping into rounding, and the pool index the niche
+ * exists for is an integer; a float base simply declares no niche.
+ */
+function hasDeclaredNiche(t: TypeRecord): boolean {
+  if (t.Kind !== 'parameterized') {
+    return false;
+  }
+  const bounds = (t.Metadata as Record<string, unknown> | undefined)?.bounds as {
+    __range?: boolean, start?: unknown, end?: unknown,
+    startBound?: 'closed' | 'open', endBound?: 'closed' | 'open',
+  } | undefined;
+  if (!bounds || bounds.__range !== true) {
+    return false;
+  }
+  const extremes = integerExtremes(t.Base);
+  if (extremes === null) {
+    return false;
+  }
+  // A present bound that does not reach the base's own extreme leaves that end
+  // free; an OPEN bound excludes its own endpoint and so leaves one free
+  // wherever it sits. A full range (`..`) excludes nothing.
+  const low = endpointInteger(bounds.start);
+  const high = endpointInteger(bounds.end);
+  const excludesLow = bounds.start !== undefined
+    && (bounds.startBound === 'open' || (low !== null && low > extremes.low));
+  const excludesHigh = bounds.end !== undefined
+    && (bounds.endBound === 'open' || (high !== null && high < extremes.high));
+  return excludesLow || excludesHigh;
+}
+
 /** The next multiple of `alignment` at or above `value`. */
 function alignUp(value: number, alignment: number): number {
   return alignment <= 1 ? value : Math.ceil(value / alignment) * alignment;
@@ -200,10 +292,15 @@ function plainDataWalk(t: TypeRecord, depth: number): boolean {
     return typeof t.Extent === 'number' && plainDataWalk(t.Element, depth + 1);
   }
   if (t.Kind === 'union') {
-    // A `T | null` over a value type class is a discriminant and an inline
-    // payload, so it is plain exactly when `T` is. Over a reference type it is a
-    // reference and is not.
-    const payload = t.Members.find((m) => m.Kind === 'nominal');
+    // A `T | null` over a value type is a discriminant and an inline payload, so
+    // it is plain exactly when `T` is. Over a reference type it is a reference
+    // and is not. The payload is selected the same way LayoutOf selects it -
+    // whichever member is not the nullish one - since a scalar payload is as
+    // plain as a class one and looking only for a ~nominal~ member reported a
+    // pool of `NodeIndex | null` fields as holding references.
+    const payload = t.Members.length === 2 && t.Members.some((m) => isNullOrUndefinedPrimitive(m))
+      ? t.Members.find((m) => !isNullOrUndefinedPrimitive(m))
+      : undefined;
     if (payload === undefined || IsReferenceClass(payload) || LayoutOf(payload) === null) {
       return false;
     }
@@ -399,13 +496,17 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // laid out as a pointer and closed an inline cycle that is not closed; a
     // ~void~ member named a type that has no values to be null-like with. The
     // third arm was the same call written twice.
-    const nullable = t.Members.length === 2
-      && t.Members.some((m) => isNullOrUndefinedPrimitive(m))
-      && t.Members.some((m) => m.Kind === 'nominal');
-    if (!nullable) {
+    // The payload is whichever member is not the nullish one. Requiring it to be
+    // ~nominal~ left `uint8 | null` and `NodeIndex | null` with no layout at all
+    // while `A | null` had one, a split with nothing behind it once the optional
+    // is inline: a discriminant and a payload work the same whatever the payload
+    // is, and the pool index the declared niche exists for is a scalar.
+    const payload = t.Members.length === 2 && t.Members.some((m) => isNullOrUndefinedPrimitive(m))
+      ? t.Members.find((m) => !isNullOrUndefinedPrimitive(m))
+      : undefined;
+    if (payload === undefined) {
       return null;
     }
-    const payload = t.Members.find((m) => m.Kind === 'nominal')!;
     // #sec-optional-values: a `T | null` over a REFERENCE type is a reference,
     // and over a value type class is laid out INLINE - a discriminant of one
     // byte, placed so the payload begins at T's alignment, then T's layout.
@@ -428,6 +529,15 @@ export function LayoutOf(t: TypeRecord): Layout | null {
       // about the KIND a class was declared with, and this is a question about
       // whether there is anything to lay out inline.
       return referenceLayout;
+    }
+    // #sec-optional-values: the discriminant is a declared byte EXCEPT where the
+    // payload's own declaration excludes a pattern, in which case that pattern
+    // IS the discriminant and the optional is the width of the payload. This is
+    // the DECLARED niche - Rust's `NonZeroU32` rather than Rust's inference -
+    // and it is what lets a pool index reserving a sentinel keep the four bytes
+    // the convention was already spending and gain a checked `| null`.
+    if (hasDeclaredNiche(payload)) {
+      return inner;
     }
     const payloadOffset = alignUp(1, inner.alignment);
     const byteLength = alignUp(payloadOffset + inner.byteLength, inner.alignment);

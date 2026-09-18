@@ -42,7 +42,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { IsReferenceClass, IsSharableValueType, setLayoutSubstituter } from './layout.mts';
+import { IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -3107,7 +3107,12 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
           return false;
         }
         const payload = members.find((m) => !nullish(m))!;
-        return payload.Kind !== 'nominal' || IsReferenceClass(payload);
+        // A payload is a REFERENCE when it is a reference class or has no inline
+        // layout of its own. Testing `Kind !== 'nominal'` instead disqualified a
+        // PARAMETERIZED payload, so a class of `NodeIndex | null` fields had no
+        // zero and `[1024].<Node>` would not allocate - the pool the declared
+        // niche exists to make cheap.
+        return IsReferenceClass(payload) || LayoutOf(payload) === null;
       });
       if (referenceField !== undefined) {
         return undefined;
