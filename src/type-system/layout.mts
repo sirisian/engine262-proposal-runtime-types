@@ -239,10 +239,16 @@ export const referenceLayout: Layout = { bitLength: 64, byteLength: 8, alignment
  * conflation, and naming the concept is what retires it.
  */
 export function IsValueTypeClass(t: TypeRecord): boolean {
+  // Asks IsValueType rather than `LayoutOf(t) !== null`. Reading value-ness off
+  // the layout is the conflation the predicate split exists to undo, and it
+  // survived here because a reference field's WIDTH gives its holder a layout:
+  // `class R { o: object | null; }` has one, is not a value type, and was copied
+  // and compared structurally by every one of the sites this gates.
   return t.Kind === 'nominal'
     && t.EnumMembers === undefined
     && !IsReferenceClass(t)
-    && LayoutOf(t) !== null;
+    && LayoutOf(t) !== null
+    && IsValueType(t);
 }
 
 /**
@@ -342,11 +348,26 @@ function valueTypeWalk(t: TypeRecord, depth: number): boolean {
     }
     typedFields += 1;
   }
-  // The field TYPES are not walked here. Doing so needs the annotation resolver,
-  // which belongs to the checker rather than to this module, and the cases it
-  // would catch - a field annotated with an object or function type - are ones a
-  // class is unlikely to reach by accident. Recorded rather than hidden.
-  return typedFields > 0;
+  if (typedFields === 0) {
+    return false;
+  }
+  // The field TYPES are walked, which an earlier revision declined to do for want
+  // of a resolver and called a case "a class is unlikely to reach by accident".
+  // `class R { o: object | null; }` reaches it directly: every field is annotated,
+  // so a declaration-shape test alone calls R a value type class, and R then
+  // compares structurally when it should keep identity. The resolver that makes
+  // plainness answerable statically answers this too.
+  const layout = LayoutOf(t) as ClassLayout | null;
+  if (layout !== null && layout.fields !== undefined) {
+    return layout.fields.every((field) => valueTypeWalk(field.type, depth + 1));
+  }
+  const declared = staticFieldsOfDeclaration?.(t);
+  if (declared === undefined) {
+    // No resolver wired: fall back to the declaration shape, which is what this
+    // could answer before. Weaker, never wrong in the other direction.
+    return true;
+  }
+  return declared !== null && declared.every((field) => valueTypeWalk(field.type, depth + 1));
 }
 
 export function IsPlainData(t: TypeRecord): boolean {

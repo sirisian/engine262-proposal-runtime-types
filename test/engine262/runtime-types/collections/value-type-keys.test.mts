@@ -183,3 +183,16 @@ test('control: the scalar value types key by value already', () => {
   expect(evaluated('const s = new Set.<float32>(); s.add(NaN := float32); s.add(NaN := float32); String(s.size);')).toBe('1');
   expect(evaluated('const s = new Set.<float32>(); s.add(-0 := float32); s.add(0 := float32); String(s.size);')).toBe('1');
 });
+
+test('a class holding a reference field keeps identity, however it is spelled', () => {
+  // Three predicates were each reading value-ness off "has a layout", and a
+  // reference field has a WIDTH - so its holder has a layout while being no
+  // value type. `IsValueTypeClass` now asks `IsValueType`, which walks the field
+  // types rather than the declaration's shape, and the equality gate asks
+  // `IsValueTypeClass` rather than testing the layout itself.
+  expect(evaluated('class R { o: object | null = null; } String(new R() === new R());')).toBe('false');
+  expect(evaluated(`dynamic class D { y = 1; } class C { d: D | null = null; }
+    String(new C() === new C());`)).toBe('false');
+  // A genuine value type class is untouched.
+  expect(evaluated('class V { x: uint8 = 1; } String(new V() === new V());')).toBe('true');
+});

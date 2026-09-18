@@ -15,7 +15,7 @@ import { Q, X, type ValueEvaluator } from '../completion.mts';
 import { OrdinaryObjectCreate, OrdinaryGetPrototypeOf } from './all.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { LayoutOf, type ClassLayout } from '../type-system/layout.mts';
+import { IsValueTypeClass, LayoutOf, type ClassLayout } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { isRationalObject, rationalEquals, rationalCompare } from '../intrinsics/Rational.mts';
 import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/Complex.mts';
@@ -425,6 +425,13 @@ function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefine
   const xt = RuntimeTypeOf(x);
   const yt = RuntimeTypeOf(y);
   if (xt.Kind !== 'nominal' || yt.Kind !== 'nominal' || xt.EnumMembers !== undefined) {
+    return undefined;
+  }
+  // Value-ness is asked of IsValueTypeClass, not inferred from having a layout.
+  // A reference field has a WIDTH, so its holder has a layout while being no
+  // value type: `class R { o: object | null; }` was compared field by field and
+  // two fresh instances came out equal, where a type with identity must not.
+  if (!IsValueTypeClass(xt)) {
     return undefined;
   }
   const layout = LayoutOf(xt) as ClassLayout | null;
