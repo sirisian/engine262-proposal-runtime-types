@@ -11,9 +11,12 @@ import { evaluated, ok, bool, expectStaticTypeError } from '../harness.mts';
  * argument values: parameters bind left to right,
  * each parameter's constraint is evaluated over the bindings so far, the parameter
  * is inferred from the arguments and checked against its constraint, and the return
- * type is evaluated over the bindings. Where a parameter's evaluated constraint is
- * a literal type or a union/tuple of literal types, the inferred binding is the
- * LITERAL type of the argument's value, not the widened base. The
+ * type is evaluated over the bindings. Where a parameter has an evaluated
+ * constraint AT ALL, the inferred binding is the LITERAL type of the argument's
+ * value, not the widened base - #sec-computed-constraints states the rule for a
+ * literal type or a union of literal types and then says it "holds for any
+ * constraint", the constraint being a contextual type. An UNCONSTRAINED
+ * parameter widens. The
  * inferred literal type is carried on the returned value (a TypedStringValue /
  * TypedNumberValue), so `Reflect.typeOf` observes it rather than the widened base.
  *
@@ -352,4 +355,34 @@ test('an ARGUMENT beats the contextual type', () => {
   const M = 'function m<T, U>(x: T): U { throw new Error(); } const a: uint8 = (1 := uint8); ';
   expect(ok(guard(`${M} let n: string = m(a); let good: string = n;`))).toBe(true);
   expectStaticTypeError(guard(`${M} let n: string = m(a); let bad: uint8 = n;`));
+});
+
+// -- The rule reaches any constraint -------------------------------------------
+test('a constraint of any shape keeps the argument\'s literal', () => {
+  // Two copies of this rule had drifted to different lists - `constraintWantsLiteral`
+  // in runtime.mts and `literalConstrained` in unify.mts - so a union with one
+  // non-literal member widened where a pure-literal union did not. Both now read
+  // "any constraint", which is what the clause says.
+  expect(evaluated('function f<T: uint8 | string>(a: T): T { return a; } String(f(1));')).toBe('1');
+  expect(evaluated('function f<T: 1 | string>(a: T): T { return a; } String(f(1));')).toBe('1');
+  expect(evaluated('function f<T: uint8 | uint16>(a: T): T { return a; } String(f(1));')).toBe('1');
+  // The shapes that already worked, pinned so the two copies cannot drift again.
+  expect(evaluated('function f<T: uint8>(a: T): T { return a; } String(f(1));')).toBe('1');
+  expect(evaluated("function pick<K: 'a' | 'b'>(k: K): K { return k; } pick('a');")).toBe('a');
+});
+
+test('an unconstrained parameter still widens', () => {
+  expect(evaluated('function f<T>(a: T): T { return a; } String(Reflect.typeOf(f(1)));')).toBe('number');
+  expect(evaluated('function f<T: uint8>(a: T): T { return a; } String(Reflect.typeOf(f(1)));')).toBe('uint.<8>');
+});
+
+test('the constraint is still checked against the literal', () => {
+  // "The binding is then checked against the constraint as any binding is,
+  // admitting a literal ... that fits it" - so keeping the literal admits more,
+  // never something the constraint refuses.
+  expectStaticTypeError("function f<T: uint8>(a: T): T { return a; } f('x');");
+  expectStaticTypeError('function f<T: uint8 | string>(a: T): T { return a; } f(true);');
+  expectStaticTypeError('function f<T: uint8>(a: T): T { return a; } f(300);');
+  // A parameter in two positions binds the join of both literals.
+  expect(evaluated('function add<T: uint8>(a: T, b: T): T { return a; } String(add(200, 100));')).toBe('200');
 });

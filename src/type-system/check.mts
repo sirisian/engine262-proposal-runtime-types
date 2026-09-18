@@ -463,6 +463,33 @@ export interface DeferredMetadataCheck {
   readonly target: TypeRecord & { readonly Kind: 'parameterized' };
 }
 
+/**
+ * A crossing into a parameterization whose VALUE the checker knows, deferred to
+ * the checking pass.
+ *
+ * #sec-primitive-operator-blocks: a bare value reaches a parameterization
+ * through a cast, or through the metadata's own admission - and which of those
+ * applies is decided by RUNNING hooks over the value, not by the types. A
+ * `suffixed("Id")` admits `"userId"` and refuses `"user"`; one type, two values,
+ * two answers. So there is no type-level rule here, and a rule that refuses
+ * every uncast crossing refuses programs the run time accepts.
+ *
+ * What IS decidable is a crossing whose source is a literal: the value is in
+ * hand, so the crossing itself can be run. The pass is where, because it has the
+ * `meta` declarations and the implicit casts of the `primitive` blocks, which
+ * #sec-type-errors lists among what it processes first.
+ */
+export interface DeferredCrossingCheck {
+  readonly value: Value;
+  readonly target: TypeRecord & { readonly Kind: 'parameterized' };
+}
+
+const deferredCrossingChecks = new WeakMap<object, readonly DeferredCrossingCheck[]>();
+
+export function TakeDeferredCrossingChecks(root: object): readonly DeferredCrossingCheck[] {
+  return deferredCrossingChecks.get(root) ?? [];
+}
+
 const deferredMetadataChecks = new WeakMap<object, readonly DeferredMetadataCheck[]>();
 
 export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetadataCheck[] {
@@ -2025,6 +2052,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const errors: ObjectValue[] = [];
 
   const deferred: DeferredMetadataCheck[] = [];
+  const crossingChecks: DeferredCrossingCheck[] = [];
 
   const meets: DeferredMeetCheck[] = [];
 
@@ -3020,6 +3048,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // pass rather than deciding it. A mixed position, a parameterization
     // meeting its bare base, is the construction boundary and stays
     // outside this pass, which the erasure below preserves.
+    // A LITERAL crossing into a parameterization. The value is known, so the
+    // crossing can be run - and only running it answers, since the metadata's
+    // admission is a judgment about the VALUE. Deferred to the pass, which has
+    // the hooks and the casts; the walk has neither.
+    //
+    // `const v: Velocity = 10` was accepted here and refused when the binding
+    // ran, and the same line inside a function nothing called raised nothing.
+    if (target.Kind === 'parameterized' && source.Kind === 'literal'
+      && !mentionsTypeParameter(target)) {
+      crossingChecks.push({ value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
+      return;
+    }
     if (source.Kind === 'parameterized' && target.Kind === 'parameterized'
         && displayType(source.Base) === displayType(target.Base)) {
       if (!IsAssignable(source, target)) {
@@ -20396,6 +20436,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     errors.push(completion.Value as ObjectValue);
   }
   deferredMetadataChecks.set(root, deferred);
+  deferredCrossingChecks.set(root, crossingChecks);
   deferredMeetChecks.set(root, meets);
   // The narrowing requests are recorded only by the walk that runs BEFORE the
   // checking pass resolves them. A later walk of the same root re-derives the

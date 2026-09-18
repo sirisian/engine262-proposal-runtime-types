@@ -1959,24 +1959,27 @@ function annotationTypeName(annotation: ParseNode.TypeAnnotation | null | undefi
 }
 
 /** True when an evaluated constraint is a literal type, or a union/tuple of them, so the literal rule applies. */
-function constraintWantsLiteral(t: TypeRecord): boolean {
-  if (t.Kind === 'literal') {
-    return true;
-  }
-  if (t.Kind === 'union') {
-    return t.Members.length > 0 && t.Members.every((m) => m.Kind === 'literal');
-  }
-  if (t.Kind === 'tuple') {
-    // `[].<string>` (a string array constraint) and a literal tuple both cue the
-    // per-element literal binding of the trailing arguments.
-    return true;
-  }
-  // A `string`/`number` array constraint written `[].<string>` reflects as an
-  // array of that element; cue the literal rule so elements bind literally.
-  if (t.Kind === 'array') {
-    return true;
-  }
-  return false;
+/**
+ * Does this constraint cue the literal binding rule?
+ *
+ * ANY constraint does. #sec-computed-constraints: "Where a parameter has an
+ * evaluated constraint AT ALL, the binding inferred for it from a call argument
+ * is the LITERAL type of the argument's value, not the widened base. This was
+ * stated for a constraint that is a literal type or a union of literal types and
+ * HOLDS FOR ANY CONSTRAINT."
+ *
+ * This enumerated the kinds instead - a literal, a union whose members are ALL
+ * literals, a tuple, an array - and widened for a union with one non-literal
+ * member and for an object constraint. It is the SECOND copy of the rule; the
+ * checker's is in `unify.mts`, and the two had drifted to different lists, so a
+ * binding kept its literal through inference and met a widened one at the
+ * constraint check.
+ *
+ * The caller has already established that a constraint exists; an UNCONSTRAINED
+ * parameter never reaches here and still widens.
+ */
+function constraintWantsLiteral(_t: TypeRecord): boolean {
+  return true;
 }
 
 /** The literal type of a value (its value with its widened base), used for literal inference. */

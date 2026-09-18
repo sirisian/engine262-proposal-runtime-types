@@ -926,6 +926,7 @@ export interface Throw {
   | '$1 is not a value of $2'
   | '$1 is not an index of $2'
   | '$1 is not assignable to $2'
+  | '$1 is not assignable to $2: $3'
   | '$1 is not assignable to $2; use a spread to copy it'
   | '$1 is not claimed by any meta type, in $2'
   | '$1 is not declared by $2'

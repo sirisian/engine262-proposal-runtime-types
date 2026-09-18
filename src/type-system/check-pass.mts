@@ -5,7 +5,7 @@ import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability
 import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame, EvaluateRefinementPredicate, ValuePackView } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   typeDeclarationNamesInPass,
@@ -15,9 +15,11 @@ import { Value } from '../value.mts';
 import { SetMetResolution } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './records.mts';
+import { SameType } from './relations.mts';
+import { isIntegerTypeName, isFloatTypeName } from './numeric-signatures.mts';
 import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
-  TakeDeferredMetadataChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
+  TakeDeferredMetadataChecks, TakeDeferredCrossingChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   TakeDefaultRequirements, GenericWhereChecksOf, DefaultConversionChecksOf, GenericDefaultChecksOf, SetEvaluatedGenericDefault,
   type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
 } from './check.mts';
@@ -44,6 +46,22 @@ import { Evaluate, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, Insta
  * here and `Math.random` is excluded, and the exclusion is enforced on the
  * function at the call (`fragment-library.mts`), not by this set.
  */
+/**
+ * Is _name_ the base of a numeric type a bare numeric literal can reach?
+ *
+ * #sec-numeric-types: "Each integer, binary floating-point, decimal
+ * floating-point, rational, complex, and vector type is a numeric type in that
+ * sense." A VECTOR is left out here on purpose: #sec-literal-propagation states
+ * its rule over "a position whose contextual type is a numeric VALUE type", and
+ * a bare literal does not reach a vector position, so including it could only
+ * refuse something the clause does not reach.
+ */
+function isNumericTypeName(name: string): boolean {
+  return name === 'number'
+    || isIntegerTypeName(name) || isFloatTypeName(name)
+    || name.startsWith('decimal') || name === 'rational' || name === 'complex';
+}
+
 const FRAGMENT_FLOOR: readonly string[] = [
   'undefined', 'NaN', 'Infinity',
   'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Object', 'Array', 'Math', 'JSON',
@@ -780,6 +798,58 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
         EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item, true));
       }
+    }
+  }
+  // #sec-primitive-operator-blocks: a crossing into a parameterization is
+  // decided by running it - a cast supplies what the value lacks, and the meta
+  // types judge what it carries. Where the source is a literal the value is
+  // known, so the crossing is run here rather than left to the binding.
+  for (const crossing of TakeDeferredCrossingChecks(root)) {
+    // #sec-literal-propagation draws a line inside this rule that the crossing
+    // alone does not: "Nor does it reach a PARAMETERIZED numeric, which is
+    // unreachable by a bare literal and reachable through an implicit cast the
+    // program declares - so `uint32.<{ bounds: 5..=5 }>` refuses `5` until such
+    // an operator is written, and admits it once one is."
+    //
+    // So for a parameterized NUMERIC the question is not what the metadata
+    // admits but whether an operator was written, which is decidable from the
+    // declarations alone - and the pass has them, #sec-type-errors listing "the
+    // implicit cast operators of its `primitive` blocks" among what it
+    // processes first. Running the crossing instead answers the wrong question:
+    // a `subtype` hook that admits everything lets `const v: Velocity = 10`
+    // through here, and the refusal then arrives when the binding runs.
+    //
+    // Every OTHER parameterization is value-decided - `suffixed("Id")` admits
+    // "userId" and refuses "user" - and falls through to the crossing below.
+    const parameterizedBase = crossing.target.Base;
+    if (parameterizedBase.Kind === 'primitive' && isNumericTypeName(parameterizedBase.Name)) {
+      const name = parameterizedBase.Arguments && parameterizedBase.Arguments.length > 0
+        ? `${parameterizedBase.Name}${parameterizedBase.Arguments[0]}`
+        : parameterizedBase.Name;
+      // A bare Number is spelled `number`; a typed value names its own base.
+      // Both are tried, as `ApplyImplicitCast` tries both.
+      const declared = ['number', name].some((key) => PrimitiveCastsFor(key)
+        .some((cast) => SameType(cast.target, crossing.target)));
+      if (!declared) {
+        return Throw.StaticTypeError('$1 is not assignable to $2',
+          Value(inspect(crossing.value)), Value(displayType(crossing.target)));
+      }
+      continue;
+    }
+    BeginFragmentEvaluation();
+    let attempt;
+    try {
+      attempt = EnsureCompletion(yield* ConvertValue(crossing.value, crossing.target));
+    } finally {
+      EndFragmentEvaluation();
+    }
+    if (attempt.Type !== 'normal') {
+      if (IsBudgetExhausted()) break;
+      // The originating error, which says WHY the crossing failed - a meta type
+      // that does not admit it, a `validate` that refused the value - rather
+      // than a summary that names only the two types.
+      return Throw.StaticTypeError('$1 is not assignable to $2: $3',
+        Value(inspect(crossing.value)), Value(displayType(crossing.target)), Value(inspect(attempt.Value)));
     }
   }
   for (const pair of TakeDeferredMetadataChecks(root)) {

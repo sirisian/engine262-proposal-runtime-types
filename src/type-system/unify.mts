@@ -224,11 +224,31 @@ export function unifyTypeParameters(
         // check evaluates the builder once the bindings exist and refuses a
         // literal that does not fit, so keeping it here is safe.
         const computedConstraint = (param as { ComputedConstraint?: boolean }).ComputedConstraint === true;
-        const literalConstrained = computedConstraint || (!!constraint && (constraint.Kind === 'literal'
-          || deferredKeyof
-          || constraint.Kind === 'primitive'
-          || (constraint.Kind === 'union'
-            && (constraint as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'literal'))));
+        //
+        // ANY constraint, which is what #sec-computed-constraints says: "Where a
+        // parameter has an evaluated constraint AT ALL, the binding inferred for
+        // it from a call argument is the LITERAL type of the argument's value,
+        // not the widened base. This was stated for a constraint that is a
+        // literal type or a union of literal types and HOLDS FOR ANY
+        // CONSTRAINT: the constraint is a contextual type, and
+        // [#sec-literal-propagation] gives a literal in a position with one the
+        // type of that position."
+        //
+        // The list this replaced admitted a literal constraint, a primitive, a
+        // computed one, a deferred `keyof`, and a union whose members are ALL
+        // literals - and widened for a union with one non-literal member, for a
+        // tuple constraint and for an object constraint. So `f({ a: 1 })` at
+        // `T: { a: uint8 }` was refused with a message naming `number` and
+        // `uint.<8>`, and `f(1)` at `T: uint8 | string` likewise, while `f(1)`
+        // at `T: uint8` was accepted - one rule, five shapes it did not reach.
+        //
+        // Nothing is admitted that the constraint would not: the clause
+        // continues "The binding is then checked against the constraint as any
+        // binding is, admitting a literal - or a union or tuple of them, which
+        // is what several arguments contribute - that fits it." An
+        // UNCONSTRAINED parameter still widens, which is the case the ladder's
+        // own example describes.
+        const literalConstrained = computedConstraint || deferredKeyof || !!constraint;
         // THE JOIN OF EVERY ARGUMENT CONTRIBUTION, not the first. A parameter
         // in two positions was fixed by whichever argument came first and every
         // later one checked against it, so `add(200, 100)` for
