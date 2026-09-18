@@ -86,7 +86,12 @@ test('a window is a member of the array and tuple family', () => {
   expect(evaluated('function f<T extends [].<any>>(p: T) { return p.length; } String(f([1, 2, 3]));')).toBe('3');
   expect(evaluated('function f<T extends [].<any>>(p: T) { return p.length; }'
     + ' let t: [uint8, uint8] = [1, 2]; String(f(t));')).toBe('2');
-  expectThrownKind('function f<T extends [].<any>>(p: T) { return p.length; } f({});', 'TypeError');
+  // Refused, and refused BEFORE the source runs: `{}` against `[].<any>` is
+  // decidable from the types, and #sec-type-errors makes a determinable type
+  // error an Early Error, which a `try`/`catch` cannot catch. This asserted the
+  // catchable kind, which pinned the instrument rather than the rule - what the
+  // comment above asks for is that the refusal still happens.
+  expectStaticTypeError('function f<T extends [].<any>>(p: T) { return p.length; } f({});');
 });
 
 // -- membership is structural, not a prototype chain --------------------------

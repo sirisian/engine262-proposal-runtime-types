@@ -442,6 +442,7 @@ export interface Throw {
   | 'a count above the maximum array length is specified but not implemented in this engine'
   | 'a decimal operand requires a decimal on both sides'
   | 'a decorator in a match arm must be followed by a block'
+  | 'a default could not be evaluated: $1'
   | 'a field of this type cannot be placed in a buffer'
   | 'a fixed-extent SoA cannot be grown'
   | 'a fixed-extent SoA cannot be shortened'

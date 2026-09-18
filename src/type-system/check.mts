@@ -7662,6 +7662,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // source for the pre-evaluation phase. Arity needs only the presence
           // of a default, recorded independently in [[DeclaredDefault]].
           const initial = e.Initializer ? staticType(e.Initializer) : null;
+          // #sec-array-and-tuple-types: the |Initializer| "must be compile-time
+          // evaluable ... and it is a type error otherwise". A default that
+          // FOLDED to a literal is already recorded by `checkFilledDefault` when
+          // a binding of the type demands its value; one that did not fold was
+          // recorded nowhere, so the pass never evaluated it and the library half
+          // of the fragment - which only evaluating decides - went unjudged. The
+          // annotation positions that demand no default, a parameter and a
+          // return, are where that showed.
+          if (e.Initializer && initial?.Kind !== 'literal' && !mentionsTypeParameter(r)) {
+            defaultConversions.push({ type: r, initializer: e.Initializer, checked: true });
+          }
           Elements.push({ Type: r, Rest: e.Rest, Initial: initial?.Kind === 'literal' ? initial.Value : 'none' as const,
             DeclaredDefault: !!e.Initializer, InitializerNode: e.Initializer ?? undefined });
         }
@@ -7883,6 +7894,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const initializerType = staticType(memberInitializer as ParseNode);
             if (initializerType && initializerType.Kind === 'literal') {
               initial = initializerType.Value;
+            } else if (r && !mentionsTypeParameter(r)) {
+              // The unfolded case, as at the tuple element above: recorded so the
+              // pass evaluates it, since only evaluating decides the library half
+              // of #annex-evaluable-fragment.
+              defaultConversions.push({ type: r, initializer: memberInitializer as ParseNode, checked: true });
             }
           }
           Properties.push({ key, type: r, optional: member.Optional, readonly: member.Readonly, initial, InitializerNode: memberInitializer ?? undefined });
@@ -8985,6 +9001,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * is "checked once rather than once per application". The application itself
    * resolves `vector.<uint8, 4>` and is judged there.
    */
+  /**
+   * Is _t_ a target for which a STRING is not a conversion source?
+   *
+   * #sec-parsing states the rule over "a numeric type", and #sec-convertvalue is
+   * where it is enforced - which reaches it only for the sized value types,
+   * `int`, `uint` and the binary floats. `number`, `bigint` and `boolean` are
+   * handled by earlier cases of that operation and perform "the ordinary
+   * primitive conversions", so `("5" := number)` is 5 and `("5" := boolean)` is
+   * *true*.
+   *
+   * Written once because the checker judges this at two spellings - the Type
+   * Object call and the `:=` cast - and a looser test than the run time's
+   * refuses programs the run time accepts. A `numericFamilyOf` test is exactly
+   * that looser test: it admits `number`, and the call form used it, so
+   * `number("5")` was refused here and accepted there.
+   */
+  const stringIsNoConversionSource = (t: Known): boolean => !!t && t.Kind === 'primitive'
+    && (isIntegerTypeName((t as { Name: string }).Name) || isFloatTypeName((t as { Name: string }).Name));
+
   const requireWellFormedVector = (record: TypeRecord | null | undefined): boolean => {
     if (!record || mentionsTypeParameter(record)) {
       return true;
@@ -14467,9 +14502,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
       case 'MatchExtractorPattern': {
-        const shape = structureOf(staticType(pattern.Head));
+        const headType = staticType(pattern.Head);
+        const shape = structureOf(headType);
         const matcher = shape?.Kind === 'object'
           ? shape.Properties.find((property) => property.key === wellKnownSymbols.customMatcher)?.type : null;
+        // #sec-match-patterns: "It is a type error if the |MatchNamePattern| of
+        // a juxtaposition or of an extractor form resolves to a binding: ... the
+        // extractor head must denote a value with a %Symbol.customMatcher%
+        // method, decided at the site where the head's Static Type is KNOWN and
+        // at run time otherwise."
+        //
+        // The clause names its own two halves and only the second was here: the
+        // head was looked up, and when it carried no matcher this arm silently
+        // did nothing, leaving the refusal to the match itself. So
+        // `let Foo: uint8 = 5; match (x) { when Foo(let a): ... }` threw when the
+        // arm was reached, and the same arm inside a function nothing called
+        // raised nothing at all.
+        //
+        // "Known" is what draws the line: an `any` head defers, which is the
+        // boundary #sec-type-errors reserves a thrown error for, and the run
+        // time's own refusal answers it there. A head MENTIONING A TYPE
+        // PARAMETER defers for the reason #sec-evaluatetotypeobject gives - it
+        // reads a parameter that is not bound, so whether it carries a matcher
+        // is not known until the declaration is applied.
+        if (!matcher && headType && headType.Kind !== 'any' && !mentionsTypeParameter(headType)) {
+          errors.push(Throw.StaticTypeError('$1 has no custom matcher', Value(displayType(headType))).Value as ObjectValue);
+        }
         let result: Known = null;
         if (matcher?.Kind === 'function') {
           const call = { type: 'CallExpression', CallExpression: typedExpressionView(pattern.Head, matcher),
@@ -18301,6 +18359,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if ((tc.Expression as ParseNode).type === 'NumericLiteral') {
           staticTypeIn(tc.Expression as ParseNode, target);
         }
+        // #sec-parsing: "A `string` is deliberately not a conversion source for
+        // a numeric type, so `let c: uint8 = '1';` is a type error and the parse
+        // is always written ... and it is enforced at the explicit conversion
+        // too, so `'1' := uint8` is a type error for the same reason."
+        //
+        // "For the same reason", and the two spellings did not get the same
+        // answer: the annotation was refused before the source ran and the cast
+        // threw when it evaluated - so `('1' := uint8)` inside a function
+        // nothing called raised nothing at all. The Type Object CALL form,
+        // `uint8('1')`, was already refused here; this is the third spelling of
+        // one rule.
+        //
+        // Only where the source type is KNOWN and is definitely a string. An
+        // `any` source is the boundary #sec-arithmetic-never-promotes defers,
+        // and the run time's own refusal answers it there.
+        const sourceType = staticType(tc.Expression as ParseNode);
+        const sourceBase = sourceType && sourceType.Kind === 'literal'
+          ? (sourceType as { Base?: TypeRecord }).Base
+          : sourceType;
+        if (sourceBase && stringIsNoConversionSource(target)
+            && sourceBase.Kind === 'primitive' && sourceBase.Name === 'string') {
+          errors.push(Throw.StaticTypeError(
+            'a string is not a conversion source for $1; use its parse form',
+            Value(displayType(target)),
+          ).Value as ObjectValue);
+        }
         walk(tc.Expression as ParseNode);
         return;
       }
@@ -19053,7 +19137,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const argBase = argType && argType.Kind === 'literal'
               ? (argType as { Base?: TypeRecord }).Base
               : argType;
-            if (argBase && numericFamilyOf(conversionTarget as Known) !== null
+            if (argBase && stringIsNoConversionSource(conversionTarget as Known)
                 && argBase.Kind === 'primitive' && argBase.Name === 'string') {
               const completion = Throw.StaticTypeError(
                 'a string is not a conversion source for $1; use its parse form',

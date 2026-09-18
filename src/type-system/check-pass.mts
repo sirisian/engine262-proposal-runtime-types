@@ -27,6 +27,30 @@ import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-libra
 import { Evaluate, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
 /**
+ * The names the compile-time-evaluable fragment guarantees.
+ *
+ * #annex-evaluable-fragment, "The Library Surface": the floor is "the type
+ * operations of #sec-type-objects, Type Object identity and `toString`, regular
+ * expression construction and matching, `Map` and `Set`, whose keys Type Objects
+ * serve as by interned identity, `Symbol` and its registry, and the pure methods
+ * and functions of String, Number, BigInt, Math, Array, Object, and JSON."
+ *
+ * Naming it once, because the pass tests the same membership in two places and
+ * they had drifted: the obligation path listed these inline and omitted `JSON`,
+ * `Map` and `Set`, which the annex names explicitly.
+ *
+ * This is an ALLOWLIST of names an evaluation may READ, which is a different
+ * question from whether a particular built-in is in the fragment - `Math` is
+ * here and `Math.random` is excluded, and the exclusion is enforced on the
+ * function at the call (`fragment-library.mts`), not by this set.
+ */
+const FRAGMENT_FLOOR: readonly string[] = [
+  'undefined', 'NaN', 'Infinity',
+  'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Object', 'Array', 'Math', 'JSON',
+  'Map', 'Set', 'RegExp', 'Reflect',
+];
+
+/**
  * Does this type's default depend on a CLASS declared in this source text?
  *
  * A value type class's
@@ -355,18 +379,42 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   for (const check of DefaultConversionChecksOf(root)) {
     let value = check.value;
     if (value === undefined && check.initializer) {
-      if (FirstNonEvaluableForm(check.initializer) || FirstFreeReference(check.initializer, new Set())) continue;
+      // The SYNTACTIC half of the fragment, and then what the initializer may
+      // read. The allowed set was `new Set()` - empty - so any default naming a
+      // global was skipped, and `Math` is a global. That skipped exactly the
+      // population the LIBRARY half of the fragment exists to judge, which is
+      // why `type T = [uint8 = Math.random()]` was diagnosed by the runtime
+      // resolver when the declaration ran, and why the same default in a
+      // parameter annotation - which that resolver never reaches - was not
+      // diagnosed at all.
+      //
+      // The floor is the annex's, not an invention, and it is the set the
+      // obligation path below already uses. A default naming anything else is
+      // still skipped: #sec-evaluatetotypeobject only evaluates what it can read
+      // at check time, and a name this pass cannot resolve is not one of them.
+      if (FirstNonEvaluableForm(check.initializer)
+        || FirstFreeReference(check.initializer, new Set(FRAGMENT_FLOOR))) continue;
       BeginFragmentEvaluation();
+      let evaluated;
       try {
-        const result = EnsureCompletion(yield* Evaluate(check.initializer));
-        if (result.Type !== 'normal') continue;
-        if (result.Value === undefined) continue;
-        const read = EnsureCompletion(yield* GetValue(result.Value));
-        if (read.Type !== 'normal') continue;
-        value = read.Value;
+        evaluated = EnsureCompletion(yield* Evaluate(check.initializer));
+        if (evaluated.Type === 'normal' && evaluated.Value !== undefined) {
+          evaluated = EnsureCompletion(yield* GetValue(evaluated.Value));
+        }
       } finally {
         EndFragmentEvaluation();
       }
+      // #sec-evaluatetotypeobject: an abrupt completion makes the result
+      // ~empty~, and ~empty~ in type position "is a type error" - an Early Error
+      // by #sec-type-errors. This arm used to `continue`, discarding the
+      // completion and the judgment with it. The generic-default arm above
+      // already does exactly what this now does, budget check included.
+      if (evaluated.Type !== 'normal') {
+        if (IsBudgetExhausted()) break;
+        return Throw.StaticTypeError('a default could not be evaluated: $1', Value(inspect(evaluated.Value)));
+      }
+      if (evaluated.Value === undefined) continue;
+      value = evaluated.Value;
     }
     if (value === undefined) continue;
     const converted = EnsureCompletion(yield* (check.checked
@@ -600,7 +648,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     // A builder may close over runtime state. Only execute closed builders
     // here; evaluating such a closure speculatively could mutate that state.
     const allowed = new Set([...bindings.keys(), ...obligation.aliases.keys(), ...obligation.functions.keys(),
-      'undefined', 'NaN', 'Infinity', 'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Object', 'Array', 'Math', 'Reflect', 'RegExp']);
+      ...FRAGMENT_FLOOR]);
     for (const name of dependencies) {
       const fn = obligation.functions.get(name);
       if (!fn) continue;

@@ -53,11 +53,23 @@ test(':= applies the conversion rule', () => {
   // SUPERSEDED: a string to a SIZED numeric type is not a cast. A cast discards
   // information from a numeric value; reading a number out of text is a parse,
   // with its own name and its own two failures.
-  expectThrownKind('("7" := uint8);', 'TypeError');
+  //
+  // And it is decided BEFORE the source runs. #sec-parsing says the rule is
+  // "enforced at the explicit conversion too, so `'1' := uint8` is a type error
+  // for the same reason" as the annotation - and a type error is an Early Error
+  // (#sec-type-errors), so the `try`/`catch` of `expectThrownKind` cannot see
+  // it. The annotation spelling was always refused this way; the cast used to
+  // throw when it evaluated.
+  expect(run('("7" := uint8);')).toMatchObject({ Type: 'throw' });
+  expectThrown('function unreached() { return ("7" := uint8); }');
   expect(evaluated('uint8.parse("7") === (7 := uint8) ? "ok" : "no";')).toBe('ok');
   // and the written promotion still composes, since Number(s) is a numeric value
   expect(evaluated('(Number("7") := uint8) === (7 := uint8) ? "ok" : "no";')).toBe('ok');
-  expectThrownKind('("300" := uint8);', 'TypeError');
+  // The same rule, and the value's magnitude has nothing to do with it: a
+  // string is refused as a SOURCE, before any question of fitting arises.
+  expect(run('("300" := uint8);')).toMatchObject({ Type: 'throw' });
+  // An object source is a different arm - no conversion at all rather than the
+  // parse-instead rule - and it stays where it was, thrown at the boundary.
   expectThrownKind('({} := uint8);', 'TypeError');
 });
 
