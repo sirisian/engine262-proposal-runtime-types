@@ -13946,6 +13946,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = resolveType(asType as ParseNode.Type);
       return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated: patternNegated } : undefined;
     }
+    // `instanceof` is a narrowing form. The README says so where it introduces
+    // the operator - "a successful check narrows the static type in that branch,
+    // the nominal counterpart to the structural `is` operator" - and again where
+    // `#a in value` is described as "joining `instanceof` and the structural `is`
+    // operator as a narrowing form". The test was typed and reported on and never
+    // turned into a fact, so `if (v instanceof A) { v.x; }` refused `x` as "not
+    // declared by every member of A | null" while the run time answered correctly.
+    //
+    // The right operand resolves through `classTypeOf` FIRST and `typeDenotedBy`
+    // only after. `typeDenotedBy` answers aliases and built-ins and deliberately
+    // declines a class - "it may be an ordinary constructor, in which case there
+    // is no Static Type to narrow against" - which is right for the
+    // impossible-test report it was written for and exactly backwards here, a
+    // class being the common right operand of `instanceof` and the one the
+    // narrowing rows are about.
+    if (e.type === 'RelationalExpression') {
+      const rel = e as unknown as { operator?: string, RelationalExpression?: ParseNode, ShiftExpression?: ParseNode };
+      if (rel.operator !== 'instanceof' || !rel.RelationalExpression || !rel.ShiftExpression) {
+        return undefined;
+      }
+      const subject = narrowableName(rel.RelationalExpression);
+      if (subject === null) {
+        return undefined;
+      }
+      const right = rel.ShiftExpression;
+      const rightName = right.type === 'IdentifierReference' ? (right as unknown as { name: string }).name : null;
+      const t = (rightName ? classTypeOf(rightName) : null) ?? typeDenotedBy(right);
+      return t ? { name: subject, type: t, negated } : undefined;
+    }
     // `a && b` implies its LEFT operand only where the whole is true, and
     // `a || b` implies the left is false only where the whole is false. So a
     // conjunction narrows the branch it guards and a disjunction narrows the
