@@ -36,7 +36,7 @@ import {
 } from './type-argument-order.mts';
 import { Diverges } from './divergence.mts';
 import { IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
-import { isBitLaneType, componentAccessorIndices, isAssignableAccessor } from './vector-ops.mts';
+import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
@@ -9372,6 +9372,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const inferStaticTypeIn = (node: ParseNode | null | undefined, contextual: Known): Known => {
+    // #sec-vector-comparisons: the result form "is decided by the expected
+    // type", so a comparison that reaches here with one is not ambiguous. The
+    // drain after the walk reads this back.
+    if (node && contextual
+      && (node.type === 'RelationalExpression' || node.type === 'EqualityExpression')) {
+      comparisonContextual.add(node);
+    }
     if (node && expressionViewTypes.has(node)) return expressionViewTypes.get(node)!;
     if (node?.type === 'MatchExpression') return checkMatchExpression(node, contextual);
     if (node?.type === 'CommaOperator') return staticTypeIn(node.ExpressionList.at(-1), contextual);
@@ -10073,7 +10080,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
           }
-          if (shape.Properties.some((p) => p.initial !== undefined)) freshObjectLiteralTargets.set(inner as object, shape);
+          // Marked where the type declares ANY default, folded or not. The test
+          // was `p.initial !== undefined`, which is set only where the default
+          // FOLDED to a literal - so `{ m?: any = new Map() }` and
+          // `{ m?: uint8 = Math.max(1, 2) }` left the literal unmarked and
+          // filled nothing, while `{ m?: uint8 = 5 }` filled. The unfolded ones
+          // are carried as `InitializerNode` and evaluated at the fill.
+          if (shape.Properties.some((p) => p.initial !== undefined || p.InitializerNode)) {
+            freshObjectLiteralTargets.set(inner as object, shape);
+          }
         }
         return contextual;
       }
@@ -10290,6 +10305,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const operatorFailures = new Map<object, 'none' | 'ambiguous'>();
+  /**
+   * #sec-vector-comparisons: comparisons of two vectors of one shape, and the
+   * three result forms each could take.
+   *
+   * Collected rather than diagnosed where they are inferred, because the rule is
+   * "left with no expected type" and a node's expected type may arrive AFTER the
+   * walk has already typed it - a declarator passes its annotation through
+   * `staticTypeIn`, but the walk has descended into the initializer first.
+   * Diagnosing in the arm refused `let r: boolean32x4 = a < b`. The drain below
+   * runs once the walk is done, which is when "no expected type" is finally
+   * true, and is the shape `operatorFailures` above already uses.
+   */
+  const vectorComparisons = new Map<object, { wide: string, compact: string, compared: string }>();
+  /** Comparisons that reached `staticTypeIn` with a contextual type. */
+  const comparisonContextual = new WeakSet<object>();
 
   const operatorResult = (callee: Known, args: readonly ParseNode[], node: ParseNode): Known => {
     operatorFailures.delete(node);
@@ -12317,6 +12347,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // until it is, a literal operand cannot be judged for disjointness at
         // all.
         const strictOperator = (node as unknown as { operator?: string }).operator;
+        // #sec-vector-comparisons: a comparison of two vectors "is overloaded
+        // on its return type", and "left with no expected type the expression is
+        // ambiguous among them and is a type error, so the result's type is
+        // written". Three forms, three instructions - the clause calls the
+        // ambiguity load-bearing: "a coin flip here is a performance cliff a
+        // program cannot see".
+        //
+        // RECORDED, not diagnosed. Whether this node has an expected type is not
+        // known yet; see `vectorComparisons`.
+        //
+        // The three forms are named with `vectorTypeName`, which is what the run
+        // time's message uses: `boolean32x4 (the wide mask)` rather than
+        // `vector.<vector.<uint.<1>, 32>, 4>`, which is the same type and
+        // useless as a thing to write. Moving a diagnostic earlier must not cost
+        // what it said.
+        if ((strictOperator === '<' || strictOperator === '>' || strictOperator === '<='
+            || strictOperator === '>=' || strictOperator === '==' || strictOperator === '!=')
+          && operandTypes.length === 2) {
+          const asVector = (t: Known): TypeRecord | null => (t && t.Kind === 'primitive'
+            && (t as { Name?: string }).Name === 'vector' ? t as TypeRecord : null);
+          const lv = asVector(operandTypes[0] as Known);
+          const rv = asVector(operandTypes[1] as Known);
+          const laneType = ((lv as { Arguments?: readonly unknown[] })?.Arguments ?? [])[0] as TypeRecord | undefined;
+          const laneCount = ((lv as { Arguments?: readonly unknown[] })?.Arguments ?? [])[1];
+          if (lv && rv && SameType(lv, rv) && laneType && typeof laneCount === 'number'
+            && !mentionsTypeParameter(lv)) {
+            const wide = wideMaskTypeFor(laneType, laneCount);
+            vectorComparisons.set(node, {
+              wide: wide ? vectorTypeName(wide) : 'the wide mask',
+              compact: vectorTypeName(maskTypeFor(laneCount)),
+              compared: vectorTypeName(lv),
+            });
+          }
+        }
         const declaredComparison = strictOperator ? declaredOperator(operandTypes[0] ?? null, strictOperator) : null;
         if (declaredComparison && operandNodes[1]) return operatorResult(declaredComparison, [operandNodes[1]], node);
         for (const operand of operandTypes) checkNumericOperation(strictOperator, operand);
@@ -20309,6 +20373,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   walk(statementList);
   // Contextual positions have now been visited, including those initially
   // sampled while declarations were collected for return inference.
+  // #sec-vector-comparisons, drained here because "left with no expected type"
+  // is only decidable once every contextual position has been visited - which
+  // the comment above says is now true.
+  for (const [node, forms] of vectorComparisons) {
+    if (comparisonContextual.has(node)) {
+      continue;
+    }
+    errors.push(Throw.StaticTypeError(
+      'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)',
+      Value(forms.wide), Value(forms.compact), Value(forms.compared),
+    ).Value as ObjectValue);
+  }
   for (const diagnostic of operatorFailures.values()) {
     const completion = diagnostic === 'none'
       ? Throw.StaticTypeError('no declared operator signature accepts these operands')

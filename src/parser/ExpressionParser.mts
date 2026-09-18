@@ -3145,7 +3145,41 @@ export abstract class ExpressionParser extends FunctionParser {
     const savedEarlyErrors = new Set(this.earlyErrors);
     const checkpoint = this.getLexerCheckpoint();
     const node = this.startNode<ParseNode.MatchExtractorPattern>();
-    const head = this.parseIdentifierReference();
+    // MatchNamePattern :
+    //   IdentifierReference
+    //   MatchNamePattern `.` IdentifierName
+    //   MatchNamePattern TypeArguments
+    //
+    // All three, where this read only the first. A head reached through a
+    // NAMESPACE OBJECT - `when Ns.Some(let n)` - was a *SyntaxError*, which is
+    // how an IMPORTED matcher arrives, so a matcher could only be used where it
+    // could also be named by a single identifier. The plain name pattern already
+    // took both forms, because everything that is not an extractor falls through
+    // to `parseType`; only the extractor head was restricted.
+    //
+    // `.` is consumed only when an IDENTIFIER follows it, because a speculation
+    // "must DECLINE rather than let a nested parse throw past its restore" and
+    // `parseIdentifierName` throws. That declines for a head whose member is a
+    // keyword usable as a name, `Ns.default`, which stays where it was.
+    let head: ParseNode = this.parseIdentifierReference();
+    for (;;) {
+      if (this.test(Token.PERIOD) && this.testAhead(Token.IDENTIFIER)) {
+        const member = this.startNode<ParseNode.MemberExpression>(head);
+        this.next();
+        member.MemberExpression = head as ParseNode.MemberExpression;
+        member.IdentifierName = this.parseIdentifierName();
+        member.PrivateIdentifier = null;
+        member.Expression = null;
+        head = this.finishNode(member, 'MemberExpression');
+      } else if (this.test(Token.PERIOD_LT)) {
+        const applied = this.startNode<ParseNode.TypeArgumentsExpression>(head);
+        applied.Expression = head as ParseNode.MemberExpression;
+        applied.TypeArguments = this.parseTypeArguments();
+        head = this.finishNode(applied, 'TypeArgumentsExpression');
+      } else {
+        break;
+      }
+    }
     if (!this.test(Token.LPAREN)) {
       this.restoreLexerCheckpoint(checkpoint);
       this.earlyErrors = savedEarlyErrors;

@@ -2,6 +2,7 @@ import { Value } from '../value.mts';
 import { Q, X } from '../completion.mts';
 import { FreshObjectLiteralTarget } from '../type-system/check.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/fragment-library.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { ObjectMemberDecoratorContext } from './PropertyDefinitionEvaluation.mts';
@@ -12,6 +13,13 @@ import {
 import { surroundingAgent, OrdinaryObjectCreate, GetValue, IsArray, HasProperty, CreateDataProperty } from '#self';
 import { IsComposite } from '../intrinsics/Composite.mts';
 import { Evaluate } from '../evaluator.mts';
+
+/**
+ * The value an unfolded member default evaluated to, keyed by its property
+ * record, so the default is a constant of the program rather than a fresh value
+ * per object literal. See the fill below.
+ */
+const evaluatedDefaults = new WeakMap<object, Value>();
 
 /** https://tc39.es/ecma262/#sec-object-initializer-runtime-semantics-evaluation */
 //   ObjectLiteral :
@@ -36,13 +44,43 @@ export function* Evaluate_ObjectLiteral(node: ParseNode.ObjectLiteral): ValueEva
   if (surroundingAgent.feature('runtime-types')) {
     const target = FreshObjectLiteralTarget(node as object);
     if (target) {
-      for (const p of (target as { Properties: readonly { key: string, type: unknown, initial?: Value }[] }).Properties) {
-        if (p.initial === undefined) {
+      for (const p of (target as { Properties: readonly { key: string, type: unknown, initial?: Value, InitializerNode?: ParseNode }[] }).Properties) {
+        // A default the CHECKER could not fold to a literal is carried as its
+        // source, and is evaluated here.
+        //
+        // `initial` is set only where the default folded, because the checker
+        // cannot evaluate - so `{ m?: any = new Map() }` and
+        // `{ m?: uint8 = Math.max(1, 2) }` filled NOTHING at a typed binding,
+        // while `{ m?: uint8 = 5 }` filled. The same defaults fill correctly for
+        // a tuple position and for `Composite.<I>({})`, because those consume
+        // records the RUNTIME resolver built, which does evaluate. This is the
+        // literal-only half of that split, on the one path that reads the
+        // checker's record.
+        //
+        // ONCE per property record, not once per literal. A default is evaluated
+        // in the compile-time-evaluable fragment, and the value it produces is a
+        // constant of the program: `Composite.<I>({})` twice yields the SAME
+        // Map today, and a tuple position does too, so filling a fresh one here
+        // would make this the one spelling that differs.
+        let initial = p.initial;
+        if (initial === undefined && p.InitializerNode) {
+          initial = evaluatedDefaults.get(p);
+          if (initial === undefined) {
+            BeginFragmentEvaluation();
+            try {
+              initial = Q(yield* GetValue(Q(yield* Evaluate(p.InitializerNode)) as never));
+            } finally {
+              EndFragmentEvaluation();
+            }
+            evaluatedDefaults.set(p, initial);
+          }
+        }
+        if (initial === undefined) {
           continue;
         }
         const key = Value(p.key);
         if (Q(yield* HasProperty(obj, key)) === Value.false) {
-          X(CreateDataProperty(obj, key, Q(yield* ConvertValue(p.initial, p.type as never))));
+          X(CreateDataProperty(obj, key, Q(yield* ConvertValue(initial, p.type as never))));
         }
       }
     }

@@ -520,7 +520,7 @@ function laneBitWidth(laneType: TypeRecord): number | null {
 }
 
 /** The WIDE MASK form of a comparison: a boolean vector of the compared lane's width. */
-function wideMaskTypeFor(laneType: TypeRecord, laneCount: number): TypeRecord | null {
+export function wideMaskTypeFor(laneType: TypeRecord, laneCount: number): TypeRecord | null {
   const width = laneBitWidth(laneType);
   if (width === null) {
     return null;
@@ -532,7 +532,7 @@ function wideMaskTypeFor(laneType: TypeRecord, laneCount: number): TypeRecord | 
   } as unknown as TypeRecord);
 }
 
-function maskTypeFor(laneCount: number): TypeRecord {
+export function maskTypeFor(laneCount: number): TypeRecord {
   return CanonicalizeType({
     Kind: 'primitive',
     Name: 'vector',

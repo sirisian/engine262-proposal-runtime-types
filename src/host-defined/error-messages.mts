@@ -435,6 +435,7 @@ export interface Throw {
   | 'a `match all` has no `default`: a clause that always contributes is `when _`'
   | 'a base-form meta type has no type parameters to bind'
   | 'a closed enum initializer does not satisfy its declaration'
+  | 'a closed enum initializer does not satisfy its declaration: $1'
   | 'a column of this type cannot be read'
   | 'a column of this type cannot be written'
   | 'a complex operand requires a complex on both sides'

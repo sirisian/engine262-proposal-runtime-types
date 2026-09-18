@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, run } from '../harness.mts';
 
 /**
  * SIMD operations, sectioned so that what is covered reads against the
@@ -510,7 +510,21 @@ test('the approximate reciprocal square root carries a stated bound', () => {
 // ---------------------------------------------------------------------------
 
 test('the ambiguity message lists the three forms, in spellings a program can write', () => {
-  const message = (source: string) => evaluated(`try { ${source} } catch (e) { e.message; }`);
+  // The ambiguity is decided BEFORE the source runs (#sec-vector-comparisons
+  // with #sec-type-errors), so a `try`/`catch` around the comparison cannot see
+  // it; the message is read off the rejection instead. What is asserted below is
+  // unchanged - the three forms, in spellings a program can write.
+  const message = (source: string): string => {
+    const completion = run(source) as { Type: string, Value?: unknown };
+    expect(completion.Type, `expected a rejection for: ${source}`).toBe('throw');
+    const properties = (completion.Value as { properties?: Map<{ stringValue(): string }, { Value?: { stringValue(): string } }> })?.properties;
+    for (const [key, descriptor] of properties ?? []) {
+      if (key.stringValue() === 'message') {
+        return descriptor.Value?.stringValue() ?? '';
+      }
+    }
+    return '';
+  };
   expect(message('int32x4(0, 1, 2, 3) == int32x4(0, 1, 3, 2);')).toBe(
     'the comparison is ambiguous among its result forms; write the result type: "boolean32x4" (the wide mask), "vector.<uint.<1>, 4>" (the compact mask), or "int32x4" (the compared type)',
   );

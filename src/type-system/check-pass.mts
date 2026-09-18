@@ -559,7 +559,12 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // initialized in body order. Their statically known contributions were
   // checked by the ordinary walk, including uncalled sequential functions.
   if ((items ?? []).some((item) => item.type === 'EnumDeclaration')) {
-    const available = new Set(['undefined', 'NaN', 'Infinity', 'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Object', 'Array', 'Math', 'Reflect', 'RegExp']);
+    // The annex's floor, named once. This was a THIRD inline copy of it, and
+    // like the obligation path's it had drifted: it omitted `JSON`, `Map` and
+    // `Set`, so `enum E: object { A = JSON } enum F: object { B = JSON }` was
+    // skipped here and its collision reported only when the declaration ran,
+    // while the same program written with `Math` was refused before it.
+    const available = new Set<string>(FRAGMENT_FLOOR);
     const typeNames = (node: ParseNode | readonly ParseNode[]): void => {
       if (Array.isArray(node)) {
         node.forEach(typeNames);
@@ -593,7 +598,18 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       try {
         const attempt = EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item));
         if (attempt.Type !== 'normal') {
-          return Throw.StaticTypeError('a closed enum initializer does not satisfy its declaration');
+          // The ORIGINATING error is carried, rather than replaced by this
+          // one's summary. The declaration is refused for a reason the
+          // evaluation already stated precisely - `"B" is already an enumerator
+          // of "E"`, a duplicate enumerator name, a first enumerator with no
+          // initializer under a non-numeric underlying type - and all of them
+          // arrived as the same sentence, which named the enum's shape and not
+          // the mistake. The object-member default path states the principle:
+          // "WHY it was not evaluable is the useful half of the diagnostic".
+          return Throw.StaticTypeError(
+            'a closed enum initializer does not satisfy its declaration: $1',
+            Value(inspect(attempt.Value)),
+          );
         }
         preEvaluatedTypeDeclarations.add(item);
         const value = Q(yield* surroundingAgent.runningExecutionContext.LexicalEnvironment.GetBindingValue(Value(item.BindingIdentifier.name), Value.true));
