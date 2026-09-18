@@ -643,8 +643,13 @@ export function FirstInlineCycle(t: TypeRecord): string | null {
         // them inline and so keeps the cycle inline with it.
         return walk(record.Element, within, record.Extent === 'dynamic' ? here : crossed, memberName);
       case 'tuple': {
-        for (const e of record.Elements) {
-          const found = walk(e.Type, within, crossed, memberName);
+        for (let i = 0; i < record.Elements.length; i += 1) {
+          // A tuple position has no key, so it is named by its INDEX - but only
+          // where no outer member has already named the path. `type T = [uint8,
+          // T]` reported `contains itself through field ""`, which names
+          // nothing; `{ a: [uint8, L] }` should still name `a`, since that is
+          // the member a reader would go and change.
+          const found = walk(record.Elements[i]!.Type, within, crossed, memberName === '' ? String(i) : memberName);
           if (found !== null) {
             return found;
           }

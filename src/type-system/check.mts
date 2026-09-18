@@ -27,7 +27,7 @@ import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
-import { IsSharableValueType, SoAColumnsOf, LayoutOf } from './layout.mts';
+import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle } from './layout.mts';
 import {
   libraryTypeParameterNames as libraryTypeParameterNamesShared,
   orderTypeArguments as orderTypeArgumentsShared,
@@ -36,7 +36,7 @@ import {
 } from './type-argument-order.mts';
 import { Diverges } from './divergence.mts';
 import { IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
-import { isBitLaneType, componentAccessorIndices } from './vector-ops.mts';
+import { isBitLaneType, componentAccessorIndices, isAssignableAccessor } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
@@ -3296,6 +3296,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const m = lhs;
     const sealedReceiver = staticType(m.MemberExpression);
     const named = memberKey(m);
+    // #sec-vector-component-accessors: "An accessor whose key names a lane twice
+    // is not assignable, since an assignment to it would give one lane two
+    // values; it is a type error to assign to one."
+    //
+    // A type error, so an Early Error (#sec-type-errors). The rule lived only on
+    // the runtime store path in `vector-ops.mts`, which meant `a.xx = a.xy`
+    // threw when the store ran and the same line inside a function nothing
+    // called was accepted outright. Both sides now use `isAssignableAccessor`,
+    // which is the one place the "no lane named twice" test is written.
+    if (typeof named === 'string' && sealedReceiver?.Kind === 'primitive'
+        && (sealedReceiver as { Name?: string }).Name === 'vector') {
+      const laneCount = ((sealedReceiver as { Arguments?: readonly unknown[] }).Arguments ?? [])[1];
+      const lanes = typeof laneCount === 'number' ? componentAccessorIndices(named, laneCount) : null;
+      if (lanes && !isAssignableAccessor(lanes)) {
+        errors.push(Throw.StaticTypeError(
+          '$1 names a lane twice and cannot be assigned to',
+          Value(named),
+        ).Value as ObjectValue);
+        return;
+      }
+    }
     if (!m.PrivateIdentifier && sealedReceiver?.Kind === 'nominal' && named !== undefined
         && !typeCanBeHeldWeakly(sealedReceiver) && !indexAccess(m)) {
       const sealedStructure = structureOf(sealedReceiver);
@@ -16354,6 +16375,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const cycle = FirstClassInlineCycle(layoutRoots.map((node) => instanceTypeOf(node)).filter((type): type is TypeRecord => type !== null), inlineFieldsOf);
     layoutRoots.forEach((node) => classLayoutsChecked.add(node));
     if (cycle) errors.push(Throw.StaticTypeError('$1 contains itself through field $2, so it has no finite layout', Value(displayType(cycle.type)), Value(cycle.field)).Value as ObjectValue);
+    // #sec-type-alias-declarations states the same rule for an ALIAS: "It is a
+    // type error if a cycle never [passes through a reference position], since
+    // the type would demand an infinite inline layout, which is the same rule
+    // #sec-typed-classes applies to a value type class containing itself."
+    //
+    // One rule, and it was answered twice. `class A { x: A; }` is refused by the
+    // loop above, before the source runs; `type L = { next?: L };` reached only
+    // `FirstInlineCycle` in the alias resolver of RuntimeTypesDeclarations and
+    // was a thrown *TypeError* when the declaration evaluated. The detector is
+    // the same one, called here over the record the checker already resolved.
+    //
+    // A GENERIC alias is skipped: its body mentions parameters that no argument
+    // has bound, so whether a cycle closes inline is not decided until it is
+    // applied - the deferral #sec-evaluatetotypeobject draws for any type that
+    // reads an unbound parameter. An INTERFACE is not walked either, and that is
+    // not an omission: an interface is nominal, FirstInlineCycle stops at a
+    // nominal because "a type whose own declaration owns this rule", and an
+    // object satisfying `interface I { next?: I }` holds a reference rather than
+    // an inline layout.
+    for (const [aliasName, aliasNode] of aliasNodes) {
+      if ((aliasNode as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters) {
+        continue;
+      }
+      // The record the walk ALREADY resolved, read straight from the frames
+      // rather than through `lookupAlias`. The lookup's fallback resolves a
+      // declaration the walk has not reached, and resolving one here registers
+      // an obligation the pass then evaluates in a scope where the alias is not
+      // bound: `type L = L;` inside a block became "a closed type annotation
+      // could not be evaluated to a type: ReferenceError", which is neither this
+      // rule nor its own ("$1 is defined as itself, so it denotes no type").
+      // Nothing is lost by not forcing - an alias the walk never resolved has no
+      // layout anything depends on.
+      let resolved: Known = null;
+      for (let i = frames.length - 1; i >= 0 && !resolved; i -= 1) {
+        resolved = frames[i].aliases.get(aliasName) ?? null;
+      }
+      if (!resolved || mentionsTypeParameter(resolved)) {
+        continue;
+      }
+      const aliasCycle = FirstInlineCycle(resolved);
+      if (aliasCycle !== null) {
+        errors.push(Throw.StaticTypeError(
+          '$1 contains itself through field $2, so it has no finite layout',
+          Value(aliasName),
+          Value(aliasCycle),
+        ).Value as ObjectValue);
+        break;
+      }
+    }
     // An interface's member walk is lazy for the same reason the class one was,
     // and a rule checked there needs the same forcing: an interface nothing
     // references would never be walked, so its computed keys would never be

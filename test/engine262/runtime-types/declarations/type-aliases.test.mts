@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import {
-  Agent, ManagedRealm, Parser, setSurroundingAgent,
+  Agent, Get, JSStringValue, ManagedRealm, ObjectValue, Parser, setSurroundingAgent, Value, X,
 } from '#self';
 
 /**
@@ -169,6 +169,30 @@ function evaluated(source: string): string {
   return completion.Value.stringValue();
 }
 
+/**
+ * The constructor name and message of the EARLY error _source_ is rejected
+ * with.
+ *
+ * Distinct from `thrown` below, and the distinction is the observable one
+ * #sec-type-errors draws: an early error rejects the source text before any of
+ * it runs, so it cannot be caught, and `thrown`'s `try`/`catch` wrapper would
+ * never see it.
+ */
+function earlyError(source: string): string {
+  const realm = makeRealm();
+  const completion = realm.evaluateScriptSkipDebugger(source) as unknown as { Type: string, Value: ObjectValue };
+  expect(completion.Type).toBe('throw');
+  const pop = realm.pushTopContext();
+  try {
+    const constructor = X(Get(completion.Value, Value('constructor'))) as ObjectValue;
+    const name = X(Get(constructor, Value('name'))) as JSStringValue;
+    const message = X(Get(completion.Value, Value('message'))) as JSStringValue;
+    return `${name.stringValue()}: ${message.stringValue()}`;
+  } finally {
+    pop?.();
+  }
+}
+
 /** The constructor name of the error _source_ throws, and its message. */
 function thrown(source: string): string {
   const realm = makeRealm();
@@ -212,15 +236,20 @@ test('a recursive alias survives the reflection round trip', () => {
 });
 
 test('a cycle through no reference position is a type error', () => {
-  expect(thrown('type Bad = { self: Bad };'))
-    .toBe('TypeError: "Bad" contains itself through field "self", so it has no finite layout');
+  // An EARLY error, as #sec-type-errors makes every type error: the source is
+  // rejected before any of it runs, so a `try` around the declaration cannot
+  // see it. This used to be a *TypeError* thrown by the alias resolver when the
+  // declaration evaluated, which is the same rule `class A { x: A; }` was
+  // already refused by at check time - one rule, two answers.
+  expect(earlyError('type Bad = { self: Bad };'))
+    .toBe('StaticTypeError: "Bad" contains itself through field "self", so it has no finite layout');
 });
 
 test('a fixed extent lays its elements inline, so it closes a cycle', () => {
   // The dynamic array above holds its elements out of line; `[2].<Fixed>` does
   // not, which is the distinction #sec-layout-finiteness draws.
-  expect(thrown('type Fixed = { items: [2].<Fixed> };'))
-    .toBe('TypeError: "Fixed" contains itself through field "items", so it has no finite layout');
+  expect(earlyError('type Fixed = { items: [2].<Fixed> };'))
+    .toBe('StaticTypeError: "Fixed" contains itself through field "items", so it has no finite layout');
 });
 
 test('an alias defined as itself denotes no type', () => {
