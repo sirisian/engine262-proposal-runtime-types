@@ -17562,11 +17562,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Still restricted to declared shapes - what a value cannot carry.
             // Removing it exposes three subjects the stamp is not the cause of;
             // see `checked-bindings-leak.md`.
-            const declaredShape = (t: TypeRecord): boolean => t.Kind === 'object'
-              || (t.Kind === 'nominal' && !(t as { LibraryName?: string }).LibraryName);
+            // NOT A VALUE PARAMETER. A value pack is read in the body as a
+            // VALUE - `Ps.length` - and the run time binds it as one; handing
+            // over a type record for it leaves the value binding unmade, so
+            // `Ps.length` was *undefined*. The checker's bindings stand in for
+            // the run time's TYPE inference only.
+            const valueParameterNames = new Set(generic
+              .filter((tp) => (tp as { Kind?: string }).Kind === 'value')
+              .map((tp) => tp.Name));
             const closedBindings = new Map<string, TypeRecord>();
             for (const [name, bound] of bindings) {
-              if (!mentionsTypeParameter(bound) && declaredShape(bound)) {
+              if (!mentionsTypeParameter(bound) && !valueParameterNames.has(name)) {
                 closedBindings.set(name, bound);
               }
             }

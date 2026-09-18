@@ -287,6 +287,14 @@ export function* AllDefaultsFrame(declaration: unknown): PlainEvaluator<Map<stri
   return frame;
 }
 
+let pendingCheckerBindings = false;
+export function setPendingCheckerBindings(v: boolean): void { pendingCheckerBindings = v; }
+export function takePendingCheckerBindings(): boolean {
+  const v = pendingCheckerBindings;
+  pendingCheckerBindings = false;
+  return v;
+}
+
 export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined {
   if (typeParameterFrames.length === 0) {
     return undefined;
@@ -1518,11 +1526,22 @@ export function* InferGenericBindings(
  * and it admits a union of such literals on the same terms.
  */
 function literalArmsFit(bound: TypeRecord, constraint: TypeRecord): boolean {
+  const fitsOne = (arm: TypeRecord, target: TypeRecord): boolean => arm.Kind === 'literal'
+    && (IsAssignable(arm, target) || literalFitsNumericType(arm, target));
+  // A PACK binds a tuple, and an array constraint is invariant - `['a','b','c']`
+  // is assignable to no `[].<string>` - so the element type is what admits it,
+  // each element on the same literal-fit terms as a scalar. The checker makes
+  // the same judgment for the same binding; the two must agree.
+  if (constraint.Kind === 'array' && bound.Kind === 'tuple') {
+    const element = (constraint as { Element?: TypeRecord }).Element;
+    const elements = (bound as { Elements: readonly { Type: TypeRecord }[] }).Elements;
+    return element !== undefined && elements.length > 0
+      && elements.every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element));
+  }
   const arms = bound.Kind === 'union'
     ? (bound as { Members: readonly TypeRecord[] }).Members
     : [bound];
-  return arms.length > 0 && arms.every((arm) => arm.Kind === 'literal'
-    && (IsAssignable(arm, constraint) || literalFitsNumericType(arm, constraint)));
+  return arms.length > 0 && arms.every((arm) => fitsOne(arm, constraint));
 }
 
 export function* InferGenericBindingsFrom(
@@ -1549,6 +1568,7 @@ export function* InferGenericBindingsFrom(
     }
   }
 
+  const checkerSupplied = takePendingCheckerBindings();
   pushTypeParameterFrame(frame);
   try {
     for (const tp of typeParameters) {
@@ -1563,6 +1583,13 @@ export function* InferGenericBindingsFrom(
       const pre = preBound?.get(paramName);
       if (pre) {
         frame.set(paramName, pre);
+        if (checkerSupplied && tp.TypeParameterConstraint) {
+          const preConstraint = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterConstraint));
+          if (preConstraint !== null && !IsAssignable(pre, preConstraint)
+              && !literalArmsFit(pre, preConstraint)) {
+            return Throw.TypeError('$1 is not assignable to $2', Value(displayType(pre)), Value(displayType(preConstraint)));
+          }
+        }
         continue;
       }
       // Evaluate the constraint over the bindings so far (computed constraints may

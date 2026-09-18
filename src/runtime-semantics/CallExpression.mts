@@ -26,7 +26,7 @@ import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { anyType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
+import { setPendingCheckerBindings, pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';
@@ -1324,6 +1324,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const stamped = (CallExpression as unknown as { CheckedBindings?: ReadonlyMap<string, TypeRecord> }).CheckedBindings;
     if (stamped && stamped.size > 0) {
       explicitFrame = new Map(stamped);
+      setPendingCheckerBindings(true);
     }
   }
   // 7. Let thisCall be this CallExpression.
@@ -1335,6 +1336,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       return Q(yield* EvaluateCall(func, ref, args, tailCall, CallExpression));
     } finally {
       popTypeParameterFrame();
+      setPendingCheckerBindings(false);
     }
   }
   return Q(yield* EvaluateCall(func, ref, args, tailCall, CallExpression));

@@ -75,3 +75,17 @@ test('a COMPUTED constraint keeps the literal, as a written one does', () => {
   expectThrown('function pick<K: "name" | "age">(k: K): K { return k; } let n: uint8 = pick("name");',
     '"\'name\'" is not assignable to "uint.<8>"');
 });
+
+test('the checker\'s bindings are checked at the run time, and reach every kind', () => {
+  // The stamp is no longer restricted to declared shapes: any closed binding
+  // the checker made is handed over. That is safe because a checker-supplied
+  // binding is still CHECKED against its constraint at the run time - a
+  // computed constraint runs its builder only there - and because a value
+  // parameter is excluded, being read in the body as a value rather than a type.
+  const keys = 'function keysOf(T) { let ks = Reflect.getReflection(T).properties.map(p => Reflect.makeType({ kind: "literal", value: p.name, base: string })); return ks.length === 1 ? ks[0] : Reflect.makeType({ kind: "union", members: ks }); } ';
+  const pluck = 'function pluck<T, K: keysOf(T)>(o: T, key: K): K { return key; } ';
+  expect(evaluated(`${keys}${pluck}let user = { name: "n" }; \`\${Reflect.typeOf(pluck(user, "name")) === type "name"}\`;`)).toBe('true');
+  expectThrown(`${keys}${pluck}let user = { name: "n" }; pluck(user, "missing");`, 'is not assignable to');
+  // A VALUE pack is still bound as a value in the body.
+  expect(evaluated('function j<...Ps: [].<string>>(sep: string, ...parts: Ps): uint64 { return Ps.length; } `${j("-", "a", "b")}`;')).toBe('2');
+});
