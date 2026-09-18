@@ -17556,6 +17556,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               TypeParameters: { TypeParameterList: generic.map((tp) => tp.Declaration) },
             } as unknown as ParseNode;
             const pushed = pushTypeParameterScopeOf(scopeCarrier);
+            // The parameters are bound to their INFERRED bindings in the scope
+            // the constraint resolves in, not left as placeholders. A COMPUTED
+            // constraint - `U: baseOf(T)` - is a builder call, and the checker
+            // evaluates one whose arguments are concrete: `type X = baseOf(uint32)`
+            // resolves to `uint.<32>` today. With `T` a placeholder the call
+            // could not be evaluated, so the constraint resolved to nothing and
+            // was skipped - losing the check entirely.
+            if (pushed) {
+              const scope = typeParameterScopes[typeParameterScopes.length - 1]!;
+              for (const [bname, bvalue] of bindings) {
+                if (!mentionsTypeParameter(bvalue)) {
+                  scope.set(bname, bvalue as Known);
+                }
+              }
+            }
             try {
               for (const tp of generic) {
                 const bound = bindings.get(tp.Name);
