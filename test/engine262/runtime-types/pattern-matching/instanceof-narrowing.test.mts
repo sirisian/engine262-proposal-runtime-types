@@ -74,3 +74,45 @@ test('a member expression is still not narrowed by any form', () => {
     const b = new B(); b.a = new A();
     if (b.a instanceof A) { String(b.a.x); }`);
 });
+
+/**
+ * The BRAND CHECK narrows for the same reason and was missing for the same
+ * reason. The README puts the three together: "the brand check `#a in value`
+ * narrows the static type of `value` to the class in the true branch, joining
+ * `instanceof` and the structural `is` operator as a narrowing form."
+ *
+ * Its subject is the RIGHT operand - the left is a private name, not an
+ * expression - and the type it narrows to is the class declaring that name.
+ */
+
+test('a brand check narrows the branch it guards, and subtracts in the other', () => {
+  const src = (arg: string) => `class Other { y: uint8 = 3; }
+    class Tagged { #tag: uint8 = 1; x: uint8 = 2;
+      static pick(v: Tagged | Other): uint8 { if (#tag in v) { return v.x; } return v.y; } }
+    String(Tagged.pick(${arg}));`;
+  expect(evaluated(src('new Tagged()'))).toBe('2');
+  expect(evaluated(src('new Other()'))).toBe('3');
+});
+
+test('a negated brand check narrows the other way', () => {
+  expect(evaluated(`class Other { y: uint8 = 3; }
+    class Tagged { #tag: uint8 = 1; x: uint8 = 2;
+      static pick(v: Tagged | Other): uint8 { if (!(#tag in v)) { return v.y; } return v.x; } }
+    String(Tagged.pick(new Other()));`)).toBe('3');
+});
+
+test('an ambiguous private name narrows nothing rather than guessing', () => {
+  // A private name is lexically scoped to its class, but the enclosing class is
+  // not tracked where this is decided, so the declaring class is found by
+  // scanning. Two classes declaring the same name make that scan ambiguous, and
+  // narrowing to the wrong one would be unsound where narrowing to none is not.
+  expectStaticTypeError(`class Other { #tag: uint8 = 9; y: uint8 = 3; }
+    class Tagged { #tag: uint8 = 1; x: uint8 = 2;
+      static pick(v: Tagged | Other): uint8 { if (#tag in v) { return v.x; } return v.y; } }
+    Tagged.pick(new Tagged());`);
+});
+
+test('the other relational forms are untouched', () => {
+  expect(evaluated(`const o = { a: 1 }; ('a' in o) ? 'yes' : 'no';`)).toBe('yes');
+  expect(evaluated(`let n: uint8 = 3; (n < 5) ? 'lt' : 'ge';`)).toBe('lt');
+});

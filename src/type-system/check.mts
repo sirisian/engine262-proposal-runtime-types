@@ -13897,6 +13897,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return !!have && !!want && have.Kind === 'primitive' && want.Kind === 'primitive' && SameType(have, want);
   };
 
+  /**
+   * The instance type of the class declaring a private name, when EXACTLY ONE
+   * does, and *null* otherwise.
+   *
+   * A private name is lexically scoped to its class body, so `#a in v` can only
+   * appear inside the class that declares `#a` and that class is the type the
+   * brand check narrows to. The enclosing class is not tracked here - `this` has
+   * a frame only inside an adopting literal - so the declaring class is found by
+   * scanning declarations instead. Two classes may each declare `#a`, in which
+   * case scanning cannot say which body this expression sits in, so it declines:
+   * narrowing nothing is always sound, narrowing to the wrong class is not.
+   */
+  const classOwningPrivateName = (privateName: string): Known => {
+    let found: Known = null;
+    let seen = 0;
+    for (const [className, node] of classNodes) {
+      const body = (node as { ClassTail?: { ClassBody?: readonly unknown[] | null } | null })
+        .ClassTail?.ClassBody ?? [];
+      const declares = body.some((element) => {
+        const name = (element as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
+        return name?.type === 'PrivateIdentifier' && name.name === privateName;
+      });
+      if (declares) {
+        seen += 1;
+        found = classTypeOf(className);
+      }
+    }
+    return seen === 1 ? found : null;
+  };
+
   const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean, sense?: 'true' | 'false' } | undefined => {
     let e = expr;
     let negated = false;
@@ -13962,7 +13992,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // class being the common right operand of `instanceof` and the one the
     // narrowing rows are about.
     if (e.type === 'RelationalExpression') {
-      const rel = e as unknown as { operator?: string, RelationalExpression?: ParseNode, ShiftExpression?: ParseNode };
+      const rel = e as unknown as {
+        operator?: string, RelationalExpression?: ParseNode, ShiftExpression?: ParseNode,
+        PrivateIdentifier?: { name: string },
+      };
+      // The BRAND CHECK `#a in v` narrows too, and the README says so in the
+      // same breath: "the brand check `#a in value` narrows the static type of
+      // `value` to the class in the true branch, JOINING `instanceof` and the
+      // structural `is` operator as a narrowing form". Its subject is the RIGHT
+      // operand, the left being a private name rather than an expression, and
+      // the type it narrows to is the class declaring that name.
+      if (rel.operator === 'in' && rel.PrivateIdentifier && rel.ShiftExpression) {
+        const subject = narrowableName(rel.ShiftExpression);
+        if (subject === null) {
+          return undefined;
+        }
+        const owner = classOwningPrivateName(rel.PrivateIdentifier.name);
+        return owner ? { name: subject, type: owner, negated } : undefined;
+      }
       if (rel.operator !== 'instanceof' || !rel.RelationalExpression || !rel.ShiftExpression) {
         return undefined;
       }
