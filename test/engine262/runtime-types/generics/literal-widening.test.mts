@@ -50,3 +50,15 @@ test('an UNCONSTRAINED pack widens its elements, as a scalar does', () => {
     + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); } '
     + 'function wrap<...Ts>(...xs: Ts): boxesOf(Ts) { return xs.map((x) => new Box(x)); } `${wrap(1, "a").length}`;')).toBe('2');
 });
+
+test('the checker binds from the call\'s context, as the run time does', () => {
+  // "A call binds from its context before its arguments." The run time applied
+  // that rung and the checker did not, so the two disagreed about what a call
+  // in a typed position binds - visible once the checker's bindings are handed
+  // over. The seed stands over the arguments because unification joins only
+  // among argument contributions.
+  expect(evaluated('function f<T>(x: T): T { return x; } const r: uint8 = f(1); `${Reflect.typeOf(r)}`;')).toBe('uint.<8>');
+  // A stale or foreign context costs nothing: the argument decides where the
+  // position requires nothing of the call.
+  expect(evaluated('function f<T>(x: T): T { return x; } function g(): uint8 { f("s"); return (1 := uint8); } `${g()}`;')).toBe('1');
+});

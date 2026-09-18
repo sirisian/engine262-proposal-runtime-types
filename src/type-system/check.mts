@@ -17432,6 +17432,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // them, using the shared ordering for type application sites.
             bindExplicitTypeArguments(generic, argNodes, bindings);
           } else {
+            // THE CONTEXT RUNG, before the arguments. "A call binds from its
+            // context before its arguments" - the run time does this and the
+            // checker did not, so `const r: uint8 = f(1)` for `f<T>(x: T): T`
+            // had Static Type `number` while the run time bound `uint8`. The
+            // call node already carries its `ContextualType`; seeding from it
+            // here puts the checker on the same rung, and the seed stands
+            // because unification joins only among argument contributions.
+            const callContextual = (n as unknown as { ContextualType?: Known }).ContextualType
+              ?? (c.CallExpression as unknown as { ContextualType?: Known } | undefined)?.ContextualType;
+            const declaredReturn = (chosen as { Return?: TypeRecord }).Return;
+            if (callContextual && declaredReturn) {
+              bindTypeParametersFromArguments(
+                [{ Type: declaredReturn as Known }],
+                [callContextual as Known],
+                new Set(generic.map((tp) => tp.Name)),
+                bindings,
+              );
+            }
             // #sec-contextual-types: substitute inferred type arguments before
             // supplying a callback's contextual parameter and return types.
             // bindTypeParametersFromArguments shares that inference with the
