@@ -5,10 +5,11 @@ import { isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { IsPlainData, LayoutOf, ReportedLayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
+import { wrapToType } from '../type-system/arithmetic.mts';
 import { CreateComplexValue } from './Complex.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols, CreateBuiltinFunction, X } from '#self';
-import { ParseDecimalDigits, CreateDecimalValue } from './Decimal.mts';
+import { ParseDecimalDigits, CreateDecimalValue, DecimalPartsInRange } from './Decimal.mts';
 import { Float128FromNumber } from './Float128.mts';
 import { surroundingAgent } from '#self';
 import { canonicalTypeText } from '../type-system/records.mts';
@@ -92,6 +93,17 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
       return Throw.SyntaxError('$1 is not a valid literal', S);
     }
     const decimalWidth = t.Name === 'decimal32' ? 32 : t.Name === 'decimal64' ? 64 : 128;
+    // #sec-parsing: "`parse` throws ... a *RangeError* when it is a LITERAL
+    // WHOSE VALUE THE TYPE CANNOT REPRESENT."
+    //
+    // The same range rule the conversion applies, and the same reason
+    // #table-numeric-conversions gives for it - "a decimal's range is a property
+    // of the type rather than of the format". Reached only now that the grammar
+    // admits an exponent: `decimal32.parse('1e300')` had no way to be written
+    // before, and silently built a value no `decimal32` holds once it did.
+    if (!DecimalPartsInRange(digits, decimalWidth)) {
+      return Throw.RangeError('$1 is not in the range of $2', S, Value(t.Name));
+    }
     return CreateDecimalValue(digits.significand, digits.exponent, decimalWidth, surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types: "for the binary floating-point, decimal, rational,
@@ -172,6 +184,31 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   // the exact value the format holds.
   if (t.Kind === 'primitive' && t.Name === 'float128') {
     return Float128FromNumber(typeof value === 'bigint' ? Number(value) : value, surroundingAgent.currentRealmRecord);
+  }
+  // #sec-parsing: `parse` "returns A VALUE OF THE TYPE the function belongs to".
+  //
+  // A narrow float's parse returned the DOUBLE it read, tagged with the type:
+  // `float16.parse('0.1')` was `0.1` where `float16(0.1)` is
+  // `0.0999755859375`, and `float16.parse('1e300')` was `1e+300`, a value no
+  // `float16` holds, answering `float16` to `Reflect.typeOf`. The range test
+  // above cannot catch either - `fitsNumericType` answers *true* for every
+  // float name, so it is a no-op on this family.
+  //
+  // Rounded by the same helper the conversion uses rather than a second rule:
+  // the digits a literal names are not generally a value of a narrow float, and
+  // rounding to the width is what makes one.
+  if (isFloat) {
+    const rounded = wrapToType(value, t);
+    // "a *RangeError* when it is a literal whose value the type cannot
+    // represent". A finite literal that rounds to an infinity is exactly that -
+    // the type has no value for it - which is where a parse parts company with
+    // a CONVERSION, whose table row says a finite source outside the range
+    // "becomes an infinity of the same sign".
+    if (typeof rounded === 'number' && !Number.isFinite(rounded)
+      && typeof value === 'number' && Number.isFinite(value)) {
+      return Throw.RangeError('$1 is out of range for the type', S);
+    }
+    return new TypedNumberValue(rounded, t);
   }
   return new TypedNumberValue(value, t);
 }
@@ -284,7 +321,24 @@ function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arg
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
   const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128');
-  if (!isInteger && !isFloat) {
+  // #sec-parsing: "EACH TYPE also has a `tryParse` function with the same
+  // parameters, returning a value of the type where `parse` would return one and
+  // *null* where `parse` would fail to parse its argument."
+  //
+  // A decimal has a `parse`, so it has a `tryParse`; this listed the integer and
+  // float families and refused the rest, so `decimal64.tryParse('1.5')` threw
+  // where `decimal64.parse('1.5')` answered.
+  //
+  // A range failure answers *null* here, which is what the integer family
+  // already does - `uint8.tryParse('300')` is *null* while `uint8.parse('300')`
+  // throws - so a decimal follows the convention beside it rather than
+  // inventing one. Whether that is right is a question for the clause: it says
+  // *null* where `parse` would "fail to parse", and a value the type cannot
+  // represent parsed fine and then did not fit, which is the other failure
+  // `parse` distinguishes.
+  const isDecimal = t.Kind === 'primitive'
+    && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128');
+  if (!isInteger && !isFloat && !isDecimal) {
     return Throw.TypeError('tryParse is not defined for $1', thisValue);
   }
   const attempt = EnsureCompletion(yield* TypeProto_parse([S, radix], context));

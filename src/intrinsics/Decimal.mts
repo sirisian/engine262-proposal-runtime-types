@@ -433,19 +433,46 @@ export function CreateDecimalValue(significand: bigint, exponent: number, width:
  * distinct as members.
  */
 export function ParseDecimalDigits(text: string): { significand: bigint, exponent: number } | undefined {
-  const m = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(text.trim());
+  // #sec-parsing: "The accepted input is THE GRAMMAR OF A LITERAL OF THAT TYPE,
+  // with optional leading and trailing white space and an optional sign.
+  // NUMERIC SEPARATORS ARE ACCEPTED."
+  //
+  // A decimal literal has no grammar of its own - it is a |NumericLiteral| read
+  // in a decimal context (#sec-decimal-floating-point-types) - so the literal
+  // grammar is ECMAScript's |DecimalLiteral|, which carries an |ExponentPart|
+  // and, with separators, `NumericLiteralSeparator`.
+  //
+  // This accepted neither, while `float64.parse('1e20')` and
+  // `uint32.parse('1_000')` accept both: one clause, one sentence, and the
+  // decimal parser alone reading a narrower grammar. The exponent matters more
+  // than it looks, `1e200` being the only compact way to write a value near a
+  // wide decimal's range, and the conversion `decimal128('1e200')` reads these
+  // same digits.
+  const separatorsRemoved = text.trim().replace(/_/g, '');
+  // A separator may not lead, trail, or double up, and `replace` would hide
+  // that - so the shape is checked before they are dropped.
+  if (/^_|_$|__|_\.|\._|[eE]_|_[eE]|[+-]_/.test(text.trim())) {
+    return undefined;
+  }
+  const m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(separatorsRemoved);
   if (!m) {
     return undefined;
   }
-  const [, sign, whole, frac] = m;
+  const [, sign, whole, frac, exp] = m;
   const digits = (whole ?? '') + (frac ?? '');
   if (digits.length === 0) {
     return undefined;
   }
   const magnitude = BigInt(digits);
+  // The exponent part SHIFTS the point the fraction already fixed, so the two
+  // compose: `1.5e3` is 15 at exponent -1 shifted by 3, which is 1500.
+  const exponent = -(frac?.length ?? 0) + (exp === undefined ? 0 : Number(exp));
+  if (!Number.isSafeInteger(exponent)) {
+    return undefined;
+  }
   return {
     significand: sign === '-' ? -magnitude : magnitude,
-    exponent: -(frac?.length ?? 0),
+    exponent,
   };
 }
 
