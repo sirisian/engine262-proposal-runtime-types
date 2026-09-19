@@ -21,7 +21,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
 import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
-import { IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
+import { IsReferenceClass, IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
@@ -501,6 +501,40 @@ export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
   // declaration the design's opening example depends on.
   if (t.Kind === 'parameter') {
     return value;
+  }
+  // A SUBCLASS MAY NOT BE STORED IN A BASE VALUE TYPE CLASS POSITION.
+  //
+  // The base's storage is `Base.byteLength` wide and a subclass does not fit,
+  // so storing one kept `instanceof Sub` while the subclass's own fields read
+  // *undefined* - a method declared `(): uint32` returned *undefined*.
+  //
+  // The rule lives HERE, at the store, and not on the subtype relation.
+  // `IsSubtype` answers two questions with one edge: *is a `B` an `A`* - which
+  // a bound, `is` and `instanceof` ask and which stays TRUE - and *may a `B` be
+  // stored in an `A`-sized slot*, which is this one. Gating the relation broke
+  // `g<T extends A>` at `B`, the bounded generic that replaces the base-typed
+  // parameter, so the two must stay separate.
+  //
+  // A REFERENCE TYPE target is unaffected: a `reference`, `sealed` or
+  // `abstract` class holds a subclass by pointer, which is the documented way
+  // to be polymorphic.
+  if (t.Kind === 'nominal' && t.EnumMembers === undefined && !IsReferenceClass(t)) {
+    const targetDeclaration = (t as { Declaration?: unknown }).Declaration;
+    const sourceType = value instanceof ObjectValue ? RuntimeTypeOf(value) : undefined;
+    if (targetDeclaration !== undefined && sourceType !== undefined
+      && sourceType.Kind === 'nominal'
+      && (sourceType as { Declaration?: unknown }).Declaration !== targetDeclaration) {
+      // Walk the source's base chain by DECLARATION IDENTITY. `SameTypeRecord`
+      // re-enters the subtype walk and recursing from a store check aborts.
+      let walked: TypeRecord | undefined = (sourceType as { Base?: TypeRecord }).Base;
+      for (let depth = 0; walked !== undefined && depth < 1000; depth += 1) {
+        if ((walked as { Declaration?: unknown }).Declaration === targetDeclaration) {
+          return Throw.TypeError('$1 is not assignable to $2',
+            Value(displayType(sourceType)), Value(displayType(t)));
+        }
+        walked = (walked as { Base?: TypeRecord }).Base;
+      }
+    }
   }
   return Q(yield* CheckedConvertValue(value, t));
 }
