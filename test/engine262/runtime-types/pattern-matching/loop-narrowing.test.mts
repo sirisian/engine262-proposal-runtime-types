@@ -112,3 +112,30 @@ test('a narrowing re-established after the call holds', () => {
   expect(evaluated(`${C}function clob(): uint8 { v = null; return 0; }
     clob(); if (v !== null) { n = v.x; } String(n);`)).toBe('0');
 });
+
+/**
+ * A GUARD CLAUSE carries its narrowing to the rest of the function, and did so
+ * only for a binding. `carriedGuardFact` bailed when `lookup(fact.name)` found
+ * nothing, and a path is not in the bindings map until something narrows it - so
+ * `if (c.a === null) return 0; return c.a.x;` was refused while the `else`
+ * spelling of the same test narrowed the same path. It falls back the way
+ * `walkGuardedBranches` already does.
+ *
+ * The rule stays exit-sensitive: a guard whose branch does not leave carries
+ * nothing, since control joins and no fact holds after it.
+ */
+test('a guard clause carries its narrowing over a path as well as a binding', () => {
+  const B = 'class A { x: uint8 = 1; } class B { a: A | null = null; } const b = new B(); b.a = new A(); ';
+  expect(evaluated(`${B}function f(c: B): uint8 { if (c.a === null) return 0; return c.a.x; } String(f(b));`)).toBe('1');
+  expect(evaluated(`class A { x: uint8 = 1; }
+    function f(v: A | null): uint8 { if (v === null) return 0; return v.x; } String(f(new A()));`)).toBe('1');
+  // `throw` leaves as surely as `return` does.
+  expect(evaluated(`class A { x: uint8 = 1; }
+    function f(v: A | null): uint8 { if (v === null) throw new Error("x"); return v.x; } String(f(new A()));`)).toBe('1');
+});
+
+test('a guard whose branch does not leave carries nothing', () => {
+  expectThrown(`class A { x: uint8 = 1; }
+    function f(v: A | null): uint8 { if (v === null) { } return v.x; } f(new A());`,
+  'is not declared by every member');
+});

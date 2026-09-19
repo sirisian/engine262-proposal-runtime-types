@@ -55,8 +55,26 @@ test('the full width of the type is usable as a key', () => {
   expect(evaluated('const s = new Set.<uint64>(); s.add(18446744073709551615n := uint64); String(s.size);')).toBe('1');
   expect(evaluated('const s = new Set.<uint64>(); s.add(18446744073709551615n := uint64); String(s.has(18446744073709551615n := uint64));')).toBe('true');
   expect(evaluated('const s = new Set.<int64>(); s.add(-9223372036854775808n := int64); s.add(9223372036854775807n := int64); String(s.size);')).toBe('2');
-  // And one past the end is refused rather than wrapped.
-  expect(ok('const s = new Set.<uint64>(); s.add(18446744073709551616n := uint64);')).toBe(false);
+  // And one past the end WRAPS, because an explicit conversion wraps:
+  // #table-numeric-conversions, integer to integer of width M, is "the
+  // mathematical value of the source modulo 2**M". 2**64 mod 2**64 is 0, so the
+  // key added is 0 and the set holds one entry.
+  //
+  // This asserted a refusal until a BigInt source was made to behave like every
+  // other numeric source. `uint8(300)`, `uint8(someUint16)` and
+  // `uint8(someFloat64)` all gave 44 while `uint8(300n)` alone was a
+  // *RangeError* - one spelling with two rules - and the BigInt case was the
+  // odd one out. The "unrepresentable" rule that had been quoted for it belongs
+  // to the BOUNDARY rather than to an explicit conversion, which is the
+  // distinction the proposal is built on: "a conversion between numeric types
+  // is written explicitly rather than performed silently".
+  //
+  // The boundary still refuses the same magnitude, which is the half that keeps
+  // a program from acquiring an out-of-range value by accident:
+  // `let k: uint64 = 18446744073709551616n` is not assignable.
+  expect(evaluated('const s = new Set.<uint64>(); s.add(18446744073709551616n := uint64); String(s.has(0n := uint64));')).toBe('true');
+  expect(evaluated('const s = new Set.<uint64>(); s.add(18446744073709551616n := uint64); String(s.size);')).toBe('1');
+  expect(ok('let k: uint64 = 18446744073709551616n;')).toBe(false);
 });
 
 test('a numeric key converts where the target represents it EXACTLY, and not otherwise', () => {

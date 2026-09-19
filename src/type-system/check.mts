@@ -18748,10 +18748,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!fact || fact.sense) {
           return null;
         }
-        const source = lookup(fact.name);
-        if (!source) {
-          return null;
-        }
+        // Falls back the way `walkGuardedBranches` already does. A PATH is not
+        // in the bindings map until something narrows it, so bailing on a
+        // missing entry carried a guard fact for a binding and never for
+        // `c.a` - the `else` spelling of the same test narrowed a path while
+        // the guard-clause spelling did not.
+        const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
         const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
         const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
         const leaves = (b: ParseNode | null | undefined) => (b
