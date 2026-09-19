@@ -236,6 +236,14 @@ export function CreateCheckSession(): CheckSession {
 
 /** The topic's binding name (#sec-pipeline-operator); `%` is not an IdentifierName, so no program can write it. */
 const TOPIC_NAME = '%';
+/**
+ * The path segment standing for `this`.
+ *
+ * A receiver, like a binding name, keys a narrowing on the scope frame, and
+ * `this` is not an identifier so it needs a spelling that no identifier can
+ * collide with.
+ */
+const THIS_PATH = 'this';
 
 /** Identity of the self type a method's [[ThisType]] uses (#sec-this-adoption). */
 const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
@@ -14031,6 +14039,82 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (e.type === 'TopicReference') {
       return TOPIC_NAME;
+    }
+    if (e.type === 'ParenthesizedExpression') {
+      return narrowableName((e as unknown as { Expression: ParseNode }).Expression);
+    }
+    if (e.type === 'ThisExpression') {
+      return THIS_PATH;
+    }
+    if (e.type === 'MemberExpression') {
+      return narrowablePath(e);
+    }
+    return null;
+  };
+
+  /**
+   * A dotted PATH naming the same place on every evaluation, or *null*.
+   *
+   * Narrowing is keyed by name on the scope frame, and `.` cannot appear in an
+   * identifier, so a key like `b.a` cannot collide with a binding and the
+   * existing map carries it unchanged.
+   *
+   * This function is the whole safety boundary: whatever it declines never
+   * narrows. It admits only what names ONE place however often it is evaluated -
+   * a chain of plain names from an identifier or `this`, private names included,
+   * and an index into a FIXED-extent array whose index cannot change, which is a
+   * literal or a `const` binding. A fixed extent cannot be grown or resized, so
+   * such an element is as stable as a field.
+   *
+   * It declines a call anywhere in the chain, since two evaluations of `h.get()`
+   * are two values; any index into a dynamic `[].<T>`, whose extent can change
+   * under it; and an optional link `b?.a`, which names a different place
+   * depending on whether the base is nullish.
+   */
+  const narrowablePath = (e: ParseNode): string | null => {
+    const m = e as unknown as {
+      MemberExpression?: ParseNode, Expression?: ParseNode | null,
+      IdentifierName?: { name: string } | null, PrivateIdentifier?: { name: string } | null,
+    };
+    if (!m.MemberExpression) {
+      return null;
+    }
+    const base = narrowableName(m.MemberExpression);
+    if (base === null) {
+      return null;
+    }
+    if (m.IdentifierName) {
+      return `${base}.${m.IdentifierName.name}`;
+    }
+    if (m.PrivateIdentifier) {
+      return `${base}.#${m.PrivateIdentifier.name}`;
+    }
+    if (m.Expression) {
+      const key = stablePathIndex(m.MemberExpression, m.Expression);
+      return key === null ? null : `${base}.[${key}]`;
+    }
+    return null;
+  };
+
+  /**
+   * The text of an index that names the same element on every evaluation, or
+   * *null*. Only over a FIXED-extent array: a dynamic one can be grown, so an
+   * index into it is not a stable place even when the index itself is.
+   */
+  const stablePathIndex = (receiver: ParseNode, index: ParseNode): string | null => {
+    const receiverType = staticType(receiver);
+    if (!receiverType || receiverType.Kind !== 'array' || typeof (receiverType as { Extent?: unknown }).Extent !== 'number') {
+      return null;
+    }
+    if (index.type === 'NumericLiteral') {
+      return String((index as unknown as { value: unknown }).value);
+    }
+    if (index.type === 'IdentifierReference') {
+      // `immutablyBound` is the existing judgment for "this name cannot be
+      // reassigned", covering a `const` and also a binding the text never writes
+      // to, and withdrawing itself in the presence of a direct `eval`.
+      const name = (index as unknown as { name: string }).name;
+      return immutablyBound(name) ? name : null;
     }
     return null;
   };
