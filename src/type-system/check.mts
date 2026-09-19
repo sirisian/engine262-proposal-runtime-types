@@ -14356,9 +14356,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Through `narrowableName`, as the `is` and `typeof` forms already are,
         // so a member path narrows here too. It declines anything that could
         // name a different place on a second evaluation.
+        //
+        // A DISCRIMINANT test is left alone. `s.kind === "circle"` over a union
+        // `s` narrows `s` to the arm, which is a different and older rule, and a
+        // fact keyed on `s.kind` displaces it - the whole record stops being
+        // narrowed and `s.r` is refused. Narrowing the discriminant itself would
+        // be correct in isolation and is worth strictly less than narrowing the
+        // record, so where the base is a union this arm declines and the
+        // discriminant rule runs.
         const name = narrowableName(subject);
         if (name === null) {
           continue;
+        }
+        if (subject.type === 'MemberExpression') {
+          const receiver = (subject as unknown as { MemberExpression?: ParseNode }).MemberExpression;
+          const receiverType = receiver ? staticType(receiver) : null;
+          if (receiverType?.Kind === 'union') {
+            continue;
+          }
         }
         // `x === null` and `x === undefined`, and the LOOSE forms, which test
         // for either: `x == null` is the idiom for "nullish" and narrows to
