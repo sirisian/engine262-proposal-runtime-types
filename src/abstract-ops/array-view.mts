@@ -6,7 +6,7 @@ import {
 import type { TypeRecord } from '../type-system/records.mts';
 import { IsPlainData, LayoutOf } from '../type-system/layout.mts';
 import { ToIndexType } from './runtime-types.mts';
-import { BufferElementType } from './placement.mts';
+import { BufferElementType, PlacedInstance } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, OrdinaryObjectCreate, R, RequireType,
@@ -127,6 +127,25 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
   }
   const type = BufferElementType(backing.Element);
   if (type === null) {
+    // A CLASS ELEMENT reads through a placement-backed instance, the same object
+    // a placement `new` produces and an SoA column already built for a nested
+    // field. Without this every element access on a class-typed window answered
+    // "an element of this type cannot be viewed in a buffer" while the
+    // array-backed window read the same element correctly - one type standing
+    // for two behaviours at the same operation.
+    //
+    // The instance ALIASES the buffer, which is what `const ref e = view[i]`
+    // wants. A plain `const e = view[i]` still copies, because the copy happens
+    // where the binding is made (#sec-value-type-copying) and not here.
+    const placed = Q(yield* PlacedInstance(
+      backing.Element,
+      backing.Buffer,
+      backing.ByteOffset + index * backing.Stride,
+      backing.Stride,
+    ));
+    if (placed) {
+      return placed;
+    }
     return Throw.TypeError('an element of this type cannot be viewed in a buffer');
   }
   const raw = GetValueFromBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, true, 'unordered');
@@ -146,7 +165,30 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
   }
   const type = BufferElementType(backing.Element);
   if (type === null) {
-    return Throw.TypeError('an element of this type cannot be viewed in a buffer');
+    // A WHOLE-ELEMENT write over a class element copies the source's fields into
+    // the slot, which is what the array-backed window already does for
+    // `s[0] = v`. Assigning field by field through the placed instance rather
+    // than blitting bytes, so a bit-field, an explicit offset and a nested class
+    // each go through the rule that placed them.
+    const source = Q(yield* RequireType(value, backing.Element));
+    const placed = Q(yield* PlacedInstance(
+      backing.Element,
+      backing.Buffer,
+      backing.ByteOffset + index * backing.Stride,
+      backing.Stride,
+    ));
+    if (!placed || !(source instanceof ObjectValue)) {
+      return Throw.TypeError('an element of this type cannot be viewed in a buffer');
+    }
+    const layout = LayoutOf(backing.Element) as { fields?: readonly { key: string | PrivateName }[] } | null;
+    for (const field of layout?.fields ?? []) {
+      if (typeof field.key !== 'string') {
+        continue;
+      }
+      const fieldValue = Q(yield* Get(source, Value(field.key)));
+      Q(yield* SetValueOnObject(placed, Value(field.key), fieldValue, Value.true));
+    }
+    return true;
   }
   const converted = Q(yield* RequireType(value, backing.Element));
   const numeric = converted instanceof TypedNumberValue

@@ -1,7 +1,7 @@
 import { Q, X } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import {
-  NumberValue, TypedNumberValue, Value, type ObjectValue,
+  NumberValue, ObjectValue, TypedNumberValue, Value,
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import type { ClassLayout, FieldPlacement } from '../type-system/layout.mts';
@@ -9,6 +9,7 @@ import type { TypedArrayTypes } from '../intrinsics/TypedArray.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, Throw, surroundingAgent, ToIndex,
+  Get, OrdinaryObjectCreate,
 } from '#self';
 
 /**
@@ -67,6 +68,45 @@ export function TakePendingPlacement(instance: object): void {
     placements.set(instance, pendingPlacement);
     pendingPlacement = undefined;
   }
+}
+
+/**
+ * An instance of a laid-out class whose fields READ AND WRITE THROUGH to a
+ * buffer at a byte offset, rather than to storage of its own.
+ *
+ * This is what a placement `new` produces and what an SoA column already built
+ * by hand for a nested class field; a window over a buffer needs the same object
+ * for its elements and had no way to ask for one, which is why every element
+ * access on a class-typed view answered "an element of this type cannot be
+ * viewed in a buffer" while the array-backed window read the same element fine.
+ */
+export function* PlacedInstance(
+  type: TypeRecord,
+  buffer: ArrayBufferObject,
+  byteOffset: number,
+  byteLength: number,
+): PlainEvaluator<ObjectValue | null> {
+  if (type.Kind !== 'nominal') {
+    return null;
+  }
+  const ctor = (type as { Constructor?: ObjectValue }).Constructor as
+    { InstanceLayout?: ClassLayout | null } | undefined;
+  const layout = ctor?.InstanceLayout;
+  if (!layout) {
+    return null;
+  }
+  const proto = Q(yield* Get(ctor as unknown as ObjectValue, Value('prototype')));
+  const instance = OrdinaryObjectCreate(proto instanceof ObjectValue ? proto : Value.null);
+  SetPlacementBacking(instance as unknown as object, {
+    Buffer: buffer, ByteOffset: byteOffset, ByteLength: byteLength, Layout: layout,
+  });
+  const typed = new Map<unknown, { TypeRecord: TypeRecord }>();
+  for (const field of layout.fields) {
+    typed.set(field.key, { TypeRecord: field.type });
+  }
+  (instance as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+  X(instance.PreventExtensions());
+  return instance;
 }
 
 export function SetPlacementBacking(instance: object, backing: PlacementBacking): void {
