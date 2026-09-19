@@ -2127,6 +2127,73 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * The names a SUBTREE assigns to, for the loop back-edge rule.
+   *
+   * Narrowing established before a loop was never re-widened when the body
+   * invalidated it, so the second iteration was typed with a fact that had
+   * stopped being true: `if (v !== null) { for (…) { n = v.x; v = null; } }`
+   * typechecked and failed at run time with "Cannot convert null to object".
+   * Ordinary invalidation works - the same two statements outside a loop ARE
+   * refused - so what was missing is a rule at the back-edge, not a rule about
+   * assignment.
+   *
+   * The body is walked ONCE, so the fact has to be dropped before the walk
+   * rather than at the point of assignment: a read textually before the
+   * assignment is fine on the first pass and stale on the second, and one walk
+   * cannot tell the two apart. Every name the body can change is therefore
+   * widened for the whole body. This is the same ordering problem
+   * `collectMutations` describes for elision - "an assignment may appear
+   * textually after the call whose elision it invalidates" - and the shape of
+   * the answer is the same.
+   *
+   * A `const` cannot be reassigned, so one never needs widening; it is left to
+   * `invalidateNarrowing`, which drops nothing it does not hold.
+   */
+  const assignedNamesIn = (node: unknown, out: Set<string>): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const c of node) {
+        assignedNamesIn(c, out);
+      }
+      return;
+    }
+    const n = node as Record<string, unknown> & { type?: string };
+    if (typeof n.type !== 'string') {
+      return;
+    }
+    const targetName = (t: unknown): void => {
+      const x = t as { type?: string, name?: string } | null | undefined;
+      if (x && x.type === 'IdentifierReference' && typeof x.name === 'string') {
+        out.add(x.name);
+      }
+    };
+    if (n.type === 'AssignmentExpression') {
+      targetName(n.LeftHandSideExpression);
+    } else if (n.type === 'UpdateExpression') {
+      targetName(n.LeftHandSideExpression ?? n.UnaryExpression);
+    } else if (n.type === 'ForInStatement' || n.type === 'ForOfStatement') {
+      targetName(n.LeftHandSideExpression);
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
+        continue;
+      }
+      assignedNamesIn(n[key], out);
+    }
+  };
+
+  /** Drop the narrowing of every name a loop can reassign, before its body is walked. */
+  const widenForLoop = (node: ParseNode): void => {
+    const assigned = new Set<string>();
+    assignedNamesIn(node, assigned);
+    for (const name of assigned) {
+      invalidateNarrowing(name);
+    }
+  };
+
   // ---- speculation and the contextual-type journals -----------------
 
   /**
@@ -18273,6 +18340,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!Array.isArray(node)
       && ((node as ParseNode).type === 'ForOfStatement' || (node as ParseNode).type === 'ForAwaitStatement'
         || (node as ParseNode).type === 'ForInStatement')) {
+      // These three are handled HERE rather than in the switch below, so the
+      // back-edge widening belongs here too - a case added there is dead code.
+      widenForLoop(node as ParseNode);
       const f = node as unknown as {
         AssignmentExpression?: ParseNode, Expression?: ParseNode, ForDeclaration?: ParseNode,
         ForBinding?: ParseNode, Statement?: ParseNode, LeftHandSideExpression?: ParseNode,
@@ -19699,6 +19769,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'DoWhileStatement':
       case 'ForStatement': {
         const checkLoop = () => {
+        // Every name this loop can reassign loses its narrowing before the body
+        // is walked, since the body is walked once and the second iteration is
+        // typed by the same walk as the first.
+        widenForLoop(n);
         if (n.type === 'ForStatement') {
           if (!n.LexicalDeclaration && !n.VariableDeclarationList) validateDiscardedExpression(n.Expression_a);
           validateDiscardedExpression(ForPatternPositions(n).update);
@@ -19729,6 +19803,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'WhileStatement': {
         // A `while` test guards its body on every iteration.
         const w = n as unknown as { Expression: ParseNode, Statement: ParseNode };
+        // Widened BEFORE `walkGuarded`, so the loop's own test still narrows the
+        // body from the widened type - which is what keeps `while (v !== null)`
+        // working while dropping a narrowing inherited from outside.
+        widenForLoop(n);
         // Typed for the same reason an `if` condition is: a condition is an
         // expression whose judgments run from `staticType`, and walking does not
         // call it for one.
