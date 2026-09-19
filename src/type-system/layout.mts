@@ -731,6 +731,7 @@ export interface FieldPlacement {
   readonly offsetBit: number;
   readonly isBitField: boolean;
   readonly layout: Layout;
+  readonly endian?: 'little' | 'big';
 }
 
 export interface ClassLayout extends Layout {
@@ -922,6 +923,8 @@ export function ComputeClassLayout(
       offsetBit: offsetBits!,
       isBitField,
       layout,
+      endian: field.controls?.endian === 'big' || field.controls?.endian === 'little'
+        ? field.controls.endian : undefined,
     });
     if (cursor > furthest) {
       furthest = cursor;

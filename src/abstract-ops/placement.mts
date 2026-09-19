@@ -212,7 +212,13 @@ export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldTy
   if (element === null) {
     return Throw.TypeError('a field of this type cannot be placed in a buffer');
   }
-  const raw = GetValueFromBuffer(backing.Buffer, backing.ByteOffset + placement.offset, element, true, 'unordered');
+  // `@endian` fixes this field's byte order. Without one the platform's order is
+  // used, which is what a `TypedArray` does and what this implementation's *true*
+  // stands for. `layout.mts` says the decorator is "carried and has no effect on
+  // the byte walk ... a property of reading and writing rather than of
+  // placement" - so this is where it belongs, and it was not consulted, leaving
+  // `@endian('big')` and no decorator writing identical bytes.
+  const raw = GetValueFromBuffer(backing.Buffer, backing.ByteOffset + placement.offset, element, true, 'unordered', placement.endian !== 'big');
   if (raw instanceof NumberValue) {
     return new TypedNumberValue(R(raw), fieldType);
   }
@@ -246,7 +252,7 @@ export function* WritePlacedField(backing: PlacementBacking, key: string, fieldT
   if (element === null) {
     return Throw.TypeError('a field of this type cannot be placed in a buffer');
   }
-  Q(yield* SetValueInBuffer(backing.Buffer, backing.ByteOffset + placement.offset, element, numeric as NumberValue, true, 'unordered'));
+  Q(yield* SetValueInBuffer(backing.Buffer, backing.ByteOffset + placement.offset, element, numeric as NumberValue, true, 'unordered', placement.endian !== 'big'));
   return true;
 }
 

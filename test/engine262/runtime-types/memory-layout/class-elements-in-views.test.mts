@@ -65,3 +65,49 @@ test('a nested class field is still refused, as it is for placement itself', () 
   expectThrown(`${nested}const o = new(new ArrayBuffer(8), 0) O(); o.i.n;`,
     'cannot be placed in a buffer');
 });
+
+/**
+ * `@endian` fixes a field's byte order. It parsed, set its descriptor key, and
+ * changed nothing: `@endian('big')`, `@endian('little')` and no decorator all
+ * wrote the same bytes.
+ *
+ * `layout.mts` says where it belongs - "`offsetBit` and `endian` are carried and
+ * have no effect on the byte walk ... the second fixes a field's byte order,
+ * which is a property of READING AND WRITING rather than of placement" - so the
+ * placement record now carries it and both buffer calls consult it.
+ *
+ * The parameter is the SEVENTH of `GetValueFromBuffer` / `SetValueInBuffer`.
+ * The fourth is `_isTypedArray`, and passing the order there type-checks, builds
+ * and does nothing, which is what made this look like a plumbing failure long
+ * after the plumbing was correct.
+ */
+test('@endian fixes a field\u2019s byte order', () => {
+  const big = `class W { @endian('big') v: uint16 = 0; } `;
+  const none = 'class W { v: uint16 = 0; } ';
+  const body = `const b = new ArrayBuffer(4); const s = Span.<W>(b);
+    const ref e = s[0]; e.v = 258; const r = new Uint8Array(b); r[0] + '/' + r[1];`;
+  expect(evaluated(big + body)).toBe('1/2');
+  expect(evaluated(none + body)).toBe('2/1');
+});
+
+test('a field round-trips through its own order', () => {
+  expect(evaluated(`class W { @endian('big') v: uint16 = 0; }
+    const b = new ArrayBuffer(4); const s = Span.<W>(b); const ref e = s[0]; e.v = 258; String(e.v);`)).toBe('258');
+  expect(evaluated(`class W { @endian('big') v: uint32 = 0; }
+    const b = new ArrayBuffer(8); const s = Span.<W>(b); const ref e = s[0]; e.v = 1;
+    const r = new Uint8Array(b); r[0] + '/' + r[3];`)).toBe('0/1');
+});
+
+test('one class may mix orders, which is what a wire format needs', () => {
+  // memorylayout.md: "a struct can mix native fields with big-endian network
+  // fields in one declaration".
+  expect(evaluated(`class P { @endian('big') a: uint16 = 0; b: uint16 = 0; }
+    const b = new ArrayBuffer(8); const s = Span.<P>(b); const ref e = s[0]; e.a = 258; e.b = 258;
+    const r = new Uint8Array(b); r[0] + '/' + r[1] + ' ' + r[2] + '/' + r[3];`)).toBe('1/2 2/1');
+});
+
+test('placement new honours it on the same path', () => {
+  expect(evaluated(`class W { @endian('big') v: uint16 = 0; }
+    const b = new ArrayBuffer(4); const w = new(b, 0) W(); w.v = 258;
+    const r = new Uint8Array(b); r[0] + '/' + r[1];`)).toBe('1/2');
+});
