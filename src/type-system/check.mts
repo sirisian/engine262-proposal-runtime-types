@@ -19708,7 +19708,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `rational(5)` wants the INTEGER 5 its constructor asks for.
             const numericLiteralArgument = (argNodes[0] as { type?: string }).type === 'NumericLiteral';
             const carriesTheValue = conversionTarget.Kind === 'primitive'
-              && conversionTarget.Name === 'rational';
+              && (conversionTarget.Name === 'rational' || decimalWidthOf(conversionTarget) !== undefined);
             if (numericLiteralArgument && carriesTheValue) {
               staticType(argNodes[0]!);
             } else {

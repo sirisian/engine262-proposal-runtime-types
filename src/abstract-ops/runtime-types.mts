@@ -689,6 +689,46 @@ export function NumericArmRank(m: TypeRecord): number | null {
   return null;
 }
 
+/**
+ * Do the values of the numeric type _m_ include _v_ EXACTLY?
+ *
+ * #sec-selectunionmember builds its second rung from "the members ... that are
+ * numeric types whose values include the mathematical value of _value_
+ * EXACTLY", and its note names the three rungs: "is the value already of a
+ * member, does a member REPRESENT IT EXACTLY as a number, and does any member
+ * admit it at all".
+ *
+ * `fitsNumericType` answers a different question - whether the value CONVERTS -
+ * and for a float it answers *true* unconditionally, rounding being what a
+ * float conversion does. Reading it as the exact test made every float member
+ * qualify for the second rung, so the narrowest won by rank and quietly lost
+ * precision a wider member would have kept: `let u: float16 | float64 = 0.1`
+ * bound a `float16` 0.0999755859375, where `float64` represents that double
+ * exactly and the rung exists to choose it.
+ *
+ * The two questions are named apart rather than merged: the boundary below
+ * still wants "does it convert", and this rung wants "is it already this".
+ */
+function representsExactly(v: number | bigint, m: TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] }): boolean {
+  if (isFloatTypeName(m.Name)) {
+    if (typeof v !== 'number') {
+      // A BigInt is exactly a float's value only where the float holds that
+      // integer, which is the round-trip below asked of its Number form.
+      const asNumber = Number(v);
+      return BigInt(asNumber) === v && representsExactly(asNumber, m);
+    }
+    // NaN and the infinities are values of every float width, and a round trip
+    // through `wrapToType` compares unequal for NaN, so they are answered
+    // first.
+    if (!Number.isFinite(v)) {
+      return true;
+    }
+    const rounded = wrapToType(v, m);
+    return typeof rounded === 'number' && rounded === v;
+  }
+  return fitsNumericType(v, m.Name, m.Arguments);
+}
+
 export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: readonly TypeRecord[] }, convert: (v: Value, m: TypeRecord) => ValueEvaluator): ValueEvaluator {
   const members = t.Members;
   for (const m of members) {
@@ -706,7 +746,7 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
       .map((m) => ({ m, rank: numericRank(m) }))
       .filter((e): e is { m: TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] }, rank: number } => e.rank !== null
         && e.m.Kind === 'primitive'
-        && fitsNumericType(numericValue, e.m.Name, e.m.Arguments))
+        && representsExactly(numericValue, e.m))
       .sort((a, b) => a.rank - b.rank);
     for (const e of exact) {
       const attempt = EnsureCompletion(yield* convert(value, e.m));
@@ -1131,24 +1171,23 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
           // #table-numeric-conversions, integer to integer of width _M_: "The
           // mathematical value of the source modulo 2**_M_ ... Signed targets
           // wrap in two's complement." A BigInt is a numeric source like any
-          // other here, so it WRAPS.
+          // other at an EXPLICIT conversion, so it wraps.
           //
-          // It refused instead, quoting #sec-requiretype's rule that "a
-          // conversion that would wrap, truncate toward zero, or round a finite
-          // value to an infinity instead yields ~unrepresentable~". That rule is
-          // the BOUNDARY's, and this operation is the explicit conversion - the
-          // distinction the whole proposal is built on, "a conversion between
-          // numeric types is written explicitly rather than performed silently".
-          // So `uint8(300)`, `uint8(someUint16)` and `uint8(someFloat64)` all
-          // gave 44 while `uint8(300n)` was a *RangeError*: one spelling, five
-          // numeric families, four answers agreeing and one not.
+          // It refused instead, quoting #sec-requiretype's "a conversion that
+          // would wrap ... instead yields ~unrepresentable~" - which is the
+          // BOUNDARY's rule, and this operation is the explicit conversion the
+          // proposal distinguishes it from. `uint8(300)`, `uint8(someUint16)`
+          // and `uint8(someFloat64)` all gave 44 while `uint8(300n)` alone was
+          // a *RangeError*: one spelling, five numeric families, four answers
+          // agreeing and one not.
           //
-          // A boundary still refuses, because `RequireType` applies its own rule
-          // and never reaches here - `let x: uint8 = 300n` is unchanged, which
-          // is the case the `n` suffix's exactness argument was actually about.
+          // A boundary still refuses, `RequireType` applying its own rule and
+          // never reaching here - `let x: uint8 = 300n` is unchanged, which is
+          // the case the `n` suffix's exactness argument was about.
           //
-          // Wrapped on the BigInt, not through a double: `Number(exact)` first
-          // would round a wide value before the modulo that defines the answer.
+          // Wrapped on the BigInt rather than through a double: `Number(exact)`
+          // first would round a wide value before the modulo that defines the
+          // answer.
           const wrapped = bits > 0
             ? (t.Name === 'int' ? BigInt.asIntN(bits, exact) : BigInt.asUintN(bits, exact))
             : exact;

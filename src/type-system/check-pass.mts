@@ -5,7 +5,7 @@ import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability
 import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame, EvaluateRefinementPredicate, ValuePackView } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor } from '../abstract-ops/runtime-types.mts';
+import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   typeDeclarationNamesInPass,
@@ -836,10 +836,27 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
       continue;
     }
+    // The BOUNDARY's question, not the conversion's. A binding is a store, and
+    // #sec-requiretype is what a store performs; `ConvertValue` answers whether
+    // the value could be converted, which is a different and weaker thing.
+    //
+    // The two part company exactly here. `string` admits a numeric source by
+    // #table-sourceconversion - "ToString of the value" - so
+    // `ConvertValue(5, string.<{ brand: 'P' }>)` succeeds with "5" and the pass
+    // reported nothing, while the binding at run time refused: RequireType's
+    // string step tests "If _t_ is `string`", and a ~parameterized~ record is
+    // not that. So `let v: string.<{ brand: 'P' }> = 5` was a run-time
+    // TypeError with no early error, and the same line in a function nothing
+    // called raised nothing at all - which `decorators/resolver-parity` reports
+    // as the checker failing to RESOLVE the annotation, though resolution was
+    // never the problem: `number.<M>` and `string.<M>` resolve by the same arm.
+    //
+    // The bare spelling was already right - `let v: string = 5` is an early
+    // error - so the parameterized one was the outlier among its own siblings.
     BeginFragmentEvaluation();
     let attempt;
     try {
-      attempt = EnsureCompletion(yield* ConvertValue(crossing.value, crossing.target));
+      attempt = EnsureCompletion(yield* RequireType(crossing.value, crossing.target));
     } finally {
       EndFragmentEvaluation();
     }

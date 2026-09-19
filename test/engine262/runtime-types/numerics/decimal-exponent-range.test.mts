@@ -58,23 +58,33 @@ test('conversions in range are unchanged', () => {
 });
 
 /**
- * decimal.md draws the line at a float64 VALUE, not at a literal: "The
- * distinction bites only when a `float64` *value* is involved - `decimal128(f)`
- * carries whatever `f` already holds, so a binary `0.1` stays slightly off",
- * with `let tenth: decimal128 = 0.1` and `0.1 := decimal128` given as the exact
- * forms, the second "forcing decimal on an otherwise-Number literal".
+ * decimal.md gives three exact spellings and one that carries the bits:
+ * `let tenth: decimal128 = 0.1` and `0.1 := decimal128` are exact, the second
+ * "forcing decimal on an otherwise-Number literal", while `decimal128(f)`
+ * "CARRIES WHATEVER `f` ALREADY HOLDS".
  *
- * The call spelling typed its literal bare, so a third spelling of one literal
- * disagreed with those two, and the design's own worked example -
- * `decimal128(someFloat64)` - was refused because a typed `float64` arrives as a
- * TypedNumberValue rather than a NumberValue. The engine converted what should
- * be exact and refused what should convert.
+ * The CALL is a conversion whatever its argument looks like: the argument is
+ * evaluated first, so by the time the conversion sees it the literal IS the
+ * double. A round of this work read "the distinction bites only when a
+ * `float64` *value* is involved" as excluding a literal argument and made
+ * `decimal128(0.1)` exact - which `type-universe/decimal.test.mts` pins against
+ * with the comment "THE ASSERTION THAT SAYS WHY": making it equal
+ * `decimal128("0.1")` "would launder a binary approximation into an
+ * exact-looking decimal and hide the whole reason these types exist".
  */
-test('a literal is exact in every spelling', () => {
+test('the exact spellings are the annotation and the cast', () => {
   expect(evaluated('let t: decimal128 = 0.1; String(t);')).toBe('0.1');
   expect(evaluated('String((0.1 := decimal128));')).toBe('0.1');
-  expect(evaluated('String(decimal128(0.1));')).toBe('0.1');
-  expect(evaluated('String(decimal128(19.99));')).toBe('19.99');
+  expect(evaluated('let p: decimal128 = 19.99; String(p);')).toBe('19.99');
+});
+
+test('the call carries the bits, literal argument or not', () => {
+  expect(evaluated('String(decimal128(0.1));')).toBe('0.1000000000000000055511151231257827');
+  expect(evaluated('String(decimal128(19.99));')).toBe('19.98999999999999843680598132777959');
+  // Which is the assertion that says why.
+  expect(evaluated("String(decimal128(0.1) == decimal128('0.1'));")).toBe('false');
+  // A value the double holds exactly converts exactly, and arrives reduced.
+  expect(evaluated('String(decimal128(0.5));')).toBe('0.5');
 });
 
 test('a float64 value carries what it holds, typed or not', () => {
@@ -97,7 +107,7 @@ test('any numeric type is a source, and exact digits are kept', () => {
 });
 
 /**
- * decimal.md, "Conversions — Explicit in every direction, and each names its
+ * decimal.md, "Conversions - Explicit in every direction, and each names its
  * loss", gives four outgoing rules: "To a binary float: `float64(d)` rounds to
  * the nearest `float64`"; "To an integer: `int64(d)` truncates toward zero";
  * "Between widths: `decimal32` to `decimal128` is exact; the reverse rounds";
@@ -137,14 +147,13 @@ test('a boundary is not a conversion', () => {
 /**
  * #table-numeric-conversions, integer to integer of width _M_: "The
  * mathematical value of the source modulo 2**_M_ ... Signed targets wrap in
- * two's complement." Every numeric source, one spelling, one answer.
+ * two's complement." Every numeric source, one spelling, one answer - and a
+ * BigInt is a numeric source like any other at an EXPLICIT conversion.
  *
- * A BigInt source refused instead, quoting #sec-requiretype's "a conversion
- * that would wrap ... instead yields ~unrepresentable~" - which is the BOUNDARY
- * rule, and this is the explicit conversion the proposal distinguishes it from.
- * The decimal-to-integer conversion delegates to the same code rather than
- * carrying its own integer rule, so both were wrong together and are right
- * together.
+ * The rule it refused under, #sec-requiretype's "a conversion that would wrap
+ * ... instead yields ~unrepresentable~", is the BOUNDARY's, and the boundary
+ * still applies it. The decimal-to-integer conversion delegates to this same
+ * code rather than carrying its own integer rule, so both follow together.
  */
 test('every numeric source wraps the same way at an explicit conversion', () => {
   expect(evaluated('let n = 300; String(uint8(n));')).toBe('44');
@@ -152,16 +161,14 @@ test('every numeric source wraps the same way at an explicit conversion', () => 
   expect(evaluated('let a: uint16 = 300; String(uint8(a));')).toBe('44');
   expect(evaluated('let f: float64 = 300; String(uint8(f));')).toBe('44');
   expect(evaluated("let d = decimal64('300'); String(uint8(d));")).toBe('44');
-  // Signed targets wrap in two's complement, and agree across sources too.
   expect(evaluated('String(int8(200n));')).toBe('-56');
   expect(evaluated('let n = 200; String(int8(n));')).toBe('-56');
   // A width wider than 53 bits still carries its value exactly.
   expect(evaluated('String(uint64(9007199254740993n));')).toBe('9007199254740993');
+  expect(evaluated("let d = decimal64('7.9'); String(int64(d));")).toBe('7');
 });
 
 test('a boundary still refuses what a conversion wraps', () => {
-  // The distinction the proposal is built on: #sec-requiretype's rule stays
-  // where it belongs.
   expectStaticTypeError('let x: uint8 = 300n;');
   expectStaticTypeError('let x: uint8 = 300;');
 });

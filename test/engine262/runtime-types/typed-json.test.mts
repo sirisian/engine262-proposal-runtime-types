@@ -196,3 +196,46 @@ test('a typed parse reads an enum member back as its enumerator', () => {
   expect(evaluated(`${C}let o = JSON.parse.<T>('{"c":1}'); String(Reflect.typeOf(o.c) === C);`)).toBe('true');
   expect(evaluated(`${S}let o = JSON.parse.<T>('{"s":"y"}'); String(Reflect.typeOf(o.s) === S);`)).toBe('true');
 });
+
+/**
+ * Spec: #sec-coercejsonvalue with #sec-composite-types.
+ *
+ * The clause validates rather than converts, and says why of the integer case:
+ * "Converting first and validating never would let a `uint8` member wrap `300`
+ * to `44` and intern the wrong document silently."
+ *
+ * It says nothing of the float case, and the float case was doing neither. A
+ * token reaching a narrow float target was tagged with the type UNROUNDED, so
+ * `JSON.parse.<float16>('0.1')` was `0.1` - a value no `float16` holds,
+ * answering `float16` to `Reflect.typeOf` - and `1e300` came through unchanged.
+ * `fitsNumericType` answers *true* for every float name, so the range test
+ * above it is a no-op on that family and caught neither.
+ *
+ * Rounding a float is not the change the integer rule guards against: it is what
+ * storing a decimal in a float means, and it is what the ANNOTATION boundary
+ * already does for the same value. A document is validated against a type, so it
+ * follows the boundary - round in range, refuse out of it - rather than the
+ * conversion, whose table row would make an out-of-range token an infinity.
+ */
+test('a float token is rounded to its width', () => {
+  expect(evaluated("String(JSON.parse.<float16>('0.1'));")).toBe('0.0999755859375');
+  expect(evaluated("String(JSON.parse.<float32>('0.1'));")).toBe('0.10000000149011612');
+  // A double IS a float64, so that family is unchanged.
+  expect(evaluated("String(JSON.parse.<float64>('0.1'));")).toBe('0.1');
+  // And it agrees with the annotation boundary for the same value.
+  expect(evaluated('let n: any = 0.1; let f: float16 = n; String(f);')).toBe('0.0999755859375');
+});
+
+test('a float token the type cannot hold is refused', () => {
+  // The boundary's verdict, in the shape this operation reports failures.
+  expectThrown("JSON.parse.<float16>('1e300');", 'expected float16');
+  expect(evaluated("String(JSON.parse.<float16>('65504'));")).toBe('65504');
+  // The integer rule the clause states is unchanged.
+  expect(evaluated("String(JSON.parse.<uint8>('42'));")).toBe('42');
+  expectThrown("JSON.parse.<uint8>('300');", 'expected uint8');
+});
+
+test('the rounding reaches nested shapes', () => {
+  expect(evaluated(`String(JSON.parse.<{ a: float16 }>('{"a": 0.1}').a);`)).toBe('0.0999755859375');
+  expect(evaluated("String(JSON.parse.<[].<float32>>('[0.1]')[0]);")).toBe('0.10000000149011612');
+});

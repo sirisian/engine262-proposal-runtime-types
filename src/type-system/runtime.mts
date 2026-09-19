@@ -52,6 +52,8 @@ import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { wrapToType } from './arithmetic.mts';
+import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
 import { beginResolvingAlias, endResolvingAlias, resolvingAlias, tieAliasKnot } from './resolving-aliases.mts';
 import { ReflectionContextRecordOf } from './reflection-contexts.mts';
@@ -6204,7 +6206,32 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
   if (name === 'rational') {
     return Number.isFinite(v as number);
   }
-  return name === 'float16' || name === 'float32' || name === 'float64' || name === 'float128';
+  // A float holds the value where ROUNDING TO THE WIDTH keeps it - which every
+  // finite Number satisfies at `float128`, the format being strictly wider than
+  // binary64 in both significand and exponent, and which a narrow width does
+  // not: no `float16` holds 1e300, the rounding overflowing to an infinity.
+  //
+  // This answered *true* for every float name, so the predicate was a no-op on
+  // the family and its callers each had to catch the overflow themselves or
+  // silently not: `float16.parse('1e300')` returned a value tagged `float16`
+  // that no `float16` holds, and `JSON.parse.<float16>('1e300')` the same.
+  // Those two now round before tagging, and the boundary has always had its own
+  // check, so this brings the predicate into line with what its callers mean by
+  // "fits" rather than changing any of their verdicts.
+  //
+  // An infinity and a NaN ARE values of every float width, so they fit: the
+  // question is only whether a FINITE value survives the rounding.
+  if (isFloatTypeName(name)) {
+    if (typeof v !== 'number') {
+      return fitsNumericType(Number(v), name, args);
+    }
+    if (!Number.isFinite(v)) {
+      return true;
+    }
+    const rounded = wrapToType(v, { Kind: 'primitive', Name: name, Arguments: args } as TypeRecord);
+    return typeof rounded === 'number' && Number.isFinite(rounded);
+  }
+  return false;
 }
 
 /**

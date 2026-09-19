@@ -603,12 +603,30 @@ test('a BigInt converts to an integer type, and back', () => {
   expect(evaluated('const b = bigint((5 := uint8)); `${b}:${typeof b}`;')).toBe('5:bigint');
 });
 
-test('a BigInt the width cannot hold is refused rather than wrapped', () => {
-  // "except that a conversion that would wrap, truncate toward zero, or round a
-  // finite value to an infinity instead yields ~unrepresentable~".
-  expect(() => evaluated('uint8(300n);')).toThrow();
-  expect(() => evaluated('uint8(-1n);')).toThrow();
-  expect(() => evaluated('uint64(18446744073709551616n);')).toThrow();
+test('a BigInt the width cannot hold wraps at a conversion and is refused at a boundary', () => {
+  // The rule quoted here was #sec-requiretype's - "except that a conversion
+  // that would wrap, truncate toward zero, or round a finite value to an
+  // infinity instead yields ~unrepresentable~" - which is the BOUNDARY's, and
+  // an explicit conversion is what the proposal distinguishes it from.
+  //
+  // #table-numeric-conversions, integer to integer of width M, is "the
+  // mathematical value of the source modulo 2**M", and a BigInt is a numeric
+  // source like any other there: `uint8(300)`, `uint8(someUint16)` and
+  // `uint8(someFloat64)` all give 44, and the BigInt spelling was the odd one
+  // out. `collections/typed-keys-64bit.test.mts` and
+  // `enforcement/boundary-check.test.mts` were moved to this reading; this
+  // assertion was left behind, so the three disagreed.
+  //
+  // The call and the cast are ONE operation - a type object's [[Call]] ends in
+  // `ConvertValue`, which is also what `:=` applies - so they cannot differ,
+  // and `uint8(300n)` answers as `(300n := uint8)` does.
+  expect(evaluated('String(uint8(300n));')).toBe('44');
+  expect(evaluated('String(uint8(-1n));')).toBe('255');
+  expect(evaluated('String(uint64(18446744073709551616n));')).toBe('0');
+  // The BOUNDARY keeps the rule the comment above quoted, which is the half
+  // that stops a program acquiring an out-of-range value by accident.
+  expect(() => evaluated('let k: uint8 = 300n; "admitted";')).toThrow();
+  expect(() => evaluated('let k: uint64 = 18446744073709551616n; "admitted";')).toThrow();
 });
 
 test('a wide value reads the same however it is looked at', () => {

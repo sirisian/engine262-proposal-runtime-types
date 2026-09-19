@@ -3145,41 +3145,29 @@ export abstract class ExpressionParser extends FunctionParser {
     const savedEarlyErrors = new Set(this.earlyErrors);
     const checkpoint = this.getLexerCheckpoint();
     const node = this.startNode<ParseNode.MatchExtractorPattern>();
-    // MatchNamePattern :
-    //   IdentifierReference
-    //   MatchNamePattern `.` IdentifierName
-    //   MatchNamePattern TypeArguments
+    // The head is a BARE IdentifierReference, not the full |MatchNamePattern|.
     //
-    // All three, where this read only the first. A head reached through a
-    // NAMESPACE OBJECT - `when Ns.Some(let n)` - was a *SyntaxError*, which is
-    // how an IMPORTED matcher arrives, so a matcher could only be used where it
-    // could also be named by a single identifier. The plain name pattern already
-    // took both forms, because everything that is not an extractor falls through
-    // to `parseType`; only the extractor head was restricted.
+    // #sec-match-patterns gives the production three forms - an identifier
+    // reference, `MatchNamePattern . IdentifierName`, and `MatchNamePattern
+    // TypeArguments` - and a round of this work admitted all three, so that a
+    // matcher reached through a namespace object could be written.
     //
-    // `.` is consumed only when an IDENTIFIER follows it, because a speculation
-    // "must DECLINE rather than let a nested parse throw past its restore" and
-    // `parseIdentifierName` throws. That declines for a head whose member is a
-    // keyword usable as a name, `Ns.default`, which stays where it was.
-    let head: ParseNode = this.parseIdentifierReference();
-    for (;;) {
-      if (this.test(Token.PERIOD) && this.testAhead(Token.IDENTIFIER)) {
-        const member = this.startNode<ParseNode.MemberExpression>(head);
-        this.next();
-        member.MemberExpression = head as ParseNode.MemberExpression;
-        member.IdentifierName = this.parseIdentifierName();
-        member.PrivateIdentifier = null;
-        member.Expression = null;
-        head = this.finishNode(member, 'MemberExpression');
-      } else if (this.test(Token.PERIOD_LT)) {
-        const applied = this.startNode<ParseNode.TypeArgumentsExpression>(head);
-        applied.Expression = head as ParseNode.MemberExpression;
-        applied.TypeArguments = this.parseTypeArguments();
-        head = this.finishNode(applied, 'TypeArgumentsExpression');
-      } else {
-        break;
-      }
-    }
+    // That is a real gap and this is not the fix for it. A qualified head is
+    // INDISTINGUISHABLE here from a type query: `v is Reflect.typeOf(s)` has a
+    // qualified callee and one argument that reads as a |MatchNamePattern|,
+    // exactly as `v is Ns.Some(let a)` does, and this speculation runs before
+    // the fall-through to `parseType`. Admitting it made every
+    // `Reflect.typeOf(x)` in an `is` position parse as an extractor and fail
+    // with "has no custom matcher", which
+    // `reflection/type-programming.test.mts` pins.
+    //
+    // The clause says a |MatchNamePattern| and a |Type| "overlap where a name
+    // is both; the name form is preferred, and THE TWO READINGS AGREE wherever
+    // both exist". Here they do not agree, so the overlap rule does not settle
+    // it and a disambiguation the clause does not state would have to be
+    // invented. Left to the specification; the gap is recorded rather than
+    // half-closed.
+    const head = this.parseIdentifierReference();
     if (!this.test(Token.LPAREN)) {
       this.restoreLexerCheckpoint(checkpoint);
       this.earlyErrors = savedEarlyErrors;

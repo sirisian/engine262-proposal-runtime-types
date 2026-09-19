@@ -203,8 +203,7 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         // the plain field it currently resembles. A plain field would get and
         // set, which is close enough to an accessor to read as support while
         // reflecting as `ClassField` and occupying the wrong kind of slot.
-        // Refusing is the honest state, and it is the same answer
-        // `reservedOnlyDecorators` gives for a decorator this engine cannot run.
+        // Refusing is the honest state.
         const plain = Q(yield* ClassFieldDefinitionEvaluation(node, object));
         if (surroundingAgent.feature('runtime-types')) {
           // Recorded for EVERY field and accessor, decorated or not - the same
@@ -318,8 +317,19 @@ export interface DefaultConstructorBuiltinFunction extends BuiltinFunctionObject
  * while these name no function at all and set property-descriptor keys. They
  * share the `@` and nothing else.
  *
- * A decorator whose name is not one of the seven is left for the decorators
- * extension, which this engine does not implement - see reservedOnlyDecorators.
+ * A decorator whose name is not one of the seven is left to the base language's
+ * own decorators, which this engine DOES implement: `@foo class A {}` runs `foo`
+ * and takes its return as the replacement.
+ *
+ * An exported `reservedOnlyDecorators` stood here, refusing every decorator that
+ * was not one of the seven, on the ground that "the ONLY decorators this engine
+ * implements are the reserved layout controls ... Refusing is the honest state".
+ * That was true when it was written and is not now - nothing called it, and its
+ * premise had been overtaken - so it is gone rather than left asserting a rule
+ * the engine does not hold. Nothing in this proposal asks for ordinary
+ * decorators to be refused: #sec-replacement-decorators defines the
+ * PREPROCESSOR decorator, whose name a `with { preprocessor: "true" }` import
+ * introduces, and says nothing of the rest.
  */
 function reservedLayoutControl(decorator: ParseNode.Decorator): { name: string, argument: unknown } | null {
   const bare = decorator.subtype === 'MemberExpression'
@@ -573,24 +583,6 @@ const INITIALIZABLE_CONTEXTS: readonly string[] = [
   'Class', 'ClassField', 'ClassAccessor', 'ClassGetter', 'ClassSetter',
   'ClassMethod', 'ClassOperator', 'ObjectMethod', 'ObjectGetter', 'ObjectSetter',
 ];
-
-/**
- * Under `runtime-types` the ONLY decorators this engine implements are the
- * reserved layout controls. This proposal's decorators extension - context
- * types, overload resolution, replacement by return value - is a separate
- * feature and is not built, so any other decorator is refused rather than
- * evaluated as a TC39 decorator would be. Refusing is the honest state: a
- * declaration that is accepted and does nothing reads as support.
- */
-export function reservedOnlyDecorators(decorators: readonly ParseNode.Decorator[] | null | undefined): ThrowCompletion | undefined {
-  for (const d of decorators ?? []) {
-    const control = reservedLayoutControl(d);
-    if (!control || (!CLASS_CONTROLS.includes(control.name) && !FIELD_CONTROLS.includes(control.name))) {
-      return Throw.TypeError('$1 is not supported yet', Value('a decorator other than a reserved layout control'));
-    }
-  }
-  return undefined;
-}
 
 export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator<FunctionObject> {
   const { ClassHeritage, ClassBody } = ClassTail;

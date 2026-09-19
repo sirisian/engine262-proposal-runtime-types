@@ -13,6 +13,7 @@ import {
   fitsNumericType,
 } from '../type-system/runtime.mts';
 import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { wrapToType } from '../type-system/arithmetic.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import {
   CodePointsToString,
@@ -526,6 +527,33 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
         // token targeting an integer type, is a TypeError (the range check).
         if (name !== 'number' && !fitsNumericType(v, name, t.Arguments)) {
           return jsonTypeError(path, t, value);
+        }
+        // A FLOAT token is rounded to the width before it is tagged.
+        //
+        // The integer case above validates rather than converts, and
+        // #sec-composite-types gives the reason: "Converting first and
+        // validating never would let a `uint8` member wrap `300` to `44` and
+        // intern the wrong document silently." Rounding a float is not that
+        // kind of change - it is what storing a decimal in a float means, and
+        // it is what every other boundary here already does: `let f: float16 =
+        // n` for an `any` n holding 0.1 is 0.0999755859375.
+        //
+        // Tagging the raw double instead produced a value that is not of its
+        // own type: `JSON.parse.<float16>('0.1')` was `0.1` answering `float16`
+        // to `Reflect.typeOf`, and `JSON.parse.<float16>('1e300')` was
+        // `1e+300`. The range test above cannot catch either, `fitsNumericType`
+        // answering *true* for every float name.
+        if (name === 'float16' || name === 'float32' || name === 'float64') {
+          const rounded = wrapToType(v, t);
+          // Out of range is refused rather than becoming an infinity, which is
+          // the verdict the annotation boundary gives for the same value -
+          // `let f: float16 = n` for 1e300 is a *RangeError*. A document is
+          // validated against a type, so it follows the boundary and not the
+          // conversion.
+          if (typeof rounded === 'number' && !Number.isFinite(rounded) && Number.isFinite(v as number)) {
+            return jsonTypeError(path, t, value);
+          }
+          return new TypedNumberValue(rounded, t);
         }
         // A plain `number` field stays an ordinary Number; a sized type carries
         // its type tag.
