@@ -53,3 +53,42 @@ test('the cases that must keep working do', () => {
   expect(evaluated(`${P}class R extends P { y: uint32 = 2; }
     const a: [2].<R>; a[0].y = 5; String(a[0].y);`)).toBe('5');
 });
+
+/**
+ * The run-time rule reaches a STORE. A local, a `return` and a parameter have no
+ * store to hang it on, and accepting them produced a value whose declared type
+ * no store would take:
+ *
+ *   let p: P = new R();     // accepted
+ *   h.f = p;                // refused - `p` is stuck
+ *
+ * That is worse than a lossy conversion, since the error lands far from the line
+ * that caused it. `requireAssignable` now refuses the same stores at the line
+ * that writes them, using a width the DECLARATION can answer.
+ */
+const PR = 'class P { x: uint32 = 1; } class R extends P { y: uint32 = 2; } class Q extends P { } ';
+
+test('a wider subclass is refused where no store would take it either', () => {
+  expectThrown(`${PR}let p: P = new R();`, 'is not assignable to');
+  expectThrown(`${PR}function f(): P { return new R(); }`, 'is not assignable to');
+  expectThrown(`${PR}function f(v: P): uint32 { return v.x; } f(new R());`, 'is not assignable to');
+  expectThrown(`${PR}class H { t(v: P): uint32 { return v.x; } } new H().t(new R());`,
+    'is not assignable to');
+});
+
+test('a subclass adding no storage is accepted in those positions too', () => {
+  // `inlineFieldsOf`, the resolver that answers this before a layout exists, was
+  // written for CYCLE DETECTION and reports the base slice as a synthetic field
+  // keyed `[[Base]]`. Counting it made `class Q extends P {}` look as though it
+  // had declared storage, and every position refused a store that loses nothing.
+  expect(evaluated(`${PR}let p: P = new Q(); String(p.x);`)).toBe('1');
+  expect(evaluated(`${PR}function f(): P { return new Q(); } String(f().x);`)).toBe('1');
+  expect(evaluated(`${PR}function f(v: P): uint32 { return v.x; } String(f(new Q()));`)).toBe('1');
+});
+
+test('the keepers survive the static rule as well', () => {
+  expect(evaluated(`${PR}let p: P = new P(); String(p.x);`)).toBe('1');
+  expect(evaluated('class MyErr extends Error { } let e: Error = new MyErr(); String(e instanceof Error);')).toBe('true');
+  expect(evaluated(`${PR}function g<T extends P>(a: T): uint32 { return a.y; } String(g.<R>(new R()));`)).toBe('2');
+  expect(evaluated(`${PR}const a: [2].<R>; a[0].y = 5; String(a[0].y);`)).toBe('5');
+});

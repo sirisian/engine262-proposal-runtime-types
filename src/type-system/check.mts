@@ -27,7 +27,7 @@ import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
-import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass, setStaticFieldResolver } from './layout.mts';
+import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver } from './layout.mts';
 import {
   libraryTypeParameterNames as libraryTypeParameterNamesShared,
   orderTypeArguments as orderTypeArgumentsShared,
@@ -3182,6 +3182,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
+      return;
+    }
+    // A SUBCLASS MAY NOT BE STORED WHERE A BASE VALUE TYPE CLASS IS DECLARED.
+    // The run time refuses this where a store happens; a local, a `return` and
+    // a parameter have no store to hang it on, and accepting them produced a
+    // value whose declared type no store would take.
+    if (SubclassAddsStorageOver(source as TypeRecord, target as TypeRecord)) {
+      errors.push(Throw.StaticTypeError('$1 is not assignable to $2',
+        Value(displayType(source as TypeRecord)),
+        Value(displayType(target as TypeRecord))).Value as ObjectValue);
       return;
     }
     if (target.Kind === 'function') {

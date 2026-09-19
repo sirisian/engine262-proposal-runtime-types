@@ -238,6 +238,69 @@ export const referenceLayout: Layout = { bitLength: 64, byteLength: 8, alignment
  * the reference-class case back out by hand. Both halves of that were the same
  * conflation, and naming the concept is what retires it.
  */
+/**
+ * Does this class declare storage of its OWN, beyond what it inherits?
+ *
+ * Answered from the DECLARATION where no layout exists yet, which is the whole
+ * point: a layout is computed at evaluation, and the positions that need this
+ * - a local, a `return`, a parameter - are checked before that.
+ */
+export function DeclaresOwnStorage(t: TypeRecord): boolean {
+  const layout = LayoutOf(t) as ClassLayout | null;
+  const base = (t as { Base?: TypeRecord }).Base;
+  const baseLayout = base ? LayoutOf(base) as ClassLayout | null : null;
+  // BOTH layouts are needed for the comparison to mean anything. Where only the
+  // subclass has one, its field list already includes the inherited fields and
+  // the missing base count reads as zero, so `class Q extends P {}` looked like
+  // it had added `P`'s own field. The declaration answers exactly what is being
+  // asked - what did THIS class declare - so it is the fallback whenever the
+  // pair is incomplete.
+  if (layout?.fields !== undefined && (base === undefined || baseLayout?.fields !== undefined)) {
+    return layout.fields.length > (baseLayout?.fields?.length ?? 0);
+  }
+  // The resolver is `inlineFieldsOf`, written for CYCLE DETECTION, and it
+  // reports the base slice as a synthetic field keyed `[[Base]]` - which is
+  // right for walking into a base and wrong for "what did THIS class declare".
+  // Counting it made `class Q extends P {}` look like it had added storage.
+  const declared = staticFieldsOfDeclaration?.(t);
+  return Array.isArray(declared)
+    && declared.some((f) => String((f as { key?: unknown }).key) !== '[[Base]]');
+}
+
+/**
+ * Does _source_ reach _target_ through its base chain while ADDING STORAGE?
+ *
+ * The static counterpart of the run-time store check. A binding never stores
+ * anything, so the run time cannot refuse `let p: P = new R()` - and accepting
+ * it produces a STUCK VALUE, one whose declared type is `P` and which every
+ * `P`-typed store then refuses. The error lands far from the line that caused
+ * it, which is worse than refusing the line.
+ *
+ * `class Q extends P {}` adds nothing and stays assignable.
+ */
+export function SubclassAddsStorageOver(source: TypeRecord, target: TypeRecord): boolean {
+  if (source.Kind !== 'nominal' || target.Kind !== 'nominal'
+    || target.EnumMembers !== undefined || IsReferenceClass(target)
+    || !IsValueType(target)) {
+    return false;
+  }
+  const targetDeclaration = (target as { Declaration?: unknown }).Declaration;
+  if (targetDeclaration === undefined
+    || (source as { Declaration?: unknown }).Declaration === targetDeclaration) {
+    return false;
+  }
+  let adds = DeclaresOwnStorage(source);
+  let walked: TypeRecord | undefined = (source as { Base?: TypeRecord }).Base;
+  for (let depth = 0; walked !== undefined && depth < 1000; depth += 1) {
+    if ((walked as { Declaration?: unknown }).Declaration === targetDeclaration) {
+      return adds;
+    }
+    adds = adds || DeclaresOwnStorage(walked);
+    walked = (walked as { Base?: TypeRecord }).Base;
+  }
+  return false;
+}
+
 export function IsValueTypeClass(t: TypeRecord): boolean {
   // Asks IsValueType rather than `LayoutOf(t) !== null`. Reading value-ness off
   // the layout is the conflation the predicate split exists to undo, and it
