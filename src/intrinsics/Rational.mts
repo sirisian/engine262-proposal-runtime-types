@@ -274,11 +274,35 @@ function* RationalProto_toString(_args: Arguments, { thisValue }: FunctionCallCo
 }
 
 export function bootstrapRationalPrototype(realmRec: Realm): void {
+/**
+ * A rational has no Number to be, so coercing one is refused rather than
+ * answered.
+ *
+ * #sec-numeric-types states Math over a rational exactly - "For a rational type
+ * the result is exact, and a fixed-width result whose lowest-terms numerator or
+ * denominator does not fit its int.<N> throws a RangeError exception" - and
+ * none of that is implemented. Without a valueOf, the ordinary coercion found
+ * Object.prototype.valueOf, returned the object, and ToNumber made it *NaN*:
+ * Math.abs(rational(-1, 2)) was NaN, as were Math.max and Math.sign of a
+ * rational. A silent NaN is the one answer that is neither right nor honest.
+ *
+ * A decimal already refuses here for the same reason, in the same shape, and
+ * this keeps the two families telling the same story until the arithmetic of
+ * either is defined.
+ */
+function* RationalProto_valueOf(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  if (!isRationalObject(thisValue)) {
+    return Throw.TypeError('$1 is not a rational', thisValue);
+  }
+  return Throw.TypeError('rational arithmetic is not yet defined; use toString to read the value');
+}
+
   const proto = bootstrapPrototype(realmRec, [
     ['numerator', [RationalProto_numerator]],
     ['denominator', [RationalProto_denominator]],
     ['reciprocal', RationalProto_reciprocal, 0],
     ['toString', RationalProto_toString, 0],
+    ['valueOf', RationalProto_valueOf, 0],
   ], realmRec.Intrinsics['%Object.prototype%'], 'rational');
   realmRec.Intrinsics['%rational.prototype%'] = proto;
 }

@@ -511,6 +511,7 @@ export interface Throw {
   | 'cannot take a ref of a value; a ref needs a variable, a property, or an array element'
   | 'capacity is available on an array with an element type'
   | 'decimal arithmetic is not yet defined; use toString to read the value'
+  | 'rational arithmetic is not yet defined; use toString to read the value'
   | 'direction option is required'
   | 'directionParam is required'
   | 'division of a decimal by zero'
