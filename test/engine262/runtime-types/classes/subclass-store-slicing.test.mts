@@ -92,3 +92,41 @@ test('the keepers survive the static rule as well', () => {
   expect(evaluated(`${PR}function g<T extends P>(a: T): uint32 { return a.y; } String(g.<R>(new R()));`)).toBe('2');
   expect(evaluated(`${PR}const a: [2].<R>; a[0].y = 5; String(a[0].y);`)).toBe('5');
 });
+
+/**
+ * `:=` IS THE EXPLICIT WIDENING. Every other spelling refuses to drop a
+ * subclass; this is the one that says "yes, drop it", so its result has to be a
+ * genuine base instance - one that stores anywhere the base goes.
+ *
+ * It already copied only the base's FIELDS. What it kept was the source's
+ * PROTOTYPE, so the result answered `instanceof R`, dispatched to `R`'s
+ * overrides, and was then refused by every `P`-typed store: lossy AND stuck,
+ * which is worse than either alone.
+ */
+const PW = 'class P { x: uint32 = 1; } class R extends P { y: uint32 = 2; } class Q extends P { } ';
+
+test('a widening conversion produces a genuine base instance', () => {
+  expect(evaluated(`${PW}const w = (new R()) := P;
+    String(w instanceof R) + '/' + String(w instanceof P);`)).toBe('false/true');
+  expect(evaluated(`${PW}const r = new R(); r.x = 7; const w = r := P; String(w.x);`)).toBe('7');
+});
+
+test('the widened value stores where the base is declared', () => {
+  // The point of the conversion: before this it produced something no `P`-typed
+  // position would take, so the escape hatch the store rule points at did not
+  // actually lead anywhere.
+  expect(evaluated(`${PW}class H { f: P = new P(); } const h = new H();
+    h.f = (new R()) := P; String(h.f.x);`)).toBe('1');
+});
+
+test('methods dispatch to the base after widening', () => {
+  expect(evaluated(`class P2 { x: uint32 = 1; n(): string { return "base"; } }
+    class R2 extends P2 { y: uint32 = 2; n(): string { return "sub"; } }
+    const w = (new R2()) := P2; w.n();`)).toBe('base');
+});
+
+test('conversions that are not widenings are untouched', () => {
+  expect(evaluated(`${PW}const w = (new P()) := P; String(w.x);`)).toBe('1');
+  expect(evaluated(`${PW}const w = (new Q()) := P; String(w.x);`)).toBe('1');
+  expect(evaluated('String(300 := uint8);')).toBe('44');
+});

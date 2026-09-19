@@ -21,7 +21,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
 import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
-import { IsReferenceClass, IsValueTypeClass, LayoutOf } from '../type-system/layout.mts';
+import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
@@ -399,7 +399,7 @@ export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRe
  * extension, and its parameters and returns take the location rather than the
  * value.
  */
-export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): PlainEvaluator<ObjectValue> {
+export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTargetPrototype = false): PlainEvaluator<ObjectValue> {
   const layout = LayoutOf(t) as { fields?: readonly { key: string | PrivateName, type: TypeRecord }[] } | null;
   if (layout?.fields === undefined) {
     return value;
@@ -422,7 +422,15 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord): Plain
   const ctor = (t as { Constructor?: ObjectValue }).Constructor;
   const ownProto = (value as { Prototype?: Value }).Prototype;
   let proto: Value = Value.null;
-  if (ownProto instanceof ObjectValue) {
+  // A WIDENING asks for the TARGET's prototype. Everywhere else the value's own
+  // is right - a copy of a `C` is a `C` - but `r := P` must produce a genuine
+  // `P`. Keeping the source's prototype is what left the conversion's result
+  // answering `instanceof R`, dispatching to `R`'s overrides, and being refused
+  // by every `P`-typed store: the fields were already the base's, and only the
+  // identity was wrong.
+  if (useTargetPrototype && ctor) {
+    proto = Q(yield* Get(ctor, Value('prototype')));
+  } else if (ownProto instanceof ObjectValue) {
     proto = ownProto;
   } else if (ctor) {
     proto = Q(yield* Get(ctor, Value('prototype')));
@@ -990,7 +998,9 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // value type acquiring its type IS the copy. See CopyValueTypeInstance for
     // why this is the right set of sites and what it does not cover.
     if (value instanceof ObjectValue && IsValueTypeClass(t)) {
-      return Q(yield* CopyValueTypeInstance(value, t));
+      const from = RuntimeTypeOf(value);
+      const widening = from !== undefined && SubclassAddsStorageOver(from, t);
+      return Q(yield* CopyValueTypeInstance(value, t, widening));
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
@@ -1790,7 +1800,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // value type acquiring its type IS the copy. See CopyValueTypeInstance for
     // why this is the right set of sites and what it does not cover.
     if (value instanceof ObjectValue && IsValueTypeClass(t)) {
-      return Q(yield* CopyValueTypeInstance(value, t));
+      const from = RuntimeTypeOf(value);
+      const widening = from !== undefined && SubclassAddsStorageOver(from, t);
+      return Q(yield* CopyValueTypeInstance(value, t, widening));
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
