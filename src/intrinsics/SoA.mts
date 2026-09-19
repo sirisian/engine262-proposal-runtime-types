@@ -8,6 +8,9 @@ import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { LayoutOf, SoAColumnsOf, type SoAColumn } from '../type-system/layout.mts';
 import { BufferElementType, SetPlacementBacking, WritePlacedField } from '../abstract-ops/placement.mts';
+import { SubclassAddsStorageOver } from '../type-system/layout.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { displayType } from '../type-system/records.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import { ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
 import type { ArrayBufferObject } from '../abstract-ops/arraybuffer-objects.mts';
@@ -461,6 +464,27 @@ export function* SoAScatter(storage: SoAStorage, index: number, value: Value): P
   }
   if (!(value instanceof ObjectValue)) {
     return Throw.TypeError('$1 is not an element of this type', value);
+  }
+  // A SUBCLASS IS REFUSED HERE, before the scatter. The loop below reads the
+  // element type's columns by name, so a wider subclass simply loses the fields
+  // that have no column - the element read back is a genuine base value with the
+  // subclass's own state gone, which is the silent widening every other position
+  // was changed to refuse.
+  //
+  // The store rule never saw this: the scatter converts FIELD BY FIELD, so
+  // `RequireType` is called with a column's type and never with the element's.
+  // Asking once, here, is what puts an SoA element on the same footing as an
+  // array element.
+  //
+  // `s[_i_] = (_sub_ := _Base_)` remains the way to write it deliberately, and
+  // its result is a genuine base value that scatters exactly.
+  const elementType = storage.Element;
+  if (elementType !== undefined) {
+    const sourceType = RuntimeTypeOf(value);
+    if (sourceType !== undefined && SubclassAddsStorageOver(sourceType, elementType)) {
+      return Throw.TypeError('$1 is not assignable to $2',
+        Value(displayType(sourceType)), Value(displayType(elementType)));
+    }
   }
   for (let i = 0; i < storage.Columns.length; i += 1) {
     const column = storage.Columns[i]!;

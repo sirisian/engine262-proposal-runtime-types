@@ -130,3 +130,35 @@ test('conversions that are not widenings are untouched', () => {
   expect(evaluated(`${PW}const w = (new Q()) := P; String(w.x);`)).toBe('1');
   expect(evaluated('String(300 := uint8);')).toBe('44');
 });
+
+/**
+ * AN SoA ELEMENT STORE IS A STORE. It scatters the element's fields into
+ * per-column runs, and the scatter converts FIELD BY FIELD - so `RequireType`
+ * saw a column's type and never the element's, and the store rule was never
+ * consulted. A wider subclass therefore wrote the base's columns and lost its
+ * own state silently, the element reading back as a genuine base value.
+ *
+ * That made SoA the one position left where a subclass was reduced without the
+ * program asking. It is asked once now, before the scatter.
+ */
+const SP = 'class P { x: uint32 = 1; } class R extends P { y: uint32 = 2; } class Q extends P { } ';
+
+test('an SoA of the base refuses a wider subclass', () => {
+  expectThrown(`${SP}const s = SoA.<P, 2>(new ArrayBuffer(64)); s[0] = new R();`,
+    'is not assignable to');
+});
+
+test('the explicit widening stores into an SoA exactly', () => {
+  expect(evaluated(`${SP}const s = SoA.<P, 2>(new ArrayBuffer(64));
+    s[0] = (new R()) := P; String(s[0].x);`)).toBe('1');
+});
+
+test('the SoA stores that always worked still do', () => {
+  expect(evaluated(`${SP}const s = SoA.<P, 2>(new ArrayBuffer(64));
+    const p = new P(); p.x = 3; s[0] = p; String(s[0].x);`)).toBe('3');
+  // A subclass adding no storage has the base's columns exactly.
+  expect(evaluated(`${SP}const s = SoA.<P, 2>(new ArrayBuffer(64)); s[0] = new Q(); String(s[0].x);`)).toBe('1');
+  // An SoA of the subclass has its own columns and is unaffected.
+  expect(evaluated(`${SP}const s = SoA.<R, 2>(new ArrayBuffer(64)); s[0] = new R(); String(s[0].y);`)).toBe('2');
+  expect(evaluated('const s = SoA.<uint32, 2>(new ArrayBuffer(16)); s[0] = (5 := uint32); String(s[0]);')).toBe('5');
+});
