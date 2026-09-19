@@ -10,6 +10,7 @@ import { BufferElementType, PlacedInstance } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, OrdinaryObjectCreate, R, RequireType,
+  ToLength, AllocateArrayBuffer,
   Throw, ToIndex, surroundingAgent, Get, Set as SetValueOnObject,
 } from '#self';
 
@@ -449,6 +450,74 @@ export function SpanLikeLengthOf(instance: object): number | undefined {
  * allocation — a difference invisible until someone called `capacity` on it.
  * Routing them through one helper is what stops that drifting apart again.
  */
+/**
+ * Give an OWNED array bytes, once, because something asked for them.
+ *
+ * `#sec-array-views` says an owned array has byte storage; this engine kept
+ * one in its own representation, so `.buffer`, `.byteOffset` and `.byteLength`
+ * answered "specified but not implemented". The consequence reached further
+ * than the accessors: `const s: Span.<V> = buf` worked for a typed array and
+ * was refused for an owned one, so a window could not be taken over the
+ * storage a program had already allocated.
+ *
+ * Materialised on FIRST REQUEST rather than at construction, so an array that
+ * is never viewed pays nothing - which matters most for the `[N].<T>` pools
+ * whose point is that they are cheap.
+ *
+ * ONE-WAY. Once the bytes exist, the array is backed by them and every read
+ * and write goes through the view. Re-representing it afterwards would leave
+ * any window over the buffer looking at bytes nothing writes.
+ */
+export function* MaterializeArrayBytes(array: ObjectValue): PlainEvaluator<ArrayBufferObject | undefined> {
+  const existing = views.get(array as unknown as object);
+  if (existing !== undefined) {
+    return existing.Buffer;
+  }
+  const element = (array as unknown as { TypedElement?: TypeRecord }).TypedElement;
+  if (element === undefined) {
+    return undefined;
+  }
+  // A FIXED extent only. A dynamic `[].<T>` can grow, and a buffer sized to its
+  // current length would either freeze it or drift out of step with it - the
+  // window over those bytes would then describe storage the array no longer
+  // uses. `TypedExtent` is recorded only for a fixed array, so its absence is
+  // the question being asked.
+  const extent = (array as unknown as { TypedExtent?: number }).TypedExtent;
+  if (extent === undefined) {
+    return undefined;
+  }
+  const layout = LayoutOf(element) as { byteLength?: number } | null;
+  const stride = layout?.byteLength;
+  if (stride === undefined || stride <= 0) {
+    return undefined;
+  }
+  const lengthValue = Q(yield* Get(array, Value('length')));
+  const length = R(Q(yield* ToLength(lengthValue)));
+  const buffer = Q(yield* AllocateArrayBuffer(
+    surroundingAgent.currentRealmRecord.Intrinsics['%ArrayBuffer%'] as ObjectValue,
+    length * stride,
+  )) as ArrayBufferObject;
+  // The elements are read BEFORE the backing is installed, since installing it
+  // routes every read through storage that has not been filled yet.
+  const held: Value[] = [];
+  for (let i = 0; i < length; i += 1) {
+    held.push(Q(yield* Get(array, Value(String(i)))));
+  }
+  const backing: ArrayViewBacking = {
+    Element: element,
+    Buffer: buffer,
+    ByteOffset: 0,
+    Stride: stride,
+    Extent: length,
+    ByteExtent: length * stride,
+  };
+  views.set(array as unknown as object, backing);
+  for (let i = 0; i < length; i += 1) {
+    Q(yield* WriteArrayViewElement(backing, i, held[i]!));
+  }
+  return buffer;
+}
+
 export function StampTypedArray(array: ObjectValue, element: TypeRecord): void {
   (array as unknown as { TypedElement?: TypeRecord }).TypedElement = element;
   const intrinsics = surroundingAgent.currentRealmRecord.Intrinsics;

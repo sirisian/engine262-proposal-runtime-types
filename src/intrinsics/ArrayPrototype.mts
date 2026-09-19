@@ -14,7 +14,7 @@ import {
 import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
-import { StampTypedArray, ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
+import { MaterializeArrayBytes, StampTypedArray, ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
@@ -457,6 +457,12 @@ function* ArrayProto_buffer(_args: Arguments, { thisValue }: FunctionCallContext
   if (buffer !== undefined) {
     return buffer as unknown as Value;
   }
+  // An OWNED array gets its bytes here, once, because something asked. See
+  // `MaterializeArrayBytes`: one-way, and never paid by an array nothing views.
+  const materialized = Q(yield* MaterializeArrayBytes(O));
+  if (materialized !== undefined) {
+    return materialized as unknown as Value;
+  }
   return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
 }
 
@@ -466,6 +472,9 @@ function* ArrayProto_byteOffset(_args: Arguments, { thisValue }: FunctionCallCon
   const offset = ArrayViewByteOffsetOf(O as unknown as object);
   if (offset !== undefined) {
     return new TypedNumberValue(offset, INDEX_TYPE);
+  }
+  if (Q(yield* MaterializeArrayBytes(O)) !== undefined) {
+    return new TypedNumberValue(ArrayViewByteOffsetOf(O as unknown as object) ?? 0, INDEX_TYPE);
   }
   return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
 }
