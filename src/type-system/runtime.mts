@@ -19,7 +19,7 @@ import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mt
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X , ThrowCompletion } from '../completion.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
-import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
+import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf } from '../abstract-ops/runtime-types.mts';
@@ -42,7 +42,7 @@ import {
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
 import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter } from './layout.mts';
+import { IsReferenceClass, IsSharableValueType, IsValueTypeClass, LayoutOf, setLayoutSubstituter } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import {
@@ -3106,6 +3106,23 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       if ((t as { LibraryName?: string }).LibraryName === 'rational') {
         return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord);
       }
+      // A REFERENCE CLASS has no memberwise zero. A bare field of a reference
+      // type is a non-null reference and a default has nothing to point at, so
+      // `class H { r: R; }` was filled with a fabricated `R` that never ran its
+      // constructor - `R`'s own `x = 1` never happened and the byte read 0.
+      // Answering *undefined* routes it to the refusal a `Span` field and a
+      // `dynamic` class field already get.
+      //
+      // The clause's own condition is "denotes A VALUE TYPE CLASS", and gating
+      // on `IsValueTypeClass` is what this first did. That predicate is
+      // STRICTLY NARROWER than the phrase: `IsValueType` requires at least one
+      // typed field, so an EMPTY class is not one, and `class B<W<_>> {}` lost
+      // the default it has always had. A class holding a nullable reference
+      // lost one too, though every field of it has a default. Excluding the
+      // reference class is what the defect actually calls for.
+      if (IsReferenceClass(t)) {
+        return undefined;
+      }
       // #sec-defaultvalueof: "If _t_.[[Kind]] is ~nominal~ and _t_ denotes a
       // value type class, return the instance of _t_ each of whose fields,
       // PUBLIC AND PRIVATE, holds the default of the field's type AS THAT TYPE
@@ -3211,7 +3228,32 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // declaration's fields directly and did not.
       const applied = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
       const declaration = (t as { Declaration?: unknown }).Declaration;
-      for (const field of constructor.Fields) {
+      // INHERITED FIELDS TOO. `Constructor.Fields` is built from "each
+      // ClassElement of elements" - this class's own body - so for a subclass it
+      // holds only what the subclass declared. The LAYOUT holds the base's
+      // fields as well, and so does the value-type copy that walks it, and the
+      // two disagreed: the default instance of `class B extends A` defined `y`
+      // and left `x` absent, the copy then read *undefined* for `x`, and
+      // `DefineOwnProperty` refused it with "undefined is not assignable to
+      // uint32" - an internal assertion, so `[4].<B>` aborted the engine rather
+      // than reporting anything.
+      //
+      // Walked base-first, so a field the subclass redeclares wins, which is the
+      // order the layout uses.
+      // The ENGINE's [[Prototype]], not JavaScript's: a subclass constructor's
+      // [[Prototype]] is its superclass constructor, and `Object.getPrototypeOf`
+      // reads the host object's prototype instead, which finds nothing.
+      const chain: { Fields?: readonly unknown[] }[] = [];
+      for (let c: unknown = constructor; c !== undefined && c !== null;) {
+        const asCtor = c as { Fields?: readonly unknown[] };
+        if (!Array.isArray(asCtor.Fields)) {
+          break;
+        }
+        chain.unshift(asCtor);
+        c = OrdinaryGetPrototypeOf(c as never) as unknown;
+      }
+      const allFields = chain.flatMap((c) => (c.Fields ?? []) as typeof constructor.Fields);
+      for (const field of allFields) {
         let record = field.TypeObject?.TypeRecord;
         if (record && applied.length > 0 && declaration !== undefined) {
           record = CanonicalizeType(SubstituteTypeArguments(record, declaration, applied));
