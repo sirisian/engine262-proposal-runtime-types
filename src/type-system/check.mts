@@ -2241,6 +2241,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || key === 'strict' || key === 'sourceText' ? false : containsCall(n[key])));
   };
 
+  /** Drop the narrowing of the PLACE an assignment target names, if it names one. */
+  const invalidatePlace = (target: ParseNode | null | undefined): void => {
+    if (!target) {
+      return;
+    }
+    const place = narrowableName(target);
+    if (place !== null) {
+      invalidateNarrowing(place);
+    }
+  };
+
   /** Drop the narrowing of every name a loop can reassign, before its body is walked. */
   const widenForLoop = (node: ParseNode): void => {
     const assigned = new Set<string>();
@@ -2484,12 +2495,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Drop any narrowing of a name, which an assignment to it invalidates. */
   const invalidateNarrowing = (name: string) => {
     typeRevision += 1;
+    // A PREFIX SWEEP, not an exact match: a narrowing is keyed by place, so
+    // assigning `b` unseats `b.a` and `b.a.c` with it. Assigning `b.a.c` leaves
+    // `b.a` alone - a write to a deeper field changes the value there, not the
+    // type of the place that holds it.
+    const prefix = `${name}.`;
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const f = frames[i] as Frame & { narrowed?: Set<string> };
-      if (f.narrowed?.has(name)) {
-        f.bindings.delete(name);
-        f.narrowed.delete(name);
-      } else if (f.declaredNames.has(name)) {
+      if (f.narrowed) {
+        for (const key of [...f.narrowed]) {
+          if (key === name || key.startsWith(prefix)) {
+            f.bindings.delete(key);
+            f.narrowed.delete(key);
+          }
+        }
+      }
+      if (f.declaredNames.has(name)) {
         break;
       }
     }
@@ -11651,6 +11672,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return staticType(templateCallView(node as ParseNode.TaggedTemplateExpression));
       }
       case 'MemberExpression': {
+        // A NARROWED PLACE answers before the field is read from its base. A
+        // test on `b.a` records a fact keyed by the path, and this is where that
+        // fact has to be consulted, since every read of `b.a` comes through
+        // here. `narrowableName` declines anything that could name a different
+        // place on a second evaluation, so a path that reaches this lookup is
+        // one a guard could legitimately have spoken about.
+        const narrowedPlace = narrowableName(node);
+        if (narrowedPlace !== null) {
+          const narrowed = lookup(narrowedPlace);
+          if (narrowed) {
+            return narrowed;
+          }
+        }
         if (node.PrivateIdentifier) return privateMember(node)?.type ?? null;
         const m = node as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
         if (m.Expression && m.MemberExpression) {
@@ -14226,7 +14260,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return undefined;
       }
       const t = resolveType(asType as ParseNode.Type);
-      return t ? { name: (ie.Expression as unknown as { name: string }).name, type: t, negated: patternNegated } : undefined;
+      // The PATH, not `.name`: the guard above accepts a member expression now,
+      // and reading `.name` off one yields *undefined*, which would key the
+      // narrowing on nothing.
+      const subject = narrowableName(ie.Expression);
+      return t && subject !== null ? { name: subject, type: t, negated: patternNegated } : undefined;
     }
     // `instanceof` is a narrowing form. The README says so where it introduces
     // the operator - "a successful check narrows the static type in that branch,
@@ -14315,10 +14353,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           continue;
         }
-        if (subject.type !== 'IdentifierReference') {
+        // Through `narrowableName`, as the `is` and `typeof` forms already are,
+        // so a member path narrows here too. It declines anything that could
+        // name a different place on a second evaluation.
+        const name = narrowableName(subject);
+        if (name === null) {
           continue;
         }
-        const name = (subject as unknown as { name: string }).name;
         // `x === null` and `x === undefined`, and the LOOSE forms, which test
         // for either: `x == null` is the idiom for "nullish" and narrows to
         // both, which is what nullishType is for.
@@ -20045,7 +20086,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // does, so facts about its previous value no longer apply.
         let updated = operand;
         while (updated?.type === 'ParenthesizedExpression') updated = updated.Expression;
-        if (updated?.type === 'IdentifierReference') invalidateNarrowing(updated.name);
+        invalidatePlace(updated);
         return;
       }
       case 'AssignmentExpression': {
@@ -20062,6 +20103,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return;
         }
         requireWritableMember(a.LeftHandSideExpression);
+        // EVERY assignment unseats the place it writes, not only the compound
+        // ones below. A plain `b.a = null` inside a branch that narrowed `b.a`
+        // left the narrowing standing, so the next read was typed by a fact the
+        // assignment had just falsified.
+        invalidatePlace(a.LeftHandSideExpression);
         if (a.AssignmentOperator === '=') checkLengthLiteral(a.LeftHandSideExpression, a.AssignmentExpression);
         if (judgedAssignmentOperator(a.AssignmentOperator) && !['=', '||=', '&&=', '??='].includes(a.AssignmentOperator)) {
           const receiver = staticType(a.LeftHandSideExpression);
@@ -20069,7 +20115,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (binary) {
             const result = operatorResult(binary, [a.AssignmentExpression], n);
             checkStoreResult(a.LeftHandSideExpression, typedExpressionView(n, result));
-            if (a.LeftHandSideExpression.type === 'IdentifierReference') invalidateNarrowing(a.LeftHandSideExpression.name);
+            invalidatePlace(a.LeftHandSideExpression);
             walk(a.LeftHandSideExpression);
             walk(a.AssignmentExpression);
             return;

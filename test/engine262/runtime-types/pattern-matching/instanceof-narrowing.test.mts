@@ -66,13 +66,12 @@ test('the other narrowing forms are unaffected', () => {
     if (typeof v === "string") { String(v.length); } else { String(v); }`)).toBe('2');
 });
 
-test('a member expression is still not narrowed by any form', () => {
-  // The remaining half of the gap, and a different problem: facts are keyed on a
-  // binding NAME, so an expression with no name cannot produce one. Pinned so
-  // that closing it is a deliberate change rather than an accident.
-  expectStaticTypeError(`class A { x: uint8 = 1; } class B { a: A | null = null; }
+test('a member expression narrows too, now that facts are keyed by place', () => {
+  // This pinned the opposite while facts were keyed on a binding NAME. They are
+  // keyed on a PATH now, so the form that could not produce a key does.
+  expect(evaluated(`class A { x: uint8 = 1; } class B { a: A | null = null; }
     const b = new B(); b.a = new A();
-    if (b.a instanceof A) { String(b.a.x); }`);
+    if (b.a instanceof A) { String(b.a.x); } else { 'no'; }`)).toBe('1');
 });
 
 /**
