@@ -56,14 +56,20 @@ test('the guards and the scalar path are untouched', () => {
   expect(evaluated('const s = Span.<uint8>(new ArrayBuffer(8)); s[0] = 3; String(s[0]);')).toBe('3');
 });
 
-test('a nested class field is still refused, as it is for placement itself', () => {
-  // Pre-existing and not a property of views: `new(buf, 0) Outer()` refuses the
-  // same read, so `ReadPlacedField` is where it lives.
+test('a nested class field reads and writes through too', () => {
+  // This pinned the opposite. The refusal was never a property of views -
+  // `new(buf, 0) Outer()` refused the same read - so it lived in
+  // `ReadPlacedField`, where `BufferElementType` answers only scalars and
+  // nothing asked what else a field might be. A nested field now reads through
+  // the same placement-backed instance a class ELEMENT gets.
   const nested = 'class I { n: uint8 = 0; } class O { i: I; m: uint8 = 0; } ';
-  expectThrown(`${nested}const s = Span.<O>(new ArrayBuffer(8)); const ref e = s[0]; e.i.n = 4;`,
-    'cannot be placed in a buffer');
-  expectThrown(`${nested}const o = new(new ArrayBuffer(8), 0) O(); o.i.n;`,
-    'cannot be placed in a buffer');
+  expect(evaluated(`${nested}const b = new ArrayBuffer(8); const s = Span.<O>(b);
+    const ref e = s[0]; e.i.n = 5; String(new Uint8Array(b)[0]);`)).toBe('5');
+  expect(evaluated(`${nested}const b = new ArrayBuffer(8);
+    const o = new(b, 0) O(); o.i.n = 4; String(new Uint8Array(b)[0]);`)).toBe('4');
+  // The sibling field is placed after the nested one, not over it.
+  expect(evaluated(`${nested}const b = new ArrayBuffer(8); const o = new(b, 0) O(); o.m = 7;
+    const r = new Uint8Array(b); r[0] + '/' + r[1];`)).toBe('0/7');
 });
 
 /**
@@ -110,4 +116,21 @@ test('placement new honours it on the same path', () => {
   expect(evaluated(`class W { @endian('big') v: uint16 = 0; }
     const b = new ArrayBuffer(4); const w = new(b, 0) W(); w.v = 258;
     const r = new Uint8Array(b); r[0] + '/' + r[1];`)).toBe('1/2');
+});
+
+test('the README\u2019s own worked example runs', () => {
+  // `const ref header = Span.<Header>(buffer)[0]; header.c.a = 10; buffer[3]`
+  // is documented with the answer 10, and needed three things that were each
+  // missing: a class element in a buffer-backed view, a nested class field
+  // through a placement, and a byte-backed source. The first two are now here;
+  // the third is why `buffer` is a `Uint8Array` rather than the `[100].<uint8>`
+  // the README writes - an owned array's bytes are "specified but not
+  // implemented in this engine", which is a separate gap.
+  expect(evaluated(`
+    @packed class HeaderSection { a: uint8 = 0; b: uint32 = 0; }
+    @packed class Header { a: uint8 = 0; b: uint16 = 0; c: HeaderSection; }
+    const buffer = new Uint8Array(100);
+    const ref header = Span.<Header>(buffer)[0];
+    header.c.a = 10;
+    String(buffer[3]);`)).toBe('10');
 });

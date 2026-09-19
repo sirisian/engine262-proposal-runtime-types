@@ -4,12 +4,12 @@ import {
   NumberValue, ObjectValue, TypedNumberValue, Value,
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import type { ClassLayout, FieldPlacement } from '../type-system/layout.mts';
+import { LayoutOf, type ClassLayout, type FieldPlacement } from '../type-system/layout.mts';
 import type { TypedArrayTypes } from '../intrinsics/TypedArray.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, Throw, surroundingAgent, ToIndex,
-  Get, OrdinaryObjectCreate,
+  Get, OrdinaryObjectCreate, Set as SetProperty,
 } from '#self';
 
 /**
@@ -210,6 +210,26 @@ export function* ReadPlacedField(backing: PlacementBacking, key: string, fieldTy
   }
   const element = BufferElementType(fieldType);
   if (element === null) {
+    // A NESTED CLASS FIELD reads through a placement-backed instance at its own
+    // offset, the same object a class ELEMENT of a window already gets. Without
+    // this, `class Outer { i: Inner; }` over a buffer answered "a field of this
+    // type cannot be placed in a buffer" for `o.i` - so memorylayout.md's own
+    // `header.c.a = 10` could not run even once its source was byte-backed, and
+    // a placement `new` refused the same read.
+    //
+    // The field's placement already carries its offset and its layout, which is
+    // everything the nested instance needs; what was missing is that
+    // `BufferElementType` answers only scalars and nothing asked what else the
+    // field might be.
+    const nested = Q(yield* PlacedInstance(
+      fieldType,
+      backing.Buffer,
+      backing.ByteOffset + placement.offset,
+      placement.layout.byteLength,
+    ));
+    if (nested) {
+      return nested;
+    }
     return Throw.TypeError('a field of this type cannot be placed in a buffer');
   }
   // `@endian` fixes this field's byte order. Without one the platform's order is
@@ -250,7 +270,28 @@ export function* WritePlacedField(backing: PlacementBacking, key: string, fieldT
   }
   const element = BufferElementType(fieldType);
   if (element === null) {
-    return Throw.TypeError('a field of this type cannot be placed in a buffer');
+    // A WHOLE NESTED FIELD is written field by field through the placed
+    // instance, so a bit-field, an explicit offset and a further nesting each go
+    // through the rule that placed them rather than being blitted.
+    const nested = Q(yield* PlacedInstance(
+      fieldType,
+      backing.Buffer,
+      backing.ByteOffset + placement.offset,
+      placement.layout.byteLength,
+    ));
+    const source = value;
+    if (!nested || !(source instanceof ObjectValue)) {
+      return Throw.TypeError('a field of this type cannot be placed in a buffer');
+    }
+    const nestedLayout = LayoutOf(fieldType) as { fields?: readonly { key: unknown }[] } | null;
+    for (const inner of nestedLayout?.fields ?? []) {
+      if (typeof inner.key !== 'string') {
+        continue;
+      }
+      const innerValue = Q(yield* Get(source, Value(inner.key)));
+      Q(yield* SetProperty(nested, Value(inner.key), innerValue, Value.true));
+    }
+    return true;
   }
   Q(yield* SetValueInBuffer(backing.Buffer, backing.ByteOffset + placement.offset, element, numeric as NumberValue, true, 'unordered', placement.endian !== 'big'));
   return true;
