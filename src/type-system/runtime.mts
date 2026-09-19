@@ -19,7 +19,7 @@ import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mt
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { Q, X , ThrowCompletion } from '../completion.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
-import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd } from '../abstract-ops/all.mts';
+import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf } from '../abstract-ops/runtime-types.mts';
@@ -1538,6 +1538,15 @@ function literalArmsFit(bound: TypeRecord, constraint: TypeRecord): boolean {
     return element !== undefined && elements.length > 0
       && elements.every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element));
   }
+  // A TUPLE constraint against a tuple bound is element-wise for the reason the
+  // array constraint above is: the bound is a tuple of the literals a program
+  // wrote, and each position is admitted on the same terms as a scalar.
+  if (constraint.Kind === 'tuple' && bound.Kind === 'tuple') {
+    const wanted = (constraint as { Elements: readonly { Type: TypeRecord }[] }).Elements;
+    const got = (bound as { Elements: readonly { Type: TypeRecord }[] }).Elements;
+    return wanted.length === got.length
+      && got.every((el, i) => fitsOne(el.Type, wanted[i]!.Type) || IsAssignable(el.Type, wanted[i]!.Type));
+  }
   const arms = bound.Kind === 'union'
     ? (bound as { Members: readonly TypeRecord[] }).Members
     : [bound];
@@ -1631,10 +1640,42 @@ export function* InferGenericBindingsFrom(
           // ternary this replaced compiled under the test pipeline and broke the
           // rollup build, leaving a stale bundle that every later probe read.
           let contributed;
+          // The literal rule needs a value that HAS a literal type.
+          //
+          // #sec-computed-constraints says the binding is "the LITERAL type of
+          // the argument's value", and an Object has none: `literalTypeOf` would
+          // wrap the object itself as a ~literal~ Type Record, which is not a
+          // type any rule can read. It showed as a *TypeError* whose message was
+          // the object's internal slots - `f({ a: 1 })` for
+          // `f<T: { a: uint8 }>` reached through an `any`, where the checker
+          // does not refuse first.
+          //
+          // The guard belongs on the VALUE rather than on the constraint:
+          // widening `constraintWantsLiteral` to "any constraint" is what
+          // #sec-computed-constraints requires, and it is right for every
+          // argument that is a literal. What it cannot do is make an Object one.
           if (literalRule || valueRule) {
             contributed = Q(yield* args.literalTypeOf(i));
           } else {
             contributed = Q(yield* args.typeOf(i));
+          }
+          // An OBJECT has no literal type, so the rule does not reach it and the
+          // argument's own type is what it contributes.
+          //
+          // An ARRAY is the exception the PACK path already makes: "A PACK binds
+          // a tuple of literals", and an array argument at a constrained
+          // parameter is the same information in one value rather than spread
+          // across trailing arguments. Its own type widens each element -
+          // `RuntimeTypeOf([1])` is `[].<number>` - so the literal a program
+          // wrote is gone before the constraint is asked, and `[1]` could not
+          // satisfy `[].<uint8>` through an inferred binding though it satisfies
+          // a plain `t: [].<uint8>` parameter. A tuple of the elements' literal
+          // types keeps it, and `literalArmsFit` already reads exactly that
+          // shape against an array constraint.
+          if (contributed.Kind === 'literal'
+            && (contributed as { Value?: unknown }).Value instanceof ObjectValue) {
+            const asArray = Q(yield* arrayElementLiteralTuple((contributed as { Value: Value }).Value));
+            contributed = asArray ?? Q(yield* args.typeOf(i));
           }
           bound = bound === null ? contributed : joinTypes(bound, contributed);
         }
@@ -1778,7 +1819,15 @@ export function* InferGenericBindingsFrom(
       if (constraint !== null) {
         if (constraint.Kind === 'array' && bound.Kind === 'tuple') {
           for (const el of bound.Elements) {
-            if (!IsAssignable(el.Type, constraint.Element)) {
+            // On LITERAL-FIT terms, as `literalArmsFit` judges the same pair -
+            // a literal's widened base is assignable to no sized type, and
+            // #sec-literal-propagation is what admits `1` in a `uint8`
+            // position. Plain assignability here refused `[1]` against
+            // `[].<uint8>` while the helper below would have admitted it, which
+            // is the two-copies-drifted shape: this branch short-circuits
+            // before the helper is ever consulted.
+            if (!IsAssignable(el.Type, constraint.Element)
+              && !(el.Type.Kind === 'literal' && literalFitsNumericType(el.Type, constraint.Element))) {
               return Throw.TypeError('$1 is not assignable to $2', Value(displayType(el.Type)), Value(displayType(constraint.Element)));
             }
           }
@@ -1980,6 +2029,34 @@ function annotationTypeName(annotation: ParseNode.TypeAnnotation | null | undefi
  */
 function constraintWantsLiteral(_t: TypeRecord): boolean {
   return true;
+}
+
+/**
+ * The tuple of element literal types of an Array value, or *null* where the
+ * value is not an Array or an element has no literal type.
+ *
+ * The shape the PACK path binds, built from one array argument instead of from
+ * trailing ones. An element that is itself an Object has no literal type
+ * (#sec-computed-constraints binds "the LITERAL type of the argument's value"),
+ * so such an array declines and contributes its own type as before.
+ */
+function* arrayElementLiteralTuple(value: Value): PlainEvaluator<TypeRecord | null> {
+  if (!(value instanceof ObjectValue) || Q(IsArray(value)) !== Value.true) {
+    return null;
+  }
+  const length = Q(yield* LengthOfArrayLike(value));
+  const elements: TypeRecord[] = [];
+  for (let i = 0; i < length; i += 1) {
+    const element = Q(yield* Get(value, Value(String(i))));
+    if (element instanceof ObjectValue) {
+      return null;
+    }
+    elements.push(literalTypeOf(element));
+  }
+  return CanonicalizeType({
+    Kind: 'tuple',
+    Elements: elements.map((t) => ({ Type: t, Rest: false, Initial: 'none' as const })),
+  } as TypeRecord);
 }
 
 /** The literal type of a value (its value with its widened base), used for literal inference. */

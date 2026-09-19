@@ -18142,7 +18142,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             bindTypeParametersFromArguments(
               chosen.Parameters.map((pr) => ({ Type: pr.Type })),
               chosen.Parameters.map((pr, pi) => {
-              const supplied = mapped.entries.filter((entry) => entry.slot === pi).map((entry) => staticType(entry.node));
+              // A COMPOSITE LITERAL is typed against the parameter's
+              // CONSTRAINT rather than bare. #sec-computed-constraints: "the
+              // constraint IS A CONTEXTUAL TYPE."
+              //
+              // Typed bare, `{ a: 1 }` at `T extends { a: uint8 }` infers
+              // `{ a: number }` - the member widened before anything could adapt
+              // it - and the constraint check then refuses the binding, while
+              // the same literal at a plain `o: { a: uint8 }` parameter adapts
+              // and is accepted, as does the explicit `f.<{ a: uint8 }>(...)`.
+              //
+              // Only the literals that ADAPT. A scalar literal is left bare:
+              // #sec-computed-constraints binds it as the literal type of its
+              // value and checks the constraint against that, and handing it the
+              // constraint here would make it take the constraint's type instead.
+              const adaptTo = pr.Type.Kind === 'parameter'
+                ? ((pr.Type as { Constraint?: Known }).Constraint ?? null) : null;
+              const supplied = mapped.entries.filter((entry) => entry.slot === pi).map((entry) => {
+                const kind = (entry.node as { type?: string }).type;
+                return adaptTo && (kind === 'ObjectLiteral' || kind === 'ArrayLiteral')
+                  ? staticTypeIn(entry.node, adaptTo)
+                  : staticType(entry.node);
+              });
               if (!pr.Rest) {
                 return supplied[0] ?? null;
               }
@@ -19612,9 +19633,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             //
             // Integer targets keep the context: `uint64(9007199254740993)` needs
             // the exact digits, the double having already lost them.
+            // A DECIMAL target is NOT among these. decimal.md draws the line at
+            // a float64 VALUE and not at a literal: "The distinction bites only
+            // when a `float64` *value* is involved - `decimal128(f)` carries
+            // whatever `f` already holds", and its exact-value examples are
+            // `let tenth: decimal128 = 0.1` and `0.1 := decimal128`, "forcing
+            // decimal on an otherwise-Number literal".
+            //
+            // Typing the literal bare made a third spelling of one literal
+            // disagree with those two: `decimal128(19.99)` was
+            // `19.98999999999999843680598132777959` where the annotation and the
+            // cast both give `19.99`. The literal was never a binary value, so
+            // there is nothing for the conversion to carry.
+            //
+            // `rational` keeps the bare reading, for the reason stated below it:
+            // `rational(5)` wants the INTEGER 5 its constructor asks for.
             const numericLiteralArgument = (argNodes[0] as { type?: string }).type === 'NumericLiteral';
             const carriesTheValue = conversionTarget.Kind === 'primitive'
-              && (conversionTarget.Name === 'rational' || decimalWidthOf(conversionTarget) !== undefined);
+              && conversionTarget.Name === 'rational';
             if (numericLiteralArgument && carriesTheValue) {
               staticType(argNodes[0]!);
             } else {

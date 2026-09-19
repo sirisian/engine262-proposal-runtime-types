@@ -1222,7 +1222,24 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           if (converted.Type !== 'normal') {
             return converted as never;
           }
-          record = { ...record, Value: converted.Value as Value } as never;
+          // The BASE moves with the value, as it does at the other two sites
+          // that make this conversion - `BindTypeArguments` in runtime.mts and
+          // the declaration path in RuntimeTypesDeclarations - both of which
+          // write `Base: <the constraint>` beside the value.
+          //
+          // Without it the binding is a ~literal~ record whose [[Value]] is a
+          // `uint8` 1 and whose [[Base]] is `number`, which is a type no
+          // program can fill. #sec-isoftype decides a ~literal~ by SameValue
+          // against its [[Value]], so a plain Number is not of it; and
+          // #sec-literal-propagation's rule for reaching one - "a contextual
+          // type that is a ~literal~ Type Record whose [[Base]] is a numeric
+          // VALUE type admits a numeric literal ... the literal is converted at
+          // the base" - does not fire either, because the base says `number`.
+          // So `f.<1>(1)` for `function f<T: uint8>(a: T)` bound a parameter
+          // type that refused its own argument: "1 is not assignable to \"1\"".
+          // The clause names this failure exactly - "without this such a type is
+          // nameable and not fillable".
+          record = { ...record, Value: converted.Value as Value, Base: declared as TypeRecord } as never;
         } else if (record.Kind !== 'literal' && p.TypeParameterConstraint) {
           // #sec-computed-constraints step 8 for a NON-literal explicit argument:
           // `f<T: string>` applied `f.<number>` was caught only because inference

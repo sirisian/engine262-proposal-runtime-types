@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, bool, expectStaticTypeError } from '../harness.mts';
+import { evaluated, ok, bool, expectStaticTypeError, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-computed-constraints (Computed Constraints),
@@ -385,4 +385,123 @@ test('the constraint is still checked against the literal', () => {
   expectStaticTypeError('function f<T: uint8>(a: T): T { return a; } f(300);');
   // A parameter in two positions binds the join of both literals.
   expect(evaluated('function add<T: uint8>(a: T, b: T): T { return a; } String(add(200, 100));')).toBe('200');
+});
+
+test('an argument with no literal type contributes its own type', () => {
+  // The literal rule widened to "any constraint" (#sec-computed-constraints) is
+  // about the argument's LITERAL type, and an Object has none. Taking one
+  // anyway wrapped the object itself as a ~literal~ Type Record, which no rule
+  // can read - it surfaced as a *TypeError* whose message was the object's
+  // internal slots.
+  //
+  // Reached through an `any`, where the checker does not refuse first and the
+  // run time's own inference is what binds. The composite constraint is still
+  // refused here, as it is statically; what this pins is that the refusal says
+  // which types disagreed.
+  expectThrown('function f<T: { a: uint8 }>(o: T): T { return o; } let g: any = f; g({ a: 1 });',
+    'is not assignable to');
+  // An ARRAY is the exception: it has a literal type, the tuple of its
+  // elements' literal types, which is the shape the PACK path already binds.
+  // So this one now SUCCEEDS, where the object above still cannot.
+  expect(evaluated('function f<T: [].<uint8>>(t: T): T { return t; } let g: any = f; String(g([1])[0]);')).toBe('1');
+  // The values that DO have a literal type still bind it, through the same path.
+  expect(evaluated('function f<T: uint8>(a: T): T { return a; } let g: any = f; String(g(1));')).toBe('1');
+  expect(evaluated('function f<T: uint8 | string>(a: T): T { return a; } let g: any = f; String(g(1));')).toBe('1');
+  expect(evaluated("function f<T: string>(a: T): T { return a; } let g: any = f; g('x');")).toBe('x');
+  // And the constraint is still enforced on the value that arrives.
+  expectThrownKind('function f<T: uint8>(a: T): T { return a; } let g: any = f; g(300);', 'RangeError');
+});
+
+// -- A value parameter's explicit argument ------------------------------------
+test("a value parameter's argument is supplied explicitly as well as inferred", () => {
+  // `<T: uint8>` declares a VALUE parameter - the `:` spelling - where
+  // `<T extends uint8>` declares a type parameter constrained to it
+  // (#sec-type-parameters gives both). So `f.<1>` supplies T's value.
+  //
+  // The binding converted the value to the constraint and left [[Base]] at
+  // `number`, making a ~literal~ record whose [[Value]] is a `uint8` 1 over a
+  // `number` base - a type no program can fill. #sec-isoftype decides a
+  // ~literal~ by SameValue against [[Value]], so a plain Number is not of it,
+  // and #sec-literal-propagation's way in needs a [[Base]] that is a numeric
+  // VALUE type. The parameter refused its own argument:
+  // `1 is not assignable to "1"`. The clause names the failure - "without this
+  // such a type is nameable and not fillable".
+  expect(evaluated('function f<T: uint8>(a: T): T { return a; } String(f.<1>(1));')).toBe('1');
+  expect(evaluated("function f<T: string>(a: T): T { return a; } f.<'x'>('x');")).toBe('x');
+  expect(evaluated('function f<T: float32>(a: T): T { return a; } String(f.<1.5>(1.5));')).toBe('1.5');
+});
+
+test('the value a value parameter binds is still checked', () => {
+  // Supplying the value does not loosen the parameter: an argument that is not
+  // that value, and a value the constraint cannot hold, are both refused.
+  expectStaticTypeError('function f<T: uint8>(a: T): T { return a; } f.<1>(2);');
+  expectStaticTypeError('function f<T: uint8>(a: T): T { return a; } f.<300>(300);');
+  // A general `uint8` is not the specific value 1, so it is refused too - the
+  // static reading is right and unchanged.
+  expectStaticTypeError('function f<T: uint8>(a: T): T { return a; } f.<1>((1 := uint8));');
+});
+
+test('the other value-parameter forms are unaffected', () => {
+  expect(evaluated('function f<T: uint8>(a: T): T { return a; } String(f(1));')).toBe('1');
+  expect(evaluated('function g<N: uint32>(): uint32 where N > 2 { return (1 := uint32); } String(g.<4>());')).toBe('1');
+  expect(ok('class G<N: uint32> { } let g: G.<4> = new G.<4>();')).toBe(true);
+  // And a TYPE parameter, the `extends` spelling, takes a type argument.
+  expect(evaluated('function f<T extends uint8>(a: T): T { return a; } String(f.<uint8>(1));')).toBe('1');
+});
+
+// -- A composite literal at a constrained parameter ----------------------------
+test('an object literal adapts to the parameter\'s constraint', () => {
+  // #sec-computed-constraints: "the constraint IS A CONTEXTUAL TYPE". Typed
+  // bare, `{ a: 1 }` infers `{ a: number }` - the member widened before
+  // anything could adapt it - and the constraint check then refused the
+  // binding, while the same literal at a plain `o: { a: uint8 }` parameter
+  // adapted and was accepted, as did the explicit `f.<{ a: uint8 }>(...)`.
+  // One argument, one target shape, three spellings, two answers.
+  expect(evaluated('function f<T extends { a: uint8 }>(o: T): T { return o; } String(f({ a: 1 }).a);')).toBe('1');
+  expect(evaluated('function f<T extends { a: { b: uint8 } }>(o: T): T { return o; } '
+    + 'String(f({ a: { b: 1 } }).a.b);')).toBe('1');
+  // The spellings that already worked, pinned.
+  expect(evaluated('function f<T extends { a: uint8 }>(o: T): T { return o; } '
+    + 'String(f.<{ a: uint8 }>({ a: 1 }).a);')).toBe('1');
+  expect(evaluated('function f<T extends { a: uint8 }>(o: T): T { return o; } '
+    + 'let o: { a: uint8 } = { a: 1 }; String(f(o).a);')).toBe('1');
+});
+
+test('adapting does not admit what the constraint refuses', () => {
+  // And the diagnostics are now the MEMBER's rather than the whole shape's,
+  // which is what adapting buys beside the acceptance.
+  const F = 'function f<T extends { a: uint8 }>(o: T): T { return o; } ';
+  expectStaticTypeError(`${F}f({ a: 'x' });`);
+  expectStaticTypeError(`${F}f({ a: 300 });`);
+  expectStaticTypeError(`${F}f({ a: 1, b: 2 });`);
+  expectStaticTypeError(`${F}f({});`);
+});
+
+test('an unconstrained parameter still takes the literal bare', () => {
+  expect(evaluated('function f<T>(o: T): T { return o; } String(Reflect.typeOf(f({ a: 1 })));')).toBe('{ a: number }');
+});
+
+// -- An array argument binds the literals it was written with ------------------
+test('an array argument at a constrained parameter keeps its elements\' literals', () => {
+  // `RuntimeTypeOf([1])` is `[].<number>`, so the literal a program wrote was
+  // gone before the constraint was asked: `[1]` satisfied a plain
+  // `t: [].<uint8>` parameter and not an inferred binding. The tuple of element
+  // literal types is what the PACK path already binds for trailing arguments -
+  // "A PACK binds a tuple of literals" - applied to one array argument.
+  expect(evaluated('function f<T extends [].<uint8>>(t: T): T { return t; } String(f([1])[0]);')).toBe('1');
+  expect(evaluated('function f<T extends [uint8]>(t: T): T { return t; } String(f([1])[0]);')).toBe('1');
+  expect(evaluated('function f<T extends [].<string>>(t: T): T { return t; } f([\'a\'])[0];')).toBe('a');
+});
+
+test('the constraint still decides what an array argument may hold', () => {
+  expectStaticTypeError('function f<T extends [].<uint8>>(t: T): T { return t; } f([300]);');
+  expectStaticTypeError("function f<T extends [].<uint8>>(t: T): T { return t; } f(['x']);");
+  // An element that is itself an Object has no literal type, so such an array
+  // declines the rule and contributes its own type, as before.
+  expectThrown('function f<T extends [].<[].<uint8>>>(t: T): T { return t; } f([[1]]);',
+    'is not assignable to');
+});
+
+test('an unconstrained parameter still widens an array argument', () => {
+  expect(evaluated('function f<T>(t: T): T { return t; } String(Reflect.typeOf(f([1])));')).toBe('[].<number>');
 });

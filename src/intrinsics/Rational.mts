@@ -6,6 +6,7 @@ import { type ValueEvaluator } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
+import { isDecimalObject, exactExpansionOfDouble } from './Decimal.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
   OrdinaryObjectCreate,
@@ -134,8 +135,83 @@ function integerArg(v: Value): bigint | null {
   return null;
 }
 
+/**
+ * The exact value of a numeric source as a fraction in lowest terms, or *null*
+ * where the source is not one this conversion reaches.
+ *
+ * #table-numeric-conversions, `binary float or the Number type` to `rational`:
+ * "The source's exact value, which is a dyadic rational, in lowest terms." A
+ * double IS a dyadic rational - it is a mathematical value of the form
+ * _m_ x 2**_e_ - so the conversion is exact and loses nothing, which is why the
+ * row admits it where the reverse direction rounds.
+ *
+ * decimal.md gives the decimal source the same treatment: "a terminating
+ * decimal is exactly a rational with a power-of-ten denominator, so
+ * `rational(d)` is exact - `0.1` becomes `1/10`".
+ *
+ * Both are read through their DECIMAL expansion, significand over a power of
+ * ten, and then reduced: a double's expansion terminates, so reducing a
+ * power-of-ten denominator against it leaves the power of two the dyadic form
+ * has. Going through the digits rather than the bits means one routine serves
+ * both sources.
+ */
+function exactFractionOf(v: Value): { num: bigint, den: bigint } | null {
+  let significand: bigint;
+  let exponent: number;
+  if (isDecimalObject(v)) {
+    significand = (v as { DecimalSignificand: bigint }).DecimalSignificand;
+    exponent = (v as { DecimalExponent: number }).DecimalExponent;
+  } else {
+    let n: number | undefined;
+    if (v instanceof NumberValue) {
+      n = v.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the exact double is wanted, not its mathematical normalization
+    } else if (isTypedNumber(v)) {
+      n = v.numberValue(); // eslint-disable-line @engine262/mathematical-value -- as above
+    }
+    if (n === undefined || !Number.isFinite(n)) {
+      return null;
+    }
+    const digits = exactExpansionOfDouble(n);
+    if (!digits) {
+      return null;
+    }
+    significand = digits.significand;
+    exponent = digits.exponent;
+  }
+  let num = exponent >= 0 ? significand * (10n ** BigInt(exponent)) : significand;
+  let den = exponent >= 0 ? 1n : 10n ** BigInt(-exponent);
+  const gcd = (x: bigint, y: bigint): bigint => (y === 0n ? (x < 0n ? -x : x) : gcd(y, x % y));
+  const g = gcd(num, den);
+  if (g > 1n) {
+    num /= g;
+    den /= g;
+  }
+  return { num, den };
+}
+
 function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: FunctionCallContext): ValueEvaluator {
   const realmRec = surroundingAgent.currentRealmRecord;
+  // ONE numeric argument is the CONVERSION of #table-numeric-conversions, not
+  // the numerator of the two-argument constructor. The arms are told apart by
+  // argument count, so neither has to guess at the other's intent.
+  //
+  // `rational(0.5)` was refused with "a rational numerator must be an integer",
+  // which is the two-argument form's rule answering a call that never named a
+  // numerator - while `rational(5)` worked, so one spelling gave two verdicts
+  // by whether the source happened to be integral.
+  if (b === undefined && integerArg(a) === null) {
+    const fraction = exactFractionOf(a);
+    if (fraction !== null) {
+      return CreateRationalValue(fraction.num, fraction.den, realmRec);
+    }
+    // The row's own failure: "A *RangeError* ... if the source is NaN or an
+    // infinity." Neither has an exact value to be the fraction of, so this is a
+    // question of range rather than of kind, and the message says which.
+    if ((a instanceof NumberValue || isTypedNumber(a))
+      && !Number.isFinite(a.numberValue())) { // eslint-disable-line @engine262/mathematical-value -- finiteness of the stored Number is the question
+      return Throw.RangeError('$1 is not in the range of $2', a, Value('rational'));
+    }
+  }
   const num = integerArg(a);
   if (num === null) {
     return Throw.TypeError('a rational numerator must be an integer');

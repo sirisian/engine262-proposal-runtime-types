@@ -141,5 +141,16 @@ test('a BigInt is a conversion source for the float families', () => {
   // RangeError where it does not.
   expect(evaluated('String((3n := uint8));')).toBe('3');
   expect(evaluated('String(int64(9007199254740993n));')).toBe('9007199254740993');
-  expectThrown('(300n := uint8); "admitted";');
+  // A CAST wraps, which is this test's own first sentence - "the lossy cast
+  // rounds to the width; the checked boundary admits exactly where the width
+  // represents the value exactly". #table-numeric-conversions gives the rule for
+  // the integer row: "the mathematical value of the source modulo 2**M".
+  //
+  // This asserted a throw, which was #sec-requiretype's BOUNDARY rule answering
+  // at a cast: `(300 := uint8)`, `(someUint16 := uint8)` and
+  // `(someFloat64 := uint8)` were all 44 and only the BigInt refused. The
+  // boundary below is unchanged and still refuses, which is the case the
+  // exactness argument for the `n` suffix was about.
+  expect(evaluated('String((300n := uint8));')).toBe('44');
+  expectThrown('let f: uint8 = 300n; "admitted";');
 });

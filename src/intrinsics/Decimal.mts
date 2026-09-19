@@ -113,6 +113,45 @@ export function DecimalPrecision(width: 32 | 64 | 128): number {
   return width === 32 ? 7 : width === 64 ? 16 : 34;
 }
 
+/**
+ * The inclusive bounds on a decimal's ADJUSTED exponent, by IEEE 754-2008.
+ *
+ * A decimal's range is a property of the TYPE and not of the binary format it
+ * came from, which #table-numeric-conversions states as the reason it demands a
+ * *RangeError*: "A *RangeError* if the source's exponent is outside the target's
+ * range, since a decimal's range is a property of the type rather than of the
+ * format."
+ *
+ * The adjusted exponent is the one the bounds are stated over - the exponent of
+ * the value written with a single digit before the point - so it is the stored
+ * exponent plus the significand's digit count minus one.
+ */
+export function DecimalExponentRange(width: 32 | 64 | 128): { min: number, max: number } {
+  if (width === 32) {
+    return { min: -95, max: 96 };
+  }
+  if (width === 64) {
+    return { min: -383, max: 384 };
+  }
+  return { min: -6143, max: 6144 };
+}
+
+/**
+ * Is _parts_ within the exponent range of a decimal of _width_?
+ *
+ * Asked of the RESULT rather than of the source, because the conversion rounds
+ * first and rounding can carry: a significand of nines rounds to a one with one
+ * more digit, which is one higher adjusted exponent.
+ */
+export function DecimalPartsInRange(parts: DecimalParts, width: 32 | 64 | 128): boolean {
+  if (parts.significand === 0n) {
+    return true;
+  }
+  const adjusted = parts.exponent + digitCount(parts.significand) - 1;
+  const range = DecimalExponentRange(width);
+  return adjusted >= range.min && adjusted <= range.max;
+}
+
 /** How many decimal digits a magnitude has. */
 function digitCount(v: bigint): number {
   const m = v < 0n ? -v : v;
@@ -264,7 +303,12 @@ export function decimalCompare(x: DecimalObject, y: DecimalObject): number {
  * division. `0.1` expands to 55 significant digits this way, which is the figure
  * the specification quotes when it flags this conversion as the hard one.
  */
-function exactExpansionOfDouble(value: number): { significand: bigint, exponent: number } | undefined {
+/**
+ * The exact decimal expansion of a double. Exported because the rational
+ * conversion reads the same digits: a double is a dyadic rational, and its
+ * terminating decimal expansion is the route to that fraction.
+ */
+export function exactExpansionOfDouble(value: number): { significand: bigint, exponent: number } | undefined {
   if (!Number.isFinite(value)) {
     return undefined;
   }
@@ -340,6 +384,20 @@ export function DecimalFromDouble(value: number, width: 32 | 64 | 128): DecimalP
  * Exact where the value has an exact binary form and rounded where it does not,
  * which is the ordinary direction of loss and needs no rule of its own.
  */
+/**
+ * Decimal parts rounded to a width's precision.
+ *
+ * The same step `DecimalFromDouble` takes after expanding a double, exposed for
+ * the sources that arrive as exact digits already - a `bigint` or a wide
+ * integer type, whose value may have more digits than the target holds.
+ */
+export function RoundPartsToWidth(parts: DecimalParts, width: 32 | 64 | 128): DecimalParts {
+  if (digitCount(parts.significand) <= DecimalPrecision(width)) {
+    return parts;
+  }
+  return roundToPrecision(parts.significand, parts.exponent, DecimalPrecision(width));
+}
+
 /** A decimal re-rounded to another width's precision. */
 export function RoundDecimalToWidth(d: DecimalObject, width: 32 | 64 | 128): DecimalParts {
   return roundToPrecision(d.DecimalSignificand, d.DecimalExponent, DecimalPrecision(width));

@@ -9,12 +9,13 @@ import type { TypeRecord } from './records.mts';
 import { neverType, orderKey, propertiesInKeyOrder, displayType } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { AreDisjoint, IsSubtype, SameTypeStructural } from './relations.mts';
-import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value } from '#self';
+import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value, R } from '#self';
 import { RequireType } from '#self';
 import {
   CreateDecimalValue, ParseDecimalDigits, DecimalFromDouble, RoundDecimalToWidth, isDecimalObject,
+  DecimalPartsInRange, RoundPartsToWidth,
 } from '../intrinsics/Decimal.mts';
-import { NumberValue } from '../value.mts';
+import { NumberValue, BigIntValue, isTypedNumber } from '../value.mts';
 
 /**
  * proposal-runtime-types #sec-canonicalizetype and #sec-gettypeobject
@@ -667,10 +668,54 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       // Making them equal would be the tempting choice and the wrong one: it
       // would launder a binary approximation into an exact-looking decimal and
       // hide the whole reason these types exist.
-      if (arg instanceof NumberValue) {
-        const parts = DecimalFromDouble((arg as NumberValue).numberValue(), width);
+      // A value of ANY numeric type converts, which is what
+      // `#table-numeric-conversions` says of the row - "any numeric type" - and
+      // what decimal.md's own example asks for: "`decimal128(someFloat64)` //
+      // carries the float's binary value, rounded to 34 digits". A `float64`
+      // value arrives as a `TypedNumberValue` rather than a `NumberValue`, so
+      // the branch missed it and refused the design's worked example while
+      // converting the untyped Number beside it.
+      //
+      // A wide integer type carries a BigInt, whose value is exact; `Number` of
+      // it would round before the conversion this operation exists to perform,
+      // so it takes the string route into the digits instead.
+      const numericSource = arg instanceof NumberValue
+        ? R(arg as NumberValue)
+        : arg instanceof BigIntValue
+          ? R(arg)
+          // `.value` rather than `numberValue()`: a wide integer type carries a
+          // BigInt, and `numberValue()` rounds it through a double first - which
+          // turned `uint64` 9007199254740993 into ...992 on the way into a
+          // `decimal128` that can hold every digit.
+          : (isTypedNumber(arg) ? arg.value : undefined);
+      if (typeof numericSource === 'bigint') {
+        const digits = ParseDecimalDigits(numericSource.toString());
+        if (digits) {
+          // Rounded to the width like every other source: an exact integer with
+          // more digits than the target holds is still an integer the target
+          // cannot hold, and `decimal32` keeps seven.
+          const rounded = RoundPartsToWidth(digits, width);
+          if (!DecimalPartsInRange(rounded, width)) {
+            return Throw.RangeError('$1 is not in the range of $2', arg, Value(record.Name));
+          }
+          return CreateDecimalValue(rounded.significand, rounded.exponent, width, surroundingAgent.currentRealmRecord);
+        }
+      }
+      if (typeof numericSource === 'number') {
+        const parts = DecimalFromDouble(numericSource, width);
         if (!parts) {
           return Throw.RangeError('$1 has no decimal value', arg);
+        }
+        // #table-numeric-conversions: "A *RangeError* if the source's exponent
+        // is outside the target's range, since a decimal's range is a property
+        // of the type rather than of the format."
+        //
+        // The precision was checked and the range was not, so `decimal32(1e300)`
+        // produced a three-hundred-digit value - a significand of one at an
+        // exponent no `decimal32` can hold - and said nothing. A decimal that
+        // cannot represent its own exponent is not a value of the type.
+        if (!DecimalPartsInRange(parts, width)) {
+          return Throw.RangeError('$1 is not in the range of $2', arg, Value(record.Name));
         }
         return CreateDecimalValue(parts.significand, parts.exponent, width, surroundingAgent.currentRealmRecord);
       }
@@ -678,8 +723,38 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
         // A decimal to a decimal of another WIDTH re-rounds to that width's
         // precision and keeps its cohort member where it fits.
         const parts = RoundDecimalToWidth(arg, width);
+        // The same range rule: a `decimal128` at an exponent no `decimal32`
+        // holds is out of range however its digits round.
+        if (!DecimalPartsInRange(parts, width)) {
+          return Throw.RangeError('$1 is not in the range of $2', arg, Value(record.Name));
+        }
         return CreateDecimalValue(parts.significand, parts.exponent, width, surroundingAgent.currentRealmRecord);
       }
+    }
+    // decimal.md, "Conversions ... Explicit in every direction, and each names
+    // its loss": "To an integer: `int64(d)` TRUNCATES TOWARD ZERO."
+    //
+    // `#table-numeric-conversions` leaves the decimal-to-binary row "Open", and
+    // the note beside it explains why the other direction is hard - "which
+    // cohort member results". That difficulty is one-sided: a binary type has
+    // no cohorts, so there is nothing to choose here, and the design settles all
+    // four outgoing directions. This is the one it states that the engine did
+    // not have: `int64(d)` and `uint8(d)` were refused as "not assignable".
+    //
+    // Truncation is exact on the digits rather than through a double, so a
+    // decimal with more significant digits than a double holds keeps them: the
+    // significand scaled by its exponent, with BigInt division truncating
+    // toward zero for either sign. The integer target's own width and wrapping
+    // rules then apply unchanged, which is what delegating to `ConvertValue`
+    // with the truncated value buys.
+    if (isDecimalObject(arg) && record.Kind === 'primitive'
+      && (record.Name === 'int' || record.Name === 'uint')) {
+      const significand = (arg as { DecimalSignificand: bigint }).DecimalSignificand;
+      const exponent = (arg as { DecimalExponent: number }).DecimalExponent;
+      const truncated = exponent >= 0
+        ? significand * (10n ** BigInt(exponent))
+        : significand / (10n ** BigInt(-exponent));
+      return Q(yield* ConvertValue(new BigIntValue(truncated), record));
     }
     return Q(yield* ConvertValue(arg, record));
   };

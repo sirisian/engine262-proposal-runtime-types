@@ -1077,13 +1077,34 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // position, which is the position the `n` suffix exists for.
         if (value instanceof BigIntValue && isIntegerTypeName(t.Name)) {
           const exact = R(value) as bigint;
-          if (!fitsNumericType(exact, t.Name, t.Arguments)) {
-            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
-          }
           const bits = typeof t.Arguments[0] === 'number' ? t.Arguments[0] : 0;
+          // #table-numeric-conversions, integer to integer of width _M_: "The
+          // mathematical value of the source modulo 2**_M_ ... Signed targets
+          // wrap in two's complement." A BigInt is a numeric source like any
+          // other here, so it WRAPS.
+          //
+          // It refused instead, quoting #sec-requiretype's rule that "a
+          // conversion that would wrap, truncate toward zero, or round a finite
+          // value to an infinity instead yields ~unrepresentable~". That rule is
+          // the BOUNDARY's, and this operation is the explicit conversion - the
+          // distinction the whole proposal is built on, "a conversion between
+          // numeric types is written explicitly rather than performed silently".
+          // So `uint8(300)`, `uint8(someUint16)` and `uint8(someFloat64)` all
+          // gave 44 while `uint8(300n)` was a *RangeError*: one spelling, five
+          // numeric families, four answers agreeing and one not.
+          //
+          // A boundary still refuses, because `RequireType` applies its own rule
+          // and never reaches here - `let x: uint8 = 300n` is unchanged, which
+          // is the case the `n` suffix's exactness argument was actually about.
+          //
+          // Wrapped on the BigInt, not through a double: `Number(exact)` first
+          // would round a wide value before the modulo that defines the answer.
+          const wrapped = bits > 0
+            ? (t.Name === 'int' ? BigInt.asIntN(bits, exact) : BigInt.asUintN(bits, exact))
+            : exact;
           // Narrower than 54 bits keeps the Number representation, so the two
           // carriers stay exactly where the rest of the engine expects them.
-          return new TypedNumberValue(bits > 53 ? exact : Number(exact), t);
+          return new TypedNumberValue(bits > 53 ? wrapped : Number(wrapped), t);
         }
         if (value instanceof BigIntValue && isFloatTypeName(t.Name)) {
           // #sec-conversions: a BigInt is a numeric family, and the float rule
