@@ -529,6 +529,22 @@ export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
       let walked: TypeRecord | undefined = (sourceType as { Base?: TypeRecord }).Base;
       for (let depth = 0; walked !== undefined && depth < 1000; depth += 1) {
         if ((walked as { Declaration?: unknown }).Declaration === targetDeclaration) {
+          // ...AND ONLY IF THE SUBCLASS ADDS STORAGE. `class Q extends P {}`
+          // has `P`'s layout exactly, so storing a `Q` into a `P` loses
+          // nothing and must stay legal; refusing it was a defect of its own.
+          //
+          // Compared by BYTE LENGTH rather than field count: the question is
+          // whether the value fits the target's storage, which is what the
+          // widths answer directly. Where either layout is missing there is no
+          // fixed storage to overflow, so nothing is lost either.
+          const sourceLayout = LayoutOf(sourceType) as { byteLength?: number } | null;
+          const targetLayout = LayoutOf(t) as { byteLength?: number } | null;
+          const sourceWidth = sourceLayout?.byteLength;
+          const targetWidth = targetLayout?.byteLength;
+          if (sourceWidth === undefined || targetWidth === undefined
+            || sourceWidth <= targetWidth) {
+            break;
+          }
           return Throw.TypeError('$1 is not assignable to $2',
             Value(displayType(sourceType)), Value(displayType(t)));
         }
