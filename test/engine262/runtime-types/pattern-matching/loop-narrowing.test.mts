@@ -64,3 +64,51 @@ test('the idioms that were always correct still are', () => {
 test('straight-line invalidation outside a loop is unchanged', () => {
   expectThrown(`${H}if (v !== null) { v = null; n = v.x; }`, 'is not declared by every member');
 });
+
+/**
+ * A CALL is the other way a narrowing goes stale, and it is not a loop problem:
+ *
+ *   function clob() { v = null; }
+ *   if (v !== null) { clob(); v.x; }      // typechecked, crashed at run time
+ *
+ * The walk cannot see into the callee, so the conservative fact is whether ANY
+ * function body assigns the name. One that none does is untouched, which is what
+ * keeps an ordinary call from widening anything.
+ *
+ * Inside a loop the call-site widening is not enough on its own: it fires when
+ * the walk REACHES the call, and `for (…) { n = v.x; clob(); }` reads first. So
+ * a loop body containing a call widens those names up front, for the same
+ * single-pass reason the assigned set does.
+ */
+const C = 'class A { x: uint8 = 1; } let v: A | null = new A(); let n: uint8 = 0; ';
+
+test('a call widens a narrowing of a name some function assigns', () => {
+  expectThrown(`${C}function clob(): uint8 { v = null; return 0; }
+    if (v !== null) { clob(); n = v.x; }`, 'is not declared by every member');
+});
+
+test('a loop whose body calls such a function widens it before the body', () => {
+  expectThrown(`${C}function clob(): uint8 { v = null; return 0; }
+    if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; clob(); } }`,
+  'is not declared by every member');
+});
+
+test('a call that cannot touch the binding widens nothing', () => {
+  // The rule is name-specific: `pure` assigns nothing, and `bump` assigns `z`,
+  // so neither reaches `v`. A blanket drop-at-every-call would have broken both.
+  expect(evaluated(`${C}function pure(k: uint8): uint8 { return k; }
+    if (v !== null) { pure(1); n = v.x; } String(n);`)).toBe('1');
+  expect(evaluated(`${C}let z: uint8 = 0; function bump(): uint8 { z = z + 1; return z; }
+    if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; bump(); } } String(n);`)).toBe('1');
+});
+
+test('a const base survives any call', () => {
+  expect(evaluated(`class A { x: uint8 = 1; } const v: A | null = new A(); let n: uint8 = 0;
+    function clob(): uint8 { return 0; }
+    if (v !== null) { clob(); n = v.x; } String(n);`)).toBe('1');
+});
+
+test('a narrowing re-established after the call holds', () => {
+  expect(evaluated(`${C}function clob(): uint8 { v = null; return 0; }
+    clob(); if (v !== null) { n = v.x; } String(n);`)).toBe('0');
+});

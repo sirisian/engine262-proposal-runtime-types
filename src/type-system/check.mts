@@ -2078,6 +2078,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const assignedNames = new Set<string>();
   const assignedGlobalProperties = new Set<string>();
+  /**
+   * Names some FUNCTION BODY assigns to, so a call might change them.
+   *
+   * Narrowing survives a call today, and a call can reassign a captured binding:
+   * `function clob() { v = null; } if (v !== null) { clob(); v.x; }` typechecks
+   * and fails at run time. That is the same hole the loop back-edge had, reached
+   * through a call rather than through an iteration, and it needs the same
+   * treatment - the walk cannot see into the callee, so the conservative fact is
+   * whether ANY function assigns the name at all.
+   *
+   * A name only this function assigns straight-line is still covered by ordinary
+   * invalidation; this set is what a CALL has to widen.
+   */
+  const assignedInsideFunction = new Set<string>();
+  let functionDepth = 0;
 
   let hasDirectEval = false;
 
@@ -2099,8 +2114,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const x = t as { type?: string, name?: string } | null | undefined;
       if (x && x.type === 'IdentifierReference' && typeof x.name === 'string') {
         assignedNames.add(x.name);
+        if (functionDepth > 0) {
+          assignedInsideFunction.add(x.name);
+        }
       }
     };
+    // A function-ish node is recognised by carrying a parameter list, which is
+    // steadier than enumerating the eleven node types that are functions.
+    const isFunctionLike = n.FormalParameters !== undefined || n.ArrowParameters !== undefined
+      || n.UniqueFormalParameters !== undefined || n.PropertySetParameterList !== undefined;
+    if (isFunctionLike) {
+      functionDepth += 1;
+    }
     if (n.type === 'AssignmentExpression') {
       targetName(n.LeftHandSideExpression);
       const target = n.LeftHandSideExpression as ParseNode.MemberExpression;
@@ -2124,6 +2149,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       collectMutations(n[key]);
+    }
+    if (isFunctionLike) {
+      functionDepth -= 1;
     }
   };
 
@@ -2185,10 +2213,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /** Whether a subtree contains a call, which may reassign a captured binding. */
+  const containsCall = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    if (Array.isArray(node)) {
+      return node.some((c) => containsCall(c));
+    }
+    const n = node as Record<string, unknown> & { type?: string };
+    if (typeof n.type !== 'string') {
+      return false;
+    }
+    if (n.type === 'CallExpression' || n.type === 'NewExpression'
+      || n.type === 'TaggedTemplateExpression' || n.type === 'OptionalExpression') {
+      return true;
+    }
+    return Object.keys(n).some((key) => (key === 'parent' || key === 'location'
+      || key === 'strict' || key === 'sourceText' ? false : containsCall(n[key])));
+  };
+
   /** Drop the narrowing of every name a loop can reassign, before its body is walked. */
   const widenForLoop = (node: ParseNode): void => {
     const assigned = new Set<string>();
     assignedNamesIn(node, assigned);
+    // A CALL in the body reaches names no syntactic scan of the body can see,
+    // and the call-site widening below cannot help: it fires when the walk
+    // REACHES the call, and a read placed before it has already been typed.
+    // `for (…) { n = v.x; clob(); }` is exactly that order.
+    if (containsCall(node)) {
+      for (const name of assignedInsideFunction) {
+        assigned.add(name);
+      }
+    }
     for (const name of assigned) {
       invalidateNarrowing(name);
     }
@@ -19331,6 +19388,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'CallExpression': {
+        // A CALL may reassign a binding some function body assigns to, and the
+        // walk cannot see into the callee, so every such name loses its
+        // narrowing here. Without this, `function clob() { v = null; }` followed
+        // by `if (v !== null) { clob(); v.x; }` typechecked and failed at run
+        // time - the loop back-edge hole reached through a call instead of an
+        // iteration. A name no function assigns is untouched, which is what
+        // keeps an ordinary call from widening anything.
+        for (const name of assignedInsideFunction) {
+          invalidateNarrowing(name);
+        }
         // With no context from the position: the diagnostics of the numeric
         // resolution (mixed families, a family with no row, an unfitting
         // literal beside a typed argument) apply at every call site.
