@@ -517,7 +517,7 @@ function* DecimalProto_valueOf(_args: Arguments, { thisValue }: FunctionCallCont
   if (!isDecimalObject(thisValue)) {
     return Throw.TypeError('$1 is not a decimal', thisValue);
   }
-  return Throw.TypeError('decimal arithmetic is not yet defined; use toString to read the value');
+  return Throw.TypeError('a decimal has no Number value; this operation is not defined for decimals');
 }
 
 function* DecimalConstructorBody(width: 32 | 64 | 128, args: Arguments): ValueEvaluator {

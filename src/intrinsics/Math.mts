@@ -24,6 +24,8 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows, type IntegerRow } from '../type-system/numeric-signatures.mts';
 import { Decimal } from '../host-defined/decimal.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
+import { isDecimalObject, CreateDecimalValue, decimalCompare } from './Decimal.mts';
+import { isRationalObject, CreateRationalValue, rationalCompare } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import {
   surroundingAgent,
@@ -39,6 +41,81 @@ import {
   ToUint32,
 } from '#self';
 
+/**
+ * The exact rows of #sec-numeric-library for the DECIMAL and RATIONAL families.
+ *
+ * The clause states these: "A signature's declared return type is a boundary
+ * ... For a decimal type, precision rounding is silent and a result outside the
+ * exponent range throws a RangeError exception. For a rational type the result
+ * is exact." None of it reached the engine, and the failure was silent in one
+ * family and misleading in the other: a decimal answered "decimal arithmetic is
+ * not yet defined" though its OPERATORS are fully defined, and a rational
+ * answered nothing at all until it was made to refuse.
+ *
+ * abs, sign, max and min are the rows that need no rounding rule - negation and
+ * comparison only - so they are exact at every width and are answered here. The
+ * rows that round (trunc, floor, ceil, round and the transcendentals) are not,
+ * and still reach the refusal below.
+ */
+function decimalOrRationalAbs(x: Value): Value | undefined {
+  const realmRec = surroundingAgent.currentRealmRecord;
+  if (isDecimalObject(x)) {
+    const sig = (x as { DecimalSignificand: bigint }).DecimalSignificand;
+    return sig < 0n
+      ? CreateDecimalValue(-sig, (x as { DecimalExponent: number }).DecimalExponent,
+        (x as { DecimalWidth: 32 | 64 | 128 }).DecimalWidth, realmRec)
+      : x;
+  }
+  if (isRationalObject(x)) {
+    const num = (x as { RationalNumerator: bigint }).RationalNumerator;
+    return num < 0n
+      ? CreateRationalValue(-num, (x as { RationalDenominator: bigint }).RationalDenominator, realmRec)
+      : x;
+  }
+  return undefined;
+}
+
+/** The sign as A VALUE OF _T_, which is what the clause's table row says. */
+function decimalOrRationalSign(x: Value): Value | undefined {
+  const realmRec = surroundingAgent.currentRealmRecord;
+  if (isDecimalObject(x)) {
+    const sig = (x as { DecimalSignificand: bigint }).DecimalSignificand;
+    const width = (x as { DecimalWidth: 32 | 64 | 128 }).DecimalWidth;
+    return CreateDecimalValue(sig === 0n ? 0n : (sig < 0n ? -1n : 1n), 0, width, realmRec);
+  }
+  if (isRationalObject(x)) {
+    const num = (x as { RationalNumerator: bigint }).RationalNumerator;
+    return CreateRationalValue(num === 0n ? 0n : (num < 0n ? -1n : 1n), 1n, realmRec);
+  }
+  return undefined;
+}
+
+/**
+ * max and min over one family, comparing rather than converting, so the answer
+ * is one of the arguments and nothing is rounded on the way.
+ */
+function decimalOrRationalExtreme(args: readonly (Value | undefined)[], wantHighest: boolean): Value | undefined {
+  const values = args.map((a) => a ?? Value.undefined);
+  if (values.length === 0) {
+    return undefined;
+  }
+  const allDecimal = values.every(isDecimalObject);
+  const allRational = values.every(isRationalObject);
+  if (!allDecimal && !allRational) {
+    return undefined;
+  }
+  let best = values[0]!;
+  for (const candidate of values.slice(1)) {
+    const order = allDecimal
+      ? decimalCompare(candidate as never, best as never)
+      : rationalCompare(candidate as never, best as never);
+    if (wantHighest ? order > 0 : order < 0) {
+      best = candidate;
+    }
+  }
+  return best;
+}
+
 /** https://tc39.es/ecma262/#sec-math.abs */
 function* Math_abs([x = Value.undefined]: Arguments): ValueEvaluator {
   // proposal-runtime-types #sec-numeric-library: "`Math.abs` of a `complex.<T>`
@@ -48,6 +125,12 @@ function* Math_abs([x = Value.undefined]: Arguments): ValueEvaluator {
   // and does not overflow for components whose squares do.
   if (surroundingAgent.feature('runtime-types') && isComplexObject(x)) {
     return F(complexAbs(x));
+  }
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = decimalOrRationalAbs(x);
+    if (exact !== undefined) {
+      return exact;
+    }
   }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN()) return n;
@@ -361,6 +444,12 @@ function* Math_log2([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.max */
 function* Math_max(args: Arguments): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = decimalOrRationalExtreme(args, true);
+    if (exact !== undefined) {
+      return exact;
+    }
+  }
   const coerced = [];
   for (const arg of args) {
     const n = Q(yield* ToNumber(arg ?? Value.undefined));
@@ -377,6 +466,12 @@ function* Math_max(args: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.min */
 function* Math_min(args: Arguments): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = decimalOrRationalExtreme(args, false);
+    if (exact !== undefined) {
+      return exact;
+    }
+  }
   const coerced = [];
   for (const arg of args) {
     const n = Q(yield* ToNumber(arg ?? Value.undefined));
@@ -592,6 +687,12 @@ function* Math_round([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.sign */
 function* Math_sign([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = decimalOrRationalSign(x);
+    if (exact !== undefined) {
+      return exact;
+    }
+  }
   const n = Q(yield* ToNumber(x));
   if (n.isNaN() || Object.is(n.value, 0) || Object.is(n.value, -0)) return n;
   if (n.value < 0) return F(-1);

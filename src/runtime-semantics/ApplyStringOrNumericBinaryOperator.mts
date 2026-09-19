@@ -25,6 +25,7 @@ import { Q } from '../completion.mts';
 import { IsOfType } from '../type-system/runtime.mts';
 import {
   isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder,
+  DecimalPartsInRange,
   CreateDecimalValue,
 } from '../intrinsics/Decimal.mts';
 import {
@@ -341,7 +342,23 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       return Throw.TypeError('a decimal operand requires a decimal on both sides');
     }
     const realmRec = surroundingAgent.currentRealmRecord;
-    const make = (r: { parts: { significand: bigint, exponent: number }, width: 32 | 64 | 128 }) => CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
+    // A result outside the width's exponent range is a *RangeError*, which is
+    // how a decimal differs from a float: #sec-numeric-types says "a float
+    // already saturates, to an infinity, and a decimal already raises a
+    // *RangeError*, since a decimal's range is a property of the type rather
+    // than of the format".
+    //
+    // It did not. `decimal32('9e90') * decimal32('9e90')` answered 8.1e181, a
+    // value no `decimal32` holds, and `decimal32('9e96') + decimal32('9e96')`
+    // answered 1.8e97 the same way - silently, and typed `decimal32`. Every
+    // operator builds its result here, so the check belongs here rather than in
+    // each arm.
+    const make = (r: { parts: { significand: bigint, exponent: number }, width: 32 | 64 | 128 }) => {
+      if (!DecimalPartsInRange(r.parts, r.width)) {
+        return Throw.RangeError('a decimal result is outside the range of $1', Value(`decimal${r.width}`));
+      }
+      return CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
+    };
     switch (opText) {
       case '+':
         return make(decimalAdd(lval, rval));

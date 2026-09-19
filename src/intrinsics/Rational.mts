@@ -294,7 +294,7 @@ function* RationalProto_valueOf(_args: Arguments, { thisValue }: FunctionCallCon
   if (!isRationalObject(thisValue)) {
     return Throw.TypeError('$1 is not a rational', thisValue);
   }
-  return Throw.TypeError('rational arithmetic is not yet defined; use toString to read the value');
+  return Throw.TypeError('a rational has no Number value; this operation is not defined for rationals');
 }
 
   const proto = bootstrapPrototype(realmRec, [

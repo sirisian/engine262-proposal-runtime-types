@@ -657,6 +657,14 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
         if (!digits) {
           return Throw.SyntaxError('$1 is not a decimal', arg);
         }
+        // The same range rule the other arms apply, and that `parse` applies to
+        // the same digits. Without it the two spellings of one conversion
+        // disagreed: `decimal32.parse('1e97')` was a *RangeError* while
+        // `decimal32('1e97')` was accepted, building a value no `decimal32`
+        // holds.
+        if (!DecimalPartsInRange(digits, width)) {
+          return Throw.RangeError('$1 is not in the range of $2', arg, Value(record.Name));
+        }
         return CreateDecimalValue(digits.significand, digits.exponent, width, surroundingAgent.currentRealmRecord);
       }
       // A NUMBER converts by CARRYING WHAT THE FLOAT HOLDS, as decimal.md
