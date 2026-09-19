@@ -3345,6 +3345,24 @@ export abstract class ExpressionParser extends FunctionParser {
     const leadingDecorators = surroundingAgent.feature('runtime-types') && this.test(Token.AT)
       ? this.parseDecorators()
       : null;
+    // A FIELD MAY NOT BE DECLARED `ref`. A reference is a borrow - a storage
+    // location and an index - and `references.md` is explicit that one "cannot
+    // be stored in a binding that outlives it, a field, an array, or a
+    // collection". A field outlives the borrow, so there is no spelling that
+    // makes this work and no fix to suggest beyond storing the value or its
+    // owner.
+    //
+    // Refused BY NAME rather than left to the grammar: `ref r: A;` reached the
+    // ordinary field path and failed on the identifier after `ref` with
+    // "Unexpected token", which says nothing about why and reads as a typo.
+    // The form is refused here rather than parsed and rejected later, so no
+    // production exists for something that must never be accepted.
+    const refThenName = () => this.test('ref') && this.peekAhead().type === Token.IDENTIFIER;
+    const staticRefThenName = () => this.test('static')
+      && this.peekAhead().type === Token.IDENTIFIER && this.peekAhead().value === 'ref';
+    if (surroundingAgent.feature('runtime-types') && (refThenName() || staticRefThenName())) {
+      this.raise(Throw.SyntaxError('a field may not be declared \`ref\`: a reference borrows a storage location and a field outlives the borrow'));
+    }
     if (this.test('static') && this.testAhead(Token.LBRACE)) {
       const node = this.startNode<ParseNode.ClassStaticBlock>();
       this.expect('static');
