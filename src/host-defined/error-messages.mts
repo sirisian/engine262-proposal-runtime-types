@@ -932,6 +932,7 @@ export interface Throw {
   | '$1 is not claimed by any meta type, in $2'
   | '$1 is not declared by $2'
   | '$1 is not declared by every member of $2'
+  | '$1 is not declared by every member of $2; narrow the receiver first, or read it with `?.`'
   | '$1 is not defined for $2'
   | '$1 is not in the range of $2'
   | '$1 is out of range for $2'

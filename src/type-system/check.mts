@@ -12047,8 +12047,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // `u.toString()`, an arm's structure listing no Object.prototype
               // member.
               if (!everyArmDeclaresIt && someArmDeclaresIt) {
+                // SOME arm declares the key, so a guard reaches it and the
+                // message can say so. The message is NOT extended for the other
+                // shape this operation refuses: where NO arm declares the key
+                // there is nothing to narrow to, and suggesting a guard would
+                // send a misspelling off after a fix that cannot work. That
+                // case is admitted as an ordinary read above rather than
+                // refused here, so the hint is safe exactly where it is
+                // attached.
                 const completion = Throw.StaticTypeError(
-                  '$1 is not declared by every member of $2',
+                  '$1 is not declared by every member of $2; narrow the receiver first, or read it with `?.`',
                   Value(readKey),
                   Value(displayType(receiver as TypeRecord)),
                 );
