@@ -1,4 +1,5 @@
 import type { Arguments } from '../value.mts';
+import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { VectorValue, ObjectValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
@@ -592,6 +593,31 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     // the lanes arrive as N arguments. One argument is the broadcast cast of
     // #sec-vector-lanes and fills every lane; N arguments give the lanes in
     // order; any other count is refused.
+    // A COMPLEX AT A NAMED WIDTH IS CONSTRUCTED FROM ITS PAIR, as the bare name
+    // is. #sec-type-names lists `complex64(1, 2)` beside `decimal128("1.0")` and
+    // `float32x4(1, 2, 3, 4)` as "how those values are CREATED".
+    //
+    // Only the bare `complex` was bound to the pair constructor; a width name is
+    // bound to its Type Object, whose call is a CONVERSION and reads one
+    // argument. So `complex128(1, 2)` silently returned `1+0i` - a well-formed
+    // complex with the wrong value, no error and no warning, while
+    // `complex(1, 2)` and `complex128.parse('1+2i')` both gave `1+2i`. Two ways
+    // of building one value disagreed and the quiet one was wrong.
+    //
+    // One argument still converts, which is what `complex128(someComplex)` and
+    // `complex128(5)` mean.
+    if (record.Kind === 'primitive' && record.Name === 'complex'
+      && record.Arguments.length === 1 && argumentsList.length >= 2) {
+      const componentType = record.Arguments[0] as TypeRecord;
+      const real = Q(yield* RequireType(argumentsList[0] ?? Value.undefined, componentType)) as Value;
+      const imaginary = Q(yield* RequireType(argumentsList[1] ?? Value.undefined, componentType)) as Value;
+      return CreateComplexValue(
+        Number((real as unknown as { numberValue(): number }).numberValue()),
+        Number((imaginary as unknown as { numberValue(): number }).numberValue()),
+        componentType,
+        surroundingAgent.currentRealmRecord,
+      );
+    }
     if (record.Kind === 'primitive' && record.Name === 'vector' && record.Arguments.length === 2) {
       const laneType = record.Arguments[0] as TypeRecord;
       const laneCount = record.Arguments[1];
