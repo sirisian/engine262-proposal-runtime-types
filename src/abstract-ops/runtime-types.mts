@@ -3146,7 +3146,18 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
   if (IsInsideOperatorBody()) {
     return undefined;
   }
-  if (t.Kind !== 'parameterized' || !isTypedNumber(value) && !(value instanceof NumberValue)) {
+  // A DECIMAL, COMPLEX or RATIONAL SOURCE reaches a cast too. The guard admitted
+  // only a typed number or a Number, which are the representations of the
+  // integer and float families - so a value of a family with its OWN object
+  // representation could not cross into a parameterization of its own base.
+  //
+  // `const d: decimal128 = 19.9; const p: Cents = d;` was refused for that
+  // reason, falling past the cast arm to `CheckedConvertValue`'s membership
+  // step, while `d := Cents` succeeded by another route and `const f: float32 =
+  // 5; const m: Meter = f;` succeeded because a float IS a typed number.
+  const hasOwnRepresentation = isDecimalObject(value) || isRationalObject(value) || isComplexObject(value);
+  if (t.Kind !== 'parameterized'
+    || !isTypedNumber(value) && !(value instanceof NumberValue) && !hasOwnRepresentation) {
     return undefined;
   }
   const base = t.Base;
