@@ -1,8 +1,9 @@
 import { CanonicalizeType } from './intern.mts';
+import { displayType } from './records.mts';
 import type { TypeRecord } from './records.mts';
 
 interface ArgumentNode {
-  readonly next: Map<TypeRecord, ArgumentNode>;
+  readonly next: Map<string, ArgumentNode>;
   verified: boolean;
 }
 
@@ -21,7 +22,20 @@ function entry(clause: object, bindings: ReadonlyMap<string, TypeRecord>, create
   for (const name of cache.names) {
     const bound = bindings.get(name);
     if (!bound) return undefined;
-    const key = CanonicalizeType(bound);
+    // Keyed by the canonical form's TEXT, not by the record itself.
+    //
+    // `CanonicalizeType` builds a fresh record on every call - its literal arm
+    // returns `{ Kind: 'literal', Value, Base }` newly each time - so it is a
+    // normal form and not an interned one. A `Map` keyed by the record compares
+    // by identity, so every lookup missed by construction: the write stored one
+    // key and the very next read with the same binding did not find it.
+    //
+    // #sec-generic-where says a specialization's clauses are "evaluated when it
+    // is created ... and NEVER PER CALL", and this memo is what enforces that,
+    // so a memo that cannot hit means both runtime sites re-evaluate on every
+    // call - `f.<4>(x)` evaluating a `where probe(N)` twice, and three calls six
+    // times.
+    const key = displayType(CanonicalizeType(bound));
     let next = node.next.get(key);
     if (!next) {
       if (!create) return undefined;

@@ -1,5 +1,5 @@
 import { specializedVectorMethod } from '../type-system/vector-specialization.mts';
-import { GenericWhereVerified } from '../type-system/generic-where.mts';
+import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
 import { Value, ReferenceRecord, JSStringValue } from '../value.mts';
 import { IsInTailPosition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
@@ -1315,6 +1315,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
             if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
               return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
             }
+            MarkGenericWhereVerified(clause, frame);
           }
         } finally {
           popTypeParameterFrame();
