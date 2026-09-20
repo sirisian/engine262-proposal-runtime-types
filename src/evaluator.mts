@@ -321,7 +321,7 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       // A CONSTANT EXPRESSION AT A RATIONAL CONTEXT is folded exactly, as a
       // fraction, and returned here rather than evaluated. Without this the
       // checker's fold was recorded and ignored: the operands degraded to
-      // Numbers, so `1 / 3` was `0.333…` converted to its exact DYADIC
+      // Numbers, so `1 / 3` was `0.333...` converted to its exact DYADIC
       // rational - `6004799503160661/18014398509481984` - and the three thirds
       // that rational.md says "sum to 1 on the nose" summed to
       // `18014398509481983/18014398509481984`.

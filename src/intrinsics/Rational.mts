@@ -200,6 +200,18 @@ function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: Functio
   // which is the two-argument form's rule answering a call that never named a
   // numerator - while `rational(5)` worked, so one spelling gave two verdicts
   // by whether the source happened to be integral.
+  // A RATIONAL SOURCE is the identity, as every other numeric conversion is on
+  // its own type: `uint8(x)` for a `uint8` and `float64(f)` for a `float64` both
+  // answer the value. `rational(r)` alone raised "a rational numerator must be
+  // an integer" - the two-argument form's rule answering a call that named no
+  // numerator, the same shape as the `rational(0.5)` defect below.
+  //
+  // It matters beyond symmetry. A constant expression at a rational contextual
+  // type folds to a rational (`foldRationalConstant`), so `rational(1 / 3)` and
+  // `rational(-1)` hand this a rational and were refused for it.
+  if (b === undefined && isRationalObject(a)) {
+    return a;
+  }
   if (b === undefined && integerArg(a) === null) {
     const fraction = exactFractionOf(a);
     if (fraction !== null) {
