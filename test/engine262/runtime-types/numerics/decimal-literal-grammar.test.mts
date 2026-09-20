@@ -63,10 +63,12 @@ test('a decimal has a tryParse, as every type does', () => {
   expect(evaluated("String(decimal64.tryParse('1.5'));")).toBe('1.5');
   expect(evaluated("String(decimal64.tryParse('1.5e3'));")).toBe('1500');
   expect(evaluated("String(decimal64.tryParse('zz'));")).toBe('null');
-  // A range failure answers null here, as it does for the integer family:
-  // `uint8.tryParse('300')` is null while `uint8.parse('300')` throws.
-  expect(evaluated("String(decimal32.tryParse('1e300'));")).toBe('null');
-  expect(evaluated("String(uint8.tryParse('300'));")).toBe('null');
+  // A RANGE FAILURE THROWS, here as in every family. It is not a failure to
+  // parse: the string was a literal of the type and its value did not fit,
+  // which is the other failure `parse` distinguishes and the one `tryParse`
+  // does not swallow.
+  expectThrownKind("decimal32.tryParse('1e300');", 'RangeError');
+  expectThrownKind("uint8.tryParse('300');", 'RangeError');
 });
 
 /**
@@ -95,7 +97,7 @@ test('a parsed float is a value of the float type', () => {
 test('a literal a float type cannot represent is a RangeError', () => {
   expectThrownKind("float16.parse('1e300');", 'RangeError');
   expectThrownKind("float16.parse('70000');", 'RangeError');
-  expect(evaluated("String(float16.tryParse('1e300'));")).toBe('null');
+  expectThrownKind("float16.tryParse('1e300');", 'RangeError');
   // The largest finite float16, and an explicit infinity, are both values of
   // the type.
   expect(evaluated("String(float16.parse('65504'));")).toBe('65504');

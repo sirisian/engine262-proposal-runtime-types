@@ -314,6 +314,30 @@ function parseFloatLiteral(text: string): number {
  * the program rather than a string that failed to parse, and answering *null*
  * there would report a bad call as a bad input.
  */
+/**
+ * Whether a thrown value is a *SyntaxError*, which is the one failure `tryParse`
+ * converts to *null*.
+ *
+ * Read from the error's own [[ErrorData]]-bearing prototype chain rather than
+ * from its `constructor` property, which a program may replace: a `tryParse`
+ * that consulted a writable property would answer differently after
+ * `SyntaxError.prototype.constructor = RangeError`.
+ */
+function isSyntaxErrorCompletion(thrown: Value): boolean {
+  if (!(thrown instanceof ObjectValue)) {
+    return false;
+  }
+  const intrinsic = surroundingAgent.currentRealmRecord.Intrinsics['%SyntaxError.prototype%'];
+  let proto = EnsureCompletion(X(thrown.GetPrototypeOf())).Value as Value;
+  while (proto instanceof ObjectValue) {
+    if (proto === intrinsic) {
+      return true;
+    }
+    proto = EnsureCompletion(X(proto.GetPrototypeOf())).Value as Value;
+  }
+  return false;
+}
+
 /** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
 function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arguments, context: FunctionCallContext): ValueEvaluator {
   const { thisValue } = context;
@@ -350,7 +374,25 @@ function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arg
   if (attempt.Type === 'normal') {
     return attempt.Value;
   }
-  return Value.null;
+  // ONLY a *SyntaxError* becomes *null*. #sec-parsing gives `parse` two
+  // failures - "a *SyntaxError* when the string is not a literal of the type,
+  // and a *RangeError* when it is a literal whose value the type cannot
+  // represent" - and gives this one: "*null* where `parse` would FAIL TO PARSE
+  // its argument". A value out of range parsed; it then did not fit.
+  //
+  // Every family answered *null* for both, so `uint8.tryParse('zz')` and
+  // `uint8.tryParse('300')` were indistinguishable and a caller wanting to tell
+  // them apart had to call `parse` and catch - which is what `tryParse` exists
+  // to avoid.
+  //
+  // The clause is not unanimous about this: a later sentence says a program
+  // that does not know its input "writes `tryParse` and handles the *null*",
+  // which reads as though nothing throws. The mechanism sentence is the precise
+  // one and governs; the other states the pair's purpose.
+  if (isSyntaxErrorCompletion(attempt.Value)) {
+    return Value.null;
+  }
+  return attempt;
 }
 
 

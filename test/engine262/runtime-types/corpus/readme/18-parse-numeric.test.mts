@@ -112,10 +112,13 @@ test('tryParse: it returns null where parse would throw', () => {
   expect(evaluated('String(float64.tryParse("abc"));')).toBe('null');
   expect(evaluated('String(uint16.tryParse("1__000"));')).toBe('null');
   expect(evaluated('String(uint8.tryParse("5", 99));')).toBe('null');
-  // a RangeError case: a literal the type cannot hold
-  expect(evaluated('String(uint8.tryParse("256"));')).toBe('null');
-  expect(evaluated('String(uint8.tryParse("-1"));')).toBe('null');
-  expect(evaluated('String(int8.tryParse("-200"));')).toBe('null');
+  // A LITERAL THE TYPE CANNOT HOLD IS NOT A FAILURE TO PARSE, so it is not
+  // *null*. #sec-parsing gives `tryParse` "*null* where `parse` would FAIL TO
+  // PARSE its argument", and a value out of range parsed and then did not fit -
+  // the other failure `parse` distinguishes.
+  expectThrownKind('uint8.tryParse("256");', 'RangeError');
+  expectThrownKind('uint8.tryParse("-1");', 'RangeError');
+  expectThrownKind('int8.tryParse("-200");', 'RangeError');
   // a non-string argument is not a literal either
   expect(evaluated('String(uint8.tryParse(5));')).toBe('null');
   // null is not a value of the type, which is what makes the union honest
@@ -126,8 +129,10 @@ test('tryParse: the two agree by construction', () => {
   // tryParse delegates to parse, so whatever parse accepts it accepts
   expect(evaluated('String(Number(uint8.tryParse("5")) === Number(uint8.parse("5")));')).toBe('true');
   expect(evaluated('String(Number(uint8.tryParse("ff", 16)) === Number(uint8.parse("ff", 16)));')).toBe('true');
-  // and where parse throws, tryParse is null
-  expect(evaluated('let threw = false; try { uint8.parse("256"); } catch (e) { threw = true; } String(threw && uint8.tryParse("256") === null);')).toBe('true');
+  // and where parse throws a *SyntaxError*, tryParse is null; where it throws a
+  // *RangeError*, tryParse throws it too.
+  expect(evaluated('let threw = false; try { uint8.parse("12abc"); } catch (e) { threw = true; } '
+    + 'String(threw && uint8.tryParse("12abc") === null);')).toBe('true');
 });
 
 test('tryParse: misusing the method is still an error, not a null', () => {
@@ -169,6 +174,14 @@ test('parse: the two failures are reported as different errors', () => {
     try { uint8.parse("256"); } catch (e) { range = e.constructor.name; }
     String(syntax !== range);
   `)).toBe('true');
-  // and tryParse collapses both to null, which is its whole contract
-  expect(evaluated('String(uint8.tryParse("12abc") === null && uint8.tryParse("256") === null);')).toBe('true');
+  // and tryParse KEEPS that distinction rather than collapsing it: the
+  // malformed string is *null*, the out-of-range literal still throws. A
+  // `tryParse` answering *null* for both would make the pair unable to tell
+  // apart the two cases the clause says it exists to tell apart.
+  expect(evaluated('String(uint8.tryParse("12abc") === null);')).toBe('true');
+  expect(evaluated(`
+    let kind = "none";
+    try { uint8.tryParse("256"); } catch (e) { kind = e.constructor.name; }
+    kind;
+  `)).toBe('RangeError');
 });
