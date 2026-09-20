@@ -25,7 +25,7 @@ import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver }
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
-import { CreateRationalValue } from '../intrinsics/Rational.mts';
+import { CreateRationalValue, isRationalObject } from '../intrinsics/Rational.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
 import { containsComputedType } from '../type-system/runtime.mts';
@@ -1213,6 +1213,31 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
           const payload = Number(R(value) as bigint);
           return new TypedNumberValue(wrapToType(payload, t), t);
         }
+        // A RATIONAL SOURCE. rational.md: "To a float: `float64(r)` is
+        // `numerator / denominator` rounded to the nearest `float64`. This is
+        // the lossy step, and it is visible. To an integer: `int64(r)` truncates
+        // toward zero."
+        //
+        // Without it a rational converted to NOTHING - every numeric target
+        // refused it - so a program could compute exactly and never get a value
+        // back out. The document names both directions and only the inbound one
+        // existed. `ToNumber` is no use here: a rational deliberately has no
+        // Number value, which is its own error message.
+        if (isRationalObject(value)) {
+          const rn = (value as unknown as { RationalNumerator: bigint }).RationalNumerator;
+          const rd = (value as unknown as { RationalDenominator: bigint }).RationalDenominator;
+          if (isFloatTypeName(t.Name)) {
+            return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
+          }
+          // Truncating toward zero, as BigInt division does and as `/` at an
+          // integer context does.
+          const truncated = rn / rd;
+          const asNumber = Number(truncated);
+          if (!Number.isFinite(asNumber) || BigInt(wrapToType(asNumber, t)) !== truncated) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          return new TypedNumberValue(wrapToType(asNumber, t), t);
+        }
         if (isNumericConversionSource(value)) {
           const n = Q(yield* ToNumber(value));
           // The payload stored on a typed value is the NUMBER, not its
@@ -1955,6 +1980,32 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // coercion rather than a check: it accepted a string, a Boolean, *null*,
         // and any object with a `valueOf`, and at a float width it could not even
         // fail, so a missing field became a NaN that surfaced somewhere else.
+        // A RATIONAL SOURCE. rational.md: "To a float: `float64(r)` is
+        // `numerator / denominator` rounded to the nearest `float64`. This is
+        // the lossy step, and it is visible. To an integer: `int64(r)`
+        // truncates toward zero."
+        //
+        // Without it a rational converted to NOTHING - `float64(r)`, `int64(r)`
+        // and every other numeric target refused it - so a program could compute
+        // exactly and never get a value back out. The document names both
+        // directions and only the inbound one existed.
+        if (isRationalObject(value)) {
+          const rn = (value as unknown as { RationalNumerator: bigint }).RationalNumerator;
+          const rd = (value as unknown as { RationalDenominator: bigint }).RationalDenominator;
+          if (isFloatTypeName(t.Name)) {
+            // Rounded, and the rounding is the point: the step the document
+            // calls lossy and visible.
+            return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
+          }
+          // Truncating toward zero, as BigInt division does and as `/` at an
+          // integer context does.
+          const truncated = rn / rd;
+          const asNumber = Number(truncated);
+          if (!Number.isFinite(asNumber) || BigInt(wrapToType(asNumber, t)) !== truncated) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          return new TypedNumberValue(wrapToType(asNumber, t), t);
+        }
         if (value instanceof BigIntValue && isFloatTypeName(t.Name)) {
           // The checked rule: a conversion that would round throws rather than
           // discarding, so a BigInt is admitted exactly where the float width
