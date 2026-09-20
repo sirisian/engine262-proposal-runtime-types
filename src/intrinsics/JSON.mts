@@ -660,6 +660,34 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
       if (name === 'boolean') {
         return value instanceof BooleanValue ? value : jsonTypeError(path, t, value);
       }
+      // THE `null` TYPE, which is a primitive like the two above and was the
+      // one of the four this case did not list.
+      //
+      // #sec-null-and-undefined-types: "`null` is the type whose one value is
+      // *null*. It is described by the Type Record { [[Kind]]: ~primitive~,
+      // [[Name]]: *"null"*, [[Arguments]]: « » }". A JSON `null` and that type
+      // mean the same thing, so nothing has to be decided here - the case was
+      // simply missing, and its absence reached much further than the bare
+      // target suggests.
+      //
+      // No spelling of a NULLABLE FIELD worked. The union case below tries each
+      // member and returns the first that converts, so a `null` member could
+      // never convert and `uint8 | null` admitted no document containing one:
+      // `JSON.parse.<{ a: uint8 | null }>('{"a":null}')` failed with "at .a:
+      // expected null or uint8, got null", a diagnostic that refutes itself.
+      // Arrays of nullables and the bare union failed the same way, so a
+      // document with a `null` anywhere could only be typed by giving that
+      // position `any` - abandoning the schema exactly where one is wanted.
+      //
+      // That union comment's "it naturally routes null to a null member" was
+      // the intent all along; this is the case it needed.
+      if (name === 'null') {
+        return value === Value.null ? value : jsonTypeError(path, t, value);
+      }
+      // `undefined` is deliberately NOT here: JSON has no `undefined` token, so
+      // no document produces one and there is nothing to accept. Its absence is
+      // correct where `null`'s was an omission.
+      //
       // bigint, symbol, and the exact wide types (decimal128, the 64-bit
       // integers) need digit-level parsing to preserve exactness and are not
       // handled by this core.
