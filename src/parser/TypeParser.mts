@@ -405,6 +405,11 @@ export abstract class TypeParser extends ExpressionParser {
   // TypeName :
   //   IdentifierReference
   //   TypeName `.` IdentifierName
+  /**
+   * Also read by the match-pattern parser: |MatchNamePattern|'s three
+   * alternatives are this production's, and a juxtaposition's head must stop
+   * where it stops rather than where `parseType` would.
+   */
   protected parseTypeName(): ParseNode.TypeName {
     const nameNode = this.startNode<ParseNode.TypeName>();
     nameNode.IdentifierReference = this.parseIdentifierReference();

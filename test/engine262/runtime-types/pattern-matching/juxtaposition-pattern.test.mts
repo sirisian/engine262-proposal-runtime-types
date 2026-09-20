@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectEarlyError, expectStaticTypeError, expectThrownKind } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-match-patterns.
@@ -104,11 +104,29 @@ test('every form that already worked is unchanged', () => {
   expect(evaluated("let s = 'hi'; String('world' is Reflect.typeOf(s));")).toBe('true');
 });
 
-test('the bracketed spellings, pinned as a baseline', () => {
-  // NOT a juxtaposition today. `P [let a]` is expressible as neither a type nor
-  // a pattern, and `P [_]` reads as an indexed access whose index will not
-  // resolve - so both are errors rather than meanings, which is why claiming
-  // them later would cost no compatibility.
-  expectEarlyError('class P {} let v: any = new P(); match (v) { when P [let a]: 1; default: 0; };', 'SyntaxError');
-  expectStaticTypeError('class P {} let v: any = new P(); match (v) { when P [_]: 1; default: 0; };');
+test('the bracketed form is claimed only where no type could be written', () => {
+  // `P [x]` reads as an |IndexedAccessType| too, and unlike the overlap rule's
+  // case the two readings do NOT agree - so the bracketed shape keeps the
+  // speculation's own gate, admitting it only where an element is something a
+  // |Type| cannot express. That test, `matchPatternNeedsPatternPath`, is purely
+  // syntactic and already serves the standalone braced and bracketed forms.
+  //
+  // The gate falls exactly on the compatibility line: these two were a
+  // *SyntaxError* and an unresolvable index before, so claiming them costs
+  // nothing.
+  expect(evaluated('class P extends Array {} let v: any = P.from([7]); '
+    + 'let r = match (v) { when P [let a]: a; default: 0; }; String(r);')).toBe('7');
+  expect(evaluated('class P extends Array {} let v: any = P.from([7]); '
+    + 'let r = match (v) { when P [_]: "y"; default: "n"; }; r;')).toBe('y');
+});
+
+test('a bracket that COULD be a type keeps its indexed-access reading', () => {
+  // These have meanings today and keep them, which is what the gate protects.
+  expect(evaluated("type T = { a: uint8 }; let v: any = (1 := uint8); "
+    + 'let r = match (v) { when T[\'a\']: "y"; default: "n"; }; r;')).toBe('y');
+  expectStaticTypeError('class P {} let v: any = new P(); match (v) { when P [uint8]: 1; default: 0; };');
+  expect(evaluated("type T = { a: uint8 }; let x: T['a'] = (1 := uint8); String(x);")).toBe('1');
+  // And a bare tuple type pattern is untouched.
+  expect(evaluated('let v: any = [(1 := uint8)]; '
+    + 'let r = match (v) { when [uint8]: "y"; default: "n"; }; r;')).toBe('y');
 });

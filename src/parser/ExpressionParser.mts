@@ -383,6 +383,9 @@ export abstract class ExpressionParser extends FunctionParser {
 
   protected abstract parseTypeArguments(): ParseNode.TypeArguments;
 
+  /** |MatchNamePattern|'s production, which a juxtaposition's head reads. */
+  protected abstract parseTypeName(): ParseNode.TypeName;
+
   // proposal-runtime-types: the modifiers of the class currently being parsed,
   // for the abstract-method placement check.
   protected currentClassModifiers: readonly string[] | null = null;
@@ -3177,23 +3180,53 @@ export abstract class ExpressionParser extends FunctionParser {
     const savedEarlyErrors = new Set(this.earlyErrors);
     const checkpoint = this.getLexerCheckpoint();
     const node = this.startNode<ParseNode.MatchJuxtapositionPattern>();
-    let head;
+    // The head is a |TypeReference| built from `parseTypeName` plus optional
+    // TypeArguments, which is exactly |MatchNamePattern|'s three alternatives -
+    // an identifier reference, `.` IdentifierName, and TypeArguments - and
+    // stops where that production stops, before either shape.
+    //
+    // NOT `parseType`, which is greedy over a trailing bracket: for
+    // `P [let a]` it reads `P[...]` as an |IndexedAccessType|, fails inside on
+    // `let`, and takes the whole speculation down with it, so the bracketed
+    // shape was never reached.
+    let head: ParseNode.Type;
     try {
-      head = this.parseType();
+      const reference = this.startNode<ParseNode.TypeReference>();
+      reference.TypeName = this.parseTypeName();
+      reference.TypeArguments = this.test(Token.PERIOD_LT) ? this.parseTypeArguments() : null;
+      head = this.finishNode(reference, 'TypeReference') as unknown as ParseNode.Type;
     } catch {
       this.restoreLexerCheckpoint(checkpoint);
       this.earlyErrors = savedEarlyErrors;
       return null;
     }
-    // A LineTerminator between the head and the brace ends the pattern: in `is`
-    // position a pattern is an ordinary operand, so `v is P` on one line and a
-    // block on the next must stay a pattern and a block.
-    if (!this.test(Token.LBRACE) || this.peek().hadLineTerminatorBefore) {
+    const braced = this.test(Token.LBRACE);
+    const bracketed = this.test(Token.LBRACK);
+    if ((!braced && !bracketed) || this.peek().hadLineTerminatorBefore) {
       this.restoreLexerCheckpoint(checkpoint);
       this.earlyErrors = savedEarlyErrors;
       return null;
     }
-    const shape = this.tryParseMatchObjectPattern(false);
+    // The two shapes are gated DIFFERENTLY, and the difference is the whole of
+    // the bracketed form's story.
+    //
+    // A braced shape has no competing reading after a head - `P { x: 1 }` is
+    // not a type in any spelling - so it is taken whatever its members are.
+    //
+    // A bracketed one does: `P [x]` reads as an |IndexedAccessType|, and unlike
+    // the overlap rule's case the two readings do NOT agree. So the bracketed
+    // form keeps the speculation's own gate, which admits it only where an
+    // element is something a |Type| CANNOT express. That is
+    // `matchPatternNeedsPatternPath`, a purely syntactic test on the node kind,
+    // already used for the standalone braced and bracketed forms.
+    //
+    // The split is exactly the compatibility line: `P [let a]` and `P [_]` are
+    // expressible as no type and were a *SyntaxError* and an unresolvable index
+    // respectively, so claiming them costs nothing; `P ['a']` and `P [uint8]`
+    // are readable as indices, have meanings today, and keep them.
+    const shape = braced
+      ? this.tryParseMatchObjectPattern(false)
+      : this.tryParseMatchArrayPattern();
     if (!shape) {
       this.restoreLexerCheckpoint(checkpoint);
       this.earlyErrors = savedEarlyErrors;

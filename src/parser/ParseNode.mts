@@ -3123,13 +3123,13 @@ export namespace ParseNode {
    * an object pattern. #sec-match-patterns gives the production as
    * `MatchNamePattern ObjectMatchPattern`.
    *
-   * Only the braced form is parsed. `MatchNamePattern ArrayMatchPattern` is
-   * ambiguous with an |IndexedAccessType| after a name and is left unclaimed.
+   * The bracketed form is admitted only where an element is something a |Type|
+   * cannot express, since `P [x]` otherwise reads as an |IndexedAccessType|.
    */
   export interface MatchJuxtapositionPattern extends BaseParseNode {
     readonly type: 'MatchJuxtapositionPattern';
     readonly Head: ParseNode;
-    readonly Shape: MatchObjectPattern;
+    readonly Shape: MatchObjectPattern | MatchArrayPattern;
   }
   /** A regular expression literal, matched against the ENTIRE subject. */
   export interface MatchRegExpPattern extends BaseParseNode {
