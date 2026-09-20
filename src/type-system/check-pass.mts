@@ -602,9 +602,24 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     };
     typeNames(items ?? []);
     for (const item of items ?? []) {
+      // An enumerator declared EARLIER is available to a later initializer, so
+      // the set grows as the list is walked. #sec-enums already sequences these
+      // - a later enumerator takes `operator++` of "the previous enumerator's
+      // value" - and naming them is the same dependency written down.
+      //
+      // Without this, `enum E: uint8 { A = 1, B = A + 1 }` had a free reference
+      // at `A`, which made the pass SKIP the enum and leave it to the run time,
+      // where the name resolved to nothing. An initializer naming its own
+      // enumerator or a later one still counts as free, so those stay refused.
+      const enumScope = new Set(available);
+      const freeInitializer = item.type === 'EnumDeclaration' && item.EnumMemberList.some((member) => {
+        const free = member.Initializer
+          && (FirstNonEvaluableForm(member.Initializer) || FirstFreeReference(member.Initializer, enumScope));
+        enumScope.add(member.IdentifierName.name);
+        return free;
+      });
       if (item.type !== 'EnumDeclaration' || item.Decorators?.length || item.EnumMemberList.some((member) => member.Decorators?.length)
-        || item.EnumMemberList.some((member) => member.Initializer
-        && (FirstNonEvaluableForm(member.Initializer) || FirstFreeReference(member.Initializer, available)))) {
+        || freeInitializer) {
         continue;
       }
       const underlying = item.TypeAnnotation ? EnsureCompletion(yield* TypeNodeToTypeRecord(item.TypeAnnotation.Type)) : undefined;

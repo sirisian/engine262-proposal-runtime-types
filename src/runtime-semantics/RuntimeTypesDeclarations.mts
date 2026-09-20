@@ -253,6 +253,24 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     // replaces it". An initializer that is not such a function sets its own
     // value "without disturbing the function for those after it".
     let generator: Value | undefined;
+    // #sec-enums already sequences these - "a later enumerator with no
+    // initializer takes the result of applying ... `operator++` to THE PREVIOUS
+    // ENUMERATOR'S VALUE" - so each is evaluated in order with the previous
+    // value in hand. What was missing is that an earlier enumerator's NAME was
+    // not in scope for a later initializer, so `enum E: uint8 { A = 1, B = A + 1 }`
+    // was a *ReferenceError*: the dependency existed and the spelling for it did
+    // not, though `B = A + 1` is the ordinary idiom of C, C#, Java and
+    // TypeScript alike.
+    //
+    // A scope of its own, pushed for the member list and popped after it, with
+    // each name bound as its value is settled. The enum's OWN name is not bound
+    // here: `E.A` stays a *ReferenceError* while `E` is uninitialized, which is
+    // the ordinary temporal dead zone and a separate question from this one.
+    const enumContext = surroundingAgent.runningExecutionContext;
+    const outerEnvironment = enumContext.LexicalEnvironment;
+    const memberScope = new DeclarativeEnvironmentRecord(outerEnvironment);
+    enumContext.LexicalEnvironment = memberScope;
+    try {
     for (const member of node.EnumMemberList) {
       let v: Value;
       if (member.Initializer) {
@@ -424,6 +442,13 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       previous = v;
       memberValues.push(v);
       memberNames.push(member.IdentifierName.name);
+      // Bound AFTER the value is settled, so an initializer naming its own
+      // enumerator finds nothing and stays the error it was.
+      X(memberScope.CreateImmutableBinding(Value(member.IdentifierName.name), Value.true));
+      X(memberScope.InitializeBinding(Value(member.IdentifierName.name), v));
+    }
+    } finally {
+      enumContext.LexicalEnvironment = outerEnvironment;
     }
     const obj = GetTypeObject(enumRecord);
     for (let i = 0; i < memberNames.length; i += 1) {
