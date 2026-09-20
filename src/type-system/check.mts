@@ -10006,6 +10006,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (inner && contextual && inner.type === 'ObjectLiteral') {
       contextualObjectTypes.set(inner, contextual);
     }
+    // A TYPED OWN PROPERTY gives its value a contextual type. `{ (v: T): … }`
+    // declares the property's type at creation, and that type is the context the
+    // value is read at - exactly as a binding, a class field and an array
+    // element give theirs.
+    //
+    // Nothing did, so a literal in that position was never read at the member's
+    // type: `Composite({ (v: rational): 1 / 3 }).v` folded no fraction and gave
+    // the dyadic `6004799503160661/18014398509481984`, and the decimal cases
+    // failed until the cast path happened to cover them.
+    //
+    // Called for its RECORDING: the literal passes key their answers on the
+    // node, and the returned type is not needed here.
+    if (inner?.type === 'ObjectLiteral') {
+      for (const member of (inner as ParseNode.ObjectLiteral).PropertyDefinitionList ?? []) {
+        const typed = member as unknown as {
+          type?: string,
+          TypeAnnotation?: { Type: ParseNode.Type },
+          AssignmentExpression?: ParseNode,
+        };
+        if (typed.type !== 'PropertyDefinition' || !typed.TypeAnnotation || !typed.AssignmentExpression) {
+          continue;
+        }
+        const declared = resolveType(typed.TypeAnnotation.Type);
+        if (declared) {
+          staticTypeIn(typed.AssignmentExpression, declared as Known);
+        }
+      }
+    }
     if (!node) {
       return null;
     }
