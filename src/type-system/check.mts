@@ -871,6 +871,18 @@ export function FoldedConstantOf(node: object): { value: bigint, type: TypeRecor
  */
 const foldedDecimals = new WeakMap<object, { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord }>();
 
+/**
+ * The rational counterpart: a constant expression at a RATIONAL contextual type,
+ * folded exactly as a fraction. The evaluator builds the value from the
+ * numerator and denominator rather than evaluating the operands, so `1 / 3` is
+ * the fraction and not the double nearest it.
+ */
+const foldedRationals = new WeakMap<object, { num: bigint, den: bigint, type: TypeRecord }>();
+
+export function FoldedRationalOf(node: object): { num: bigint, den: bigint, type: TypeRecord } | undefined {
+  return foldedRationals.get(node);
+}
+
 export function FoldedDecimalOf(node: object): { sig: bigint, exp: number, width: 32 | 64 | 128, type: TypeRecord } | undefined {
   return foldedDecimals.get(node);
 }
@@ -1514,6 +1526,118 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
  * `const` reference resolves to its exact decimal, or to its exact integer as a
  * decimal with exponent 0.
  */
+interface Rat { num: bigint, den: bigint }
+
+/** Reduce to canonical form: lowest terms, denominator strictly positive. */
+function canonicalRational(num: bigint, den: bigint): Rat | null {
+  if (den === 0n) {
+    return null;
+  }
+  let n = num;
+  let d = den;
+  if (d < 0n) {
+    n = -n;
+    d = -d;
+  }
+  let a = n < 0n ? -n : n;
+  let b = d;
+  while (b !== 0n) {
+    const t = a % b;
+    a = b;
+    b = t;
+  }
+  const g = a === 0n ? 1n : a;
+  return { num: n / g, den: d / g };
+}
+
+/**
+ * Fold a constant expression at a RATIONAL contextual type, exactly, as a
+ * fraction.
+ *
+ * rational.md: "In `let third: rational = 1 / 3` the context is `rational`, so
+ * `1` and `3` are rational literals and `/` is rational division, giving
+ * `1/3`." Without this the expression was Number division first - `0.333…` -
+ * and the result converted to its exact DYADIC rational, so `1 / 3` became
+ * `6004799503160661/18014398509481984` and the document's headline claim, that
+ * three thirds "sum to `1` on the nose", gave
+ * `18014398509481983/18014398509481984` instead.
+ *
+ * It hid in the obvious test: `6 / 12` is `1/2` either way, because `0.5` is
+ * dyadic and round-trips through the float. Only a non-dyadic denominator shows
+ * it, and thirds are the document's own example.
+ *
+ * The same fold-first shape as `foldDecimalConstant`, with `/` included, which
+ * is exactly where the two differ: division is not exact for a decimal and is
+ * the whole point of a rational.
+ */
+function foldRationalConstant(node: ParseNode): Rat | null {
+  const fold = (n: ParseNode) => foldRationalConstant(n);
+  const e = node as ParseNode & {
+    Expression?: ParseNode, UnaryExpression?: ParseNode, operator?: string,
+    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode,
+    ExponentiationExpression?: ParseNode, SourceText?: string,
+  };
+  switch (e.type) {
+    case 'NumericLiteral': {
+      if (typeof e.SourceText !== 'string') {
+        return null;
+      }
+      // A rational literal is exact on its source digits, as a decimal one is:
+      // `0.1` in a rational context is one tenth, not the double nearest it.
+      const d = ParseDecimalDigits(e.SourceText.replace(/_/g, ''));
+      if (!d) {
+        return null;
+      }
+      return d.exponent >= 0
+        ? canonicalRational(d.significand * 10n ** BigInt(d.exponent), 1n)
+        : canonicalRational(d.significand, 10n ** BigInt(-d.exponent));
+    }
+    case 'ParenthesizedExpression':
+      return e.Expression ? fold(e.Expression) : null;
+    case 'UnaryExpression': {
+      const v = e.UnaryExpression ? fold(e.UnaryExpression) : null;
+      if (v === null) {
+        return null;
+      }
+      if (e.operator === '-') {
+        return { num: -v.num, den: v.den };
+      }
+      return e.operator === '+' ? v : null;
+    }
+    case 'AdditiveExpression': {
+      const l = fold(e.AdditiveExpression!);
+      const r = fold(e.MultiplicativeExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      const num = e.operator === '+'
+        ? l.num * r.den + r.num * l.den
+        : l.num * r.den - r.num * l.den;
+      return canonicalRational(num, l.den * r.den);
+    }
+    case 'MultiplicativeExpression': {
+      const l = fold(e.MultiplicativeExpression!);
+      const r = fold(e.ExponentiationExpression!);
+      if (l === null || r === null) {
+        return null;
+      }
+      const op = (e as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator;
+      if (op === '*') {
+        return canonicalRational(l.num * r.num, l.den * r.den);
+      }
+      if (op === '/') {
+        // `1 / 3` is the fraction, not a rounded quotient. A zero denominator
+        // declines the fold rather than folding to an infinity the type has no
+        // value for; the ordinary evaluation then raises where it always did.
+        return r.num === 0n ? null : canonicalRational(l.num * r.den, l.den * r.num);
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
+}
+
 function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => Dec | null): Dec | null {
   const fold = (n: ParseNode) => foldDecimalConstant(n, resolveConst);
   const e = node as ParseNode & {
@@ -10427,6 +10551,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // constant `0.1 + 0.2` at a `decimal128` is the decimal `0.3`, where Number
     // arithmetic gave `0.30000000000000004` and refused it. The same fold-first
     // shape as the integer case; a `const` use of a decimal constant is one too.
+    // ...and at a RATIONAL contextual type, exactly as a fraction. rational.md:
+    // "the context is `rational`, so `1` and `3` are rational literals and `/`
+    // is rational division, giving `1/3`". Placed before the decimal arm
+    // because a rational is not a decimal width and would otherwise fall
+    // through to Number arithmetic, which is what produced the dyadic
+    // approximation this fixes.
+    if (contextual && contextual.Kind === 'primitive' && contextual.Name === 'rational'
+        && isNumericConstantExpression(node)
+        && node.type !== 'NumericLiteral') {
+      const rat = foldRationalConstant(node);
+      if (rat !== null) {
+        foldedRationals.set(node, { ...rat, type: contextual as TypeRecord });
+        return contextual;
+      }
+    }
     if (contextual && decimalWidthOf(contextual as TypeRecord) !== undefined && isNumericConstantExpression(node)
         && node.type !== 'NumericLiteral') {
       const dec = foldDecimal(node);

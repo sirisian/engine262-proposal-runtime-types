@@ -2,9 +2,10 @@ import { Throw } from './host-defined/error-messages.mts';
 import { PatternEnvironmentFor } from './runtime-semantics/PatternEnvironment.mts';
 import { InMetaHookEvaluation, CurrentMetaHookSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
-import { FoldedConstantOf, FoldedDecimalOf } from './type-system/check.mts';
+import { FoldedConstantOf, FoldedDecimalOf, FoldedRationalOf } from './type-system/check.mts';
 import { TypedNumberValue } from './value.mts';
 import { CreateDecimalValue } from './intrinsics/Decimal.mts';
+import { CreateRationalValue } from './intrinsics/Rational.mts';
 import type {
   NormalCompletion, PlainCompletion, ThrowCompletion, YieldCompletion,
 } from './completion.mts';
@@ -267,6 +268,10 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       if (foldedDecUse !== undefined) {
         return CreateDecimalValue(foldedDecUse.sig, foldedDecUse.exp, foldedDecUse.width, surroundingAgent.currentRealmRecord, foldedDecUse.type);
       }
+      const foldedRatUse = FoldedRationalOf(node);
+      if (foldedRatUse !== undefined) {
+        return CreateRationalValue(foldedRatUse.num, foldedRatUse.den, surroundingAgent.currentRealmRecord);
+      }
       return yield* Evaluate_IdentifierReference(node);
     }
     case 'NullLiteral':
@@ -312,6 +317,21 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       const folded = FoldedConstantOf(node);
       if (folded !== undefined) {
         return new TypedNumberValue(folded.value, folded.type as never);
+      }
+      // A CONSTANT EXPRESSION AT A RATIONAL CONTEXT is folded exactly, as a
+      // fraction, and returned here rather than evaluated. Without this the
+      // checker's fold was recorded and ignored: the operands degraded to
+      // Numbers, so `1 / 3` was `0.333…` converted to its exact DYADIC
+      // rational - `6004799503160661/18014398509481984` - and the three thirds
+      // that rational.md says "sum to 1 on the nose" summed to
+      // `18014398509481983/18014398509481984`.
+      //
+      // A BARE literal already propagated correctly (`0.1` is `1/10`), which is
+      // what made this hard to see: only an expression degraded, and only a
+      // NON-DYADIC one showed it, since `6 / 12` round-trips through `0.5`.
+      const foldedRat = FoldedRationalOf(node);
+      if (foldedRat !== undefined) {
+        return CreateRationalValue(foldedRat.num, foldedRat.den, surroundingAgent.currentRealmRecord);
       }
       const foldedDec = FoldedDecimalOf(node);
       if (foldedDec !== undefined) {
@@ -405,6 +425,12 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       const foldedDecUnary = FoldedDecimalOf(node);
       if (foldedDecUnary !== undefined) {
         return CreateDecimalValue(foldedDecUnary.sig, foldedDecUnary.exp, foldedDecUnary.width, surroundingAgent.currentRealmRecord, foldedDecUnary.type);
+      }
+      // `-0.1` is the negation of the `1/10` a bare `0.1` gives, not the
+      // negation of the float.
+      const foldedRatUnary = FoldedRationalOf(node);
+      if (foldedRatUnary !== undefined) {
+        return CreateRationalValue(foldedRatUnary.num, foldedRatUnary.den, surroundingAgent.currentRealmRecord);
       }
       return yield* Evaluate_UnaryExpression(node);
     }
