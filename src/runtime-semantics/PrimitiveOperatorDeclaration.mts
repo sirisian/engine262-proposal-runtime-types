@@ -53,14 +53,14 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       // grammar is `primitive` TypeName TypeParameters? `{` ... `}`.
       //
       // They were collected and never bound, so `primitive complex<T: P> {
-      // operator complex.<T>() { … } }` - the form the clause defines - answered
+      // operator complex.<T>() { ... } }` - the form the clause defines - answered
       // `"T" is not defined`. Only the P-less form worked, and there
       // `complex.<P>` has to be read as a COMPONENT argument, because `complex`
       // takes one: the cast's target became `complex.<{ phase: int.<32> }>`, a
       // shape rather than the meta type family, and covered no parameterization.
       //
-      // That is why a metadata crossing into `complex.<float64>.<{ … }>` or
-      // `rational.<64>.<{ … }>` was refused in the annotation spelling while
+      // That is why a metadata crossing into `complex.<float64>.<{ ... }>` or
+      // `rational.<64>.<{ ... }>` was refused in the annotation spelling while
       // `:=` succeeded: the cast the program declared was never a candidate.
       const blockFrame = new Map<string, TypeRecord>();
       for (let i = 0; i < blockParameterNames.length; i += 1) {
