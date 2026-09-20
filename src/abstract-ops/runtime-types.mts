@@ -3174,8 +3174,20 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
   if (base.Kind !== 'primitive') {
     return undefined;
   }
-  const name = base.Arguments && base.Arguments.length > 0
-    ? `${base.Name}${base.Arguments[0]}`
+  // The name a cast is registered under. A WIDTH argument spells the familiar
+  // name - `int` with 32 is `int32`, `decimal` with 128 is `decimal128` - but a
+  // TYPE argument does not: `complex` with `float64` is not `complexfloat64`,
+  // and interpolating the record gave the literal string
+  // `"complex[object Object]"`, which matched nothing.
+  //
+  // So a cast declared for `complex` was invisible to every complex
+  // parameterization: `const p: complex.<float64>.<{ phase: 1 }> = c` fell past
+  // the cast arm to the membership test and was refused, while `c := Ph`
+  // succeeded by the converting route. Two spellings of one crossing disagreed,
+  // and the cast the program declared was never consulted.
+  const firstArgument = base.Arguments?.[0];
+  const name = typeof firstArgument === 'number'
+    ? `${base.Name}${firstArgument}`
     : base.Name;
   // A bare Number is spelled `number`; a typed value names its own base.
   const declaredOn = value instanceof NumberValue ? ['number', name] : [name];
