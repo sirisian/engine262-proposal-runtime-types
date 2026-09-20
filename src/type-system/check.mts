@@ -15212,6 +15212,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         break;
       }
+      // A juxtaposition's SHAPE is checked against the HEAD's type, not the
+      // subject's: the head has already excluded everything that is not of it,
+      // so a binding in the shape is typed from the head. That is what makes
+      // writing the head worth anything - `A | B` narrowed by `when A { x: let
+      // n }` types `n` from `A`'s `x` and not from the union's.
+      case 'MatchJuxtapositionPattern': {
+        // The head rule - "it is a type error if the |MatchNamePattern| of a
+        // juxtaposition ... resolves to a binding" - is NOT decidable here.
+        // Measured: a head naming a value binding and a head naming a class
+        // through a namespace object both resolve to *null* statically, so no
+        // test at this site separates them. The clause anticipates exactly this
+        // - the rule is "decided at the site where the head's Static Type is
+        // known and AT RUN TIME OTHERWISE" - so `PatternMatches` carries it.
+        const headType = resolveType(pattern.Head as ParseNode.Type);
+        // The shape is checked against the HEAD's type, not the subject's: the
+        // head has already excluded everything that is not of it, so a binding
+        // in the shape is typed from the head. That is what makes writing the
+        // head worth anything - `A | B` narrowed by `when A { x: let n }` types
+        // `n` from `A`'s `x` rather than from the union's.
+        declareMatchPatternBindings(pattern.Shape as ParseNode.MatchPattern, headType ?? positionType, subPattern);
+        break;
+      }
       case 'MatchObjectPattern':
         pattern.Properties.forEach((prop) => {
           const members = positionType?.Kind === 'union' ? positionType.Members : [positionType];

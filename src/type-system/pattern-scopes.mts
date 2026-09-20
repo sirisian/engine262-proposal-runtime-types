@@ -12,6 +12,10 @@ export function PatternBindingNames(pattern: ParseNode.MatchPattern | null): Par
       ...PatternBindingNames(pattern.Rest ?? null)];
     case 'MatchArrayPattern': return pattern.Elements.flatMap(PatternBindingNames);
     case 'MatchExtractorPattern': return pattern.Elements.flatMap(PatternBindingNames);
+    // A juxtaposition binds whatever its SHAPE binds; the head is a type and
+    // binds nothing. Without this the bindings were never declared and
+    // `when P { x: let n }` brought the engine down rather than binding `n`.
+    case 'MatchJuxtapositionPattern': return PatternBindingNames(pattern.Shape);
     default: return [];
   }
 }

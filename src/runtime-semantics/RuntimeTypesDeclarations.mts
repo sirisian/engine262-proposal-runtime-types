@@ -953,6 +953,13 @@ function MatchPatternBoundNames(pattern: ParseNode.MatchPattern | null): { name:
       case 'MatchExtractorPattern':
         p.Elements.forEach(walk);
         break;
+      // A juxtaposition binds through its SHAPE; the head is a type and binds
+      // nothing. Three walks over a pattern's bindings exist - this one, the
+      // scope walker, and the checker's - and a form missing from any of them
+      // is a form whose bindings are declared in one place and read in another.
+      case 'MatchJuxtapositionPattern':
+        walk(p.Shape as ParseNode.MatchPattern);
+        break;
       default:
         break;
     }
@@ -1371,6 +1378,46 @@ export function* PatternMatches(P: ParseNode.MatchPattern, subject: Value, cache
         }
       }
       return true;
+    }
+    case 'MatchJuxtapositionPattern': {
+      // #sec-match-patterns leaves the juxtaposition's test unwritten, but the
+      // overlap rule fixes it: a |MatchNamePattern| and a |Type| "overlap where
+      // a name is both; the name form is preferred, and THE TWO READINGS AGREE
+      // wherever both exist, since a name denoting a type matches by membership
+      // under either". So `P` tests membership, and `P { ... }` must agree with
+      // `P` about whether a `P` matches - membership first, then the shape.
+      //
+      // Both halves are reused rather than rewritten: the head goes through the
+      // same path a bare name pattern takes, and the shape through the object
+      // arm above, with THE SAME CACHE - the clause promises "the subject is
+      // evaluated once and the cache is shared across clauses, so a property is
+      // read at most once however many patterns look at it", which a private
+      // cache here would quietly break.
+      // "It is a type error if the |MatchNamePattern| of a juxtaposition ...
+      // resolves to a binding: THE JUXTAPOSED HEAD MUST DENOTE A TYPE",
+      // "decided at the site where the head's Static Type is known and at run
+      // time otherwise". It is otherwise: a head naming a value binding and one
+      // naming a class through a namespace object are both unresolvable
+      // statically, so the decision is here.
+      //
+      // Without it a head that denotes a value took the membership path and
+      // brought the engine down - `let Foo = 5; when Foo { x: let n }` crashed
+      // with "Value [object Object] is out of range" rather than naming the
+      // mistake.
+      const headRecord = EnsureCompletion(yield* TypeNodeToTypeRecord(P.Head as never));
+      if (headRecord.Type !== 'normal' || !headRecord.Value) {
+        // No interpolation. The formatter takes Values, so a Parse Node made
+        // the diagnostic throw a RangeError out of `exhaustive` - the rule
+        // fired and then died formatting its own message - and `sourceText` is
+        // not a function on this node either. The sentence names the rule; the
+        // site names the place.
+        return Throw.TypeError('a juxtaposed head must denote a type');
+      }
+      const headPattern = { type: 'MatchTypePattern', Type: P.Head } as unknown as ParseNode.MatchPattern;
+      if (!Q(yield* PatternMatches(headPattern, subject, cache))) {
+        return false;
+      }
+      return Q(yield* PatternMatches(P.Shape as ParseNode.MatchPattern, subject, cache));
     }
     case 'MatchTypePattern': {
       // A bare name that resolves to a VALUE with a custom matcher is a

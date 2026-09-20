@@ -3031,6 +3031,7 @@ export namespace ParseNode {
     | MatchRangePattern
     | MatchRegExpPattern
     | MatchExtractorPattern
+    | MatchJuxtapositionPattern
     | MatchTypePattern;
 
   export interface MatchOrPattern extends BaseParseNode {
@@ -3116,6 +3117,19 @@ export namespace ParseNode {
     readonly type: 'MatchExtractorPattern';
     readonly Head: ParseNode;
     readonly Elements: readonly MatchPattern[];
+  }
+  /**
+   * A JUXTAPOSITION, `P { x: let n }`: a head that denotes a type, followed by
+   * an object pattern. #sec-match-patterns gives the production as
+   * `MatchNamePattern ObjectMatchPattern`.
+   *
+   * Only the braced form is parsed. `MatchNamePattern ArrayMatchPattern` is
+   * ambiguous with an |IndexedAccessType| after a name and is left unclaimed.
+   */
+  export interface MatchJuxtapositionPattern extends BaseParseNode {
+    readonly type: 'MatchJuxtapositionPattern';
+    readonly Head: ParseNode;
+    readonly Shape: MatchObjectPattern;
   }
   /** A regular expression literal, matched against the ENTIRE subject. */
   export interface MatchRegExpPattern extends BaseParseNode {
@@ -3947,6 +3961,7 @@ export type ParseNode =
   | ParseNode.MatchRangePattern
   | ParseNode.MatchRegExpPattern
   | ParseNode.MatchExtractorPattern
+  | ParseNode.MatchJuxtapositionPattern
   | ParseNode.MatchExpression
   | ParseNode.DecoratedExpression
   | ParseNode.MatchClause

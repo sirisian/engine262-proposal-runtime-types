@@ -611,6 +611,7 @@ export interface Throw {
   | '$1 does not name a goal symbol'
   | '$1 does not name a replacement decorator, and a statement declares nothing for a decorator to run at'
   | '$1 has no custom matcher'
+  | 'a juxtaposed head must denote a type'
   | '$1 has no decimal value'
   | '$1 has no default value, so a declaration of it needs an initializer'
   | '$1 has no signature taking values of two numeric types'

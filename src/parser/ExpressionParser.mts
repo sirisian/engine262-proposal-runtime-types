@@ -2907,6 +2907,25 @@ export abstract class ExpressionParser extends FunctionParser {
         return objectPattern;
       }
     }
+    // A JUXTAPOSITION, `P { x: let n }`. #sec-match-patterns gives it as
+    // `MatchNamePattern ObjectMatchPattern`, beside the extractor's
+    // `MatchNamePattern ( ... )`, and the engine parsed neither of the two
+    // braced-or-bracketed juxtaposition forms.
+    //
+    // Speculative like its neighbours, and tried BEFORE the extractor only
+    // because both begin with a name; they cannot both succeed, the token after
+    // the head deciding which.
+    //
+    // Only the BRACED form. `MatchNamePattern ArrayMatchPattern` is ambiguous
+    // with an |IndexedAccessType| after a name - `P [x]` reads as an index into
+    // `P` - and the clause's overlap rule does not settle it, since there the
+    // two readings do NOT agree. Left unclaimed rather than half-decided.
+    if (this.test(Token.IDENTIFIER)) {
+      const juxtaposition = this.tryParseMatchJuxtapositionPattern();
+      if (juxtaposition) {
+        return juxtaposition;
+      }
+    }
     // An EXTRACTOR, `Expr(p1, p2, ...)`. Speculative for the same reason the
     // braced and bracketed forms are: a |Type| can be a parameterized name, and
     // only the shape after the head tells them apart.
@@ -3141,6 +3160,50 @@ export abstract class ExpressionParser extends FunctionParser {
    * one - a |Type| may be a plain name or a parameterized one, and the
    * parentheses are what distinguish the extractor.
    */
+  /**
+   * `MatchNamePattern ObjectMatchPattern`, the braced juxtaposition.
+   *
+   * The head is read through `parseType` rather than as a bare identifier, so
+   * the qualified and parameterized spellings of |MatchNamePattern| both work -
+   * `Ns.P { ... }` and `Box.<uint8> { ... }`. That is safe here and is not safe
+   * for the extractor: a qualified head followed by PARENTHESES is
+   * indistinguishable from a type query such as `Reflect.typeOf(s)`, while a
+   * qualified head followed by a BRACE has no competing reading.
+   *
+   * The shape is parsed by the same routine a standalone object pattern uses,
+   * so the two cannot drift.
+   */
+  tryParseMatchJuxtapositionPattern(): ParseNode.MatchJuxtapositionPattern | null {
+    const savedEarlyErrors = new Set(this.earlyErrors);
+    const checkpoint = this.getLexerCheckpoint();
+    const node = this.startNode<ParseNode.MatchJuxtapositionPattern>();
+    let head;
+    try {
+      head = this.parseType();
+    } catch {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    // A LineTerminator between the head and the brace ends the pattern: in `is`
+    // position a pattern is an ordinary operand, so `v is P` on one line and a
+    // block on the next must stay a pattern and a block.
+    if (!this.test(Token.LBRACE) || this.peek().hadLineTerminatorBefore) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    const shape = this.tryParseMatchObjectPattern(false);
+    if (!shape) {
+      this.restoreLexerCheckpoint(checkpoint);
+      this.earlyErrors = savedEarlyErrors;
+      return null;
+    }
+    node.Head = head;
+    node.Shape = shape;
+    return this.finishNode(node, 'MatchJuxtapositionPattern');
+  }
+
   tryParseMatchExtractorPattern(): ParseNode.MatchExtractorPattern | null {
     const savedEarlyErrors = new Set(this.earlyErrors);
     const checkpoint = this.getLexerCheckpoint();
@@ -3245,7 +3308,17 @@ export abstract class ExpressionParser extends FunctionParser {
    * braces are a |Type| after all. The checkpoint-and-restore is the same
    * mechanism `tryParseAnnotatedArrowParameter` uses.
    */
-  tryParseMatchObjectPattern(): ParseNode.MatchObjectPattern | null {
+  /**
+   * `requireNonType` is the speculation's own guard and not the shape's rule.
+   *
+   * Standing alone, `{ x: uint8 }` is spelled identically as a type and as a
+   * pattern, and where every member is a type the two agree - so the braced
+   * speculation DECLINES and the type path keeps the parse. After a
+   * juxtaposition's head there is no competing reading: `P { x: 1 }` is not a
+   * type in any spelling, so the shape is taken whatever its members are, and
+   * `P {}` with it.
+   */
+  tryParseMatchObjectPattern(requireNonType = true): ParseNode.MatchObjectPattern | null {
     const savedEarlyErrors = new Set(this.earlyErrors);
     const checkpoint = this.getLexerCheckpoint();
     const node = this.startNode<ParseNode.MatchObjectPattern>();
@@ -3321,7 +3394,7 @@ export abstract class ExpressionParser extends FunctionParser {
         break;
       }
     }
-    if (!this.eat(Token.RBRACE) || !sawNonType) {
+    if (!this.eat(Token.RBRACE) || (requireNonType && !sawNonType)) {
       // Either it did not parse, or every member is a type - in which case the
       // TYPE path gives the same answer and keeps the existing node shape.
       this.restoreLexerCheckpoint(checkpoint);
