@@ -41,8 +41,12 @@ test('a row that rounds is refused, and says why', () => {
   // Not "arithmetic is not yet defined" - the arithmetic is defined. What is
   // missing is a rounding rule for these rows, and the value has no Number to
   // fall back on.
+  //
+  // A RATIONAL no longer belongs here. rational.md gives it the rule -
+  // `Math.floor`, `ceil`, `round` and `trunc` "return the `int.<N>` nearest in
+  // their direction" - and it is implemented; see
+  // `rational-rounding.test.mts`. A decimal still has no such rule stated.
   expectThrownKind("let d = decimal64('2.5'); Math.trunc(d);", 'TypeError');
-  expectThrownKind('let r = rational(1, 2); Math.trunc(r);', 'TypeError');
   // A mixed pair is not one family, so it is not an exact row either.
   expectThrownKind("let d = decimal64('2.5'); let r = rational(1, 2); Math.max(d, r);", 'TypeError');
 });

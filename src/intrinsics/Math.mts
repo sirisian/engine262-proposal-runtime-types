@@ -75,6 +75,60 @@ function decimalOrRationalAbs(x: Value): Value | undefined {
   return undefined;
 }
 
+/**
+ * `Math.floor`, `Math.ceil`, `Math.round` and `Math.trunc` of a RATIONAL.
+ *
+ * rational.md: these "return the `int.<N>` nearest in their direction", as
+ * distinct from `abs`, `sign`, `min` and `max`, which are overloaded to return a
+ * rational. A rounding function answers a whole number, and the type says so.
+ *
+ * Computed on the fraction rather than through a double: `Math.floor(r)` for a
+ * rational whose numerator exceeds 2^53 has an exact answer, and routing through
+ * `ToNumber` both loses it and raises "a rational has no Number value" - which is
+ * what these did, so the four documented overloads did not exist at all.
+ */
+function rationalRounded(x: Value, functionName: string): Value | undefined {
+  if (!isRationalObject(x)) {
+    return undefined;
+  }
+  const num = (x as { RationalNumerator: bigint }).RationalNumerator;
+  const den = (x as { RationalDenominator: bigint }).RationalDenominator;
+  // Canonical form keeps the denominator strictly positive, so the sign is the
+  // numerator's and the quotient below truncates toward zero.
+  const q = num / den;
+  const r = num % den;
+  let result: bigint;
+  if (r === 0n) {
+    result = q;
+  } else {
+    switch (functionName) {
+      case 'trunc':
+        result = q;
+        break;
+      case 'floor':
+        result = num < 0n ? q - 1n : q;
+        break;
+      case 'ceil':
+        result = num > 0n ? q + 1n : q;
+        break;
+      case 'round': {
+        // Halfway rounds toward POSITIVE infinity, as `Math.round` does for a
+        // Number: 2.5 is 3 and -2.5 is -2.
+        const twice = (r < 0n ? -r : r) * 2n;
+        const up = twice > den || (twice === den && num > 0n);
+        result = num < 0n ? (up ? q - 1n : q) : (up ? q + 1n : q);
+        break;
+      }
+      default:
+        return undefined;
+    }
+  }
+  // The width is the rational's own: `rational.<N>` holds two `int.<N>`, so the
+  // nearest integer is an `int.<N>`. The bare `rational` is `rational.<64>`.
+  const intType = { Kind: 'primitive', Name: 'int', Arguments: [64] } as unknown as TypeRecord;
+  return new TypedNumberValue(result, intType as never);
+}
+
 /** The sign as A VALUE OF _T_, which is what the clause's table row says. */
 function decimalOrRationalSign(x: Value): Value | undefined {
   const realmRec = surroundingAgent.currentRealmRecord;
@@ -266,6 +320,12 @@ function* Math_cbrt([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.ceil */
 function* Math_ceil([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = rationalRounded(x, 'ceil');
+    if (exact !== undefined) {
+      return exact;
+    }
+  }
   const n = Q(yield* ToNumber(x));
   if (!n.isFinite() || Object.is(n.value, 0) || Object.is(n.value, -0)) return n;
   // eslint-disable-next-line no-compare-neg-zero
@@ -334,6 +394,12 @@ function* Math_expm1([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.floor */
 function* Math_floor([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = rationalRounded(x, 'floor');
+    if (exact !== undefined) {
+      return exact;
+    }
+  }
   const n = Q(yield* ToNumber(x));
   if (!n.isFinite() || Object.is(n.value, 0) || Object.is(n.value, -0)) return n;
   if (n.value < 1 && n.value > 0) return F(0);
@@ -677,6 +743,12 @@ export function TypedRandomInRange(t: TypeRecord, range: RangeObject, realm: Rea
 
 /** https://tc39.es/ecma262/#sec-math.round */
 function* Math_round([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = rationalRounded(x, 'round');
+    if (exact !== undefined) {
+      return exact;
+    }
+  }
   const n = Q(yield* ToNumber(x));
   if (!n.isFinite() || n.isIntegralNumber()) return n;
   if (n.value < 0.5 && n.value > 0) return F(0);
@@ -1087,6 +1159,12 @@ function* Math_tanh([x = Value.undefined]: Arguments): ValueEvaluator {
 
 /** https://tc39.es/ecma262/#sec-math.trunc */
 function* Math_trunc([x = Value.undefined]: Arguments): ValueEvaluator {
+  if (surroundingAgent.feature('runtime-types')) {
+    const exact = rationalRounded(x, 'trunc');
+    if (exact !== undefined) {
+      return exact;
+    }
+  }
   const n = Q(yield* ToNumber(x));
   if (!n.isFinite() || Object.is(n.value, 0) || Object.is(n.value, -0)) return n;
   if (n.value < 1 && n.value > 0) return F(0);
