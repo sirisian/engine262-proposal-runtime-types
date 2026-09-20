@@ -11,7 +11,7 @@ import { isDecimalObject, exactExpansionOfDouble } from './Decimal.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
   OrdinaryObjectCreate,
-  CreateBuiltinFunction,
+  CreateBuiltinFunction, ToNumber,
   Descriptor,
   F, X,
   type OrdinaryObject,
@@ -389,6 +389,89 @@ function* RationalTryParse([S = Value.undefined]: Arguments): ValueEvaluator {
   return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord);
 }
 
+/**
+ * `rational.approximate(f, maxDenominator)`.
+ *
+ * rational.md: "For a bounded approximation, `Rational.approximate(f,
+ * maxDenominator)` returns the closest rational whose denominator does not
+ * exceed the bound, by the continued-fraction expansion", with
+ * `Rational.approximate(Math.PI, 1000)` giving `355/113`.
+ *
+ * Distinct from `rational(f)`, which is the float's EXACT dyadic value and can
+ * need a denominator of 2^52. This is the approximation a program wants when it
+ * has a measurement and a bound.
+ *
+ * The convergents of the continued fraction are the best approximations, so the
+ * expansion runs until the next convergent would exceed the bound. The
+ * SEMICONVERGENT at that point is sometimes closer and sometimes not, so both
+ * are formed and the nearer wins - for pi at a bound of 1000 the convergent
+ * 355/113 beats the semiconvergent 2818/897 by two orders of magnitude, and
+ * taking the semiconvergent unconditionally would have returned the worse one.
+ */
+function approximateRational(x: number, maxDen: bigint): { num: bigint, den: bigint } {
+  const negative = x < 0;
+  const ax = Math.abs(x);
+  let p0 = 0n;
+  let q0 = 1n;
+  let p1 = 1n;
+  let q1 = 0n;
+  let v = ax;
+  for (let i = 0; i < 64; i += 1) {
+    const whole = Math.floor(v);
+    if (!Number.isFinite(whole)) {
+      break;
+    }
+    const a = BigInt(whole);
+    const p2 = a * p1 + p0;
+    const q2 = a * q1 + q0;
+    if (q2 > maxDen) {
+      // The bound is reached. The semiconvergent with the largest denominator
+      // that still fits is the other candidate.
+      if (q1 > 0n) {
+        const k = (maxDen - q0) / q1;
+        const pc = k * p1 + p0;
+        const qc = k * q1 + q0;
+        if (qc > 0n && Math.abs(Number(pc) / Number(qc) - ax) < Math.abs(Number(p1) / Number(q1) - ax)) {
+          p1 = pc;
+          q1 = qc;
+        }
+      }
+      break;
+    }
+    p0 = p1;
+    q0 = q1;
+    p1 = p2;
+    q1 = q2;
+    const frac = v - whole;
+    if (frac === 0) {
+      break;
+    }
+    v = 1 / frac;
+  }
+  if (q1 === 0n) {
+    // A bound below 1 admits no denominator; the nearest whole number is the
+    // closest thing with a denominator of 1.
+    return { num: BigInt(Math.round(negative ? -ax : ax)), den: 1n };
+  }
+  return { num: negative ? -p1 : p1, den: q1 };
+}
+
+function* RationalApproximate([x = Value.undefined, bound = Value.undefined]: Arguments): ValueEvaluator {
+  const realmRec = surroundingAgent.currentRealmRecord;
+  const n = Q(yield* ToNumber(x));
+  const value = n.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the source is a Number and its stored payload is what is approximated
+  if (!Number.isFinite(value)) {
+    return Throw.RangeError('$1 is not in the range of $2', x, Value('rational'));
+  }
+  const b = Q(yield* ToNumber(bound));
+  const limit = b.numberValue(); // eslint-disable-line @engine262/mathematical-value -- a denominator bound is a count
+  if (!Number.isFinite(limit) || limit < 1) {
+    return Throw.RangeError('$1 is not in the range of $2', bound, Value('a denominator bound'));
+  }
+  const { num, den } = approximateRational(value, BigInt(Math.floor(limit)));
+  return CreateRationalValue(num, den, realmRec);
+}
+
 export function bootstrapRational(realmRec: Realm): void {
   const proto = realmRec.Intrinsics['%rational.prototype%'];
   const cons = CreateBuiltinFunction(RationalConstructor, 2, Value('rational'), [], realmRec);
@@ -398,7 +481,7 @@ export function bootstrapRational(realmRec: Realm): void {
     Enumerable: Value.false,
     Configurable: Value.false,
   })));
-  for (const [name, fn] of [['parse', RationalParse], ['tryParse', RationalTryParse]] as const) {
+  for (const [name, fn] of [['parse', RationalParse], ['tryParse', RationalTryParse], ['approximate', RationalApproximate]] as const) {
     X(cons.DefineOwnProperty(Value(name), Descriptor({
       Value: CreateBuiltinFunction(fn, 1, Value(name), [], realmRec),
       Writable: Value.true,
