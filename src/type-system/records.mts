@@ -644,6 +644,23 @@ export const voidType: TypeRecord = { Kind: 'void' };
 export const neverType: TypeRecord = { Kind: 'union', Members: [] };
 
 export function makePrimitive(Name: string, Arguments: readonly (TypeRecord | number)[] = []): TypeRecord {
+  // THE DEFAULT WIDTH IS NORMALIZED AWAY, so the two spellings of one type build
+  // one record. `table-type-name-shorthands`: "`complex` is `complex.<number>`
+  // and `rational` is `rational.<64>`" - the bare name IS the application, so
+  // they must not be distinguishable afterwards.
+  //
+  // They were. `rational.<64> === rational` answered *true*, because the Type
+  // Objects intern to one; but a rational VALUE carries `rational` with an empty
+  // argument list while the written `rational.<64>` carries `[64]`, so
+  // `r is rational.<64>` answered *false* and `const s: rational.<64> = r` was
+  // refused - the same type by identity and not by membership.
+  //
+  // That contradiction is what made a metadata parameterization over `rational`
+  // unreachable: its base is `rational.<64>`, the crossing converts the value to
+  // that base first, and that step refused a rational.
+  if (Name === 'rational' && Arguments.length === 1 && Arguments[0] === 64) {
+    return { Kind: 'primitive', Name, Arguments: [] };
+  }
   return { Kind: 'primitive', Name, Arguments };
 }
 
