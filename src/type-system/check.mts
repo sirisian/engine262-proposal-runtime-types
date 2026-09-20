@@ -3839,10 +3839,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const symbolKeys = new Map<ParseNode, SymbolValue>();
 
+  /**
+   * The description the DECLARATION gives, where it gives one: `const s =
+   * Symbol('tag')` mints a symbol described "tag".
+   *
+   * The minted symbol is the checker's own - it has no access to the one the
+   * program creates at run time - but its DESCRIPTION is readable from the
+   * source, and it is what a diagnostic shows. Without this every symbol-keyed
+   * member rendered as `{ [symbol key]: … }`, naming the mechanism rather than
+   * the key, and two different symbol keys were indistinguishable in a message.
+   */
+  const symbolDescriptionOf = (declaration: ParseNode): string | undefined => {
+    const init = (declaration as { Initializer?: ParseNode }).Initializer
+      ?? (declaration as { AssignmentExpression?: ParseNode }).AssignmentExpression;
+    const call = init as {
+      type?: string,
+      CallExpression?: { type?: string, name?: string },
+      MemberExpression?: { type?: string, name?: string },
+      Arguments?: readonly { type?: string, value?: unknown }[],
+    } | undefined;
+    if (call?.type !== 'CallExpression') {
+      return undefined;
+    }
+    const callee = call.CallExpression ?? call.MemberExpression;
+    if (callee?.type !== 'IdentifierReference' || callee.name !== 'Symbol') {
+      return undefined;
+    }
+    const first = call.Arguments?.[0];
+    return first?.type === 'StringLiteral' && typeof first.value === 'string'
+      ? first.value
+      : undefined;
+  };
+
   const symbolKeyFor = (declaration: ParseNode): SymbolValue => {
     let minted = symbolKeys.get(declaration);
     if (!minted) {
-      minted = new SymbolValue(Value('symbol key'));
+      minted = new SymbolValue(Value(symbolDescriptionOf(declaration) ?? 'symbol key'));
       symbolKeys.set(declaration, minted);
     }
     return minted;

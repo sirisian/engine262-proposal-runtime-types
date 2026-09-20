@@ -250,3 +250,22 @@ test('the four refusals an intersection target gives are distinct', () => {
   expect(message(`${AB} let c: C = { x: 1 };`)).not.toContain('no value is of both');
   expect(message(`${AB} let c: C = { x: 1, y: 2, z: 3 };`)).not.toContain('is required by');
 });
+
+test('two symbol keys are told apart by their descriptions', () => {
+  // The minted symbol is the checker's own - it has no access to the one the
+  // program creates at run time - but its DESCRIPTION comes from the source.
+  // Every symbol-keyed member rendered as `{ [symbol key]: … }` before, naming
+  // the mechanism rather than the key, so two different keys were
+  // indistinguishable in a message.
+  expect(message('const a = Symbol("alpha"); type O = { [a]: uint8 }; let o: O = 5;'))
+    .toContain('{ [alpha]: uint.<8> }');
+  expect(message('const b = Symbol("beta"); type O = { [b]: uint8 }; let o: O = 5;'))
+    .toContain('{ [beta]: uint.<8> }');
+});
+
+test('a symbol with no description still renders', () => {
+  // `Symbol()` gives nothing to name it by, so the mechanism's own wording
+  // stands in rather than an empty pair of brackets.
+  expect(message('const s = Symbol(); type O = { [s]: uint8 }; let o: O = 5;'))
+    .toContain('symbol key');
+});
