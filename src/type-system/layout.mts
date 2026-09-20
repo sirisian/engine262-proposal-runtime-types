@@ -774,6 +774,28 @@ export function LayoutOf(t: TypeRecord): Layout | null {
         alignment: inner.alignment,
       };
     }
+    // rational.md: "`rational.<N>` is a value type holding two `int.<N>` fields,
+    // a numerator and a denominator ... It occupies `2N` bits with the alignment
+    // of `int.<N>`. The bare name `rational` is `rational.<64>` - two `int64`,
+    // sixteen bytes."
+    //
+    // The same shape as `complex` above and for the same reason: a pair of
+    // components laid out as two of them, aligned as one component rather than
+    // as the whole width, so `[].<rational>` is the interleaved
+    // numerator/denominator buffer the document describes.
+    //
+    // Without this `rational.byteLength` was *undefined* - the type reported no
+    // layout at all, though the document gives its width and says it "lives
+    // inline in a `[].<rational>`".
+    case 'rational': {
+      const width = t.Arguments[0] as number | undefined;
+      const bits = typeof width === 'number' ? width : 64;
+      return {
+        bitLength: bits * 2,
+        byteLength: (bits * 2) / 8,
+        alignment: bits / 8,
+      };
+    }
     case 'boolean': return fromBits(8);
     // `number` is the type an untyped program computes with rather than a width
     // asked for by name, but its values are those of float64 and it lays out as one.
