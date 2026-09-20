@@ -238,6 +238,51 @@ export function complexPow(x: ComplexObject, y: ComplexObject, realmRec: Realm):
     const zeroPower = y.ComplexReal > 0 && y.ComplexImaginary === 0;
     return CreateComplexValue(zeroPower ? 0 : NaN, zeroPower ? 0 : NaN, c, realmRec);
   }
+  // AN INTEGER EXPONENT IS REPEATED MULTIPLICATION, not a trip through polar
+  // form. `complex.md` writes `(0 + 1i) ** 2; // -1 + 0i` with no rounding
+  // caveat - unlike its Euler line, which says "within rounding" - and squaring
+  // `i` is exact in the algebraic form: (a+bi)² is (a²-b²) + 2abi.
+  //
+  // Through `exp(y·log x)` it was not. Measured before this: `i ** 2` gave
+  // `-1 + 1.2246467991473532e-16i`, `i ** 3` gave `-1.8369701987210297e-16 - 1i`,
+  // and `(2 + 0i) ** 3` - a purely real value at an integer power - gave
+  // `7.999999999999998`. Multiplication was exact throughout, so the two
+  // spellings of a square disagreed: `(1+1i) * (1+1i)` was `2i` while
+  // `(1+1i) ** 2` was `1.2246467991473532e-16 + 2i`.
+  //
+  // Binary exponentiation, so the cost stays logarithmic in the exponent.
+  if (y.ComplexImaginary === 0 && Number.isInteger(y.ComplexReal)
+    && Math.abs(y.ComplexReal) <= 1024) {
+    const negative = y.ComplexReal < 0;
+    let n = Math.abs(y.ComplexReal);
+    let baseRe = x.ComplexReal;
+    let baseIm = x.ComplexImaginary;
+    let accRe = 1;
+    let accIm = 0;
+    while (n > 0) {
+      if (n % 2 === 1) {
+        const re = accRe * baseRe - accIm * baseIm;
+        accIm = accRe * baseIm + accIm * baseRe;
+        accRe = re;
+      }
+      const sq = baseRe * baseRe - baseIm * baseIm;
+      baseIm = 2 * baseRe * baseIm;
+      baseRe = sq;
+      n = Math.floor(n / 2);
+    }
+    if (negative) {
+      // The reciprocal, by the same conjugate rule `complexDivide` uses.
+      const denominator = accRe * accRe + accIm * accIm;
+      accRe /= denominator;
+      accIm = -accIm / denominator;
+    }
+    return CreateComplexValue(
+      roundToComponent(accRe, c),
+      roundToComponent(accIm, c),
+      c,
+      realmRec,
+    );
+  }
   const argument = Math.atan2(x.ComplexImaginary, x.ComplexReal);
   const logModulus = Math.log(modulus);
   const scale = Math.exp(y.ComplexReal * logModulus - y.ComplexImaginary * argument);
