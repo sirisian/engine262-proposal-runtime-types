@@ -481,6 +481,16 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
     Q(yield* PrivateFieldAdd(copy, element.Key, held));
   }
   (copy as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
+  // Typed-boundary copies preserve each retained field's declaring constructor.
+  // Widening copies keep only the target layout; discarded derived fields must
+  // not leave permission metadata on the base value.
+  const readonly = (value as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields;
+  if (readonly) {
+    (copy as { ReadonlyFields?: Map<unknown, unknown> }).ReadonlyFields = new Map(
+      [...readonly].filter(([key]) => typed.has(key) || layout.fields!.some((field) => field.key === key)),
+    );
+  }
+
   // Sealed, as the original is. A value type class has a layout with no room for
   // a property it did not declare, so its instances are not extensible - and a
   // copy that forgot this would be a value of the type that accepts what the

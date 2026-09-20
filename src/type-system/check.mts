@@ -9,6 +9,7 @@ import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.m
 import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
+import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
@@ -2543,6 +2544,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
   const varFrames: Frame[] = [frames[0]];
   const uninitializedVars = new WeakMap<Frame, Set<string>>();
+  const referenceSlots = new WeakMap<Frame, Map<string, ReferenceSlot>>();
+  const referenceOperations = new WeakMap<ParseNode, ReferenceOperation>();
+  const referenceAnalysisRoots: ParseNode[] = [root];
+  const referenceSlot = (frame: Frame, name: string, declaration?: ParseNode): ReferenceSlot => {
+    let slots = referenceSlots.get(frame);
+    if (!slots) {
+      slots = new Map();
+      referenceSlots.set(frame, slots);
+    }
+    let slot = slots.get(name);
+    if (!slot) {
+      slot = { owner: declaration ? ReferenceFunction(declaration) : null };
+      slots.set(name, slot);
+    }
+    return slot;
+  };
+  const referenceSlotForName = (name: string): ReferenceSlot | undefined => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const frame = frames[i];
+      if (frame.bindingKinds.has(name) || frame.declaredNames.has(name)) {
+        const kind = frame.bindingKinds.get(name);
+        return kind === 'mutable-ref' || kind === 'immutable-ref' ? referenceSlot(frame, name) : undefined;
+      }
+      if (frame.dynamicBindings) return undefined;
+    }
+    return undefined;
+  };
 
   const lookup = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -2616,6 +2644,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const name = binding.BindingIdentifier?.name ?? (binding.type === 'BindingIdentifier' ? binding.name : undefined);
     if (name && (!preserveExisting || !frame.bindingKinds.has(name))) {
       frame.bindingKinds.set(name, ref ? (mutable ? 'mutable-ref' : 'immutable-ref') : 'ordinary');
+      if (ref) referenceSlot(frame, name, binding);
     }
     // Binding children only: expressions, property names, and annotations do
     // not declare names in this scope.
@@ -3698,6 +3727,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!owner) return false;
     const key = member.PrivateIdentifier?.name ?? memberKey(member);
     return (owner.ClassTail.ClassBody ?? []).some((field) => field.type === 'FieldDefinition'
+      && !field.static
+      && (field.ClassElementName.type === 'PrivateIdentifier') === !!member.PrivateIdentifier
       && classElementKey(field.ClassElementName) === key);
   };
 
@@ -3711,6 +3742,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const requireWritableMember = (expression: ParseNode | null | undefined) => {
     const lhs = patternExpression(expression ?? undefined);
     if (lhs?.type === 'IdentifierReference') {
+      const slot = referenceSlotForName(lhs.name);
+      if (slot) referenceOperations.set(lhs, { kind: 'write', slot });
       for (let i = frames.length - 1; i >= 0; i -= 1) {
         if (frames[i].declaredNames.has(lhs.name)) {
           if (patternBindingFrames.get(frames[i])?.has(lhs.name)) {
@@ -3790,6 +3823,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned',
         typeof named === 'string' ? Value(named) : named).Value as ObjectValue);
     }
+  };
+
+  // Store immutable permission facts separately from the alias's value type.
+  // An alias of another binding points at that lexical slot, so rebinding the
+  // first alias also changes the location reached through the second one.
+  const borrowedLocations = (source: ParseNode): readonly ReferenceLocation[] => {
+    const expression = patternExpression(source);
+    if (expression?.type === 'IdentifierReference') {
+      const slot = referenceSlotForName(expression.name);
+      return slot ? [slot] : [];
+    }
+    if (expression?.type !== 'MemberExpression') return [];
+    const key = memberKey(expression);
+    if (key === undefined) return [];
+    const collect = (receiver: Known): ReferenceLocation[] => {
+      if (receiver?.Kind === 'union') return receiver.Members.flatMap(collect);
+      const shape = structureOf(receiver);
+      const property = shape?.Kind === 'object' ? shape.Properties.find((p) => p.key === key) : undefined;
+      if (!property?.readonly) return [];
+      // Only a declared field of this receiver may use constructor permission.
+      // The actual write must still occur in that constructor, not a callback.
+      const declaration = receiver?.Kind === 'nominal' ? receiver.Declaration as ParseNode.ClassDeclaration : undefined;
+      const ownField = patternExpression(expression.MemberExpression)?.type === 'ThisExpression'
+        && declaration?.ClassTail?.ClassBody?.some((field) => field.type === 'FieldDefinition'
+          && !field.static && field.ClassElementName.type !== 'PrivateIdentifier' && classElementKey(field.ClassElementName) === key);
+      return [{ key: typeof key === 'string' ? key : (key.Description instanceof JSStringValue ? key.Description.stringValue() : 'symbol'),
+        ...(ownField ? { constructorOwner: declaration } : {}) }];
+    };
+    return collect(staticType(expression.MemberExpression));
   };
 
   /**
@@ -4975,6 +5037,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const construct: { Parameters: ParameterRecord[] }[] = [];
     const accessorKeys = new Set<string | SymbolValue>();
     const getterKeys = new Set<string | SymbolValue>();
+    const setterKeys = new Set<string | SymbolValue>();
+    const fieldProperties = new Map<string | SymbolValue, typeof Properties[number]>();
     const setterTypes = new Map<string | SymbolValue, TypeRecord>();
     for (const el of cls.ClassTail?.ClassBody ?? []) {
       if (el.type === 'AbstractMethodDefinition') {
@@ -5068,9 +5132,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // because a getter and setter pair may legitimately differ.
           const sp = md.PropertySetParameterList[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
           const t = sp?.TypeAnnotation ? resolveType(sp.TypeAnnotation.Type) : null;
-          if (t) {
-            setterTypes.set(key, t);
-          }
+          setterKeys.add(key);
+          setterTypes.set(key, t ?? anyTypeRecord);
           continue;
         }
         if (!md.UniqueFormalParameters) {
@@ -5097,18 +5160,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               publishedReturnTypes.set(el as unknown as object, inferred);
             }
           }
-          if (t) {
-            // `readonly` set for completeness. Not observable here - a
-            // class reaches the relation as a ~nominal~ judged by identity, so
-            // these records never meet the exact-match arm - but a record either
-            // carries its fields or it does not, and three defects here
-            // were a field missing from a record nothing happened to read.
-            //
-            // `false` preserves the current answer. Whether a GETTER-only member
-            // is readonly is a separate question and is not decided here.
-            Properties.push({ key, type: t, optional: false, readonly: false });
-            getterKeys.add(key);
-          }
+          // Presence is independent of inference: an unannotated getter still
+          // has no setter unless the same effective descriptor declares one.
+          Properties.push({ key, type: t ?? anyTypeRecord, optional: false });
+          getterKeys.add(key);
           continue;
         }
         const Parameters: ParameterRecord[] = [];
@@ -5318,7 +5373,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return inferred ? widen(inferred as TypeRecord) as Known : null;
           })()
           : null);
-      if (t) {
+      if (t || !annotated) {
         Properties.push({
           // #sec-object-types: "A write to a `readonly` member is a type error,
           // AT COMPILE TIME WHERE THE TYPE OF THE BASE IS KNOWN and at run time
@@ -5326,10 +5381,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `readonly` class FIELD is refused at compile time by
           // `requireWritableMember`, as the same member on an object type or an
           // interface is; the run time refuses the write either way.
-          key, type: t, optional: false, readonly: (f as { readonly?: boolean }).readonly === true,
+          key, type: t ?? anyTypeRecord, optional: false, readonly: (f as { readonly?: boolean }).readonly === true,
           protected: (f as { protected?: boolean }).protected === true,
           ...(annotated ? {} : { writeType: anyTypeRecord as TypeRecord }),
         });
+        fieldProperties.set(key, Properties.at(-1)!);
         // An `accessor` is a FieldDefinition carrying the marker, and it is the
         // one member kind whose OVERRIDE is invariant - recorded here because
         // the Properties list keeps a type per key and no member kind.
@@ -5340,14 +5396,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // `construct` is set by the constructor branch and read by the tail's
     // nominal record, so it travels with the rest.
-    return { Properties, methods, abstractMembers, unusable, accessorKeys, getterKeys, setterTypes, construct };
+    return { Properties, methods, abstractMembers, unusable, accessorKeys, getterKeys, setterKeys, setterTypes, fieldProperties, construct };
   };
 
   /** Fold the walk's setters and methods into its Properties. Both callers need it. */
   const classMemberFolds = (acc: ReturnType<typeof classMemberWalk>) => {
     const {
-      Properties, methods, unusable, setterTypes,
+      Properties, methods, unusable, getterKeys, setterKeys, setterTypes, fieldProperties,
     } = acc;
+    // Instance fields shadow prototype descriptors regardless of source order.
+    // Static fields are also installed after the class's methods/accessors.
+    for (const [key, field] of fieldProperties) {
+      for (let i = Properties.length - 1; i >= 0; i -= 1) {
+        if (Properties[i]!.key === key && Properties[i] !== field) Properties.splice(i, 1);
+      }
+      getterKeys.delete(key);
+      setterKeys.delete(key);
+      setterTypes.delete(key);
+      methods.delete(key);
+    }
+    for (const property of Properties) {
+      if (getterKeys.has(property.key)) property.readonly = !setterKeys.has(property.key);
+    }
     for (const [key, writeType] of setterTypes) {
       const existing = Properties.find((p) => p.key === key);
       if (existing) {
@@ -7093,7 +7163,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           defaultConversions.push({ type: r, initializer, checked: false });
         }
         Parameters.push(parameter(r, {
-          Name: pn.BindingIdentifier?.name ?? '', Rest: pn.Rest === true, Optional: pn.Optional === true || hasDefault,
+          Name: pn.BindingIdentifier?.name ?? '', Rest: pn.Rest === true, Ref: p.Ref, Optional: pn.Optional === true || hasDefault,
         }));
       }
       checkAdjacentRestTypes(Parameters, declaration);
@@ -11005,7 +11075,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return staticType(expression);
   };
 
-  const staticType = (node: ParseNode): Known => withPatternScope(node, () => inferStaticType(node));
+  const callReturnType = (node: ParseNode.CallExpression): Known => withPatternScope(node, () => inferStaticType(node));
+  const callValueType = (type: Known): Known => {
+    if (type?.Kind === 'reference') return type.Target;
+    if (type?.Kind === 'union') return CanonicalizeType({ Kind: 'union', Members: type.Members.map((arm) => callValueType(arm)!) });
+    return type;
+  };
+  // A call decays in value positions. Location consumers explicitly request
+  // its undegraded return contract, including unions of reference returns.
+  const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
+    const type = inferStaticType(node);
+    return node.type === 'CallExpression' ? callValueType(type) : type;
+  });
 
   const vectorCallType = (node: ParseNode.CallExpression, diagnose: boolean): Known => {
     const specialized = specializedVectorMethod(node.CallExpression);
@@ -11790,6 +11871,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             return null;
           }
+        }
+        if (callee?.Kind === 'union') {
+          const name = patternExpression(node.CallExpression);
+          if (name?.type === 'IdentifierReference' && !immutablyBound(name.name)) return null;
+          const returns = callee.Members.map((arm) => callReturnType(callAlternative(node, callableForm(arm))));
+          return returns.length && returns.every((type) => type !== null)
+            ? CanonicalizeType({ Kind: 'union', Members: returns as TypeRecord[] }) : null;
         }
         const selected = callee?.Kind === 'function'
           ? selectCallSignature(node, expandValueSpreads(node.Arguments ?? []), callee, node, false) : null;
@@ -16843,6 +16931,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         recordBindingKinds(declaration.BindingIdentifier as ParseNode.BindingIdentifier, true);
       }
     }
+    // Key identities must precede signatures and aliases that mention them.
+    // typeprogramming.md §6.6: "a declared `const s = Symbol()` used in type
+    // position IS the unique symbol type, without a keyword". A checker has no
+    // VALUES, so that identity is carried by the DECLARATION - two consts are
+    // two types, and one const named twice is one type, which is exactly what
+    // §6.6's identity rule means where no symbol can be held.
+    for (const n of list) {
+      if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
+        continue;
+      }
+      for (const binding of (n as ParseNode.LexicalDeclaration).BindingList) {
+        const b = binding as unknown as {
+          BindingIdentifier?: { name?: string } | null,
+          Initializer?: { type?: string, CallExpression?: { type?: string, name?: string } } | null,
+        };
+        const bound = b.BindingIdentifier?.name;
+        const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
+        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol'
+            && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
+          frames[frames.length - 1].constPropertyKeys.set(bound, symbolKeyFor(binding));
+        }
+      }
+    }
     // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
     // this proposal's function overloading - so the signatures are collected
     // per name and declared together: declared one at a time, the last
@@ -17228,28 +17339,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // memoizes, so forcing it here runs the walk exactly once per class and
     // every later demand is a cache hit: the errors below are reported once,
     // not once per reference.
-    // typeprogramming.md §6.6: "a declared `const s = Symbol()` used in type
-    // position IS the unique symbol type, without a keyword". A checker has no
-    // VALUES, so that identity is carried by the DECLARATION - two consts are
-    // two types, and one const named twice is one type, which is exactly what
-    // §6.6's identity rule means where no symbol can be held.
-    for (const n of list) {
-      if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
-        continue;
-      }
-      for (const binding of (n as ParseNode.LexicalDeclaration).BindingList) {
-        const b = binding as unknown as {
-          BindingIdentifier?: { name?: string } | null,
-          Initializer?: { type?: string, CallExpression?: { type?: string, name?: string } } | null,
-        };
-        const bound = b.BindingIdentifier?.name;
-        const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
-        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol'
-            && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
-          frames[frames.length - 1].constPropertyKeys.set(bound, symbolKeyFor(binding));
-        }
-      }
-    }
     // Linked in a SECOND pass, after every class is in `classNodes`: a subclass
     // may be declared before its sealed base, and the set is fixed "when the
     // MODULE finishes evaluating" rather than when a declaration is reached.
@@ -17408,10 +17497,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const locationType = (expression: ParseNode): Known => {
     const target = patternExpression(expression)!;
     if (target.type === 'IdentifierReference') return lookupDeclared(target.name);
-    const type = staticType(target);
+    const type = target.type === 'CallExpression' ? callReturnType(target) : staticType(target);
     if (target.type !== 'CallExpression') return type;
     if (!type || type.Kind === 'any') return null;
-    if (type.Kind === 'reference') return type.Target;
+    const referent = (t: TypeRecord): Known => {
+      if (t.Kind === 'reference') return t.Target;
+      if (t.Kind !== 'union' || t.Members.length === 0) return null;
+      const targets = t.Members.map(referent);
+      return targets.every((item): item is TypeRecord => item !== null)
+        ? CanonicalizeType({ Kind: 'union', Members: targets }) : null;
+    };
+    const value = referent(type);
+    if (value) return value;
     errors.push(Throw.StaticTypeError('a call in a location-consuming context must return a ref, and $1 does not', Value(displayType(type))).Value as ObjectValue);
     return null;
   };
@@ -17584,7 +17681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const patternKey = (key: ParseNode.PropertyNameLike | undefined | null): string | null => {
+  const patternKey = (key: ParseNode.PropertyNameLike | undefined | null): string | SymbolValue | null => {
     if (!key) {
       return null;
     }
@@ -17596,8 +17693,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (key.type === 'PropertyName') {
       walk(key.ComputedPropertyName);
+      const knownKey = memberKey({ Expression: key.ComputedPropertyName });
+      if (knownKey !== undefined) return knownKey;
       const t = staticType(key.ComputedPropertyName);
-      if (t?.Kind === 'literal') {
+      if (t?.Kind === 'literal' && !(t.Value instanceof SymbolValue)) {
         return String((t.Value as { value?: unknown }).value);
       }
     }
@@ -17630,7 +17729,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { type: t ? elementTypeOfIterable(t) : null };
   };
 
-  const patternProperty = (source: PatternSource, key: string | null): PatternSource => {
+  const patternProperty = (source: PatternSource, key: string | SymbolValue | null): PatternSource => {
     if (key === null) {
       return { type: null };
     }
@@ -17642,7 +17741,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!member.PropertyName) {
             return { type: null };
           }
-          if (patternKey(member.PropertyName) === key) {
+          const writtenKey = patternKey(member.PropertyName);
+          if (writtenKey === null) return { type: null };
+          if (writtenKey === key) {
             return { type: staticType(member.AssignmentExpression), expression: member.AssignmentExpression };
           }
         } else if (member.type === 'IdentifierReference' && member.name === key) {
@@ -17650,6 +17751,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    // Patterns consume a value contribution, not ordinary member-read
+    // diagnostics. Preserve a common declared key, including optionality.
+    const declaredContribution = (type: Known): Known => {
+      if (type?.Kind === 'union') {
+        const members = type.Members.map(declaredContribution);
+        return members.length && members.every((member) => member !== null)
+          ? CanonicalizeType({ Kind: 'union', Members: members as TypeRecord[] }) : null;
+      }
+      const shape = structureOf(type);
+      const property = shape?.Kind === 'object' ? shape.Properties.find((p) => p.key === key) : undefined;
+      return property ? (property.optional ? joinTypes(property.type, undefinedType) : property.type) : null;
+    };
+    if (source.type?.Kind === 'union') return { type: declaredContribution(source.type) };
     const t = structureOf(source.type);
     if (t?.Kind === 'object') {
       const property = t.Properties.find((p) => p.key === key);
@@ -17784,7 +17898,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.type === 'ObjectBindingPattern' || node.type === 'ObjectAssignmentPattern') {
       const properties = node.BindingPropertyList ?? node.AssignmentPropertyList ?? [];
-      const consumed = new Set<string>();
+      const consumed = new Set<string | SymbolValue>();
       for (const p of properties) {
         const key = p.BindingIdentifier?.name ?? p.IdentifierReference?.name ?? patternKey(p.PropertyName);
         if (key !== null) {
@@ -17796,7 +17910,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (rest) {
         const t = structureOf(source.type);
         checkPattern(rest, { type: t?.Kind === 'object'
-          ? { ...t, Properties: t.Properties.filter((p) => !consumed.has(p.key as string)) } : null }, declaring, infer, frame);
+          ? { ...t, Properties: t.Properties.filter((p) => !consumed.has(p.key)) } : null }, declaring, infer, frame);
       }
       return;
     }
@@ -18291,9 +18405,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  // Each union alternative is a separate call contract. Its contextual
+  // literal types, callback inference and generic bindings must never stamp
+  // the shared runtime call with one alternative's choices. Temporary syntax
+  // views reuse the ordinary checker and keep those facts on private nodes.
+  const callAlternative = (call: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, type: Known): ParseNode.CallExpression => {
+    const clone = (node: ParseNode, parent?: ParseNode): ParseNode => {
+      const copy = { ...node, parent: parent ?? node.parent } as ParseNode;
+      for (const key of Object.keys(node)) {
+        if (key === 'parent') continue;
+        const value = (node as unknown as Record<string, unknown>)[key];
+        const child = (item: unknown): unknown => item && typeof item === 'object' && 'type' in item
+          ? clone(item as ParseNode, copy) : item;
+        (copy as unknown as Record<string, unknown>)[key] = Array.isArray(value) ? value.map(child) : child(value);
+      }
+      return copy;
+    };
+    const view = {
+      ...call, type: 'CallExpression' as const,
+      CallExpression: typedExpressionView(call.CallExpression!, type),
+      Arguments: [] as ParseNode[],
+    } as unknown as ParseNode.CallExpression & { Arguments: ParseNode[] };
+    view.Arguments.push(...(call.Arguments?.map((argument) => clone(argument, view as ParseNode)) ?? []));
+    const context = contextualCallTypes.get(call as ParseNode);
+    if (context) contextualCallTypes.set(view, context);
+    return view as ParseNode.CallExpression;
+  };
+
   /** Calls whose inferred bindings have been checked against their constraints; see `checkCallArguments`. */
   const constraintCheckedCalls = new WeakSet<object>();
   const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
+    if (callee?.Kind === 'union') {
+      for (const arm of callee.Members) {
+        const type = callableForm(arm);
+        const view = callAlternative(c, type);
+        const context = contextualCallTypes.get(n) ?? (n as unknown as { ContextualType?: Known }).ContextualType;
+        if (context) contextualCallTypes.set(view, context);
+        checkCallable(type);
+        checkCallArguments(view, type, view);
+        // Contextual callbacks are checked under each possible signature. The
+        // ordinary walk still visits the original arguments for their effects.
+        for (const argument of view.Arguments ?? []) {
+          const value = argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument;
+          if (isFunctionLiteral(value)) {
+            walk(value);
+            referenceAnalysisRoots.push(value);
+          }
+        }
+      }
+      return;
+    }
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
     const supplied = expandValueSpreads(c.Arguments);
     checkedCallSignatures.delete(c);
@@ -19790,7 +19951,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (n.Initializer) {
-            if ((n as { Ref?: boolean }).Ref) requireBorrowable(n.Initializer);
+            if ((n as { Ref?: boolean }).Ref) {
+              requireBorrowable(n.Initializer);
+              referenceOperations.set(n, { kind: 'bind', slot: referenceSlot(bindingFrame, n.BindingIdentifier.name, n),
+                locations: borrowedLocations(n.Initializer), source: n.Initializer });
+            }
             withProvenance(n.Initializer, () => requireAssignable((n as { Ref?: boolean }).Ref
               ? locationType(n.Initializer!) : staticTypeIn(n.Initializer!, declared), declared));
             walk(n.Initializer);
@@ -19918,7 +20083,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           errors.push(Throw.StaticTypeError('$1 is not a rebindable ref binding', Value(name!)).Value as ObjectValue);
         }
         const target = name && kind ? lookupDeclared(name) : null;
-        if (rb.Expression) requireBorrowable(rb.Expression);
+        if (rb.Expression) {
+          requireBorrowable(rb.Expression);
+          const slot = name ? referenceSlotForName(name) : undefined;
+          if (slot) referenceOperations.set(n, { kind: 'rebind', slot,
+            locations: borrowedLocations(rb.Expression), source: rb.Expression });
+        }
         const source = rb.Expression ? locationType(rb.Expression) : null;
         // Where either side's type is unknown the judgment is the run time's,
         // as it is for the borrow itself.
@@ -19938,21 +20108,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (target?.type === 'OptionalExpression') target = optionalChainView(target, false).expression;
         if (u.operator === 'delete' && target?.type === 'MemberExpression') {
           const named = memberKey(target);
-          const structure = target.MemberExpression ? structureOf(staticType(target.MemberExpression)) : null;
-          if (named !== undefined && structure && structure.Kind === 'object'
-              && structure.Properties.some((p) => p.key === named)) {
-            const completion = Throw.StaticTypeError('$1 is a typed property and cannot be deleted', typeof named === 'string' ? Value(named) : named) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-          }
-          if (typeof named === 'string') {
+          // Deletion asks about protected storage, not the validity of a read.
+          // A union proves refusal only when every executing arm does.
+          const protectedStorage = (receiver: Known): 'property' | 'element' | null => {
+            if (receiver?.Kind === 'union') {
+              const arms = receiver.Members.map(protectedStorage);
+              return arms.length && arms.every((arm) => arm !== null) ? arms[0] : null;
+            }
+            const structure = structureOf(receiver);
+            if (named !== undefined && structure?.Kind === 'object'
+                && structure.Properties.some((p) => p.key === named)) return 'property';
+            if (typeof named !== 'string') return null;
             const index = Number(named);
             const canonicalIndex = Number.isInteger(index) && index >= 0 && index < 0xffffffff && String(index) === named;
             const arrayPosition = structure?.Kind === 'array' && typeof structure.Extent === 'number' && index < structure.Extent;
             const tuplePosition = structure?.Kind === 'tuple' && structure.Elements[index]?.Initial === 'none'
               && structure.Elements.slice(0, index + 1).every((element) => !element.Rest);
-            if (canonicalIndex && (arrayPosition || tuplePosition)) {
-              errors.push(Throw.StaticTypeError('$1 is a typed element and cannot be deleted', Value(named)).Value as ObjectValue);
-            }
+            return canonicalIndex && (arrayPosition || tuplePosition) ? 'element' : null;
+          };
+          const storage = protectedStorage(staticType(target.MemberExpression));
+          if (storage) {
+            errors.push(Throw.StaticTypeError(storage === 'property'
+              ? '$1 is a typed property and cannot be deleted' : '$1 is a typed element and cannot be deleted',
+            typeof named === 'string' ? Value(named) : named!).Value as ObjectValue);
           }
         }
         staticType(n);
@@ -21238,6 +21416,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   collectMutations(statementList);
   hoistVarBindings(statementList);
   walk(statementList);
+  const reportedReferenceWrites = new Set<ParseNode>();
+  CheckReferencePermissions(referenceAnalysisRoots, referenceOperations, (origin, write) => {
+    if (reportedReferenceWrites.has(write)) return;
+    const fn = ReferenceFunction(write);
+    if (origin.constructorOwner && fn?.type === 'MethodDefinition'
+        && classElementKey(fn.ClassElementName) === 'constructor') {
+      let owner = fn.parent;
+      while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression') owner = owner.parent;
+      if (owner === origin.constructorOwner) return;
+    }
+    reportedReferenceWrites.add(write);
+    errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned', Value(origin.key)).Value as ObjectValue);
+  });
   // Contextual positions have now been visited, including those initially
   // sampled while declarations were collected for return inference.
   // #sec-vector-comparisons, drained here because "left with no expected type"
