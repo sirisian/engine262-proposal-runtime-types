@@ -436,7 +436,29 @@ export abstract class TypeParser extends ExpressionParser {
     while (this.test(Token.LPAREN)) {
       const computed: ParseNode.Unfinished<ParseNode.ComputedType> = this.startNode(result);
       computed.Callee = result;
-      computed.Arguments = this.parseArguments().Arguments;
+      // A |ComputedType|'s arguments are EXPRESSIONS, so the `>>` splitting that
+      // lets a nested type argument list close - `Box.<Box.<uint8>>` - must not
+      // reach them.
+      //
+      // #sec-type-arguments provides the escape: "A shift operator inside a type
+      // argument list MUST BE PARENTHESIZED, which is only relevant to a value
+      // argument, since a shift cannot otherwise appear in a type." The escape
+      // did not work. `noFuseGT` stayed raised through the argument list, so
+      // `B.<N(8 >> 1)>` split its `>>` into two closers - correctly, that one is
+      // genuinely ambiguous - and `B.<N((8 >> 1))>` split it too, which leaves
+      // the clause's remedy no way to be written. A left shift was unaffected,
+      // `<<` needing no splitting, so only `>>` and `>>>` were unreachable.
+      //
+      // Suspended for the parenthesized argument list and restored after: a `>`
+      // inside those parentheses cannot be closing this list, since the `)` must
+      // come first.
+      const suspended = this.noFuseGT;
+      this.noFuseGT = 0;
+      try {
+        computed.Arguments = this.parseArguments().Arguments;
+      } finally {
+        this.noFuseGT = suspended;
+      }
       result = this.finishNode(computed, 'ComputedType');
     }
     return result;
