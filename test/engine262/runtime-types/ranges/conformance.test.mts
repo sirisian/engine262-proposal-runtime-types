@@ -129,20 +129,17 @@ test('sec-range-literals: no spaced reading is a program at all', () => {
 });
 
 test('sec-range-literals: a parenthesized range is rejected as a relational operand', () => {
-  // "Parentheses put a range back under them, and there a range is REJECTED as
-  //  a relational operand: a range does not implement `Ordered`, so
-  //  `(0..<3) < 5` is a *TypeError* rather than the *false* an ordinary
-  //  object's comparison would yield."
+  // Known ranges now reject before source evaluation. Unknown operands retain
+  // the same runtime backstop, so the exception stays catchable there.
   const kind = (src: string) => `let k = "none"; try { ${src} } catch (e) { k = e.constructor.name; } k;`;
-  expect(evaluated(kind('const a = 1, b = 2; (a..) < b;'))).toBe('TypeError');
-  expect(evaluated(kind('(0..<3) < 5;'))).toBe('TypeError');
+  expectStaticTypeError('const a = 1, b = 2; (a..) < b;');
+  expectStaticTypeError('(0..<3) < 5;');
   // Either operand, and all four relational operators.
-  expect(evaluated(kind('5 > (0..<3);'))).toBe('TypeError');
-  expect(evaluated(kind('(0..<3) <= 5;'))).toBe('TypeError');
-  expect(evaluated(kind('(0..<3) >= 5;'))).toBe('TypeError');
-  // Catchable rather than an early error: the unspaced spellings are the ones
-  // the grammar refuses.
-  expect(evaluated('try { (0..<3) < 5; "no-throw" } catch (e) { "caught" }')).toBe('caught');
+  expectStaticTypeError('5 > (0..<3);');
+  expectStaticTypeError('(0..<3) <= 5;');
+  expectStaticTypeError('(0..<3) >= 5;');
+  expect(evaluated(kind('let r = 0..<3; r < 5;'))).toBe('TypeError');
+  expect(evaluated('let r = 0..<3; try { r < 5; "no-throw" } catch (e) { "caught" }')).toBe('caught');
   // Equality is untouched, since a range compares by identity like any value.
   expect(evaluated('const r = 0..<3; String(r === r);')).toBe('true');
 });

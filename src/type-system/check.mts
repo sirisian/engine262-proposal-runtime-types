@@ -2285,6 +2285,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (functionDepth > 0) {
           assignedInsideFunction.add(x.name);
         }
+      } else if (x) {
+        // Assignment patterns and parentheses can replace a function binding
+        // as surely as a bare identifier. Do not inspect keys/default values:
+        // only the locations receiving the assignment invalidate an origin.
+        const target = t as Record<string, unknown>;
+        const keys: Record<string, string[]> = {
+          ParenthesizedExpression: ['Expression'],
+          AssignmentExpression: ['LeftHandSideExpression'],
+          ArrayLiteral: ['ElementList'], ObjectLiteral: ['PropertyDefinitionList'],
+          PropertyDefinition: ['AssignmentExpression'], SpreadElement: ['AssignmentExpression'],
+          AssignmentRestElement: ['AssignmentExpression'],
+        };
+        for (const key of keys[x.type ?? ''] ?? []) {
+          const child = target[key];
+          if (Array.isArray(child)) child.forEach(targetName);
+          else targetName(child);
+        }
       }
     };
     // A function-ish node is recognised by carrying a parameter list, which is
@@ -2298,13 +2315,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       targetName(n.LeftHandSideExpression);
       const target = n.LeftHandSideExpression as ParseNode.MemberExpression;
       if (target?.type === 'MemberExpression' && target.MemberExpression?.type === 'IdentifierReference'
-          && target.MemberExpression.name === 'globalThis' && target.IdentifierName) {
-        assignedGlobalProperties.add(target.IdentifierName.name);
+          && target.MemberExpression.name === 'globalThis') {
+        const key = target.IdentifierName?.name
+          ?? (target.Expression?.type === 'StringLiteral' ? target.Expression.value : undefined);
+        if (key !== undefined) assignedGlobalProperties.add(key);
       }
     } else if (n.type === 'UpdateExpression') {
       targetName(n.LeftHandSideExpression ?? n.UnaryExpression);
-    } else if (n.type === 'ForInStatement' || n.type === 'ForOfStatement') {
+    } else if (n.type === 'ForInStatement' || n.type === 'ForOfStatement' || n.type === 'ForAwaitStatement') {
       targetName(n.LeftHandSideExpression);
+    } else if (n.type === 'VariableDeclaration' && n.Initializer) {
+      // `var f = ...` can overwrite an earlier hoisted function declaration.
+      const binding = n.BindingIdentifier as { name?: string } | undefined;
+      if (binding?.name) assignedNames.add(binding.name);
     } else if (n.type === 'CallExpression') {
       const callee = n.CallExpression ?? n.MemberExpression;
       const c = callee as { type?: string, name?: string } | null | undefined;
@@ -2542,6 +2565,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- scope: frames, bindings, type parameters ---------------------
 
   const frames: Frame[] = [session ? session.frame : emptyFrame()];
+  // Value origin is not part of a function signature. Keep it local to this
+  // checking pass; a prior script's mutable function value is not a new proof.
+  type InvocationOrigin = { node: ParseNode, immutable: boolean, annotated: boolean };
+  const invocationOrigins = new WeakMap<Frame, Map<string, InvocationOrigin>>();
+  const unaryBindingParticipation = new WeakMap<Frame, Map<string, boolean>>();
+  const recordInvocationOrigin = (frame: Frame, name: string, node: ParseNode, immutable: boolean, annotated = false): void => {
+    let origins = invocationOrigins.get(frame);
+    if (!origins) {
+      origins = new Map();
+      invocationOrigins.set(frame, origins);
+    }
+    origins.set(name, { node, immutable, annotated });
+  };
   const varFrames: Frame[] = [frames[0]];
   const uninitializedVars = new WeakMap<Frame, Set<string>>();
   const referenceSlots = new WeakMap<Frame, Map<string, ReferenceSlot>>();
@@ -6969,20 +7005,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || ['number', 'bigint', 'string', 'boolean', 'symbol', 'null', 'undefined', 'vector', 'complex', 'rational'].includes(at.Name));
   };
 
-  const notIterable = (t: Known): boolean => {
+  const notIterable = (t: Known, asynchronous = false, skipEntryHook = false): boolean => {
     const at = erasedForJudgment(t);
     if (!at) {
       return false;
     }
-    if (at.Kind === 'union' || at.Kind === 'intersection') {
+    if (at.Kind === 'union' || (at.Kind === 'intersection' && structureOf(at)?.Kind !== 'object')) {
       const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
-      return members.length > 0 && members.every((mem) => notIterable(mem as Known));
+      return members.length > 0 && members.every((mem) => notIterable(mem as Known, asynchronous, skipEntryHook));
     }
     if (at.Kind === 'void') {
       return true;
     }
     const name = at.Kind === 'primitive' ? (at as { Name?: string }).Name : undefined;
-    return name !== undefined && name !== 'string' && name !== 'Composite';
+    if (name !== undefined) return name !== 'string' && name !== 'Composite';
+    // Argument spread also has a named-property protocol, while reference
+    // iteration is index-based. Neither is disqualified by an invalid hook.
+    if (skipEntryHook) return false;
+    const shape = structureOf(at);
+    if (shape?.Kind !== 'object') return false;
+    const hook = (key: SymbolValue): Known => {
+      const property = shape.Properties.find((p) => p.key === key);
+      return property ? (property.optional ? joinTypes(property.type, undefinedType) : property.type) : null;
+    };
+    const invalid = (type: Known, fallback: () => boolean): boolean => {
+      const member = erasedForJudgment(type);
+      if (!member) return false;
+      if (member.Kind === 'union') return member.Members.length > 0 && member.Members.every((arm) => invalid(arm, fallback));
+      if (member.Kind === 'primitive' && ['undefined', 'null'].includes(member.Name)) return fallback();
+      // An open object-shaped hook might itself be a callable object. Only a
+      // known non-object value supplies this negative proof.
+      return knownNonObject(member);
+    };
+    const syncInvalid = () => invalid(hook(wellKnownSymbols.iterator), () => true);
+    return asynchronous ? invalid(hook(wellKnownSymbols.asyncIterator), syncInvalid) : syncInvalid();
   };
 
   // Calls, construction and super calls share spread eligibility independently
@@ -6995,7 +7051,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const spreadArg = (arg as unknown as { AssignmentExpression?: ParseNode }).AssignmentExpression;
       const spreadArgType = spreadArg ? staticType(spreadArg) : null;
-      if (spreadArgType && notIterable(spreadArgType)) {
+      if (spreadArgType && notIterable(spreadArgType, false, true)) {
         const completion = Throw.StaticTypeError(
           'a value of $1 is not iterable',
           Value(displayType(spreadArgType as TypeRecord)),
@@ -7724,7 +7780,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // Last is also the conservative place: this lookup answers only for a
         // name nothing else in the chain claims.
-        return refuseBareGeneric(node, builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? classTypeOf(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
+        // A source class named Range (or Map, etc.) denotes that class in its
+        // own annotations, just as it does in `new Range()`. The library name
+        // must not substitute an unrelated intrinsic type for the parameter.
+        return refuseBareGeneric(node, classTypeOf(name) ?? builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : makePrimitive('null');
@@ -10316,13 +10375,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       const start = fromEndpoint(r.RangeStart as ParseNode | null);
       const end = fromEndpoint(r.RangeEnd as ParseNode | null);
-      const element = contextualElement ?? start ?? end;
+      const element = contextualElement ?? start ?? end ?? anyTypeRecord;
       const ordinal = (bound: 'closed' | 'open' | null) => (bound === 'open' ? 1 : 0);
       if (!r.RangeStart && !r.RangeEnd) {
-        return libraryTypeRecord('RangeFull', element ? [element] : []);
-      }
-      if (!element) {
-        return null;
+        return libraryTypeRecord('RangeFull', contextualElement ? [contextualElement] : []);
       }
       if (r.RangeStart && r.RangeEnd) {
         return libraryTypeRecord('Range', [element, ordinal(r.RangeStartBound), ordinal(r.RangeEndBound)]);
@@ -11014,6 +11070,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const knownRange = (type: Known): boolean => {
+    const at = erasedForJudgment(type);
+    if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(knownRange);
+    return at?.Kind === 'nominal' && isRangeFamilyName(at.LibraryName);
+  };
+
+  const invalidRangeComparison = (left: Known, right: Known, operator: string): boolean => {
+    left = erasedForJudgment(left);
+    right = erasedForJudgment(right);
+    if (left?.Kind === 'union') return left.Members.length > 0
+      && left.Members.every((arm) => invalidRangeComparison(arm, right, operator));
+    if (right?.Kind === 'union') return right.Members.length > 0
+      && right.Members.every((arm) => invalidRangeComparison(left, arm, operator));
+    // Declared and derived comparisons precede the built-in range guard.
+    if (declaredOperator(left, operator) || declaredOperator(left, '<')) return false;
+    if (knownRange(left)) return true;
+    // An unknown/open left operand may declare an operator accepting a range.
+    return knownRange(right) && (knownNonObject(left)
+      || (!!left && classDeclarationOf(left) !== undefined));
+  };
+
   const operatorFailures = new Map<object, 'none' | 'ambiguous'>();
   /**
    * #sec-vector-comparisons: comparisons of two vectors of one shape, and the
@@ -11280,6 +11357,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const operand = inner ? staticType(inner) : null;
         const declared = unary.operator ? declaredOperator(operand, `unary ${unary.operator}`) : null;
         if (declared) return operatorResult(declared, [], node);
+        // A declared operand contract participates; legacy literal-only JS
+        // keeps its runtime exceptions, even inside an otherwise typed body.
+        const forbiddenScalar = (type: Known): boolean => {
+          const at = erasedForJudgment(type);
+          if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(forbiddenScalar);
+          return at?.Kind === 'primitive' && (at.Name === 'symbol'
+            || (unary.operator === '+' && at.Name === 'bigint'));
+        };
+        if (inner && ['+', '-', '~'].includes(unary.operator ?? '')
+          && forbiddenScalar(operand) && unaryOperandParticipates(inner)) {
+          errors.push(Throw.StaticTypeError('$1 is not defined for $2',
+            Value(`unary ${unary.operator}`), Value(displayType(operand!))).Value as ObjectValue);
+          return neverType;
+        }
         if (unary.operator === '!') return operand && operand.Kind !== 'any' && operand.Kind !== 'union'
           && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
         checkNumericOperation(unary.operator, operand);
@@ -11321,6 +11412,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return null;
       }
+      case 'RangeExpression':
+        return inferStaticTypeIn(node, null);
       case 'NumericLiteral': {
         // A BIGINT literal is a literal of `bigint`, not of `number`. It was
         // labelled `number`, which was pinned as cosmetic - it is not: with
@@ -16922,13 +17015,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       list.push(item);
     }
+    const invocationDeclarations = new Set<string>();
     for (const declaration of list) {
       if (declaration.type === 'LexicalDeclaration') {
         recordBindingKinds(declaration, declaration.LetOrConst === 'let');
+        for (const binding of declaration.BindingList) {
+          if (binding.BindingIdentifier && binding.Initializer && !(binding as { Ref?: boolean }).Ref) {
+            recordInvocationOrigin(frames[frames.length - 1], binding.BindingIdentifier.name, binding.Initializer,
+              declaration.LetOrConst === 'const', !!binding.TypeAnnotation);
+          }
+        }
       } else if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration',
         'ClassDeclaration', 'EnumDeclaration', 'TypeAliasDeclaration', 'InterfaceDeclaration'].includes(declaration.type)
           && 'BindingIdentifier' in declaration && declaration.BindingIdentifier) {
         recordBindingKinds(declaration.BindingIdentifier as ParseNode.BindingIdentifier, true);
+        if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration', 'ClassDeclaration'].includes(declaration.type)) {
+          const name = (declaration.BindingIdentifier as ParseNode.BindingIdentifier).name;
+          // An overload dispatcher may have a different invocation kind from
+          // its individual implementations. Do not select the last declaration.
+          if (invocationDeclarations.has(name)) invocationOrigins.get(frames[frames.length - 1])?.delete(name);
+          else recordInvocationOrigin(frames[frames.length - 1], name, declaration, false);
+          invocationDeclarations.add(name);
+        }
       }
     }
     // Key identities must precede signatures and aliases that mention them.
@@ -17470,7 +17578,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(pattern);
   };
 
-  type PatternSource = { type: Known, expression?: ParseNode };
+  type PatternSource = { type: Known, expression?: ParseNode, typed?: boolean };
   type PatternNode = {
     type: string,
     BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null,
@@ -17637,6 +17745,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'NewExpression':
       case 'CallExpression':
       case 'TypedConversionExpression':
+      case 'RangeExpression':
         return true;
       case 'NumericLiteral': case 'StringLiteral': case 'BooleanLiteral':
       case 'NullLiteral': case 'RegularExpressionLiteral': case 'TemplateLiteral':
@@ -17678,6 +17787,63 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         return false;
+    }
+  };
+
+  // Unary domain errors need a typed contract, not merely a known JS builtin
+  // result. In particular Symbol(), BigInt(), and their ordinary const aliases
+  // do not opt legacy code into a new early-error rule.
+  const unaryOperandParticipates = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
+    const node = patternExpression(expression)!;
+    if (node.type === 'IdentifierReference') {
+      for (let i = scope; i >= 0; i -= 1) {
+        const frame = frames[i];
+        const contribution = unaryBindingParticipation.get(frame)?.get(node.name);
+        if (contribution !== undefined) return contribution;
+        const origin = invocationOrigins.get(frame)?.get(node.name);
+        if (origin) {
+          if (origin.annotated) return frame.bindings.get(node.name)?.Kind !== 'any';
+          if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration'].includes(origin.node.type)) {
+            return typedInvocationSignature(origin.node);
+          }
+          if (!origin.immutable || seen.has(origin)) return false;
+          seen.add(origin);
+          return unaryOperandParticipates(origin.node, i, seen);
+        }
+        if (frame.bindings.has(node.name)) return frame.bindings.get(node.name)?.Kind !== 'any';
+        if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name) || frame.dynamicBindings) return false;
+      }
+      return false;
+    }
+    switch (node.type) {
+      case 'CommaOperator':
+        return !!node.ExpressionList.length && unaryOperandParticipates(node.ExpressionList.at(-1)!, scope, seen);
+      case 'CallExpression':
+        return callProvenance.has(node) || unaryOperandParticipates(node.CallExpression, scope, seen);
+      case 'MemberExpression':
+        return !!node.MemberExpression && unaryOperandParticipates(node.MemberExpression, scope, seen);
+      case 'NewExpression':
+        return !!node.MemberExpression && invocationFact(node.MemberExpression, scope)?.typed === true;
+      case 'ThisExpression':
+        return staticType(node) !== null;
+      case 'TypedConversionExpression': case 'RangeExpression':
+        return true;
+      case 'FunctionDeclaration': case 'FunctionExpression': case 'ArrowFunction':
+      case 'AsyncFunctionDeclaration': case 'AsyncFunctionExpression': case 'AsyncArrowFunction':
+      case 'GeneratorDeclaration': case 'GeneratorExpression': case 'AsyncGeneratorDeclaration': case 'AsyncGeneratorExpression':
+        return typedInvocationSignature(node);
+      case 'ConditionalExpression':
+        return unaryOperandParticipates(node.AssignmentExpression_a, scope, new Set(seen))
+          || unaryOperandParticipates(node.AssignmentExpression_b, scope, new Set(seen));
+      case 'NumericLiteral': case 'StringLiteral': case 'BooleanLiteral': case 'NullLiteral':
+        return false;
+      default:
+        return Object.entries(node).some(([key, value]) => {
+          if (['parent', 'location', 'sourceText', 'strict'].includes(key)) return false;
+          if (key === 'TypeAnnotation' && value) return true;
+          return (Array.isArray(value) ? value : [value]).some((child) => child && typeof child === 'object'
+            && 'type' in child && unaryOperandParticipates(child as ParseNode, scope, new Set(seen)));
+        });
     }
   };
 
@@ -17814,7 +17980,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkPattern = (node: PatternNode, incoming: PatternSource, declaring: boolean,
     infer = false, frame = frames[frames.length - 1]): void => {
-    let source = incoming;
+    let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? unaryOperandParticipates(incoming.expression) : incoming.type !== null) };
     const annotation = node.TypeAnnotation ? resolveType(node.TypeAnnotation.Type) : null;
     const checkIncoming = (target: Known, value = source) => {
       requireAssignable(value.expression ? staticTypeIn(value.expression, target) : value.type, target);
@@ -17830,14 +17996,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const present = NarrowFrom(source.type, undefinedType);
         const fallback = staticTypeIn(node.Initializer, annotation);
         if (present === empty) {
-          source = { type: fallback, expression: node.Initializer };
+          source = { type: fallback, expression: node.Initializer, typed: !!annotation || unaryOperandParticipates(node.Initializer) };
         } else if (annotation) {
           // Check each contribution before joining: joining fresh literals
           // first would lose the position's numeric conversion.
           checkIncoming(annotation, source);
-          source = { type: annotation };
+          source = { type: annotation, typed: true };
         } else if (!AreDisjoint(source.type, undefinedType)) {
-          source = { type: fallback ? joinTypes(present as TypeRecord, fallback) : null };
+          source = { type: fallback ? joinTypes(present as TypeRecord, fallback) : null,
+            typed: source.typed || unaryOperandParticipates(node.Initializer) };
         }
       }
     }
@@ -17846,6 +18013,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.BindingIdentifier) {
       declare(node.BindingIdentifier.name, annotation ?? (infer ? source.type : null), frame);
+      let participation = unaryBindingParticipation.get(frame);
+      if (!participation) {
+        participation = new Map();
+        unaryBindingParticipation.set(frame, participation);
+      }
+      participation.set(node.BindingIdentifier.name, !!annotation || (infer && !!source.typed));
       return;
     }
     if (node.BindingPattern) {
@@ -17873,7 +18046,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : infer && source.expression && patternExpression(source.expression)?.type !== 'ArrayLiteral'
               ? { type: StaticIterationContribution(source.type, structureOf).element }
               : patternElement(source, index);
-          checkPattern(el, contribution, declaring, infer, frame);
+          checkPattern(el, { ...contribution, typed: source.typed }, declaring, infer, frame);
         }
       });
       const rest = node.BindingRestElement ?? node.AssignmentRestElement;
@@ -17892,7 +18065,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const element = patternElement(source, elements.length).type;
           collected = { type: element ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null };
         }
-        checkPattern(rest, collected, declaring, infer, frame);
+        checkPattern(rest, { ...collected, typed: source.typed }, declaring, infer, frame);
       }
       return;
     }
@@ -17904,12 +18077,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (key !== null) {
           consumed.add(key);
         }
-        checkPattern(p.BindingElement ?? p.AssignmentElement ?? p, patternProperty(source, key), declaring, infer, frame);
+        checkPattern(p.BindingElement ?? p.AssignmentElement ?? p,
+          { ...patternProperty(source, key), typed: source.typed }, declaring, infer, frame);
       }
       const rest = node.BindingRestProperty ?? node.AssignmentRestProperty;
       if (rest) {
         const t = structureOf(source.type);
-        checkPattern(rest, { type: t?.Kind === 'object'
+        checkPattern(rest, { typed: source.typed, type: t?.Kind === 'object'
           ? { ...t, Properties: t.Properties.filter((p) => !consumed.has(p.key)) } : null }, declaring, infer, frame);
       }
       return;
@@ -19034,6 +19208,68 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const typedInvocationSignature = (node: ParseNode): boolean => {
+    const signature = node as unknown as {
+      TypeAnnotation?: unknown, TypeParameters?: unknown,
+      FormalParameters?: readonly ParseNode[], UniqueFormalParameters?: readonly ParseNode[], ArrowParameters?: readonly ParseNode[],
+    };
+    const annotatedParameter = (parameter: ParseNode): boolean => {
+      if ((parameter as { TypeAnnotation?: unknown, Ref?: boolean }).TypeAnnotation
+        || (parameter as { Ref?: boolean }).Ref) return true;
+      return Object.entries(parameter).some(([key, value]) => {
+        if (['parent', 'location', 'sourceText', 'Initializer'].includes(key)) return false;
+        return (Array.isArray(value) ? value : [value]).some((child) => child && typeof child === 'object'
+          && 'type' in child && annotatedParameter(child as ParseNode));
+      });
+    };
+    return !!signature.TypeAnnotation || !!signature.TypeParameters
+      || (signature.FormalParameters ?? signature.UniqueFormalParameters ?? signature.ArrowParameters ?? []).some(annotatedParameter);
+  };
+
+  type InvocationFact = { callable: boolean, constructible: boolean, typed: boolean };
+  const invocationFact = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>()): InvocationFact | null => {
+    const node = patternExpression(expression)!;
+    if (node.type === 'IdentifierReference') {
+      for (let i = scope; i >= 0; i -= 1) {
+        const frame = frames[i];
+        const origin = invocationOrigins.get(frame)?.get(node.name);
+        if (origin) {
+          if (seen.has(origin) || frame.bindings.get(node.name)?.Kind === 'any'
+            || (origin.annotated && !frame.bindings.has(node.name))
+            || (!origin.immutable && (assignedNames.has(node.name) || assignedGlobalProperties.has(node.name) || hasDirectEval))) return null;
+          seen.add(origin);
+          const fact = invocationFact(origin.node, i, seen);
+          return fact ? { ...fact, typed: fact.typed || origin.annotated } : null;
+        }
+        if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name) || frame.dynamicBindings) return null;
+      }
+      return null;
+    }
+    if (node.type === 'ClassExpression' || node.type === 'ClassDeclaration') {
+      if (node.Decorators?.length) return null;
+      const typed = !!node.TypeParameters || !!node.ClassModifiers?.length || !!node.ClassTail.ImplementsClause?.length
+        || (node.ClassTail.ClassBody ?? []).some((member) => member.type === 'OperatorDefinition'
+          || typedInvocationSignature(member));
+      return { callable: false, constructible: true, typed };
+    }
+    if (['FunctionExpression', 'FunctionDeclaration', 'ArrowFunction', 'AsyncArrowFunction',
+      'GeneratorExpression', 'GeneratorDeclaration', 'AsyncFunctionExpression', 'AsyncFunctionDeclaration',
+      'AsyncGeneratorExpression', 'AsyncGeneratorDeclaration'].includes(node.type)) {
+      return { callable: true, constructible: node.type === 'FunctionExpression' || node.type === 'FunctionDeclaration',
+        typed: typedInvocationSignature(node) };
+    }
+    return null;
+  };
+
+  const checkInvocation = (expression: ParseNode, construct: boolean): void => {
+    const fact = invocationFact(expression);
+    if (fact?.typed && !(construct ? fact.constructible : fact.callable)) {
+      errors.push(Throw.StaticTypeError(construct
+        ? 'this typed function is not a constructor'
+        : 'a typed class constructor cannot be invoked without new').Value as ObjectValue);
+    }
+  };
+
   const templateCallView = (node: ParseNode.TaggedTemplateExpression): ParseNode.CallExpression => {
     const template = node.TemplateLiteral;
     const strings = {
@@ -19072,6 +19308,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!unreachable) {
             const callee = callableForm(receiver);
             checkCallable(callee);
+            checkInvocation(view.expression, false);
             checkCallArguments(call, callee, node);
           }
           walk(chain.Arguments);
@@ -19178,7 +19415,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // which #sec-composite-getiterator gives an inserted step and which
         // `iterator-operations.mts` already implements. A record composite still
         // throws, one step later and from the operation that can tell.
-        if (notIterable(over)) {
+        if (notIterable(over, (node as ParseNode).type === 'ForAwaitStatement', !!(decl?.ForBinding?.Ref || decl?.Ref))) {
           const completion = Throw.StaticTypeError(
             'a value of $1 is not iterable',
             Value(displayType(over as TypeRecord)),
@@ -19214,7 +19451,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const declaration = f.ForDeclaration as ParseNode.ForDeclaration | undefined;
             recordBindingKinds(binding, declaration?.LetOrConst !== 'const',
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1], !!decl?.Ref, !!f.ForBinding);
-            checkPattern(binding as PatternNode, { type: bindingType }, true, !enumerating,
+            checkPattern(binding as PatternNode, { type: bindingType, typed: !!declaredLoopType || (!!source && unaryOperandParticipates(source)) }, true, !enumerating,
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1]);
           } else if (f.LeftHandSideExpression) {
             checkPattern(f.LeftHandSideExpression as PatternNode, { type: element }, false);
@@ -19360,6 +19597,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (scope) typeParameterScopes.pop();
     }
     switch (n.type) {
+      case 'PropertyDefinition': {
+        const annotation = (n as ParseNode.PropertyDefinition & { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+        if (annotation) {
+          const declared = resolveType(annotation.Type);
+          withProvenance(n.AssignmentExpression, () => requireAssignable(staticTypeIn(n.AssignmentExpression, declared), declared));
+        }
+        walk(n.PropertyName);
+        walk(n.AssignmentExpression);
+        return;
+      }
+      case 'RangeExpression': {
+        for (const endpoint of [n.RangeStart, n.RangeEnd]) {
+          if (endpoint && knownRange(staticType(endpoint))) errors.push(Throw.StaticTypeError(
+            'a range endpoint must be an ordered value, not a range',
+          ).Value as ObjectValue);
+          walk(endpoint);
+        }
+        return;
+      }
       case 'ThrowStatement':
         validateDiscardedExpression(n.Expression);
         walk(n.Expression);
@@ -19451,6 +19707,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'RelationalExpression': {
         const rel = n as ParseNode.RelationalExpression;
+        if (['<', '<=', '>', '>='].includes(rel.operator)
+          && invalidRangeComparison(rel.RelationalExpression ? staticType(rel.RelationalExpression) : null, staticType(rel.ShiftExpression), rel.operator)) {
+          errors.push(Throw.StaticTypeError('a range is not an ordered value and cannot be compared').Value as ObjectValue);
+        }
         if (rel.operator === 'in' || rel.operator === 'instanceof') {
           const right = staticType(rel.ShiftExpression);
           if (knownNonObject(right)) {
@@ -19878,6 +20138,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const isConstDeclaration = n.type === 'LexicalBinding' && (n.parent as { LetOrConst?: string } | undefined)?.LetOrConst === 'const';
         recordBindingKinds(n, !isConstDeclaration, bindingFrame, false, n.type === 'VariableDeclaration');
         if (n.BindingIdentifier) {
+          const origin = n.Initializer ?? n.TypedInitializer?.AssignmentExpression;
+          if (origin && !(n as { Ref?: boolean }).Ref) recordInvocationOrigin(bindingFrame, n.BindingIdentifier.name,
+            origin, isConstDeclaration, !!n.TypeAnnotation || !!n.TypedInitializer);
           // proposal-runtime-types (spec sec-enums): track a binding that holds an
           // enumerator, from `let e = E.Member` or `let e: E`, so a switch over it
           // can be checked.
@@ -20154,6 +20417,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkNumericCall(n, null);
         checkArgumentSpreads(n.Arguments);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
+        checkInvocation(c.CallExpression, false);
         const callee = callableForm(staticType(c.CallExpression));
         // Type-object calls share lexical resolution with result inference.
         const conversionTarget = callee?.Kind === 'function' ? undefined : typeObjectTarget(c.CallExpression) ?? undefined;
@@ -20311,6 +20575,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bareTarget = bareTarget.Expression;
         }
         const namedInstance = bareTarget?.type === 'IdentifierReference' ? classTypeOf(bareTarget.name) : null;
+        if (target) checkInvocation(target, true);
         // A VALUE OF A PRIMITIVE TYPE IS NOT A CONSTRUCTOR, for the reason a
         // value of one is not callable: `new n()` for a `uint8` n was the run
         // time's "1 (typed) is not a constructor", and the type is written at
@@ -20482,6 +20747,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'TaggedTemplateExpression': {
         const call = templateCallView(n);
+        checkInvocation(n.MemberExpression, false);
         const callee = callableForm(staticType(call.CallExpression));
         checkCallable(callee);
         checkCallArguments(call, callee, n);
@@ -20505,7 +20771,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const y = n as unknown as { hasStar?: boolean, AssignmentExpression?: ParseNode | null };
         if (y.hasStar && y.AssignmentExpression) {
           const yielded = staticType(y.AssignmentExpression);
-          if (yielded && notIterable(yielded)) {
+          const owner = ReferenceFunction(n);
+          if (yielded && notIterable(yielded, owner?.type.startsWith('Async') === true)) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not iterable',
               Value(displayType(yielded as TypeRecord)),

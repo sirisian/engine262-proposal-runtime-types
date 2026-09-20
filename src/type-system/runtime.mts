@@ -4563,6 +4563,7 @@ function declarationNamed(from: ParseNode, name: string): ParseNode | null {
   let node: ParseNode | undefined = from;
   while (node && !seen.has(node)) {
     seen.add(node);
+    if ((node.type === 'ClassDeclaration' || node.type === 'ClassExpression') && node.BindingIdentifier?.name === name) return node;
     const lists = [
       (node as { StatementList?: readonly ParseNode[] }).StatementList,
       (node as { ScriptBody?: { StatementList?: readonly ParseNode[] } }).ScriptBody?.StatementList,
@@ -5043,7 +5044,9 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return Throw.TypeError('$1 does not name a type parameter of $2', Value(argNames2.find((n) => n !== undefined)!), Value(name));
         }
       }
-      const builtin = builtinTypeRecord(name, argRecords.map(toNumericArgument));
+      const sourceDeclaration = declarationNamed(node, name);
+      const sourceClass = sourceDeclaration?.type === 'ClassDeclaration' || sourceDeclaration?.type === 'ClassExpression';
+      const builtin = sourceClass ? null : builtinTypeRecord(name, argRecords.map(toNumericArgument));
       if (builtin) {
         // proposal-runtime-types (spec sec-vector-types): a `vector.<T, N>` is
         // well-formed only when T is a lane type and N a positive integer. A
@@ -5075,7 +5078,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // extent - arrives as a ~literal~ record wrapping a Number, and every
       // consumer wants the number. Without this an \ carried a
       // literal where its layout rule expected 4 and reported no layout at all.
-      const library = libraryTypeRecord(name, argRecords.map(toNumericArgument));
+      const library = sourceClass ? null : libraryTypeRecord(name, argRecords.map(toNumericArgument));
       if (library) {
         return library;
       }
@@ -5147,7 +5150,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
             }
           }
         }
-        if (declaration && (declaration as { type?: string }).type === 'ClassDeclaration') {
+        if (declaration && (declaration.type === 'ClassDeclaration' || declaration.type === 'ClassExpression')) {
           // A Type Object over the declaration, so the resolution continues
           // down the SAME path an initialized binding takes - including the
           // single attach point for type arguments below. Returning the record
