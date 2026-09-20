@@ -262,6 +262,7 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       // binding's Number. See `FoldedConstantOf`.
       const foldedUse = FoldedConstantOf(node);
       if (foldedUse !== undefined) {
+        if (foldedUse.type.Kind === 'primitive' && foldedUse.type.Name === 'bigint') return Value(foldedUse.value);
         return new TypedNumberValue(foldedUse.value, foldedUse.type as never);
       }
       const foldedDecUse = FoldedDecimalOf(node);
@@ -316,6 +317,7 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       // the rounded literals gave `...984`. See `FoldedConstantOf`.
       const folded = FoldedConstantOf(node);
       if (folded !== undefined) {
+        if (folded.type.Kind === 'primitive' && folded.type.Name === 'bigint') return Value(folded.value);
         return new TypedNumberValue(folded.value, folded.type as never);
       }
       // A CONSTANT EXPRESSION AT A RATIONAL CONTEXT is folded exactly, as a
@@ -420,6 +422,7 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       // because a double happens to hold -128 exactly.
       const foldedUnary = FoldedConstantOf(node);
       if (foldedUnary !== undefined) {
+        if (foldedUnary.type.Kind === 'primitive' && foldedUnary.type.Name === 'bigint') return Value(foldedUnary.value);
         return new TypedNumberValue(foldedUnary.value, foldedUnary.type as never);
       }
       const foldedDecUnary = FoldedDecimalOf(node);
