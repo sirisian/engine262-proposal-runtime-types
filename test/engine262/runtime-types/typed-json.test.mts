@@ -226,13 +226,36 @@ test('a float token is rounded to its width', () => {
   expect(evaluated('let n: any = 0.1; let f: float16 = n; String(f);')).toBe('0.0999755859375');
 });
 
-test('a float token the type cannot hold is refused', () => {
-  // The boundary's verdict, in the shape this operation reports failures.
-  expectThrown("JSON.parse.<float16>('1e300');", 'expected float16');
+test('a float token the type cannot hold SATURATES; an integer token is refused', () => {
+  // The asymmetry is the operation's, and it is not arbitrary.
+  //
+  // `#sec-coercejsonvalue` puts its range check on SIZED INTEGER targets and
+  // then converts everything else by `#table-numeric-conversions`, whose binary
+  // float row ends: "A finite source outside the target's range becomes an
+  // infinity of the same sign."
+  //
+  // A `uint8` has no value for 300 and so must refuse; a `float16` HAS one for
+  // 1e300, and refusing it read the annotation boundary's rule into a document
+  // boundary that states its own.
+  expect(evaluated("String(JSON.parse.<float16>('1e300'));")).toBe('Infinity');
+  expect(evaluated("String(JSON.parse.<float16>('-1e300'));")).toBe('-Infinity');
   expect(evaluated("String(JSON.parse.<float16>('65504'));")).toBe('65504');
   // The integer rule the clause states is unchanged.
   expect(evaluated("String(JSON.parse.<uint8>('42'));")).toBe('42');
   expectThrown("JSON.parse.<uint8>('300');", 'expected uint8');
+});
+
+test('the numeric families the arm once omitted', () => {
+  // A well-formed number reaching these fell to the terminal throw - "expected
+  // rational, got 0.5" - though the table has a row for each.
+  expect(evaluated("String(JSON.parse.<rational>('0.5'));")).toBe('1/2');
+  expect(evaluated("String(Reflect.typeOf(JSON.parse.<rational>('0.5')));")).toBe('rational');
+  expect(evaluated("String(JSON.parse.<float128>('1.5'));")).toBe('1.5');
+  // `bigint` and `decimal128` stay refused: the operation DEFERS them by name,
+  // as exact wide types "whose digits must convert without first rounding
+  // through a Number".
+  expectThrown("JSON.parse.<bigint>('42');", 'expected bigint');
+  expectThrown("JSON.parse.<decimal128>('1.5');", 'expected decimal128');
 });
 
 test('the rounding reaches nested shapes', () => {

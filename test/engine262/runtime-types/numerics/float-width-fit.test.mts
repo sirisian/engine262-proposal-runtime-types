@@ -29,9 +29,24 @@ test('a boundary refuses what a conversion overflows', () => {
   expect(evaluated('let n: any = 0.1; let f: float16 = n; String(f);')).toBe('0.0999755859375');
 });
 
-test('parse and a typed JSON token refuse an out-of-range literal', () => {
+test('parse refuses an out-of-range literal; a JSON token saturates', () => {
+  // THE TWO DIVERGE, and the reason is in what each clause says the value IS.
+  //
+  // `#sec-parsing` reads a LITERAL and throws "a *RangeError* when it is a
+  // literal whose value the type cannot represent".
+  //
+  // `#sec-coercejsonvalue` CONVERTS a Number, and its step 4 converts by
+  // `#table-numeric-conversions`, whose binary float row ends: "A finite source
+  // outside the target's range becomes an infinity of the same sign." Its
+  // range check is on SIZED INTEGER targets, which have no value to hold an
+  // overflow where a float has the infinity.
+  //
+  // This test asserted a *TypeError* for the JSON case, which was an earlier
+  // change of mine reading the annotation boundary's rule into the document
+  // boundary.
   expectThrownKind("float16.parse('1e300');", 'RangeError');
-  expectThrownKind("JSON.parse.<float16>('1e300');", 'TypeError');
+  expect(evaluated("String(JSON.parse.<float16>('1e300'));")).toBe('Infinity');
+  // Rounding in range is the same on both paths.
   expect(evaluated("String(float16.parse('0.1'));")).toBe('0.0999755859375');
   expect(evaluated("String(JSON.parse.<float16>('0.1'));")).toBe('0.0999755859375');
 });

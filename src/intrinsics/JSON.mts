@@ -518,7 +518,24 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
         return Q(yield* CompositeFromShape(shape, validated));
       }
       const name = t.Name;
-      if (name === 'uint' || name === 'int' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number') {
+      // EVERY numeric type, not six of them.
+      //
+      // #sec-coercejsonvalue guards its numeric case with "If _type_ is a
+      // numeric type", and this listed `uint`, `int`, the three common float
+      // widths and `number`. A well-formed JSON number reaching a `decimal32`,
+      // `decimal64`, `float128` or `rational` field fell past every case to the
+      // terminal throw - "expected decimal64, got 1.5" - though the conversion
+      // table has a row for each: "any numeric type" to decimal, and "binary
+      // float or the Number type" to rational.
+      //
+      // `bigint` and `decimal128` stay out, and the 64-bit integers keep their
+      // exactness guard above: the operation's closing paragraph DEFERS those
+      // by name, as "the exact wide numeric types ... whose digits must convert
+      // without first rounding through a Number".
+      const deferredWide = name === 'bigint' || name === 'decimal128';
+      const convertsByTable = !deferredWide
+        && (name === 'float128' || name === 'decimal32' || name === 'decimal64' || name === 'rational');
+      if (name === 'uint' || name === 'int' || name === 'float16' || name === 'float32' || name === 'float64' || name === 'number' || convertsByTable) {
         if (!(value instanceof NumberValue)) {
           return jsonTypeError(path, t, value);
         }
@@ -558,7 +575,18 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
         }
         // A number token that does not fit its integer target, or a fractional
         // token targeting an integer type, is a TypeError (the range check).
-        if (name !== 'number' && !fitsNumericType(v, name, t.Arguments)) {
+        // THE RANGE CHECK IS FOR SIZED INTEGER TARGETS, which is where
+        // #sec-coercejsonvalue puts it: "If _type_ is a sized integer type and
+        // the mathematical value of _value_ is not an integer in the range of
+        // _type_, throw a *TypeError* exception." A float target falls past it
+        // to the conversion below.
+        //
+        // It read `name !== 'number'`, so every float width reached it too.
+        // That was harmless while `fitsNumericType` answered *true* for every
+        // float name; a later change made it check whether a finite value
+        // survives rounding to the width, and this line silently became a range
+        // check on floats - which the operation does not have.
+        if ((name === 'uint' || name === 'int') && !fitsNumericType(v, name, t.Arguments)) {
           return jsonTypeError(path, t, value);
         }
         // A FLOAT token is rounded to the width before it is tagged.
@@ -577,16 +605,50 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
         // `1e+300`. The range test above cannot catch either, `fitsNumericType`
         // answering *true* for every float name.
         if (name === 'float16' || name === 'float32' || name === 'float64') {
-          const rounded = wrapToType(v, t);
-          // Out of range is refused rather than becoming an infinity, which is
-          // the verdict the annotation boundary gives for the same value -
-          // `let f: float16 = n` for 1e300 is a *RangeError*. A document is
-          // validated against a type, so it follows the boundary and not the
-          // conversion.
-          if (typeof rounded === 'number' && !Number.isFinite(rounded) && Number.isFinite(v as number)) {
+          // OUT OF RANGE SATURATES; it is not refused.
+          //
+          // #sec-coercejsonvalue step 4 converts by
+          // #table-numeric-conversions, whose binary float row reads: "The
+          // source rounded to the nearest value of the target, with ties to
+          // even. A FINITE SOURCE OUTSIDE THE TARGET'S RANGE BECOMES AN
+          // INFINITY OF THE SAME SIGN."
+          //
+          // This refused instead, reasoning that a document follows the
+          // annotation boundary rather than the conversion. That reading does
+          // not survive the operation: the boundary's *RangeError* exists
+          // because a numeric value "the target cannot represent" has nowhere
+          // to go, and a float HAS somewhere - the infinity is a value of the
+          // type. The integer case is the one with nothing to return, which is
+          // why the operation checks the range there and only there.
+          //
+          // `float64` never reached the refusal - nothing is outside its range
+          // that a double can hold - so it has behaved this way all along and
+          // the narrow widths were the ones out of step.
+          return new TypedNumberValue(wrapToType(v, t), t);
+        }
+        // The families the table converts and this arm has no arithmetic of its
+        // own for. `ConvertValue` IS the table, so delegating keeps one
+        // implementation of each row rather than a second copy here; its
+        // failure is remapped, since "every failure here is a *TypeError*: in a
+        // parsed document the type is the schema".
+        if (convertsByTable) {
+          const converted = EnsureCompletion(yield* ConvertValue(value, t));
+          if (converted.Type !== 'normal') {
+            // DECIMAL TARGETS STILL LAND HERE, and the blocker is not JSON's.
+            // A Number reaching a decimal converts as a LITERAL or an explicit
+            // call - `decimal64(1.5)` and `let d: decimal64 = 1.5` both answer
+            // 1.5 - and as a VALUE it converts nowhere: `let n: any = 1.5; let
+            // d: decimal64 = n` is a *TypeError* at the ordinary annotation
+            // boundary too, as is `n := decimal64`.
+            //
+            // #table-numeric-conversions gives the row as "any numeric type" to
+            // decimal, so that is a gap in `ConvertValue` that this arm merely
+            // reveals. Routed here anyway rather than excluded: the routing is
+            // what the operation says, and a decimal field starts working the
+            // moment the conversion does, with nothing to change here.
             return jsonTypeError(path, t, value);
           }
-          return new TypedNumberValue(rounded, t);
+          return converted.Value;
         }
         // A plain `number` field stays an ordinary Number; a sized type carries
         // its type tag.
