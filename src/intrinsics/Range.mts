@@ -289,6 +289,22 @@ function numericEndpoint(v: RangeEndpoint | undefined): number | undefined {
   if (v === undefined) {
     return undefined;
   }
+  // A TYPED number is an endpoint too, and this took only a plain Number.
+  //
+  // `undefined` here means "unbounded" to `reachedEnd`, which then answers
+  // *false* forever - so a range with a typed endpoint ITERATED WITHOUT END.
+  // `for (const i of 0..<a.length)` hung the engine for a typed array, whose
+  // `length` is a `uint.<64>`, and so did any explicit endpoint:
+  // `0..<(2 := uint8)` yielded 0, 1, 2, 3, ... The literal form `0..<3` was
+  // unaffected, which is why it stayed hidden - and that loop is the one
+  // #sec-range-literals holds up as "the loop written without thinking rather
+  // than one short".
+  //
+  // `endpointOf` beside this one already unwraps a typed number; the two read
+  // the same endpoints and disagreed about what counts as one.
+  if (isTypedNumber(v)) {
+    return Number(v.numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored value is the endpoint
+  }
   if (!(v instanceof NumberValue)) {
     return undefined;
   }
