@@ -1203,7 +1203,17 @@ function conversionHasEffect(target: TypeRecord | null | undefined): boolean {
 
 /** The width of a decimal type, or *undefined* where the type is not one. */
 function decimalWidthOf(t: TypeRecord): 32 | 64 | 128 | undefined {
-  const base = t.Kind === 'literal' ? t.Base : t;
+  // A PARAMETERIZATION is unwrapped as a literal type is: `decimal128.<{ scale:
+  // 2 }>` is a decimal of width 128, and metadata does not change the width.
+  //
+  // Without this a literal at a parameterized decimal position was never
+  // recorded from its digits - the recording is gated on this width - so it
+  // stayed a Number, and `19.9 := Cents` then asked whether a Number is a
+  // member of `decimal128` and refused it. `19.9 := decimal128` worked for the
+  // same reason in reverse: there the width is found, the digits are read, and
+  // a decimal reaches the conversion.
+  const unwrapped = t.Kind === 'parameterized' ? t.Base : t;
+  const base = unwrapped.Kind === 'literal' ? unwrapped.Base : unwrapped;
   if (base.Kind !== 'primitive') {
     return undefined;
   }
