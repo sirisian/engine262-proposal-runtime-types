@@ -176,9 +176,14 @@ test.each([
   expect(ok(source)).toBe(true);
 });
 
-test('overloaded protocol contracts retain a potentially valid return', () => {
-  expect(ok('interface Hook{():number;(n:number):{next:()=>{}};}function f(x:{[Symbol.iterator]:Hook}){const [v]=x;}')).toBe(true);
-  expect(ok('interface Next{():number;(n:number):{};}function f(x:{[Symbol.iterator]:()=>{next:Next}}){const [v]=x;}')).toBe(true);
+test('R38 rejects when the only Object result requires an unsupplied argument', () => {
+  expectStaticTypeError('interface Hook{():number;(n:number):{next:()=>{}};}function f(x:{[Symbol.iterator]:Hook}){const [v]=x;}');
+  expectStaticTypeError('interface Next{():number;(n:number):{};}function f(x:{[Symbol.iterator]:()=>{next:Next}}){const [v]=x;}');
+});
+
+test('overloaded protocol contracts retain an applicable Object result', () => {
+  expect(ok('interface Hook{():{next:()=>{}};(n:number):number;}function f(x:{[Symbol.iterator]:Hook}){const [v]=x;}')).toBe(true);
+  expect(ok('interface Next{():{};(n:number):number;}function f(x:{[Symbol.iterator]:()=>{next:Next}}){const [v]=x;}')).toBe(true);
 });
 
 test('every published overload result can establish an invalid protocol stage', () => {

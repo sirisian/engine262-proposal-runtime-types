@@ -66,10 +66,6 @@ test.each([
   [
     "control: legacy",
     "let x={[Symbol.toPrimitive]:1};let o={[x]:1};"
-  ],
-  [
-    "edge: primitive symbol returned key versus text",
-    "function f(x:{[Symbol.toPrimitive]:(hint:string)=>symbol}){`${x}`;}f({[Symbol.toPrimitive](hint:string):symbol{return Symbol();}});"
   ]
 ])('R35 preserves runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
@@ -219,4 +215,9 @@ test('a valid primitive-conversion contract does not bypass reference liveness',
     let a:[].<{[Symbol.toPrimitive]:(hint:string)=>string}>=[{[Symbol.toPrimitive](hint:string):string{return 'x';}}];
     let ref x=a[0];a.pop();({[x]:1});
   `, 'TypeError');
+});
+
+// R40 now follows the successful primitive result into text conversion.
+test('a Symbol-producing hook fails implicit text conversion before evaluation', () => {
+  expectStaticTypeError('function f(x:{[Symbol.toPrimitive]:(hint:string)=>symbol}){`${x}`;}f({[Symbol.toPrimitive](hint:string):symbol{return Symbol();}});');
 });

@@ -43,6 +43,7 @@ import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeR
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, parameterReceiving, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
 import { BindNamedArguments, type ArgumentItem } from './named-arguments.mts';
+import { SequenceAssignment } from './sequence-assignment.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeric-signatures.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
@@ -7064,6 +7065,60 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && !declaresInboundConversion(target, source);
   };
 
+  // A conservative, non-emitting call-boundary query. SequenceAssignment also
+  // handles non-final/multiple rests; unknown admission keeps a path viable.
+  // Flatten bounded rest contracts only up to the supplied argument count.
+  const protocolArgumentsFail = (parameters: readonly ParameterRecord[], args: readonly Known[]): boolean => {
+    if (!parameters.some((p) => p.Rest)) return parameters.some((p, i) => {
+      const optional = p.Optional || p.Initial !== undefined;
+      if (i >= args.length && optional) return false;
+      // Extra arguments are ignored by the runtime parameter boundary. An
+      // optional slot still receives a present positional argument.
+      return p.Ref === true || protocolArgumentFails(i < args.length ? args[i] : undefinedType,
+        optional ? joinTypes(p.Type, undefinedType) : p.Type);
+    });
+    const slots: { Rest: boolean, Optional: boolean, Type: TypeRecord, Ref: boolean }[] = [];
+    const restInProgress = new Set<TypeRecord>();
+    const appendRest = (type: TypeRecord, ref: boolean): 'ok' | 'invalid' | 'unknown' => {
+      const rest = erasedForJudgment(type);
+      if (!rest || restInProgress.has(rest)) return 'unknown';
+      restInProgress.add(rest);
+      try {
+        if (rest.Kind === 'array') {
+          if (typeof rest.Extent === 'number') {
+            if (rest.Extent > args.length) return 'invalid';
+            for (let i = 0; i < rest.Extent; i += 1) {
+              slots.push({ Rest: false, Optional: false, Type: rest.Element, Ref: ref });
+            }
+          } else slots.push({ Rest: true, Optional: false, Type: rest.Element, Ref: ref });
+          return 'ok';
+        }
+        if (rest.Kind !== 'tuple') return 'unknown';
+        for (const element of rest.Elements) {
+          if (element.Rest) {
+            const result = appendRest(element.Type, ref);
+            if (result !== 'ok') return result;
+          } else slots.push({ Rest: false, Optional: element.DeclaredDefault === true, Type: element.Type, Ref: ref });
+        }
+        return 'ok';
+      } finally {
+        restInProgress.delete(rest);
+      }
+    };
+    for (const p of parameters) {
+      const optional = p.Optional || p.Initial !== undefined;
+      if (!p.Rest) {
+        slots.push({ Rest: false, Optional: optional || (!p.Ref && !protocolArgumentFails(undefinedType, p.Type)),
+          Type: optional ? joinTypes(p.Type, undefinedType) : p.Type, Ref: p.Ref === true });
+      } else {
+        const result = appendRest(p.Type, p.Ref === true);
+        if (result !== 'ok') return result === 'invalid';
+      }
+    }
+    return SequenceAssignment(slots, args.length, (i, k) => !slots[k].Ref
+      && !protocolArgumentFails(args[i], slots[k].Type)) === 'unmatched';
+  };
+
   const protocolCallFails = (type: Known, resultFails: (result: Known) => boolean,
     args?: readonly Known[]): boolean => everyProtocolAlternative(type, (arm) => {
     if (knownNonObject(arm)) return true;
@@ -7071,24 +7126,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Unresolved overloads are conservative: a potentially valid signature
     // prevents a proof. No exploratory signature emits an argument diagnostic.
     return fn?.Kind === 'function' && fn.Signatures.length > 0
-      && fn.Signatures.every((signature) => {
-        const invalidArgument = args && signature.Parameters.some((p, i) => {
-          const argument = args[i];
-          if (p.Rest) return args.slice(i).some((a) => protocolArgumentFails(a, restElementType(p.Type)));
-          if (i >= args.length && p.Optional) return false;
-          return p.Ref === true || protocolArgumentFails(i < args.length ? argument : undefinedType,
-            p.Optional ? joinTypes(p.Type, undefinedType) : p.Type);
-        });
-        return !!invalidArgument || resultFails(signature.Return ?? null);
-      });
+      && fn.Signatures.every((signature) => (args && protocolArgumentsFail(signature.Parameters, args))
+        || resultFails(signature.Return ?? null));
   });
 
-  const primitiveConversionFails = (type: Known, hint: 'string' | 'number' | 'default'): boolean =>
+  // Result predicates describe this conversion's consumer, never the Static
+  // Type of the original Object. Unknown/open results cannot prove failure.
+  const primitiveConversionFails = (type: Known, hint: 'string' | 'number' | 'default',
+    resultFails: (result: TypeRecord) => boolean = () => false): boolean =>
     everyProtocolAlternative(type, (arm) => {
-      if (knownNonObject(arm)) return false;
+      if (knownNonObject(arm)) return resultFails(arm);
+      const ordinary = (): boolean => {
+        const names = hint === 'string' ? ['toString', 'valueOf'] : ['valueOf', 'toString'];
+        const outcomes = new Map<number, boolean>();
+        const attempt = (i: number): boolean => {
+          if (i === names.length) return true;
+          if (outcomes.has(i)) return outcomes.get(i)!;
+          const failed = everyProtocolAlternative(protocolMember(arm, names[i]), (method) => {
+            // OrdinaryToPrimitive skips non-callables and continues after an
+            // Object result. Unlike GetMethod, non-callability is not an error.
+            if (knownNonObject(method)) return attempt(i + 1);
+            return protocolCallFails(method, (result) => everyProtocolAlternative(result, (value) =>
+              knownObject(value) ? attempt(i + 1) : knownNonObject(value) && resultFails(value)), []);
+          });
+          outcomes.set(i, failed);
+          return failed;
+        };
+        return attempt(0);
+      };
       const argument: TypeRecord = { Kind: 'literal', Value: Value(hint), Base: makePrimitive('string') };
       return everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.toPrimitive), (hook) =>
-        !nullishOnly(hook) && protocolCallFails(hook, knownObject, [argument]));
+        nullishOnly(hook) ? ordinary() : protocolCallFails(hook, (result) => everyProtocolAlternative(result,
+          (value) => knownObject(value) || (knownNonObject(value) && resultFails(value))), [argument]));
     });
 
   const hasInstanceFails = (type: Known, argument: Known): boolean => everyProtocolAlternative(type, (arm) =>
@@ -7111,30 +7180,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               everyProtocolAlternative(asynchronous ? awaitedType(step) : step, (result) => {
                 const done = protocolMember(result, 'done');
                 return done?.Kind === 'literal' && done.Value === Value.false;
-              }));
+              }), []);
             if (!yields || knownNonObject(protocolMember(object, 'next'))) return false;
           }
           return everyProtocolAlternative(protocolMember(object, 'return'), (ret) =>
-            !nullishOnly(ret) && protocolCallFails(ret, (result) => knownNonObject(asynchronous ? awaitedType(result) : result)));
-        }));
+            !nullishOnly(ret) && protocolCallFails(ret, (result) => knownNonObject(asynchronous ? awaitedType(result) : result), []));
+        }), []);
       });
     });
 
   // A negative protocol proof follows only stages this consumer reaches. Open
   // shapes and unknown returns are inconclusive; no getter or method is run.
-  const notIterable = (t: Known, asynchronous = false, skipEntryHook = false, steps = true): boolean => {
+  const notIterable = (t: Known, asynchronous = false, skipEntryHook = false, steps = true,
+    stepArguments: readonly Known[] = []): boolean => {
     const propertyType = protocolMember;
     const everyAlternative = everyProtocolAlternative;
     const callFails = protocolCallFails;
     const iteratorFails = (result: Known, asyncStep: boolean): boolean => everyAlternative(result, (iterator) => {
       if (knownNonObject(iterator)) return true;
       if (!steps) return false;
-      return callFails(propertyType(iterator, 'next'), (step) => knownNonObject(asyncStep ? awaitedType(step) : step));
+      return callFails(propertyType(iterator, 'next'), (step) => knownNonObject(asyncStep ? awaitedType(step) : step), stepArguments);
     });
     const at = erasedForJudgment(t);
     if (!at) return false;
     if (at.Kind === 'union' || (at.Kind === 'intersection' && structureOf(at)?.Kind !== 'object')) {
-      return at.Members.length > 0 && at.Members.every((mem) => notIterable(mem, asynchronous, skipEntryHook, steps));
+      return at.Members.length > 0 && at.Members.every((mem) => notIterable(mem, asynchronous, skipEntryHook, steps, stepArguments));
     }
     if (at.Kind === 'void') return true;
     if (at.Kind === 'primitive') return at.Name !== 'string' && at.Name !== 'Composite';
@@ -7143,7 +7213,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (skipEntryHook) return false;
     const invalid = (type: Known, fallback: () => boolean, asyncStep: boolean): boolean => everyAlternative(type, (arm) => {
       if (arm.Kind === 'primitive' && ['undefined', 'null'].includes(arm.Name)) return fallback();
-      return callFails(arm, (result) => iteratorFails(result, asyncStep));
+      return callFails(arm, (result) => iteratorFails(result, asyncStep), []);
     });
     const syncInvalid = () => invalid(propertyType(at, wellKnownSymbols.iterator), () => true, false);
     return asynchronous ? invalid(propertyType(at, wellKnownSymbols.asyncIterator), syncInvalid, true) : syncInvalid();
@@ -11592,21 +11662,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const operand = inner ? staticType(inner) : null;
         const declared = unary.operator ? declaredOperator(operand, `unary ${unary.operator}`) : null;
         if (declared) return operatorResult(declared, [], node);
-        if (inner && ['+', '-', '~'].includes(unary.operator ?? '') && checkPrimitiveConversion(inner, 'number')) return neverType;
-        // A declared operand contract participates; legacy literal-only JS
-        // keeps its runtime exceptions, even inside an otherwise typed body.
-        const forbiddenScalar = (type: Known): boolean => {
-          const at = erasedForJudgment(type);
-          if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(forbiddenScalar);
-          return at?.Kind === 'primitive' && (at.Name === 'symbol'
-            || (unary.operator === '+' && at.Name === 'bigint'));
-        };
         if (inner && ['+', '-', '~'].includes(unary.operator ?? '')
-          && forbiddenScalar(operand) && operandParticipates(inner)) {
-          errors.push(Throw.StaticTypeError('$1 is not defined for $2',
-            Value(`unary ${unary.operator}`), Value(displayType(operand!))).Value as ObjectValue);
-          return neverType;
-        }
+          && checkPrimitiveConversion(inner, 'number', (result) => result.Kind === 'primitive'
+            && (result.Name === 'symbol' || (unary.operator === '+' && result.Name === 'bigint')))) return neverType;
         if (unary.operator === '!') return operand && operand.Kind !== 'any' && operand.Kind !== 'union'
           && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
         if (unary.operator && reportNumericUnion(unary.operator, operand)) return neverType;
@@ -12495,6 +12553,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return staticType(templateCallView(node as ParseNode.TaggedTemplateExpression));
       }
       case 'MemberExpression': {
+        if (checkMemberReceiver(node)) return neverType;
         // A NARROWED PLACE answers before the field is read from its base. A
         // test on `b.a` records a fact keyed by the path, and this is where that
         // fact has to be consulted, since every read of `b.a` comes through
@@ -18076,11 +18135,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const primitiveConversionFailures = new WeakSet<ParseNode>();
-  const checkPrimitiveConversion = (expression: ParseNode, hint: 'string' | 'number' | 'default'): boolean => {
-    if (!operandParticipates(expression) || !primitiveConversionFails(staticType(expression), hint)) return false;
+  const memberReceiverFailures = new WeakSet<ParseNode>();
+  const checkMemberReceiver = (node: ParseNode.MemberExpression): boolean => {
+    const receiver = node.MemberExpression;
+    if (!receiver || !operandParticipates(receiver) || !nullishOnly(staticType(receiver))) return false;
+    if (!memberReceiverFailures.has(node)) {
+      memberReceiverFailures.add(node);
+      errors.push(Throw.StaticTypeError('an all-nullish receiver cannot support an ordinary property operation').Value as ObjectValue);
+    }
+    return true;
+  };
+
+  const checkPrimitiveConversion = (expression: ParseNode, hint: 'string' | 'number' | 'default',
+    resultFails?: (result: TypeRecord) => boolean): boolean => {
+    if (!operandParticipates(expression) || !primitiveConversionFails(staticType(expression), hint, resultFails)) return false;
     if (!primitiveConversionFailures.has(expression)) {
       primitiveConversionFailures.add(expression);
-      errors.push(Throw.StaticTypeError('the selected Symbol.toPrimitive contract cannot produce a primitive').Value as ObjectValue);
+      errors.push(Throw.StaticTypeError('the selected primitive conversion contract cannot satisfy this operation').Value as ObjectValue);
     }
     return true;
   };
@@ -18092,29 +18163,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!leftParticipates && !rightParticipates) return false;
     const ordered = ['<', '>', '<=', '>='].includes(operator);
     const hint = operator === '+' ? 'default' : 'number';
-    const invalid = everyProtocolAlternative(staticType(left), (l) => everyProtocolAlternative(staticType(right), (r) => {
+    const operandType = (expression: ParseNode): Known => {
+      const type = staticType(expression);
+      const inner = innermostLiteral(expression);
+      // Numeric const uses receive literal context at the operation, while the
+      // binding itself remains dynamic. Recover only that local category.
+      if (!type && inner.type === 'IdentifierReference'
+        && (constExactValue(inner.name) !== null || constDecimalValue(inner.name) !== null)) return makePrimitive('number');
+      return type;
+    };
+    const invalid = everyProtocolAlternative(operandType(left), (l) => everyProtocolAlternative(operandType(right), (r) => {
       if (declaredOperator(l, operator) || (ordered && declaredOperator(l, '<'))) return false;
       // An open left operand could supply a declared operator instead of the
       // built-in conversion, even when the right operand is certainly Symbol.
       if (!knownNonObject(l) && !classDeclarationOf(l)) return false;
       if ((leftParticipates && primitiveConversionFails(l, hint))
         || (rightParticipates && primitiveConversionFails(r, hint))) return true;
-      const ln = l.Kind === 'primitive' ? l.Name : null;
-      const rn = r.Kind === 'primitive' ? r.Name : null;
-      if ((leftParticipates && ln === 'symbol') || (rightParticipates && rn === 'symbol')) return true;
-      if (ordered || (operator === '+' && (ln === 'string' || rn === 'string'))) return false;
-      const becomesNumber = (name: string | null) => name !== null
-        && ['number', 'boolean', 'null', 'undefined', 'string'].includes(name);
-      // Other numeric families have their own literal-adoption and mixing
-      // rules. In particular, do not forbid a working uint8 * String coercion.
-      const adoptingLiteral = (expression: ParseNode): boolean => {
-        if (literalOperand(expression)) return true;
-        const inner = innermostLiteral(expression);
-        return inner.type === 'IdentifierReference'
-          && (constExactValue(inner.name) !== null || constDecimalValue(inner.name) !== null);
-      };
-      return !adoptingLiteral(left) && !adoptingLiteral(right)
-        && ((ln === 'bigint' && becomesNumber(rn)) || (rn === 'bigint' && becomesNumber(ln)));
+      if ((leftParticipates && l.Kind === 'primitive' && l.Name === 'symbol')
+        || (rightParticipates && r.Kind === 'primitive' && r.Name === 'symbol')) return true;
+      const converted = (type: TypeRecord, participates: boolean, fails: (result: TypeRecord) => boolean): boolean =>
+        knownNonObject(type) ? fails(type) : participates && primitiveConversionFails(type, hint, fails);
+      return converted(l, leftParticipates, (leftResult) => converted(r, rightParticipates, (rightResult) => {
+        const ln = leftResult.Kind === 'primitive' ? leftResult.Name : null;
+        const rn = rightResult.Kind === 'primitive' ? rightResult.Name : null;
+        if ((leftParticipates && ln === 'symbol') || (rightParticipates && rn === 'symbol')) return true;
+        // ECMAScript BigInt has no unsigned width. Sized integers using a BigInt
+        // payload are different value families and retain their own shift rules.
+        if (operator === '>>>' && ((leftParticipates && ln === 'bigint')
+          || (rightParticipates && rn === 'bigint'))) return true;
+        if (ordered || (operator === '+' && (ln === 'string' || rn === 'string'))) return false;
+        const becomesNumber = (name: string | null) => name !== null
+          && ['number', 'boolean', 'null', 'undefined', 'string'].includes(name);
+        // Other numeric families have their own literal-adoption and mixing
+        // rules. In particular, do not forbid a working uint8 * String coercion.
+        const adoptingLiteral = (expression: ParseNode): boolean => {
+          if (literalOperand(expression)) return true;
+          const inner = innermostLiteral(expression);
+          return inner.type === 'IdentifierReference'
+            && (constExactValue(inner.name) !== null || constDecimalValue(inner.name) !== null);
+        };
+        return !adoptingLiteral(left) && !adoptingLiteral(right)
+          && ((ln === 'bigint' && becomesNumber(rn)) || (rn === 'bigint' && becomesNumber(ln)));
+      }));
     }));
     if (!invalid) return false;
     if (!binaryConversionFailures.has(node)) {
@@ -18124,21 +18214,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
-  const implicitStringFailures = new WeakSet<ParseNode>();
-  const checkImplicitString = (expression: ParseNode, hint: 'string' | 'default' = 'string'): boolean => {
-    if (checkPrimitiveConversion(expression, hint)) return true;
-    const symbolOnly = (type: Known): boolean => {
-      const at = erasedForJudgment(type);
-      if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(symbolOnly);
-      return at?.Kind === 'primitive' && at.Name === 'symbol';
-    };
-    if (!symbolOnly(staticType(expression)) || !operandParticipates(expression)) return false;
-    if (!implicitStringFailures.has(expression)) {
-      implicitStringFailures.add(expression);
-      errors.push(Throw.StaticTypeError('a typed Symbol cannot be implicitly converted to string; use String(value)').Value as ObjectValue);
-    }
-    return true;
-  };
+  const checkImplicitString = (expression: ParseNode, hint: 'string' | 'default' = 'string'): boolean =>
+    checkPrimitiveConversion(expression, hint, (result) => result.Kind === 'primitive' && result.Name === 'symbol');
 
   const patternKey = (key: ParseNode.PropertyNameLike | undefined | null): string | SymbolValue | null => {
     if (!key) {
@@ -21142,7 +21219,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (y.hasStar && y.AssignmentExpression) {
           const yielded = staticType(y.AssignmentExpression);
           const owner = ReferenceFunction(n);
-          if (yielded && notIterable(yielded, owner?.type.startsWith('Async') === true)) {
+          if (yielded && notIterable(yielded, owner?.type.startsWith('Async') === true, false, true, [undefinedType])) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not iterable',
               Value(displayType(yielded as TypeRecord)),
