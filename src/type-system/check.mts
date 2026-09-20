@@ -1501,9 +1501,22 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
       if (op !== '/') {
         return null;
       }
-      // `/` folds only where it is exact; an inexact quotient is not an
-      // integer and the expression falls through to Number arithmetic.
-      return l % r === 0n ? l / r : null;
+      // `/` AT AN INTEGER CONTEXT IS INTEGER DIVISION, truncating toward zero,
+      // which is what BigInt division already does.
+      //
+      // rational.md states the rule and gives this case as its example: "With an
+      // `int32` context the same `1 / 3` is integer division and gives `0`; in
+      // an untyped context it is `Number` division and gives `0.333â€¦`. The
+      // literal never converts a typed value - it just adopts the type the
+      // context asks for."
+      //
+      // Folding only the EXACT quotient left `7 / 2` to fall through to Number
+      // arithmetic, which produced `3.5` and then refused it as out of range -
+      // an error naming an intermediate value the program never wrote, and a
+      // rule no neighbouring language has. It also split `/` from itself: the
+      // context decides the operator for a `rational`, where `1 / 3` is `1/3`,
+      // and decided nothing for an integer.
+      return l / r;
     }
     case 'ExponentiationExpression': {
       const l = fold(e.UpdateExpression!);
