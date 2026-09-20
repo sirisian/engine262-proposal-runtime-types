@@ -37,7 +37,7 @@ import {
   Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
   IsComposite, CompositeFromShape } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
-import { isDecimalObject, DoubleFromDecimal } from '../intrinsics/Decimal.mts';
+import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts';
 
@@ -3192,6 +3192,51 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
         const unwrapped = raw instanceof ObjectValue && 'NumberData' in raw
           ? (raw as unknown as { NumberData: Value }).NumberData
           : raw;
+        // A FAMILY WITH ITS OWN REPRESENTATION is BUILT, not stamped. A
+        // `TypedNumberValue` is the representation of an integer or a float, and
+        // stamping one with the target's type is enough for those. A decimal is
+        // a decimal OBJECT carrying [[DecimalWidth]], and a complex and a
+        // rational likewise carry their own slots.
+        //
+        // Stamping regardless produced a plain typed number wearing a decimal
+        // type, which `RequireTypeAfterCast` then refused at its own guard -
+        // "the value must still be one of the BASE" - because it was not a
+        // decimal at all. So `const p: Cents = 19.9` was refused with
+        // `19.9 (typed) is not assignable to "decimal128.<{ scale: 2 }>"` while
+        // the float equivalent `const m: Meter = 5` worked, and every step
+        // before this one was correct for both: the literal pass, the cast
+        // lookup, the selection, and the body's own return.
+        const targetBase = t.Base as { Name?: string, Arguments?: readonly unknown[] };
+        const baseName = targetBase?.Name;
+        if (baseName === 'decimal' || (typeof baseName === 'string' && baseName.startsWith('decimal'))) {
+          const width = typeof targetBase.Arguments?.[0] === 'number'
+            ? targetBase.Arguments[0] as 32 | 64 | 128
+            : Number(String(baseName).slice('decimal'.length)) as 32 | 64 | 128;
+          // The value reaching a cast is still a raw Number - the crossing runs
+          // before the decimal literal pass builds anything - so the digits come
+          // from its own shortest representation, which is what the literal
+          // would have read.
+          const digits = isDecimalObject(unwrapped)
+            ? {
+              sig: (unwrapped as unknown as { DecimalSignificand: bigint }).DecimalSignificand,
+              exp: (unwrapped as unknown as { DecimalExponent: number }).DecimalExponent,
+            }
+            : (() => {
+              const n = isTypedNumber(unwrapped) ? Number(unwrapped.value) : (unwrapped instanceof NumberValue ? R(unwrapped) as number : undefined);
+              if (n === undefined || !Number.isFinite(n)) { return undefined; }
+              const parsed = ParseDecimalDigits(String(n));
+              return parsed === undefined ? undefined : { sig: parsed.significand, exp: parsed.exponent };
+            })();
+          if (digits !== undefined && (width === 32 || width === 64 || width === 128)) {
+            return CreateDecimalValue(digits.sig, digits.exp, width,
+              surroundingAgent.currentRealmRecord, t);
+          }
+        }
+        if (isDecimalObject(unwrapped) || isRationalObject(unwrapped) || isComplexObject(unwrapped)) {
+          // The body handed back a value of the family already; it carries its
+          // own representation and must not be flattened into a typed number.
+          return unwrapped;
+        }
         if (isTypedNumber(unwrapped)) {
           return new TypedNumberValue(unwrapped.value, t);
         }
