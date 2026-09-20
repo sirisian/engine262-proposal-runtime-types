@@ -1,5 +1,5 @@
 import { EnsureCompletion, Q } from '../completion.mts';
-import { Value, JSStringValue, NumberValue, TypedNumberValue, ObjectValue, Descriptor, type Arguments, type FunctionCallContext, type NativeSteps } from '../value.mts';
+import { Value, JSStringValue, NumberValue, TypedNumberValue, INDEX_TYPE, ObjectValue, Descriptor, type Arguments, type FunctionCallContext, type NativeSteps } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -371,7 +371,17 @@ function layoutOfThis(thisValue: Value, which: 'bitLength' | 'byteLength' | 'ali
   if (layout === null) {
     return Throw.TypeError('this type has no layout, so it has no $1', Value(which));
   }
-  return Value(layout[which]);
+  // TYPED, as `a.length`, `a.byteOffset`, `a.byteLength` and a window's `length`
+  // already are. These were plain Numbers, so the two halves of the layout
+  // surface could not be combined: `a.length * V.byteLength` - the most ordinary
+  // layout computation the proposal has - was refused as "a value of the number
+  // type and a uint64 are disjoint".
+  //
+  // This does NOT make `count * V.byteLength` work for a `count` of some other
+  // width; the numeric-family rule wants an exact match, so a program counting
+  // in `uint8` writes the conversion, as it does everywhere else. What it fixes
+  // is one reflective quantity being combinable with another.
+  return new TypedNumberValue(layout[which], INDEX_TYPE);
 }
 
 /**
