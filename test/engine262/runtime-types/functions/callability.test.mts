@@ -121,10 +121,9 @@ test('a UNION is not callable when no member is', () => {
   expectThrown(dead('let u: uint8 | string = uint8(1); if (u is uint8) { let q = u(); }'),
     'is not callable');
 
-  // A union with ONE callable member is left alone. Calling it is unsound, but
-  // narrowing is the escape the language gives, and refusing it would refuse the
-  // program that narrows first.
-  expect(ok(dead('let u: uint8 | (() => uint8) = uint8(1); let q = u();'))).toBe(true);
+  // R18 checks each known callable alternative; a non-callable arm requires
+  // narrowing before the call, even when another arm is callable.
+  expectThrown(dead('let u: uint8 | (() => uint8) = uint8(1); let q = u();'), 'is not callable');
   // A TYPE PARAMETER is not judged - it stands for something not yet known.
   expect(ok(dead('function g<T extends uint8>(v: T) { let q = v(); }'))).toBe(true);
 });

@@ -29,7 +29,7 @@ import {
   CreateDecimalValue,
 } from '../intrinsics/Decimal.mts';
 import {
-  Assert, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, LookupPrimitiveOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
+  Assert, R, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, LookupPrimitiveOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
 
 
 /**
@@ -241,6 +241,23 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // would otherwise coerce and produce a value the program did not ask for.
   if (RightOperandDeclaresOperator(lval, rval, opText)) {
     return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', opText);
+  }
+  // A rational power accepts an integer exponent, independently of the
+  // rational base's representation. Do this before same-type numeric mixing.
+  if (surroundingAgent.feature('runtime-types') && opText === '**' && isRationalObject(lval)
+    && (rval instanceof NumberValue || rval instanceof BigIntValue || isTypedNumber(rval))) {
+    if (isTypedNumber(rval)) {
+      const type = rval.TypeRecord as TypeRecord;
+      if (type.Kind !== 'primitive' || !['int', 'uint'].includes(type.Name)) {
+        return Throw.TypeError('a rational exponent must be an integer');
+      }
+    }
+    const exponent = isTypedNumber(rval) ? rval.value : R(rval);
+    if (typeof exponent === 'number' && !Number.isInteger(exponent)) {
+      return Throw.TypeError('a rational exponent must be an integer');
+    }
+    const result = rationalPow(lval, BigInt(exponent), surroundingAgent.currentRealmRecord);
+    return 'zero' in result ? Throw.RangeError('a zero rational to a negative power') : result;
   }
   // proposal-runtime-types R3: typed-number arithmetic. When either operand is
   // a numeric value type and neither is a string, compute and wrap into the

@@ -39,8 +39,8 @@ test('the three rules agree with each other', () => {
   expectThrown(dead(`${U}let q = u();`), 'is not callable');
   expectThrown(dead(`${U}let q = new u();`), 'is not a constructor');
   expectThrown(dead(`${U}for (const x of u) { }`), 'is not iterable');
-  // One member is, so none of them judges it.
+  // Iteration permits a viable alternative; calls require every known arm to be callable (R18).
   const M = 'let m: uint8 | [].<uint8> = uint8(1); ';
   expect(ok(dead(`${M}for (const x of m) { }`))).toBe(true);
-  expect(ok(dead('let f: uint8 | (() => uint8) = uint8(1); let q = f();'))).toBe(true);
+  expectThrown(dead('let f: uint8 | (() => uint8) = uint8(1); let q = f();'), 'is not callable');
 });

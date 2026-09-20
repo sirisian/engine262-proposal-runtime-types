@@ -5595,9 +5595,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const heritageName = heritageArgs
       ? (heritage as unknown as { Expression?: { type?: string, name?: string } }).Expression
       : (heritage as { type?: string, name?: string } | null | undefined);
-    const baseName = heritageName && heritageName.type === 'IdentifierReference'
-      ? (heritageName as { name: string }).name
-      : null;
+    const namedBase = heritageName && heritageName.type === 'IdentifierReference' ? heritageName.name : undefined;
+    // Heritage sees the class self-name in its TDZ, not an instance-type cycle.
+    // A value parameter likewise shadows an outer class of the same name.
+    const ownParameters = (n as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
+    const baseName = namedBase && namedBase !== cls.BindingIdentifier?.name
+      && !ownParameters.some((parameter) => parameter.BindingIdentifier.name === namedBase) ? namedBase : null;
     // A class may extend a LIBRARY nominal - `class MyErr extends Error` - and
     // `classTypeOf` finds only classes declared in source, so the library
     // record stands in as [[Base]]. Otherwise the chain the subtype relation
@@ -7005,40 +7008,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || ['number', 'bigint', 'string', 'boolean', 'symbol', 'null', 'undefined', 'vector', 'complex', 'rational'].includes(at.Name));
   };
 
-  const notIterable = (t: Known, asynchronous = false, skipEntryHook = false): boolean => {
-    const at = erasedForJudgment(t);
-    if (!at) {
-      return false;
-    }
-    if (at.Kind === 'union' || (at.Kind === 'intersection' && structureOf(at)?.Kind !== 'object')) {
-      const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
-      return members.length > 0 && members.every((mem) => notIterable(mem as Known, asynchronous, skipEntryHook));
-    }
-    if (at.Kind === 'void') {
-      return true;
-    }
-    const name = at.Kind === 'primitive' ? (at as { Name?: string }).Name : undefined;
-    if (name !== undefined) return name !== 'string' && name !== 'Composite';
-    // Argument spread also has a named-property protocol, while reference
-    // iteration is index-based. Neither is disqualified by an invalid hook.
-    if (skipEntryHook) return false;
-    const shape = structureOf(at);
-    if (shape?.Kind !== 'object') return false;
-    const hook = (key: SymbolValue): Known => {
+  // A negative protocol proof follows only stages this consumer reaches. Open
+  // shapes and unknown returns are inconclusive; no getter or method is run.
+  const notIterable = (t: Known, asynchronous = false, skipEntryHook = false, steps = true): boolean => {
+    const propertyType = (type: Known, key: string | SymbolValue): Known => {
+      const shape = structureOf(type);
+      if (shape?.Kind !== 'object') return null;
       const property = shape.Properties.find((p) => p.key === key);
       return property ? (property.optional ? joinTypes(property.type, undefinedType) : property.type) : null;
     };
-    const invalid = (type: Known, fallback: () => boolean): boolean => {
-      const member = erasedForJudgment(type);
-      if (!member) return false;
-      if (member.Kind === 'union') return member.Members.length > 0 && member.Members.every((arm) => invalid(arm, fallback));
-      if (member.Kind === 'primitive' && ['undefined', 'null'].includes(member.Name)) return fallback();
-      // An open object-shaped hook might itself be a callable object. Only a
-      // known non-object value supplies this negative proof.
-      return knownNonObject(member);
+    const everyAlternative = (type: Known, predicate: (arm: TypeRecord) => boolean): boolean => {
+      const at = erasedForJudgment(type);
+      if (!at) return false;
+      return at.Kind === 'union' ? at.Members.length > 0
+        && at.Members.every((arm) => everyAlternative(arm, predicate)) : predicate(at);
     };
-    const syncInvalid = () => invalid(hook(wellKnownSymbols.iterator), () => true);
-    return asynchronous ? invalid(hook(wellKnownSymbols.asyncIterator), syncInvalid) : syncInvalid();
+    const callFails = (type: Known, resultFails: (result: Known) => boolean): boolean => everyAlternative(type, (arm) => {
+      if (knownNonObject(arm)) return true;
+      const fn = effectiveFunctionType(callableForm(arm));
+      // Considering all signatures is conservative even when overload selection
+      // is unresolved. A signature without a published result blocks the proof.
+      return fn?.Kind === 'function' && fn.Signatures.length > 0
+        && fn.Signatures.every((signature) => resultFails(signature.Return ?? null));
+    });
+    const iteratorFails = (result: Known, asyncStep: boolean): boolean => everyAlternative(result, (iterator) => {
+      if (knownNonObject(iterator)) return true;
+      if (!steps) return false;
+      return callFails(propertyType(iterator, 'next'), (step) => knownNonObject(asyncStep ? awaitedType(step) : step));
+    });
+    const at = erasedForJudgment(t);
+    if (!at) return false;
+    if (at.Kind === 'union' || (at.Kind === 'intersection' && structureOf(at)?.Kind !== 'object')) {
+      return at.Members.length > 0 && at.Members.every((mem) => notIterable(mem, asynchronous, skipEntryHook, steps));
+    }
+    if (at.Kind === 'void') return true;
+    if (at.Kind === 'primitive') return at.Name !== 'string' && at.Name !== 'Composite';
+    // Named argument spreads and index-based reference iteration do not use
+    // these hooks. An absent hook on an open object remains unknown.
+    if (skipEntryHook) return false;
+    const invalid = (type: Known, fallback: () => boolean, asyncStep: boolean): boolean => everyAlternative(type, (arm) => {
+      if (arm.Kind === 'primitive' && ['undefined', 'null'].includes(arm.Name)) return fallback();
+      return callFails(arm, (result) => iteratorFails(result, asyncStep));
+    });
+    const syncInvalid = () => invalid(propertyType(at, wellKnownSymbols.iterator), () => true, false);
+    return asynchronous ? invalid(propertyType(at, wellKnownSymbols.asyncIterator), syncInvalid, true) : syncInvalid();
   };
 
   // Calls, construction and super calls share spread eligibility independently
@@ -11052,22 +11065,82 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
-  const checkNumericOperation = (operator: string | undefined, type: Known): void => {
+  const numericOperationUnavailable = (operator: string | undefined, type: Known): boolean => {
     const erased = erasedForJudgment(type);
-    if (!operator || erased?.Kind !== 'primitive') return;
+    if (!operator || erased?.Kind !== 'primitive') return false;
     const name = erased.Name;
     const bitwise = ['~', '&', '|', '^', '<<', '>>', '>>>'].includes(operator);
     const ordered = ['<', '>', '<=', '>='].includes(operator);
-    const unavailable = (bitwise && (/^(float|decimal)(16|32|64|128)?$/.test(name)
+    return (bitwise && (/^(float|decimal)(16|32|64|128)?$/.test(name)
         || name === 'rational' || name === 'complex'))
       || (operator === '%' && (name === 'rational' || name === 'complex'))
       || (ordered && name === 'complex');
-    if (unavailable) {
-      const error = /^float(16|32|64|128)$/.test(name)
+  };
+
+  const checkNumericOperation = (operator: string | undefined, type: Known): void => {
+    if (numericOperationUnavailable(operator, type)) {
+      const at = erasedForJudgment(type)!;
+      const error = at.Kind === 'primitive' && /^float(16|32|64|128)$/.test(at.Name)
         ? Throw.StaticTypeError('this operator is not defined for a binary floating-point type')
-        : Throw.StaticTypeError('$1 is not defined for $2', Value(operator), Value(displayType(erased)));
+        : Throw.StaticTypeError('$1 is not defined for $2', Value(operator!), Value(displayType(type!)));
       errors.push(error.Value as ObjectValue);
     }
+  };
+
+  // Unlike calls, numeric unions are refused only when no alternative can
+  // execute. Probe without operatorResult/staticTypeIn: discarded alternatives
+  // must not emit diagnostics or install literal contexts or result types.
+  const invalidNumericUnion = (operator: string, left: Known, right?: Known, leftLiteral?: ParseNode | null, rightLiteral?: ParseNode | null): boolean => {
+    const memo = new Map<Known, Map<Known | undefined, boolean>>();
+    const invalid = (l: Known, r?: Known): boolean => {
+      l = erasedKeepingBrand(l);
+      r = r === undefined ? undefined : erasedKeepingBrand(r);
+      const cached = memo.get(l)?.get(r);
+      if (cached !== undefined) return cached;
+      // A recursive alternative contributes no closed negative proof.
+      if (!memo.has(l)) memo.set(l, new Map());
+      memo.get(l)!.set(r, false);
+      let result: boolean;
+      if (l?.Kind === 'union') result = l.Members.length > 0 && l.Members.every((arm) => invalid(arm, r));
+      else if (r?.Kind === 'union') result = r.Members.length > 0 && r.Members.every((arm) => invalid(l, arm));
+      else if (declaredOperator(l, right === undefined ? `unary ${operator}` : operator)
+        || (['<', '>', '<=', '>=', '==', '!='].includes(operator) && declaredOperator(l, '<'))) result = false;
+      else if (r === undefined) result = numericOperationUnavailable(operator, l);
+      else {
+        const numeric = (type: Known): boolean => {
+          const at = erasedForJudgment(type);
+          return at?.Kind === 'primitive' && isNumericOperandName(at.Name);
+        };
+        // An open left operand may declare an operator, so it prevents a proof
+        // even if a built-in operation would reject the right operand.
+        const literalFails = (literal: ParseNode, target: TypeRecord): boolean => {
+          const base = erasedForJudgment(target)!;
+          if (numericOperationUnavailable(operator, base)) return true;
+          const value = signedLiteralValue(literal);
+          return isIntegerValueType(base) && value !== null && base.Kind === 'primitive'
+            && !fitsNumericType(value, base.Name, base.Arguments);
+        };
+        if (!l && leftLiteral && numeric(r)) result = literalFails(leftLiteral, r!);
+        else if (!r && rightLiteral && numeric(l)) result = literalFails(rightLiteral, l!);
+        else if (!numeric(l)) result = false;
+        else if (numericOperationUnavailable(operator, l)) result = true;
+        else if (!numeric(r)) result = false;
+        else if (numericOperationUnavailable(operator, r)) result = true;
+        else if (operator === '**' && (erasedForJudgment(l) as { Name?: string }).Name === 'rational'
+          && (isIntegerValueType(r!) || ['number', 'bigint'].includes((erasedForJudgment(r) as { Name?: string }).Name ?? ''))) result = false;
+        else result = !SameType(l!, r!);
+      }
+      memo.get(l)!.set(r, result);
+      return result;
+    };
+    if (erasedKeepingBrand(left)?.Kind !== 'union' && erasedKeepingBrand(right ?? null)?.Kind !== 'union') return false;
+    return invalid(left, right);
+  };
+
+  const reportNumericUnion = (operator: string, left: Known, right?: Known, leftLiteral?: ParseNode | null, rightLiteral?: ParseNode | null): boolean => {
+    if (!invalidNumericUnion(operator, left, right, leftLiteral, rightLiteral)) return false;
+    errors.push(Throw.StaticTypeError('numeric alternatives either use different numeric types and do not mix or do not define $1', Value(operator)).Value as ObjectValue);
+    return true;
   };
 
   const knownRange = (type: Known): boolean => {
@@ -11366,13 +11439,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || (unary.operator === '+' && at.Name === 'bigint'));
         };
         if (inner && ['+', '-', '~'].includes(unary.operator ?? '')
-          && forbiddenScalar(operand) && unaryOperandParticipates(inner)) {
+          && forbiddenScalar(operand) && operandParticipates(inner)) {
           errors.push(Throw.StaticTypeError('$1 is not defined for $2',
             Value(`unary ${unary.operator}`), Value(displayType(operand!))).Value as ObjectValue);
           return neverType;
         }
         if (unary.operator === '!') return operand && operand.Kind !== 'any' && operand.Kind !== 'union'
           && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
+        if (unary.operator && reportNumericUnion(unary.operator, operand)) return neverType;
         checkNumericOperation(unary.operator, operand);
         if ((unary.operator === '-' || unary.operator === '+')
           && inner && (inner as { type?: string }).type === 'NumericLiteral'
@@ -13117,7 +13191,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const declaredComparison = strictOperator ? declaredOperator(operandTypes[0] ?? null, strictOperator) : null;
         if (declaredComparison && operandNodes[1]) return operatorResult(declaredComparison, [operandNodes[1]], node);
-        for (const operand of operandTypes) checkNumericOperation(strictOperator, operand);
+        if (strictOperator && ['<', '>', '<=', '>='].includes(strictOperator)
+          && reportNumericUnion(strictOperator, operandTypes[0], operandTypes[1])) return neverType;
+        if (!operandTypes.some((type) => erasedKeepingBrand(type)?.Kind === 'union')) {
+          for (const operand of operandTypes) checkNumericOperation(strictOperator, operand);
+        }
 
 
         // A `void` operand is excluded too, and this one is a genuine tension
@@ -13228,9 +13306,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return makePrimitive('boolean');
       }
-      case 'TemplateLiteral':
+      case 'TemplateLiteral': {
         validateDiscardedExpression(node);
-        return makePrimitive('string');
+        const tagged = node.parent?.type === 'TaggedTemplateExpression' && node.parent.TemplateLiteral === node;
+        const failures = !tagged && node.ExpressionList.map((expression) => checkImplicitString(expression));
+        return failures && failures.some(Boolean) ? neverType : makePrimitive('string');
+      }
       // proposal-runtime-types #sec-static-type-of-an-expression: `&&`, `||`,
       // and `??` produce one of their OPERANDS, not a boolean, so their type is
       // the part of the left that short-circuits joined with the right's: `const
@@ -13353,7 +13434,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.type === 'AdditiveExpression' && (node as unknown as { operator?: string }).operator === '+'
             && (isStringType(leftT) || isStringType(rightT)
               || stringLiteralOperand(leftNode) || stringLiteralOperand(rightNode))) {
-          return makePrimitive('string') as Known;
+          const leftFailure = checkImplicitString(leftNode);
+          const rightFailure = checkImplicitString(rightNode);
+          return leftFailure || rightFailure ? neverType : makePrimitive('string');
         }
         // A BRANDED numeric is a value type and keeps its brand here: the
         // comparison below is `SameType`, and a brand is part of the identity it
@@ -13369,21 +13452,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         // Through `shared` and a literal's base: a `shared uint8` is a `uint8`
         // for every question about what the value can do.
-        // A UNION mixes when SOME member does. The run time settles the line:
-        // `(uint8 | int32) * int32` evaluates where the value is the int32 and
-        // refuses where it is the uint8, so the operation is sound for one
-        // member and refusing the union outright would refuse a working
-        // program. A union NO member of which mixes is decided - which a union
-        // of one numeric type is, that canonicalizing to the type itself.
-        const mixesWith = (t: Known, other: TypeRecord): boolean => {
-          const at = erasedKeepingBrand(t);
-          if (at && at.Kind === 'union') {
-            const members = (at as { Members?: readonly TypeRecord[] }).Members ?? [];
-            return members.some((mem) => mixesWith(mem as Known, other));
-          }
-          const one = asValueType(at);
-          return !one || SameType(one, other);
-        };
         const lv = asValueType(erasedKeepingBrand(leftT));
         const rv = asValueType(erasedKeepingBrand(rightT));
 
@@ -13425,8 +13493,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
-        checkNumericOperation(token, leftT);
-        checkNumericOperation(token, rightT);
+        if (token && reportNumericUnion(token, leftT, rightT, leftLit, rightLit)) return neverType;
+        if (erasedKeepingBrand(leftT)?.Kind !== 'union' && erasedKeepingBrand(rightT)?.Kind !== 'union') {
+          checkNumericOperation(token, leftT);
+          checkNumericOperation(token, rightT);
+        }
         // "one that doesn't fit is a compile-time TypeError rather than a silent
         // truncation" - the README's `a + 300` at a `uint8`. The literal takes
         // the type here, so it is checked here; this was a RangeError at run
@@ -13457,21 +13528,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (rv && leftLit) {
           if (isNumericValueTypeName(((rv.Kind === 'parameterized' ? rv.Base : rv) as { Name?: string }).Name)) adopt(leftLit, rv);
           return rv;
-        }
-        {
-          // Either operand may be a UNION, which `asValueType` answers nothing
-          // for, so the pair below never sees one.
-          const leftU = erasedKeepingBrand(leftT);
-          const rightU = erasedKeepingBrand(rightT);
-          const unionSide = leftU && leftU.Kind === 'union' ? leftU : (rightU && rightU.Kind === 'union' ? rightU : null);
-          const otherSide = unionSide === leftU ? rv : lv;
-          if (unionSide && otherSide && !mixesWith(unionSide, otherSide)) {
-            const completion = Throw.StaticTypeError(
-              '$1 and $2 are different numeric types and do not mix',
-              Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord)),
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-          }
         }
         // Rational exponentiation takes an integer exponent, not a rational.
         if (token === '**' && erasedForJudgment(lv)?.Kind === 'primitive'
@@ -17790,10 +17846,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  // Unary domain errors need a typed contract, not merely a known JS builtin
+  // Operand-domain errors need a typed contract, not merely a known JS builtin
   // result. In particular Symbol(), BigInt(), and their ordinary const aliases
   // do not opt legacy code into a new early-error rule.
-  const unaryOperandParticipates = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
+  const operandParticipates = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
     const node = patternExpression(expression)!;
     if (node.type === 'IdentifierReference') {
       for (let i = scope; i >= 0; i -= 1) {
@@ -17808,7 +17864,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (!origin.immutable || seen.has(origin)) return false;
           seen.add(origin);
-          return unaryOperandParticipates(origin.node, i, seen);
+          return operandParticipates(origin.node, i, seen);
         }
         if (frame.bindings.has(node.name)) return frame.bindings.get(node.name)?.Kind !== 'any';
         if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name) || frame.dynamicBindings) return false;
@@ -17817,14 +17873,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     switch (node.type) {
       case 'CommaOperator':
-        return !!node.ExpressionList.length && unaryOperandParticipates(node.ExpressionList.at(-1)!, scope, seen);
+        return !!node.ExpressionList.length && operandParticipates(node.ExpressionList.at(-1)!, scope, seen);
       case 'CallExpression':
-        return callProvenance.has(node) || unaryOperandParticipates(node.CallExpression, scope, seen);
+        return callProvenance.has(node) || operandParticipates(node.CallExpression, scope, seen);
       case 'MemberExpression':
-        return !!node.MemberExpression && unaryOperandParticipates(node.MemberExpression, scope, seen);
+        return !!node.MemberExpression && operandParticipates(node.MemberExpression, scope, seen);
       case 'NewExpression':
         return !!node.MemberExpression && invocationFact(node.MemberExpression, scope)?.typed === true;
-      case 'ThisExpression':
+      case 'ThisExpression': case 'SuperProperty':
         return staticType(node) !== null;
       case 'TypedConversionExpression': case 'RangeExpression':
         return true;
@@ -17833,8 +17889,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'GeneratorDeclaration': case 'GeneratorExpression': case 'AsyncGeneratorDeclaration': case 'AsyncGeneratorExpression':
         return typedInvocationSignature(node);
       case 'ConditionalExpression':
-        return unaryOperandParticipates(node.AssignmentExpression_a, scope, new Set(seen))
-          || unaryOperandParticipates(node.AssignmentExpression_b, scope, new Set(seen));
+        return operandParticipates(node.AssignmentExpression_a, scope, new Set(seen))
+          || operandParticipates(node.AssignmentExpression_b, scope, new Set(seen));
       case 'NumericLiteral': case 'StringLiteral': case 'BooleanLiteral': case 'NullLiteral':
         return false;
       default:
@@ -17842,9 +17898,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (['parent', 'location', 'sourceText', 'strict'].includes(key)) return false;
           if (key === 'TypeAnnotation' && value) return true;
           return (Array.isArray(value) ? value : [value]).some((child) => child && typeof child === 'object'
-            && 'type' in child && unaryOperandParticipates(child as ParseNode, scope, new Set(seen)));
+            && 'type' in child && operandParticipates(child as ParseNode, scope, new Set(seen)));
         });
     }
+  };
+
+  const implicitStringFailures = new WeakSet<ParseNode>();
+  const checkImplicitString = (expression: ParseNode): boolean => {
+    const symbolOnly = (type: Known): boolean => {
+      const at = erasedForJudgment(type);
+      if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(symbolOnly);
+      return at?.Kind === 'primitive' && at.Name === 'symbol';
+    };
+    if (!symbolOnly(staticType(expression)) || !operandParticipates(expression)) return false;
+    if (!implicitStringFailures.has(expression)) {
+      implicitStringFailures.add(expression);
+      errors.push(Throw.StaticTypeError('a typed Symbol cannot be implicitly converted to string; use String(value)').Value as ObjectValue);
+    }
+    return true;
   };
 
   const patternKey = (key: ParseNode.PropertyNameLike | undefined | null): string | SymbolValue | null => {
@@ -17978,9 +18049,68 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const builtinUpdateFailures = new WeakSet<ParseNode>();
+  const checkBuiltinUpdate = (node: ParseNode.UpdateExpression, target: ParseNode): boolean => {
+    if (!operandParticipates(target)) return false;
+    const unwrapped = patternExpression(target)!;
+    const read = staticType(target);
+    const source = read?.Kind === 'reference' ? read.Target : read;
+    const writes = unwrapped.type === 'MemberExpression' ? memberWriteTypes(unwrapped) : [];
+    // Read and write contracts differ for accessors/index operators. Retain
+    // every possible setter parameter; an unresolved one prevents a proof.
+    const index = unwrapped.type === 'MemberExpression' ? indexAccess(unwrapped) : null;
+    const setter = index?.set;
+    const property = unwrapped.type === 'SuperProperty' ? superMember(unwrapped) : undefined;
+    const destinations: Known[] = setter
+      ? setter.Kind === 'function' ? setter.Signatures.map((signature) => {
+        const parameter = signature.Parameters[index!.arguments.length];
+        return !parameter?.Rest ? parameter?.Type ?? null : null;
+      }) : [null]
+      : writes.length ? writes : [(property as { writeType?: TypeRecord } | undefined)?.writeType ?? locationType(unwrapped)];
+    const rejectsNumeric = (destination: Known, exact: number | bigint | null): boolean => {
+      if (!destination) return false;
+      if (destination.Kind === 'shared') return rejectsNumeric(destination.Target, exact);
+      if (destination.Kind === 'union') return destination.Members.length > 0
+        && destination.Members.every((arm) => rejectsNumeric(arm, exact));
+      if (destination.Kind === 'literal') {
+        const value = destination.Value;
+        const wanted = value instanceof NumberValue || value instanceof BigIntValue ? R(value) : null;
+        // Preserve uncertain conversions and numeric-to-string write-back.
+        return wanted !== null && exact !== null ? !Object.is(wanted, exact) : rejectsNumeric(destination.Base, null);
+      }
+      const at = erasedForJudgment(destination);
+      return at?.Kind === 'primitive' && ['boolean', 'symbol', 'null', 'undefined'].includes(at.Name);
+    };
+    const fails = (type: Known): boolean => {
+      if (!type) return false;
+      if (type.Kind === 'union') return type.Members.length > 0 && type.Members.every(fails);
+      if (type.Kind === 'shared') return fails(type.Target);
+      if (declaredOperator(type, `unary ${node.operator}`)) return false;
+      const at = erasedForJudgment(type);
+      if (at?.Kind !== 'primitive') return false;
+      if (at.Name === 'symbol') return true;
+      if (!['number', 'bigint', 'string', 'boolean', 'null', 'undefined'].includes(at.Name)
+        && !isNumericValueTypeName(at.Name)) return false;
+      let exact: number | bigint | null = null;
+      if (type.Kind === 'literal' && (type.Value instanceof NumberValue || type.Value instanceof BigIntValue)) {
+        const before = R(type.Value);
+        exact = typeof before === 'bigint' ? before + (node.operator === '++' ? 1n : -1n)
+          : before + (node.operator === '++' ? 1 : -1);
+        exact = wrapToType(exact, at);
+      }
+      return destinations.length > 0 && destinations.every((destination) => rejectsNumeric(destination, exact));
+    };
+    if (!fails(source)) return false;
+    if (!builtinUpdateFailures.has(node)) {
+      builtinUpdateFailures.add(node);
+      errors.push(Throw.StaticTypeError('the built-in update cannot convert or store its result in this typed location').Value as ObjectValue);
+    }
+    return true;
+  };
+
   const checkPattern = (node: PatternNode, incoming: PatternSource, declaring: boolean,
     infer = false, frame = frames[frames.length - 1]): void => {
-    let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? unaryOperandParticipates(incoming.expression) : incoming.type !== null) };
+    let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? operandParticipates(incoming.expression) : incoming.type !== null) };
     const annotation = node.TypeAnnotation ? resolveType(node.TypeAnnotation.Type) : null;
     const checkIncoming = (target: Known, value = source) => {
       requireAssignable(value.expression ? staticTypeIn(value.expression, target) : value.type, target);
@@ -17996,7 +18126,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const present = NarrowFrom(source.type, undefinedType);
         const fallback = staticTypeIn(node.Initializer, annotation);
         if (present === empty) {
-          source = { type: fallback, expression: node.Initializer, typed: !!annotation || unaryOperandParticipates(node.Initializer) };
+          source = { type: fallback, expression: node.Initializer, typed: !!annotation || operandParticipates(node.Initializer) };
         } else if (annotation) {
           // Check each contribution before joining: joining fresh literals
           // first would lose the position's numeric conversion.
@@ -18004,7 +18134,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           source = { type: annotation, typed: true };
         } else if (!AreDisjoint(source.type, undefinedType)) {
           source = { type: fallback ? joinTypes(present as TypeRecord, fallback) : null,
-            typed: source.typed || unaryOperandParticipates(node.Initializer) };
+            typed: source.typed || operandParticipates(node.Initializer) };
         }
       }
     }
@@ -18035,7 +18165,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (node.type === 'ArrayBindingPattern' || node.type === 'ArrayAssignmentPattern') {
-      if (notIterable(source.type)) {
+      const steps = (node.BindingElementList ?? node.AssignmentElementList ?? []).length > 0
+        || !!(node.BindingRestElement ?? node.AssignmentRestElement);
+      if (notIterable(source.type, false, false, steps)) {
         errors.push(Throw.StaticTypeError('a value of $1 is not iterable', Value(displayType(source.type!))).Value as ObjectValue);
       }
       const elements = node.BindingElementList ?? node.AssignmentElementList ?? [];
@@ -19451,7 +19583,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const declaration = f.ForDeclaration as ParseNode.ForDeclaration | undefined;
             recordBindingKinds(binding, declaration?.LetOrConst !== 'const',
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1], !!decl?.Ref, !!f.ForBinding);
-            checkPattern(binding as PatternNode, { type: bindingType, typed: !!declaredLoopType || (!!source && unaryOperandParticipates(source)) }, true, !enumerating,
+            checkPattern(binding as PatternNode, { type: bindingType, typed: !!declaredLoopType || (!!source && operandParticipates(source)) }, true, !enumerating,
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1]);
           } else if (f.LeftHandSideExpression) {
             checkPattern(f.LeftHandSideExpression as PatternNode, { type: element }, false);
@@ -19597,6 +19729,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (scope) typeParameterScopes.pop();
     }
     switch (n.type) {
+      case 'TemplateLiteral':
+        staticType(n);
+        walk(n.ExpressionList);
+        return;
       case 'PropertyDefinition': {
         const annotation = (n as ParseNode.PropertyDefinition & { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
         if (annotation) {
@@ -20299,29 +20435,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the same annotation on a plain `let`. The written annotation is the
         // binding's declared type, taken unwidened for the reason a plain
         // annotation is: it is declared, not inferred from a value.
-        // AN ARRAY PATTERN ITERATES ITS INITIALIZER, so a value of a primitive
-        // type - `string` excepted, which iterates its characters - cannot fill
-        // one. `let [x] = n` for a `uint8` n was the run time's "1 (typed) is
-        // not iterable", the same judgment `for`-`of` and a spread already make
-        // at this type; only the syntax differs, and an OBJECT pattern reads
-        // properties rather than iterating and is untouched.
-        {
-          const pattern = (n as { BindingPattern?: ParseNode | null }).BindingPattern;
-          if (pattern && (pattern as { type?: string }).type === 'ArrayBindingPattern' && n.Initializer) {
-            const from = staticType(n.Initializer);
-            // A `Composite` is left to the run time, as at the `for`-`of` and
-            // spread sites: #sec-composite-getiterator reaches all three
-            // together - "`for`-`of`, spread, and ARRAY DESTRUCTURING iterate a
-            // tuple composite" - and the kind is not carried through a call.
-            if (notIterable(from)) {
-              const completion = Throw.StaticTypeError(
-                'a value of $1 is not iterable',
-                Value(displayType(from as TypeRecord)),
-              ) as ThrowCompletion;
-              errors.push(completion.Value as ObjectValue);
-            }
-          }
-        }
         if (n.BindingPattern) {
           const infer = isConstDeclaration && !!n.Initializer && constInitializerParticipates(n.Initializer);
           checkPattern(n.BindingPattern, { type: n.Initializer ? staticType(n.Initializer) : null, expression: n.Initializer ?? undefined }, true, infer, bindingFrame);
@@ -20915,7 +21028,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           locationType(operand);
           const declared = declaredOperator(staticType(operand), `unary ${n.operator}`);
           if (declared) checkStoreResult(operand, typedExpressionView(n, operatorResult(declared, [], n)));
-          else checkLengthMutation(operand, n.operator);
+          else {
+            checkBuiltinUpdate(n, operand);
+            checkLengthMutation(operand, n.operator);
+          }
         }
         walk(operand);
         // #sec-narrowing: an update writes the binding just as an assignment
@@ -21288,6 +21404,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ClassDeclaration':
       case 'ClassExpression': {
+        const heritage = n.ClassTail.ClassHeritage;
+        if (heritage) pushBlock(() => {
+          // The class self-name is still in its TDZ during heritage evaluation.
+          // It must shadow any outer value without lending it an origin.
+          const selfName = n.BindingIdentifier?.name;
+          if (selfName) {
+            frames.at(-1)!.declaredNames.add(selfName);
+            frames.at(-1)!.bindings.set(selfName, anyTypeRecord);
+          }
+          const scoped = pushTypeParameterScopeOf(n);
+          for (const parameter of n.TypeParameters?.TypeParameterList ?? []) {
+            const name = parameter.BindingIdentifier.name;
+            frames.at(-1)!.declaredNames.add(name);
+            frames.at(-1)!.bindings.set(name, anyTypeRecord);
+          }
+          try {
+            checkInvocation(heritage, true);
+            const invalidBase = (type: Known): boolean => {
+              const at = erasedForJudgment(type);
+              if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(invalidBase);
+              return knownNonObject(at) && !(at?.Kind === 'primitive' && at.Name === 'null');
+            };
+            if (operandParticipates(heritage) && invalidBase(staticType(heritage))) {
+              errors.push(Throw.StaticTypeError('a typed superclass must be a constructor or null').Value as ObjectValue);
+            }
+            walk(heritage);
+          } finally {
+            if (scoped) typeParameterScopes.pop();
+          }
+        });
+
         // A DECORATOR IS AN ORDINARY EXPRESSION, and no judgment reached one:
         // `Decorator` appeared nowhere in this file, so `@f` and `@g(x)` were
         // unchecked everywhere. `@n` for a `uint8` n was the run time's "1
