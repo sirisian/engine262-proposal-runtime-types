@@ -549,6 +549,7 @@ export abstract class StatementParser extends TypeParser {
         ref = true;
       }
       const node = this.parseBindingElement({ allowTypedInitializer: true, allowOptionalMarker: false, ref });
+      if (ref && node.Initializer) this.markLocationConsuming(node.Initializer);
       bindingList.push(this.repurpose(node, 'LexicalBinding'));
     } while (this.eat(Token.COMMA));
     return bindingList;
@@ -983,6 +984,7 @@ export abstract class StatementParser extends TypeParser {
             node.BindingIdentifier = this.parseBindingIdentifier();
             this.expect(Token.ASSIGN);
             node.Expression = this.parseLeftHandSideExpression();
+            this.markLocationConsuming(node.Expression);
             this.semicolon();
             return this.finishNode(node, 'RefRebindingStatement');
           }

@@ -104,6 +104,11 @@ export function* Evaluate_RefExpression({ Expression }: ParseNode.RefExpression)
  * binding - the form soa.md actually writes - silently borrowing a copy.
  */
 export function* SoAElementLocationFor(location: ReferenceRecord): PlainEvaluator<ReferenceRecord> {
+  // Re-borrowing an existing location must retain the generation at which it
+  // was taken, rather than making a stale reference live again.
+  if (location.ArrayBorrow !== undefined || location.SoAElement !== undefined) {
+    return location;
+  }
   if (!surroundingAgent.feature('runtime-types')
       || !(location.Base instanceof ObjectValue)
       || !(location.ReferencedName instanceof JSStringValue)) {
@@ -173,7 +178,7 @@ export function* Evaluate_RefRebindingStatement({ BindingIdentifier, Expression 
   if (IsUnresolvableReference(lhs) === Value.true) {
     return Throw.ReferenceError('$1 is not defined', name);
   }
-  const location = Q(yield* RequireBorrowableReference(Expression));
+  const location = Q(yield* SoAElementLocationFor(Q(yield* RequireBorrowableReference(Expression))));
   const holder = lhs.Base instanceof EnvironmentRecord ? RefBindingHolder(lhs.Base, name) : undefined;
   if (holder === undefined || !RebindRefBinding(holder, name, location)) {
     return Throw.TypeError('$1 is not a rebindable ref binding', name);

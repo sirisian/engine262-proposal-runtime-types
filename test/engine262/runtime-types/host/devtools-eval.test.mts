@@ -56,6 +56,19 @@ test('devtools eval: a synchronous body answers its completion value', () => {
   expect(c.numberOf(r.value)).toBe(7);
 });
 
+test('devtools eval: reference binding kinds persist across entries', () => {
+  const c = makeConsole();
+  expect(c.evaluate('let x: uint8 = 1, y: uint8 = 2; let ref p = x; const ref q = x; globalThis.marker = false;').thrown).toBe(false);
+  const valid = c.evaluate('ref p = y; p = 3; String(y);');
+  expect(valid.thrown).toBe(false);
+  expect(c.stringOf(valid.value)).toBe('3');
+  expect(c.evaluate('globalThis.marker = true; function unused() { ref x = y; }').thrown).toBe(true);
+  expect(c.stringOf(c.evaluate('String(globalThis.marker);').value)).toBe('false');
+  expect(c.evaluate('globalThis.marker = true; function unused() { ref q = y; }').thrown).toBe(true);
+  expect(c.stringOf(c.evaluate('String(globalThis.marker);').value)).toBe('false');
+  expect(c.evaluate('ref p = x;').thrown).toBe(false);
+});
+
 test('devtools eval: an async body answers its completion value, not undefined', () => {
   // AsyncBlockStart resolves a NORMAL completion with undefined and a RETURN
   // completion with its value, which is right for an async function body -

@@ -1448,6 +1448,7 @@ export abstract class ExpressionParser extends FunctionParser {
    * rule of the type errors clause.
    */
   markLocationConsuming(node: ParseNode): boolean {
+    if (node.type === 'ParenthesizedExpression') return this.markLocationConsuming(node.Expression);
     if (!surroundingAgent.feature('runtime-types') || node.type !== 'CallExpression') {
       return false;
     }

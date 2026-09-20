@@ -103,8 +103,13 @@ interface EnumInfo {
   readonly names: readonly string[];
 }
 
+type BindingKind = 'ordinary' | 'mutable-ref' | 'immutable-ref';
+
 interface Frame {
   readonly bindings: Map<string, TypeRecord>;
+  /** Lexical identity is independent of the value's type or narrowing. */
+  readonly bindingKinds: Map<string, BindingKind>;
+  readonly dynamicBindings?: boolean;
 
   /**
    * Names bound by a `const` whose initializer is a compile-time numeric
@@ -124,7 +129,7 @@ interface Frame {
    * RUN TIME where `let a: uint8 = 300` reports before the program runs.
    */
   readonly constLiteralTypes: Map<string, TypeRecord>;
-  readonly constPropertyKeys: Map<string, string>;
+  readonly constPropertyKeys: Map<string, string | SymbolValue>;
   /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
   readonly constLiteralValues: Map<string, bigint>;
   /** The EXACT decimal value of a `const` whose initializer is a constant expression. */
@@ -164,8 +169,9 @@ interface Frame {
 function emptyFrame(): Frame {
   return {
     bindings: new Map(),
+    bindingKinds: new Map(),
     constLiterals: new Set<string>(),
-    constLiteralTypes: new Map<string, TypeRecord>(), constPropertyKeys: new Map<string, string>(),
+    constLiteralTypes: new Map<string, TypeRecord>(), constPropertyKeys: new Map<string, string | SymbolValue>(),
     constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(),
     letConstants: new Set<string>(),
     immutableNames: new Set<string>(),
@@ -191,6 +197,8 @@ function emptyFrame(): Frame {
 function cloneFrame(frame: Frame): Frame {
   return {
     bindings: new Map(frame.bindings),
+    bindingKinds: new Map(frame.bindingKinds),
+    dynamicBindings: frame.dynamicBindings,
     constLiterals: new Set(frame.constLiterals),
     constLiteralTypes: new Map(frame.constLiteralTypes),
     constPropertyKeys: new Map(frame.constPropertyKeys),
@@ -2586,11 +2594,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
+  const recordBindingKinds = (node: ParseNode | readonly ParseNode[] | null | undefined,
+    mutable: boolean, frame = frames[frames.length - 1], borrowed = false, preserveExisting = false): void => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach((child) => recordBindingKinds(child, mutable, frame, borrowed, preserveExisting));
+      return;
+    }
+    const binding = node as ParseNode & { Ref?: boolean, BindingIdentifier?: ParseNode.BindingIdentifier };
+    const ref = (borrowed || binding.Ref === true) && binding.type !== 'BindingRestElement';
+    const name = binding.BindingIdentifier?.name ?? (binding.type === 'BindingIdentifier' ? binding.name : undefined);
+    if (name && (!preserveExisting || !frame.bindingKinds.has(name))) {
+      frame.bindingKinds.set(name, ref ? (mutable ? 'mutable-ref' : 'immutable-ref') : 'ordinary');
+    }
+    // Binding children only: expressions, property names, and annotations do
+    // not declare names in this scope.
+    for (const key of ['BindingList', 'BindingPattern', 'BindingElementList', 'BindingRestElement',
+      'BindingPropertyList', 'BindingRestProperty', 'BindingElement', 'ForBinding']) {
+      const child = (binding as unknown as Record<string, ParseNode | readonly ParseNode[] | undefined>)[key];
+      if (child) recordBindingKinds(child, mutable, frame, ref, preserveExisting);
+    }
+  };
+
+  const bindingKindOf = (name: string): BindingKind | undefined => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const frame = frames[i];
+      const kind = frame.bindingKinds.get(name);
+      if (kind) return kind;
+      if (frame.declaredNames.has(name)) return 'ordinary';
+      // An object environment may intercept a name before an outer binding.
+      if (frame.dynamicBindings) return undefined;
+    }
+    return undefined;
+  };
+
   let typeRevision = 0;
 
   const declare = (name: string, t: Known, frame = frames[frames.length - 1]) => {
     typeRevision += 1;
     frame.declaredNames.add(name);
+    if (!frame.bindingKinds.has(name)) frame.bindingKinds.set(name, 'ordinary');
     uninitializedVars.get(frame)?.delete(name);
     if (t) {
       frame.bindings.set(name, t);
@@ -3546,7 +3589,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return memberKey({ Expression: expression.Expression });
     }
     if (expression.type === 'MemberExpression' && expression.MemberExpression.type === 'IdentifierReference'
-        && expression.MemberExpression.name === 'Symbol' && !frames.some((frame) => frame.declaredNames.has('Symbol'))) {
+        && expression.MemberExpression.name === 'Symbol'
+        && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
       const name = expression.IdentifierName?.name;
       if (name && Object.hasOwn(wellKnownSymbols, name)) return wellKnownSymbols[name as keyof typeof wellKnownSymbols];
     }
@@ -3555,10 +3599,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const key = frames[i].constPropertyKeys.get(expression.name);
         if (key !== undefined) return key;
         if (frames[i].declaredNames.has(expression.name)) break;
-      }
-      const symbol = symbolConsts.get(expression.name);
-      if (symbol) {
-        return symbolKeyFor(symbol);
+        if (frames[i].bindingKinds.has(expression.name) || frames[i].dynamicBindings) return undefined;
       }
     }
     const type = staticType(expression);
@@ -3566,6 +3607,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return type.Value.stringValue();
     }
     return undefined;
+  };
+
+  /** Declared member reads use the same contract for String and Symbol keys. */
+  const memberReadType = (receiver: Known, key: string | SymbolValue): Known => {
+    const propertyType = (shape: Known): Known => {
+      if (shape?.Kind !== 'object') return null;
+      const property = shape.Properties.find((candidate) => candidate.key === key);
+      return property ? (property.optional ? joinTypes(property.type, undefinedType) : property.type) : null;
+    };
+    if (receiver?.Kind === 'union') {
+      const types = receiver.Members.map((arm) => propertyType(structureOf(arm)));
+      if (types.every((type) => type !== null)) {
+        return CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] });
+      }
+      // An undeclared key on every arm remains an ordinary dynamic read.
+      if (types.some((type) => type !== null)) {
+        errors.push(Throw.StaticTypeError(
+          '$1 is not declared by every member of $2; narrow the receiver first, or read it with `?.`',
+          typeof key === 'string' ? Value(key) : key, Value(displayType(receiver)),
+        ).Value as ObjectValue);
+      }
+      return null;
+    }
+    const shape = structureOf(receiver);
+    const declared = propertyType(shape);
+    if (declared) return declared;
+    // Preserve the named string-index-signature rule. An undeclared symbol
+    // member remains unknown; it never denotes an array or tuple element.
+    return typeof key === 'string' && shape?.Kind === 'object'
+      ? shape.IndexSignatures.find((ix) => ix.Key.Kind === 'primitive' && ix.Key.Name === 'string')?.Value ?? null
+      : null;
   };
 
   const superMember = (node: ParseNode.SuperProperty) => {
@@ -3698,18 +3770,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return;
     }
-    const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
-    if (!objType || objType.Kind !== 'object') {
-      return;
-    }
-    const key = memberKey(m);
-    if (key === undefined) {
-      return;
-    }
-    const prop = objType.Properties.find((candidate) => candidate.key === key);
-    if (prop && (prop as { readonly?: boolean }).readonly) {
-      const completion = Throw.StaticTypeError('$1 is a readonly member and cannot be assigned', typeof key === 'string' ? Value(key) : key) as ThrowCompletion;
-      errors.push(completion.Value as ObjectValue);
+    if (named === undefined) return;
+    const hasReadonlyMember = (receiver: Known): boolean => {
+      if (receiver?.Kind === 'union') return receiver.Members.some(hasReadonlyMember);
+      const shape = structureOf(receiver);
+      return shape?.Kind === 'object' && shape.Properties.some((property) => property.key === named && property.readonly);
+    };
+    if (hasReadonlyMember(sealedReceiver)) {
+      errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned',
+        typeof named === 'string' ? Value(named) : named).Value as ObjectValue);
     }
   };
 
@@ -3825,9 +3894,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Alias declarations found by the name pre-pass, resolved on demand. */
   const aliasNodes = new Map<string, ParseNode>();
 
-  /** `const k = Symbol(...)` bindings, by name: §6.6's unique symbol types. */
-  const symbolConsts = new Map<string, ParseNode>();
-
   /**
    * One stable Symbol per symbol-`const` DECLARATION, minted for the checker's
    * own use. A Property Type Record's [[Key]] is "a String or a Symbol", so a
@@ -3892,12 +3958,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return String(literal);
     }
     const computed = propertyName?.ComputedPropertyName;
-    if (computed?.type === 'IdentifierReference' && typeof computed.name === 'string') {
-      const declaration = symbolConsts.get(computed.name);
-      if (declaration) {
-        return symbolKeyFor(declaration);
-      }
-    }
     return computed ? memberKey({ Expression: computed as ParseNode }) : undefined;
   };
 
@@ -4519,9 +4579,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // are as judgeable as `s` and `1` - they are the same member spelled
         // through brackets.
         const isWrittenLiteral = computed?.type === 'StringLiteral' || computed?.type === 'NumericLiteral';
-        const namesSymbolConst = computed?.type === 'IdentifierReference'
-          && typeof computed.name === 'string' && symbolConsts.has(computed.name);
-        if (computed && !namesSymbolConst && !isWrittenLiteral) {
+        if (computed && !isWrittenLiteral) {
           const completion = Throw.StaticTypeError('a computed member name must be a literal or a `const` bound to a Symbol') as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
@@ -6819,6 +6877,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return at.Kind === 'primitive'
       || (!!inner && inner.Kind === 'object')
       || at.Kind === 'nominal';
+  };
+
+  const knownNonObject = (type: Known): boolean => {
+    const at = erasedForJudgment(type);
+    if (!at) return false;
+    if (at.Kind === 'union') return at.Members.length > 0 && at.Members.every(knownNonObject);
+    // Do not infer a value category from an unknown intersection or parameter.
+    // Type objects and Composite also use primitive records but are Objects.
+    return at.Kind === 'primitive' && (isNumericValueTypeName(at.Name)
+      || ['number', 'bigint', 'string', 'boolean', 'symbol', 'null', 'undefined', 'vector', 'complex', 'rational'].includes(at.Name));
   };
 
   const notIterable = (t: Known): boolean => {
@@ -9481,7 +9549,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const constExactValue = (name: string): bigint | null => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
-      if (frames[i].declaredNames.has(name) || frames[i].bindings.has(name) || frames[i].constLiterals.has(name)) {
+      if (frames[i].declaredNames.has(name) || frames[i].bindingKinds.has(name)
+          || frames[i].bindings.has(name) || frames[i].constLiterals.has(name) || frames[i].dynamicBindings) {
         return frames[i].constLiteralValues.get(name) ?? null;
       }
     }
@@ -9494,7 +9563,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** The exact decimal of a constant `const`, an integer constant serving as a decimal of exponent 0. */
   const constDecimalValue = (name: string): Dec | null => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
-      if (frames[i].declaredNames.has(name) || frames[i].bindings.has(name) || frames[i].constLiterals.has(name)) {
+      if (frames[i].declaredNames.has(name) || frames[i].bindingKinds.has(name)
+          || frames[i].bindings.has(name) || frames[i].constLiterals.has(name) || frames[i].dynamicBindings) {
         const d = frames[i].constDecimalValues.get(name);
         if (d) {
           return d;
@@ -9527,6 +9597,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const value = numericIndexLiteral(node.UnaryExpression);
       return value === null ? null : node.operator === '-' ? -value : value;
     }
+    return null;
+  };
+
+  const singletonTupleIndex = (node: ParseNode): number | bigint | null => {
+    const literal = numericIndexLiteral(node);
+    if (literal !== null) return literal;
+    const key = patternExpression(node);
+    if (!key) return null;
+    if (key.type === 'IdentifierReference') {
+      const constant = constExactValue(key.name);
+      if (constant !== null) return constant;
+      const decimal = constDecimalValue(key.name);
+      if (decimal) {
+        const value = Number(`${decimal.sig}e${decimal.exp}`);
+        // A fractional/non-finite Number is never an index. Do not use a
+        // rounded decimal to select a position: exact integers use the path
+        // above, while a decimal that rounds to an integer stays unknown.
+        if (!Number.isInteger(value)) return value;
+      }
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        if (frames[i].declaredNames.has(key.name)) break;
+        if (frames[i].bindingKinds.has(key.name) || frames[i].dynamicBindings) return null;
+      }
+    }
+    const type = staticType(key);
+    if (type?.Kind !== 'literal') return null;
+    if (type.Value instanceof BigIntValue) return R(type.Value);
+    if (type.Value instanceof NumberValue) return R(type.Value);
+    // TypedNumberValue is not a NumberValue, which R requires.
+    // eslint-disable-next-line @engine262/mathematical-value
+    if (type.Value instanceof TypedNumberValue) return (type.Value as TypedNumberValue).numberValue();
     return null;
   };
 
@@ -11960,6 +12061,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const key = memberKey(m);
           const base = staticType(m.MemberExpression);
+          if (key instanceof SymbolValue) return memberReadType(base, key);
           if (typeof key === 'string' && (base?.Kind === 'union' || structureOf(base)?.Kind === 'object')) {
             return staticType({ ...node, Expression: undefined, IdentifierName: { type: 'IdentifierName', name: key } } as unknown as ParseNode);
           }
@@ -12240,85 +12342,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return sig;
             }
           }
-          // A read from a UNION is the union of that key's type across the arms,
-          // and an ERROR where any arm does not declare it.
-          //
-          // `structureOf` resolves a ~nominal~ to its structure and returns
-          // everything else unchanged, so a union receiver arrives as `Kind:
-          // 'union'` and needs its own case before the `=== 'object'` guard
-          // below; falling through to ~any~ would accept `c.x` on `{ x: int32
-          // } | { x: int8 }` at `uint8`, at `boolean` and at an object type,
-          // none of which either arm declares, while the SINGLE-arm spelling
-          // refuses a wrong read.
-          //
-          // The accessible keys are the INTERSECTION of the arms' and the type is
-          // the UNION of that key's types - the rule TypeScript, Flow, Scala 3 and
-          // mypy all reached, and which tagged-union languages enforce by
-          // construction. A key one arm lacks is an error because the program
-          // cannot know which arm it holds; narrowing is the escape, and the
-          // DISCRIMINANT - a key every arm declares - still reads, which is what
-          // makes narrowing possible in the first place.
-          const unionReceiver = receiver as { Kind?: string, Members?: readonly TypeRecord[] } | null | undefined;
-          if (unionReceiver?.Kind === 'union' && unionReceiver.Members && m.IdentifierName) {
-            const readKey = (m.IdentifierName as { name?: string }).name;
-            if (typeof readKey === 'string') {
-              const perArm: TypeRecord[] = [];
-              let everyArmDeclaresIt = true;
-              let someArmDeclaresIt = false;
-              for (const arm of unionReceiver.Members) {
-                const armShape = structureOf(arm) as { Kind?: string, Properties?: readonly { key: string, type: TypeRecord }[] } | null;
-                const here = armShape?.Kind === 'object'
-                  ? armShape.Properties?.find((q) => q.key === readKey)
-                  : undefined;
-                if (!here) {
-                  everyArmDeclaresIt = false;
-                  continue;
-                }
-                someArmDeclaresIt = true;
-                perArm.push(here.type);
-              }
-              if (everyArmDeclaresIt && perArm.length > 0) {
-                return CanonicalizeType({ Kind: 'union', Members: perArm } as TypeRecord) as Known;
-              }
-              // A key SOME arm declares and another does not is an ERROR, not a
-              // fall-through to ~any~. The accessible keys are the INTERSECTION of
-              // the arms', because the program cannot know which arm it holds:
-              // `{ x: int32 } | { y: string }` has an `x` only if it took the first.
-              // A `null` member declares nothing, so every read of a nullable
-              // object is this case. Narrowing is the escape, and the DISCRIMINANT
-              // still reads, since a key every arm declares is answered above -
-              // which is what makes narrowing possible at all.
-              //
-              // A key NO arm declares is NOT this case, and the distinction is the
-              // rule's own reasoning: uncertainty about which arm is held decides
-              // nothing when every arm agrees the key is absent. Such a read is
-              // ordinary, and #sec-typed-storage governs it - "READING a property
-              // the type does not declare is unaffected ... `if (o.maybe)`,
-              // `typeof o.maybe`, and `o.absent === undefined` are all ordinary.
-              // The asymmetry is deliberate." Refusing it here made a union the one
-              // receiver in the language where those programs were refused, and
-              // refused inconsistently: `typeof u.zz` and `u?.zz` reach other arms
-              // of this operation and were accepted throughout. It also refused
-              // `u.toString()`, an arm's structure listing no Object.prototype
-              // member.
-              if (!everyArmDeclaresIt && someArmDeclaresIt) {
-                // SOME arm declares the key, so a guard reaches it and the
-                // message can say so. The message is NOT extended for the other
-                // shape this operation refuses: where NO arm declares the key
-                // there is nothing to narrow to, and suggesting a guard would
-                // send a misspelling off after a fix that cannot work. That
-                // case is admitted as an ordinary read above rather than
-                // refused here, so the hint is safe exactly where it is
-                // attached.
-                const completion = Throw.StaticTypeError(
-                  '$1 is not declared by every member of $2; narrow the receiver first, or read it with `?.`',
-                  Value(readKey),
-                  Value(displayType(receiver as TypeRecord)),
-                );
-                errors.push(completion.Value as ObjectValue);
-                return null;
-              }
-            }
+          if (receiver?.Kind === 'union') {
+            return memberReadType(receiver, m.IdentifierName.name);
           }
           // A VECTOR'S LANE ACCESSORS. #sec-vector-types: `a.x` reads a lane
           // and answers the LANE TYPE, and a multi-component accessor - `a.xy`,
@@ -12345,43 +12370,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // given a type this arm would be guessing at.
             }
           }
-          const objType = structureOf(receiver);
-          if (objType && objType.Kind === 'object') {
-            const prop = objType.Properties.find((p) => p.key === (m.IdentifierName as { name: string }).name);
-            if (prop) {
-              // #sec-object-types: "Reading a property that a declaration marked
-              // OPTIONAL yields the union of its type with `undefined`, which is
-              // what reading an absent property gives." The declaration is what
-              // says the property may be absent, so the read carries the
-              // possibility whether or not the value at hand has it.
-              //
-              // Answering the declared type alone made `{ a?: string }` and
-              // `{ a: string | undefined }` disagree about the SAME read: the
-              // second refused `let s: string = x.a` and the first accepted it,
-              // though the marker is exactly what says the value may not be
-              // there.
-              return prop.optional
-                ? CanonicalizeType({ Kind: 'union', Members: [prop.type, makePrimitive('undefined')] } as TypeRecord) as Known
-                : prop.type;
-            }
-            // An INDEX SIGNATURE answers where no declared property does.
-            // Without this a read through one was ~any~, so
-            // `let _s_: string = _o_.a` type-checked on an
-            // `_o_: { [key: string]: uint8 }` - the type resolved, the relation
-            // honoured it, and the only thing that did not was the access.
-            //
-            // That is what made an index-signature RESULT inert:
-            // `Object.groupBy`'s `{ [key: K]: [].<T> }` refused a wrong
-            // whole-result annotation and then let every read off it go
-            // unchecked.
-            //
-            // A NAMED access is a String key, so only a `string`-keyed signature
-            // answers it; a `symbol`-keyed one is reached by a computed access
-            // and is left to that path.
-            const named = objType.IndexSignatures.find((ix) => ix.Key.Kind === 'primitive'
-              && (ix.Key as { Name?: string }).Name === 'string');
-            return named ? named.Value as Known : null;
-          }
+          return memberReadType(receiver, m.IdentifierName.name);
         }
         // The index judgments below decide a READ. The operand of a `delete` is
         // not one: the engine's rule there is the opposite way round - deleting a
@@ -12480,9 +12469,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const positions = receiver.Elements ?? [];
             const restAt = positions.findIndex((e) => e.Rest);
             const fixed = restAt === -1 ? positions.length : restAt;
-            const index = numericIndexLiteral(m.Expression);
+            const literalIndex = numericIndexLiteral(m.Expression);
+            const index = literalIndex ?? singletonTupleIndex(m.Expression);
             if (!isDeleteOperand && index !== null) {
-              if (!Number.isInteger(index) || index < 0
+              if ((typeof index === 'number' && !Number.isInteger(index)) || index < 0
                   || (restAt === -1 && index >= fixed)) {
                 const completion = Throw.StaticTypeError(
                   '$1 is not an index of $2', Value(String(index)), Value(displayType(receiver)),
@@ -12491,9 +12481,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return null;
               }
               if (index < fixed) {
-                return positions[index]!.Type as Known;
+                const position = positions[Number(index)]!;
+                // Newly recognized keys only claim required, unambiguous slots.
+                // Defaults/rest suffixes retain their runtime lookup boundary.
+                return literalIndex !== null || !position.DeclaredDefault ? position.Type : null;
               }
-              return restElementType(positions[restAt]!.Type);
+              return literalIndex !== null ? restElementType(positions[restAt]!.Type) : null;
             }
           }
           // The third arm. A computed access
@@ -16803,6 +16796,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       list.push(item);
     }
+    for (const declaration of list) {
+      if (declaration.type === 'LexicalDeclaration') {
+        recordBindingKinds(declaration, declaration.LetOrConst === 'let');
+      } else if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration',
+        'ClassDeclaration', 'EnumDeclaration', 'TypeAliasDeclaration', 'InterfaceDeclaration'].includes(declaration.type)
+          && 'BindingIdentifier' in declaration && declaration.BindingIdentifier) {
+        recordBindingKinds(declaration.BindingIdentifier as ParseNode.BindingIdentifier, true);
+      }
+    }
     // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
     // this proposal's function overloading - so the signatures are collected
     // per name and declared together: declared one at a time, the last
@@ -17204,8 +17206,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         const bound = b.BindingIdentifier?.name;
         const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
-        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol') {
-          symbolConsts.set(bound, binding);
+        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol'
+            && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
+          frames[frames.length - 1].constPropertyKeys.set(bound, symbolKeyFor(binding));
         }
       }
     }
@@ -17840,6 +17843,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (n.type === 'ForBinding' && n.parent?.type === 'ForDeclaration') {
         return;
       }
+      recordBindingKinds(n, true, frame, false, true);
       if (n.BindingIdentifier) {
         if (n.TypeAnnotation || !frame.declaredNames.has(n.BindingIdentifier.name)) {
           declare(n.BindingIdentifier.name, n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null, frame);
@@ -17932,6 +17936,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     generatorContributions.push(contributions ?? null);
     asyncReturns.push((!!resumable && !generatorType) || (generatorType?.Kind === 'nominal' && generatorType.LibraryName === 'AsyncGenerator'));
     returnsProven.push(true);
+    recordBindingKinds(params, true);
     let index = 0;
     for (const p of params ?? []) {
       if (p.type === 'SingleNameBinding' || p.type === 'BindingElement') {
@@ -19007,6 +19012,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const binding = (f.ForDeclaration as ParseNode.ForDeclaration | undefined)?.ForBinding ?? f.ForBinding;
         const check = () => {
           if (binding) {
+            const declaration = f.ForDeclaration as ParseNode.ForDeclaration | undefined;
+            recordBindingKinds(binding, declaration?.LetOrConst !== 'const',
+              f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1], !!decl?.Ref, !!f.ForBinding);
             checkPattern(binding as PatternNode, { type: bindingType }, true, !enumerating,
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1]);
           } else if (f.LeftHandSideExpression) {
@@ -19177,6 +19185,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // proposal-runtime-types (README, explicit resource management): the type
         // declared for a resource must be one that can be disposed.
         const decl = n as ParseNode.LexicalDeclaration;
+        recordBindingKinds(decl, decl.LetOrConst === 'let');
         if (decl.LetOrConst === 'using') {
           for (const binding of decl.BindingList) {
             const ann = (binding as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
@@ -19243,6 +19252,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'RelationalExpression': {
         const rel = n as ParseNode.RelationalExpression;
+        if (rel.operator === 'in' || rel.operator === 'instanceof') {
+          const right = staticType(rel.ShiftExpression);
+          if (knownNonObject(right)) {
+            errors.push(Throw.StaticTypeError('the right operand of $1 must be an object, not $2',
+              Value(rel.operator), Value(displayType(right!))).Value as ObjectValue);
+          }
+        }
         if (rel.operator === 'instanceof' && rel.RelationalExpression) {
           const s = staticType(rel.RelationalExpression as ParseNode);
           const t = typeDenotedBy(rel.ShiftExpression as ParseNode);
@@ -19359,6 +19375,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         applyAssertionNarrowing(n);
         return;
       }
+      case 'WithStatement':
+        walk(n.Expression);
+        frames.push({ ...emptyFrame(), dynamicBindings: true });
+        try {
+          walk(n.Statement);
+        } finally {
+          frames.pop();
+        }
+        return;
       case 'Block':
       case 'CaseBlock':
         pushBlock(() => {
@@ -19652,6 +19677,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'VariableDeclaration': {
         const bindingFrame = n.type === 'VariableDeclaration' ? varFrames[varFrames.length - 1] : frames[frames.length - 1];
         const isConstDeclaration = n.type === 'LexicalBinding' && (n.parent as { LetOrConst?: string } | undefined)?.LetOrConst === 'const';
+        recordBindingKinds(n, !isConstDeclaration, bindingFrame, false, n.type === 'VariableDeclaration');
         if (n.BindingIdentifier) {
           // proposal-runtime-types (spec sec-enums): track a binding that holds an
           // enumerator, from `let e = E.Member` or `let e: E`, so a switch over it
@@ -19727,7 +19753,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (n.Initializer) {
             if ((n as { Ref?: boolean }).Ref) requireBorrowable(n.Initializer);
-            withProvenance(n.Initializer, () => requireAssignable(staticTypeIn(n.Initializer, declared), declared));
+            withProvenance(n.Initializer, () => requireAssignable((n as { Ref?: boolean }).Ref
+              ? locationType(n.Initializer!) : staticTypeIn(n.Initializer!, declared), declared));
             walk(n.Initializer);
           }
           // A `const` bound to a compile-time numeric constant behaves as if
@@ -19744,7 +19771,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // must be fixed or the reassignment has nothing to check against.
           if (isConstDeclaration && n.Initializer) {
             const key = memberKey({ Expression: n.Initializer });
-            if (typeof key === 'string') bindingFrame.constPropertyKeys.set(n.BindingIdentifier.name, key);
+            if (key !== undefined) bindingFrame.constPropertyKeys.set(n.BindingIdentifier.name, key);
           }
           if (!n.TypeAnnotation && n.Initializer && isNumericConstantExpression(n.Initializer)) {
             const frame = frames[frames.length - 1];
@@ -19762,7 +19789,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // explicit annotation wins, including `any`; plain let remains dynamic.
           const newInit = n.Initializer as ParseNode | null | undefined;
           inferredConstTypes.delete(n);
-          if (!n.TypeAnnotation && isConstDeclaration && newInit && constInitializerParticipates(newInit)) {
+          if (!n.TypeAnnotation && !(n as { Ref?: boolean }).Ref && isConstDeclaration && newInit && constInitializerParticipates(newInit)) {
             const inferred = staticType(newInit);
             if (inferred && inferred.Kind !== 'any') {
               inferredConstTypes.set(n, inferred);
@@ -19786,7 +19813,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // initializer's type is unknown - a borrow of an untyped location -
           // the binding stays untyped and the run time decides, as before.
           if (!declared && !n.TypeAnnotation && (n as { Ref?: boolean }).Ref === true && newInit) {
-            const referent = staticType(newInit);
+            const referent = locationType(newInit);
             if (referent) {
               declare(n.BindingIdentifier.name, referent, bindingFrame);
               return;
@@ -19848,9 +19875,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'RefRebindingStatement': {
         const rb = n as unknown as { BindingIdentifier?: { name?: string }, Expression?: ParseNode };
         const name = rb.BindingIdentifier?.name;
-        const target = name ? lookup(name) : null;
+        const kind = name ? bindingKindOf(name) : undefined;
+        if (kind && kind !== 'mutable-ref') {
+          errors.push(Throw.StaticTypeError('$1 is not a rebindable ref binding', Value(name!)).Value as ObjectValue);
+        }
+        const target = name && kind ? lookupDeclared(name) : null;
         if (rb.Expression) requireBorrowable(rb.Expression);
-        const source = rb.Expression ? staticType(rb.Expression) : null;
+        const source = rb.Expression ? locationType(rb.Expression) : null;
         // Where either side's type is unknown the judgment is the run time's,
         // as it is for the borrow itself.
         if (target && source && !IsAssignable(source as TypeRecord, target as TypeRecord)) {
