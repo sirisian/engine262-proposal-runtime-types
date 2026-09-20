@@ -94,3 +94,15 @@ test('the coercion still refuses to reinterpret', () => {
   // Same element type re-describes nothing and is unaffected.
   expect(evaluated('class A { x: uint8 = 1; } const p: [4].<A>; const s: Span.<A> = p; String(s.length);')).toBe('4');
 });
+
+test('a view holds whole elements, and the remainder is not one', () => {
+  // Documented in `sec-array-views` rather than left to be discovered: the count
+  // is the floor of the available bytes over the stride, measured from
+  // `byteOffset`, so a trailing partial element is simply not in the view.
+  const V = 'class V { x: uint8 = 0; y: uint8 = 0; } ';
+  expect(evaluated(`${V}const buf: [7].<uint8>; String(Span.<V>(buf).length);`)).toBe('3');
+  expect(evaluated(`${V}const buf: [8].<uint8>; String(Span.<V>(buf).length);`)).toBe('4');
+  expect(evaluated(`${V}const buf: [9].<uint8>; String(Span.<V>(buf).length);`)).toBe('4');
+  // From the offset, not from the start: 9 bytes at offset 1 leaves 8.
+  expect(evaluated(`${V}const buf: [9].<uint8>; String(Span.<V>(buf, 1).length);`)).toBe('4');
+});
