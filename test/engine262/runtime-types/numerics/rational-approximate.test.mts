@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
  * `rational.approximate(f, maxDenominator)`.
@@ -49,4 +49,14 @@ test('a source or bound with no answer is refused', () => {
 test('the neighbouring statics and the exact form are untouched', () => {
   expect(evaluated('String(rational.parse("1/3"));')).toBe('1/3');
   expect(evaluated('String(rational(0.5));')).toBe('1/2');
+});
+
+test('approximation converts its source and bound in order', () => {
+  expect(evaluated('let log = ""; const x = { valueOf() { log += "x"; return 0.5; } }; const bound = { valueOf() { log += "b"; return 10; } }; String(rational.approximate(x, bound)) + ":" + log;')).toBe('1/2:xb');
+});
+
+test('approximation propagates abrupt numeric conversions', () => {
+  expectThrownKind('rational.approximate(Symbol(), 10);', 'TypeError');
+  expectThrownKind('rational.approximate(0.5, Symbol());', 'TypeError');
+  expect(evaluated('let log = ""; const x = { valueOf() { throw new Error("source"); } }; const bound = { valueOf() { log += "b"; return 10; } }; try { rational.approximate(x, bound); } catch (e) { log += e.message; } log;')).toBe('source');
 });

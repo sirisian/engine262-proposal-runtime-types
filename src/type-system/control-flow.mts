@@ -257,35 +257,24 @@ export const endsWithReturn = (body: ParseNode | readonly ParseNode[] | null | u
  * checker reports; `never` is the empty union and falls out of the union arm. `null` and `undefined` ARE admitted, because the
  * declaration permits them at runtime and registers nothing.
  *
- * This is the direction of the README's rule rather than its exact form. The
- * precise statement is that the declared type must include `[Symbol.dispose]`,
- * which cannot be checked yet because the type grammar has no symbol-keyed
- * member: `{ [Symbol.dispose](): void }` is rejected with "a computed member name
- * is not supported yet", so no type can declare the method to be looked for.
- * Rejecting every object type instead would make the annotation unusable, so the
- * checker catches what it provably can and the exact membership check waits on
- * that grammar.
+ * A known non-callable disposal member is also impossible. The checker supplies
+ * member lookup/callability so this predicate need not resolve class shapes.
+ * Unknown members and open object types retain runtime protocol discovery.
  */
-export const canCarryDisposal = (t: TypeRecord): boolean => {
+export const canCarryDisposal = (t: TypeRecord, possibleDisposer: (type: TypeRecord) => boolean): boolean => {
   switch (t.Kind) {
     case 'any':
       return true;
     case 'union':
-      return (t as { Members: readonly TypeRecord[] }).Members.some(canCarryDisposal);
-    case 'literal': {
-      const v = (t as { Value: unknown }).Value;
-      return v === Value.null || v === Value.undefined;
-    }
+      return t.Members.some((member) => canCarryDisposal(member, possibleDisposer));
+    case 'literal':
+      return t.Value === Value.null || t.Value === Value.undefined;
     case 'primitive':
-      // `null` and `undefined` are primitive types named for their one value
-      // (#sec-null-and-undefined-types), and a `using` declaration accepts
-      // either - the disposal is simply skipped. They were literal types
-      // before, and the case above answered for them.
-      return (t as { Name?: string }).Name === 'null' || (t as { Name?: string }).Name === 'undefined';
+      return t.Name === 'null' || t.Name === 'undefined';
     case 'void':
       return false;
     default:
-      return true;
+      return possibleDisposer(t);
   }
 };
 

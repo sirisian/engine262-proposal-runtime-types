@@ -1707,6 +1707,16 @@ function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => D
   }
 }
 
+/** Whether this declaration itself contributes sealed typed instance storage. */
+function classHasOwnSealedStorage(t: TypeRecord): boolean {
+  if (t.Kind !== 'nominal') return false;
+  const decl = t.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+  if (!decl || (decl.type !== 'ClassDeclaration' && decl.type !== 'ClassExpression')) return false;
+  return !decl.ClassModifiers?.includes('dynamic')
+    && (decl.ClassTail.ClassBody ?? []).some((element) => element.type === 'FieldDefinition'
+      && !element.static && element.TypeAnnotation !== undefined && element.TypeAnnotation !== null);
+}
+
 /**
  * Static counterpart of CanBeHeldWeakly, over a TYPE: whether every value of
  * the type can be held weakly.
@@ -1715,9 +1725,9 @@ function foldDecimalConstant(node: ParseNode, resolveConst?: (name: string) => D
  * be held weakly ... A class becomes ineligible exactly when it becomes a typed,
  * sealed class." The run time derives "sealed" as: a non-`dynamic` class with a
  * typed instance field (`ClassDefinitionEvaluation`, `SealInstances`). The same
- * derivation is made here from the declaration, so the two agree by
- * construction. A composite is refused in the same positions (the clause merges
- * both into one predicate).
+ * derivation is made here over the resolved class hierarchy, including inherited
+ * storage and reference kind. A composite is refused in the same positions
+ * (the clause merges both into one predicate).
  *
  * Answers: `object` and any object, array, tuple, function or library nominal
  * type - yes; `symbol` - yes (a registered symbol is the run time's, as the
@@ -1743,30 +1753,24 @@ function typeCanBeHeldWeakly(t: TypeRecord | null | undefined): boolean {
     case 'union': return (t as { Members: readonly TypeRecord[] }).Members.every((m) => typeCanBeHeldWeakly(m));
     case 'intersection': return (t as { Members: readonly TypeRecord[] }).Members.some((m) => typeCanBeHeldWeakly(m));
     case 'nominal': {
-      const decl = (t as { Declaration?: ParseNode | null }).Declaration as (ParseNode & { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null, ClassModifiers?: readonly string[] | null }) | null | undefined;
-      if (!decl || (decl.type !== 'ClassDeclaration' && decl.type !== 'ClassExpression')) {
-        // A library nominal - Map, Promise, Date - is an ordinary object.
-        return true;
+      // Mirror CanBeHeldWeakly's ConstructedBy flags: a reference kind anywhere
+      // in the chain supplies identity; otherwise any sealing base excludes it.
+      if (IsReferenceClass(t)) return true;
+      let current: TypeRecord | undefined = t;
+      let sealed = false;
+      const seen = new Set<TypeRecord>();
+      while (current?.Kind === 'nominal') {
+        if (seen.has(current)) return true;
+        seen.add(current);
+        sealed ||= classHasOwnSealedStorage(current);
+        const declaration = current.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+        // An unknown constructor may supply reference kind. Its absence from
+        // the static chain must not be mistaken for proof of value identity.
+        if ((declaration?.type === 'ClassDeclaration' || declaration?.type === 'ClassExpression')
+            && declaration.ClassTail.ClassHeritage && !current.Base) return true;
+        current = current.Base;
       }
-      const body = decl.ClassTail?.ClassBody ?? [];
-      // `ClassModifiers` on the declaration, which is where the run time reads
-      // `dynamic` from (through the tail's parent) - a `dynamic` typed class is
-      // not sealed and IS holdable.
-      const isDynamic = (decl.ClassModifiers ?? []).includes('dynamic');
-      // A REFERENCE CLASS is held and passed by reference, so it HAS the
-      // identity a weak reference observes and is holdable for the same reason
-      // a `dynamic` class is. The runtime companion of this test lives in
-      // CanBeHeldWeakly, which reads [[ReferenceKind]]; both must agree, or a
-      // `new WeakRef(r)` is refused before the program runs while
-      // `weakMap.set(r, v)` is accepted while it runs.
-      if (IsReferenceClass(t)) {
-        return true;
-      }
-      const hasTypedInstanceField = body.some((el) => (el as { type?: string }).type === 'FieldDefinition'
-        && !(el as { static?: boolean }).static
-        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== undefined
-        && (el as { TypeAnnotation?: unknown }).TypeAnnotation !== null);
-      return !(hasTypedInstanceField && !isDynamic);
+      return !sealed;
     }
     default:
       return false;
@@ -3667,7 +3671,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (!m.PrivateIdentifier && sealedReceiver?.Kind === 'nominal' && named !== undefined
-        && !typeCanBeHeldWeakly(sealedReceiver) && !indexAccess(m)) {
+        && classHasOwnSealedStorage(sealedReceiver) && !IsReferenceClass(sealedReceiver) && !indexAccess(m)) {
       const sealedStructure = structureOf(sealedReceiver);
       const declaresName = (type: Known, seen = new Set<object>()): boolean => {
         if (type?.Kind !== 'nominal' || seen.has(type)) return false;
@@ -3850,10 +3854,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * walk and the object-literal check so a declaration and a use agree by
    * construction rather than by two rules that must be kept in step.
    */
-  const memberKeyOf = (propertyName: { name?: string, value?: string, ComputedPropertyName?: { type?: string, name?: string } } | null | undefined): string | SymbolValue | undefined => {
+  const memberKeyOf = (propertyName: { name?: string, value?: string | number | bigint, ComputedPropertyName?: { type?: string, name?: string } } | null | undefined): string | SymbolValue | undefined => {
     const literal = propertyName?.name ?? propertyName?.value;
-    if (typeof literal === 'string') {
-      return literal;
+    if (typeof literal === 'string' || typeof literal === 'number' || typeof literal === 'bigint') {
+      return String(literal);
     }
     const computed = propertyName?.ComputedPropertyName;
     if (computed?.type === 'IdentifierReference' && typeof computed.name === 'string') {
@@ -5438,9 +5442,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && heritageArgRecords.every((t): t is TypeRecord => !!t)
       ? { ...bareBase, Arguments: heritageArgRecords as readonly TypeRecord[] } as Known
       : bareBase;
-    const baseStructure = base && base.Kind === 'nominal'
-      ? (base as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
-      : null;
+    // Merge the specialized base shape, not its declaration's still-generic
+    // members. Inherited reads and disposal lookup need the same substitution.
+    const baseStructure = base && base.Kind === 'nominal' ? structureOf(base) : null;
     const implemented = (cls.ClassTail as { ImplementsClause?: readonly ParseNode[] | null } | null | undefined)?.ImplementsClause ?? [];
     for (const ref of implemented) {
       const iname = (ref as { TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } }).TypeName;
@@ -6801,6 +6805,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return name !== undefined && name !== 'string' && name !== 'Composite';
   };
 
+  // Calls, construction and super calls share spread eligibility independently
+  // of signature resolution. Object spreads may bind names; the predicate only
+  // refuses types that cannot use either argument-spread protocol.
+  const checkArgumentSpreads = (args: readonly ParseNode[] | null | undefined): void => {
+    for (const arg of args ?? []) {
+      if ((arg as { type?: string }).type !== 'AssignmentRestElement') {
+        continue;
+      }
+      const spreadArg = (arg as unknown as { AssignmentExpression?: ParseNode }).AssignmentExpression;
+      const spreadArgType = spreadArg ? staticType(spreadArg) : null;
+      if (spreadArgType && notIterable(spreadArgType)) {
+        const completion = Throw.StaticTypeError(
+          'a value of $1 is not iterable',
+          Value(displayType(spreadArgType as TypeRecord)),
+        ) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+      }
+    }
+  };
+
   const erasedKeepingBrand = (t: Known): Known => {
     let at = t;
     for (let i = 0; at && i < 8; i += 1) {
@@ -8051,7 +8075,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const IndexSignatures = [];
         // Keys already seen in THIS object type, for the duplicate check below.
         // The interface path has its own, `declaredIn`.
-        const objectTypeKeys = new Set<string>();
+        const objectTypeKeys = new Set<string | SymbolValue>();
         for (const member of node.TypeMemberList) {
           // An INDEX SIGNATURE member. Any member that was not a
           // `TypeMember` made the WHOLE type resolve to *null*, so
@@ -8080,8 +8104,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (member.type !== 'TypeMember') {
             return null;
           }
-          const key = (member.PropertyName as { name?: string, value?: string }).name ?? (member.PropertyName as { value?: string }).value;
-          if (typeof key !== 'string') {
+          // A known computed key must not make the whole annotation unknown.
+          // Use the same key identity as interfaces and object literals.
+          const key = memberKeyOf(member.PropertyName);
+          if (key === undefined) {
             return null;
           }
           // A duplicate |PropertyName| in ONE object type is a TypeError
@@ -8097,7 +8123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (objectTypeKeys.has(key)) {
             errors.push((Throw.StaticTypeError(
               '$1 is already declared on this type',
-              Value(key),
+              typeof key === 'string' ? Value(key) : key,
             ) as { Value: ObjectValue }).Value);
             continue;
           }
@@ -17364,12 +17390,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return base.Kind === 'void' || (base.Kind === 'primitive' && base.Name !== 'object');
   };
 
-  const checkLengthLiteral = (target: ParseNode, value: ParseNode): void => {
+  const lengthReceiver = (target: ParseNode): Known => {
     const member = patternExpression(target);
-    if (member?.type !== 'MemberExpression' || memberKey(member) !== 'length') return;
-    const receiver = structureOf(staticType(member.MemberExpression));
-    const length = foldIntegerConstant(value, constExactValue);
-    if (length === null) return;
+    if (member?.type !== 'MemberExpression' || memberKey(member) !== 'length') return null;
+    return structureOf(staticType(member.MemberExpression));
+  };
+
+  const checkKnownLength = (receiver: Known, length: bigint): void => {
     if (receiver?.Kind === 'array' && typeof receiver.Extent === 'number' && length !== BigInt(receiver.Extent)) {
       errors.push(Throw.StaticTypeError('a fixed-extent array cannot be grown').Value as ObjectValue);
     } else if (receiver?.Kind === 'tuple') {
@@ -17379,6 +17406,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         'a tuple of $1 positions cannot be given a length of $2', Value(String(fixed)), Value(String(length)),
       ).Value as ObjectValue);
     }
+  };
+
+  const checkLengthLiteral = (target: ParseNode, value: ParseNode): void => {
+    const receiver = lengthReceiver(target);
+    if (!receiver) return;
+    const length = foldIntegerConstant(value, constExactValue);
+    if (length !== null) checkKnownLength(receiver, length);
+  };
+
+  // A fixed storage extent is a fact about this update, not a literal type for
+  // `.length`. Do not guess the current length of a growable/defaulted tuple.
+  const checkLengthMutation = (target: ParseNode, operator: string, value?: ParseNode): void => {
+    if (!['++', '--', '+=', '-='].includes(operator)) return;
+    const receiver = lengthReceiver(target);
+    const extent = receiver?.Kind === 'array' ? receiver.Extent
+      : receiver?.Kind === 'tuple' && receiver.Elements.every((element) => !element.Rest && !element.DeclaredDefault)
+        ? receiver.Elements.length : undefined;
+    if (typeof extent !== 'number' || !Number.isSafeInteger(extent)) return;
+    const amount = value ? foldIntegerConstant(value, constExactValue) : 1n;
+    // Invalid operand literals are diagnosed by ordinary numeric checking.
+    if (amount === null || amount < 0n || amount > (1n << 64n) - 1n) return;
+    const result = BigInt(extent) + (operator === '--' || operator === '-=' ? -amount : amount);
+    checkKnownLength(receiver, BigInt(wrapToType(result, indexTypeRecord())));
   };
 
   /** Typed information can pass through syntax without another binding opt-in. */
@@ -18029,7 +18079,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const entries: MappedArgument[] = [];
     groups.forEach((nodes, slot) => nodes.forEach((node, offset) => entries.push({ node, slot, offset })));
-    return { entries, counts: groups.map((g) => g.length), spread, named };
+    // An unknown iteration count cannot move a required positional prefix.
+    // Optional slots and non-final rests can, and a possible object spread may
+    // pin names before positional binding. Only retain destinations proved
+    // independent of those choices. Array storage alone proves no protocol.
+    const positionalSpreads = spread && !named && args.every((arg) => {
+      if (arg.type !== 'AssignmentRestElement') return true;
+      const type = erasedForJudgment(staticType(arg.AssignmentExpression));
+      const contribution = StaticIterationContribution(type, structureOf);
+      return contribution.element !== null || contribution.positions !== undefined
+        || (type?.Kind === 'primitive' && type.Name === 'string');
+    });
+    let prefix = 0;
+    if (positionalSpreads) {
+      while (prefix < args.length && prefix < slots.length
+          && args[prefix]!.type !== 'AssignmentRestElement'
+          && !slots[prefix]!.Rest && !slots[prefix]!.Optional) prefix += 1;
+    }
+    const certainEntries = !spread ? entries : entries.filter(({ node, slot }) => slot < prefix && node === args[slot]);
+    return { entries, certainEntries, counts: groups.map((g) => g.length), spread, named };
   };
 
   const checkedCallSignatures = new WeakMap<object, SignatureRecord>();
@@ -18188,55 +18256,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // reported "parameter $1 requires a ref argument" only when the
       // call ran.
       {
-        const argsForRef = mapped.entries;
+        const argsForRef = mapped.certainEntries;
         const params = chosen.Parameters as readonly ParameterRecord[];
-        if (!mapped.spread) {
-          argsForRef.forEach(({ node: arg, slot: i }) => {
-            const pr = params[i];
-            if (!pr) {
-              return;
-            }
-            // Only the MISSING direction. The extra one - a `ref`
-            // argument to a parameter that declares none - is specified
-            // behaviour rather than a mistake: the reference DECAYS to
-            // its value, the callee gets the value and cannot write
-            // through, and the caller is unchanged.
-            if (pr.Ref === true && (arg as { type?: string }).type !== 'RefExpression') {
+        argsForRef.forEach(({ node: arg, slot: i }) => {
+          const pr = params[i];
+          if (!pr) {
+            return;
+          }
+          // Only the MISSING direction. The extra one - a `ref`
+          // argument to a parameter that declares none - is specified
+          // behaviour rather than a mistake: the reference DECAYS to
+          // its value, the callee gets the value and cannot write
+          // through, and the caller is unchanged.
+          if (pr.Ref === true && (arg as { type?: string }).type !== 'RefExpression') {
+            const completion = Throw.StaticTypeError(
+              'parameter $1 requires a ref argument',
+              Value(pr.Name || `parameter ${i + 1}`),
+            ) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+            return;
+          }
+          // THE REFERENT'S TYPE IS CHECKED AND NEVER CONVERTED.
+          // #sec-reference-parameters-and-arguments: "A type annotation
+          // on a `ref` parameter is checked against the referent and
+          // never converts it ... because a borrow that converted its
+          // referent would silently change storage it does not own." So
+          // this is not the ordinary argument check, which adapts a
+          // literal and admits a conversion: the referent's type must
+          // BE the parameter's.
+          //
+          // `SameType` rather than assignability, for that reason. A
+          // subtype would be admitted by assignability and is still
+          // wrong here - the callee may write the parameter's type into
+          // a location that holds the narrower one.
+          if (pr.Ref === true && (arg as { type?: string }).type === 'RefExpression') {
+            const borrowed = locationType((arg as unknown as { Expression?: ParseNode }).Expression ?? arg);
+            const wantedRef = pr.Rest ? restElementType(pr.Type) : pr.Type as Known;
+            if (borrowed && wantedRef && borrowed.Kind !== 'any' && wantedRef.Kind !== 'any'
+              && !mentionsTypeParameter(wantedRef)
+              && !SameType(borrowed as TypeRecord, wantedRef as TypeRecord)) {
               const completion = Throw.StaticTypeError(
-                'parameter $1 requires a ref argument',
+                'the argument bound by ref to $1 does not satisfy its type annotation',
                 Value(pr.Name || `parameter ${i + 1}`),
               ) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
-              return;
             }
-            // THE REFERENT'S TYPE IS CHECKED AND NEVER CONVERTED.
-            // #sec-reference-parameters-and-arguments: "A type annotation
-            // on a `ref` parameter is checked against the referent and
-            // never converts it ... because a borrow that converted its
-            // referent would silently change storage it does not own." So
-            // this is not the ordinary argument check, which adapts a
-            // literal and admits a conversion: the referent's type must
-            // BE the parameter's.
-            //
-            // `SameType` rather than assignability, for that reason. A
-            // subtype would be admitted by assignability and is still
-            // wrong here - the callee may write the parameter's type into
-            // a location that holds the narrower one.
-            if (pr.Ref === true && (arg as { type?: string }).type === 'RefExpression') {
-              const borrowed = locationType((arg as unknown as { Expression?: ParseNode }).Expression ?? arg);
-              const wantedRef = pr.Rest ? restElementType(pr.Type) : pr.Type as Known;
-              if (borrowed && wantedRef && borrowed.Kind !== 'any' && wantedRef.Kind !== 'any'
-                && !mentionsTypeParameter(wantedRef)
-                && !SameType(borrowed as TypeRecord, wantedRef as TypeRecord)) {
-                const completion = Throw.StaticTypeError(
-                  'the argument bound by ref to $1 does not satisfy its type annotation',
-                  Value(pr.Name || `parameter ${i + 1}`),
-                ) as ThrowCompletion;
-                errors.push(completion.Value as ObjectValue);
-              }
-            }
-          });
-        }
+          }
+        });
       }
       {
         const contextFills = decoratorCalls.has(c as unknown as object)
@@ -19064,7 +19130,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               continue;
             }
             const declared = resolveType(ann.Type);
-            if (declared && !canCarryDisposal(declared)) {
+            if (declared && !canCarryDisposal(declared, (type) => {
+              const shape = structureOf(type);
+              const disposer = shape?.Kind === 'object'
+                ? shape.Properties.find((property) => property.key === wellKnownSymbols.dispose)?.type : null;
+              return !disposer || !notCallable(disposer);
+            })) {
               const completion = Throw.StaticTypeError('a using declaration cannot be typed $1, whose values carry no disposal method', Value(displayType(declared))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
@@ -19780,24 +19851,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // resolution (mixed families, a family with no row, an unfitting
         // literal beside a typed argument) apply at every call site.
         checkNumericCall(n, null);
-        // A SPREAD ARGUMENT iterates, exactly as a spread in an array literal
-        // does. `f(...n)` for a `uint8` n was the run time's "1 (typed) is not
-        // iterable" while `[...n]` was refused here - one rule, two syntaxes,
-        // and only one of them reached.
-        for (const arg of (n as unknown as { Arguments?: readonly ParseNode[] }).Arguments ?? []) {
-          if ((arg as { type?: string }).type !== 'AssignmentRestElement') {
-            continue;
-          }
-          const spreadArg = (arg as unknown as { AssignmentExpression?: ParseNode }).AssignmentExpression;
-          const spreadArgType = spreadArg ? staticType(spreadArg) : null;
-          if (spreadArgType && notIterable(spreadArgType)) {
-            const completion = Throw.StaticTypeError(
-              'a value of $1 is not iterable',
-              Value(displayType(spreadArgType as TypeRecord)),
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-          }
-        }
+        checkArgumentSpreads(n.Arguments);
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         const callee = callableForm(staticType(c.CallExpression));
         // Type-object calls share lexical resolution with result inference.
@@ -19933,6 +19987,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(n.Expression);
         return;
       case 'SuperCall': {
+        checkArgumentSpreads(n.Arguments);
         const self = thisTypeFrames.at(-1);
         const base = (self as { Base?: Known } | null | undefined)?.Base;
         if (base?.Kind === 'nominal') {
@@ -19947,6 +20002,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'NewExpression': {
+        checkArgumentSpreads(n.Arguments);
         const ne = n as unknown as { MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
         const target = patternExpression(ne.MemberExpression);
         let bareTarget = target;
@@ -20291,6 +20347,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           locationType(operand);
           const declared = declaredOperator(staticType(operand), `unary ${n.operator}`);
           if (declared) checkStoreResult(operand, typedExpressionView(n, operatorResult(declared, [], n)));
+          else checkLengthMutation(operand, n.operator);
         }
         walk(operand);
         // #sec-narrowing: an update writes the binding just as an assignment
@@ -20331,6 +20388,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             walk(a.AssignmentExpression);
             return;
           }
+          checkLengthMutation(a.LeftHandSideExpression, a.AssignmentOperator, a.AssignmentExpression);
           compoundBinaryType(assignment);
         }
         const indexed = patternExpression(a.LeftHandSideExpression);

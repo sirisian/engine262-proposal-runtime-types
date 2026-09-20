@@ -2,7 +2,7 @@ import {
   Value, ObjectValue, NumberValue, isTypedNumber,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
-import { type ValueEvaluator } from '../completion.mts';
+import { Q, type ValueEvaluator } from '../completion.mts';
 import { JSStringValue } from '../value.mts';
 import { type Mutable } from '../utils/language.mts';
 import { makePrimitive } from '../type-system/records.mts';
