@@ -1,6 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
-import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { surroundingAgent, EnsureCompletion, Q, type PlainEvaluator } from '#self';
 
@@ -47,7 +47,41 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     // and no [[OperatorName]], which is the discriminator. It takes no
     // parameters: the value it converts is `this`.
     if (e.type === 'OperatorDefinition' && e.OperatorName === null && e.Type && e.FunctionBody) {
-      const target = Q(yield* TypeNodeToTypeRecord(e.Type));
+      // THE BLOCK'S OWN TYPE PARAMETERS ARE IN SCOPE for the cast's target.
+      // #sec-primitive-operator-blocks: "`primitive` T P `{` ... `}`, where ...
+      // P is an optional |TypeParameters| constrained by a meta type", and the
+      // grammar is `primitive` TypeName TypeParameters? `{` ... `}`.
+      //
+      // They were collected and never bound, so `primitive complex<T: P> {
+      // operator complex.<T>() { … } }` - the form the clause defines - answered
+      // `"T" is not defined`. Only the P-less form worked, and there
+      // `complex.<P>` has to be read as a COMPONENT argument, because `complex`
+      // takes one: the cast's target became `complex.<{ phase: int.<32> }>`, a
+      // shape rather than the meta type family, and covered no parameterization.
+      //
+      // That is why a metadata crossing into `complex.<float64>.<{ … }>` or
+      // `rational.<64>.<{ … }>` was refused in the annotation spelling while
+      // `:=` succeeded: the cast the program declared was never a candidate.
+      const blockFrame = new Map<string, TypeRecord>();
+      for (let i = 0; i < blockParameterNames.length; i += 1) {
+        const constraint = blockParameterConstraints[i];
+        if (constraint) {
+          blockFrame.set(blockParameterNames[i]!, Q(yield* TypeNodeToTypeRecord(constraint as never)));
+        }
+      }
+      let blockFramePushed = false;
+      if (blockFrame.size > 0) {
+        pushTypeParameterFrame(blockFrame);
+        blockFramePushed = true;
+      }
+      let target: TypeRecord;
+      try {
+        target = Q(yield* TypeNodeToTypeRecord(e.Type));
+      } finally {
+        if (blockFramePushed) {
+          popTypeParameterFrame();
+        }
+      }
       const castFn = OrdinaryFunctionCreate(
         surroundingAgent.intrinsic('%Function.prototype%'),
         'operator',
