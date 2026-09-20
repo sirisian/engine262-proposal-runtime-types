@@ -528,8 +528,22 @@ export function* ApplyDecorators(decorators: readonly ParseNode.Decorator[] | nu
       // the context has not been appended yet.
       args.push(Q(yield* ArgumentListEvaluation(call.Arguments)) as unknown as Value[]);
     } else {
-      const expr = (d as unknown as { MemberExpression: ParseNode.MemberExpression }).MemberExpression;
-      const ref = Q(yield* Evaluate(expr as ParseNode));
+      // THREE subtypes, not two. `parseDecorator` produces
+      // ~ParenthesizedExpression~ as well - the grammar's
+      // `@ ( Expression )` - and this read `MemberExpression` off it, which is
+      // not a field of that node. The undefined travelled into `Evaluate` and
+      // the engine fell over reading `.parent` of nothing: `@(d) class A {}`
+      // crashed the host rather than throwing, as did every parenthesized
+      // spelling - a factory, an arrow, a member access, on a class, a method
+      // or a field.
+      //
+      // The parenthesized form evaluates its inner |Expression| and is
+      // otherwise the plain form: no arguments of its own, the context appended
+      // as for `@f`.
+      const expr = d.subtype === 'ParenthesizedExpression'
+        ? (d as unknown as { ParenthesizedExpression: ParseNode }).ParenthesizedExpression
+        : (d as unknown as { MemberExpression: ParseNode.MemberExpression }).MemberExpression as ParseNode;
+      const ref = Q(yield* Evaluate(expr));
       evaluated.push(Q(yield* GetValue(ref as never)));
       // `@f` and `@f()` are ONE FORM: both resolve with no explicit argument.
       args.push([]);
