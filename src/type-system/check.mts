@@ -817,9 +817,29 @@ export function IsBigIntContextLiteral(node: object): boolean {
  * double the two are indistinguishable.
  */
 const decimalLiterals = new WeakMap<object, 32 | 64 | 128>();
+const complexLiteralComponents = new WeakMap<object, TypeRecord>();
 
 export function DecimalContextLiteralWidth(node: object): 32 | 64 | 128 | undefined {
   return decimalLiterals.get(node);
+}
+
+/**
+ * The COMPONENT TYPE an imaginary literal was read at, where its context asked
+ * for one.
+ *
+ * #sec-complex-numbers gives an imaginary literal "the type `complex`", and the
+ * checker's own note on that arm adds that literal propagation "is what puts a
+ * `4i` in a `complex64` position at `complex64`". It did not: the literal was
+ * built with no component at all, so it was a `complex.<number>`, and
+ * `const c: complex128 = 1 + 2i` was refused - at run time as well as in the
+ * checker, since the VALUE really was of the wrong type.
+ *
+ * Recorded here and read by `NumericValue`, exactly as a decimal literal's width
+ * is, so the value is BORN at its context's component rather than converted at
+ * the store.
+ */
+export function ComplexContextLiteralComponent(node: object): TypeRecord | undefined {
+  return complexLiteralComponents.get(node);
 }
 
 /**
@@ -10121,6 +10141,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node && expressionViewTypes.has(node)) return expressionViewTypes.get(node)!;
     if (node?.type === 'MatchExpression') return checkMatchExpression(node, contextual);
     if (node?.type === 'CommaOperator') return staticTypeIn(node.ExpressionList.at(-1), contextual);
+    // A COMPLEX CONTEXT REACHES THROUGH `+` AND `-` TO ITS OPERANDS, because
+    // that is how a complex is written: `1 + 2i` is the documents' own spelling
+    // and the only one #sec-complex-numbers uses in prose.
+    //
+    // The imaginary literal's own arm already adopts a contextual component, but
+    // an additive expression never handed it one - the context stopped at the
+    // `+` - so `const c: complex128 = 1 + 2i` stayed a `complex.<number>` and
+    // was refused, while the bare `const c: complex128 = 4i` worked. The two
+    // spellings of one value disagreed.
+    //
+    // Only for a COMPLEX contextual, and only to record the operands: the
+    // additive arm below still decides the expression's own type, so no other
+    // context changes shape here.
+    if (node && contextual && (node.type === 'AdditiveExpression')) {
+      const cbase = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
+      if (cbase.Kind === 'primitive' && cbase.Name === 'complex' && cbase.Arguments.length === 1) {
+        const parts = node as unknown as { AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode };
+        if (parts.AdditiveExpression) {
+          staticTypeIn(parts.AdditiveExpression, contextual);
+        }
+        if (parts.MultiplicativeExpression) {
+          staticTypeIn(parts.MultiplicativeExpression, contextual);
+        }
+      }
+    }
     // PARENTHESES ARE TRANSPARENT. A contextual is recorded against the node
     // that reads it - the call, the object literal - and `( … )` is a node of
     // its own in between, so the literal inside is what is recorded against,
@@ -10883,6 +10928,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           rationalLiterals.set(node, { sig: digits.significand, exp: digits.exponent });
           return contextual;
         }
+      }
+    }
+    // An IMAGINARY literal takes its component from the context, the way the
+    // decimal mark below takes its width.
+    if (node.type === 'NumericLiteral' && contextual
+      && (node as { Imaginary?: boolean }).Imaginary) {
+      const base = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
+      if (base.Kind === 'primitive' && base.Name === 'complex' && base.Arguments.length === 1) {
+        complexLiteralComponents.set(node, base.Arguments[0] as TypeRecord);
+        // AND the literal REPORTS that type. Recording alone left its static
+        // type as the bare `complex`, which is not assignable to
+        // `complex.<float64>`, so the checker refused the declaration before the
+        // value was ever built - `NumericValue` was never even reached.
+        return contextual;
       }
     }
     if (node.type === 'NumericLiteral' && contextual) {

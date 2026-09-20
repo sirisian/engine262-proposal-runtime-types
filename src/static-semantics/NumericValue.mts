@@ -1,6 +1,6 @@
 import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits } from '../type-system/check.mts';
+import { IsBigIntContextLiteral, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextLiteralComponent } from '../type-system/check.mts';
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
@@ -20,7 +20,11 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
   // as its real one, so `4i` is `complex(0, 4)`." The lexer scanned the
   // magnitude; the axis is what the suffix said.
   if ((node as { Imaginary?: boolean }).Imaginary) {
-    return CreateComplexValue(0, Number(node.value), undefined, surroundingAgent.currentRealmRecord);
+    // The component the CONTEXT asked for, where it asked for one: a `4i` in a
+    // `complex64` position is a `complex.<float32>`, not a `complex.<number>`
+    // that the store would then refuse.
+    const component = ComplexContextLiteralComponent(node);
+    return CreateComplexValue(0, Number(node.value), component, surroundingAgent.currentRealmRecord);
   }
   if (typeof node.value === 'number' && typeof node.SourceText === 'string' && IsBigIntContextLiteral(node)) {
     return Value(BigInt(node.SourceText.replace(/_/g, '')));
