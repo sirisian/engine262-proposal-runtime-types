@@ -55,3 +55,42 @@ test('the design\u2019s worked example runs over an owned array', () => {
 test('a dynamic array still reports the limit', () => {
   expectThrown('let a: [].<uint8> = [1, 2, 3]; a.buffer;', 'specified but not implemented');
 });
+
+/**
+ * A FIXED OWNED ARRAY IS A VIEW SOURCE. Its bytes exist on request, so
+ * `Span.<V>(buf)` is the same operation as `Span.<V>(buf.buffer)`; it was
+ * refused only because the source was named rather than its storage, and the
+ * message listed three sources while an owned array had become a fourth.
+ *
+ * The COERCION is deliberately not extended. `const s: Span.<V> = buf`
+ * reinterprets eight `uint8`s as four `V`s, and a conversion between types "is
+ * written explicitly rather than performed silently" - the call says so, the
+ * declaration does not. The same-element coercion is unaffected, since
+ * describing a `[4].<A>` as a `Span.<A>` re-describes nothing.
+ */
+
+test('a fixed owned array may be viewed directly', () => {
+  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+    const buf: [8].<uint8>; String(Span.<V>(buf).length);`)).toBe('4');
+  // The same window either way.
+  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+    const buf: [8].<uint8>; String(Span.<V>(buf.buffer).length);`)).toBe('4');
+  // And it is a window over the array, not a copy of it.
+  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+    const buf: [8].<uint8>; const s = Span.<V>(buf);
+    const ref e = s[0]; e.x = 7; String(buf[0]);`)).toBe('7');
+  expect(evaluated(`class V { x: uint8 = 0; y: uint8 = 0; }
+    const buf: [8].<uint8>; String(Span.<V>(buf, 2).length);`)).toBe('3');
+});
+
+test('a dynamic array is still not a view source', () => {
+  expectThrown('class V { x: uint8 = 0; y: uint8 = 0; } let buf: [].<uint8> = [1,2,3,4]; Span.<V>(buf);',
+    'a view needs an ArrayBuffer');
+});
+
+test('the coercion still refuses to reinterpret', () => {
+  expectThrown('class V { x: uint8 = 0; y: uint8 = 0; } const buf: [8].<uint8>; const s: Span.<V> = buf;',
+    'is not assignable to');
+  // Same element type re-describes nothing and is unaffected.
+  expect(evaluated('class A { x: uint8 = 1; } const p: [4].<A>; const s: Span.<A> = p; String(s.length);')).toBe('4');
+});

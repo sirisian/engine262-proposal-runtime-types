@@ -228,6 +228,23 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
       if (viewed.ViewedArrayBuffer) {
         buffer = viewed.ViewedArrayBuffer;
         baseOffset = viewed.ByteOffset ?? 0;
+      } else {
+        // A FIXED OWNED ARRAY is a source too. Its bytes exist on request
+        // (`MaterializeArrayBytes`), so `Span.<V>(buf)` is the same operation as
+        // `Span.<V>(buf.buffer)` and was refused only because the source was
+        // named rather than its storage. The message listed three sources and an
+        // owned array had become a fourth in every respect except being
+        // accepted.
+        //
+        // A DYNAMIC array is not one: materialisation is restricted to a fixed
+        // extent, since a growable array cannot hand out a window without
+        // freezing or desynchronising, so this returns *undefined* for one and
+        // the refusal below still stands.
+        const owned = Q(yield* MaterializeArrayBytes(source));
+        if (owned !== undefined) {
+          buffer = owned;
+          baseOffset = 0;
+        }
       }
     }
   }
