@@ -523,6 +523,39 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
           return jsonTypeError(path, t, value);
         }
         const v = R(value);
+        // AN INTEGER TOKEN WIDER THAN A DOUBLE HOLDS EXACTLY IS REFUSED.
+        //
+        // #sec-coercejsonvalue defers "the exact wide numeric types (the 64-bit
+        // integers, `decimal128`, and `bigint`) WHOSE DIGITS MUST CONVERT
+        // WITHOUT FIRST ROUNDING THROUGH A NUMBER" - and this converts by
+        // rounding through a Number, because the document has already been
+        // parsed into one by the time it arrives here.
+        //
+        // Below 2**53 every integer is a Number exactly, so the rounding is the
+        // identity and the conversion is sound. Above it, it is not:
+        // `JSON.parse.<uint64>('9007199254740993')` answered 9007199254740992,
+        // so a document round-tripped, validated, and came back holding a
+        // DIFFERENT NUMBER. The token's own digits are gone by this point and
+        // cannot be recovered, so the honest answer is to refuse rather than to
+        // guess which of two tokens produced this double.
+        //
+        // The range check below catches the largest of these by accident - a
+        // `uint64` token near 2**64 rounds past the type's maximum - which is
+        // why only the band between 2**53 and the type's range was silent.
+        // INTEGER targets only: a float target has an answer for a large value
+        // (it rounds, and saturates to an infinity), so the exactness question
+        // does not arise there - `JSON.parse.<float64>('1e300')` is 1e300 and
+        // must stay so.
+        //
+        // The bound is 2**53 INCLUSIVE, not exclusive: the token
+        // `9007199254740993` parses to exactly 2**53, so an exclusive bound
+        // lets through the very value that motivated the guard. The cost is
+        // that the exact token `9007199254740992` is refused too, which is
+        // unavoidable - both tokens produce this double and nothing here can
+        // tell them apart.
+        if ((name === 'uint' || name === 'int') && Math.abs(v) >= 2 ** 53) {
+          return jsonTypeError(path, t, value);
+        }
         // A number token that does not fit its integer target, or a fractional
         // token targeting an integer type, is a TypeError (the range check).
         if (name !== 'number' && !fitsNumericType(v, name, t.Arguments)) {
