@@ -5,7 +5,7 @@ import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability
 import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame, EvaluateRefinementPredicate, ValuePackView } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor } from '../abstract-ops/runtime-types.mts';
+import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   typeDeclarationNamesInPass,
@@ -828,8 +828,12 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         : parameterizedBase.Name;
       // A bare Number is spelled `number`; a typed value names its own base.
       // Both are tried, as `ApplyImplicitCast` tries both.
+      // `CastCoversTarget`, not `SameType`: the documented form declares the
+      // cast against a META TYPE while a crossing's target is one
+      // parameterization of it, so an exact-type test matched nothing and
+      // declaring the cast changed nothing.
       const declared = ['number', name].some((key) => PrimitiveCastsFor(key)
-        .some((cast) => SameType(cast.target, crossing.target)));
+        .some((cast) => CastCoversTarget(cast.target, crossing.target)));
       if (!declared) {
         return Throw.StaticTypeError('$1 is not assignable to $2',
           Value(inspect(crossing.value)), Value(displayType(crossing.target)));

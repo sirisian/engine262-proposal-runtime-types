@@ -4488,6 +4488,37 @@ function metadataValueFromType(t: TypeRecord): unknown {
 /** Distinguishes "this form is not a metadata value" from a value of *undefined*. */
 const METADATA_NOT_A_VALUE = Symbol('not-a-metadata-value');
 
+/**
+ * The meta type an argument to a parameterization NAMES, where it names one
+ * rather than supplying values.
+ *
+ * `float32.<Dimensions>` passes an object type whose members are TYPES; every
+ * key of it is claimed by the meta type that declared them, so the first claimed
+ * key identifies it. `float32.<{ m: 1 }>` passes literal values and names no
+ * meta type - the metadata IS the argument - so this answers *undefined* and the
+ * record is built as it always was.
+ *
+ * The distinction is the member's type: a `literal` supplies a value, anything
+ * else declares a key. Without it a metadata object would be read as naming the
+ * family that claims its keys, and `float32.<{ m: 1 }>` would cover every
+ * dimensioned float32.
+ */
+export function MetaTypeNamedByArgument(t: TypeRecord): object | undefined {
+  if (t.Kind !== 'object') {
+    return undefined;
+  }
+  let found: object | undefined;
+  for (const p of t.Properties) {
+    if (p.type?.Kind === 'literal') {
+      return undefined;
+    }
+    if (found === undefined && typeof p.key === 'string') {
+      found = MetaTypeClaiming(p.key);
+    }
+  }
+  return found;
+}
+
 export function MetadataObjectFromType(t: TypeRecord): MetadataRecord {
   const fields: Record<string, unknown> = Object.create(null);
   if (t.Kind === 'object') {
@@ -4935,10 +4966,21 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           base = null;
         }
         if (base) {
+          // THE META TYPE THE ARGUMENT NAMES, kept on the record. Both
+          // `float32.<Dimensions>` and `float32.<{ m: 1 }>` reduce to a metadata
+          // object, and for the first that object is EMPTY - `Dimensions`'s
+          // members are types, not values - so the two records were
+          // indistinguishable. Cast selection compares a cast's target to a
+          // crossing's target, and a family is never the same type as one of its
+          // members, so the form `primitivemetadata.md` documents matched
+          // nothing: declaring it changed no program, and a `Vector3` of `Meter`
+          // fields had no zero-filled form.
+          const namedMetaType = MetaTypeNamedByArgument(metadataRecord);
           const record = {
             Kind: 'parameterized',
             Base: base,
             Metadata: MetadataObjectFromType(metadataRecord),
+            ...(namedMetaType === undefined ? {} : { MetaType: namedMetaType }),
           } as TypeRecord;
           // #sec-meta-declarations: "A metadata object whose own key no meta type
           // claims is a type error at the parameterization that writes it."

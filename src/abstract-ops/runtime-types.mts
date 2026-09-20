@@ -3050,6 +3050,43 @@ export function PrimitiveCastsFor(typeName: string): readonly PrimitiveCast[] {
  * lacks. Returns *undefined* where no cast applies, so the caller reports the
  * ordinary type error and nothing about an undeclared crossing changes.
  */
+/**
+ * Does a cast declared with target _castTarget_ cover a crossing into _target_?
+ *
+ * Exactly when they are the same type, OR when the cast names a META TYPE and
+ * _target_ is a parameterization of the same base whose metadata that meta type
+ * governs. `primitive float32 { operator float32.<Dimensions>() { … } }` is how
+ * `primitivemetadata.md` declares the crossing, and it means every dimensioned
+ * `float32` rather than one of them.
+ *
+ * `SameType` alone was the test, so the documented form matched NOTHING: a cast
+ * target of `float32.<Dimensions>` is never the same type as a crossing target
+ * of `float32.<{ m: 1 }>`. Declaring the cast therefore changed nothing, and a
+ * `Vector3` of `Meter` fields had no zero-filled form - which
+ * `primitivemetadata.md` names as what the memory-layout extension depends on.
+ *
+ * Coverage follows the meta type and does NOT become a blanket match: a cast
+ * written against one parameterization, `float32.<{ m: 1 }>`, still covers only
+ * that one, so `float32.<{ m: 2 }>` does not acquire a zero from it.
+ */
+export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): boolean {
+  if (SameType(castTarget, target)) {
+    return true;
+  }
+  const metaType = (castTarget as { MetaType?: object }).MetaType;
+  if (metaType === undefined || castTarget.Kind !== 'parameterized' || target.Kind !== 'parameterized') {
+    return false;
+  }
+  if (!SameType(castTarget.Base, target.Base)) {
+    return false;
+  }
+  const metadata = (target as { Metadata?: MetadataRecord }).Metadata;
+  if (metadata === undefined) {
+    return false;
+  }
+  return MetaTypeGoverns(metadata, metaType);
+}
+
 export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
   // The raw-body rule reaches the CAST too, and not only the binary operators:
   // a cast body returning `this` has its return checked against the cast's own
@@ -3077,7 +3114,7 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
       // casts apply, each runs in declaration order and the last result stands,
       // which is the clause's "one is invoked for each meta type" read
       // literally: a cast supplies its own meta type's portion.
-      if (SameType(cast.target, t)) {
+      if (CastCoversTarget(cast.target, t)) {
         // "An operator body evaluates on RAW VALUES: no operator declared by
         // any block is re-entered within one." A cast body returning `this`
         // returns the bare value, and checking that return against the cast's
