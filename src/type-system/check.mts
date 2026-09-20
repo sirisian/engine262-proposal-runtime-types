@@ -3464,6 +3464,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!source || !target) {
       return;
     }
+    // `string` TAKES WHAT HAS A CANONICAL TEXT, at a BOUNDARY. README: "A number,
+    // a bigint, and a boolean each have exactly one text that denotes them, and
+    // ToString of them is total and loses nothing, so they convert without
+    // ceremony. `undefined`, `null`, an object, and a symbol have only a
+    // diagnostic text, and are refused."
+    //
+    // The run time already does exactly this - `isStringConversionSource` admits
+    // those three and nothing else - so `let a: string = 5` was refused here
+    // before the run-time rule could apply, while `string(5)` and
+    // `5 := string` both worked.
+    //
+    // HERE and not in `IsAssignable`. That is the type RELATION, which
+    // type-level programming matches on; this is a CONVERSION at an annotation.
+    // Putting it in the relation made `1` assignable to `string`, so a type-level
+    // `replaceFirst([1, 'two', 3], string, ...)` matched `1` instead of `'two'` -
+    // a change to what a tuple means that no part of the document asks for.
+    //
+    // Exactly the three the document names: a `uint8` is a distinct type and not
+    // a `number`, and stays refused.
+    if (target.Kind === 'primitive' && target.Name === 'string' && target.Arguments.length === 0) {
+      const canonical = source.Kind === 'literal' ? (source.Base as TypeRecord) : (source as TypeRecord);
+      if (canonical.Kind === 'primitive' && canonical.Arguments.length === 0
+        && (canonical.Name === 'number' || canonical.Name === 'bigint' || canonical.Name === 'boolean')) {
+        return;
+      }
+    }
     // A SUBCLASS MAY NOT BE STORED WHERE A BASE VALUE TYPE CLASS IS DECLARED.
     // The run time refuses this where a store happens; a local, a `return` and
     // a parameter have no store to hang it on, and accepting them produced a

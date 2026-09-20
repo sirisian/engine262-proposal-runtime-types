@@ -2130,33 +2130,6 @@ export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
   if (s.Kind === 'any' || t.Kind === 'any') {
     return true;
   }
-  // `string` TAKES WHAT HAS A CANONICAL TEXT. README: "A number, a bigint, and a
-  // boolean each have exactly one text that denotes them, and ToString of them
-  // is total and loses nothing, so they convert without ceremony. `undefined`,
-  // `null`, an object, and a symbol have only a diagnostic text, and are
-  // refused."
-  //
-  // The RUNTIME already implemented this exactly - `isStringConversionSource`
-  // admits those three and no others, with the same reasoning in its comment -
-  // but the static check did not, so `let a: string = 5` was refused before the
-  // runtime rule could apply. `string(5)` and `5 := string` both worked, which
-  // is the tell: the conversion existed and only the implicit boundary was
-  // missing.
-  //
-  // The refusals were already right and stay right; this adds only the three
-  // sources the document names.
-  if (t.Kind === 'primitive' && t.Name === 'string' && t.Arguments.length === 0) {
-    const source = s.Kind === 'literal' ? (s.Base as TypeRecord) : s;
-    // EXACTLY the three the document names. A sized numeric type is not one of
-    // them: `number`, `bigint` and `boolean` are the types whose values have a
-    // canonical text, and a `uint8` is a distinct type that says so - admitting
-    // it here made `let s: string = o[Symbol.dispose]` pass where the suite
-    // requires it to be refused.
-    if (source.Kind === 'primitive' && source.Arguments.length === 0
-      && (source.Name === 'number' || source.Name === 'bigint' || source.Name === 'boolean')) {
-      return true;
-    }
-  }
   // The two BOUND types are tops over a predicate rather than over a structure,
   // so they are answered here rather than by the subtype walk. `value` admits
   // every value type (#sec-value-types), which is what excludes a `dynamic`
