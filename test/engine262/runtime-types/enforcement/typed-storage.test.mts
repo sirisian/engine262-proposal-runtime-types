@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, runFlagOff, expectStaticTypeError, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrown, runFlagOff, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-typed-storage (Typed Storage) - typed own properties via
@@ -303,5 +303,5 @@ test('what delete still allows', () => {
   // The tuple rule is unchanged in both directions: a non-position is
   // deletable, a position is not.
   expect(evaluated('type T = [uint8, string]; let t: T = [1, "s"]; String(delete t[9]);')).toBe('true');
-  expectThrownKind('type T = [uint8, string]; let t: T = [1, "s"]; delete t[0];', 'TypeError');
+  expectStaticTypeError('type T = [uint8, string]; let t: T = [1, "s"]; delete t[0];');
 });

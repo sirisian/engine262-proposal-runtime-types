@@ -83,3 +83,18 @@ test('a comparison the checker cannot decide defers', () => {
   expectThrownKind('let a: any = float32x4(1, 2, 3, 4); '
     + 'let b: float32x4 = float32x4(4, 3, 2, 1); let r = a < b;', 'TypeError');
 });
+
+test.each(['==', '!='])('discarded SIMD equality requires an expected result: %s', (operator) => {
+  for (const body of [`a ${operator} b;`, `throw a ${operator} b;`, `for (a ${operator} b; false;) {}`, `for (; false; a ${operator} b) {}`]) {
+    expectStaticTypeError(`function unused(a: int32x4, b: int32x4) { ${body} }`);
+  }
+  for (const result of ['boolean32x4', 'vector.<uint.<1>, 4>', 'int32x4']) {
+    expect(ok(`function valid(a: int32x4, b: int32x4) { const result: ${result} = a ${operator} b; }`)).toBe(true);
+  }
+  expect(ok(`function unknown(a: any, b: any) { a ${operator} b; }`)).toBe(true);
+  expect(ok(`function generic<T>(a: vector.<T, 4>, b: vector.<T, 4>) { a ${operator} b; }`)).toBe(true);
+});
+
+test('discarded strict scalar equality keeps its existing policy', () => {
+  expect(ok('function unused(a: string, b: boolean) { a === b; a !== b; }')).toBe(true);
+});

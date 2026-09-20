@@ -9345,24 +9345,59 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * is "checked once rather than once per application". The application itself
    * resolves `vector.<uint8, 4>` and is judged there.
    */
-  /**
-   * Is _t_ a target for which a STRING is not a conversion source?
-   *
-   * #sec-parsing states the rule over "a numeric type", and #sec-convertvalue is
-   * where it is enforced - which reaches it only for the sized value types,
-   * `int`, `uint` and the binary floats. `number`, `bigint` and `boolean` are
-   * handled by earlier cases of that operation and perform "the ordinary
-   * primitive conversions", so `("5" := number)` is 5 and `("5" := boolean)` is
-   * *true*.
-   *
-   * Written once because the checker judges this at two spellings - the Type
-   * Object call and the `:=` cast - and a looser test than the run time's
-   * refuses programs the run time accepts. A `numericFamilyOf` test is exactly
-   * that looser test: it admits `number`, and the call form used it, so
-   * `number("5")` was refused here and accepted there.
-   */
-  const stringIsNoConversionSource = (t: Known): boolean => !!t && t.Kind === 'primitive'
-    && (isIntegerTypeName((t as { Name: string }).Name) || isFloatTypeName((t as { Name: string }).Name));
+  // #sec-convertvalue: availability is distinct from assignability. A
+  // narrowing numeric cast may wrap, while an unknown source, metadata hook,
+  // class conversion or structural boundary cannot be ruled out here.
+  type ConversionAvailability = 'possible' | 'impossible' | 'unresolved';
+  const explicitConversionAvailability = (source: Known, target: Known): ConversionAvailability => {
+    if (!source || !target || source.Kind === 'any' || target.Kind === 'any'
+      || mentionsTypeParameter(source) || mentionsTypeParameter(target)) return 'unresolved';
+    if (SameType(source, target)) return 'possible';
+    if (source.Kind === 'literal') return explicitConversionAvailability(source.Base, target);
+    if (source.Kind === 'union') {
+      const alternatives = source.Members.map((member) => explicitConversionAvailability(member, target));
+      if (alternatives.every((result) => result === 'impossible')) return 'impossible';
+      return alternatives.every((result) => result === 'possible') ? 'possible' : 'unresolved';
+    }
+    if (target.Kind === 'union') {
+      const alternatives = target.Members.map((member) => explicitConversionAvailability(source, member));
+      if (alternatives.includes('possible')) return 'possible';
+      return alternatives.every((result) => result === 'impossible') ? 'impossible' : 'unresolved';
+    }
+    // This closed scalar domain needs neither member inspection nor user
+    // evaluation. In particular, do not erase brands to manufacture a proof.
+    if (source.Kind !== 'primitive' || target.Kind !== 'primitive') return 'unresolved';
+    const numericSource = isNumericOperandName(source.Name);
+    const simpleSource = ['string', 'boolean', 'symbol', 'undefined', 'null'].includes(source.Name);
+    if (!numericSource && !simpleSource) return 'unresolved';
+    if (numericSource && isNumericOperandName(target.Name)) return 'possible';
+    if (target.Name === 'boolean') return 'possible';
+    // The legacy Number conversion deliberately retains ToNumber semantics.
+    if (target.Name === 'number') return source.Name === 'symbol' ? 'impossible' : 'possible';
+    if (target.Name === 'string') {
+      return numericSource || source.Name === 'boolean' ? 'possible' : 'impossible';
+    }
+    if (isIntegerTypeName(target.Name) || isFloatTypeName(target.Name)
+      || ['symbol', 'undefined', 'null'].includes(target.Name)) return 'impossible';
+    // Other extension constructors (decimal, rational, vectors, Composite,
+    // etc.) have additional forms. Their availability remains deferred.
+    return 'unresolved';
+  };
+
+  const requireExplicitConversion = (source: Known, target: Known): void => {
+    if (!source || !target || explicitConversionAvailability(source, target) !== 'impossible') return;
+    const base = source.Kind === 'literal' ? source.Base : source;
+    if (base.Kind === 'primitive' && base.Name === 'string' && target.Kind === 'primitive'
+      && (isIntegerTypeName(target.Name) || isFloatTypeName(target.Name))) {
+      errors.push(Throw.StaticTypeError(
+        'a string is not a conversion source for $1; use its parse form', Value(displayType(target)),
+      ).Value as ObjectValue);
+    } else {
+      errors.push(Throw.StaticTypeError(
+        '$1 has no explicit conversion to $2', Value(displayType(source)), Value(displayType(target)),
+      ).Value as ObjectValue);
+    }
+  };
 
   const requireWellFormedVector = (record: TypeRecord | null | undefined): boolean => {
     if (!record || mentionsTypeParameter(record)) {
@@ -9492,6 +9527,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
         return;
       }
+      case 'EqualityExpression':
+        // Loose vector equality has the same contextual-result obligation as
+        // ordering. Leave discarded strict scalar equality's policy unchanged.
+        if (node.operator === '==' || node.operator === '!=') {
+          staticType(node);
+        } else {
+          validateDiscardedExpression(node.EqualityExpression);
+          validateDiscardedExpression(node.RelationalExpression);
+        }
+        return;
       case 'RelationalExpression':
       case 'AdditiveExpression':
       case 'MultiplicativeExpression':
@@ -12334,7 +12379,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // range needs no per-element check. A window whose length is not
             // stated has nothing to decide against and keeps the run-time check.
             const spanExtent = spanExtentOfReceiver(receiver);
-            const spanIndex = m.Expression as { type?: string, value?: unknown };
+            const spanIndex = patternExpression(m.Expression) as { type?: string, value?: unknown };
             if (spanExtent !== undefined && spanIndex.type === 'NumericLiteral'
                 && typeof spanIndex.value === 'number'
                 && (!Number.isInteger(spanIndex.value) || spanIndex.value < 0 || spanIndex.value >= spanExtent)) {
@@ -12354,9 +12399,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // runs rather than as a run-time RangeError, which is what lets a
             // bounds check be elided where the index is proven.
             //
-            // Only a literal is decided: anything computed keeps the run-time
-            // check, which stays the backstop for every other index.
-            const index = m.Expression as { type?: string, value?: number };
+            // Parentheses are transparent; unary signs and computed indices
+            // retain their existing runtime checks.
+            const index = patternExpression(m.Expression) as { type?: string, value?: number };
             if (!isDeleteOperand && index.type === 'NumericLiteral' && typeof receiver.Extent === 'number'
                 && typeof index.value === 'number'
                 && (!Number.isInteger(index.value) || index.value < 0 || index.value >= receiver.Extent)) {
@@ -17250,6 +17295,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  // Retain storage provenance while resolving a member at the receiver's
+  // specialization. A structural property with a small integer type is not a
+  // class bit-field, and a derived accessor must not expose a hidden base field.
+  const storageFieldType = (receiver: Known, key: string | SymbolValue | undefined): Known => {
+    const seen = new Set<TypeRecord>();
+    let current = receiver;
+    while (key !== undefined && current?.Kind === 'nominal' && !seen.has(current)) {
+      seen.add(current);
+      const declaration = current.Declaration as ParseNode.ClassDeclaration | ParseNode.ClassExpression;
+      if (declaration?.type !== 'ClassDeclaration' && declaration?.type !== 'ClassExpression') return null;
+      const member = declaration.ClassTail.ClassBody?.find((element) => 'ClassElementName' in element
+        && !element.static && classElementKey(element.ClassElementName) === key);
+      if (member) {
+        if (member.type !== 'FieldDefinition' || !member.TypeAnnotation) return null;
+        const shape = structureOf(current);
+        return shape?.Kind === 'object' ? shape.Properties.find((property) => property.key === key)?.type ?? null : null;
+      }
+      const base = (current as TypeRecord & { Base?: TypeRecord }).Base;
+      current = base ? SubstituteTypeArguments(base, declaration, current.Arguments) : null;
+    }
+    return null;
+  };
+
   /** Borrow eligibility is independent of the type stored at a location. */
   const requireBorrowable = (expression: ParseNode): void => {
     const target = patternExpression(expression)!;
@@ -17274,12 +17342,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     if (primitive(receiver)) errors.push(Throw.StaticTypeError('cannot take a ref of a property of a primitive').Value as ObjectValue);
     const key = memberKey(target);
-    const declaration = receiver && classDeclarationOf(receiver) as ParseNode.ClassDeclaration | undefined;
-    const field = declaration?.ClassTail.ClassBody?.find((element) => element.type === 'FieldDefinition'
-      && classElementKey(element.ClassElementName) === key);
-    if (field?.type === 'FieldDefinition' && field.TypeAnnotation) {
-      const fieldType = resolveType(field.TypeAnnotation.Type);
-      const layout = fieldType ? LayoutOf(fieldType) : null;
+    const fieldType = storageFieldType(receiver, key);
+    if (fieldType && !mentionsTypeParameter(fieldType)) {
+      const layout = LayoutOf(fieldType);
       if (layout && layout.bitLength < 8 && typeof key === 'string') errors.push(Throw.StaticTypeError(
         'cannot take a ref of $1, which is a bit-field and has no byte address', Value(key),
       ).Value as ObjectValue);
@@ -19047,32 +19112,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if ((tc.Expression as ParseNode).type === 'NumericLiteral') {
           staticTypeIn(tc.Expression as ParseNode, target);
         }
-        // #sec-parsing: "A `string` is deliberately not a conversion source for
-        // a numeric type, so `let c: uint8 = '1';` is a type error and the parse
-        // is always written ... and it is enforced at the explicit conversion
-        // too, so `'1' := uint8` is a type error for the same reason."
-        //
-        // "For the same reason", and the two spellings did not get the same
-        // answer: the annotation was refused before the source ran and the cast
-        // threw when it evaluated - so `('1' := uint8)` inside a function
-        // nothing called raised nothing at all. The Type Object CALL form,
-        // `uint8('1')`, was already refused here; this is the third spelling of
-        // one rule.
-        //
-        // Only where the source type is KNOWN and is definitely a string. An
-        // `any` source is the boundary #sec-arithmetic-never-promotes defers,
-        // and the run time's own refusal answers it there.
-        const sourceType = staticType(tc.Expression as ParseNode);
-        const sourceBase = sourceType && sourceType.Kind === 'literal'
-          ? (sourceType as { Base?: TypeRecord }).Base
-          : sourceType;
-        if (sourceBase && target && stringIsNoConversionSource(target)
-            && sourceBase.Kind === 'primitive' && sourceBase.Name === 'string') {
-          errors.push(Throw.StaticTypeError(
-            'a string is not a conversion source for $1; use its parse form',
-            Value(displayType(target)),
-          ).Value as ObjectValue);
-        }
+        requireExplicitConversion(staticType(tc.Expression as ParseNode), target);
         walk(tc.Expression as ParseNode);
         return;
       }
@@ -19695,14 +19735,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(rb.Expression);
         return;
       }
-      // `delete o.a` WHERE THE BASE'S TYPE DECLARES `a`. The run time refuses
-      // it - "$1 is a typed property and cannot be deleted" - and the base's
-      // type is known here, which is the condition the object-type rules use for
-      // deciding a member question at compile time. Only a known member of a
-      // type that declares it: an undeclared name, an untyped base, and an
-      // unknown key are left alone, and the tuple rule keeps its own
-      // meaning (a non-position IS deletable, which is why that judgment lives
-      // with the index check and not here).
+      // Deletion has its own storage judgment: read bounds would reject the
+      // legal non-position case instead. Decide guaranteed fixed positions;
+      // unknown keys, dynamic extents and rest/default positions defer.
       case 'UnaryExpression': {
         const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
         let target = patternExpression(u.UnaryExpression);
@@ -19714,6 +19749,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && structure.Properties.some((p) => p.key === named)) {
             const completion = Throw.StaticTypeError('$1 is a typed property and cannot be deleted', typeof named === 'string' ? Value(named) : named) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
+          }
+          if (typeof named === 'string') {
+            const index = Number(named);
+            const canonicalIndex = Number.isInteger(index) && index >= 0 && index < 0xffffffff && String(index) === named;
+            const arrayPosition = structure?.Kind === 'array' && typeof structure.Extent === 'number' && index < structure.Extent;
+            const tuplePosition = structure?.Kind === 'tuple' && structure.Elements[index]?.Initial === 'none'
+              && structure.Elements.slice(0, index + 1).every((element) => !element.Rest);
+            if (canonicalIndex && (arrayPosition || tuplePosition)) {
+              errors.push(Throw.StaticTypeError('$1 is a typed element and cannot be deleted', Value(named)).Value as ObjectValue);
+            }
           }
         }
         staticType(n);
@@ -19821,28 +19866,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (conversionTarget !== undefined) {
           const argNodes = (c.Arguments ?? []).filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
           if (argNodes.length === 1) {
-            // #sec-conversions: "the numeric conversions are keyed on NUMERIC
-            // families, so a numeric target has a conversion available only when
-            // the value is itself numeric." `uint32("s")` was a RUNTIME TypeError
-            // only - it raised nothing in a dead branch - though both sides are
-            // written down.
-            //
-            // Reported only where the argument's type is KNOWN and is definitely
-            // not a conversion source. Argument types are frequently null in this
-            // pass, and refusing an unknown type would reject programs the
-            // runtime accepts.
-            const argType = staticType(argNodes[0]!);
-            const argBase = argType && argType.Kind === 'literal'
-              ? (argType as { Base?: TypeRecord }).Base
-              : argType;
-            if (argBase && stringIsNoConversionSource(conversionTarget as Known)
-                && argBase.Kind === 'primitive' && argBase.Name === 'string') {
-              const completion = Throw.StaticTypeError(
-                'a string is not a conversion source for $1; use its parse form',
-                Value(displayType(conversionTarget)),
-              );
-              errors.push(completion.Value as ObjectValue);
-            }
+            requireExplicitConversion(staticType(argNodes[0]!), conversionTarget);
             // The argument is typed IN the target's context, which is what
             // `uint32(f())` needed: the overload resolves because the position
             // says `uint32`.

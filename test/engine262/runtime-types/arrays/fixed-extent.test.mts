@@ -103,7 +103,7 @@ test('a fixed-extent array cannot be shortened either', () => {
   expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; a.pop();', 'TypeError');
   expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; a.shift();', 'TypeError');
   expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; a.splice(0, 1);', 'TypeError');
-  expectThrownKind('const a: [4].<uint8> = [1, 2, 3, 4]; delete a[0];', 'TypeError');
+  expectStaticTypeError('const a: [4].<uint8> = [1, 2, 3, 4]; delete a[0];');
 });
 
 test('operations that keep the length are unaffected', () => {
@@ -167,4 +167,17 @@ test('a ZERO extent has a default whatever its element type', () => {
   // Early Error rather than as a thrown TypeError.
   expectStaticTypeError('let a: [2].<never>;');
   expect(evaluated('type T = [0].<never>; String(T === never);')).toBe('false');
+});
+
+test.each(['2', '(2)', '((2))'])('grouping preserves the fixed array and Span bound judgment: %s', (index) => {
+  for (const type of ['[2].<uint8>', 'Span.<uint8, 2>']) {
+    expectStaticTypeError(`function unused(a: ${type}) { a[${index}]; }`);
+    expectStaticTypeError(`function unused(a: ${type}) { a[${index}] = 1; }`);
+    expect(ok(`function unused(a: ${type}) { a[((1))]; a[((1))] = 1; }`)).toBe(true);
+  }
+});
+
+test('parenthesized runtime indices retain runtime bounds checks', () => {
+  expectThrownKind('function read(a: [2].<uint8>, i: number) { return a[(i)]; } let a: [2].<uint8> = [1, 2]; read(a, 2);', 'RangeError');
+  expectThrownKind('let a: [].<uint8> = [1, 2]; a[((2))];', 'RangeError');
 });

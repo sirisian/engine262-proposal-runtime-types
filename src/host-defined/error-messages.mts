@@ -915,6 +915,7 @@ export interface Throw {
   | '$1 does not exist on $2'
   | '$1 does not match any of productions ($2)'
   | '$1 does not name a type parameter of $2'
+  | '$1 has no explicit conversion to $2'
   | '$1 has no signature taking a value of type $2'
   | '$1 implements an inherited $2 with a signature the declaration does not accept'
   | '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract'
