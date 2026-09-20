@@ -7068,13 +7068,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // A conservative, non-emitting call-boundary query. SequenceAssignment also
   // handles non-final/multiple rests; unknown admission keeps a path viable.
   // Flatten bounded rest contracts only up to the supplied argument count.
-  const protocolArgumentsFail = (parameters: readonly ParameterRecord[], args: readonly Known[]): boolean => {
+  const protocolArgumentsFail = (parameters: readonly ParameterRecord[], args: readonly Known[],
+    argumentFails = protocolArgumentFails): boolean => {
     if (!parameters.some((p) => p.Rest)) return parameters.some((p, i) => {
       const optional = p.Optional || p.Initial !== undefined;
       if (i >= args.length && optional) return false;
       // Extra arguments are ignored by the runtime parameter boundary. An
       // optional slot still receives a present positional argument.
-      return p.Ref === true || protocolArgumentFails(i < args.length ? args[i] : undefinedType,
+      return p.Ref === true || argumentFails(i < args.length ? args[i] : undefinedType,
         optional ? joinTypes(p.Type, undefinedType) : p.Type);
     });
     const slots: { Rest: boolean, Optional: boolean, Type: TypeRecord, Ref: boolean }[] = [];
@@ -7108,7 +7109,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const p of parameters) {
       const optional = p.Optional || p.Initial !== undefined;
       if (!p.Rest) {
-        slots.push({ Rest: false, Optional: optional || (!p.Ref && !protocolArgumentFails(undefinedType, p.Type)),
+        slots.push({ Rest: false, Optional: optional || (!p.Ref && !argumentFails(undefinedType, p.Type)),
           Type: optional ? joinTypes(p.Type, undefinedType) : p.Type, Ref: p.Ref === true });
       } else {
         const result = appendRest(p.Type, p.Ref === true);
@@ -7116,7 +7117,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     return SequenceAssignment(slots, args.length, (i, k) => !slots[k].Ref
-      && !protocolArgumentFails(args[i], slots[k].Type)) === 'unmatched';
+      && !argumentFails(args[i], slots[k].Type)) === 'unmatched';
   };
 
   const protocolCallFails = (type: Known, resultFails: (result: Known) => boolean,
@@ -7160,9 +7161,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           (value) => knownObject(value) || (knownNonObject(value) && resultFails(value))), [argument]));
     });
 
-  const hasInstanceFails = (type: Known, argument: Known): boolean => everyProtocolAlternative(type, (arm) =>
+  const hasInstanceFails = (type: Known, argument: Known, ordinaryObject: boolean): boolean => everyProtocolAlternative(type, (arm) =>
     everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.hasInstance), (hook) =>
-      !nullishOnly(hook) && protocolCallFails(hook, () => false, [argument])));
+      nullishOnly(hook) ? ordinaryObject : protocolCallFails(hook, () => false, [argument])));
+
+  // Await's assimilation call supplies two ordinary function values. Their
+  // callable/Object category is known, but they do not publish the arbitrary
+  // signature or structural properties a parameter might require. Restrict the
+  // negative argument proof to incompatible scalar domains and omitted slots.
+  const resolvingCallback: TypeRecord = { Kind: 'function', Signatures: [] };
+  const assimilationArgumentFails = (source: Known, target: TypeRecord): boolean => {
+    if (source !== resolvingCallback) return protocolArgumentFails(source, target);
+    if (target.Kind === 'union') return target.Members.length > 0
+      && target.Members.every((arm) => assimilationArgumentFails(source, arm));
+    if (target.Kind === 'parameterized' || mentionsTypeParameter(target)) return false;
+    return knownNonObject(target) && protocolArgumentFails(source, target);
+  };
+  const awaitAssimilationFails = (type: Known): boolean => everyProtocolAlternative(type, (arm) => {
+    // PromiseResolve can take the intrinsic Promise path without selecting a
+    // user-visible then. Unknown paths remain dynamic, as do primitive values.
+    if (!knownObject(arm) || (arm.Kind === 'nominal' && arm.LibraryName === 'Promise')) return false;
+    return everyProtocolAlternative(protocolMember(arm, 'then'), (method) => {
+      // Unlike GetMethod, assimilation accepts a non-callable then as a value.
+      const fn = effectiveFunctionType(callableForm(method));
+      return fn?.Kind === 'function' && fn.Signatures.length > 0
+        && fn.Signatures.every((signature) => protocolArgumentsFail(signature.Parameters,
+          [resolvingCallback, resolvingCallback], assimilationArgumentFails));
+    });
+  });
 
   // Closing has a different reachability/exception rule from stepping. This
   // bounded proof covers empty patterns and a definitely-yielding first step
@@ -19664,7 +19690,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || (signature.FormalParameters ?? signature.UniqueFormalParameters ?? signature.ArrowParameters ?? []).some(annotatedParameter);
   };
 
-  type InvocationFact = { callable: boolean, constructible: boolean, typed: boolean };
+  type InvocationFact = {
+    callable: boolean, constructible: boolean, typed: boolean,
+    abstractClass?: string, ordinaryObject?: boolean,
+  };
   const invocationFact = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>()): InvocationFact | null => {
     const node = patternExpression(expression)!;
     if (node.type === 'IdentifierReference') {
@@ -19677,18 +19706,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || (!origin.immutable && (assignedNames.has(node.name) || assignedGlobalProperties.has(node.name) || hasDirectEval))) return null;
           seen.add(origin);
           const fact = invocationFact(origin.node, i, seen);
+          // A declared conversion may replace an object literal's identity.
+          // Preserve its ordinary-object origin only across plain structures;
+          // a nominal/metadata annotation needs its own conversion proof.
+          const declared = frame.bindings.get(node.name);
+          if (fact?.ordinaryObject && origin.annotated && declared?.Kind !== 'object'
+            && !(declared?.Kind === 'primitive' && declared.Name === 'object')) return null;
           return fact ? { ...fact, typed: fact.typed || origin.annotated } : null;
         }
         if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name) || frame.dynamicBindings) return null;
       }
       return null;
     }
+    if (node.type === 'TypeArgumentsExpression') return invocationFact(node.Expression, scope, seen);
+    if (node.type === 'ObjectLiteral') return { callable: false, constructible: false, typed: false, ordinaryObject: true };
     if (node.type === 'ClassExpression' || node.type === 'ClassDeclaration') {
       if (node.Decorators?.length) return null;
       const typed = !!node.TypeParameters || !!node.ClassModifiers?.length || !!node.ClassTail.ImplementsClause?.length
         || (node.ClassTail.ClassBody ?? []).some((member) => member.type === 'OperatorDefinition'
           || typedInvocationSignature(member));
-      return { callable: false, constructible: true, typed };
+      return { callable: false, constructible: true, typed,
+        abstractClass: node.ClassModifiers?.includes('abstract') ? node.BindingIdentifier?.name ?? '(anonymous class)' : undefined };
     }
     if (['FunctionExpression', 'FunctionDeclaration', 'ArrowFunction', 'AsyncArrowFunction',
       'GeneratorExpression', 'GeneratorDeclaration', 'AsyncFunctionExpression', 'AsyncFunctionDeclaration',
@@ -20089,6 +20127,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
 
+      case 'AwaitExpression': {
+        const operand = n.UnaryExpression;
+        if (operandParticipates(operand) && awaitAssimilationFails(staticType(operand))) {
+          errors.push(Throw.StaticTypeError('the selected then contract cannot accept the resolving callbacks of await').Value as ObjectValue);
+        }
+        walk(operand);
+        return;
+      }
+      case 'ImportCall':
+        checkImplicitString(n.AssignmentExpression);
+        walk(n.AssignmentExpression);
+        walk(n.OptionsExpression);
+        return;
       case 'IdentifierReference':
         checkPatternBindingReference(n);
         return;
@@ -20173,8 +20224,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } else if (rel.operator === 'in') {
             checkPrimitiveConversion(rel.RelationalExpression, 'string');
           } else if (rel.operator === 'instanceof' && operandParticipates(rel.ShiftExpression)
-            && hasInstanceFails(staticType(rel.ShiftExpression), staticType(rel.RelationalExpression))) {
-            errors.push(Throw.StaticTypeError('the selected Symbol.hasInstance contract cannot accept this operand').Value as ObjectValue);
+            && hasInstanceFails(staticType(rel.ShiftExpression), staticType(rel.RelationalExpression),
+              invocationFact(rel.ShiftExpression)?.ordinaryObject === true)) {
+            errors.push(Throw.StaticTypeError('the selected instanceof protocol cannot accept these operands').Value as ObjectValue);
           }
         }
         if (['<', '<=', '>', '>='].includes(rel.operator)
@@ -20810,8 +20862,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       // Deletion has its own storage judgment: read bounds would reject the
-      // legal non-position case instead. Decide guaranteed fixed positions;
-      // unknown keys, dynamic extents and rest/default positions defer.
+      // legal non-position case instead. Decide declared protected domains;
+      // unknown keys and unresolved rest domains defer.
       case 'UnaryExpression': {
         const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
         let target = patternExpression(u.UnaryExpression);
@@ -20821,6 +20873,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Deletion asks about protected storage, not the validity of a read.
           // A union proves refusal only when every executing arm does.
           const protectedStorage = (receiver: Known): 'property' | 'element' | null => {
+            receiver = erasedForJudgment(receiver);
             if (receiver?.Kind === 'union') {
               const arms = receiver.Members.map(protectedStorage);
               return arms.length && arms.every((arm) => arm !== null) ? arms[0] : null;
@@ -20831,9 +20884,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (typeof named !== 'string') return null;
             const index = Number(named);
             const canonicalIndex = Number.isInteger(index) && index >= 0 && index < 0xffffffff && String(index) === named;
-            const arrayPosition = structure?.Kind === 'array' && typeof structure.Extent === 'number' && index < structure.Extent;
-            const tuplePosition = structure?.Kind === 'tuple' && structure.Elements[index]?.Initial === 'none'
-              && structure.Elements.slice(0, index + 1).every((element) => !element.Rest);
+            const arrayPosition = structure?.Kind === 'array' && (structure.Extent === 'dynamic'
+              || (typeof structure.Extent === 'number' && index < structure.Extent));
+            let tuplePosition = false;
+            if (structure?.Kind === 'tuple') {
+              const restIndex = structure.Elements.findIndex((element) => element.Rest);
+              tuplePosition = index < (restIndex < 0 ? structure.Elements.length : restIndex);
+              if (!tuplePosition && restIndex === structure.Elements.length - 1 && restIndex >= 0) {
+                const rest = erasedForJudgment(structure.Elements[restIndex].Type);
+                tuplePosition = rest?.Kind === 'array' && rest.Extent === 'dynamic';
+              }
+            }
             return canonicalIndex && (arrayPosition || tuplePosition) ? 'element' : null;
           };
           const storage = protectedStorage(staticType(target.MemberExpression));
@@ -21065,28 +21126,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
-        // AN ABSTRACT CLASS CANNOT BE INSTANTIATED. #sec-typed-classes: the
-        // class exists to be extended, and its abstract members have no body to
-        // run. The run time refuses it - "$1 is an abstract class and cannot be
-        // instantiated" - and the modifier is on the declaration, so a `new`
-        // naming the class directly is decidable here.
-        //
-        // Only where the class is NAMED. `const K = A; new K()` reaches the
-        // same class through a binding, and the run time is what answers there.
-        if (bareTarget?.type === 'IdentifierReference') {
-          const named = namedInstance;
-          const namedDecl = named && named.Kind === 'nominal'
-            ? (named as unknown as { Declaration?: ParseNode }).Declaration
-            : null;
-          const modifiers = (namedDecl as unknown as { ClassModifiers?: readonly string[] | null } | null)?.ClassModifiers ?? [];
-          if (modifiers.includes('abstract')) {
-            const completion = Throw.StaticTypeError(
-              '$1 is an abstract class and cannot be instantiated',
-              Value(bareTarget.name),
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-          }
-        }
+        // Abstract identity follows the same guarded origins as invocation
+        // capability, but it is a separate restriction on direct new. An
+        // abstract base remains constructible for extends and super().
+        const abstractClass = target ? invocationFact(target)?.abstractClass : undefined;
+        if (abstractClass) errors.push(Throw.StaticTypeError(
+          '$1 is an abstract class and cannot be instantiated', Value(abstractClass),
+        ).Value as ObjectValue);
         // A CONSTRUCTION's written type arguments are counted against the
         // class's parameters, as a call's are against the function's.
         if (target && (target as { type?: string }).type === 'TypeArgumentsExpression') {
