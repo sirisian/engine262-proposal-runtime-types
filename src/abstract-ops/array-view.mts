@@ -2,12 +2,14 @@ import { Q, X } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import {
   NumberValue, ObjectValue, TypedNumberValue, Value,
+  type PrivateName,
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { IsPlainData, LayoutOf } from '../type-system/layout.mts';
 import { ToIndexType } from './runtime-types.mts';
 import { BufferElementType, PlacedInstance } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
+import type { FunctionObject } from '#self';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, OrdinaryObjectCreate, R, RequireType,
   ToLength, AllocateArrayBuffer,
@@ -511,7 +513,10 @@ export function* MaterializeArrayBytes(array: ObjectValue): PlainEvaluator<Array
   const lengthValue = Q(yield* Get(array, Value('length')));
   const length = R(Q(yield* ToLength(lengthValue)));
   const buffer = Q(yield* AllocateArrayBuffer(
-    surroundingAgent.currentRealmRecord.Intrinsics['%ArrayBuffer%'] as ObjectValue,
+    // The intrinsic IS the %ArrayBuffer% constructor; the realm record types it
+    // as an ObjectValue, and `AllocateArrayBuffer` wants the narrower
+    // FunctionObject it actually is.
+    surroundingAgent.currentRealmRecord.Intrinsics['%ArrayBuffer%'] as FunctionObject,
     length * stride,
   )) as ArrayBufferObject;
   // The elements are read BEFORE the backing is installed, since installing it

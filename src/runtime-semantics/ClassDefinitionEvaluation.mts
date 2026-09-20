@@ -10,7 +10,6 @@ import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TakePendingPlacement } from '../abstract-ops/placement.mts';
 import { ComputeClassLayout, type ClassControls, type ClassLayout, type FieldControls } from '../type-system/layout.mts';
-import type { ThrowCompletion } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { Descriptor } from '../value.mts';
 import {

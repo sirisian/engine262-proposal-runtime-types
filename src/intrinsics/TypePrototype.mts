@@ -3,7 +3,7 @@ import { Value, JSStringValue, NumberValue, TypedNumberValue, INDEX_TYPE, Object
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { IsPlainData, LayoutOf, ReportedLayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
+import { IsPlainData, ReportedLayoutOf, SoAColumnsOf } from '../type-system/layout.mts';
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { CreateComplexValue } from './Complex.mts';

@@ -762,7 +762,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       const truncated = exponent >= 0
         ? significand * (10n ** BigInt(exponent))
         : significand / (10n ** BigInt(-exponent));
-      return Q(yield* ConvertValue(new BigIntValue(truncated), record));
+      return Q(yield* ConvertValue(Value(truncated), record));
     }
     return Q(yield* ConvertValue(arg, record));
   };

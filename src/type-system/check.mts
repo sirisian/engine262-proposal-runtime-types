@@ -19053,7 +19053,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const sourceBase = sourceType && sourceType.Kind === 'literal'
           ? (sourceType as { Base?: TypeRecord }).Base
           : sourceType;
-        if (sourceBase && stringIsNoConversionSource(target)
+        if (sourceBase && target && stringIsNoConversionSource(target)
             && sourceBase.Kind === 'primitive' && sourceBase.Name === 'string') {
           errors.push(Throw.StaticTypeError(
             'a string is not a conversion source for $1; use its parse form',

@@ -15,7 +15,6 @@ import { Value } from '../value.mts';
 import { SetMetResolution } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './records.mts';
-import { SameType } from './relations.mts';
 import { isIntegerTypeName, isFloatTypeName } from './numeric-signatures.mts';
 import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
@@ -429,7 +428,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // already does exactly what this now does, budget check included.
       if (evaluated.Type !== 'normal') {
         if (IsBudgetExhausted()) break;
-        return Throw.StaticTypeError('a default could not be evaluated: $1', Value(inspect(evaluated.Value)));
+        return Throw.StaticTypeError('a default could not be evaluated: $1', Value(evaluated.Value === undefined ? 'undefined' : inspect(evaluated.Value)));
       }
       if (evaluated.Value === undefined) continue;
       value = evaluated.Value;
