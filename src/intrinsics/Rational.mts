@@ -3,6 +3,7 @@ import {
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
+import { JSStringValue } from '../value.mts';
 import { type Mutable } from '../utils/language.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
@@ -307,6 +308,75 @@ function* RationalProto_valueOf(_args: Arguments, { thisValue }: FunctionCallCon
   realmRec.Intrinsics['%rational.prototype%'] = proto;
 }
 
+/**
+ * A rational's written form: a numerator, a solidus and a denominator, or a
+ * bare integer standing for a denominator of one.
+ *
+ * #sec-parsing requires it - "for the binary floating-point, decimal, RATIONAL,
+ * and complex types it is `parse(_string_)`" - and #sec-rational-types defines
+ * no literal, so the accepted input is the form the type WRITES:
+ * `String(rational(1, 2))` is `1/2`, and this reads it back. Where a type has
+ * no literal, its own written form is the only available reading of "the
+ * grammar of a literal of that type", and it is what every rational library
+ * accepts.
+ *
+ * Separators are accepted and a sign may lead, as the clause requires of every
+ * `parse`. A sign on the DENOMINATOR is refused: the type holds a denominator
+ * greater than zero, so `1/-2` names no value of it, and normalizing is the
+ * constructor's job rather than a text reader's.
+ */
+function ParseRationalLiteral(source: string): { numerator: bigint, denominator: bigint } | null {
+  const text = source.trim();
+  if (/^_|_$|__|_\/|\/_|[+-]_/.test(text)) {
+    return null;
+  }
+  const bare = /^([+-]?\d[\d_]*)$/.exec(text);
+  if (bare) {
+    return { numerator: BigInt(bare[1]!.replace(/_/g, '')), denominator: 1n };
+  }
+  const quotient = /^([+-]?\d[\d_]*)\/(\d[\d_]*)$/.exec(text);
+  if (!quotient) {
+    return null;
+  }
+  const denominator = BigInt(quotient[2]!.replace(/_/g, ''));
+  if (denominator === 0n) {
+    return null;
+  }
+  return { numerator: BigInt(quotient[1]!.replace(/_/g, '')), denominator };
+}
+
+/**
+ * `parse` and `tryParse` sit on the CONSTRUCTOR rather than on a type object.
+ *
+ * `rational` is bound as a constructor because the clause writes it that way -
+ * `complex(re, im)` is its own example - and a constructor is not a type
+ * object, so the `parse` that every other numeric type inherits from
+ * `%Type.prototype%` never reached this family: `rational.parse` was not a
+ * function at all, where `uint8.parse`, `float64.parse`, `decimal64.parse` and
+ * `complex64.parse` all are. Defining them here puts the function where
+ * #sec-parsing says it is, without disturbing the two-argument form the clause
+ * depends on.
+ */
+function* RationalParse([S = Value.undefined]: Arguments): ValueEvaluator {
+  if (!(S instanceof JSStringValue)) {
+    return Throw.SyntaxError('$1 is not a valid literal', S);
+  }
+  const parsed = ParseRationalLiteral(S.stringValue());
+  if (!parsed) {
+    return Throw.SyntaxError('$1 is not a valid literal', S);
+  }
+  return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord);
+}
+
+/** *null* where `parse` would fail to parse, as #sec-parsing gives it. */
+function* RationalTryParse([S = Value.undefined]: Arguments): ValueEvaluator {
+  if (!(S instanceof JSStringValue) || !ParseRationalLiteral(S.stringValue())) {
+    return Value.null;
+  }
+  const parsed = ParseRationalLiteral(S.stringValue())!;
+  return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord);
+}
+
 export function bootstrapRational(realmRec: Realm): void {
   const proto = realmRec.Intrinsics['%rational.prototype%'];
   const cons = CreateBuiltinFunction(RationalConstructor, 2, Value('rational'), [], realmRec);
@@ -316,5 +386,13 @@ export function bootstrapRational(realmRec: Realm): void {
     Enumerable: Value.false,
     Configurable: Value.false,
   })));
+  for (const [name, fn] of [['parse', RationalParse], ['tryParse', RationalTryParse]] as const) {
+    X(cons.DefineOwnProperty(Value(name), Descriptor({
+      Value: CreateBuiltinFunction(fn, 1, Value(name), [], realmRec),
+      Writable: Value.true,
+      Enumerable: Value.false,
+      Configurable: Value.true,
+    })));
+  }
   realmRec.Intrinsics['%rational%'] = cons;
 }

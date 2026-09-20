@@ -3,7 +3,9 @@ import {
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
+import { JSStringValue } from '../value.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
+import { ParseComplexLiteral } from './TypePrototype.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
   CreateBuiltinFunction, Descriptor, OrdinaryObjectCreate, ToNumber, X, Q,
@@ -361,6 +363,44 @@ export function bootstrapComplexPrototype(realmRec: Realm): void {
   realmRec.Intrinsics['%complex.prototype%'] = proto;
 }
 
+/**
+ * `parse` and `tryParse` on the CONSTRUCTOR, for the reason they are on
+ * `rational`'s: #sec-parsing gives every numeric type a `parse`, and `complex`
+ * is bound as a constructor - the clause writes `complex(0, 4)` as its own
+ * example - so it is not a type object and inherits nothing from
+ * `%Type.prototype%`.
+ *
+ * The gap was masked here by the width-named shorthands: `complex64.parse`
+ * works, being a genuine type object, while bare `complex.parse` was not a
+ * function. Rational has no shorthand, so nothing masked it there.
+ *
+ * The grammar is the one the shorthands already accept - an imaginary literal
+ * per #sec-imaginary-literals - read by the same function, so the two spellings
+ * cannot drift.
+ */
+function* ComplexParse([S = Value.undefined]: Arguments): ValueEvaluator {
+  if (!(S instanceof JSStringValue)) {
+    return Throw.SyntaxError('$1 is not a valid literal', S);
+  }
+  const parsed = ParseComplexLiteral(S.stringValue());
+  if (!parsed) {
+    return Throw.SyntaxError('$1 is not a valid literal', S);
+  }
+  return CreateComplexValue(parsed.real, parsed.imaginary, undefined, surroundingAgent.currentRealmRecord);
+}
+
+/** *null* where `parse` would fail to parse, as #sec-parsing gives it. */
+function* ComplexTryParse([S = Value.undefined]: Arguments): ValueEvaluator {
+  if (!(S instanceof JSStringValue)) {
+    return Value.null;
+  }
+  const parsed = ParseComplexLiteral(S.stringValue());
+  if (!parsed) {
+    return Value.null;
+  }
+  return CreateComplexValue(parsed.real, parsed.imaginary, undefined, surroundingAgent.currentRealmRecord);
+}
+
 export function bootstrapComplex(realmRec: Realm): void {
   const proto = realmRec.Intrinsics['%complex.prototype%'];
   const cons = CreateBuiltinFunction(ComplexConstructor, 2, Value('complex'), [], realmRec);
@@ -370,5 +410,13 @@ export function bootstrapComplex(realmRec: Realm): void {
     Enumerable: Value.false,
     Configurable: Value.false,
   })));
+  for (const [name, fn] of [['parse', ComplexParse], ['tryParse', ComplexTryParse]] as const) {
+    X(cons.DefineOwnProperty(Value(name), Descriptor({
+      Value: CreateBuiltinFunction(fn, 1, Value(name), [], realmRec),
+      Writable: Value.true,
+      Enumerable: Value.false,
+      Configurable: Value.true,
+    })));
+  }
   realmRec.Intrinsics['%complex%'] = cons;
 }

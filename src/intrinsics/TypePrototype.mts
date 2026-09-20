@@ -45,7 +45,9 @@ function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }:
  * Whitespace around the whole is ignored; a sign between the parts is required,
  * since `3 2i` denotes nothing.
  */
-function ParseComplexLiteral(text: string): { real: number, imaginary: number } | null {
+/** Exported so the bare `complex` constructor reads the same grammar its
+ * width-named shorthands do; one reader, one accepted form. */
+export function ParseComplexLiteral(text: string): { real: number, imaginary: number } | null {
   const source = text.trim();
   if (source === '') {
     return null;
@@ -338,7 +340,10 @@ function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arg
   // `parse` distinguishes.
   const isDecimal = t.Kind === 'primitive'
     && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128');
-  if (!isInteger && !isFloat && !isDecimal) {
+  // "EACH type also has a `tryParse` function", so the families that gained a
+  // `parse` gain this beside it.
+  const isRationalOrComplex = t.Kind === 'primitive' && (t.Name === 'rational' || t.Name === 'complex');
+  if (!isInteger && !isFloat && !isDecimal && !isRationalOrComplex) {
     return Throw.TypeError('tryParse is not defined for $1', thisValue);
   }
   const attempt = EnsureCompletion(yield* TypeProto_parse([S, radix], context));
