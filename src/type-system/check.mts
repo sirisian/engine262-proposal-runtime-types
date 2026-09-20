@@ -10508,7 +10508,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       const start = fromEndpoint(r.RangeStart as ParseNode | null);
       const end = fromEndpoint(r.RangeEnd as ParseNode | null);
-      const element = contextualElement ?? start ?? end ?? anyTypeRecord;
+      // A TYPED endpoint decides the element type over a literal one, whichever
+      // side it is on.
+      //
+      // This read `start ?? end`, so the FIRST endpoint won outright and a
+      // literal there carried its `number` base past a typed endpoint opposite:
+      // `0..<a.length` over a typed array, whose `length` is a `uint.<64>`, was
+      // a range of `number`. That is the loop #sec-range-literals holds up as
+      // "the loop written without thinking rather than one short", and its
+      // index came out untyped.
+      //
+      // A literal adapts to its position everywhere else in this system, and
+      // the opposite endpoint is the position here: with both endpoints typed
+      // the range already takes their type, so a literal beside a typed one
+      // should reach the same answer rather than a different one.
+      const literalBased = (t: TypeRecord | null) => !!t && t.Kind === 'primitive' && t.Name === 'number';
+      const typedEndpoint = !literalBased(start) ? start : (!literalBased(end) ? end : null);
+      const element = contextualElement ?? typedEndpoint ?? start ?? end ?? anyTypeRecord;
       const ordinal = (bound: 'closed' | 'open' | null) => (bound === 'open' ? 1 : 0);
       if (!r.RangeStart && !r.RangeEnd) {
         return libraryTypeRecord('RangeFull', contextualElement ? [contextualElement] : []);
