@@ -2397,10 +2397,18 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     }
   }
   if (isComplexObject(value)) {
+    // A complex with NO recorded component is a `complex.<number>`.
+    // `table-type-name-shorthands`: "`complex` is `complex.<number>`" - the bare
+    // name IS the application, so there is no such thing as a complex without a
+    // component, only one whose component was never written down.
+    //
+    // Falling through instead left the value with no type record at all, and
+    // `Reflect.typeOf(1 + 2i)` rendered `{}` - an empty object type, which is
+    // both wrong and unreadable. It made the three defects around it harder to
+    // diagnose than they needed to be, since the type a value carried could not
+    // be read off it.
     const component = (value as unknown as { ComplexComponent?: TypeRecord }).ComplexComponent;
-    if (component) {
-      return makePrimitive('complex', [component]);
-    }
+    return makePrimitive('complex', [component ?? makePrimitive('number')]);
   }
   if (value instanceof TypedNumberValue) {
     return (value as TypedNumberValue).TypeRecord as TypeRecord;

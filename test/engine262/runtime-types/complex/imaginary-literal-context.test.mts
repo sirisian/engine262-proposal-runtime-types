@@ -64,3 +64,23 @@ test('a complex VALUE still converts explicitly, as number and float64 do', () =
   expect(evaluated('String(complex128(1, 2));')).toBe('1+2i');
   expect(evaluated('String((1 + 2i) := complex128);')).toBe('1+2i');
 });
+
+test('a complex with no written component reports complex.<number>', () => {
+  // `table-type-name-shorthands`: "`complex` is `complex.<number>`" - the bare
+  // name IS the application, so there is no complex without a component, only
+  // one whose component was never written down.
+  //
+  // Such a value reported no type record at all and rendered as `{}` - an empty
+  // object type. It made the defects around it harder to diagnose than they
+  // needed to be, since the type a value carried could not be read off it.
+  expect(evaluated('String(Reflect.typeOf(1 + 2i));')).toBe('complex.<number>');
+  expect(evaluated('String(Reflect.typeOf(4i));')).toBe('complex.<number>');
+  expect(evaluated('String(Reflect.typeOf(complex(1, 2)));')).toBe('complex.<number>');
+});
+
+test('and it is a member of the type it now reports', () => {
+  expect(evaluated('String((1 + 2i) is complex);')).toBe('true');
+  expect(evaluated('String((1 + 2i) is complex.<number>);')).toBe('true');
+  // Still not a member of a width-named one, which is the scalar rule.
+  expect(evaluated('String((1 + 2i) is complex128);')).toBe('false');
+});
