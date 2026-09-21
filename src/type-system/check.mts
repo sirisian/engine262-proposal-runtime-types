@@ -5272,7 +5272,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // field of the same name gets. It is kept apart from the read type
           // because a getter and setter pair may legitimately differ.
           const sp = md.PropertySetParameterList[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
-          const t = sp?.TypeAnnotation ? resolveType(sp.TypeAnnotation.Type) : null;
+          const pushed = pushTypeParameterScopeOf(n, 'type-only');
+          let t: Known;
+          try {
+            t = sp?.TypeAnnotation ? resolveType(sp.TypeAnnotation.Type) : null;
+          } finally {
+            if (pushed) typeParameterScopes.pop();
+          }
           setterKeys.add(key);
           setterTypes.set(key, t ?? anyTypeRecord);
           continue;
@@ -5284,7 +5290,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // parameters and its body's returns ARE the property's type - so
           // reading it as untyped where a program wrote no annotation loses the
           // type for every read of the member.
-          let t = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+          // Accessor annotations, like method and field annotations, belong to
+          // the class's parameter scope. Otherwise a specialization can lose T
+          // (or capture an unrelated outer T) before substitution ever runs.
+          const pushed = pushTypeParameterScopeOf(n, 'type-only');
+          let t: Known;
+          try {
+            t = md.TypeAnnotation ? resolveType(md.TypeAnnotation.Type) : null;
+          } finally {
+            if (pushed) typeParameterScopes.pop();
+          }
           if (!t) {
             const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
             inferenceDepth += 1;
@@ -7144,6 +7159,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     ['object', 'array', 'tuple', 'function', 'nominal'].includes(arm.Kind)
       || (arm.Kind === 'primitive' && ['object', 'type', 'Composite'].includes(arm.Name)));
 
+  // Import options and their effective `with` member each admit undefined or
+  // Object. A shape does not prove that an attribute is an enumerable own key.
+  const importOptionsFail = (type: Known): boolean => everyProtocolAlternative(type, (arm) => {
+    const invalidCategory = (value: TypeRecord): boolean => knownNonObject(value)
+      && !(value.Kind === 'primitive' && value.Name === 'undefined');
+    if (knownNonObject(arm)) return invalidCategory(arm);
+    return knownObject(arm) && everyProtocolAlternative(protocolMember(arm, 'with'), invalidCategory);
+  });
+
   const protocolArgumentFails = (source: Known, target: TypeRecord): boolean => {
     if (!source || source.Kind === 'any' || source.Kind === 'void' || mentionsTypeParameter(source) || mentionsTypeParameter(target)) return false;
     if (source.Kind === 'union') return source.Members.length > 0
@@ -7288,6 +7312,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // Combine failure reasons within each result alternative: one may have an
+  // unusable then while another cannot supply the required Object at all.
+  const asyncIteratorResultFails = (type: Known): boolean => everyProtocolAlternative(type,
+    (arm) => awaitAssimilationFails(arm) || knownNonObject(awaitedType(arm)));
+
   // Closing has a different reachability/exception rule from stepping. This
   // bounded proof covers empty patterns and a definitely-yielding first step
   // followed immediately by break. Throw completions never enter this query.
@@ -7308,7 +7337,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!yields || knownNonObject(protocolMember(object, 'next'))) return false;
           }
           return everyProtocolAlternative(protocolMember(object, 'return'), (ret) =>
-            !nullishOnly(ret) && protocolCallFails(ret, (result) => knownNonObject(asynchronous ? awaitedType(result) : result), []));
+            !nullishOnly(ret) && protocolCallFails(ret, asynchronous ? asyncIteratorResultFails : knownNonObject, []));
         }), []);
       });
     });
@@ -7323,7 +7352,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const iteratorFails = (result: Known, asyncStep: boolean): boolean => everyAlternative(result, (iterator) => {
       if (knownNonObject(iterator)) return true;
       if (!steps) return false;
-      return callFails(propertyType(iterator, 'next'), (step) => knownNonObject(asyncStep ? awaitedType(step) : step), stepArguments);
+      return callFails(propertyType(iterator, 'next'), (step) => {
+        if (asyncStep) return asyncIteratorResultFails(step);
+        // Async-from-sync awaits the raw step's value, even when done is true.
+        // It does not await the raw step or entry-hook result. A real async
+        // iterator likewise does not separately await the value of its step.
+        return everyAlternative(step, (raw) => knownNonObject(raw)
+          || (asynchronous && knownObject(raw) && awaitAssimilationFails(propertyType(raw, 'value'))));
+      }, stepArguments);
     });
     const at = erasedForJudgment(t);
     if (!at) return false;
@@ -18227,10 +18263,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const memberReceiverFailures = new WeakSet<ParseNode>();
   const checkMemberReceiver = (node: ParseNode.MemberExpression): boolean => {
     const receiver = node.MemberExpression;
-    if (!receiver || !operandParticipates(receiver) || !nullishOnly(staticType(receiver))) return false;
+    if (!receiver || !operandParticipates(receiver)) return false;
+    const type = staticType(receiver);
+    const impossiblePrivate = !!node.PrivateIdentifier && knownNonObject(type);
+    if (!impossiblePrivate && !nullishOnly(type)) return false;
     if (!memberReceiverFailures.has(node)) {
       memberReceiverFailures.add(node);
-      errors.push(Throw.StaticTypeError('an all-nullish receiver cannot support an ordinary property operation').Value as ObjectValue);
+      errors.push(Throw.StaticTypeError(impossiblePrivate
+        ? 'a non-object receiver cannot support a private member operation'
+        : 'an all-nullish receiver cannot support an ordinary property operation').Value as ObjectValue);
     }
     return true;
   };
@@ -20275,6 +20316,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ImportCall':
         checkImplicitString(n.AssignmentExpression);
+        if (n.OptionsExpression && operandParticipates(n.OptionsExpression) && importOptionsFail(staticType(n.OptionsExpression))) {
+          errors.push(Throw.StaticTypeError('import options and their with member must admit Object or undefined').Value as ObjectValue);
+        }
         walk(n.AssignmentExpression);
         walk(n.OptionsExpression);
         return;
@@ -20286,29 +20330,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the branches for which NarrowTo or NarrowFrom is ~empty~, since the branch
       // guarded is dead code the program did not intend.
       case 'LexicalDeclaration': {
-        // proposal-runtime-types (README, explicit resource management): the type
-        // declared for a resource must be one that can be disposed.
+        // An annotation describes the resource after its boundary. Otherwise a
+        // participating initializer can disprove disposal without declaring a
+        // storage type for the binding. Walk in order so later initializers see
+        // earlier declarations in the same list.
         const decl = n as ParseNode.LexicalDeclaration;
         recordBindingKinds(decl, decl.LetOrConst === 'let');
         if (decl.LetOrConst === 'using') {
           for (const binding of decl.BindingList) {
             const ann = (binding as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
-            if (!ann) {
-              continue;
-            }
-            const declared = resolveType(ann.Type);
+            const initializer = binding.Initializer ?? binding.TypedInitializer?.AssignmentExpression;
+            const declared = ann ? resolveType(ann.Type)
+              : initializer && operandParticipates(initializer) ? staticType(initializer) : null;
             if (declared && !canCarryDisposal(declared, (type) => {
               const shape = structureOf(type);
               const disposer = shape?.Kind === 'object'
                 ? shape.Properties.find((property) => property.key === wellKnownSymbols.dispose)?.type : null;
               return !disposer || (!notCallable(disposer) && !protocolCallFails(disposer, () => false, []));
             })) {
-              const completion = Throw.StaticTypeError('a using declaration cannot be typed $1, whose disposal contract cannot be called without arguments', Value(displayType(declared))) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('a using resource of type $1 has a disposal contract that cannot be called without arguments', Value(displayType(declared))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
+            walk(binding);
           }
-        }
-        walk(decl.BindingList);
+        } else walk(decl.BindingList);
         return;
       }
       case 'IsExpression': {
@@ -21250,7 +21295,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'NewExpression': {
         checkArgumentSpreads(n.Arguments);
-        const ne = n as unknown as { MemberExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
+        const ne = n;
         const target = patternExpression(ne.MemberExpression);
         let bareTarget = target;
         while (bareTarget?.type === 'ParenthesizedExpression' || bareTarget?.type === 'TypeArgumentsExpression') {
@@ -21399,6 +21444,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(ne.MemberExpression);
         walk(ne.Arguments);
+        walk(ne.PlacementArguments);
         return;
       }
       case 'ConditionalExpression': {

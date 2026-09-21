@@ -24,6 +24,8 @@ export interface PropertyTypeRecord {
    */
   readonly key: string | SymbolValue;
   readonly type: TypeRecord;
+  /** Effective setter contract, when distinct from the readable type. */
+  readonly writeType?: TypeRecord;
   readonly optional: boolean;
   readonly readonly: boolean;
   /**
@@ -1938,8 +1940,9 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
     || (!!ix?.Value && mentionsTypeParameter(ix.Value, seen)))) {
     return true;
   }
-  const withProperties = t as { Properties?: readonly { type?: TypeRecord }[] };
-  return !!withProperties.Properties?.some((prop) => !!prop?.type && mentionsTypeParameter(prop.type, seen));
+  const withProperties = t as { Properties?: readonly { type?: TypeRecord, writeType?: TypeRecord }[] };
+  return !!withProperties.Properties?.some((prop) => (!!prop?.type && mentionsTypeParameter(prop.type, seen))
+    || (!!prop?.writeType && mentionsTypeParameter(prop.writeType, seen)));
 };
 
 /**
@@ -2106,7 +2109,8 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
       ...t,
       ...(withProperties.Properties ? {
         Properties: withProperties.Properties.map((prop) => (prop?.type
-          ? { ...prop, type: substituteTypeParameters(prop.type, bindings) }
+          ? { ...prop, type: substituteTypeParameters(prop.type, bindings),
+            ...(prop.writeType ? { writeType: substituteTypeParameters(prop.writeType, bindings) } : {}) }
           : prop)),
       } : {}),
       ...(withProperties.IndexSignatures ? {

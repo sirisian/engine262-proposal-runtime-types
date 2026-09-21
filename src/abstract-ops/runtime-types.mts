@@ -11,7 +11,7 @@ import { CopyValueClassInstance } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
-import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, ToLength, SameValue } from './all.mts';
+import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -467,10 +467,12 @@ export function* CopyValueTypeInstance(value: ObjectValue, t: TypeRecord, useTar
   // PRIVATE fields, taken from the value's own elements rather than looked up by
   // the layout's Private Name - which for a generic class belongs to a different
   // evaluation, as above. Whatever name the instance carries is the name the copy
-  // gets. Fields only: a private method or accessor lives on the prototype and is
-  // not per-instance state.
-  for (const element of (value as { PrivateElements?: readonly { Key: PrivateName, Kind: string, Value?: Value }[] }).PrivateElements ?? []) {
+  // gets. Private methods/accessors also need an entry on each instance even
+  // though their function values are shared. Preserve those entries without
+  // calling a getter or constructing a new function.
+  for (const element of value.PrivateElements) {
     if (element.Kind !== 'field') {
+      Q(yield* PrivateMethodOrAccessorAdd(copy, element));
       continue;
     }
     let held = element.Value as Value;

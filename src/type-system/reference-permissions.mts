@@ -36,11 +36,17 @@ export function CheckReferencePermissions(
   const initialLocations = new Map<ReferenceSlot, readonly ReferenceLocation[]>();
   const rebound = new Set<ReferenceSlot>();
   const capturedRebound = new Set<ReferenceSlot>();
-  const children = (node: ParseNode): ParseNode[] => Object.entries(node).flatMap(([key, value]) => {
-    if (['parent', 'location', 'sourceText', 'strict'].includes(key)) return [];
-    return (Array.isArray(value) ? value : [value]).filter((child): child is ParseNode =>
-      !!child && typeof child === 'object' && typeof child.type === 'string');
-  });
+  const children = (node: ParseNode): ParseNode[] => {
+    // Parser insertion order puts placement first, but evaluation obtains the
+    // constructor and ordinary arguments before evaluating placement arguments.
+    // A rebind in either list must govern the stores that actually follow it.
+    if (node.type === 'NewExpression') return [node.MemberExpression, ...(node.Arguments ?? []), ...(node.PlacementArguments ?? [])];
+    return Object.entries(node).flatMap(([key, value]) => {
+      if (['parent', 'location', 'sourceText', 'strict'].includes(key)) return [];
+      return (Array.isArray(value) ? value : [value]).filter((child): child is ParseNode =>
+        !!child && typeof child === 'object' && typeof child.type === 'string');
+    });
+  };
   const scan = (node: ParseNode): void => {
     if (ReferenceFunction(node) === node) functions.push(node);
     const op = operations.get(node);
