@@ -123,7 +123,7 @@ test('an unannotated parameter is a catch-all ranked below a typed match', () =>
 // -- Errors --------------------------------------------------------------------
 // No viable signature is a type error.
 test('a call matching no signature is a type error', () => {
-  expectThrown('function k(a: uint8): string { return "u"; } function k(a: string): string { return "s"; } k(true);');
+  expectThrown('function k(a: uint8): string { return "u"; } function k(a: string): string { return "s"; } k(Symbol());');
 });
 
 // More than one equally-best signature is ambiguous, a type error. A single uint8
@@ -209,7 +209,7 @@ test('deferring the resolution does not weaken the arity or the ranking', () => 
     + 'f((1 := uint8)) + "/" + f((1 := uint16));')).toBe('u8/u16');
   // An argument no signature accepts is still refused, and statically - the
   // checker reaches it before the script runs, so a try cannot swallow it.
-  expectStaticTypeError('function f(x: uint8): string { return "u"; } function f(x: string): string { return "s"; } f(true);');
+  expectStaticTypeError('function f(x: uint8): string { return "u"; } function f(x: string): string { return "s"; } f(Symbol());');
 });
 
 // -- An interface-typed parameter -----------------------------------------------
@@ -244,4 +244,8 @@ test('the structural reading is the interface\'s alone', () => {
   // And an interface is still a nominal type: two declarations of the same shape
   // are two types.
   expect(evaluated('interface I { a: uint8 } interface J { a: uint8 } String(I === J);')).toBe('false');
+});
+
+test('plain Boolean arguments can select a converting String overload', () => {
+  expect(evaluated('function f(x: uint8): string { return "u"; } function f(x: string): string { return x; } f(true);')).toBe('true');
 });

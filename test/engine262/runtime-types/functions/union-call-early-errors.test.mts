@@ -38,7 +38,7 @@ test('unknown arguments and callee retain runtime boundaries', () => {
 
 test('contextual overload selection and generic inference stay independent per arm', () => {
   expect(ok('interface A { (x: uint8): uint8; (x: uint8): string; } type B = (x: uint8) => string; function use(f: A | B): string { return f(1); }')).toBe(true);
-  expectStaticTypeError('interface A { (x: uint8): uint8; (x: uint8): string; } type B = (x: uint8) => boolean; function use(f: A | B): string { return f(1); }');
+  expectStaticTypeError('interface A { (x: uint8): uint8; (x: uint8): string; } type B = (x: uint8) => symbol; function use(f: A | B): string { return f(1); }');
   expect(ok('type A = <T>(x: T) => T; type B = (x: uint8) => uint8; function use(f: A | B): uint8 { return f(1); }')).toBe(true);
 });
 

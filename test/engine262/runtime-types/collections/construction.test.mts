@@ -181,7 +181,7 @@ test('a collection type still has no default value', () => {
 // ---------------------------------------------------------------------------
 
 test('a Set\'s array-literal seed is checked against the element type', () => {
-  expectStaticTypeError('const s = new Set.<string>([1]);');
+  expectStaticTypeError('const s = new Set.<string>([Symbol()]);');
   expectStaticTypeError('const s = new Set.<uint8>(["a"]);');
 });
 

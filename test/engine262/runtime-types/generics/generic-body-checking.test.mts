@@ -27,15 +27,15 @@ const okSrc = (s: string) => expect(ok(s), `expected accepted: ${s}`).toBe(true)
 test('a type parameter is enforced at the CALL', () => {
   // The half that is implemented: an explicit type argument constrains the
   // argument, and a constraint on the parameter constrains the type argument.
-  expectError('function f<T>(x: T): void {} f.<string>(5);');
-  expectError('function f<T extends string>(x: T): void {} f.<number>(5);');
+  expectError('function f<T>(x: T): void {} f.<string>(Symbol());');
+  expectError('function f<T extends string>(x: T): void {} f.<symbol>(Symbol());');
   okSrc('function f<T extends string>(x: T): void {} f.<string>("s");');
 });
 
 test('a CONCRETE return is still checked, which is the control', () => {
   // Whatever is wrong below is specific to a type-position expression that reads
   // a generic parameter, not to returns in general.
-  expectError('function h(): string { return 5; }');
+  expectError('function h(): string { return Symbol(); }');
 });
 
 test('a generic body that is correct still runs', () => {
@@ -93,4 +93,9 @@ test('an indexed access over a parameter is deferred, not unresolvable', () => {
   okSrc('function p<T, K: keyof T>(o: T, k: K): T[K] { return o[k]; }');
   okSrc('function p<T, K: keyof T>(o: T, k: K) { let v: T[K] = o[k]; }');
   expectError('function p<T, K: keyof T>(o: T, k: K) { let v: string = o[k]; }');
+});
+
+test('plain Number values cross generic and return String boundaries by conversion', () => {
+  expect(evaluated('function f<T>(x:T):T{return x;} f.<string>(5);')).toBe('5');
+  expect(evaluated('function f():string{return 5;} f();')).toBe('5');
 });

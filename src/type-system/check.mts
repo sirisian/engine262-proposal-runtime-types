@@ -3731,6 +3731,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  // Library members have the same contract for dot and known String keys.
+  // This describes the typed view, not the identity of the runtime method.
+  const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
+    if (typeof key !== 'string' || receiver?.Kind !== 'nominal' || receiver.Arguments.length === 0
+      || !['Set', 'Map', 'WeakSet', 'WeakMap', 'FinalizationRegistry'].includes(receiver.LibraryName ?? '')) return null;
+    if (key === 'size' && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map')) return indexTypeRecord();
+    if (WEAK_COLLECTION_ABSENT.has(key) && (receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
+      errors.push(Throw.StaticTypeError('$1 is not declared by $2', Value(key), Value(displayType(receiver))).Value as ObjectValue);
+      return null;
+    }
+    return collectionMethodSignature(receiver.LibraryName!, key, receiver.Arguments, receiver);
+  };
+
   /** Declared member reads use the same contract for String and Symbol keys. */
   const memberReadType = (receiver: Known, key: string | SymbolValue): Known => {
     const propertyType = (shape: Known): Known => {
@@ -3739,7 +3752,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return property ? (property.optional ? joinTypes(property.type, undefinedType) : property.type) : null;
     };
     if (receiver?.Kind === 'union') {
-      const types = receiver.Members.map((arm) => propertyType(structureOf(arm)));
+      const types = receiver.Members.map((arm) => collectionMemberType(arm, key) ?? propertyType(structureOf(arm))
+        ?? (typeof key === 'string' ? vectorAccessorType(arm, key) : null));
       if (types.every((type) => type !== null)) {
         return CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] });
       }
@@ -3752,6 +3766,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return null;
     }
+    const libraryMember = collectionMemberType(receiver, key);
+    if (libraryMember) return libraryMember;
     const shape = structureOf(receiver);
     const declared = propertyType(shape);
     if (declared) return declared;
@@ -3856,17 +3872,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // threw when the store ran and the same line inside a function nothing
     // called was accepted outright. Both sides now use `isAssignableAccessor`,
     // which is the one place the "no lane named twice" test is written.
-    if (typeof named === 'string' && sealedReceiver?.Kind === 'primitive'
-        && (sealedReceiver as { Name?: string }).Name === 'vector') {
-      const laneCount = ((sealedReceiver as { Arguments?: readonly unknown[] }).Arguments ?? [])[1];
+    const repeatsVectorLane = (receiver: Known): boolean => {
+      const at = erasedForJudgment(receiver);
+      if (at?.Kind === 'union') return at.Members.some(repeatsVectorLane);
+      if (typeof named !== 'string' || at?.Kind !== 'primitive' || at.Name !== 'vector') return false;
+      const laneCount = at.Arguments[1];
       const lanes = typeof laneCount === 'number' ? componentAccessorIndices(named, laneCount) : null;
-      if (lanes && !isAssignableAccessor(lanes)) {
-        errors.push(Throw.StaticTypeError(
-          '$1 names a lane twice and cannot be assigned to',
-          Value(named),
-        ).Value as ObjectValue);
-        return;
-      }
+      return !!lanes && !isAssignableAccessor(lanes);
+    };
+    if (repeatsVectorLane(sealedReceiver)) {
+      errors.push(Throw.StaticTypeError(
+        '$1 names a lane twice and cannot be assigned to', Value(named as string),
+      ).Value as ObjectValue);
+      return;
     }
     if (!m.PrivateIdentifier && sealedReceiver?.Kind === 'nominal' && named !== undefined
         && classHasOwnSealedStorage(sealedReceiver) && !IsReferenceClass(sealedReceiver) && !indexAccess(m)) {
@@ -7074,6 +7092,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const nullishOnly = (type: Known): boolean => everyProtocolAlternative(type,
     (arm) => arm.Kind === 'primitive' && ['null', 'undefined'].includes(arm.Name));
 
+  // A present Symbol/nullish endpoint cannot supply the range's ordering.
+  // Metadata and open types may add capabilities; do not erase that uncertainty.
+  const invalidRangeEndpoint = (type: Known): boolean => {
+    const at = erasedKeepingBrand(type);
+    if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(invalidRangeEndpoint);
+    return at?.Kind === 'primitive' && ['symbol', 'null', 'undefined'].includes(at.Name);
+  };
+
   const knownObject = (type: Known): boolean => everyProtocolAlternative(type, (arm) =>
     ['object', 'array', 'tuple', 'function', 'nominal'].includes(arm.Kind)
       || (arm.Kind === 'primitive' && ['object', 'type', 'Composite'].includes(arm.Name)));
@@ -7655,7 +7681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             } | null;
             const userNames = userDeclared?.Declaration?.TypeParameters?.TypeParameterList
               ?.map((q) => q.BindingIdentifier?.name ?? '');
-            const libNames = libraryTypeParameterNamesShared(namedBase) ?? userNames;
+            const libNames = userNames ?? libraryTypeParameterNamesShared(namedBase);
             if (!libNames) {
               return null;
             }
@@ -7806,8 +7832,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // not at the first `set`. README: "Passing one is a TypeError,
           // statically when the type is known". `new X.<..>()` resolves its
           // arguments on its own path and calls the same check there.
-          checkWeakKeyConstraint(parameterizedName, args);
-          const builtinOrLibrary = builtinTypeRecord(parameterizedName, args)
+          // A source declaration wins over a same-spelled library generic.
+          // Otherwise `class Set<T>` annotations acquire intrinsic signatures.
+          const userDeclared = classNodes.has(parameterizedName) || interfaceNodes.has(parameterizedName)
+            || aliasNodes.has(parameterizedName);
+          if (!userDeclared) checkWeakKeyConstraint(parameterizedName, args);
+          const builtinOrLibrary = userDeclared ? null : builtinTypeRecord(parameterizedName, args)
             ?? iterationInterfaceRecord(parameterizedName, args)
             ?? libraryTypeRecord(parameterizedName, args);
           if (builtinOrLibrary) {
@@ -12631,6 +12661,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const key = memberKey(m);
           const base = staticType(m.MemberExpression);
           if (key instanceof SymbolValue) return memberReadType(base, key);
+          if (typeof key === 'string') {
+            const libraryMember = collectionMemberType(base, key);
+            if (libraryMember) return libraryMember;
+          }
           if (typeof key === 'string' && (base?.Kind === 'union' || structureOf(base)?.Kind === 'object')) {
             return staticType({ ...node, Expression: undefined, IdentifierName: { type: 'IdentifierName', name: key } } as unknown as ParseNode);
           }
@@ -12860,55 +12894,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   IndexSignatures: [],
                 } as unknown as Known;
               }
-            }
-          }
-          // The same for a typed COLLECTION, which reaches the checker as the
-          // nominal its annotation resolved to, carrying its type arguments.
-          if (receiver && receiver.Kind === 'nominal' && receiver.Arguments.length > 0
-              && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map'
-                || receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap'
-                || receiver.LibraryName === 'FinalizationRegistry')) {
-            const name = (m.IdentifierName as { name: string }).name;
-            // #index-type covers containers as well as arrays: a typed
-            // collection's `size` reads at the index type, as an array's
-            // `length` and `capacity` do. One type for every count is what makes
-            // `map.size < array.length` writable at all. The RUNTIME half is the
-            // two `size` accessors, and the two must agree: a checker saying
-            // `uint64` over a run time answering a Number is a disagreement,
-            // and `collections/size-and-counts` pins them to each other.
-            if (name === 'size' && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map')) {
-              return indexTypeRecord();
-            }
-            // A WEAK collection has none of the members below, and reading one
-            // was ~any~ - so `let n: string = w.size` type-checked on a
-            // `WeakMap`, and so did `w.forEach(...)`. Refused by name, the
-            // treatment `Span.<T>` already gives the operations it does not
-            // have, because a member the type does not declare is a mistake
-            // rather than an unknown.
-            //
-            // The list is the members that follow from being ENUMERABLE, plus
-            // `clear`. A weak collection is neither - it cannot be walked,
-            // because what it holds may be collected between one step and the
-            // next, which is the whole point of it - so this is not an omission
-            // to fill in later.
-            if (WEAK_COLLECTION_ABSENT.has(name)
-                && (receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
-              const completion = Throw.StaticTypeError(
-                '$1 is not declared by $2',
-                Value(name),
-                Value(displayType(receiver)),
-              ) as ThrowCompletion;
-              errors.push(completion.Value as ObjectValue);
-              return null;
-            }
-            const sig = collectionMethodSignature(
-              receiver.LibraryName,
-              name,
-              receiver.Arguments,
-              receiver,
-            );
-            if (sig) {
-              return sig;
             }
           }
           if (receiver?.Kind === 'union') {
@@ -13293,7 +13278,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // The weak generics' key constraint, at the `new` as at an
                 // annotation: `new WeakMap.<string, uint8>()` was the one
                 // position of seven the annotation-side check did not reach.
-                checkWeakKeyConstraint(specName, valueArgs);
+                if (base.LibraryName) checkWeakKeyConstraint(base.LibraryName, valueArgs);
                 // The constructor's ITERABLE argument. `new WeakSet.<T>(iter)` adds
                 // each element and `new WeakMap.<K, V>(iter)` sets each pair, so an
                 // element (or a pair's key) that could not be passed to `add`/`set`
@@ -13320,7 +13305,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // `Map` is left alone entirely: a pair literal the checker
                 // infers as an ARRAY joins key and value into one element type,
                 // the same reason the weak branch below gives for abstaining.
-                if (specName === 'Set') {
+                if (base.LibraryName === 'Set') {
                   const seed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])[0];
                   const declared = args[0];
                   if (seed && (seed as { type?: string }).type === 'ArrayLiteral'
@@ -13331,7 +13316,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     requireAssignable(staticTypeIn(seed, seedType), seedType);
                   }
                 }
-                if (specName === 'WeakSet' || specName === 'WeakMap') {
+                if (base.LibraryName === 'WeakSet' || base.LibraryName === 'WeakMap') {
                   const ctorArgs = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
                   const iter = ctorArgs[0];
                   if (iter && (iter as { type?: string }).type !== 'AssignmentRestElement') {
@@ -13361,7 +13346,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     }
                   }
                 }
-                const asLibrary = libraryTypeRecord(specName, valueArgs);
+                const asLibrary = base.LibraryName ? libraryTypeRecord(base.LibraryName, valueArgs) : null;
                 if (asLibrary) {
                   return CanonicalizeType(asLibrary as TypeRecord) as Known;
                 }
@@ -19096,6 +19081,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return view as ParseNode.CallExpression;
   };
 
+  // A single trailing positional spread may supply zero or more elements.
+  // At a fixed parameter, omission and a supplied element can both fail, so
+  // exact count is unnecessary. Other layouts and unknown contributions defer.
+  const trailingSpreadCannotBind = (parameters: readonly ParameterRecord[], supplied: readonly ParseNode[]): boolean => {
+    const spread = supplied.at(-1);
+    if (spread?.type !== 'AssignmentRestElement' || parameters.some((p) => p.Rest)
+      || supplied.slice(0, -1).some((arg) => arg.type === 'AssignmentRestElement' || arg.type === 'NamedArgument')) return false;
+    const element = StaticIterationContribution(staticType(spread.AssignmentExpression), structureOf).element;
+    if (!element) return false;
+    return parameters.slice(supplied.length - 1).some((p) => !p.Ref && !p.Optional && p.Initial === undefined
+      && protocolArgumentFails(undefinedType, p.Type) && protocolArgumentFails(element, p.Type));
+  };
+
   /** Calls whose inferred bindings have been checked against their constraints; see `checkCallArguments`. */
   const constraintCheckedCalls = new WeakSet<object>();
   const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
@@ -19121,6 +19119,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
     const supplied = expandValueSpreads(c.Arguments);
+    if (callee.Signatures.length > 0 && callee.Signatures.every((signature) => trailingSpreadCannotBind(signature.Parameters, supplied))) {
+      errors.push(Throw.StaticTypeError('no argument count for this spread can satisfy the required parameter contracts').Value as ObjectValue);
+    }
     checkedCallSignatures.delete(c);
     const sig = selectCallSignature(c, supplied, callee, n, true);
     if (sig) {
@@ -20136,6 +20137,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (endpoint && knownRange(staticType(endpoint))) errors.push(Throw.StaticTypeError(
             'a range endpoint must be an ordered value, not a range',
           ).Value as ObjectValue);
+          else if (endpoint && operandParticipates(endpoint) && invalidRangeEndpoint(staticType(endpoint))) {
+            errors.push(Throw.StaticTypeError('a present Symbol or nullish range endpoint has no ordering').Value as ObjectValue);
+          }
           walk(endpoint);
         }
         return;
@@ -20189,9 +20193,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const shape = structureOf(type);
               const disposer = shape?.Kind === 'object'
                 ? shape.Properties.find((property) => property.key === wellKnownSymbols.dispose)?.type : null;
-              return !disposer || !notCallable(disposer);
+              return !disposer || (!notCallable(disposer) && !protocolCallFails(disposer, () => false, []));
             })) {
-              const completion = Throw.StaticTypeError('a using declaration cannot be typed $1, whose values carry no disposal method', Value(displayType(declared))) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('a using declaration cannot be typed $1, whose disposal contract cannot be called without arguments', Value(displayType(declared))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -21567,7 +21571,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
           } else if (objType && objType.Kind === 'array' && m.Expression) {
-            target = objType.Element;
+            // Symbol properties, including a replaced iterator, are not array
+            // elements. The read path makes the same distinction.
+            const keyType = erasedForJudgment(staticType(m.Expression));
+            target = keyType?.Kind === 'primitive' && keyType.Name === 'symbol' ? null : objType.Element;
           } else if (objType && objType.Kind === 'tuple' && m.Expression) {
             // Reads and writes classify the same positions before accessing the
             // host Elements array, including rest positions and signed literals.

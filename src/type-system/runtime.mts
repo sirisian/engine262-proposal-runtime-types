@@ -5037,7 +5037,9 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // refused rather than silently positional - the same rule a misspelling
       // gets. A user declaration's name falls through untouched; the
       // declaration-backed sites below order it against the real parameters.
-      if (argNames2.some((n) => n !== undefined)) {
+      const sourceDeclaration = declarationNamed(node, name);
+      const sourceClass = sourceDeclaration?.type === 'ClassDeclaration' || sourceDeclaration?.type === 'ClassExpression';
+      if (!sourceClass && argNames2.some((n) => n !== undefined)) {
         const earlyLibNames = libraryTypeParameterNames(name);
         if (earlyLibNames) {
           const orderedEarly = Q(yield* OrderNamedTypeArguments(
@@ -5052,8 +5054,6 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           return Throw.TypeError('$1 does not name a type parameter of $2', Value(argNames2.find((n) => n !== undefined)!), Value(name));
         }
       }
-      const sourceDeclaration = declarationNamed(node, name);
-      const sourceClass = sourceDeclaration?.type === 'ClassDeclaration' || sourceDeclaration?.type === 'ClassExpression';
       const builtin = sourceClass ? null : builtinTypeRecord(name, argRecords.map(toNumericArgument));
       if (builtin) {
         // proposal-runtime-types (spec sec-vector-types): a `vector.<T, N>` is
