@@ -20671,7 +20671,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!label) {
               continue;
             }
-            const labelType = staticType(label);
+            let labelType = staticType(label);
+            // A RANGE LABEL MATCHES BY CONTAINMENT. #sec-ranges: "A `case` whose
+            // label is a range matches where the range contains the
+            // discriminant ... Matching is by containment rather than by `===`".
+            // So the question is whether the discriminant can be an ELEMENT of
+            // the range, and the range type itself is never what is compared.
+            //
+            // Comparing against the range type made every range label disjoint
+            // from every scalar discriminant - `"float32" and
+            // "ClosedOpenRange.<number>" are disjoint` - which refused the form
+            // the specification introduces for exactly this case ("what a
+            // `switch` over a float discriminant needs").
+            //
+            // A range is a NOMINAL record named by `LibraryName`, its element type
+            // first among its arguments. An element of bare `number` came from
+            // untyped endpoints, which adopt the discriminant's type as a literal
+            // label does, so it is not a disjointness.
+            if (labelType && labelType.Kind === 'nominal'
+                && ['Range', 'RangeFrom', 'RangeTo', 'RangeFull', 'RangeBounds']
+                  .includes(String((labelType as { LibraryName?: unknown }).LibraryName))) {
+              const element = (labelType as { Arguments?: readonly unknown[] }).Arguments?.[0] as TypeRecord | undefined;
+              labelType = element && !(element.Kind === 'primitive' && element.Name === 'number'
+                && element.Arguments.length === 0)
+                ? element as Known
+                : null;
+            }
+            // A LITERAL label is exempt because it adopts - but only a NUMERIC
+            // literal adopts a numeric discriminant. A string, boolean or bigint
+            // literal cannot become a `uint8`, so the exemption let through the
+            // very case this check's comment names: `case "s"` for a `uint8`. The
+            // literal's BASE is what it would have to become.
+            if (labelType && labelType.Kind === 'literal') {
+              const literalBase = (labelType as { Base?: TypeRecord }).Base;
+              labelType = literalBase && !(literalBase.Kind === 'primitive' && literalBase.Name === 'number')
+                ? literalBase as Known
+                : null;
+            }
             if (labelType && labelType.Kind !== 'literal' && labelType.Kind !== 'void'
                 && AreDisjoint(subject as TypeRecord, labelType as TypeRecord)) {
               const completion = Throw.StaticTypeError('$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(subject as TypeRecord)), Value(displayType(labelType as TypeRecord)), Value('false')) as ThrowCompletion;
