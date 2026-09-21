@@ -187,6 +187,31 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
     }
   } else {
     value = parseFloatLiteral(cleaned);
+    // A literal whose value OVERFLOWED THE DOUBLE is a *RangeError* at every
+    // float width, not only the narrow ones.
+    //
+    // #sec-parsing gives `parse` "a *RangeError* when it is a literal whose
+    // value the type cannot represent". `float16.parse('1e300')` and
+    // `float32.parse('1e300')` refused, and `float64.parse('1e400')` answered
+    // *Infinity* - because the overflow happened in a different place. At the
+    // narrow widths 1e300 is a finite double, and rounding it to the width is
+    // what overflows, which `fitsNumericType` sees. At `float64` the double
+    // itself overflows while being read, so the predicate receives an infinity
+    // and, correctly for a conversion, counts an infinity as a value of the
+    // type.
+    //
+    // That predicate is right for what it serves: a CONVERSION saturates, and
+    // `JSON.parse.<float16>('1e300')` is *Infinity* by the conversion table.
+    // What differs here is that `parse` reads a LITERAL, and a literal naming
+    // a finite value the type cannot hold is refused - so the distinction is
+    // made where the literal is still in hand, not in the shared predicate.
+    //
+    // A literal that WRITES an infinity is not an overflow and is unaffected:
+    // `float64.parse('Infinity')` names a value of the type and answers it.
+    if (typeof value === 'number' && !Number.isFinite(value) && !Number.isNaN(value)
+      && !/^[+-]?Infinity$/.test(cleaned)) {
+      return Throw.RangeError('$1 is out of range for the type', S);
+    }
   }
   if (typeof value === 'number' && Number.isNaN(value)) {
     return Throw.SyntaxError('$1 is not a valid literal', S);

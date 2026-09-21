@@ -83,12 +83,26 @@ test('misuse of the method is still not a parse failure', () => {
   expectThrownKind("string.tryParse('1');", 'TypeError');
 });
 
-test('a known-wrong float64 case, pinned', () => {
-  // `float64.parse('1e400')` SATURATES rather than raising, so its `tryParse`
-  // has nothing to let through. The narrow widths refuse because of an earlier
-  // change to `fitsNumericType` that did not reach `float64`, so the family
-  // disagrees with itself. Out of scope here and pinned so a later change
-  // cannot adopt it silently.
-  expect(evaluated("String(float64.tryParse('1e400'));")).toBe('Infinity');
-  expect(evaluated("String(float64.parse('1e400'));")).toBe('Infinity');
+test('every float width refuses an overflowing literal', () => {
+  // This was pinned as KNOWN-WRONG: `float64.parse('1e400')` answered
+  // *Infinity* while `float16` and `float32` refused. The overflow happened in
+  // a different place - at the narrow widths while rounding to the width, at
+  // `float64` while reading the double - and the shared predicate, correctly for
+  // a conversion, counts an infinity as a value of every float type.
+  //
+  // `parse` reads a LITERAL, and a literal naming a finite value the type
+  // cannot hold is "a literal whose value the type cannot represent", so the
+  // family now agrees. A range failure is not a failure to parse, so
+  // `tryParse` lets it through as it does for the other widths.
+  expectThrownKind("float64.parse('1e400');", 'RangeError');
+  expectThrownKind("float64.parse('-1e400');", 'RangeError');
+  expectThrownKind("float64.tryParse('1e400');", 'RangeError');
+  // A literal that WRITES an infinity names a value of the type.
+  expect(evaluated("String(float64.parse('Infinity'));")).toBe('Infinity');
+  expect(evaluated("String(float64.parse('-Infinity'));")).toBe('-Infinity');
+  // The largest finite double is not an overflow.
+  expect(evaluated("String(float64.parse('1.7976931348623157e308'));")).toBe('1.7976931348623157e+308');
+  // And a CONVERSION still saturates, which is the division this preserves:
+  // `parse` refuses a literal the type cannot hold, JSON converts a Number.
+  expect(evaluated("String(JSON.parse.<float64>('1e400'));")).toBe('Infinity');
 });
