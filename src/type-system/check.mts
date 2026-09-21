@@ -3766,6 +3766,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return collectionMethodSignature(receiver.LibraryName!, key, receiver.Arguments, receiver);
   };
 
+  // Object patterns read properties, not iterator contributions. This query
+  // returns only value contracts and emits no missing-key/bounds diagnostics.
+  const sequencePropertyContribution = (receiver: Known, key: string | SymbolValue): Known => {
+    if (typeof key !== 'string' || !receiver) return null;
+    if (receiver.Kind === 'array') {
+      if (key === 'length' || key === 'capacity') return indexTypeRecord();
+      if (!/^(0|[1-9][0-9]*)$/.test(key)) return null;
+      const index = BigInt(key);
+      if (index >= 2n ** 64n) return null;
+      if (typeof receiver.Extent === 'number' && index >= BigInt(receiver.Extent)) return null;
+      return receiver.Element;
+    }
+    if (receiver.Kind === 'tuple') {
+      // Tuple storage is an ordinary Array with per-position boundaries.
+      if (key === 'length') return makePrimitive('number');
+      if (!/^(0|[1-9][0-9]*)$/.test(key)) return null;
+      const index = BigInt(key);
+      if (index >= 0xffffffffn) return null;
+      const rest = receiver.Elements.findIndex((element) => element.Rest);
+      const fixed = rest < 0 ? receiver.Elements.length : rest;
+      if (index < BigInt(fixed)) {
+        const element = receiver.Elements[Number(index)]!;
+        return element.DeclaredDefault ? null : element.Type;
+      }
+      return rest >= 0 && rest === receiver.Elements.length - 1
+        ? restElementType(receiver.Elements[rest]!.Type) : null;
+    }
+    return null;
+  };
+
   /** Declared member reads use the same contract for String and Symbol keys. */
   const memberReadType = (receiver: Known, key: string | SymbolValue): Known => {
     const propertyType = (shape: Known): Known => {
@@ -3774,7 +3804,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return property ? (property.optional ? joinTypes(property.type, undefinedType) : property.type) : null;
     };
     if (receiver?.Kind === 'union') {
-      const types = receiver.Members.map((arm) => collectionMemberType(arm, key) ?? propertyType(structureOf(arm))
+      const types = receiver.Members.map((arm) => sequencePropertyContribution(arm, key)
+        ?? collectionMemberType(arm, key) ?? propertyType(structureOf(arm))
         ?? (typeof key === 'string' ? vectorAccessorType(arm, key) : null));
       if (types.every((type) => type !== null)) {
         return CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] });
@@ -3788,7 +3819,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return null;
     }
-    const libraryMember = collectionMemberType(receiver, key);
+    const libraryMember = sequencePropertyContribution(receiver, key) ?? collectionMemberType(receiver, key);
     if (libraryMember) return libraryMember;
     const shape = structureOf(receiver);
     const declared = propertyType(shape);
@@ -7179,6 +7210,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return !IsAssignable(source, target) && !literalFitsNumericType(source, target)
       && !convertingConstructorAccepts(target, source) && !declaresConversionTo(source, target)
       && !declaresInboundConversion(target, source);
+  };
+
+  // A language-created ordinary Object has a known category, not a closed
+  // property shape. Keep structural/nominal views possible without manufacturing
+  // an empty object type that would reject their required members.
+  const ordinaryObjectArgumentFails = (target: Known, seen = new Set<TypeRecord>()): boolean => {
+    if (!target || seen.has(target)) return false;
+    const next = new Set(seen).add(target);
+    if (target.Kind === 'union') return target.Members.length > 0
+      && target.Members.every((arm) => ordinaryObjectArgumentFails(arm, next));
+    if (target.Kind === 'intersection') return target.Members.some((arm) => ordinaryObjectArgumentFails(arm, next));
+    if (target.Kind === 'shared') return ordinaryObjectArgumentFails(target.Target, next);
+    if (target.Kind === 'parameter') return ordinaryObjectArgumentFails(target.Constraint ?? null, next);
+    // Metadata may supply a conversion; unknown types remain gradual.
+    if (target.Kind === 'parameterized') return false;
+    return (knownNonObject(target) || target.Kind === 'function')
+      && protocolArgumentFails(makePrimitive('object'), target);
   };
 
   // A conservative, non-emitting call-boundary query. SequenceAssignment also
@@ -17968,7 +18016,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(pattern);
   };
 
-  type PatternSource = { type: Known, expression?: ParseNode, typed?: boolean };
+  type PatternSource = { type: Known, expression?: ParseNode, typed?: boolean, ordinaryObject?: boolean };
   type PatternNode = {
     type: string,
     BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null,
@@ -18401,6 +18449,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return { type: null };
     }
     const expr = patternExpression(source.expression);
+    if (expr?.type === 'ArrayLiteral' && typeof key === 'string') {
+      if (key === 'length') return { type: makePrimitive('number') };
+      if (/^(0|[1-9][0-9]*)$/.test(key) && Number.isSafeInteger(Number(key))) {
+        return patternElement(source, Number(key));
+      }
+    }
     if (expr?.type === 'ObjectLiteral') {
       // Last writer wins. An unknown spread may replace an earlier property.
       for (const member of [...expr.PropertyDefinitionList].reverse()) {
@@ -18426,11 +18480,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return members.length && members.every((member) => member !== null)
           ? CanonicalizeType({ Kind: 'union', Members: members as TypeRecord[] }) : null;
       }
+      const sequence = sequencePropertyContribution(type, key);
+      if (sequence) return sequence;
       const shape = structureOf(type);
       const property = shape?.Kind === 'object' ? shape.Properties.find((p) => p.key === key) : undefined;
       return property ? (property.optional ? joinTypes(property.type, undefinedType) : property.type) : null;
     };
     if (source.type?.Kind === 'union') return { type: declaredContribution(source.type) };
+    const sequence = sequencePropertyContribution(source.type, key);
+    if (sequence) return { type: sequence };
     const t = structureOf(source.type);
     if (t?.Kind === 'object') {
       const property = t.Properties.find((p) => p.key === key);
@@ -18580,6 +18638,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const annotation = node.TypeAnnotation ? resolveType(node.TypeAnnotation.Type) : null;
     if (node.type === 'BindingRestElement') checkRestAnnotation(node.TypeAnnotation, annotation);
     const checkIncoming = (target: Known, value = source) => {
+      if (value.ordinaryObject && ordinaryObjectArgumentFails(target)) {
+        report(makePrimitive('object'), target!);
+        return;
+      }
       requireAssignable(value.expression ? staticTypeIn(value.expression, target) : value.type, target);
     };
     if (node.Initializer) {
@@ -18677,18 +18739,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const properties = node.BindingPropertyList ?? node.AssignmentPropertyList ?? [];
       const consumed = new Set<string | SymbolValue>();
+      let knownExclusions = true;
       for (const p of properties) {
         const key = p.BindingIdentifier?.name ?? p.IdentifierReference?.name ?? patternKey(p.PropertyName);
         if (key !== null) {
           consumed.add(key);
-        }
+        } else knownExclusions = false;
         checkPattern(p.BindingElement ?? p.AssignmentElement ?? p,
           { ...patternProperty(source, key), typed: source.typed }, declaring, infer, frame);
       }
       const rest = node.BindingRestProperty ?? node.AssignmentRestProperty;
       if (rest) {
         const t = structureOf(source.type);
-        checkPattern(rest, { typed: source.typed, type: t?.Kind === 'object'
+        const literal = patternExpression(source.expression);
+        // Structural membership does not establish ownness/enumerability.
+        // Preserve a shape only for a fresh, known-key data-property literal;
+        // spreads, computed exclusions and prototype setters cannot prove it.
+        const ownData = knownExclusions && literal?.type === 'ObjectLiteral'
+          && literal.PropertyDefinitionList.every((property) => property.type === 'IdentifierReference'
+            || (property.type === 'PropertyDefinition' && property.PropertyName
+              && ['IdentifierName', 'StringLiteral', 'NumericLiteral'].includes(property.PropertyName.type)
+              && (property.PropertyName as { name?: string, value?: unknown }).name !== '__proto__'
+              && (property.PropertyName as { value?: unknown }).value !== '__proto__'));
+        checkPattern(rest, { typed: source.typed, ordinaryObject: true, type: ownData && t?.Kind === 'object'
           ? { ...t, Properties: t.Properties.filter((p) => !consumed.has(p.key)) } : null }, declaring, infer, frame);
       }
       return;
@@ -18708,6 +18781,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const target = node as ParseNode;
       requireWritableMember(target);
       const wanted = locationType(target);
+      if (source.ordinaryObject && ordinaryObjectArgumentFails(wanted)) report(makePrimitive('object'), wanted!);
       checkStoreResult(target, source.expression ?? typedExpressionView(target, source.type));
       if (node.Initializer) {
         requireAssignable(staticTypeIn(node.Initializer, wanted), wanted);
@@ -18811,6 +18885,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null, contributions?: GeneratorContributions) => {
     const formals = params ?? [];
+    // Subtarget decorators are evaluated at declaration time, outside the
+    // parameter bindings and local declarations of the function they decorate.
+    for (const parameterNode of formals) walkDecorators(parameterNode);
+    if (returnAnnotation) walkDecorators(returnAnnotation);
     checkAdjacentRestTypes(formals.map((p) => parameter(
       (p as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation
         ? resolveType((p as { TypeAnnotation: ParseNode.TypeAnnotation }).TypeAnnotation.Type) ?? anyTypeRecord : anyTypeRecord,
@@ -19107,6 +19185,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ?? callee.Signatures[0] ?? null;
     }
     if (!sig && callee.Signatures.length > 1) {
+      // Ordinary ranking against an unknown context would manufacture ties
+      // between distinct reflection hosts. The application judgment below
+      // instead eliminates only demonstrably impossible candidates.
+      if (decoratorCalls.has(c)) return null;
       // #sec-overload-resolution, statically: rank the declared
       // signatures against the argument types by the SHARED resolver, so
       // the checker selects the row the run time would. An
@@ -19245,13 +19327,86 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && protocolArgumentFails(undefinedType, p.Type) && protocolArgumentFails(element, p.Type));
   };
 
-  /** Calls whose inferred bindings have been checked against their constraints; see `checkCallArguments`. */
+  /** Negative proof for the decorator's context-last calling convention. */
+  const decoratorApplicationFails = (callee: Known, written: readonly ParseNode[]): boolean => {
+    const type = callableForm(callee);
+    if (type?.Kind === 'union') return type.Members.some((arm) => decoratorApplicationFails(arm, written));
+    if (knownNonObject(type)) return true;
+    if (type?.Kind !== 'function' || !type.Signatures.length) return false;
+    const args = expandValueSpreads(written);
+    return type.Signatures.every((signature) => {
+      if ((signature as SignatureRecord & { Untyped?: boolean }).Untyped) return false;
+      const parameters = signature.Parameters;
+      // A zero-parameter decorator is allowed to ignore its context. Non-final
+      // rests and named mappings retain their existing dynamic placement.
+      if (!parameters.length || parameters.slice(0, -1).some((p) => p.Rest)
+        || args.some((arg) => arg.type === 'NamedArgument')) return false;
+      const last = parameters.length - 1;
+      const context = parameters[last]!;
+      const contextType = context.Rest ? restElementType(context.Type) : context.Type;
+      const spread = args.findIndex((arg) => arg.type === 'AssignmentRestElement');
+      const known = spread < 0 ? args.length : spread;
+      // Extra arguments may be ignored by a decorator with no context slot.
+      // An unknown spread may also move the context beyond the fixed slots.
+      const receivesContext = context.Rest || (spread < 0 && args.length <= last);
+      if (receivesContext && (context.Ref || ordinaryObjectArgumentFails(contextType))) return true;
+      for (let i = 0; i < last; i += 1) {
+        const parameter = parameters[i]!;
+        if (i >= known) {
+          if (spread < 0 && !parameter.Optional && parameter.Initial === undefined
+            && protocolArgumentFails(undefinedType, parameter.Type)) return true;
+          // A spread's count may fill this position. An optional preceding
+          // parameter can also alter mapping, so do not guess at its suffix.
+          continue;
+        }
+        const arg = args[i]!;
+        if (parameter.Ref && arg.type !== 'RefExpression') return true;
+        if (protocolArgumentFails(staticType(arg), parameter.Type)) return true;
+      }
+      // Written values collected by a trailing rest precede the implicit Object.
+      if (context.Rest && contextType) {
+        for (let i = last; i < known; i += 1) {
+          if (protocolArgumentFails(staticType(args[i]!), contextType)) return true;
+        }
+      }
+      return false;
+    });
+  };
+
+  const checkedDecorators = new WeakSet<ParseNode>();
+  const walkDecorator = (decorator: ParseNode.Decorator): void => {
+    if (checkedDecorators.has(decorator)) return;
+    checkedDecorators.add(decorator);
+    const call = decorator.CallExpression;
+    const expr = call?.CallExpression ?? decorator.MemberExpression ?? decorator.ParenthesizedExpression;
+    const callee = expr ? staticType(expr) : null;
+    if (call) {
+      decoratorCalls.add(call);
+      walk(call);
+    } else {
+      walk(expr);
+      if (knownNonObject(callableForm(callee))) {
+        errors.push(Throw.StaticTypeError('a value of $1 is not callable', Value(displayType(callee!))).Value as ObjectValue);
+      }
+    }
+    if (decoratorApplicationFails(callee, call?.Arguments ?? [])) {
+      errors.push(Throw.StaticTypeError('no declared decorator signature accepts the written arguments and by-value Object context').Value as ObjectValue);
+    }
+  };
+
+  const walkDecorators = (node: ParseNode): void => {
+    for (const decorator of (node as ParseNode & { Decorators?: readonly ParseNode.Decorator[] }).Decorators ?? []) {
+      walkDecorator(decorator);
+    }
+  };
+
   const constraintCheckedCalls = new WeakSet<object>();
   const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
     if (callee?.Kind === 'union') {
       for (const arm of callee.Members) {
         const type = callableForm(arm);
         const view = callAlternative(c, type);
+        if (decoratorCalls.has(c)) decoratorCalls.add(view);
         const context = contextualCallTypes.get(n) ?? (n as unknown as { ContextualType?: Known }).ContextualType;
         if (context) contextualCallTypes.set(view, context);
         checkCallable(type);
@@ -19270,7 +19425,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
     const supplied = expandValueSpreads(c.Arguments);
-    if (callee.Signatures.length > 0 && callee.Signatures.every((signature) => trailingSpreadCannotBind(signature.Parameters, supplied))) {
+    if (!decoratorCalls.has(c) && callee.Signatures.length > 0
+      && callee.Signatures.every((signature) => trailingSpreadCannotBind(signature.Parameters, supplied))) {
       errors.push(Throw.StaticTypeError('no argument count for this spread can satisfy the required parameter contracts').Value as ObjectValue);
     }
     checkedCallSignatures.delete(c);
@@ -19477,7 +19633,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
-      const counts = mapped.spread ? null : mapped.counts;
+      const counts = mapped.spread ? null : [...mapped.counts];
+      if (counts && decoratorCalls.has(c) && chosen.Parameters.at(-1)?.Rest) {
+        counts[counts.length - 1] += 1;
+      }
       // #sec-type-annotations: "Where the annotation states an EXTENT -
       // `[2].<uint8>`, or `[`_N_`].<uint8>` for a value parameter _N_ - the
       // extent is part of the type and the call must supply that many
@@ -19989,6 +20148,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
+    }
+    if (!Array.isArray(node)) {
+      if ((node as ParseNode).type === 'Decorator') {
+        walkDecorator(node as ParseNode.Decorator);
+        return;
+      }
+      walkDecorators(node as ParseNode);
     }
     if (!Array.isArray(node) && PatternScopeOf(node as ParseNode).length && !activePatternScopes.has(node as ParseNode)) {
       withPatternScope(node as ParseNode, () => walk(node));
@@ -20765,10 +20931,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 });
                 continue;
               }
-              // A destructuring parameter carries its members' annotations.
+              // A filter supplies the pattern's input contract. Even an untyped
+              // catch checks its independently written defaults/rest annotations.
               pushBlock(() => {
-                declarePatternAnnotations(cl.CatchParameter as ParseNode | null | undefined);
-                walk(clause);
+                if (cl.CatchParameter) checkPattern(cl.CatchParameter as PatternNode,
+                  { type: caught, typed: !!cl.TypeAnnotation }, true, !!cl.TypeAnnotation);
+                walk((clause as ParseNode.Catch).Block);
               });
             }
             continue;
@@ -22043,70 +22211,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         });
 
-        // A DECORATOR IS AN ORDINARY EXPRESSION, and no judgment reached one:
-        // `Decorator` appeared nowhere in this file, so `@f` and `@g(x)` were
-        // unchecked everywhere. `@n` for a `uint8` n was the run time's "1
-        // (typed) is not a function" though `n()` is refused, and a decorator
-        // call's arguments went unchecked though an ordinary call's are.
-        //
-        // Walked HERE, from the class body, rather than from a case of their
-        // own: a decorator hangs off its element rather than standing in the
-        // body, and the element cases are not where the walk descends. The
-        // rules are written already and were missing an operand, which is the
-        // shape the pipeline body had.
-        //
-        // The three subtypes hold the expression under different names
-        // (#prod-Decorator): a member expression for `@f` and `@a.b`, a call for
-        // `@g(x)`, and a parenthesized expression for `@(e)`. The class's OWN
-        // decorators are walked with its elements'.
-        {
-          const walkDecorators = (host: ParseNode | null | undefined) => {
-            for (const d of (host as unknown as { Decorators?: readonly ParseNode[] | null } | null | undefined)?.Decorators ?? []) {
-              const dec = d as unknown as {
-                MemberExpression?: ParseNode | null,
-                CallExpression?: ParseNode | null,
-                ParenthesizedExpression?: ParseNode | null,
-              };
-              // An application WRITTEN WITH ARGUMENTS is walked, with its
-              // implicit argument recorded in `decoratorCalls`. The count and
-              // overload resolution both read that, so the WRITTEN arguments are
-              // judged while the context is neither demanded nor typed.
-              if (dec.CallExpression) {
-                decoratorCalls.add(dec.CallExpression as unknown as object);
-                walk(dec.CallExpression);
-              }
-              const expr = dec.MemberExpression ?? dec.ParenthesizedExpression;
-              walk(expr);
-              // A DECORATOR IS CALLED. The protocol invokes it with the context,
-              // so `@n` for a `uint8` n is the mistake `n()` is - and it needs
-              // saying separately, because `@n` is a MEMBER EXPRESSION rather
-              // than a call and reaches no call rule.
-              //
-              // The CallExpression subtype is `@g(x)`, which calls `g` ITSELF
-              // with the written arguments and the context - not a factory whose
-              // result becomes the decorator, a model sec-decorator-application
-              // dropped. So `g`'s return is applied to nothing and is not asked
-              // to be callable; the callability test above is for `@g`, where
-              // the name IS the decorator.
-              {
-                const decType = expr ? callableForm(staticType(expr)) : null;
-                const decBase = decType && decType.Kind === 'literal'
-                  ? ((decType as { Base?: TypeRecord }).Base ?? null)
-                  : decType;
-                if (decBase && decBase.Kind === 'primitive') {
-                  const completion = Throw.StaticTypeError(
-                    'a value of $1 is not callable',
-                    Value(displayType(decType as TypeRecord)),
-                  ) as ThrowCompletion;
-                  errors.push(completion.Value as ObjectValue);
-                }
-              }
-            }
-          };
-          walkDecorators(n);
-          for (const el of (n as unknown as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
-            walkDecorators(el);
-          }
+        // Elements are processed in the class-specific loop below rather than
+        // by the generic walk; their decorator expressions still belong here.
+        for (const element of (n as ParseNode.ClassDeclaration).ClassTail.ClassBody ?? []) {
+          walkDecorators(element);
         }
         // A class DECLARATION is registered
         // by name in `classNodes` and forced with the others, which is what

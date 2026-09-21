@@ -346,7 +346,7 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
     return error;
   }
 
-  abstract isStrictMode(): boolean;
+  abstract isStrictMode(position?: number): boolean;
 
   raise(error: ThrowCompletion, context: number | Locatable = this.peek()): never {
     if (!isErrorObject(error.Value)) {
@@ -1060,7 +1060,7 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
             return Token.NUMBER;
           }
           // Legacy octal literal (0123)
-          if (this.isStrictMode()) {
+          if (this.isStrictMode(this.position)) {
             this.raise(Throw.SyntaxError('Legacy octal literal in strict mode'), start);
           }
           this.position -= 1;
@@ -1263,7 +1263,7 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
           this.position += 1;
           return '\u{0000}';
         } else if (isDecimalDigit(c)) {
-          if (this.isStrictMode()) {
+          if (this.isStrictMode(this.position)) {
             this.raise(Throw.SyntaxError('Illegal octal escape'), this.position);
           }
           const lookahead2 = this.source[this.position + 2];

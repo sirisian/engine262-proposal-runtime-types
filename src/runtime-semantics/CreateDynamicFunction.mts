@@ -136,8 +136,14 @@ export function* CreateDynamicFunction(constructor: FunctionObject, newTarget: F
       Parser.decorateSyntaxErrorWithScriptId(expr[0], scriptId);
       return ThrowCompletion(expr[0]);
     }
-    parametersNode = parameters.result;
-    bodyNode = body;
+    // The combined parse establishes strictness from annotations in either the
+    // parameters or body. The isolated parses only validate their delimiters;
+    // using their nodes would discard the combined function's execution mode.
+    parametersNode = expr.FormalParameters;
+    if (expr.type === 'FunctionExpression') bodyNode = expr.FunctionBody;
+    else if (expr.type === 'GeneratorExpression') bodyNode = expr.GeneratorBody;
+    else if (expr.type === 'AsyncFunctionExpression') bodyNode = expr.AsyncBody;
+    else bodyNode = expr.AsyncGeneratorBody;
   }
   const proto = Q(yield* GetPrototypeFromConstructor(newTarget, fallbackProto));
   const env = currentRealm.GlobalEnv;

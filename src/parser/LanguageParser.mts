@@ -38,7 +38,7 @@ export abstract class LanguageParser extends ModuleParser {
     }, () => {
       const directives: string[] = [];
       node.StatementList = this.parseStatementList(Token.EOS, directives);
-      node.strict = directives.includes('use strict');
+      node.strict = node.strict || directives.includes('use strict');
     });
     Object.defineProperty(node, 'sourceText', {
       configurable: true,

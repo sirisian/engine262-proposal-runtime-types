@@ -5,9 +5,11 @@ import type {
 } from './ParseNode.mts';
 import { Scope } from './Scope.mts';
 import { PrescanPreprocessorNames } from './PrescanDecoratorModes.mts';
+import type { StrictRange } from './TypedStrictness.mts';
 import { surroundingAgent, type Feature } from '#self';
 
 export interface ParserOptions {
+  readonly typedStrictRanges?: readonly StrictRange[];
   /** `{ bound name -> grammar }` for this module's preprocessor decorations. */
   decoratorGrammars?: ReadonlyMap<string, string>;
   readonly source: string;
@@ -21,6 +23,8 @@ export class Parser extends LanguageParser {
   protected readonly source: string;
 
   protected readonly specifier?: string;
+
+  private readonly typedStrictRanges: readonly StrictRange[];
 
   readonly state: {
     /**
@@ -68,11 +72,12 @@ export class Parser extends LanguageParser {
 
   constructor({
     source, specifier, json = false, allowAllPrivateNames = false, decoratingSource,
-    decoratorGrammars,
+    decoratorGrammars, typedStrictRanges = [],
   }: ParserOptions) {
     super();
     this.source = source;
     this.specifier = specifier;
+    this.typedStrictRanges = typedStrictRanges;
     this.decoratingSource = decoratingSource;
     this.preprocessorNames = surroundingAgent?.feature?.('runtime-types')
       ? new Set(PrescanPreprocessorNames(source).keys())
@@ -97,8 +102,16 @@ export class Parser extends LanguageParser {
     };
   }
 
-  isStrictMode() {
-    return this.state.strict;
+  isStrictMode(position = this.peekToken?.startIndex ?? this.position) {
+    if (this.state.strict) return true;
+    let low = 0;
+    let high = this.typedStrictRanges.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (this.typedStrictRanges[mid]![0] <= position) low = mid + 1;
+      else high = mid;
+    }
+    return low > 0 && position < this.typedStrictRanges[low - 1]![1];
   }
 
   feature(name: Feature) {
@@ -114,7 +127,7 @@ export class Parser extends LanguageParser {
       type: undefined!,
       parent: undefined,
       location: this.getLocation(inheritStart),
-      strict: this.state.strict,
+      strict: this.isStrictMode(),
       get sourceText() {
         return s.slice(node.location.startIndex, node.location.endIndex);
       },

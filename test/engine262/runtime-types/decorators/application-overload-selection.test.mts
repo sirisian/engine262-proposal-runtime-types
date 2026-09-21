@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrown, expectStaticTypeError } from '../harness.mts';
 
 /**
  * proposal-runtime-types #sec-decorator-application, the rest of the clause:
@@ -120,7 +120,7 @@ test('a DEFAULT before the context is filled, and the context still lands last',
   expect(evaluated(`${two} class A { @f(7, "w") z: uint8; } got;`)).toBe('7/w/z');
   // A gap at a parameter with NO default is not a candidate: there is nothing
   // for that position to take, so the signature cannot accept a bare `@f`.
-  expectThrownKind('let seen; function f(a: uint8, c: Reflect.ClassField) { seen = String(a) + String(c.name); } class A { @f a: uint8; }', 'TypeError');
+  expectStaticTypeError('let seen; function f(a: uint8, c: Reflect.ClassField) { seen = String(a) + String(c.name); } class A { @f a: uint8; }');
 });
 
 test('FEWER DEFAULTS WINS, and a tie is ambiguous', () => {

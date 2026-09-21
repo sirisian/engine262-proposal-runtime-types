@@ -1,4 +1,5 @@
 import { Parser, type ParserOptions } from './parser/Parser.mts';
+import { TypedStrictRanges } from './parser/TypedStrictness.mts';
 import type { ExecutionContext } from './execution-context/ExecutionContext.mts';
 import {
   CheckModule, CheckScript, PublishedReturnTypeOf, TakeNarrowingRequests,
@@ -262,14 +263,23 @@ export function ParseRange(
   return TokensFromParse(log as never, slice, source as never, 0, slice.length);
 }
 
-export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T) {
-  const p = new Parser({
+export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T): T | ObjectValue[] {
+  const options = {
     ...init,
     decoratorGrammars: init.decoratorGrammars ?? DecoratorGrammars(init.source, init.specifier),
-  });
+  };
+  const p = new Parser(options);
 
   try {
     const r = f(p);
+    // Annotation ownership is source-order independent. The first parse only
+    // classifies scopes; reparse once with those ranges so the existing strict
+    // grammar, early errors, and runtime node flags all agree. The callback is
+    // reused to preserve eval/private-name and dynamic-function parse goals.
+    if (surroundingAgent.feature('runtime-types') && init.typedStrictRanges === undefined) {
+      const ranges = TypedStrictRanges(r);
+      if (ranges.length) return wrappedParse({ ...options, typedStrictRanges: ranges }, f);
+    }
     const errors = [];
     for (const error of p.earlyErrors) {
       errors.push(error);

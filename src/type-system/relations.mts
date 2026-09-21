@@ -1255,6 +1255,13 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     // passed through `any` at run time, and `is` agreed with the run time. The
     // checker and the run time disagreed, which is the shape of gap this
     // closes.
+    // A stamped reflection context is an Object even though its nominal record
+    // deliberately has no structural member model. This category relation does
+    // not make distinct reflection hosts interchangeable or invent their shape.
+    if (t.Kind === 'object' && t.Properties.length === 0 && t.IndexSignatures.length === 0
+      && s.Kind === 'nominal' && (s.Declaration as { type?: string })?.type === 'ReflectionContext') {
+      return true;
+    }
     const sourceClassShape = ClassShapeOf(s);
     if (sourceClassShape && t.Kind === 'object') {
       return IsSubtype(sourceClassShape, t, next);

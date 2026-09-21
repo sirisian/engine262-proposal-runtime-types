@@ -59,8 +59,8 @@ test('the alias keeps its read type but stores respect the rebound location', ()
 
 test('unresolved and object-environment destinations defer to runtime', () => {
   expect(ok('function unused(y: uint8) { ref external = y; }')).toBe(true);
-  expect(ok('function unused(o: any, y: uint8) { let p: uint8 = 1; with (o) { ref p = y; } }')).toBe(true);
-  expectStaticTypeError('function unused(o: any, y: uint8) { with (o) { let p: uint8 = 1; ref p = y; } }');
+  expect(ok('function unused(o, y) { let p = 1; with (o) { ref p = y; } }')).toBe(true);
+  expectStaticTypeError('function unused(o, y) { with (o) { let p = 1; ref p = y; } }');
 });
 
 test('rebinding preserves the new location and its liveness checks', () => {
