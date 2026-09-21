@@ -9,6 +9,7 @@
 
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Value } from '../value.mts';
+import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argument.mts';
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import { anyType, restElementType } from './records.mts';
 import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
@@ -292,6 +293,13 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   // match.
   if (paramType.Kind === 'parameter') {
     return Tier.Generic;
+  }
+  // Template objects are immutable language-created sequences with exact
+  // cooked positions. They may meet an array boundary by checking each value;
+  // this is call provenance, not tuple/array storage covariance.
+  if (isTemplateArgumentType(argType) && argType.Kind === 'tuple' && paramType.Kind === 'array') {
+    return (paramType.Extent === 'dynamic' || paramType.Extent === argType.Elements.length)
+      && argType.Elements.every((element) => IsAssignable(element.Type, paramType.Element)) ? Tier.Literal : null;
   }
   if (IsAssignable(argType, paramType)) {
     // Exact identity is mutual assignability: the argument type is the parameter
@@ -594,7 +602,7 @@ export type OverloadResolution =
  * equally-best is `ambiguous`; exactly one best is `resolved`.
  */
 export function resolveOverload(signatures: readonly OverloadSignature[], argValues: readonly Value[], contextualType?: TypeRecord): OverloadResolution {
-  return resolveOverloadByTypes(signatures, argValues.map((v) => RuntimeTypeOf(v)), contextualType);
+  return resolveOverloadByTypes(signatures, argValues.map((v) => templateArgumentTypeOf(v) ?? RuntimeTypeOf(v)), contextualType);
 }
 
 /**

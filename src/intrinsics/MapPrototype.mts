@@ -1,6 +1,7 @@
 import {
   INDEX_TYPE,
   NumberValue,
+  type ObjectValue,
   TypedNumberValue,
   Value,
   wellKnownSymbols } from '../value.mts';
@@ -368,4 +369,5 @@ export function bootstrapMapPrototype(realmRec: Realm) {
   X(proto.DefineOwnProperty(wellKnownSymbols.iterator, entriesFunc as Descriptor));
 
   realmRec.Intrinsics['%Map.prototype%'] = proto;
+  realmRec.Intrinsics['%Map.prototype.set%'] = proto.properties.get(Value('set'))!.Value as ObjectValue;
 }

@@ -6,6 +6,7 @@ import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
 import { ConvertValue, soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 import { OutOfRange, isArray } from '../utils/language.mts';
+import { registerTemplateArgument } from '../type-system/template-argument.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { BindNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
@@ -94,6 +95,7 @@ function GetTemplateObject(templateLiteral: ParseNode.TemplateLiteral) {
   X(SetIntegrityLevel(template, 'frozen'));
   // 15. Append the Record { [[Site]]: templateLiteral, [[Array]]: template } to templateRegistry.
   templateRegistry.push({ Site: templateLiteral, Array: template });
+  if (surroundingAgent.feature('runtime-types')) registerTemplateArgument(template, cookedStrings);
   // 16. Return template.
   return template;
 }

@@ -13,7 +13,10 @@ export type ReferenceOperation =
 type State = Map<ReferenceSlot, readonly ReferenceLocation[]>;
 
 export function ReferenceFunction(node: ParseNode | undefined): ParseNode | null {
-  for (let current = node; current; current = current.parent) {
+  let child: ParseNode | undefined;
+  for (let current = node; current; child = current, current = current.parent) {
+    // A method's name is evaluated outside its invocation and parameter scope.
+    if (child && (current as { ClassElementName?: ParseNode }).ClassElementName === child) continue;
     if (/FunctionDeclaration|FunctionExpression|ArrowFunction|Method|GeneratorDeclaration|GeneratorExpression|OperatorDefinition/.test(current.type)) return current;
   }
   return null;
@@ -112,15 +115,18 @@ export function CheckReferencePermissions(
     if (ReferenceFunction(node) === node) {
       if (visitedFunctions.has(node)) return normal(input);
       visitedFunctions.add(node);
-      const local = new Map(input);
+      const name = (node as { ClassElementName?: ParseNode }).ClassElementName;
+      const before = name ? visit(name, input) : normal(input);
+      if (!before.normal) return before;
+      const local = new Map(before.normal);
       for (const [slot, locations] of initialLocations) {
         if (slot.owner !== node && !local.has(slot) && !rebound.has(slot)) local.set(slot, locations);
       }
       // A closure observes a slot at call time, not its definition-time target.
       // Without an effects contract a captured, rebindable origin is unknown.
       for (const slot of rebound) if (slot.owner !== node) local.delete(slot);
-      sequence(children(node), local);
-      return normal(input);
+      sequence(children(node).filter((child) => child !== name), local);
+      return before;
     }
     switch (node.type) {
       case 'BreakStatement':

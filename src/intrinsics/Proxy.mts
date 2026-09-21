@@ -122,4 +122,5 @@ export function bootstrapProxy(realmRec: Realm) {
   ]);
 
   realmRec.Intrinsics['%Proxy%'] = proxyConstructor;
+  realmRec.Intrinsics['%Proxy.revocable%'] = proxyConstructor.properties.get(Value('revocable'))!.Value as ObjectValue;
 }

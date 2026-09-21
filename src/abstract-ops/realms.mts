@@ -100,6 +100,10 @@ interface Intrinsics_Table6 {
   '%WrapForValidIteratorPrototype%': ObjectValue;
 }
 export interface Intrinsics extends Intrinsics_Table6 {
+  '%Proxy.revocable%': ObjectValue;
+  '%Map.prototype.set%': ObjectValue;
+  '%Set.prototype.add%': ObjectValue;
+  '%ArrayIteratorPrototype.next%': ObjectValue;
   '%AbstractModuleSource.prototype%': ObjectValue;
   '%AggregateError.prototype%': ObjectValue;
   /** proposal-runtime-types: its [[Prototype]] is %SyntaxError.prototype%. */

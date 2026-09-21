@@ -57,10 +57,8 @@ export function TV(s: string) {
           if (s[i] === '{') {
             i += 1;
             const start = i;
-            do {
-              i += 1;
-            } while (isHexDigit(s[i]));
-            if (s[i] !== '}') {
+            while (isHexDigit(s[i])) i += 1;
+            if (i === start || s[i] !== '}') {
               return undefined;
             }
             const n = Number.parseInt(s.slice(start, i), 16);
@@ -81,13 +79,21 @@ export function TV(s: string) {
           if (isDecimalDigit(s[i + 1])) {
             return undefined;
           }
-          return '\u{0000}';
+          buffer += '\u{0000}';
+          break;
         default:
-          if (isLineTerminator(s)) {
-            return '';
+          if (isDecimalDigit(s[i]) || s[i] === undefined) return undefined;
+          if (isLineTerminator(s[i])) {
+            if (s[i] === '\r' && s[i + 1] === '\n') i += 1;
+          } else {
+            // NonEscapeCharacter contributes itself (for example \a).
+            buffer += s[i];
           }
-          return undefined;
+          break;
       }
+    } else if (s[i] === '\r') {
+      if (s[i + 1] === '\n') i += 1;
+      buffer += '\n';
     } else {
       buffer += s[i];
     }

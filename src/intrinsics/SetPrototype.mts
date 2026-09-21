@@ -698,6 +698,7 @@ export function bootstrapSetPrototype(realmRec: Realm) {
   X(proto.DefineOwnProperty(wellKnownSymbols.iterator, valuesFunc));
 
   realmRec.Intrinsics['%Set.prototype%'] = proto;
+  realmRec.Intrinsics['%Set.prototype.add%'] = proto.properties.get(Value('add'))!.Value as ObjectValue;
 }
 
 interface SetRecord {

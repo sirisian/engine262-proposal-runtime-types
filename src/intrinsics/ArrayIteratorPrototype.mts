@@ -1,6 +1,6 @@
 import { Q, type ValueEvaluator } from '../completion.mts';
 import {
-  Value, type Arguments, type FunctionCallContext,
+  Value, type ObjectValue, type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import {
@@ -20,4 +20,5 @@ export function bootstrapArrayIteratorPrototype(realmRec: Realm) {
   ], realmRec.Intrinsics['%Iterator.prototype%'], 'Array Iterator');
 
   realmRec.Intrinsics['%ArrayIteratorPrototype%'] = proto;
+  realmRec.Intrinsics['%ArrayIteratorPrototype.next%'] = proto.properties.get(Value('next'))!.Value as ObjectValue;
 }

@@ -8,7 +8,10 @@ import { surroundingAgent } from '../execution-context/Agent.mts';
 import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.mts';
 import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
+import { templateArgumentType, isTemplateArgumentType } from './template-argument.mts';
+import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
@@ -3195,6 +3198,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * null return annotation, and why the type they DO have needs its own frame.
    */
   const generatorTypes: Known[] = [];
+  const typedAsyncYieldBoundaries: boolean[] = [];
   type GeneratorContributions = { yielded: Known[], returned: Known[] };
   const generatorContributions: (GeneratorContributions | null)[] = [];
 
@@ -7427,6 +7431,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return asynchronous ? invalid(propertyType(at, wellKnownSymbols.asyncIterator), syncInvalid, true) : syncInvalid();
   };
 
+  // Only the typed async yield boundary separately awaits a real async
+  // iterator's value. Base yield* and for-await do not. A known false `done`
+  // establishes that this first step reaches EnforceYieldType.
+  const typedAsyncDelegationFails = (type: Known): boolean => everyProtocolAlternative(type, (iterable) =>
+    everyProtocolAlternative(protocolMember(iterable, wellKnownSymbols.asyncIterator), (method) => {
+      if (nullishOnly(method)) return false; // The adapter is checked by notIterable.
+      return protocolCallFails(method, (iterator) => everyProtocolAlternative(iterator, (object) => {
+        if (knownNonObject(object)) return true;
+        return protocolCallFails(protocolMember(object, 'next'), (step) => everyProtocolAlternative(step, (raw) => {
+          if (asyncIteratorResultFails(raw)) return true;
+          return everyProtocolAlternative(awaitedType(raw), (result) => {
+            if (!knownObject(result)) return false;
+            const done = protocolMember(result, 'done');
+            return done?.Kind === 'literal' && done.Value === Value.false
+              && awaitAssimilationFails(protocolMember(result, 'value'));
+          });
+        }), [undefinedType]);
+      }), []);
+    }));
+
   // Calls, construction and super calls share spread eligibility independently
   // of signature resolution. Object spreads may bind names; the predicate only
   // refuses types that cannot use either argument-spread protocol.
@@ -10495,7 +10519,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && (node.type === 'RelationalExpression' || node.type === 'EqualityExpression')) {
       comparisonContextual.add(node);
     }
-    if (node && expressionViewTypes.has(node)) return expressionViewTypes.get(node)!;
+    if (node && expressionViewTypes.has(node)
+        && !(contextual && isTemplateArgumentType(expressionViewTypes.get(node)!))) return expressionViewTypes.get(node)!;
     if (node?.type === 'MatchExpression') return checkMatchExpression(node, contextual);
     if (node?.type === 'CommaOperator') return staticTypeIn(node.ExpressionList.at(-1), contextual);
     // A COMPLEX CONTEXT REACHES THROUGH `+` AND `-` TO ITS OPERANDS, because
@@ -10550,6 +10575,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (inner?.type === 'MatchExpression') return checkMatchExpression(inner, contextual);
     if (inner?.type === 'DoExpression' && inner.star) return checkDoGenerator(inner, contextual);
+    if (inner?.type === 'NewExpression' && contextual) checkCollectionSeed(inner, contextual);
     if (inner && contextual) {
       contextualCallTypes.set(inner, contextual);
     }
@@ -13418,34 +13444,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // `s.add(5)` beside it was static. The same holdability test the
                 // methods now apply, on the iterable's element (or the pair's
                 // first member), where that type is known and not `any`.
-                // The NON-WEAK family asks a different question from the weak
-                // one below: not whether the element can be held weakly, but
-                // whether it fits the DECLARED type - and that is answered by
-                // the seed's CONVERSION, not by comparing inferred types.
-                // `new Set.<uint8>([1, 2])` is accepted because the literals
-                // adopt `uint8`, exactly as `const a: [].<uint8> = [1, 2]` does,
-                // so the seed is typed IN CONTEXT of `[].<T>` and the existing
-                // array-literal machinery does the propagation and the element
-                // check.
-                //
-                // Only for an ARRAY LITERAL seed. Any other iterable - another
-                // `Set.<uint8>`, a generator - is not assignable to `[].<T>`
-                // even when its elements are perfectly fine, so checking it that
-                // way would refuse `new Set.<uint8>(a)` for a `Set.<uint8>` a.
-                // `Map` is left alone entirely: a pair literal the checker
-                // infers as an ARRAY joins key and value into one element type,
-                // the same reason the weak branch below gives for abstaining.
-                if (base.LibraryName === 'Set') {
-                  const seed = ((node as { Arguments?: readonly ParseNode[] }).Arguments ?? [])[0];
-                  const declared = args[0];
-                  if (seed && (seed as { type?: string }).type === 'ArrayLiteral'
-                      && declared && typeof declared !== 'number') {
-                    const seedType = CanonicalizeType({
-                      Kind: 'array', Element: declared as TypeRecord, Extent: 'dynamic',
-                    } as unknown as TypeRecord) as Known;
-                    requireAssignable(staticTypeIn(seed, seedType), seedType);
-                  }
-                }
                 if (base.LibraryName === 'WeakSet' || base.LibraryName === 'WeakMap') {
                   const ctorArgs = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
                   const iter = ctorArgs[0];
@@ -13478,6 +13476,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }
                 const asLibrary = base.LibraryName ? libraryTypeRecord(base.LibraryName, valueArgs) : null;
                 if (asLibrary) {
+                  checkCollectionSeed(node, asLibrary);
                   return CanonicalizeType(asLibrary as TypeRecord) as Known;
                 }
                 // `new A.<>(5)` and `new Grid.<8>()` bind their defaults, as the
@@ -18942,6 +18941,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // the origin is known HERE and nowhere downstream.
     returnContextIsContextual.push(!generatorType && !returnAnnotation && !!contextualReturn);
     generatorTypes.push(generatorType ?? null);
+    typedAsyncYieldBoundaries.push(generatorType?.Kind === 'nominal'
+      && generatorType.LibraryName === 'AsyncGenerator' && !!declaredForReturn
+      && !mentionsTypeParameter(declaredForReturn));
     generatorContributions.push(contributions ?? null);
     asyncReturns.push((!!resumable && !generatorType) || (generatorType?.Kind === 'nominal' && generatorType.LibraryName === 'AsyncGenerator'));
     returnsProven.push(true);
@@ -19067,6 +19069,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     returnTypes.pop();
     returnContextIsContextual.pop();
     generatorTypes.pop();
+    typedAsyncYieldBoundaries.pop();
     generatorContributions.pop();
     asyncReturns.pop();
     varFrames.pop();
@@ -20074,6 +20077,157 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  let stableIntrinsicSource: boolean | undefined;
+  const intrinsicOrigin = (expression: ParseNode, name: 'Proxy' | 'Map' | 'Set',
+    scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
+    const realm = surroundingAgent.currentRealmRecord;
+    stableIntrinsicSource ??= intrinsicSourceIsStable(root, realm);
+    if (!stableIntrinsicSource || hasDirectEval) return false;
+    const node = patternExpression(expression)!;
+    if (node.type === 'TypeArgumentsExpression') return intrinsicOrigin(node.Expression, name, scope, seen);
+    if (node.type !== 'IdentifierReference') return false;
+    for (let i = scope; i >= 0; i -= 1) {
+      const frame = frames[i];
+      if (frame.dynamicBindings) return false;
+      const origin = invocationOrigins.get(frame)?.get(node.name);
+      if (origin) {
+        if (!origin.immutable || origin.annotated || seen.has(origin)) return false;
+        seen.add(origin);
+        return intrinsicOrigin(origin.node, name, i, seen);
+      }
+      if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name)) return false;
+    }
+    // An eval or a separate script may be checked in a live outer environment
+    // whose bindings are absent from this source's checker frames.
+    let environment: typeof surroundingAgent.runningExecutionContext.LexicalEnvironment | null
+      = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+    while (environment && environment !== realm.GlobalEnv) {
+      if ('BindingObject' in environment || ('bindings' in environment
+          && (environment.bindings as { has(key: JSStringValue): boolean }).has(Value(name)))) return false;
+      environment = environment.OuterEnv;
+    }
+    return node.name === name && !assignedNames.has(name) && !assignedGlobalProperties.has(name)
+      && !realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(name))
+      && intrinsicData(realm.GlobalObject, Value(name)) === realm.Intrinsics[`%${name}%`];
+  };
+
+  const proxyLayoutForbidden = (type: Known): boolean => everyProtocolAlternative(type, (arm) => {
+    if (arm.Kind === 'array') return true;
+    if (arm.Kind !== 'nominal') return false;
+    const seen = new Set<TypeRecord>();
+    let current: TypeRecord | undefined = arm;
+    while (current?.Kind === 'nominal' && !seen.has(current)) {
+      seen.add(current);
+      // Reference identity changes weak holding, not Proxy's storage rule.
+      if (classHasOwnSealedStorage(current)) return true;
+      current = current.Base;
+    }
+    return false;
+  });
+  const checkProxyTarget = (callee: ParseNode, args: readonly ParseNode[], revocable = false): void => {
+    let origin = callee;
+    const realm = surroundingAgent.currentRealmRecord;
+    if (revocable) {
+      const member = patternExpression(callee);
+      if (member?.type !== 'MemberExpression' || member.IdentifierName?.name !== 'revocable'
+          || intrinsicData(realm.Intrinsics['%Proxy%'], Value('revocable')) !== realm.Intrinsics['%Proxy.revocable%']) return;
+      origin = member.MemberExpression;
+    }
+    // No positional claim through unresolved spreads or named arguments.
+    if (!args.length || args.some((arg) => arg.type === 'AssignmentRestElement' || arg.type === 'NamedArgument')
+        || !intrinsicOrigin(origin, 'Proxy')) return;
+    const target = args[0];
+    if (operandParticipates(target) && proxyLayoutForbidden(staticType(target))) {
+      errors.push(Throw.StaticTypeError('a Proxy target cannot carry typed array or sealed class storage').Value as ObjectValue);
+    }
+  };
+
+  const checkedCollectionSeeds = new WeakMap<ParseNode, Set<TypeRecord>>();
+  const checkCollectionSeed = (node: ParseNode.NewExpression, target: Known): void => {
+    if (target?.Kind !== 'nominal' || !['Map', 'Set'].includes(target.LibraryName ?? '')) return;
+    const name = target.LibraryName as 'Map' | 'Set';
+    if (!intrinsicOrigin(node.MemberExpression, name)) return;
+    const args = node.Arguments ?? [];
+    if (args.some((arg) => arg.type === 'AssignmentRestElement' || arg.type === 'NamedArgument')) return;
+    const seed = patternExpression(args[0]);
+    if (seed?.type !== 'ArrayLiteral' || seed.ElementList.some((el) => !el || el.type === 'SpreadElement')) return;
+    const realm = surroundingAgent.currentRealmRecord;
+    const intrinsic = realm.Intrinsics;
+    const adder = name === 'Map' ? 'set' : 'add';
+    if (intrinsicData(intrinsic[`%${name}.prototype%`], Value(adder)) !== (name === 'Map' ? intrinsic['%Map.prototype.set%'] : intrinsic['%Set.prototype.add%'])
+        || intrinsicData(intrinsic['%Array.prototype%'], wellKnownSymbols.iterator) !== intrinsic['%Array.prototype.values%']
+        || intrinsicData(intrinsic['%ArrayIteratorPrototype%'], Value('next')) !== intrinsic['%ArrayIteratorPrototype.next%']) return;
+    const checked = checkedCollectionSeeds.get(node) ?? new Set<TypeRecord>();
+    if (checked.has(target)) return;
+    checked.add(target);
+    checkedCollectionSeeds.set(node, checked);
+
+    // A negative conversion query must not contextually stamp the seed: its
+    // elements are evaluated before construction, and adoption happens later.
+    const refuses = (expression: ParseNode, wanted: TypeRecord): boolean => {
+      if (wanted.Kind === 'union') return wanted.Members.length > 0 && wanted.Members.every((arm) => refuses(expression, arm));
+      const source = staticType(expression);
+      if (!source || source.Kind === 'any' || wanted.Kind === 'any' || mentionsTypeParameter(wanted)
+          || wanted.Kind === 'parameterized' || source.Kind === 'parameterized'
+          || convertingConstructorAccepts(wanted, source) || declaresConversionTo(source, wanted)
+          || declaresInboundConversion(wanted, source)) return false;
+      const value = patternExpression(expression);
+      if (value?.type === 'ObjectLiteral' && wanted.Kind === 'object') {
+        // Only known own data positions: no getter execution, closed-shape
+        // assumption, freshness policy or conversion of transient values.
+        const data = value.PropertyDefinitionList;
+        if (data.some((member) => member.type !== 'PropertyDefinition'
+            || member.PropertyName?.type === 'PropertyName')) return false;
+        return wanted.Properties.some((property) => {
+          const member = [...data].reverse().find((entry) => entry.type === 'PropertyDefinition'
+            && classElementKey(entry.PropertyName) === property.key) as ParseNode.PropertyDefinition | undefined;
+          return !!member?.AssignmentExpression && refuses(member.AssignmentExpression, property.type);
+        });
+      }
+      // Existing record/array values can acquire element conversions at this
+      // boundary. An invariant container mismatch alone does not disprove it.
+      if (['object', 'array', 'tuple'].includes(source.Kind)) return knownNonObject(wanted);
+      return protocolArgumentFails(source, wanted);
+    };
+    const positions = target.Arguments;
+    const reject = (value: ParseNode, wanted: TypeRecord | number | undefined): void => {
+      if (wanted && typeof wanted !== 'number' && refuses(value, wanted)) errors.push(Throw.StaticTypeError(
+        'a final $1 seed entry cannot be converted to $2', Value(name), Value(displayType(wanted)),
+      ).Value as ObjectValue);
+    };
+    if (name === 'Set') {
+      for (const value of seed.ElementList) reject(value, positions[0]);
+      return;
+    }
+    // Host Map uses SameValueZero for these primitive payloads too. Restrict
+    // the key facts to that shared domain; structural/value-class keys defer.
+    const final = new Map<string | number | bigint | Value, { keyNode: ParseNode, valueNode: ParseNode }>();
+    for (const entry of seed.ElementList) {
+      const pair = patternExpression(entry);
+      if (pair?.type !== 'ArrayLiteral' || pair.ElementList.length !== 2
+          || pair.ElementList.some((el) => !el || el.type === 'SpreadElement')) return;
+      const [keyNode, valueNode] = pair.ElementList;
+      const keyType = staticType(keyNode);
+      // A later unknown key might overwrite any earlier bad value. Keep the
+      // whole seed dynamic unless every comparison is established here.
+      if (keyType?.Kind !== 'literal' || !knownNonObject(keyType)) return;
+      const value = keyType.Value;
+      let key: string | number | bigint | Value;
+      if (value instanceof JSStringValue) key = value.stringValue();
+      else if (value instanceof NumberValue) key = R(value);
+      else if (value instanceof BigIntValue) key = R(value);
+      else if (value === Value.undefined || value === Value.null || value === Value.true || value === Value.false) key = value;
+      else return;
+      const prior = final.get(key);
+      if (prior) prior.valueNode = valueNode;
+      else final.set(key, { keyNode, valueNode });
+    }
+    for (const entry of final.values()) {
+      reject(entry.keyNode, positions[0]);
+      reject(entry.valueNode, positions[1]);
+    }
+  };
+
   const checkInvocation = (expression: ParseNode, construct: boolean): void => {
     const fact = invocationFact(expression);
     if (fact?.typed && !(construct ? fact.constructible : fact.callable)) {
@@ -20083,12 +20237,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // A computed name executes in the surrounding evaluation scope, before
+  // entering a member's parameters, body or instance/static `this` frame.
+  const visitedMemberNames = new WeakSet<object>();
+  const walkMemberName = (node: ParseNode): void => {
+    const name = (node as { ClassElementName?: ParseNode }).ClassElementName;
+    if (name?.type === 'PropertyName' && !visitedMemberNames.has(name)) {
+      visitedMemberNames.add(name);
+      walk(name);
+    }
+  };
+
   const templateCallView = (node: ParseNode.TaggedTemplateExpression): ParseNode.CallExpression => {
     const template = node.TemplateLiteral;
     const strings = {
       type: 'ArrayLiteral',
-      ElementList: template.TemplateSpanList.map((value) => ({ type: 'StringLiteral', value })),
+      ElementList: template.TemplateSpanList.map((raw) => {
+        const value = TV(raw);
+        // Undefined here is the intrinsic cooked value, not a name lookup.
+        return value === undefined ? typedExpressionView({ type: 'NullLiteral' } as ParseNode, undefinedType)
+          : { type: 'StringLiteral', value };
+      }),
     } as unknown as ParseNode;
+    // Preserve position/literal facts for overload selection as well as the
+    // subsequent contextual argument check. This view never escapes to runtime.
+    expressionViewTypes.set(strings, templateArgumentType(template.TemplateSpanList.map((raw) => {
+      const cooked = TV(raw);
+      return cooked === undefined ? Value.undefined : Value(cooked);
+    })));
     return {
       type: 'CallExpression', CallExpression: node.MemberExpression,
       Arguments: [strings, ...template.ExpressionList],
@@ -21296,6 +21472,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'CallExpression': {
+        checkProxyTarget(n.CallExpression, n.Arguments ?? [], true);
         // A CALL may reassign a binding some function body assigns to, and the
         // walk cannot see into the callee, so every such name loses its
         // narrowing here. Without this, `function clob() { v = null; }` followed
@@ -21462,6 +21639,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'NewExpression': {
+        checkProxyTarget(n.MemberExpression, n.Arguments ?? []);
         checkArgumentSpreads(n.Arguments);
         const ne = n;
         const target = patternExpression(ne.MemberExpression);
@@ -21653,7 +21831,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (y.hasStar && y.AssignmentExpression) {
           const yielded = staticType(y.AssignmentExpression);
           const owner = ReferenceFunction(n);
-          if (yielded && notIterable(yielded, owner?.type.startsWith('Async') === true, false, true, [undefinedType])) {
+          if (yielded && (notIterable(yielded, owner?.type.startsWith('Async') === true, false, true, [undefinedType])
+            || (typedAsyncYieldBoundaries.at(-1) && typedAsyncDelegationFails(yielded)))) {
             const completion = Throw.StaticTypeError(
               'a value of $1 is not iterable',
               Value(displayType(yielded as TypeRecord)),
@@ -22000,6 +22179,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'FieldDefinition': {
+        walkMemberName(n);
         // #sec-declared-zero: `static default = ...` declares the class's zero.
         // "The expression must be compile-time evaluable" and "It is a type
         // error if the declared zero is not a value of the class." Neither was
@@ -22168,6 +22348,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'MethodDefinition': {
+        walkMemberName(n);
         enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
           contextualParameterTypes.get(n), undefined, undefined, contextualMethodReturns.get(n) ?? null);
         return;
@@ -22216,6 +22397,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const element of (n as ParseNode.ClassDeclaration).ClassTail.ClassBody ?? []) {
           walkDecorators(element);
         }
+        pushBlock(() => {
+          const selfName = n.BindingIdentifier?.name;
+          if (selfName) {
+            frames.at(-1)!.declaredNames.add(selfName);
+            frames.at(-1)!.bindings.set(selfName, anyTypeRecord);
+          }
+          const scoped = pushTypeParameterScopeOf(n);
+          for (const parameter of n.TypeParameters?.TypeParameterList ?? []) {
+            frames.at(-1)!.declaredNames.add(parameter.BindingIdentifier.name);
+            frames.at(-1)!.bindings.set(parameter.BindingIdentifier.name, anyTypeRecord);
+          }
+          try {
+            for (const element of n.ClassTail.ClassBody ?? []) walkMemberName(element);
+          } finally {
+            if (scoped) typeParameterScopes.pop();
+          }
+        });
         // A class DECLARATION is registered
         // by name in `classNodes` and forced with the others, which is what
         // publishes its instance type for the runtime record to read. A class
@@ -22469,6 +22667,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // frame's return type, since a `return` inside sets the generator's R,
         // but it is carried so that a `yield` can read the N it declares.
         {
+          walkMemberName(n);
           const ordinary = n.type.endsWith('Declaration') || n.type.endsWith('Expression');
           if (ordinary) {
             thisTypeFrames.push(contextualThisTypes.get(n) ?? null);

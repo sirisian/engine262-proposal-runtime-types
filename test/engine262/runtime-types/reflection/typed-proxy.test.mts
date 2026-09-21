@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
  * TYPED PROXY. #sec-reflection-and-declared-types: "A Proxy constructed with a
@@ -34,8 +34,10 @@ test('a layout-backed target cannot be proxied', () => {
   // Both halves of "an instance of a typed class or a typed array": a field or
   // element read is an offset load, so there is no point at which a trap could
   // correctly run.
-  expectThrown('class C { v: uint8 = 1; } new Proxy(new C(), {});', 'typed class and cannot be proxied');
-  expectThrown('let a: [2].<uint8> = [1, 2]; new Proxy(a, {});', 'typed array and cannot be proxied');
+  expectStaticTypeError('class C { v: uint8 = 1; } new Proxy(new C(), {});');
+  expectThrown('class C { v: uint8 = 1; } function f(x:any){new Proxy(x,{});} f(new C());', 'typed class and cannot be proxied');
+  expectStaticTypeError('let a: [2].<uint8> = [1, 2]; new Proxy(a, {});');
+  expectThrown('let a: [2].<uint8> = [1, 2]; function f(x:any){new Proxy(x,{});} f(a);', 'typed array and cannot be proxied');
   // An untyped target of either shape is untouched.
   expect(evaluated('`${typeof new Proxy({ a: 1 }, {})}`;')).toBe('object');
   expect(evaluated('`${typeof new Proxy([1, 2], {})}`;')).toBe('object');
