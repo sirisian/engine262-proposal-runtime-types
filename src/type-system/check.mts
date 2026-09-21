@@ -1252,11 +1252,31 @@ function decimalWidthOf(t: TypeRecord): 32 | 64 | 128 | undefined {
  * directly: `let x: bigint | undefined = 9007199254740993` wants the same
  * reading as the bare annotation.
  */
-function bigintTarget(t: TypeRecord): boolean {
+function bigintTarget(t: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean {
+  // A SELF-REFERENTIAL union terminates the walk.
+  //
+  // `type R = { a: int32 } | R` has no finite layout, and the declaration alone
+  // says so - "R contains itself through field, so it has no finite layout".
+  // Writing a literal at it reached here first, and this walk recursed through
+  // [[Members]] until the host stack gave out: `let c: R = { a: 1 }` escaped as
+  // a host *RangeError*, which is not a throw completion, so nothing downstream
+  // could catch or report it, and it fired at CHECK time - `if (false)` around
+  // the literal did not avoid it.
+  //
+  // `eraseMetadata` and `literalFitsNumericType` on this same path were guarded
+  // before; this pair is the third and fourth walk, and guarding those two only
+  // moved the overflow here.
+  //
+  // *false* on a revisit is the answer the arm would give anyway: a union that
+  // reaches only itself accepts no literal as a bigint.
   if (t.Kind === 'primitive') {
     return t.Name === 'bigint';
   }
   if (t.Kind === 'union') {
+    if (seen.has(t)) {
+      return false;
+    }
+    seen.add(t);
     // A union is a bigint target only where NO
     // arm already accepts the literal as a Number. `some` alone made every
     // union containing `bigint` one, so `let x: number | bigint = 5` propagated
@@ -1269,7 +1289,13 @@ function bigintTarget(t: TypeRecord): boolean {
     // belongs to one arm has no reason to be converted for another. The Number
     // arm is preferred because the literal is written as a Number; a `5n` is a
     // BigInt literal and reaches the bigint arm on its own.
-    return t.Members.some(bigintTarget) && !t.Members.some(numberLiteralTarget);
+    // A SET PER WALK. Sharing one between the two made the first walk's visits
+    // count as the second's: every union `bigintTarget` had already entered was
+    // a revisit for `numberLiteralTarget`, which then answered *false* for it
+    // and lost the Number arm it exists to find. The guard is against a CYCLE
+    // within one walk, not a record of what any walk has seen.
+    return t.Members.some((m) => bigintTarget(m, seen))
+      && !t.Members.some((m) => numberLiteralTarget(m, new Set()));
   }
   return false;
 }
@@ -1282,9 +1308,9 @@ function bigintTarget(t: TypeRecord): boolean {
  * `number` and every sized numeric type hold `5` as written; `bigint` does not,
  * which is why it is the one numeric name excluded here.
  */
-function numberLiteralTarget(t: TypeRecord): boolean {
+function numberLiteralTarget(t: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean {
   if (t.Kind === 'literal') {
-    return numberLiteralTarget(t.Base as TypeRecord);
+    return numberLiteralTarget(t.Base as TypeRecord, seen);
   }
   if (t.Kind === 'primitive') {
     // `number` is the untyped one; the sized names are the typed numerics that
@@ -1294,7 +1320,13 @@ function numberLiteralTarget(t: TypeRecord): boolean {
       || t.Name === 'float' || t.Name === 'decimal';
   }
   if (t.Kind === 'union') {
-    return t.Members.some(numberLiteralTarget);
+    // Guarded for the reason given on `bigintTarget`: the two walk the same
+    // members and a cycle in either overflows the host stack.
+    if (seen.has(t)) {
+      return false;
+    }
+    seen.add(t);
+    return t.Members.some((m) => numberLiteralTarget(m, seen));
   }
   return false;
 }
