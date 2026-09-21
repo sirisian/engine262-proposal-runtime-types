@@ -1,9 +1,11 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import type { TypeRecord } from './records.mts';
 
 /** A lexical slot, distinct from its current referent and value type. */
 export interface ReferenceSlot { owner: ParseNode | null }
 export interface ReadonlyOrigin { key: string; constructorOwner?: ParseNode }
-export type ReferenceLocation = ReadonlyOrigin | ReferenceSlot;
+export interface StoreOrigin { writeType: TypeRecord }
+export type ReferenceLocation = ReadonlyOrigin | StoreOrigin | ReferenceSlot;
 export type ReferenceOperation =
   | { kind: 'bind' | 'rebind', slot: ReferenceSlot, locations: readonly ReferenceLocation[], source: ParseNode }
   | { kind: 'write', slot: ReferenceSlot };
@@ -27,6 +29,7 @@ export function CheckReferencePermissions(
   roots: readonly ParseNode[],
   operations: WeakMap<ParseNode, ReferenceOperation>,
   report: (origin: ReadonlyOrigin, write: ParseNode) => void,
+  store?: (origin: StoreOrigin, write: ParseNode) => void,
 ): void {
   const functions: ParseNode[] = [];
   const visitedFunctions = new Set<ParseNode>();
@@ -68,6 +71,7 @@ export function CheckReferencePermissions(
     seen.add(slot);
     for (const location of state.get(slot) ?? []) {
       if ('key' in location) report(location, node);
+      else if ('writeType' in location) store?.(location, node);
       else checkWrite(location, state, node, seen);
     }
   };

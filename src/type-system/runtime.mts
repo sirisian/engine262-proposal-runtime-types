@@ -3627,8 +3627,8 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Reflect.TypeObject') {
     return isTypeObject(value);
   }
-  if (value.type === 'Vector') {
-    return SameType((value as VectorValue).TypeRecord as TypeRecord, t);
+  if (t.Kind === 'primitive' && t.Name === 'vector') {
+    return value.type === 'Vector' && SameType((value as VectorValue).TypeRecord as TypeRecord, t);
   }
   // proposal-runtime-types #sec-enums: "membership in `int32` follows from
   // `Count` being a subtype of it, not from a second runtime type". An

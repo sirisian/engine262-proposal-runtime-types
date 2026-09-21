@@ -2092,6 +2092,11 @@ export function CheckScriptInSession(script: ParseNode.Script, session: CheckSes
   return { errors, next };
 }
 
+interface ReferenceSyntaxIdentities {
+  nodes: WeakMap<ParseNode, ParseNode>;
+  alternatives: WeakMap<object, { type: Known, nodes: WeakMap<ParseNode, ParseNode> }[]>;
+}
+
 /**
  * Check _statementList_ twice: once to DECLARE, and once to report.
  *
@@ -2118,15 +2123,23 @@ export function CheckScriptInSession(script: ParseNode.Script, session: CheckSes
  * starts with, so every inference in the second pass is decided over the
  * list's complete bindings and every type in its final form. The second pass
  * reports. Everything else a pass accumulates is local to the call, so the
- * second starts clean.
+ * second starts clean. Where that completed walk finds known alias-store
+ * destinations, one final walk checks those stores in their lexical contexts.
+ * It consumes the flow facts rather than making the read type a write contract.
  *
  * _session_ is the caller's and is filled in place: after the call its frame
  * holds every top-level declaration of _statementList_, which is what a
  * module's importer reads.
  */
 function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
-  CheckStatementList(statementList, root, session, afterTypeEvaluation);
-  return CheckStatementList(statementList, root, session, afterTypeEvaluation);
+  const identities: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() };
+  CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities);
+  const referenceStores = new Map<ParseNode, TypeRecord[]>();
+  const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities);
+  // Flow is computed over the completed declarations. A final walk checks
+  // alias stores in their original lexical/contextual environment, rather
+  // than re-evaluating their expressions after their scopes have been popped.
+  return referenceStores.size ? CheckStatementList(statementList, root, session, afterTypeEvaluation, referenceStores, undefined, identities) : errors;
 }
 
 export function CheckModule(module: ParseNode.Module, specifier?: string): ObjectValue[] {
@@ -2232,7 +2245,9 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   }
 }
 
-function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
+function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession, afterTypeEvaluation = false,
+  referenceStoreTargets?: ReadonlyMap<ParseNode, readonly TypeRecord[]>, collectedReferenceStores?: Map<ParseNode, TypeRecord[]>,
+  referenceSyntax: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() }): ObjectValue[] {
   const unresolvedTypes = new Map<object, DeferredTypeCheck>();
   deferredTypeChecks.set(root, unresolvedTypes);
 
@@ -2601,6 +2616,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const varFrames: Frame[] = [frames[0]];
   const uninitializedVars = new WeakMap<Frame, Set<string>>();
+  const referenceWriteKey = (node: ParseNode): ParseNode => referenceSyntax.nodes.get(node) ?? node;
   const referenceSlots = new WeakMap<Frame, Map<string, ReferenceSlot>>();
   const referenceOperations = new WeakMap<ParseNode, ReferenceOperation>();
   const referenceAnalysisRoots: ParseNode[] = [root];
@@ -3760,6 +3776,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return shape?.Kind === 'object' ? shape.Properties.find((property) => property.key === key) : undefined;
   };
 
+  const vectorWriteType = (receiver: Known, node: ParseNode.MemberExpression): Known => {
+    const key = memberKey(node);
+    const component = typeof key === 'string' ? vectorAccessorType(receiver, key) : null;
+    if (component) return component;
+    // Dynamic numeric bounds remain runtime checks; only the lane value is typed.
+    const keyType = node.Expression ? staticType(node.Expression) : null;
+    if (receiver?.Kind === 'primitive' && receiver.Name === 'vector' && node.Expression
+        && keyType && keyType.Kind !== 'any' && IsAssignable(keyType, builtinTypeRecord('uint', [32])!)) {
+      const lane = receiver.Arguments[0];
+      if (lane && typeof lane !== 'number') return lane;
+    }
+    return null;
+  };
+
   const memberWriteTypes = (node: ParseNode.MemberExpression): TypeRecord[] => {
     if (node.PrivateIdentifier) {
       const property = privateMember(node);
@@ -3771,6 +3801,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (receiver?.Kind === 'union') {
         return receiver.Members.flatMap(from);
       }
+      const vector = vectorWriteType(receiver, node);
+      if (vector) return [vector];
       const shape = structureOf(receiver);
       if (key === 'length' && (shape?.Kind === 'array' || shape?.Kind === 'tuple')) return [indexTypeRecord()];
       if (shape?.Kind !== 'object') {
@@ -3907,11 +3939,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const expression = patternExpression(source);
     if (expression?.type === 'IdentifierReference') {
       const slot = referenceSlotForName(expression.name);
-      return slot ? [slot] : [];
+      if (slot) return [slot];
     }
-    if (expression?.type !== 'MemberExpression') return [];
+    const stores: ReferenceLocation[] = locationWriteTypes(source).filter((type) => type.Kind !== 'any')
+      .map((writeType) => ({ writeType }));
+    if (expression?.type !== 'MemberExpression') return stores;
     const key = memberKey(expression);
-    if (key === undefined) return [];
+    if (key === undefined) return stores;
     const collect = (receiver: Known): ReferenceLocation[] => {
       if (receiver?.Kind === 'union') return receiver.Members.flatMap(collect);
       const shape = structureOf(receiver);
@@ -3926,7 +3960,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return [{ key: typeof key === 'string' ? key : (key.Description instanceof JSStringValue ? key.Description.stringValue() : 'symbol'),
         ...(ownField ? { constructorOwner: declaration } : {}) }];
     };
-    return collect(staticType(expression.MemberExpression));
+    return [...stores, ...collect(staticType(expression.MemberExpression))];
   };
 
   /**
@@ -7215,6 +7249,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           [resolvingCallback, resolvingCallback], assimilationArgumentFails));
     });
   });
+
+  const checkAwaitAssimilation = (operand: ParseNode | null | undefined): void => {
+    if (operand && operandParticipates(operand) && awaitAssimilationFails(staticType(operand))) {
+      errors.push(Throw.StaticTypeError('the selected then contract cannot accept the resolving callbacks of promise assimilation').Value as ObjectValue);
+    }
+  };
 
   // Closing has a different reachability/exception rule from stepping. This
   // bounded proof covers empty patterns and a definitely-yielding first step
@@ -17510,23 +17550,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (p.type === 'BindingRestElement') {
           const rp = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null };
           const restResolved = rp.TypeAnnotation ? resolveType(rp.TypeAnnotation.Type) : null;
-          // The rest-annotation rule, restated here. Making a rest parameter USABLE routes the
-          // declaration through this branch instead of the one that carried the
-          // check, so `function f<C>(...a: C)` stopped being refused. A rule that
-          // lives at one of two sites resolving the same thing is the shape of
-          // the range rule and the trailing-default rule both; it is stated at
-          // both here rather than moved.
-          //
-          // #sec-type-annotations: the annotation must RESOLVE to an array or
-          // tuple type, and a type PARAMETER is judged by its CONSTRAINT.
-          if (rp.TypeAnnotation && restResolved) {
-            const judgedRest = restResolved.Kind === 'parameter'
-              ? (restResolved as { Constraint?: TypeRecord }).Constraint
-              : restResolved;
-            if (!judgedRest || (judgedRest.Kind !== 'array' && judgedRest.Kind !== 'tuple')) {
-              report(restResolved as TypeRecord, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as TypeRecord);
-            }
-          }
+          checkRestAnnotation(rp.TypeAnnotation, restResolved);
           annotated.push(restResolved);
           Parameters.push(parameterFromDeclaration(p, restResolved ?? anyTypeRecord));
           continue;
@@ -17898,6 +17922,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return expr;
   };
 
+  const returnedLocationTypes = (type: Known): TypeRecord[] | null => {
+    if (type?.Kind === 'reference') return [type.Target];
+    if (type?.Kind !== 'union' || type.Members.length === 0) return null;
+    const targets = type.Members.map(returnedLocationTypes);
+    return targets.every((item): item is TypeRecord[] => item !== null) ? targets.flat() : null;
+  };
+
   // #sec-location-consuming-contexts: a call supplies its returned location,
   // while compatibility and stores concern the value at that location.
   const locationType = (expression: ParseNode): Known => {
@@ -17906,17 +17937,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const type = target.type === 'CallExpression' ? callReturnType(target) : staticType(target);
     if (target.type !== 'CallExpression') return type;
     if (!type || type.Kind === 'any') return null;
-    const referent = (t: TypeRecord): Known => {
-      if (t.Kind === 'reference') return t.Target;
-      if (t.Kind !== 'union' || t.Members.length === 0) return null;
-      const targets = t.Members.map(referent);
-      return targets.every((item): item is TypeRecord => item !== null)
-        ? CanonicalizeType({ Kind: 'union', Members: targets }) : null;
-    };
-    const value = referent(type);
-    if (value) return value;
+    const targets = returnedLocationTypes(type);
+    if (targets) return CanonicalizeType({ Kind: 'union', Members: targets });
     errors.push(Throw.StaticTypeError('a call in a location-consuming context must return a ref, and $1 does not', Value(displayType(type))).Value as ObjectValue);
     return null;
+  };
+
+  // A read joins possible referents. A write must fit each possible location,
+  // not merely one member of that read type. A single ref (A | B) keeps its
+  // union as ONE destination, unlike (ref A) | (ref B).
+  const locationWriteTypes = (expression: ParseNode): readonly TypeRecord[] => {
+    const target = patternExpression(expression)!;
+    if (target.type === 'IdentifierReference') {
+      const origins = referenceStoreTargets?.get(referenceWriteKey(target));
+      if (origins?.length) return origins;
+    }
+    if (target.type === 'CallExpression') {
+      const targets = returnedLocationTypes(callReturnType(target));
+      if (targets) return targets;
+    }
+    if (target.type === 'MemberExpression') {
+      const targets = memberWriteTypes(target);
+      if (targets.length) return targets;
+    }
+    const property = target.type === 'SuperProperty' ? superMember(target) : undefined;
+    const type = (property as { writeType?: TypeRecord } | undefined)?.writeType ?? locationType(target);
+    return type ? [type] : [];
   };
 
   // Retain storage provenance while resolving a member at the receiver's
@@ -18347,17 +18393,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
-  const checkStoreResult = (target: ParseNode, value: ParseNode): void => {
-    if (checkIndexStore(target, value)) return;
-    const unwrapped = patternExpression(target)!;
-    const types = unwrapped.type === 'MemberExpression' ? memberWriteTypes(unwrapped) : [];
-    if (types.length) {
-      for (const type of types) requireAssignable(staticTypeIn(value, type), type);
-    } else {
-      const property = unwrapped.type === 'SuperProperty' ? superMember(unwrapped) : undefined;
-      const wanted = (property as { writeType?: TypeRecord } | undefined)?.writeType ?? locationType(unwrapped);
-      requireAssignable(staticTypeIn(value, wanted), wanted);
+  // Two pure component projections of one vector binding select the SAME
+  // union alternative. Comparing their uncorrelated joins rejects v.xy=v.yx.
+  const checkVectorSelfStore = (target: ParseNode, value: ParseNode): boolean => {
+    // A synthetic view carries a produced/iterated value, not another read of
+    // its syntax node (iteration uses the target merely as that view's anchor).
+    if (expressionViewTypes.has(value)) return false;
+    const left = patternExpression(target);
+    const right = patternExpression(value);
+    if (left?.type !== 'MemberExpression' || right?.type !== 'MemberExpression') return false;
+    const receiver = patternExpression(left.MemberExpression);
+    const source = patternExpression(right.MemberExpression);
+    if (receiver?.type !== 'IdentifierReference' || source?.type !== 'IdentifierReference'
+        || receiver.name !== source.name) return false;
+    // A key expression can redirect the binding between the two reads.
+    for (const key of [left.Expression, right.Expression]) {
+      const assigned = new Set<string>();
+      assignedNamesIn(key, assigned);
+      if (containsCall(key) || assigned.size) return false;
     }
+    const type = staticType(receiver);
+    const alternatives = type?.Kind === 'union' ? type.Members : type ? [type] : [];
+    const pairs = alternatives.map((arm) => [vectorWriteType(arm, left), vectorWriteType(arm, right)] as const);
+    if (!pairs.length || pairs.some(([to, from]) => !to || !from)) return false;
+    for (const [to, from] of pairs) requireAssignable(from, to);
+    return true;
+  };
+
+  const checkStoreResult = (target: ParseNode, value: ParseNode): void => {
+    if (checkIndexStore(target, value) || checkVectorSelfStore(target, value)) return;
+    for (const type of locationWriteTypes(target)) requireAssignable(staticTypeIn(value, type), type);
   };
 
   const builtinUpdateFailures = new WeakSet<ParseNode>();
@@ -18366,13 +18431,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const unwrapped = patternExpression(target)!;
     const read = staticType(target);
     const source = read?.Kind === 'reference' ? read.Target : read;
-    const writes = unwrapped.type === 'MemberExpression' ? memberWriteTypes(unwrapped) : [];
+    const writes = locationWriteTypes(unwrapped);
     // Read and write contracts differ for accessors/index operators. Retain
     // every possible setter parameter; an unresolved one prevents a proof.
     const index = unwrapped.type === 'MemberExpression' ? indexAccess(unwrapped) : null;
     const setter = index?.set;
     const property = unwrapped.type === 'SuperProperty' ? superMember(unwrapped) : undefined;
-    const destinations: Known[] = setter
+    const destinations: readonly Known[] = setter
       ? setter.Kind === 'function' ? setter.Signatures.map((signature) => {
         const parameter = signature.Parameters[index!.arguments.length];
         return !parameter?.Rest ? parameter?.Type ?? null : null;
@@ -18411,7 +18476,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return destinations.length > 0 && destinations.every((destination) => rejectsNumeric(destination, exact));
     };
-    if (!fails(source)) return false;
+    const referenceDestinations = unwrapped.type === 'CallExpression'
+      ? returnedLocationTypes(callReturnType(unwrapped)) : referenceStoreTargets?.get(referenceWriteKey(unwrapped));
+    const invalidReferenceStore = referenceDestinations?.some((destination) => {
+      const at = erasedForJudgment(destination);
+      return at?.Kind === 'primitive' && !declaredOperator(destination, `unary ${node.operator}`)
+        && ['boolean', 'null', 'undefined'].includes(at.Name);
+    });
+    if (!invalidReferenceStore && !fails(source)) return false;
     if (!builtinUpdateFailures.has(node)) {
       builtinUpdateFailures.add(node);
       errors.push(Throw.StaticTypeError('the built-in update cannot convert or store its result in this typed location').Value as ObjectValue);
@@ -18419,10 +18491,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
+  const checkedRestAnnotations = new WeakSet<ParseNode.TypeAnnotation>();
+  const checkRestAnnotation = (annotation: ParseNode.TypeAnnotation | null | undefined, resolved: Known): void => {
+    if (!annotation || !resolved || checkedRestAnnotations.has(annotation)) return;
+    checkedRestAnnotations.add(annotation);
+    const judged = resolved.Kind === 'parameter' ? resolved.Constraint : resolved;
+    if (!judged || (judged.Kind !== 'array' && judged.Kind !== 'tuple')) {
+      report(resolved, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' });
+    }
+  };
+
   const checkPattern = (node: PatternNode, incoming: PatternSource, declaring: boolean,
     infer = false, frame = frames[frames.length - 1]): void => {
     let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? operandParticipates(incoming.expression) : incoming.type !== null) };
     const annotation = node.TypeAnnotation ? resolveType(node.TypeAnnotation.Type) : null;
+    if (node.type === 'BindingRestElement') checkRestAnnotation(node.TypeAnnotation, annotation);
     const checkIncoming = (target: Known, value = source) => {
       requireAssignable(value.expression ? staticTypeIn(value.expression, target) : value.type, target);
     };
@@ -18739,6 +18822,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           frames[frames.length - 1].unresolvedAnnotations.set(named, annotated.Type);
         }
       } else if (p.type === 'BindingRestElement') {
+        checkRestAnnotation(p.TypeAnnotation, p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : null);
         // The static half of the ref-rest second-class rule
         // (#sec-function-types): the name a
         // `ref ...refs` binds in this frame. A reference to it is admitted in
@@ -18753,7 +18837,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           declare(restName, p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : null);
         } else {
-          declarePatternAnnotations(p.BindingPattern);
+          checkPattern(p.BindingPattern as PatternNode, { type: null }, true);
         }
       }
       index += 1;
@@ -18768,6 +18852,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // The statement form needs nothing here because its `return` reaches the
       // runtime push; a concise body has no return statement to reach it, and
       // the checker refuses the declaration before any call runs.
+      const conciseExpression = (body as { ExpressionBody?: { AssignmentExpression?: ParseNode } }).ExpressionBody?.AssignmentExpression
+        ?? (body as { AssignmentExpression?: ParseNode }).AssignmentExpression;
+      if (asyncReturns.at(-1)) checkAwaitAssimilation(conciseExpression);
       const conciseReturn = returnTypes[returnTypes.length - 1];
       if (conciseReturn) {
         const expr = (body as { ExpressionBody?: { AssignmentExpression?: ParseNode } }).ExpressionBody?.AssignmentExpression
@@ -19033,8 +19120,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // the shared runtime call with one alternative's choices. Temporary syntax
   // views reuse the ordinary checker and keep those facts on private nodes.
   const callAlternative = (call: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, type: Known): ParseNode.CallExpression => {
+    // Contextual callbacks get private syntax per callable alternative. Keep
+    // stable identities across declaration/flow/check walks without sharing
+    // contextual annotations or mixing one alternative's source/destination
+    // contracts with another's.
+    const callKey = referenceSyntax.nodes.get(call as ParseNode) ?? call;
+    const alternatives = referenceSyntax.alternatives.get(callKey) ?? [];
+    let identity = alternatives.find((candidate) => candidate.type === type
+      || candidate.type && type && SameType(candidate.type, type));
+    if (!identity) {
+      identity = { type, nodes: new WeakMap() };
+      alternatives.push(identity);
+      referenceSyntax.alternatives.set(callKey, alternatives);
+    }
     const clone = (node: ParseNode, parent?: ParseNode): ParseNode => {
       const copy = { ...node, parent: parent ?? node.parent } as ParseNode;
+      const original = referenceWriteKey(node);
+      const stable = identity.nodes.get(original) ?? copy;
+      identity.nodes.set(original, stable);
+      referenceSyntax.nodes.set(copy, stable);
       for (const key of Object.keys(node)) {
         if (key === 'parent') continue;
         const value = (node as unknown as Record<string, unknown>)[key];
@@ -20133,9 +20237,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
       case 'AwaitExpression': {
         const operand = n.UnaryExpression;
-        if (operandParticipates(operand) && awaitAssimilationFails(staticType(operand))) {
-          errors.push(Throw.StaticTypeError('the selected then contract cannot accept the resolving callbacks of await').Value as ObjectValue);
-        }
+        checkAwaitAssimilation(operand);
         walk(operand);
         return;
       }
@@ -21313,6 +21415,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
         }
+        if (!y.hasStar && asyncReturns.at(-1)) checkAwaitAssimilation(y.AssignmentExpression);
         const generator = generatorTypes[generatorTypes.length - 1];
         const yieldedType = generatorParameters(generator)?.Yield ?? null;
         if (yieldedType) {
@@ -21493,7 +21596,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return;
           }
           checkLengthMutation(a.LeftHandSideExpression, a.AssignmentOperator, a.AssignmentExpression);
-          compoundBinaryType(assignment);
+          const result = compoundBinaryType(assignment);
+          if (result) checkStoreResult(a.LeftHandSideExpression, typedExpressionView(n, result));
         }
         const indexed = patternExpression(a.LeftHandSideExpression);
         if (indexed?.type === 'MemberExpression') {
@@ -21528,9 +21632,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // rule below applied to the target: known and not a `ref` type is
         // refused before the source runs, unknown defers to the store.
         if (patternExpression(a.LeftHandSideExpression)?.type === 'CallExpression') {
-          const target = locationType(a.LeftHandSideExpression);
-          if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
-            requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+          for (const target of locationWriteTypes(a.LeftHandSideExpression)) {
+            if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
+              requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+            }
           }
         }
         if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'IdentifierReference') {
@@ -21539,9 +21644,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // narrowed it to `uint8`, and doing so ENDS the narrowing rather than
           // being an error.
           const name = (a.LeftHandSideExpression as { name: string }).name;
-          const target = lookupDeclared(name);
-          if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
-            requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+          for (const target of locationWriteTypes(a.LeftHandSideExpression)) {
+            if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
+              requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+            }
           }
           invalidateNarrowing(name);
         } else if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'SuperProperty') {
@@ -21565,15 +21671,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const m = a.LeftHandSideExpression as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null, Expression?: ParseNode | null };
           const objType = m.MemberExpression ? structureOf(staticType(m.MemberExpression)) : null;
           let target: Known = null;
-          // A LANE WRITE takes the type the lane READ answers. `a.x = s` for a
-          // string was the run time's "a string is not a conversion source for
-          // float32", though `a.x` answers `float32` here.
-          const vectorTarget = m.IdentifierName
-            ? vectorAccessorType(m.MemberExpression ? staticType(m.MemberExpression) : null,
-              (m.IdentifierName as { name: string }).name)
-            : null;
-          if (vectorTarget) {
-            target = vectorTarget;
+          if (['=', '||=', '&&=', '??='].includes(a.AssignmentOperator)
+              && checkVectorSelfStore(a.LeftHandSideExpression, a.AssignmentExpression)) {
+            // The shared receiver supplies correlated source/destination pairs.
           } else if (memberWriteTypes(a.LeftHandSideExpression as ParseNode.MemberExpression).length > 0) {
             for (const written of memberWriteTypes(a.LeftHandSideExpression as ParseNode.MemberExpression)) {
               if (compoundChecksLikeAssignment(a.AssignmentOperator, written)) {
@@ -21600,6 +21700,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ReturnStatement': {
         const expr = (n as { Expression?: ParseNode | null }).Expression;
+        if (asyncReturns.at(-1)) checkAwaitAssimilation(expr);
         const context = returnTypes[returnTypes.length - 1] ?? null;
         if (expr) {
           // A `void` RETURN admits *undefined*. #sec-void makes
@@ -21847,10 +21948,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const invalidBase = (type: Known): boolean => {
               const at = erasedForJudgment(type);
               if (at?.Kind === 'union') return at.Members.length > 0 && at.Members.every(invalidBase);
-              return knownNonObject(at) && !(at?.Kind === 'primitive' && at.Name === 'null');
+              if (at?.Kind === 'primitive' && at.Name === 'null') return false;
+              if (knownNonObject(at)) return true;
+              // A possible constructor still fails if its effective prototype
+              // contract excludes both Object and null. Open members defer.
+              return everyProtocolAlternative(protocolMember(type, 'prototype'), (prototype) =>
+                knownNonObject(prototype) && !(erasedForJudgment(prototype)?.Kind === 'primitive'
+                  && (erasedForJudgment(prototype) as { Name?: string }).Name === 'null'));
             };
             if (operandParticipates(heritage) && invalidBase(staticType(heritage))) {
-              errors.push(Throw.StaticTypeError('a typed superclass must be a constructor or null').Value as ObjectValue);
+              errors.push(Throw.StaticTypeError('a typed superclass must be a constructor with an Object-or-null prototype, or null').Value as ObjectValue);
             }
             walk(heritage);
           } finally {
@@ -22265,6 +22372,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     reportedReferenceWrites.add(write);
     errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned', Value(origin.key)).Value as ObjectValue);
+  }, (origin, write) => {
+    if (!collectedReferenceStores) return;
+    const key = referenceWriteKey(write);
+    const types = collectedReferenceStores.get(key) ?? [];
+    if (!types.some((type) => SameType(type, origin.writeType))) types.push(origin.writeType);
+    collectedReferenceStores.set(key, types);
   });
   // Contextual positions have now been visited, including those initially
   // sampled while declarations were collected for return inference.

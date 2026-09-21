@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrownKind, expectStaticTypeError, ok } from '../harness.mts';
+import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 const setup = 'let a: [].<uint8> = [1, 2]; a.reserve(10); let ref r = a[1]; ';
 
@@ -28,8 +28,9 @@ test('an ordinary array reference keeps ordinary property semantics', () => {
 
 test('a wider alias retains the actual destination write boundary', () => {
   const source = 'let a: uint8 | string = 1; let b: uint8 = 2; let ref r = a; ref r = b; r = "s";';
-  expect(ok('function unused() { ' + source + ' }')).toBe(true);
-  expectThrownKind(source, 'TypeError');
+  expectStaticTypeError('function unused() { ' + source + ' }');
+  expectStaticTypeError(source);
+  expectThrownKind('let a: uint8 | string = 1; let b: uint8 = 2; let ref r = a; function next(): ref uint8 { return ref b; } const get: any = next; ref r = get(); r = "s";', 'TypeError');
   expectStaticTypeError('let a: uint8 = 1; let b: uint8 | string = 2; let ref r = a; ref r = b;');
   expectStaticTypeError('function f(ref x: uint8 | string) {} let x: uint8 = 1; f(ref x);');
 });

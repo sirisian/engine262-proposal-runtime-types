@@ -50,10 +50,11 @@ test('immutable refs preserve ordinary const write restrictions', () => {
   expect(evaluated('let o = { x: 1 }; const ref p = o; p.x = 2; String(o.x);')).toBe('2');
 });
 
-test('the alias keeps its declared type when rebound to a narrower location', () => {
-  expect(ok('function unused(a: uint8 | string, b: uint8) { let ref p = a; ref p = b; p = "s"; }')).toBe(true);
+test('the alias keeps its read type but stores respect the rebound location', () => {
+  expectStaticTypeError('function unused(a: uint8 | string, b: uint8) { let ref p = a; ref p = b; p = "s"; }');
   expect(ok('function unused(a: uint8 | string, b: string) { let ref p = a; if (p is uint8) { ref p = b; } }')).toBe(true);
-  expectThrownKind('let a: uint8 | string = 1, b: uint8 = 2; let ref p = a; ref p = b; p = "s";', 'TypeError');
+  expectStaticTypeError('let a: uint8 | string = 1, b: uint8 = 2; let ref p = a; ref p = b; p = "s";');
+  expectThrownKind('let a: uint8 | string = 1, b: uint8 = 2; let ref p = a; function next(): ref uint8 { return ref b; } const get: any = next; ref p = get(); p = "s";', 'TypeError');
 });
 
 test('unresolved and object-environment destinations defer to runtime', () => {
