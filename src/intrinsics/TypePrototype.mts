@@ -77,6 +77,7 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   }
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
+  const isBigInt = t.Kind === 'primitive' && t.Name === 'bigint';
   const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128');
   // decimal.md names `decimal128.parse('19.99')` as the EXACT construction form,
   // beside a literal: "an exact decimal comes from a literal or a string, never
@@ -127,7 +128,11 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
     }
     return CreateComplexValue(parsed.real, parsed.imaginary, t.Arguments?.[0], surroundingAgent.currentRealmRecord);
   }
-  if (!isInteger && !isFloat) {
+  // #sec-parsing: "For an integer type AND FOR `BIGINT` its signature is
+  // `parse(_string_, _radix_ = 10)`." The family was absent, so `bigint.parse`
+  // refused with "parse is not defined for bigint" - a message that was true of
+  // the engine and false of the clause.
+  if (!isInteger && !isFloat && !isBigInt) {
     return Throw.TypeError('parse is not defined for $1', thisValue);
   }
   if (!(S instanceof JSStringValue)) {
@@ -142,7 +147,7 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   // Determine the radix. For integer types parse(string, radix = 10); a radix
   // argument is honoured, and the matching base prefix is accepted.
   let base = 10;
-  if (isInteger && radix !== Value.undefined) {
+  if ((isInteger || isBigInt) && radix !== Value.undefined) {
     const rNum = radix instanceof NumberValue ? (R(radix) as number) : NaN;
     if (Number.isInteger(rNum) && rNum >= 2 && rNum <= 36) {
       base = rNum;
@@ -157,6 +162,16 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   }
   const cleaned = text.replace(/_/g, '');
   let value: number | bigint;
+  if (isBigInt) {
+    // Read as an EXACT integer, never through a Number. A bigint has no width,
+    // so there is no rounding that could be harmless and no range to check -
+    // the only failure this family has is a malformed literal.
+    const exact = exactIntegerLiteral(cleaned, base);
+    if (exact === null) {
+      return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    return Value(exact);
+  }
   if (isInteger) {
     value = parseIntegerLiteral(cleaned, base);
     // #sec-integer-types: a type wider than 53 bits has values a double cannot
@@ -346,6 +361,7 @@ function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arg
   }
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
+  const isBigInt = t.Kind === 'primitive' && t.Name === 'bigint';
   const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128');
   // #sec-parsing: "EACH TYPE also has a `tryParse` function with the same
   // parameters, returning a value of the type where `parse` would return one and
@@ -364,10 +380,12 @@ function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arg
   // `parse` distinguishes.
   const isDecimal = t.Kind === 'primitive'
     && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128');
+  // `bigint` has a `parse`, so it has this beside it: "EACH type also has a
+  // `tryParse` function with the same parameters".
   // "EACH type also has a `tryParse` function", so the families that gained a
   // `parse` gain this beside it.
   const isRationalOrComplex = t.Kind === 'primitive' && (t.Name === 'rational' || t.Name === 'complex');
-  if (!isInteger && !isFloat && !isDecimal && !isRationalOrComplex) {
+  if (!isInteger && !isFloat && !isDecimal && !isRationalOrComplex && !isBigInt) {
     return Throw.TypeError('tryParse is not defined for $1', thisValue);
   }
   const attempt = EnsureCompletion(yield* TypeProto_parse([S, radix], context));
