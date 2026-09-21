@@ -20231,9 +20231,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkInvocation = (expression: ParseNode, construct: boolean): void => {
     const fact = invocationFact(expression);
     if (fact?.typed && !(construct ? fact.constructible : fact.callable)) {
-      errors.push(Throw.StaticTypeError(construct
+      // The class-constructor wording is TRUE ONLY OF A CLASS - a target that is
+      // constructible and not callable. It was chosen on `!callable` alone, so
+      // every typed non-callable value got it: an object literal bound to
+      // `let o: { a: uint8 }` reported "a typed class constructor cannot be
+      // invoked without new" for `o()`, naming a class that does not exist.
+      // The same call through an interface-typed value already said the true
+      // thing, "is not callable", by another path.
+      //
+      // Only the MESSAGE changes. Whether the call is refused is decided above
+      // and is unchanged, so every case refused before is refused now.
+      const message = construct
         ? 'this typed function is not a constructor'
-        : 'a typed class constructor cannot be invoked without new').Value as ObjectValue);
+        : fact.constructible
+          ? 'a typed class constructor cannot be invoked without new'
+          : 'this value is not callable';
+      errors.push(Throw.StaticTypeError(message).Value as ObjectValue);
     }
   };
 
