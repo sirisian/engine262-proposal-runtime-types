@@ -84,7 +84,9 @@ test('Map.groupBy over a composite key groups by contents', () => {
   // "Group by a composite" is the idiom composites.md gives for grouping on
   // more than one field, and it works only because equal composites are one key.
   expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.size);')).toBe('2');
-  expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.get(Composite({ v: 1 })).length);')).toBe('2');
+  // `get` answers `V | undefined`; with a composite key the group type is known,
+  // so the read goes through `?.` or the narrowing rule refuses it.
+  expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.get(Composite({ v: 1 }))?.length);')).toBe('2');
 });
 
 test('array membership finds a composite by value', () => {

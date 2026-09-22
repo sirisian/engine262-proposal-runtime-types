@@ -87,16 +87,26 @@ test('literal-type and union keys', () => {
 
 test('a collection nests inside another collection', () => {
   expect(evaluated('const m = new Map.<string, Set.<uint8>>(); m.set("a", new Set.<uint8>()); String(m.size);')).toBe('1');
-  expect(evaluated('const m = new Map.<string, Set.<uint8>>(); const inner = new Set.<uint8>(); inner.add(1); m.set("a", inner); String(m.get("a").size);')).toBe('1');
+  // `Map.get` answers `V | undefined` - a missing key gives *undefined* - so a
+  // member read off it goes through `?.`, or the narrowing rule refuses it.
+  expect(evaluated('const m = new Map.<string, Set.<uint8>>(); const inner = new Set.<uint8>(); inner.add(1); m.set("a", inner); String(m.get("a")?.size);')).toBe('1');
   // The inner collection keeps its own element type, so a bad store into it is
   // refused through the outer one.
-  expect(ok('const m = new Map.<string, Set.<uint8>>(); m.set("a", new Set.<uint8>()); const bad = (300 := any); m.get("a").add(bad);')).toBe(false);
+  //
+  // Written unnarrowed, this passed VACUOUSLY: `m.get("a").add(bad)` was refused
+  // by the narrowing rule - "add" is not declared by `undefined` - before the
+  // store was ever tried, so it would have passed had the engine accepted 300
+  // into a `uint8`. With `?.` the refusal is the one the comment claims:
+  // "300 is not in the range of uint.<8>".
+  expect(ok('const m = new Map.<string, Set.<uint8>>(); m.set("a", new Set.<uint8>()); const bad = (300 := any); m.get("a")?.add(bad);')).toBe(false);
+  // And a value that fits is accepted, so the refusal above is about the value.
+  expect(evaluated('const m = new Map.<string, Set.<uint8>>(); m.set("a", new Set.<uint8>()); const good = (7 := any); m.get("a")?.add(good); String(m.get("a")?.size);')).toBe('1');
   // A Map of arrays, which is what `Map.groupBy` produces.
-  expect(evaluated('const m = new Map.<string, [].<uint8>>(); m.set("a", [1, 2]); String(m.get("a").length);')).toBe('2');
+  expect(evaluated('const m = new Map.<string, [].<uint8>>(); m.set("a", [1, 2]); String(m.get("a")?.length);')).toBe('2');
 });
 
 test('a tuple and an array as values', () => {
-  expect(evaluated('const m = new Map.<string, [uint8, string]>(); m.set("a", [1, "x"]); String(m.get("a")[1]);')).toBe('x');
+  expect(evaluated('const m = new Map.<string, [uint8, string]>(); m.set("a", [1, "x"]); String(m.get("a")?.[1]);')).toBe('x');
   expect(ok('let m: Map.<string, [uint8, string]> = new Map(); m.set("a", ["x", 1]);')).toBe(false);
 });
 

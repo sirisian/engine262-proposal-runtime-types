@@ -50,7 +50,9 @@ test('the key type comes from the callback, including a COMPOSITE key', () => {
   // The idiom `composites.md` names for grouping on more than one field, and the
   // one that gets nothing from an untyped `groupBy`.
   expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.size);')).toBe('2');
-  expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.get(Composite({ v: 1 })).length);')).toBe('2');
+  // `Map.groupBy` gives a TYPED map, so `get` answers `V | undefined` and a
+  // member read goes through `?.` - the narrowing rule refuses it otherwise.
+  expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.get(Composite({ v: 1 }))?.length);')).toBe('2');
 });
 
 test('a SHADOWED `Map` gets no signature', () => {
@@ -75,7 +77,7 @@ test('an UNTYPED source yields an untyped result, per participation', () => {
 
 test('the run time is unchanged in every case', () => {
   expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => n); String(g.size);')).toBe('2');
-  expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => n); String(g.get(1).length);')).toBe('2');
+  expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => n); String(g.get(1)?.length);')).toBe('2');
   expect(evaluated('const g = Map.groupBy([], (n) => "k"); String(g.size);')).toBe('0');
   expect(evaluated('const o = Object.groupBy([1, 2], (n) => "k"); String(Object.keys(o).length);')).toBe('1');
 });
@@ -205,7 +207,7 @@ test('a BARE call is not stamped, and that is correct', () => {
   // it is a question about the SIGNATURE rather than about the elision that this
   // fixed.
   expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(typeof g.size);`)).toBe('number');
-  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(g.get("k").length);`)).toBe('3');
+  expect(evaluated(`${A} const g = Map.groupBy(a, (n) => "k"); String(g.get("k")?.length);`)).toBe('3');
 });
 
 // ---------------------------------------------------------------------------
