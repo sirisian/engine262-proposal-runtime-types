@@ -12875,6 +12875,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // enforces them; the checker knowing them is what turns
           // `a.includes(70000)` from a run-time RangeError into the Early Error
           // a statically determinable mistake deserves.
+          // A TUPLE's `length` is the index type too, as an array's is.
+          //
+          // #sec-array-and-tuple-types: "A store to the `length` property of an
+          // array carrying an array OR TUPLE type is a typed store whose target
+          // is the index type." A read had no tuple arm, so it fell through to
+          // `number`, and a count that is stored as a `uint64` was read back as
+          // something wider: `function pairUp<T, ...Rest>(p: [T, ...Rest]):
+          // uint64 { return p.length; }` was refused with "number is not
+          // assignable to uint.<64>", where the same function over an array
+          // passes. A tuple is stored as an ordinary Array, so its count is an
+          // array's count.
+          //
+          // The array arm's carve-out is kept: a bare literal's `length` reads
+          // as a `number`, since the checker cannot tell `[1, 'a']` written
+          // inline from a declared tuple and the run time answers a Number there.
+          if (receiver && receiver.Kind === 'tuple') {
+            const tupleName = (m.IdentifierName as { name?: string } | undefined)?.name;
+            if (tupleName === 'length') {
+              let tupleReceiverNode = m.MemberExpression as ParseNode | undefined;
+              while (tupleReceiverNode && tupleReceiverNode.type === 'ParenthesizedExpression') {
+                tupleReceiverNode = (tupleReceiverNode as unknown as { Expression?: ParseNode }).Expression;
+              }
+              if (tupleReceiverNode?.type === 'ArrayLiteral') {
+                return makePrimitive('number') as Known;
+              }
+              return indexTypeRecord();
+            }
+          }
           if (receiver && receiver.Kind === 'array') {
             // #index-type: one type describes every count an array reports or
             // accepts - its `length`, its `capacity`, an index, and a view's
