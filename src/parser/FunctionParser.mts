@@ -68,7 +68,7 @@ export abstract class FunctionParser extends IdentifierParser {
 
   abstract parseTypedInitializer(): ParseNode.TypedInitializer;
 
-  abstract parseTypeParameters(): ParseNode.TypeParameters;
+  abstract parseTypeParameters(dotted?: boolean, context?: ParseNode.GenericListContext): ParseNode.TypeParameters;
 
   abstract parseBindingRestElement(): ParseNode.BindingRestElement;
 
@@ -119,7 +119,7 @@ export abstract class FunctionParser extends IdentifierParser {
     // `function id<T>(x: T): T`, applied with `.<...>` at the call site. Parsed
     // only under the feature, before the formal parameter list.
     if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
-      (node as Mutable<ParseNode.FunctionDeclaration>).TypeParameters = this.parseTypeParameters();
+      (node as Mutable<ParseNode.FunctionDeclaration>).TypeParameters = this.parseTypeParameters(false, isExpression ? 'expression' : 'function');
     }
 
     this.scope.with({

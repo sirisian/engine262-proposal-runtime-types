@@ -201,7 +201,7 @@ export abstract class StatementParser extends TypeParser {
     const node = this.startNode<ParseNode.TypeAliasDeclaration>();
     this.expect('type');
     node.BindingIdentifier = this.parseBindingIdentifier();
-    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters(false, 'alias') : null;
     this.expect(Token.ASSIGN);
     node.Type = this.parseType();
     const whereClauses = this.parseWhereClauses();
@@ -221,7 +221,7 @@ export abstract class StatementParser extends TypeParser {
     const node = this.startNode<ParseNode.InterfaceDeclaration>();
     this.expect('interface');
     node.BindingIdentifier = this.parseBindingIdentifier();
-    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters(false, isPartial ? 'partial' : 'interface') : null;
     this.expect(Token.LBRACE);
     const InterfaceMemberList: ParseNode.InterfaceMember[] = [];
     while (!this.test(Token.RBRACE)) {
@@ -305,7 +305,7 @@ export abstract class StatementParser extends TypeParser {
     // `interface` and `primitive` already carry above and below - a `meta`
     // declaration was the only one in this file that did not take parameters,
     // though #sec-meta-declarations gives it `TypeParameters?`.
-    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters(false, 'meta') : null;
     // #sec-meta-declarations: a
     // meta declaration "may instead name a PRIMITIVE type rather than an object
     // type, declaring a base-form meta type". A primitive has no parameter to
@@ -432,7 +432,7 @@ export abstract class StatementParser extends TypeParser {
     const node = this.startNode<ParseNode.PrimitiveOperatorDeclaration>();
     this.expect('primitive');
     node.TypeName = this.parseTypeName();
-    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters() : null;
+    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters(false, 'primitive') : null;
     this.expect(Token.LBRACE);
     const OperatorDefinitionList: ParseNode.OperatorDefinition[] = [];
     while (!this.test(Token.RBRACE)) {

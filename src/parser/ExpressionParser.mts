@@ -381,6 +381,9 @@ export abstract class ExpressionParser extends FunctionParser {
 
   protected abstract parseType(): ParseNode.Type;
 
+  /** proposal-runtime-types #sec-specialization-lists: `const` BindingIdentifier ... */
+  protected abstract parseCaptureBinding(variadic: boolean): ParseNode.CaptureBinding;
+
   protected abstract parseTypeArguments(): ParseNode.TypeArguments;
 
   /** |MatchNamePattern|'s production, which a juxtaposition's head reads. */
@@ -1846,6 +1849,14 @@ export abstract class ExpressionParser extends FunctionParser {
   }
 
   parsePrimaryExpression(): ParseNode.PrimaryExpression {
+    // proposal-runtime-types #sec-capture-scope: a builder's arguments are
+    // expressions, where `const` is otherwise an unexpected token. Inside a
+    // specialization entry it is a capture written where a builder would have
+    // to run backwards to find it, and the diagnostic says so. The node stands
+    // in for the argument only because the list is refused.
+    if (this.builderArgumentDepth > 0 && this.specializationEntryDepth > 0 && this.test(Token.CONST)) {
+      return this.parseCaptureBinding(false) as unknown as ParseNode.PrimaryExpression;
+    }
     // #sec-checked-contracts: "Within a
     // |WhereClause| of a function declaration, `return` is a |PrimaryExpression|
     // denoting the value the function returns. It is a Syntax Error for `return`
@@ -2371,9 +2382,6 @@ export abstract class ExpressionParser extends FunctionParser {
     this.scope.with({ strict: true }, () => {
       if (!this.test(Token.LBRACE) && !this.test(Token.EXTENDS) && !this.test(Token.LT)) {
         node.BindingIdentifier = this.parseBindingIdentifier();
-        if (!isExpression && !isPartial) {
-          this.scope.declare(node.BindingIdentifier, 'lexical');
-        }
       } else if (this.test(Token.LT)) {
         // A generic class expression may omit the binding identifier: `class <T> {}`.
         node.BindingIdentifier = null;
@@ -2385,9 +2393,19 @@ export abstract class ExpressionParser extends FunctionParser {
       // proposal-runtime-types: a class may declare type parameters, `class A<T>`,
       // applied with `.<...>` elsewhere. Parsed only under the feature.
       if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
-        node.TypeParameters = this.parseTypeParameters();
+        node.TypeParameters = this.parseTypeParameters(false, isExpression ? 'expression' : (isPartial ? 'partial' : 'class'));
       } else {
         node.TypeParameters = null;
+      }
+      // Declared after the list, which decides whether there is a binding to
+      // declare: a specialization, `class Box<uint32> {}`, is a definition for
+      // applications of the family `Box` already names, and introduces no
+      // binding of its own (#sec-specialization-lists), so it is not a second
+      // declaration of `Box`. Nothing in a list reads the scope, so declaring
+      // the name after it is not observable.
+      if (node.BindingIdentifier && !isExpression && !isPartial
+        && (!node.TypeParameters || node.TypeParameters.ListKind === 'parameters')) {
+        this.scope.declare(node.BindingIdentifier, 'lexical');
       }
       const savedClassModifiers = this.currentClassModifiers;
       this.currentClassModifiers = ClassModifiers;
@@ -4315,7 +4333,7 @@ export abstract class ExpressionParser extends FunctionParser {
     }, () => {
       if (isSpecialMethod && (isGetter || isSetter) && this.test(Token.LT)) {
         this.addEarlyError(Throw.SyntaxError('an accessor may not declare type parameters; use a method'), this.peek());
-        this.parseTypeParameters();
+        this.parseTypeParameters(false, 'accessor');
       }
       if (isSpecialMethod && isGetter) {
         this.expect(Token.LPAREN);
@@ -4337,7 +4355,7 @@ export abstract class ExpressionParser extends FunctionParser {
         // `<` here can only begin type parameters: a method name is never
         // followed by a relational operator in this position.
         if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
-          (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeParameters = this.parseTypeParameters();
+          (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeParameters = this.parseTypeParameters(false, 'method');
         }
         node.PropertySetParameterList = null;
         node.UniqueFormalParameters = this.parseUniqueFormalParameters();

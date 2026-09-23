@@ -364,6 +364,21 @@ ${' '.repeat(startIndex - lineStart)}${'^'.repeat(Math.max(endIndex - startIndex
   protected noFuseGT = 0;
 
   /**
+   * proposal-runtime-types #sec-specialization-lists: positive while a
+   * |SpecializationEntry| is being parsed, which is the only place a
+   * |CaptureBinding| may stand (#sec-specialization-lists-static-semantics-early-errors).
+   * A nested declaration's own list resets it, since that list is not an entry.
+   */
+  protected specializationEntryDepth = 0;
+
+  /**
+   * proposal-runtime-types #sec-capture-scope: positive while the arguments of
+   * a builder call, a |ComputedType|, are being parsed. A builder is never run
+   * backwards, so a capture there observes nothing.
+   */
+  protected builderArgumentDepth = 0;
+
+  /**
    * proposal-runtime-types: snapshot of all lexer token state, for the
    * bounded speculative parses the type grammar needs (array extents,
    * later arrow return annotations). Restoring is only valid when no

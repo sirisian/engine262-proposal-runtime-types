@@ -3385,10 +3385,84 @@ export namespace ParseNode {
     readonly Type: Type;
   }
 
-  // TypeParameters : `<` TypeParameterList `,`? `>`
+  // TypeParameters : `<` GenericEntryList `,`? `>`
   export interface TypeParameters extends BaseParseNode {
     readonly type: 'TypeParameters';
+    /**
+     * The PARAMETERS of the list - its |TypeParameter| entries - in order. A
+     * specialization list has none, and a mixed list has only its binders, so
+     * every reader of a primary declaration's parameters reads this field
+     * unchanged.
+     */
     readonly TypeParameterList: readonly TypeParameter[];
+    /**
+     * proposal-runtime-types #sec-specialization-lists: the ARGUMENTS of the
+     * list - fixed arguments, the wildcard `_`, and captures - in order. Kept
+     * apart from TypeParameterList rather than interleaved with it, so that a
+     * walker visiting every child visits each binder once.
+     */
+    readonly SpecializationEntryList?: readonly SpecializationEntry[];
+    /**
+     * Which of the two lists each entry of the written list went to, in source
+     * order: the full |GenericEntryList| is recovered by taking the next item
+     * of TypeParameterList for `'parameter'` and of SpecializationEntryList for
+     * `'argument'`.
+     */
+    readonly EntryKinds?: readonly ('parameter' | 'argument')[];
+    /**
+     * #sec-type-parameters-static-semantics-early-errors: a PARAMETER LIST has
+     * only |TypeParameter|s, a SPECIALIZATION LIST none (including `<>`), and
+     * a MIXED LIST both.
+     */
+    readonly ListKind?: 'parameters' | 'specialization' | 'mixed';
+    /** #sec-collectcaptures: every |CaptureBinding| of the list, in source order. */
+    readonly Captures?: readonly CaptureBinding[];
+  }
+
+  /**
+   * Where a |TypeParameters| stands, which decides what kind of list it may be
+   * (#sec-type-parameters-static-semantics-early-errors): a function, method,
+   * or operator may write a mixed list, a selector-prefixed overload; a class,
+   * interface, alias, partial, or primitive block has one primary per family
+   * and may not; and an expression, a signature, a meta declaration, or an
+   * accessor declares parameters only.
+   */
+  export type GenericListContext =
+    | 'function' | 'method' | 'operator'
+    | 'class' | 'interface' | 'alias' | 'partial' | 'primitive'
+    | 'expression' | 'signature' | 'meta' | 'accessor';
+
+  // SpecializationEntry : Type / CaptureBinding / `...` CaptureBinding
+  export interface SpecializationEntry extends BaseParseNode {
+    readonly type: 'SpecializationEntry';
+    /**
+     * The entry's pattern: a |Type| (the wildcard `_` being the |TypeReference|
+     * of that name) or a |CaptureBinding|, whose IsVariadic records the `...`.
+     */
+    readonly Pattern: Type | CaptureBinding;
+  }
+
+  // CaptureBinding :
+  //   `const` BindingIdentifier TypeParameterHoles? TypeParameterDomain? TypeParameterConstraint?
+  /**
+   * proposal-runtime-types #sec-specialization-lists: a CAPTURE, binding the
+   * argument that stands in its position while a specialization list is
+   * matched. It may stand as a specialization entry, as a type argument of a
+   * nested application (positionally or under the nested constructor's own
+   * parameter name, which rides on the node as ArgumentName does on a type),
+   * as the extent of an array type, or as a tuple element.
+   */
+  export interface CaptureBinding extends BaseParseNode {
+    readonly type: 'CaptureBinding';
+    readonly BindingIdentifier: BindingIdentifier;
+    /** The count of `_` holes: a capture of a higher-kinded position. */
+    readonly Arity: number;
+    /** The written domain, or *null* where the capture takes its slot's (D4). */
+    readonly TypeParameterDomain: Type | null;
+    /** The `extends` bound on a type capture, or *null*. */
+    readonly TypeParameterConstraint: Type | null;
+    /** Written `...const X`: the capture binds the tuple of a run. */
+    readonly IsVariadic: boolean;
   }
 
   // TypeParameter : BindingIdentifier TypeParameterConstraint? TypeParameterDefault?
@@ -3959,6 +4033,8 @@ export type ParseNode =
   | ParseNode.ParenthesizedType
   | ParseNode.TypeParameters
   | ParseNode.TypeParameter
+  | ParseNode.SpecializationEntry
+  | ParseNode.CaptureBinding
   | ParseNode.WhereClause
   | ParseNode.ConditionalRefinement
   | ParseNode.MatchObjectPattern
