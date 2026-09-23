@@ -143,6 +143,13 @@ export interface ScopeInfo {
   /** Names declared here by a FUNCTION declaration, for recognising a later one as a possible overload. */
   readonly lexicalFunctions: Set<string>;
   readonly parameters: Set<string>;
+  /**
+   * proposal-runtime-types #sec-type-parameters-static-semantics-early-errors:
+   * the type parameters of the generic callable whose scope this is. No binding
+   * at this level may take one of these names, since it would rebind the
+   * parameter for the whole body; a nested scope may.
+   */
+  readonly typeParameters: Set<string>;
 }
 
 export interface PrivateScopeInfo {
@@ -307,6 +314,7 @@ export class Scope {
         functions: new Set(),
         lexicalFunctions: new Set(),
         parameters: new Set(),
+        typeParameters: new Set(),
       });
     }
 
@@ -444,6 +452,24 @@ export class Scope {
     throw new RangeError();
   }
 
+  /**
+   * proposal-runtime-types #sec-type-parameters-static-semantics-early-errors:
+   * records a generic callable's type parameters on the scope of its parameters
+   * and body. Called inside that scope, before its formal parameters.
+   */
+  declareTypeParameters(list: ParseNode.TypeParameters | null | undefined): void {
+    const names = this.variableScope().typeParameters;
+    for (const p of list?.TypeParameterList ?? []) {
+      names.add(p.BindingIdentifier.name);
+    }
+  }
+
+  private rebindsTypeParameter(scope: ScopeInfo, d: { name: string, node: ParseNode }, how: string, fix: string): void {
+    if (scope.typeParameters.has(d.name)) {
+      this.parser.addEarlyError(Throw.SyntaxError('$1', `\`${d.name}\` is a type parameter of this declaration, and ${how} would rebind it for the whole body; ${fix}`), d.node);
+    }
+  }
+
   declare(node: ParseNode | readonly ParseNode[], type: 'private', extraType?: 'field' | 'method' | 'get' | 'set'): void;
 
   declare(node: ParseNode | readonly ParseNode[], type: 'lexical' | 'lexical-allow-let' | 'import' | 'function' | 'parameter' | 'variable' | 'export'): void;
@@ -465,6 +491,7 @@ export class Scope {
               || scope.parameters.has(d.name)) {
             this.parser.addEarlyError(Throw.SyntaxError('Identifier $1 already declared', d.name), d.node);
           }
+          this.rebindsTypeParameter(scope, d as never, 'a declaration at the top of its body', 'rename the binding, or declare it in a nested block');
           scope.lexicals.add(d.name);
           if (scope === this.scopeStack[0] && this.undefinedExports.has(d.name)) {
             this.undefinedExports.delete(d.name);
@@ -473,6 +500,7 @@ export class Scope {
         }
         case 'function': {
           const scope = this.lexicalScope();
+          this.rebindsTypeParameter(scope, d as never, 'a function declared at the top of its body', 'rename the binding, or declare it in a nested block');
           // proposal-runtime-types: a repeat of a name ALREADY DECLARED BY A
           // FUNCTION may be an OVERLOAD; a name bound by `let`, `const` or
           // `class` never is. The DUPLICATE is caught by the checker, early.
@@ -503,6 +531,7 @@ export class Scope {
           break;
         }
         case 'parameter':
+          this.rebindsTypeParameter(this.variableScope(), d as never, 'a parameter of the same name', 'rename one of them');
           this.variableScope().parameters.add(d.name);
           break;
         case 'variable':
@@ -516,6 +545,10 @@ export class Scope {
               this.undefinedExports.delete(d.name);
             }
             if (scope.flags.variable) {
+              // A `var` hoists to this scope from any block, and for an
+              // ordinary parameter it aliases the parameter's binding; a type
+              // parameter has no binding to alias, so it would replace it.
+              this.rebindsTypeParameter(scope, d as never, '`var`, which hoists to the top of the body,', 'rename the binding, or declare it with `let` in a nested block');
               break;
             }
           }

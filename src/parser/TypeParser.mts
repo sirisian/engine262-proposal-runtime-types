@@ -1414,6 +1414,7 @@ export abstract class TypeParser extends ExpressionParser {
         lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,
       }, () => {
         this.scope.arrowInfoStack.push(null);
+        this.scope.declareTypeParameters(node.TypeParameters);
         node.FormalParameters = this.parseFormalParameters();
         if (this.test(Token.COLON)) {
           node.TypeAnnotation = this.parseTypeAnnotation(true);
@@ -1452,6 +1453,7 @@ export abstract class TypeParser extends ExpressionParser {
           lexical: true, variable: true, variableFunctions: true, await: false, yield: false, newTarget: false,
         }, () => {
           this.scope.arrowInfoStack.push(null);
+          this.scope.declareTypeParameters(node.TypeParameters);
           node.FormalParameters = this.parseFormalParameters();
           if (this.test(Token.COLON)) {
             node.TypeAnnotation = this.parseTypeAnnotation(true);

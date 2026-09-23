@@ -106,6 +106,27 @@ test('#sec-generic-parameters-as-values: a type parameter is scoped lexically', 
   expect(evaluated('let T = 5; function f<T: type>() { return T; } f.<string>(); String(T);')).toBe('5');
 });
 
+test('#sec-type-parameters-static-semantics-early-errors: a callable\'s own level cannot rebind a type parameter', () => {
+  // The declaration's parameter list, the top of its body, and any `var` or
+  // function hoisting there would rebind the parameter for the whole body.
+  expectEarlyError('function f<T: type>() { let T; }', 'SyntaxError');
+  expectEarlyError('function f<T: type>() { const T = uint16; }', 'SyntaxError');
+  expectEarlyError('function f<T: type>() { function T() {} }', 'SyntaxError');
+  expectEarlyError('function f<T: type>(T) {}', 'SyntaxError');
+  expectEarlyError('function f<N: uint32>() { { var N = 1; } }', 'SyntaxError');
+  expectEarlyError('class C { m<T: type>() { let T; } }', 'SyntaxError');
+  expectEarlyError('class C { operator+.<T: type>(rhs: T) { let T; return this; } }', 'SyntaxError');
+  expectThrown('function f<T: type>() { let T; }', '`T` is a type parameter of this declaration');
+  expectThrown('function f<T: type>() { { var T; } }', 'declare it with `let` in a nested block');
+  // A nested scope may shadow it, as it may shadow an ordinary parameter.
+  expect(evaluated('function f<T: type>() { { let T = 5; return String(T); } } f.<string>();')).toBe('5');
+  expect(evaluated('function f<T: type>() { return [7].map((T) => String(T)).join(); } f.<string>();')).toBe('7');
+  expect(evaluated('function f<T: type>() { function g() { var T = 3; return T; } return String(g()); } f.<string>();')).toBe('3');
+  expect(evaluated('class M<K: type, V: type> { sum(m) { let out = 0; m.forEach((V, K) => { out += V; }); return String(out); } } new M.<string, uint8>().sum(new Map([["a", 2]]));')).toBe('2');
+  // A class's parameters are not a callable's: its body declares no bindings.
+  expect(evaluated('class B<T: type> { static { let T = 4; } } "ok";')).toBe('ok');
+});
+
 test('D3: a bound written as a domain is refused at the declaration', () => {
   expectEarlyError('interface Ord { lt(o: any): boolean; } function f<T: Ord>() {}', 'StaticTypeError');
   expectEarlyError('class K {} function f<T: K>() {}', 'StaticTypeError');
@@ -116,6 +137,14 @@ test('D3: a bound written as a domain is refused at the declaration', () => {
   expect(evaluated('function f<V: 1 | 2>(): string { return String(V); } f.<2>();')).toBe('2');
 });
 
-test.fails('#sec-parameter-kinds: an alias of type declares a type parameter', () => {
-  expect(evaluated('type Kind = type; function f<T: Kind>(x: T): T { return x; } String(f((3 := uint16)) is uint16);')).toBe('true');
+test('#sec-parameter-kinds: a kind is read from its spelling, so an alias of type is refused with the spelling', () => {
+  expectEarlyError('type Kind = type; function f<T: Kind>(x: T): T { return x; }', 'StaticTypeError');
+  expectThrown('type Kind = type; function f<T: Kind>(x: T): T { return x; }', 'writes the type kind through an alias; a parameter\'s kind is read from how its domain is written, so declare it as `T: type`');
+  expectThrown('type Kinds = [].<type>; function f<...Ts: Kinds>() {}', 'declare it as `...Ts: [].<type>`');
+  // An alias declared after its use, or in an enclosing scope, is refused alike.
+  expectEarlyError('function f<T: Kind>() {} type Kind = type;', 'StaticTypeError');
+  // An alias of a VALUE domain is a value domain as before.
+  expect(evaluated('type Small = uint8; function f<N: Small>(): string { return String(N); } f.<7>();')).toBe('7');
+  // The mixed domain keeps its own message.
+  expectThrown('function f<V: type | uint32>() {}', 'admits Type Objects alongside other values');
 });

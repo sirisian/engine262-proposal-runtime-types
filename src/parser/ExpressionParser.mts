@@ -4355,7 +4355,9 @@ export abstract class ExpressionParser extends FunctionParser {
         // `<` here can only begin type parameters: a method name is never
         // followed by a relational operator in this position.
         if (surroundingAgent.feature('runtime-types') && this.test(Token.LT)) {
-          (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeParameters = this.parseTypeParameters(false, 'method');
+          const list = this.parseTypeParameters(false, 'method');
+          (node as ParseNode.Unfinished<ParseNode.MethodDefinition | ParseNode.AsyncMethod | ParseNode.GeneratorMethod | ParseNode.AsyncGeneratorMethod>).TypeParameters = list;
+          this.scope.declareTypeParameters(list);
         }
         node.PropertySetParameterList = null;
         node.UniqueFormalParameters = this.parseUniqueFormalParameters();

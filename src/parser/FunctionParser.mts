@@ -134,6 +134,7 @@ export abstract class FunctionParser extends IdentifierParser {
       newTarget: true,
     }, () => {
       this.scope.arrowInfoStack.push(null);
+      this.scope.declareTypeParameters((node as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters);
 
       node.FormalParameters = this.parseFormalParameters();
 

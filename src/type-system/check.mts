@@ -3144,7 +3144,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || (d.Kind === 'union' && (d.Members ?? []).some(objectLike));
           const domain = resolvedConstraint as DomainRecord;
           const objectDomain = !mixed(domain) && objectLike(domain);
-          if (mixed(domain)) {
+          // #sec-parameter-kinds: a parameter's kind is read from how its
+          // domain is WRITTEN - `type`, `[].<type>` for a pack, or holes - so
+          // the kind is known wherever the declaration is read, without
+          // resolving an alias that may be declared later or imported. A value
+          // domain that resolves to exactly the type kind is therefore that
+          // spelling through an alias, and is refused with the spelling.
+          const typeKind = (d: DomainRecord): boolean => d.Kind === 'type' || (d.Kind === 'primitive' && d.Name === 'type');
+          const variadic = (tp as { IsVariadic?: boolean }).IsVariadic === true;
+          const packElement = (domain as { Element?: DomainRecord }).Element;
+          const aliasOfKind = variadic ? domain.Kind === 'array' && packElement !== undefined && typeKind(packElement) : typeKind(domain);
+          if (aliasOfKind) {
+            const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'type';
+            const spelling = variadic ? `...${name}: [].<type>` : `${name}: type`;
+            errors.push(Throw.StaticTypeError('$1', `\`${variadic ? '...' : ''}${name}: ${written}\` writes the type kind through an alias; a parameter's kind is read from how its domain is written, so declare it as \`${spelling}\``).Value as ObjectValue);
+          } else if (mixed(domain)) {
             const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'any';
             errors.push(Throw.StaticTypeError('$1', `\`${name}: ${written}\` admits Type Objects alongside other values, so an argument could not bind it unambiguously; write \`${name}: type\` for a type, or a value domain such as a union of value types`).Value as ObjectValue);
           }
