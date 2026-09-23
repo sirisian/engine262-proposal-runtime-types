@@ -3910,7 +3910,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Declared member reads use the same contract for String and Symbol keys. */
-  const memberReadType = (receiver: Known, key: string | SymbolValue): Known => {
+  const memberReadType = (receiver: Known, key: string | SymbolValue, forDelete = false): Known => {
     const propertyType = (shape: Known): Known => {
       if (shape?.Kind !== 'object') return null;
       const property = shape.Properties.find((candidate) => candidate.key === key);
@@ -3924,7 +3924,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] });
       }
       // An undeclared key on every arm remains an ordinary dynamic read.
-      if (types.some((type) => type !== null)) {
+      //
+      // A `delete` is exempt from this one refusal and from nothing else. The
+      // rule protects a READ, which needs every arm to declare the key it
+      // reads; a delete reads nothing, and deleting what an arm does not
+      // declare is the legal case - "Deletion asks about protected storage, not
+      // the validity of a read", as the `delete` arm of the statement walk puts
+      // it. So `delete a[2]` on `[uint8] | [].<uint8>` is left to that arm,
+      // which defers because the members disagree. Every OTHER check on the
+      // operand still runs - a nullish receiver is still refused, since a delete
+      // still needs an object to delete from.
+      if (types.some((type) => type !== null) && !forDelete) {
         errors.push(Throw.StaticTypeError(
           '$1 is not declared by every member of $2; narrow the receiver first, or read it with `?.`',
           typeof key === 'string' ? Value(key) : key, Value(displayType(receiver)),
@@ -13518,7 +13528,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (receiver?.Kind === 'union') {
-            return memberReadType(receiver, m.IdentifierName.name);
+            // Reached for `a.k`, and for `a[k]` with a string key, which the
+            // computed-access arm rewrites to this dot form with `{ ...node }` -
+            // so `parent` is the original's either way.
+            let operand = node as ParseNode;
+            while ((operand as { parent?: ParseNode }).parent?.type === 'ParenthesizedExpression') {
+              operand = (operand as { parent: ParseNode }).parent;
+            }
+            const parent = (operand as { parent?: { type?: string, operator?: string } }).parent;
+            const forDelete = parent?.type === 'UnaryExpression' && parent.operator === 'delete';
+            return memberReadType(receiver, m.IdentifierName.name, forDelete);
           }
           // A VECTOR'S LANE ACCESSORS. #sec-vector-types: `a.x` reads a lane
           // and answers the LANE TYPE, and a multi-component accessor - `a.xy`,
