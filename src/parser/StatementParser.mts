@@ -1,4 +1,5 @@
 import { builtinTypeRecord } from '../type-system/records.mts';
+import { PrimitiveDeclaresParameters } from '../type-system/specialization-patterns.mts';
 import type { Mutable } from '../utils/language.mts';
 import { Token, isAutomaticSemicolon } from './tokens.mts';
 import { TypeParser } from './TypeParser.mts';
@@ -427,12 +428,15 @@ export abstract class StatementParser extends TypeParser {
   }
 
   // PrimitiveOperatorDeclaration :
-  //   `primitive` [no LineTerminator here] TypeName TypeParameters? `{` OperatorDefinitionList? `}`
+  //   `primitive` [no LineTerminator here] TypeName TypeParameters? TypeParameters? `{` OperatorDefinitionList? `}`
   parsePrimitiveOperatorDeclaration(): ParseNode.PrimitiveOperatorDeclaration {
     const node = this.startNode<ParseNode.PrimitiveOperatorDeclaration>();
     this.expect('primitive');
     node.TypeName = this.parseTypeName();
-    node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters(false, 'primitive') : null;
+    const first = this.test(Token.LT) ? this.parseTypeParameters(false, 'primitive') : null;
+    const second = first && this.test(Token.LT) ? this.parseTypeParameters(false, 'primitive') : null;
+    node.TypeParameters = first;
+    this.checkPrimitiveBlockLists(node, first, second);
     this.expect(Token.LBRACE);
     const OperatorDefinitionList: ParseNode.OperatorDefinition[] = [];
     while (!this.test(Token.RBRACE)) {
@@ -441,6 +445,66 @@ export abstract class StatementParser extends TypeParser {
     this.expect(Token.RBRACE);
     node.OperatorDefinitionList = OperatorDefinitionList;
     return this.finishNode(node, 'PrimitiveOperatorDeclaration');
+  }
+
+  /**
+   * #sec-primitive-operator-blocks: assigns each list of a block's header its
+   * role, as #sec-type-references assigns a type's `.<...>` - components where
+   * the primitive declares parameters, metadata otherwise - and reports what
+   * the lists may not hold. A list declaring parameters is refused
+   * (#sec-type-parameters-static-semantics-early-errors). Implemented are a
+   * component list of `_` only, which covers every parameterization, and a
+   * metadata list of captures naming their meta types; any other pattern is
+   * reported as unsupported rather than accepted and ignored.
+   */
+  private checkPrimitiveBlockLists(
+    node: ParseNode.Unfinished<ParseNode.PrimitiveOperatorDeclaration>,
+    first: ParseNode.TypeParameters | null,
+    second: ParseNode.TypeParameters | null,
+  ): void {
+    const name = node.TypeName?.IdentifierReference.name ?? '';
+    const declares = PrimitiveDeclaresParameters(name);
+    const components = declares ? first : null;
+    const metadata = declares ? second : first;
+    (node as Mutable<ParseNode.PrimitiveOperatorDeclaration>).ComponentParameters = components;
+    (node as Mutable<ParseNode.PrimitiveOperatorDeclaration>).MetadataParameters = metadata;
+    const unsupported = 'other patterns over a primitive are not supported yet';
+    if (!declares && second) {
+      this.addEarlyError(Throw.SyntaxError('$1', `\`${name}\` declares no parameters, so its first list is already its metadata, and a block takes one metadata list`), second);
+    }
+    if (components) {
+      if (components.ListKind === 'parameters') {
+        const p = components.TypeParameterList[0];
+        const domain = p.TypeParameterDomain?.sourceText ?? 'M';
+        this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's lists match the receiver rather than declare parameters, and \`${name}\` takes its components first; to capture its metadata write \`primitive ${name}<_><const ${p.BindingIdentifier.name}: ${domain}>\``), components);
+      } else {
+        for (const entry of components.SpecializationEntryList ?? []) {
+          const pattern = entry.Pattern;
+          if (pattern.type === 'TypeReference' && pattern.TypeName.IdentifierReference.name === '_' && !pattern.TypeArguments && pattern.TypeName.MemberNames.length === 0) {
+            continue;
+          }
+          // D9: a written domain restates its slot's. A capture naming a meta
+          // type in a component slot is metadata written a list too early.
+          const message = pattern.type === 'CaptureBinding' && pattern.TypeParameterDomain && !second
+            ? `\`${pattern.BindingIdentifier.name}\` stands in a component of \`${name}\`, which is not a metadata position; metadata follows the components in a list of its own: \`primitive ${name}<_><const ${pattern.BindingIdentifier.name}: ${pattern.TypeParameterDomain.sourceText}>\``
+            : `a primitive block's component list is supported only as \`_\` in every position; ${unsupported}`;
+          this.addEarlyError(Throw.SyntaxError('$1', message), entry);
+        }
+      }
+    }
+    if (metadata) {
+      if (metadata.ListKind === 'parameters') {
+        const p = metadata.TypeParameterList[0];
+        this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's list captures the receiver's metadata rather than declaring parameters; write \`const ${p.BindingIdentifier.name}: ${p.TypeParameterDomain?.sourceText ?? 'M'}\``), metadata);
+      } else {
+        for (const entry of metadata.SpecializationEntryList ?? []) {
+          const capture = entry.Pattern.type === 'CaptureBinding' ? entry.Pattern : null;
+          if (!capture || capture.IsVariadic || !capture.TypeParameterDomain) {
+            this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's metadata list is supported only as captures that name their meta type, \`const D: Dim\`; ${unsupported}`), entry);
+          }
+        }
+      }
+    }
   }
 
   /**

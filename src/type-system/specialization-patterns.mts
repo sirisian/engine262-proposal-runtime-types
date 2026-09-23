@@ -639,8 +639,14 @@ export interface MetadataCaptureView {
  * own; this is the one place its readers - the checker's scope for its
  * operator bodies and the run time's frame - learn what it binds.
  */
-export function MetadataCapturesOf(declaration: { readonly TypeParameters?: ParseNode.TypeParameters | null } | null | undefined): MetadataCaptureView[] {
-  const list = declaration?.TypeParameters;
+export function MetadataCapturesOf(declaration: {
+  readonly TypeParameters?: ParseNode.TypeParameters | null,
+  readonly MetadataParameters?: ParseNode.TypeParameters | null,
+} | null | undefined): MetadataCaptureView[] {
+  // The block's METADATA list, which the parser chose by the primitive's own
+  // parameters: the first list of `float32<const D: Dim>`, the second of
+  // `complex<_><const T: P>`.
+  const list = declaration && 'MetadataParameters' in declaration ? declaration.MetadataParameters : declaration?.TypeParameters;
   if (!list || list.ListKind !== 'specialization') {
     return [];
   }
@@ -656,4 +662,17 @@ export function MetadataCapturesOf(declaration: { readonly TypeParameters?: Pars
     }
   }
   return views;
+}
+
+/**
+ * #sec-primitives: whether the predefined primitive _name_ declares type
+ * parameters, and so takes its components in the first `.<...>` applied to it
+ * (#sec-type-references): `complex` its component type, `rational`, `int` and
+ * `uint` a width, and `vector` its element and lane count. Every other
+ * primitive declares none, so its first `.<...>` is metadata. The primitives
+ * are predefined, so this is known wherever a block is read, without resolving
+ * any name the program declares.
+ */
+export function PrimitiveDeclaresParameters(name: string): boolean {
+  return name === 'complex' || name === 'rational' || name === 'int' || name === 'uint' || name === 'vector';
 }

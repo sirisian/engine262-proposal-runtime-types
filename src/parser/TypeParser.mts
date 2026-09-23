@@ -890,35 +890,19 @@ export abstract class TypeParser extends ExpressionParser {
         seen.set(name, capture);
       }
     }
+    // A primitive block's lists are judged by the declaration parser, which
+    // knows each list's role (#sec-primitive-operator-blocks).
+    if (context === 'primitive') {
+      return;
+    }
     // #sec-type-parameters-static-semantics-early-errors: a `partial`
-    // declaration or a primitive operator block has one primary elsewhere, so
-    // its list never declares parameters of its own.
-    if (list.ListKind === 'parameters' && (context === 'primitive' || context === 'partial')) {
-      const first = list.TypeParameterList[0];
-      const name = first.BindingIdentifier.name;
-      const domain = first.TypeParameterDomain?.sourceText ?? 'M';
-      this.addEarlyError(Throw.SyntaxError('$1', context === 'primitive'
-        ? `a primitive block's list captures the receiver's metadata rather than declaring parameters; write \`const ${name}: ${domain}\``
-        : 'a `partial` declaration adds to a family whose primary declares its parameters; its list is a specialization list, which is not supported yet'), list);
+    // declaration has one primary elsewhere, so its list never declares
+    // parameters of its own.
+    if (list.ListKind === 'parameters' && context === 'partial') {
+      this.addEarlyError(Throw.SyntaxError('$1', 'a `partial` declaration adds to a family whose primary declares its parameters; its list is a specialization list, which is not supported yet'), list);
       return;
     }
     if (list.ListKind === 'parameters') {
-      return;
-    }
-    // #sec-primitive-operator-blocks: a primitive block's specialization list.
-    // The form implemented is a list of captures of metadata, each naming the
-    // meta type whose portion of the receiver's metadata it binds,
-    // `primitive float32<const D: Dimensions>`. A pattern over a primitive's
-    // COMPONENTS, `primitive vector<float32.<const D: Dimensions>, const N:
-    // uint32>` in primitivemetadata.md, is grammatical and not implemented, so
-    // it is reported as unsupported rather than accepted and ignored.
-    if (context === 'primitive' && list.ListKind === 'specialization') {
-      for (const entry of list.SpecializationEntryList ?? []) {
-        const capture = entry.Pattern.type === 'CaptureBinding' ? entry.Pattern : null;
-        if (!capture || capture.IsVariadic || !capture.TypeParameterDomain) {
-          this.addEarlyError(Throw.SyntaxError('$1', 'a primitive block\'s list is supported only as captures of metadata that name their meta type, `const D: Dim`; other patterns over a primitive are not supported yet'), entry);
-        }
-      }
       return;
     }
     if (parametersOnly) {

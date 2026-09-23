@@ -4,10 +4,14 @@ import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 /**
  * A PRIMITIVE OPERATOR BLOCK'S CAPTURES OF METADATA ARE IN SCOPE.
  *
- * #sec-primitive-operator-blocks now writes the block's list as a
- * specialization list whose captures bind metadata, `primitive
- * complex<const T: P>`: the written domain names the meta type (plan D9, a
- * metadata position). The history below is of the earlier parameter form.
+ * #sec-primitive-operator-blocks: each list of a block's header is decided as
+ * a type's `.<...>` is, by the type it follows. `complex` and `rational`
+ * declare a parameter, so their first list matches the component and the
+ * second captures metadata - `primitive complex<_><const T: P>`, as the type
+ * is `complex.<float64>.<{ phase: 1 }>` - while `float32` declares none and
+ * takes `<const D: Dim>` directly. A capture's written domain names the meta
+ * type (plan D9, a metadata position). The history below is of the earlier
+ * parameter form.
  *
  * #sec-primitive-operator-blocks: "A declaration of the form `primitive` _T_ _P_
  * `{` ... `}`, where _T_ names a primitive type and _P_ is an optional
@@ -27,12 +31,12 @@ import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 const CX = `type P = { phase: int32 };
 meta P { default = { phase: 0 }; subtype(a: P, b: P): boolean { return true; } }
-primitive complex<const T: P> { operator complex.<T>() { return this; } }
+primitive complex<_><const T: P> { operator complex.<T>() { return this; } }
 type Ph = complex.<float64>.<{ phase: 1 }>;
 `;
 const RAT = `type U = { unit: int32 };
 meta U { default = { unit: 0 }; subtype(a: U, b: U): boolean { return true; } }
-primitive rational<const T: U> { operator rational.<T>() { return this; } }
+primitive rational<_><const T: U> { operator rational.<T>() { return this; } }
 type Ratio = rational.<64>.<{ unit: 1 }>;
 `;
 
@@ -67,7 +71,13 @@ test('the parameterless form is unchanged', () => {
 
 test('#sec-type-parameters-static-semantics-early-errors: the list captures metadata and declares no parameters', () => {
   expectEarlyError('primitive complex<T: P> {}', 'SyntaxError');
-  expectThrown('primitive complex<T: P> {}', 'write `const T: P`');
+  expectThrown('primitive complex<T: P> {}', 'write `primitive complex<_><const T: P>`');
+  expectThrown('primitive float32<D: Dim> {}', 'write `const D: Dim`');
+  // Each list takes its role from the type it follows, as a `.<...>` does:
+  // `complex` takes its component first, so metadata there is one list early.
+  expectThrown('primitive complex<const T: P> {}', 'stands in a component of `complex`, which is not a metadata position');
+  // `float32` declares no parameters: its first list is its metadata already.
+  expectThrown('primitive float32<const D: Dim><const E: Dim> {}', 'its first list is already its metadata');
   // Only captures naming their meta type are implemented; any other pattern
   // over a primitive, including the component patterns of primitivemetadata.md,
   // is reported as unsupported rather than accepted and ignored.

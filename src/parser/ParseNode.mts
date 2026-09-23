@@ -2900,7 +2900,19 @@ export namespace ParseNode {
   export interface PrimitiveOperatorDeclaration extends BaseParseNode {
     readonly type: 'PrimitiveOperatorDeclaration';
     readonly TypeName: TypeName;
+    /** The first list as written. */
     readonly TypeParameters: TypeParameters | null;
+    /**
+     * #sec-primitive-operator-blocks: each list of the header is decided as a
+     * type's `.<...>` is (#sec-type-references), by the type it follows: a
+     * pattern over the primitive's COMPONENTS where the primitive declares
+     * parameters, and a pattern over METADATA otherwise. So `complex` takes
+     * `<_><const T: P>` as `complex.<float64>.<{ phase: 1 }>` takes its
+     * component and then its metadata, and `float32`, which declares none,
+     * takes `<const D: Dimensions>`.
+     */
+    readonly ComponentParameters?: TypeParameters | null;
+    readonly MetadataParameters?: TypeParameters | null;
     readonly OperatorDefinitionList: readonly OperatorDefinition[];
   }
 
