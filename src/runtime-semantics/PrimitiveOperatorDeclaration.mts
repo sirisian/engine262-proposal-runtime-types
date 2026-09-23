@@ -2,7 +2,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { MetadataCapturesOf } from '../type-system/specialization-patterns.mts';
+import { MetadataCapturesOf, ComponentCapturesOf } from '../type-system/specialization-patterns.mts';
 import { surroundingAgent, EnsureCompletion, Q, type PlainEvaluator } from '#self';
 
 /**
@@ -66,6 +66,13 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       // `rational.<64>.<{ ... }>` was refused in the annotation spelling while
       // `:=` succeeded: the cast the program declared was never a candidate.
       const blockFrame = new Map<string, TypeRecord>();
+      // A COMPONENT capture ranges over every component in a cast's target:
+      // `operator complex.<E>.<T>()` covers the T-parameterization of every
+      // complex, so E is bound to an open parameter, which CastCoversTarget
+      // lets stand for any argument in its position.
+      for (const component of ComponentCapturesOf(node as ParseNode.PrimitiveOperatorDeclaration)) {
+        blockFrame.set(component.BindingIdentifier.name, { Kind: 'parameter', Name: component.BindingIdentifier.name } as TypeRecord);
+      }
       for (let i = 0; i < blockParameterNames.length; i += 1) {
         const constraint = blockParameterConstraints[i];
         if (constraint) {

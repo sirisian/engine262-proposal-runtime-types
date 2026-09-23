@@ -674,5 +674,61 @@ export function MetadataCapturesOf(declaration: {
  * any name the program declares.
  */
 export function PrimitiveDeclaresParameters(name: string): boolean {
-  return name === 'complex' || name === 'rational' || name === 'int' || name === 'uint' || name === 'vector';
+  return PrimitiveParameterKinds(name).length > 0;
+}
+
+/**
+ * The kinds of the predefined primitive _name_'s parameters, in order: a
+ * component TYPE (`complex`'s, `vector`'s element) or a VALUE (a width, a
+ * lane count). Empty for a primitive that declares none.
+ */
+export function PrimitiveParameterKinds(name: string): readonly ('type' | 'value')[] {
+  switch (name) {
+    case 'complex': return ['type'];
+    case 'rational': case 'int': case 'uint': return ['value'];
+    case 'vector': return ['type', 'value'];
+    default: return [];
+  }
+}
+
+/** A capture of a primitive block's component list, with the component it stands for. */
+export interface ComponentCaptureView {
+  readonly BindingIdentifier: ParseNode.BindingIdentifier;
+  /** The position among the primitive's parameters. */
+  readonly Index: number;
+  readonly TypeParameterConstraint: null;
+  readonly TypeParameterDefault: null;
+  readonly IsVariadic: false;
+}
+
+/**
+ * #sec-primitive-operator-blocks: the captures of a block's COMPONENT list,
+ * `primitive complex<const E><const T: P>`, each standing for the receiver's
+ * component at its position. In a cast's target a component capture ranges
+ * over every component, so `operator complex.<E>.<T>()` covers the
+ * P-parameterization of every complex.
+ */
+export function ComponentCapturesOf(declaration: { readonly ComponentParameters?: ParseNode.TypeParameters | null } | null | undefined): ComponentCaptureView[] {
+  const list = declaration?.ComponentParameters;
+  if (!list || list.ListKind !== 'specialization') {
+    return [];
+  }
+  const views: ComponentCaptureView[] = [];
+  (list.SpecializationEntryList ?? []).forEach((entry, Index) => {
+    if (entry.Pattern.type === 'CaptureBinding' && !entry.Pattern.IsVariadic) {
+      views.push({
+        BindingIdentifier: entry.Pattern.BindingIdentifier, Index, TypeParameterConstraint: null, TypeParameterDefault: null, IsVariadic: false,
+      });
+    }
+  });
+  return views;
+}
+
+/** Every name a primitive block's header binds: its component captures, then its metadata captures. */
+export function BlockCapturesOf(declaration: {
+  readonly TypeParameters?: ParseNode.TypeParameters | null,
+  readonly ComponentParameters?: ParseNode.TypeParameters | null,
+  readonly MetadataParameters?: ParseNode.TypeParameters | null,
+} | null | undefined): (ComponentCaptureView | MetadataCaptureView)[] {
+  return [...ComponentCapturesOf(declaration), ...MetadataCapturesOf(declaration)];
 }

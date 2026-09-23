@@ -3159,6 +3159,37 @@ export function PrimitiveCastsFor(typeName: string): readonly PrimitiveCast[] {
  * written against one parameterization, `float32.<{ m: 1 }>`, still covers only
  * that one, so `float32.<{ m: 2 }>` does not acquire a zero from it.
  */
+/**
+ * #sec-primitive-operator-blocks: a cast's base written with a component
+ * capture, `complex.<E>`, covers the base of every parameterization of that
+ * primitive: an open parameter stands for any argument in its position, and
+ * every other argument must be the same.
+ */
+function OpenComponentsCover(castBase: TypeRecord, base: TypeRecord): boolean {
+  if (castBase.Kind !== 'primitive' || base.Kind !== 'primitive' || castBase.Name !== base.Name) {
+    return false;
+  }
+  const open = castBase.Arguments ?? [];
+  const actual = base.Arguments ?? [];
+  const isOpen = (a: unknown) => typeof a === 'object' && (a as TypeRecord).Kind === 'parameter';
+  // A primitive's record may omit an argument that is its default -
+  // `rational.<64>` is recorded as `rational` - so a position the actual base
+  // leaves out holds the default, which an open parameter covers too.
+  if (actual.length > open.length || !open.some(isOpen)) {
+    return false;
+  }
+  return open.every((a, i) => {
+    if (isOpen(a)) {
+      return true;
+    }
+    if (i >= actual.length) {
+      return false;
+    }
+    const b = actual[i];
+    return typeof a === 'object' && typeof b === 'object' ? SameType(a as TypeRecord, b as TypeRecord) : a === b;
+  });
+}
+
 export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): boolean {
   if (SameType(castTarget, target)) {
     return true;
@@ -3167,7 +3198,7 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
   if (metaType === undefined || castTarget.Kind !== 'parameterized' || target.Kind !== 'parameterized') {
     return false;
   }
-  if (!SameType(castTarget.Base, target.Base)) {
+  if (!SameType(castTarget.Base, target.Base) && !OpenComponentsCover(castTarget.Base, target.Base)) {
     return false;
   }
   const metadata = (target as { Metadata?: MetadataRecord }).Metadata;

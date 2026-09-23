@@ -5898,6 +5898,13 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           Value(displayType(baseRecord)),
         );
       }
+      // A META TYPE named as the argument makes the application a family, as
+      // the unchained form does: `complex.<E>.<P>` in a cast's target is every
+      // P-parameterization, and a family is never the same type as a member.
+      const namedMetaType = MetaTypeNamedByArgument(metadataRecord);
+      if (namedMetaType !== undefined) {
+        return { Kind: 'parameterized', Base: baseRecord, Metadata: MetadataObjectFromType(metadataRecord), MetaType: namedMetaType } as TypeRecord;
+      }
       // CanonicalizeType is what makes the inline spelling and the alias
       // spelling the SAME type rather than two equal ones. The neighbouring
       // TypeReference path reaches it through its own caller; this arm returns

@@ -1,5 +1,5 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { MetadataCapturesOf } from './specialization-patterns.mts';
+import { BlockCapturesOf } from './specialization-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -3124,7 +3124,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } | null | undefined)?.TypeParameters?.TypeParameterList;
     // A primitive block binds its captures of metadata, not parameters.
     if (declaration?.type === 'PrimitiveOperatorDeclaration') {
-      return pushTypeParameterScopeOf({ TypeParameters: { TypeParameterList: MetadataCapturesOf(declaration as { TypeParameters?: ParseNode.TypeParameters | null }) } } as unknown as ParseNode, only);
+      return pushTypeParameterScopeOf({ TypeParameters: { TypeParameterList: BlockCapturesOf(declaration as ParseNode.PrimitiveOperatorDeclaration) } } as unknown as ParseNode, only);
     }
     if (!list || list.length === 0) {
       return false;
@@ -21380,7 +21380,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkPrimitiveOperatorBlock = (node: ParseNode.PrimitiveOperatorDeclaration): void => {
     const typeName = (node.TypeName as unknown as { IdentifierReference?: { name?: string } } | null)?.IdentifierReference?.name;
     if (typeof typeName !== 'string') return;
-    if (MetadataCapturesOf(node as { TypeParameters?: ParseNode.TypeParameters | null }).length) return;
+    if (BlockCapturesOf(node).length) return;
     for (const e of node.OperatorDefinitionList ?? []) {
       if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FunctionBody || !e.FormalParameters) continue;
       if ((e.TypeParameters?.TypeParameterList ?? []).length > 0) continue;

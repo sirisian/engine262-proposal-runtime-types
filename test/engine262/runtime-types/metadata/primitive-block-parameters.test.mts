@@ -31,12 +31,12 @@ import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 const CX = `type P = { phase: int32 };
 meta P { default = { phase: 0 }; subtype(a: P, b: P): boolean { return true; } }
-primitive complex<_><const T: P> { operator complex.<T>() { return this; } }
+primitive complex<const E><const T: P> { operator complex.<E>.<T>() { return this; } }
 type Ph = complex.<float64>.<{ phase: 1 }>;
 `;
 const RAT = `type U = { unit: int32 };
 meta U { default = { unit: 0 }; subtype(a: U, b: U): boolean { return true; } }
-primitive rational<_><const T: U> { operator rational.<T>() { return this; } }
+primitive rational<const W><const T: U> { operator rational.<W>.<T>() { return this; } }
 type Ratio = rational.<64>.<{ unit: 1 }>;
 `;
 
@@ -48,6 +48,32 @@ test('the parameterized block declares without error', () => {
 test('and its cast crosses a value into a parameterization', () => {
   expect(evaluated(`${CX}const c: complex128 = 1 + 2i; String(c := Ph);`)).toBe('1+2i');
   expect(evaluated(`${RAT}const r: rational = 1 / 3; String(r := Ratio);`)).toBe('1/3');
+  // `:=` converts by its own route, so it passes with no cast at all. An
+  // ANNOTATED crossing needs the cast, and is what shows the cast covers its
+  // targets: one cast, its component captured, covers every component.
+  expect(evaluated(`${CX}const c: complex128 = 1 + 2i; const p: Ph = c; String(p);`)).toBe('1+2i');
+  expect(evaluated(`${CX}const d: complex64 = 3 + 4i; const q: complex.<float32>.<{ phase: 1 }> = d; String(q);`)).toBe('3+4i');
+  expect(evaluated(`${RAT}const r: rational = 1 / 3; const p: Ratio = r; String(p);`)).toBe('1/3');
+});
+
+test('#sec-type-references: a cast target is read by the rule every type follows', () => {
+  // `complex` declares a component, so `complex.<T>` fills it: the cast this
+  // file used to declare targeted a complex of P-typed parts and covered no
+  // crossing. Only the `:=` route made it look as if it worked.
+  const old = `type P = { phase: int32 };
+meta P { default = { phase: 0 }; subtype(a: P, b: P): boolean { return true; } }
+primitive complex<_><const T: P> { operator complex.<T>() { return this; } }
+type Ph = complex.<float64>.<{ phase: 1 }>;
+`;
+  expectThrown(`${old}const c: complex128 = 1 + 2i; const p: Ph = c;`, 'is not assignable to');
+});
+
+test('a component capture: its slot\'s domain, and where it may be named', () => {
+  // D9: a capture takes its slot's domain; writing another is refused.
+  expectThrown('type P = { phase: int32 }; primitive complex<const E: P><const T: P> {}', 'restates that slot\'s domain');
+  expectThrown('primitive complex<const E, const F><const T: P> {}', '`complex` declares 1 parameter');
+  // An operator's signature would need it bound from each receiver.
+  expectThrown(`${CX}primitive complex<const E><const S: P> { operator +(rhs: complex.<E>.<S>) { return this; } }`, 'which an operator\'s signature cannot yet name');
 });
 
 test('a block parameter is still unknown outside its block', () => {
@@ -76,6 +102,7 @@ test('#sec-type-parameters-static-semantics-early-errors: the list captures meta
   // Each list takes its role from the type it follows, as a `.<...>` does:
   // `complex` takes its component first, so metadata there is one list early.
   expectThrown('primitive complex<const T: P> {}', 'stands in a component of `complex`, which is not a metadata position');
+  expectThrown('primitive complex<const T: P> {}', 'primitive complex<const E><const T: P>');
   // `float32` declares no parameters: its first list is its metadata already.
   expectThrown('primitive float32<const D: Dim><const E: Dim> {}', 'its first list is already its metadata');
   // Only captures naming their meta type are implemented; any other pattern

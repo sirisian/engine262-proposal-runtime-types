@@ -1,5 +1,5 @@
 import { builtinTypeRecord } from '../type-system/records.mts';
-import { PrimitiveDeclaresParameters } from '../type-system/specialization-patterns.mts';
+import { PrimitiveDeclaresParameters, PrimitiveParameterKinds, ComponentCapturesOf } from '../type-system/specialization-patterns.mts';
 import type { Mutable } from '../utils/language.mts';
 import { Token, isAutomaticSemicolon } from './tokens.mts';
 import { TypeParser } from './TypeParser.mts';
@@ -444,7 +444,54 @@ export abstract class StatementParser extends TypeParser {
     }
     this.expect(Token.RBRACE);
     node.OperatorDefinitionList = OperatorDefinitionList;
+    this.checkComponentCaptureUses(node, OperatorDefinitionList);
     return this.finishNode(node, 'PrimitiveOperatorDeclaration');
+  }
+
+  /**
+   * A component capture is implemented where a cast's target names it, which
+   * is where it ranges over every component. An operator's own signature
+   * would need it bound from each receiver's component at dispatch, which is
+   * not implemented, so such a signature is reported as unsupported rather
+   * than failing at dispatch with the name undefined.
+   */
+  private checkComponentCaptureUses(node: ParseNode.Unfinished<ParseNode.PrimitiveOperatorDeclaration>, operators: readonly ParseNode.OperatorDefinition[]): void {
+    const names = new Set(ComponentCapturesOf(node as ParseNode.PrimitiveOperatorDeclaration).map((c) => c.BindingIdentifier.name));
+    if (names.size === 0) {
+      return;
+    }
+    const mentions = (value: unknown): string | undefined => {
+      if (!value || typeof value !== 'object') {
+        return undefined;
+      }
+      if (Array.isArray(value)) {
+        for (const v of value) {
+          const found = mentions(v);
+          if (found) return found;
+        }
+        return undefined;
+      }
+      const n = value as { type?: string, name?: string };
+      if (n.type === 'IdentifierReference' && typeof n.name === 'string' && names.has(n.name)) {
+        return n.name;
+      }
+      for (const key of Object.keys(n)) {
+        if (key !== 'parent' && key !== 'location' && key !== 'sourceText' && key !== 'FunctionBody') {
+          const found = mentions((n as Record<string, unknown>)[key]);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    for (const e of operators) {
+      if (e.OperatorName === null) {
+        continue; // a cast: its target is where a component capture ranges
+      }
+      const found = mentions([e.FormalParameters, e.TypeAnnotation]);
+      if (found) {
+        this.addEarlyError(Throw.SyntaxError('$1', `\`${found}\` captures a component of the receiver, which an operator's signature cannot yet name: binding it from each receiver is not supported yet; a cast's target may name it`), e);
+      }
+    }
   }
 
   /**
@@ -478,18 +525,33 @@ export abstract class StatementParser extends TypeParser {
         const domain = p.TypeParameterDomain?.sourceText ?? 'M';
         this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's lists match the receiver rather than declare parameters, and \`${name}\` takes its components first; to capture its metadata write \`primitive ${name}<_><const ${p.BindingIdentifier.name}: ${domain}>\``), components);
       } else {
-        for (const entry of components.SpecializationEntryList ?? []) {
+        const kinds = PrimitiveParameterKinds(name);
+        const entries = components.SpecializationEntryList ?? [];
+        if (entries.length > kinds.length) {
+          this.addEarlyError(Throw.SyntaxError('$1', `\`${name}\` declares ${kinds.length} parameter${kinds.length === 1 ? '' : 's'}, and its component list supplies ${entries.length}`), components);
+        }
+        entries.forEach((entry, q) => {
           const pattern = entry.Pattern;
           if (pattern.type === 'TypeReference' && pattern.TypeName.IdentifierReference.name === '_' && !pattern.TypeArguments && pattern.TypeName.MemberNames.length === 0) {
-            continue;
+            return;
           }
-          // D9: a written domain restates its slot's. A capture naming a meta
-          // type in a component slot is metadata written a list too early.
-          const message = pattern.type === 'CaptureBinding' && pattern.TypeParameterDomain && !second
-            ? `\`${pattern.BindingIdentifier.name}\` stands in a component of \`${name}\`, which is not a metadata position; metadata follows the components in a list of its own: \`primitive ${name}<_><const ${pattern.BindingIdentifier.name}: ${pattern.TypeParameterDomain.sourceText}>\``
-            : `a primitive block's component list is supported only as \`_\` in every position; ${unsupported}`;
-          this.addEarlyError(Throw.SyntaxError('$1', message), entry);
-        }
+          if (pattern.type === 'CaptureBinding' && !pattern.IsVariadic && pattern.Arity === 0) {
+            // D4: the capture takes its slot's domain. D9: a written domain
+            // restates it. A type slot's domain is `type`, so a meta type
+            // written there is metadata one list too early.
+            const domain = pattern.TypeParameterDomain?.sourceText.replace(/\s+/g, '');
+            const kind = kinds[q];
+            if (domain === undefined || (kind === 'type' ? domain === 'type' : domain !== 'type')) {
+              return;
+            }
+            const capture = pattern.BindingIdentifier.name;
+            this.addEarlyError(Throw.SyntaxError('$1', kind === 'type' && !second
+              ? `\`${capture}\` stands in a component of \`${name}\`, which is not a metadata position; metadata follows the components in a list of its own: \`primitive ${name}<const E><const ${capture}: ${pattern.TypeParameterDomain!.sourceText}>\`, or \`<_>\` where the component is not needed`
+              : `\`${capture}\` stands in a ${kind} component of \`${name}\`, and \`${pattern.TypeParameterDomain!.sourceText}\` restates that slot's domain as another; a capture takes its slot's domain, so it needs none written`), entry);
+            return;
+          }
+          this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's component list is supported only as \`_\` or a capture in each position; ${unsupported}`), entry);
+        });
       }
     }
     if (metadata) {
