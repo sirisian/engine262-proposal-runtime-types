@@ -104,7 +104,7 @@ test.each([
   ],
   [
     "generic value shadow",
-    "const B=(x:uint8)=>x;class C<B: any> extends B{}"
+    "const B=(x:uint8)=>x;class C<B: uint8> extends B{}"
   ],
   [
     "generic base",

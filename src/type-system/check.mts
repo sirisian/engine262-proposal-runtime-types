@@ -3128,9 +3128,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // parameters, and is not judged by this rule.
         if ((tp as { IsValueParameter?: boolean }).IsValueParameter && resolvedConstraint
           && !(declaration && /Primitive/.test((declaration as { type: string }).type))) {
-          const domain = resolvedConstraint as { Kind: string, Declaration?: { type?: string } };
-          const objectDomain = domain.Kind === 'function'
-            || (domain.Kind === 'nominal' && (domain.Declaration?.type === 'InterfaceDeclaration' || domain.Declaration?.type === 'ClassDeclaration'));
+          // A union is a value domain when every member is one, so
+          // `V: uint8 | string` is admitted. `any`, and a union reaching `type`,
+          // admit Type Objects alongside other values, and a binding from an
+          // argument could not tell which reading was meant (plan D2).
+          type DomainRecord = { Kind: string, Name?: string, Declaration?: { type?: string }, Members?: readonly DomainRecord[] };
+          const mixed = (d: DomainRecord): boolean => d.Kind === 'any' || d.Kind === 'type' || (d.Kind === 'primitive' && d.Name === 'type')
+            || (d.Kind === 'union' && (d.Members ?? []).some(mixed));
+          const objectLike = (d: DomainRecord): boolean => d.Kind === 'function'
+            || (d.Kind === 'nominal' && (d.Declaration?.type === 'InterfaceDeclaration' || d.Declaration?.type === 'ClassDeclaration'))
+            || (d.Kind === 'union' && (d.Members ?? []).some(objectLike));
+          const domain = resolvedConstraint as DomainRecord;
+          const objectDomain = !mixed(domain) && objectLike(domain);
+          if (mixed(domain)) {
+            const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'any';
+            errors.push(Throw.StaticTypeError('$1', `\`${name}: ${written}\` admits Type Objects alongside other values, so an argument could not bind it unambiguously; write \`${name}: type\` for a type, or a value domain such as a union of value types`).Value as ObjectValue);
+          }
           if (objectDomain) {
             const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'B';
             errors.push(Throw.StaticTypeError('$1', `\`${name}: ${written}\` declares a value parameter, and \`${written}\` is not a value domain; did you mean \`${name}: type extends ${written}\`?`).Value as ObjectValue);

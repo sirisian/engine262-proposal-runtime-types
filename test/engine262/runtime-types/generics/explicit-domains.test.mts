@@ -78,6 +78,14 @@ test('`out` stays an ordinary name', () => {
   expect(evaluated('class C<out T: type> { } typeof C;')).toBe('function');
 });
 
+test('D2: a domain admitting Type Objects alongside other values is refused', () => {
+  expectEarlyError('function f<V: any>() {}', 'StaticTypeError');
+  expectEarlyError('function f<V: type | uint32>() {}', 'StaticTypeError');
+  expectThrown('function f<V: any>() {}', 'admits Type Objects alongside other values');
+  // a union of value domains is itself a value domain
+  expect(evaluated('function f<V: uint8 | string>(): string { return String(V); } f.<"a">();')).toBe('a');
+});
+
 // Recorded gaps, each owned by a later part of the plan.
 
 test.fails('D6: a parameter named after a predefined type shadows it in the body too', () => {
