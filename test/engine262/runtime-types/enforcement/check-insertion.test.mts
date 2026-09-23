@@ -1220,7 +1220,11 @@ test('deleting a typed field, a typed element, or an interface-required member t
   // recording their declared type: the rule reads a structure that is empty
   // for every declared field until they do.
   expect(thrownKind('class C { x: uint8 = 1; } let c = new C(); delete c.x;')).toBe('TypeError');
-  expect(thrownKind('let a: [].<uint8> = [1,2]; delete a[0];')).toBe('TypeError');
+  // A typed ELEMENT is caught before the program runs, the index being a
+  // constant into a typed array; the field and the interface member below are
+  // still decided when the `delete` executes. Same rule, reported earlier where
+  // it can be.
+  expect(thrownKind('let a: [].<uint8> = [1,2]; delete a[0];')).toBe('StaticTypeError');
   expect(thrownKind('interface I { m: uint8 } class C implements I { m: uint8 = 1; } let c = new C(); delete c.m;')).toBe('TypeError');
   // An untyped property is still deletable, and so is a non-index property of
   // a typed array.

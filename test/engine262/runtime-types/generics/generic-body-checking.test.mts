@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectError, ok } from '../harness.mts';
+import { evaluated, expectError, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
  * proposal-runtime-types `#sec-type-expressions`: "A type-position expression
@@ -96,6 +96,16 @@ test('an indexed access over a parameter is deferred, not unresolvable', () => {
 });
 
 test('plain Number values cross generic and return String boundaries by conversion', () => {
-  expect(evaluated('function f<T: type>(x:T):T{return x;} f.<string>(5);')).toBe('5');
-  expect(evaluated('function f():string{return 5;} f();')).toBe('5');
+  // A PLAIN Number is one whose type is not known statically - an `any` - and
+  // it converts at the boundary: `RequireType` hands a `string` target to
+  // `PrimitiveConvert`, whose rationale is that "ToString of a number is total
+  // and lossless".
+  expect(evaluated('function f<T: type>(x:T):T{return x;} let v: any = 5; f.<string>(v);')).toBe('5');
+  expect(evaluated('function f():string{ let v: any = 5; return v; } f();')).toBe('5');
+  // A number whose type IS known statically is not plain, and static
+  // assignability has no conversion in it, so a literal at a `string` boundary
+  // is refused before the program runs. This test once wrote the literal
+  // directly, from before literals were typed statically.
+  expectStaticTypeError('function f<T: type>(x:T):T{return x;} f.<string>(5);');
+  expectStaticTypeError('function f():string{return 5;} f();');
 });

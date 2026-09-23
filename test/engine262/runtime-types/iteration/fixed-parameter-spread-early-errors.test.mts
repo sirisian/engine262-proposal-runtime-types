@@ -94,7 +94,16 @@ test("R48: multiple spreads deferred", () => {
 });
 
 test("R48: upstream number to string conversion", () => {
-  expect(ok("function take(s:string):void{}function f(xs:{[Symbol.iterator]:()=>Generator.<number,void,void>}){take(...xs);}")).toBe(true);
+  // The conversion happens where the element's type is not known statically:
+  // an iterable of `any` spreads into a `string` parameter and each element
+  // converts at the boundary, `RequireType` handing the `string` target to
+  // `PrimitiveConvert`.
+  expect(ok("function take(s:string):void{}function f(xs:{[Symbol.iterator]:()=>Generator.<any,void,void>}){take(...xs);}")).toBe(true);
+  // An iterable of `number` is typed statically, and static assignability has
+  // no conversion in it, so no count of such elements satisfies a `string`
+  // parameter. This test once used `number` here, from before the spread's
+  // element type was checked statically.
+  expect(ok("function take(s:string):void{}function f(xs:{[Symbol.iterator]:()=>Generator.<number,void,void>}){take(...xs);}")).toBe(false);
 });
 
 test("R48: unknown generic contribution", () => {
