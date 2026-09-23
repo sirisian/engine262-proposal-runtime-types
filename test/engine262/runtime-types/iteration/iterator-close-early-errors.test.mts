@@ -125,7 +125,7 @@ test.each([
   ],
   [
     "inherited specialized close",
-    "class B<T>{[Symbol.iterator]():{next:number,return:()=>T}{throw 1;}}class C extends B.<number>{}function f(x:C){const []=x;}"
+    "class B<T: type>{[Symbol.iterator]():{next:number,return:()=>T}{throw 1;}}class C extends B.<number>{}function f(x:C){const []=x;}"
   ]
 ])('R34 additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);

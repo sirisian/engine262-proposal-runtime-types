@@ -42,32 +42,32 @@ test('makeType reconstructs Promise.<T> from base and arguments', () => {
 // -- User generic class: Box ---------------------------------------------------
 test('a user generic class instantiates distinctly by its argument', () => {
   // this is the fix: different instantiations were previously collapsing to one type
-  expect(bool('class Box<T> {} type A = Box.<uint32>; type B = Box.<string>; String(A === B);')).toBe(false);
-  expect(ok('class Box<T> {} type A = Box.<uint32>; type B = Box.<uint32>; A === B;')).toBe(true);
+  expect(bool('class Box<T: type> {} type A = Box.<uint32>; type B = Box.<string>; String(A === B);')).toBe(false);
+  expect(ok('class Box<T: type> {} type A = Box.<uint32>; type B = Box.<uint32>; A === B;')).toBe(true);
   // A bare `Box` in type position names `Box.<>` and is an error where a
   // parameter has no default (PLAN-v3 Q7-a); the declaration's own Type Object
   // is what an instantiation's `generic.base` reflects, and it is not any
   // instantiation.
-  expect(bool('class Box<T> {} type A = Box.<uint32>; String(Reflect.getReflection(A).generic.base === A);')).toBe(false);
+  expect(bool('class Box<T: type> {} type A = Box.<uint32>; String(Reflect.getReflection(A).generic.base === A);')).toBe(false);
 });
 
 test('a user generic class exposes the same generic reflection view', () => {
-  expect(evaluated('class Box<T> {} type A = Box.<uint32>; Reflect.getReflection(A).generic ? "yes" : "no";')).toBe('yes');
-  expect(ok('class Box<T> {} type A = Box.<uint32>; Reflect.getReflection(A).generic.arguments[0] === uint32;')).toBe(true);
+  expect(evaluated('class Box<T: type> {} type A = Box.<uint32>; Reflect.getReflection(A).generic ? "yes" : "no";')).toBe('yes');
+  expect(ok('class Box<T: type> {} type A = Box.<uint32>; Reflect.getReflection(A).generic.arguments[0] === uint32;')).toBe(true);
   // base is the declaration's Type Object, stable across instantiations; in
   // expression position the class constructor stands for it (makeType below)
-  expect(ok('class Box<T> {} type A = Box.<uint32>; Reflect.getReflection(A).generic.base !== undefined;')).toBe(true);
-  expect(ok('class Box<T> {} type A = Box.<uint32>; type B = Box.<string>; Reflect.getReflection(A).generic.base === Reflect.getReflection(B).generic.base;')).toBe(true);
+  expect(ok('class Box<T: type> {} type A = Box.<uint32>; Reflect.getReflection(A).generic.base !== undefined;')).toBe(true);
+  expect(ok('class Box<T: type> {} type A = Box.<uint32>; type B = Box.<string>; Reflect.getReflection(A).generic.base === Reflect.getReflection(B).generic.base;')).toBe(true);
 });
 
 test('makeType reconstructs a user generic class instantiation', () => {
-  expect(evaluated('class Box<T> {} type A = Box.<uint32>; let X = Reflect.makeType({ kind: "generic", base: Box, arguments: [uint32] }); X === A ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('class Box<T> {} type A = Box.<uint32>; let X = Reflect.makeType({ kind: "generic", base: Reflect.getReflection(A).generic.base, arguments: [uint32] }); X === A ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('class Box<T: type> {} type A = Box.<uint32>; let X = Reflect.makeType({ kind: "generic", base: Box, arguments: [uint32] }); X === A ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('class Box<T: type> {} type A = Box.<uint32>; let X = Reflect.makeType({ kind: "generic", base: Reflect.getReflection(A).generic.base, arguments: [uint32] }); X === A ? "ok" : "no";')).toBe('ok');
 });
 
 // -- Two arguments -------------------------------------------------------------
 test('a two-parameter generic carries both arguments in order', () => {
-  expect(ok('class Pair<A, B> {} type P = Pair.<uint32, string>; let r = Reflect.getReflection(P); r.generic.arguments[0] === uint32 && r.generic.arguments[1] === string;')).toBe(true);
+  expect(ok('class Pair<A: type, B: type> {} type P = Pair.<uint32, string>; let r = Reflect.getReflection(P); r.generic.arguments[0] === uint32 && r.generic.arguments[1] === string;')).toBe(true);
   // order matters for identity
-  expect(bool('class Pair<A, B> {} type P = Pair.<uint32, string>; type Q = Pair.<string, uint32>; String(P === Q);')).toBe(false);
+  expect(bool('class Pair<A: type, B: type> {} type P = Pair.<uint32, string>; type Q = Pair.<string, uint32>; String(P === Q);')).toBe(false);
 });

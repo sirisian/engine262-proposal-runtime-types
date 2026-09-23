@@ -15,7 +15,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  */
 
 const P = 'type P = { a: uint8, b: string }; ';
-const PLUCK = 'function pluck<T, K: keyof T>(o: T, key: K): T[K] { return o[key]; } ';
+const PLUCK = 'function pluck<T: type, K: keyof T>(o: T, key: K): T[K] { return o[key]; } ';
 const O = 'let o: P = { a: (1 := uint8), b: "x" }; ';
 
 test('E1/E2: the clause example compiles, inferred and explicit', () => {
@@ -24,7 +24,7 @@ test('E1/E2: the clause example compiles, inferred and explicit', () => {
 });
 
 test('E3: keyof as a constraint, honoured after binding', () => {
-  expect(evaluated(`${P}function id<T, K: keyof T>(k: K): K { return k; } let r: "a" = id.<P, "a">("a"); \`\${r}\`;`)).toBe('a');
+  expect(evaluated(`${P}function id<T: type, K: keyof T>(k: K): K { return k; } let r: "a" = id.<P, "a">("a"); \`\${r}\`;`)).toBe('a');
 });
 
 test('E7: a union key yields a union', () => {
@@ -41,7 +41,7 @@ test('E8, SOUNDNESS: the wrong target is refused for the real reason', () => {
 test('E10: inside the declaration nothing is known, and nothing changes', () => {
   // The fix adds an EXIT from deferral; it must not weaken what deferral
   // refuses. `5` is not a `T[K]` for an unknown `T`, as before.
-  expectThrown(`${P}function bad<T, K: keyof T>(o: T, key: K): T[K] { return 5; }`, 'is not assignable to "T[K]"');
+  expectThrown(`${P}function bad<T: type, K: keyof T>(o: T, key: K): T[K] { return 5; }`, 'is not assignable to "T[K]"');
 });
 
 test('E9: the non-generic forms are untouched', () => {
@@ -56,7 +56,7 @@ test('a parameter relates to its own constraint, and to itself through an assump
   // before the constraint rule could run; and once it could, the assumption
   // pair it adds - `{ K, keyof T }` - was consulted when comparing `keyof T`
   // to itself and wrongly decided against. Identity is checked first now.
-  expect(evaluated('function p<T, K: keyof T>(o: T, k: K): keyof T { return k; } `${typeof p}`;')).toBe('function');
+  expect(evaluated('function p<T: type, K: keyof T>(o: T, k: K): keyof T { return k; } `${typeof p}`;')).toBe('function');
 });
 
 test('inference keeps a literal under a deferred keyof', () => {
@@ -74,8 +74,8 @@ test('E11: one kind for every deferred computation, and it reflects as one', () 
   // shape for `keyof T`, `T[K]` and a builder call alike.
   const reflectReturn = (F: string) => `${F} const t = Reflect.getReflection(type F).signatures[0].return.type; const r = Reflect.getReflection(t); `
     + 'String(t) + " " + r.kind + " " + String(r.operator) + " " + r.operands.length;';
-  expect(evaluated(reflectReturn('type F = <T>(o: T) => keyof T;'))).toBe('keyof T deferred keyof 1');
-  expect(evaluated(reflectReturn('type F = <T, K: keyof T>(o: T, k: K) => T[K];'))).toBe('T[K] deferred indexed 2');
+  expect(evaluated(reflectReturn('type F = <T: type>(o: T) => keyof T;'))).toBe('keyof T deferred keyof 1');
+  expect(evaluated(reflectReturn('type F = <T: type, K: keyof T>(o: T, k: K) => T[K];'))).toBe('T[K] deferred indexed 2');
 });
 
 test('E12: the run time and the checker read `keyof T` alike', () => {
@@ -84,9 +84,9 @@ test('E12: the run time and the checker read `keyof T` alike', () => {
   // time's annotation path fell to "anything else has no keys" - so the same
   // function type was `<T>(o: T) => keyof T` to one and `<T>(o: T) => never` to
   // the other.
-  expect(evaluated('type F = <T>(o: T) => keyof T; String(Reflect.getReflection(type F).signatures[0].return.type);')).toBe('keyof T');
+  expect(evaluated('type F = <T: type>(o: T) => keyof T; String(Reflect.getReflection(type F).signatures[0].return.type);')).toBe('keyof T');
   // And a specialization still closes it.
-  expect(evaluated("type P = { a: uint8, b: string }; function p<T, K: keyof T>(o: T, k: K): T[K] { return o[k]; } "
+  expect(evaluated("type P = { a: uint8, b: string }; function p<T: type, K: keyof T>(o: T, k: K): T[K] { return o[k]; } "
     + "let o: P = { a: (1 := uint8), b: 'x' }; String(p(o, 'a')) + String(p.<P, 'b'>(o, 'b'));")).toBe('1x');
 });
 
@@ -115,7 +115,7 @@ test('E6: the checker\'s binding travels to the run time for a declared shape', 
   // with no `a` among its keys. The checker now stamps its closed bindings on
   // the call and the evaluation pushes them as a frame, the way an explicit
   // `.<...>` is pushed, so the two sides bind identically.
-  const PLUCK2 = 'function pluck<T, K: keyof T>(o: T, key: K): T[K] { return o[key]; } ';
+  const PLUCK2 = 'function pluck<T: type, K: keyof T>(o: T, key: K): T[K] { return o[key]; } ';
   expect(evaluated(`type Q = { a?: uint8 }; ${PLUCK2}let q: Q = {}; let n: uint8 | undefined = pluck(q, "a"); \`\${n}\`;`)).toBe('undefined');
   expect(evaluated(`type Q = { a?: uint8 }; ${PLUCK2}let q: Q = { a: (3 := uint8) }; let n: uint8 | undefined = pluck(q, "a"); \`\${n}\`;`)).toBe('3');
   expect(evaluated(`interface I { a?: uint8; } ${PLUCK2}let q: I = {}; let n: uint8 | undefined = pluck(q, "a"); \`\${n}\`;`)).toBe('undefined');

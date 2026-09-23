@@ -77,7 +77,7 @@ test('comparisons that are not between two vectors are untouched', () => {
 test('a comparison the checker cannot decide defers', () => {
   // A vector mentioning a type parameter is not one shape yet, so the forms are
   // not known - the deferral #sec-evaluatetotypeobject draws.
-  expect(ok('function f<T>(a: vector.<T, 4>, b: vector.<T, 4>) { let r = a < b; }')).toBe(true);
+  expect(ok('function f<T: type>(a: vector.<T, 4>, b: vector.<T, 4>) { let r = a < b; }')).toBe(true);
   // An `any` operand is the boundary #sec-type-errors reserves a thrown error
   // for, and the run time's own refusal answers it there.
   expectThrownKind('let a: any = float32x4(1, 2, 3, 4); '
@@ -92,7 +92,7 @@ test.each(['==', '!='])('discarded SIMD equality requires an expected result: %s
     expect(ok(`function valid(a: int32x4, b: int32x4) { const result: ${result} = a ${operator} b; }`)).toBe(true);
   }
   expect(ok(`function unknown(a: any, b: any) { a ${operator} b; }`)).toBe(true);
-  expect(ok(`function generic<T>(a: vector.<T, 4>, b: vector.<T, 4>) { a ${operator} b; }`)).toBe(true);
+  expect(ok(`function generic<T: type>(a: vector.<T, 4>, b: vector.<T, 4>) { a ${operator} b; }`)).toBe(true);
 });
 
 test('discarded strict scalar equality keeps its existing policy', () => {

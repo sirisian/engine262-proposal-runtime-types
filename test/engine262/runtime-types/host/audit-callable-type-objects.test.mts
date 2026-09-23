@@ -30,7 +30,7 @@ test.each(['function(x?: uint8): void {}', '(x?: uint8): void => {}', 'function(
 
 test.each(['U', 'V', '(U)', 'A.<uint8>', 'uint.<8>'])(
   'type-object calls check source and result: %s', (callee) => {
-    const aliases = 'type U = uint8; type V = U; type A<T> = T;';
+    const aliases = 'type U = uint8; type V = U; type A<T: type> = T;';
     expectStaticTypeError(`${aliases} function unused() { ${callee}("bad"); }`);
     expectStaticTypeError(`${aliases} function unused(): string { return ${callee}(1); }`);
     expect(evaluated(`${aliases} const n: uint16 = ${callee}(1); String(n);`)).toBe('1');
@@ -39,7 +39,7 @@ test.each(['U', 'V', '(U)', 'A.<uint8>', 'uint.<8>'])(
 
 test.each(['uint8', '(uint8)', 'U', 'A.<uint8>'])(
   'tryParse exposes its nullable result: %s', (receiver) => {
-    const aliases = 'type U = uint8; type A<T> = T;';
+    const aliases = 'type U = uint8; type A<T: type> = T;';
     expectStaticTypeError(`${aliases} function unused(): boolean { return ${receiver}.tryParse("1"); }`);
     expectStaticTypeError(`${aliases} function unused(): uint8 { return ${receiver}.tryParse("1"); }`);
     expect(ok(`${aliases} const n: uint8 | null = ${receiver}.tryParse("1");`)).toBe(true);

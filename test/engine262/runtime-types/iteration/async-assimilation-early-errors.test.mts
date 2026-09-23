@@ -299,7 +299,7 @@ test.each([
   ],
   [
     "R58-E07: generic then specialization",
-    "class Bad<T>{then(x:T):void{}}async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad.<uint8>}}){for await(const x of xs){}}",
+    "class Bad<T: type>{then(x:T):void{}}async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad.<uint8>}}){for await(const x of xs){}}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -323,7 +323,7 @@ test.each([
   ],
   [
     "R58-E09: generic then unresolved",
-    "class Bad<T>{then(x:T):void{}}async function f<T>(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad.<T>}}){for await(const x of xs){}}",
+    "class Bad<T: type>{then(x:T):void{}}async function f<T: type>(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad.<T>}}){for await(const x of xs){}}",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -381,7 +381,7 @@ test.each([
   ],
   [
     "R58-E15: generic getter then specialized",
-    "class P<T>{get then():T{throw 0;}}async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>P.<(x:uint8)=>void>}}){for await(const x of xs){}}",
+    "class P<T: type>{get then():T{throw 0;}}async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>P.<(x:uint8)=>void>}}){for await(const x of xs){}}",
     {
       "completion": "throw",
       "bodyRan": "false",

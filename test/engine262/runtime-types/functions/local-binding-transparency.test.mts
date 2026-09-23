@@ -228,8 +228,8 @@ test('a plain parameter keeps its own boundary, unchanged', () => {
   // `function g<T extends [].<any>>(v: T)` for every argument, because `T` is unbound
   // at that point. Pattern elements are the case with no other boundary.
   expectThrows('function f(a: uint8) { return a; } f(300);');
-  expectOk('function g<T extends [].<any>>(v: T): string { return "ok"; } const a: [].<number> = [1]; g(a);');
-  expectOk('function g<T>(v: [].<T>) { return v[0]; } g(["a"]);');
+  expectOk('function g<T: type extends [].<any>>(v: T): string { return "ok"; } const a: [].<number> = [1]; g(a);');
+  expectOk('function g<T: type>(v: [].<T>) { return v[0]; } g(["a"]);');
 });
 
 test('a destructured binding carries the type of its position', () => {

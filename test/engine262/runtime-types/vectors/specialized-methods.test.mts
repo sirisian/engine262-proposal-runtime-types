@@ -36,7 +36,7 @@ test('spread indices use the expanded lane count and bounds', () => {
 test('specialized calls evaluate vector and ordinary receivers once', () => {
   expect(evaluated('let count = 0; function f(): float32x4 { count++; return float32x4(1, 2, 3, 4); } f()["lane"].<1>(); String(count);')).toBe('1');
   for (const call of ['f().lane.<uint8>()', 'f()["lane"].<uint8>()', '(f().lane).<uint8>()', '(f().lane.<uint8>)()']) {
-    expect(evaluated(`let count = 0; function f() { count++; return { lane<T>(): number { return 1; } }; } ${call}; String(count);`)).toBe('1');
+    expect(evaluated(`let count = 0; function f() { count++; return { lane<T: type>(): number { return 1; } }; } ${call}; String(count);`)).toBe('1');
   }
 });
 

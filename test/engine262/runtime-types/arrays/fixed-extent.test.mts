@@ -158,7 +158,7 @@ test('a ZERO extent has a default whatever its element type', () => {
   // Reached through a parameter as well, which is where a generic body hits it:
   // the body is checked once for every instantiation, so an element type that
   // has no default must not make the declaration unwritable.
-  expect(evaluated('function f<T>() { let a: [0].<T>; return a.length; } String(f.<never>());')).toBe('0');
+  expect(evaluated('function f<T: type>() { let a: [0].<T>; return a.length; } String(f.<never>());')).toBe('0');
 
   // The boundary holds: an extent with anything to fill still needs an element
   // default, and the array type is not itself empty either way.

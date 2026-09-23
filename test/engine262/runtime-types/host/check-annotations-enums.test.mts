@@ -21,7 +21,7 @@ test.each([
 
 test.each([
   'function f(x: uint8) {}',
-  'function f<T>(x: T): T { return x; }',
+  'function f<T: type>(x: T): T { return x; }',
   'const N = 2; function f(x: [N].<uint8>) { x[0] = 1; }',
   'function f() { let values: [1 + 1].<uint8> = [1, 2]; values[0] = 1; }',
   'function builder(): type { return type uint8; } function f(x: builder()) { x = 1; }',

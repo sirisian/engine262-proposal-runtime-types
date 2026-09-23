@@ -28,10 +28,10 @@ import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 // ---------------------------------------------------------------------------
 
 test('a collection inside a generic class takes the class argument', () => {
-  expect(evaluated('class C<T> { m = new Map.<string, T>(); } const c = new C.<uint8>(); c.m.set("a", 1); String(c.m.size);')).toBe('1');
-  expect(evaluated('class C<T> { s = new Set.<T>(); } const c = new C.<uint8>(); c.s.add(1); String(c.s.size);')).toBe('1');
+  expect(evaluated('class C<T: type> { m = new Map.<string, T>(); } const c = new C.<uint8>(); c.m.set("a", 1); String(c.m.size);')).toBe('1');
+  expect(evaluated('class C<T: type> { s = new Set.<T>(); } const c = new C.<uint8>(); c.s.add(1); String(c.s.size);')).toBe('1');
   // A generic function over a collection, whose return is the index type.
-  expect(ok('function f<T>(s: Set.<T>): uint64 { return s.size; }')).toBe(true);
+  expect(ok('function f<T: type>(s: Set.<T>): uint64 { return s.size; }')).toBe(true);
 });
 
 test('a collection is invariant in its arguments, and reaches its family top', () => {

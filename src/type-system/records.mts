@@ -1627,10 +1627,24 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
             ? `${prefix}${p.Name}${p.Optional ? '?' : ''}: ${displayType(p.Type)}`
             : `${prefix}${displayType(p.Type)}`;
         });
-        // A GENERIC signature prints its type parameter list - names and the
-        // pack marker; a constraint is a Parse Node here and does not print.
+        // A GENERIC signature prints its type parameter list as it is written:
+        // the pack marker, the name, any higher-kinded holes, and the domain
+        // (#sec-type-parameters), so the display is itself a valid declaration.
+        // A bound is a Parse Node here, evaluated per application, and does
+        // not print.
+        const domainOf = (tp: TypeParameterRecord): string => {
+          const written = (tp.Declaration as { TypeParameterDomain?: { sourceText?: string } } | undefined)?.TypeParameterDomain?.sourceText;
+          if (written) {
+            return written.replace(/\s+/g, ' ').trim();
+          }
+          return tp.Kind === 'value' ? '' : tp.Variadic ? '[].<type>' : 'type';
+        };
         const generic = s.TypeParameters && s.TypeParameters.length > 0
-          ? `<${s.TypeParameters.map((tp) => `${tp.Variadic ? '...' : ''}${tp.Name}`).join(', ')}>`
+          ? `<${s.TypeParameters.map((tp) => {
+            const domain = domainOf(tp);
+            const holes = tp.Arity > 0 ? `<${Array.from({ length: tp.Arity }, () => '_').join(', ')}>` : '';
+            return `${tp.Variadic ? '...' : ''}${tp.Name}${holes}${domain ? `: ${domain}` : ''}`;
+          }).join(', ')}>`
           : '';
         // A null Return is representable and must not print as `null`.
         return `${generic}(${params.join(', ')}) => ${s.Return ? displayType(s.Return) : 'void'}`;

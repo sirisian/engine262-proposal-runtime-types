@@ -18,8 +18,8 @@ test('a declared operator contributes its selected result', () => {
 });
 
 test('inherited and generic operators keep their parameter and result types', () => {
-  expectStaticTypeError('class B<T> { operator+(v: T): T { return v; } } class D extends B.<uint8> {} function unused(d: D) { d + "s"; }');
-  expect(evaluated('class B<T> { operator+(v: T): T { return v; } } const b: B.<uint8> = new B.<uint8>(); String(b + 2);')).toBe('2');
+  expectStaticTypeError('class B<T: type> { operator+(v: T): T { return v; } } class D extends B.<uint8> {} function unused(d: D) { d + "s"; }');
+  expect(evaluated('class B<T: type> { operator+(v: T): T { return v; } } const b: B.<uint8> = new B.<uint8>(); String(b + 2);')).toBe('2');
 });
 
 test('operator overload resolution uses the contextual return type at runtime too', () => {

@@ -56,18 +56,18 @@ const OMIT = 'export function omit(T: type, k: string): type where Reflect.isAss
 
 test("an imported builder's contract refuses a body that contradicts it", () => runWith('kit', OMIT,
   'import { omit } from "kit";' + NL
-  + 'function bad<T>(value: T): omit(T, "password") { return "no"; }')
+  + 'function bad<T: type>(value: T): omit(T, "password") { return "no"; }')
   .then((r) => expect(r).toBe('threw')));
 
 test('and admits one that does not', () => runWith('kit', OMIT,
   'import { omit } from "kit";' + NL
-  + 'function good<T>(value: T): omit(T, "password") { return value; }' + NL
+  + 'function good<T: type>(value: T): omit(T, "password") { return value; }' + NL
   + 'good.<{ a: uint8 }>({ a: 1 });')
   .then((r) => expect(r).toBe('ok')));
 
 test('a builder with no contract is still untouched', () => runWith('kit',
   'export function pairOf(T: type): type { return Reflect.makeType({ kind: "tuple", elements: [{ type: T, rest: false }, { type: T, rest: false }] }); }',
   'import { pairOf } from "kit";' + NL
-  + 'function f<T>(a: pairOf(T)): pairOf(T) { return a; }' + NL
+  + 'function f<T: type>(a: pairOf(T)): pairOf(T) { return a; }' + NL
   + 'f.<uint8>([1, 2]);')
   .then((r) => expect(r).toBe('ok')));

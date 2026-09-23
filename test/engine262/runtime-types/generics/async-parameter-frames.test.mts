@@ -63,7 +63,7 @@ test('every async form carries the frame', () => {
   expect(observed('class C<W: uint32> { async inner() { await 0; return W; }'
     + ' async m() { await 0; return await this.inner(); } }', 'new C.<4>().m()')).toBe('ok:4');
   // a parameter used as a TYPE rather than as a value
-  expect(observed('class C<T> { async m() { await 0; return (1 := T) is uint8; } }',
+  expect(observed('class C<T: type> { async m() { await 0; return (1 := T) is uint8; } }',
     'new C.<uint8>().m()')).toBe('ok:true');
 });
 

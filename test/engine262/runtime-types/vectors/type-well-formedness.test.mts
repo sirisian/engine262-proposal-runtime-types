@@ -75,8 +75,8 @@ test('the rule stands down where the vector mentions a type parameter', () => {
   // Both resolvers had to learn this. The checker had no validator and so
   // accepted these by accident; the runtime resolver had one and applied it
   // unconditionally, so a generic class could not carry a vector field at all.
-  expect(ok('function f<T>(v: vector.<T, 4>) { return v; }')).toBe(true);
-  expect(ok('class B<T> { v: vector.<T, 4> | null = null; }')).toBe(true);
+  expect(ok('function f<T: type>(v: vector.<T, 4>) { return v; }')).toBe(true);
+  expect(ok('class B<T: type> { v: vector.<T, 4> | null = null; }')).toBe(true);
   expect(ok('class G<N: uint32> { v: vector.<uint8, N> | null = null; }')).toBe(true);
   expect(ok('type V<N: uint32> = vector.<uint8, N>;')).toBe(true);
 });
@@ -84,9 +84,9 @@ test('the rule stands down where the vector mentions a type parameter', () => {
 test('the application is where a bound parameter is judged', () => {
   // The deferral above is not a hole: the argument resolves the parameter and
   // the same rule decides there.
-  expect(evaluated('function f<T>(v: vector.<T, 4>): vector.<T, 4> { return v; } '
+  expect(evaluated('function f<T: type>(v: vector.<T, 4>): vector.<T, 4> { return v; } '
     + 'let a: float32x4 = float32x4(1, 2, 3, 4); String(Reflect.typeOf(f.<float32>(a)));')).toBe('vector.<float32, 4>');
   expect(evaluated('type V<N: uint32> = vector.<uint8, N>; let a: V.<4>; String(Reflect.typeOf(a));')).toBe('vector.<uint.<8>, 4>');
   // A lane type the application supplies wrongly is still refused.
-  expect(ok('class B<T> { v: vector.<T, 4> | null = null; } let b: B.<string> = new B.<string>();')).toBe(false);
+  expect(ok('class B<T: type> { v: vector.<T, 4> | null = null; } let b: B.<string> = new B.<string>();')).toBe(false);
 });

@@ -54,9 +54,9 @@ test('generics.md\'s EventBus runs as written', () => {
   // map is keyed on `T`, which needs `type`, generic methods, and parameters
   // readable as values together
   const BUS = 'class EventBus { #channels = new Map.<type, any>();'
-    + ' emit<T>(event: T) { const c = this.#channels.get(T); if (c) { c.push(event); } return this.#channels.size; }'
-    + ' open<T>() { this.#channels.set(T, []); return this.#channels.size; }'
-    + ' read<T>() { return this.#channels.get(T) ?? []; } } ';
+    + ' emit<T: type>(event: T) { const c = this.#channels.get(T); if (c) { c.push(event); } return this.#channels.size; }'
+    + ' open<T: type>() { this.#channels.set(T, []); return this.#channels.size; }'
+    + ' read<T: type>() { return this.#channels.get(T) ?? []; } } ';
   expect(evaluated(`${BUS}const b = new EventBus(); b.open.<uint8>(); b.emit.<uint8>((1 := uint8));`
     + ' String(b.read.<uint8>().length);')).toBe('1');
   // each parameter keys its own channel
@@ -70,7 +70,7 @@ test('generics.md\'s EventBus runs as written', () => {
 test('the type alias declaration is unaffected', () => {
   // `type` is still the contextual keyword that begins an alias
   expect(evaluated('type A = uint8; let a: A = (1 := uint8); String(a);')).toBe('1');
-  expect(evaluated('type A<T> = [].<T>; let a: A.<uint8> = []; String(a.length);')).toBe('0');
+  expect(evaluated('type A<T: type> = [].<T>; let a: A.<uint8> = []; String(a.length);')).toBe('0');
 });
 
 test('a parameter constrained to `type` takes a type as its value', () => {
@@ -88,6 +88,9 @@ test('a parameter constrained to `type` takes a type as its value', () => {
   expect(evaluated('class A {} function f<T: type>() { return 1; } String(f.<A>());')).toBe('1');
   // The parameter is usable as the value it is.
   expect(evaluated('function f<T: type>() { return T; } String(f.<uint8>() === uint8);')).toBe('true');
-  // A literal is a value that is not a type, and is what the constraint refuses.
-  expectThrown('function f<T: type>() { return 1; } String(f.<4>());');
+  // A literal is a type too, and `T: type` now declares a TYPE parameter
+  // (#sec-parameter-kinds), so `f.<4>` binds the literal type `4`, as it does
+  // for any type parameter. Before explicit domains `T: type` was a VALUE
+  // parameter whose values were Type Objects, and this application was refused.
+  expect(evaluated('function f<T: type>() { return T; } String(f.<4>() === type 4);')).toBe('true');
 });

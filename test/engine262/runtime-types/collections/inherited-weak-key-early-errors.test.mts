@@ -25,7 +25,7 @@ test('weak argument sites reject inherited typed storage in unused bodies', () =
 });
 
 test('weak classification follows generic and multi-level bases', () => {
-  expectStaticTypeError('class Base<T> { x: T; } class Middle<T> extends Base.<T> {} class Derived extends Middle.<uint8> {} function unused(value: Derived) { new WeakRef(value); }');
+  expectStaticTypeError('class Base<T: type> { x: T; } class Middle<T: type> extends Base.<T> {} class Derived extends Middle.<uint8> {} function unused(value: Derived) { new WeakRef(value); }');
   expectStaticTypeError('class Base { x: uint8; } dynamic class Derived extends Base {} function unused(value: Derived) { new WeakRef(value); }');
 });
 

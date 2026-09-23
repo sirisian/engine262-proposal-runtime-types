@@ -9,8 +9,8 @@ test('a declared numeric disposal member is rejected before acquisition', () => 
 
 test('disposal lookup includes inherited and specialized members', () => {
   expectStaticTypeError('class B { [Symbol.dispose]: uint8 = 1; } class C extends B {} function unused(c: C) { using r: C = c; }');
-  expectStaticTypeError('class B<T> { [Symbol.dispose]: T; } function unused(c: B.<uint8>) { using r: B.<uint8> = c; }');
-  expectStaticTypeError('class B<T> { [Symbol.dispose]: T; } class C extends B.<uint8> {} function unused(c: C) { using r: C = c; }');
+  expectStaticTypeError('class B<T: type> { [Symbol.dispose]: T; } function unused(c: B.<uint8>) { using r: B.<uint8> = c; }');
+  expectStaticTypeError('class B<T: type> { [Symbol.dispose]: T; } class C extends B.<uint8> {} function unused(c: C) { using r: C = c; }');
 });
 
 test('computed object-type members retain the rest of their static shape', () => {
@@ -25,7 +25,7 @@ test('computed object-type members retain the rest of their static shape', () =>
 test('callable and inherited disposal methods run once on block exit', () => {
   expect(evaluated('let log = ""; class B { [Symbol.dispose](): void { log += "d"; } } class C extends B {} { using r: C = new C(); log += "b"; } log;')).toBe('bd');
   expect(evaluated('let log = ""; { using r: { [Symbol.dispose]: () => void } = { [Symbol.dispose]() { log += "d"; } }; } log;')).toBe('d');
-  expect(ok('class B<T> { [Symbol.dispose]: T; } class C extends B.<() => void> {} function unused(c: C) { using r: C = c; }')).toBe(true);
+  expect(ok('class B<T: type> { [Symbol.dispose]: T; } class C extends B.<() => void> {} function unused(c: C) { using r: C = c; }')).toBe(true);
 });
 
 test('resource checking never executes a getter', () => {

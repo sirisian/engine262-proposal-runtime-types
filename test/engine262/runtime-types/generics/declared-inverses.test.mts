@@ -50,7 +50,7 @@ function evaluate(source: string): Promise<string> {
 }
 
 const PRELUDE = 'import { inverse } from "std:types";' + NL
-  + 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+  + 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
   + 'function unboxed(Bs) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Bs).elements.map((e) => ({ type: Reflect.getReflection(e.type).generic.arguments[0] })) }); }' + NL
   + '@inverse(unboxed)' + NL
   + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); }' + NL;
@@ -61,18 +61,18 @@ function assertEq(expr: string, expected: string): string {
 
 test('a pack reached only through a builder binds through the builder\'s declared inverse (G37, A1)', async () => {
   const src = PRELUDE
-    + 'function unpack<...Ts>(...bs: boxesOf(Ts)): string { return Reflect.getReflection(Ts).elements.map((e) => String(e.type)).join(","); }' + NL
+    + 'function unpack<...Ts: [].<type>>(...bs: boxesOf(Ts)): string { return Reflect.getReflection(Ts).elements.map((e) => String(e.type)).join(","); }' + NL
     + assertEq('unpack(new Box.<uint8>(1), new Box.<string>("a"))', 'uint.<8>,string');
   expect(await evaluate(src)).toBe('evaluated');
 });
 
 test('the same for a SCALAR parameter', async () => {
   const src = 'import { inverse } from "std:types";' + NL
-    + 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+    + 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function unbox(B) { return Reflect.getReflection(B).generic.arguments[0]; }' + NL
     + '@inverse(unbox)' + NL
     + 'function boxOf(T) { const t = T; return type Box.<t>; }' + NL
-    + 'function open<T>(b: boxOf(T)): string { return String(T); }' + NL
+    + 'function open<T: type>(b: boxOf(T)): string { return String(T); }' + NL
     + assertEq('open(new Box.<uint8>(1))', 'uint.<8>');
   expect(await evaluate(src)).toBe('evaluated');
 });
@@ -82,20 +82,20 @@ test('explicit type arguments through a class-applying builder', async () => {
   // [[Constructor]] to interning, and IsOfType fell back to the bare class's
   // prototype, which a specialized instance never chains to. Membership now
   // asks the instance's own class type.
-  const src = 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+  const src = 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function boxOf(T) { const t = T; return type Box.<t>; }' + NL
-    + 'function open<T>(b: boxOf(T)): string { return String(T); }' + NL
+    + 'function open<T: type>(b: boxOf(T)): string { return String(T); }' + NL
     + assertEq('open.<uint8>(new Box.<uint8>(1))', 'uint.<8>');
   expect(await evaluate(src)).toBe('evaluated');
 });
 
 test('a lying inverse is caught by forward verification, naming the builder and the proposal', async () => {
   const src = 'import { inverse } from "std:types";' + NL
-    + 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+    + 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function lie(B) { return string; }' + NL
     + '@inverse(lie)' + NL
     + 'function boxOf(T) { const t = T; return type Box.<t>; }' + NL
-    + 'function open<T>(b: boxOf(T)): string { return String(T); }' + NL
+    + 'function open<T: type>(b: boxOf(T)): string { return String(T); }' + NL
     + 'open(new Box.<uint8>(1));';
   const result = await evaluate(src);
   expect(result).toContain("boxOf's inverse proposed string");
@@ -104,30 +104,30 @@ test('a lying inverse is caught by forward verification, naming the builder and 
 
 test('an inverse that returns no type is refused naming the builder', async () => {
   const src = 'import { inverse } from "std:types";' + NL
-    + 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+    + 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function junk(B) { return 42; }' + NL
     + '@inverse(junk)' + NL
     + 'function boxOf(T) { const t = T; return type Box.<t>; }' + NL
-    + 'function open<T>(b: boxOf(T)): string { return String(T); }' + NL
+    + 'function open<T: type>(b: boxOf(T)): string { return String(T); }' + NL
     + 'open(new Box.<uint8>(1));';
   expect(await evaluate(src)).toContain("boxOf's inverse returned no proposal for T");
 });
 
 test('a builder without an inverse still refuses naming the builder (the rung-three contract)', async () => {
-  const src = 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+  const src = 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function boxOf(T) { const t = T; return type Box.<t>; }' + NL
-    + 'function open<T>(b: boxOf(T)): string { return String(T); }' + NL
+    + 'function open<T: type>(b: boxOf(T)): string { return String(T); }' + NL
     + 'open(new Box.<uint8>(1));';
   expect(await evaluate(src)).toContain('boxOf declares no inverse');
 });
 
 test('a multi-slot builder proposes a record keyed by parameter name, verified jointly', async () => {
   const src = 'import { inverse } from "std:types";' + NL
-    + 'class Pair<A, B> { a: A; b: B; constructor(a: A, b: B) { this.a = a; this.b = b; } }' + NL
+    + 'class Pair<A: type, B: type> { a: A; b: B; constructor(a: A, b: B) { this.a = a; this.b = b; } }' + NL
     + 'function unpair(P) { const as = Reflect.getReflection(P).generic.arguments; return { A: as[0], B: as[1] }; }' + NL
     + '@inverse(unpair)' + NL
     + 'function pairOf(A, B) { const a = A; const b = B; return type Pair.<a, b>; }' + NL
-    + 'function split<A, B>(p: pairOf(A, B)): string { return String(A) + "/" + String(B); }' + NL
+    + 'function split<A: type, B: type>(p: pairOf(A, B)): string { return String(A) + "/" + String(B); }' + NL
     + assertEq('split(new Pair.<uint8, string>(1, "a"))', 'uint.<8>/string');
   expect(await evaluate(src)).toBe('evaluated');
 });
@@ -153,9 +153,9 @@ test('reflection reports the declared inverse in the builder\'s metadata', async
 });
 
 test('the forward-declaration pattern is untouched: no inverse needed when the builder sits in the return', async () => {
-  const src = 'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+  const src = 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); }' + NL
-    + 'function wrap<...Ts>(...xs: Ts): boxesOf(Ts) { return xs.map((x) => new Box(x)); }' + NL
+    + 'function wrap<...Ts: [].<type>>(...xs: Ts): boxesOf(Ts) { return xs.map((x) => new Box(x)); }' + NL
     + assertEq('wrap(1, "a").length', '2');
   expect(await evaluate(src)).toBe('evaluated');
 });

@@ -151,8 +151,8 @@ test('control: membership against the BARE nominal, and the user-generic answer'
   expect(evaluated('const s = new Set.<uint8>(); String(s is Set);')).toBe('true');
   // A user generic already discriminates, which is the behaviour the library
   // nominals are asked to match.
-  expect(evaluated('class G<T> { x: uint8; } String(new G.<uint8>() is G.<string>);')).toBe('false');
-  expect(evaluated('class G<T> { x: uint8; } String(new G.<uint8>() is G.<uint8>);')).toBe('true');
+  expect(evaluated('class G<T: type> { x: uint8; } String(new G.<uint8>() is G.<string>);')).toBe('false');
+  expect(evaluated('class G<T: type> { x: uint8; } String(new G.<uint8>() is G.<uint8>);')).toBe('true');
 });
 
 test('control: a Map is not a Set and neither is an ordinary object', () => {

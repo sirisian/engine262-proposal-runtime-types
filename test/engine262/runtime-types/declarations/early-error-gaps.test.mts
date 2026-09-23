@@ -109,14 +109,14 @@ test('a variance modifier on a type alias is judged where it is declared', () =>
   // Raised as a *SyntaxError*, which is how the class and interface paths
   // already raise it: the rule is stated as an Early Error of the production
   // rather than as a judgment about types.
-  expectEarlyError('type O<out T> = { v: T };', 'SyntaxError');
-  expectEarlyError('type F<out T> = (x: T) => void;', 'SyntaxError');
+  expectEarlyError('type O<out T: type> = { v: T };', 'SyntaxError');
+  expectEarlyError('type F<out T: type> = (x: T) => void;', 'SyntaxError');
 });
 
 test('a well-placed variance on an alias stands', () => {
-  expect(ok('type O<out T> = { readonly v: T };')).toBe(true);
-  expect(ok('type F<in T> = (x: T) => void;')).toBe(true);
-  expect(ok('type O<T> = { v: T };')).toBe(true);
+  expect(ok('type O<out T: type> = { readonly v: T };')).toBe(true);
+  expect(ok('type F<in T: type> = (x: T) => void;')).toBe(true);
+  expect(ok('type O<T: type> = { v: T };')).toBe(true);
 });
 
 // ---- #sec-interfaces-semantics: operator members ---------------------
@@ -132,14 +132,14 @@ test('implements verifies operator members', () => {
   expectStaticTypeError('interface I { operator[](i: uint32): uint8; } class A implements I {}');
   // The clause's own example, whose parameter is the interface's own type
   // parameter and is bound by the `implements` application.
-  const O = 'interface Ordered<T> { operator<(other: T): boolean; } ';
+  const O = 'interface Ordered<T: type> { operator<(other: T): boolean; } ';
   expectStaticTypeError(`${O}class V implements Ordered.<V> { n: uint8 = 1; }`);
   expectStaticTypeError(`${O}class V implements Ordered.<V> { n: uint8 = 1; operator<(o: string): boolean { return true; } }`);
 });
 
 test('a class that declares its operators satisfies the interface', () => {
   expect(ok('interface I { operator+(o: I): I; } class A implements I { operator+(o: I): I { return this; } }')).toBe(true);
-  expect(ok('interface Ordered<T> { operator<(other: T): boolean; } '
+  expect(ok('interface Ordered<T: type> { operator<(other: T): boolean; } '
     + 'class V implements Ordered.<V> { n: uint8 = 1; operator<(o: V): boolean { return this.n < o.n; } }')).toBe(true);
   // An inherited operator satisfies a member as an inherited method does. `B`
   // declares `implements` itself so that `return this` satisfies the `I`
@@ -177,7 +177,7 @@ test('the three key types and their unions stand', () => {
   expect(ok('type T = { [k: uint32]: uint8 }; let t: T = {};')).toBe(true);
   expect(ok('type T = { [k: string | symbol]: uint8 }; let t: T = {};')).toBe(true);
   // A type parameter says nothing until it is bound, as it does everywhere.
-  expect(ok('type T<V> = { [k: string]: V }; let t: T.<uint8> = {};')).toBe(true);
+  expect(ok('type T<V: type> = { [k: string]: V }; let t: T.<uint8> = {};')).toBe(true);
 });
 
 test('a declared member coexists with a signature its key falls under', () => {
@@ -229,9 +229,9 @@ test('a specialization of a non-generic value is refused, in both phases', () =>
 });
 
 test('every generic form still specializes', () => {
-  expect(ok('class B<T> { v: T | null = null; } String(B.<uint8> === B.<uint8>);')).toBe(true);
-  expect(ok('function f<T>(x: T): T { return x; } String(f.<uint8>(1));')).toBe(true);
-  expect(ok('type Box<T> = { v: T }; let b: Box.<uint8> = { v: 1 }; String(b.v);')).toBe(true);
+  expect(ok('class B<T: type> { v: T | null = null; } String(B.<uint8> === B.<uint8>);')).toBe(true);
+  expect(ok('function f<T: type>(x: T): T { return x; } String(f.<uint8>(1));')).toBe(true);
+  expect(ok('type Box<T: type> = { v: T }; let b: Box.<uint8> = { v: 1 }; String(b.v);')).toBe(true);
   expect(ok('String(typeof Map.<string, uint8>);')).toBe(true);
   expect(ok('String(int.<8>(1));')).toBe(true);
   expect(ok('String(typeof complex.<float32>);')).toBe(true);
@@ -293,7 +293,7 @@ test('distinct operator declarations stand', () => {
   // An untyped definition is the catch-all and stands beside anything.
   expect(ok('class A { operator+(o) { return this; } operator+(o: A): A { return o; } }')).toBe(true);
   // A generic class's operators resolve under its parameters.
-  expect(ok('class A<T> { v: T | null = null; operator+(o: A.<T>): A.<T> { return this; } }')).toBe(true);
+  expect(ok('class A<T: type> { v: T | null = null; operator+(o: A.<T>): A.<T> { return this; } }')).toBe(true);
 });
 
 // ---- #sec-declared-zero -------------------------------------------------
@@ -314,7 +314,7 @@ test('a declared zero of the class itself stands, generic or not', () => {
   expect(ok('class A { x: uint8 = 1; static default = new A(); } let a: A; String(a.x);')).toBe(true);
   // A generic class's zero is judged at the specialization, where the
   // checker stands down and the run time's instance check decides.
-  expect(ok('class Bx<T> { x: uint8; static default = new Bx.<T>(); } const f = Bx.<uint8>; String(f.default instanceof f);')).toBe(true);
+  expect(ok('class Bx<T: type> { x: uint8; static default = new Bx.<T>(); } const f = Bx.<uint8>; String(f.default instanceof f);')).toBe(true);
   // A static block assigning the zero is the other spelling.
   expect(ok('class S { x: uint8 = 1; static { S.default = new S(); } } let s: S; String(s.x);')).toBe(true);
   // Any other static field is untouched by the rule.

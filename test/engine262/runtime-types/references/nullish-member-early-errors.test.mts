@@ -144,7 +144,7 @@ test.each([
   ],
   [
     "specialized field",
-    "class Box<T>{v:T;}function f(x:Box.<null>){x.v.a;}"
+    "class Box<T: type>{v:T;}function f(x:Box.<null>){x.v.a;}"
   ]
 ])('R36 additional early: %s', (_name, source) => {
   expectStaticTypeError(source);

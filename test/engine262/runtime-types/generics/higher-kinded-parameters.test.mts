@@ -14,12 +14,12 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
  */
 
 test('a higher-kinded parameter declares, at each arity and position', () => {
-  expect(ok('interface I<W<_>> {}')).toBe(true);
-  expect(ok('interface I<W<_, _>> {}')).toBe(true);
-  expect(ok('interface I<W<_>, T> {}')).toBe(true);
-  expect(ok('interface I<T, W<_>> {}')).toBe(true);
-  expect(ok('class C<W<_>> {}')).toBe(true);
-  expect(ok('type A<W<_>> = uint8;')).toBe(true);
+  expect(ok('interface I<W<_>: type> {}')).toBe(true);
+  expect(ok('interface I<W<_, _>: type> {}')).toBe(true);
+  expect(ok('interface I<W<_>: type, T: type> {}')).toBe(true);
+  expect(ok('interface I<T: type, W<_>: type> {}')).toBe(true);
+  expect(ok('class C<W<_>: type> {}')).toBe(true);
+  expect(ok('type A<W<_>: type> = uint8;')).toBe(true);
 });
 
 test('only `_` is a hole', () => {
@@ -34,12 +34,12 @@ test('only `_` is a hole', () => {
 
 test('arity zero is spelled without brackets', () => {
   expect(ok('interface I<W<>> {}')).toBe(false);
-  expect(ok('interface I<W> {}')).toBe(true);
+  expect(ok('interface I<W: type> {}')).toBe(true);
 });
 
 test('a higher-kinded parameter takes a constraint and a default', () => {
-  expect(ok('type Identity<T> = T; interface I<W<_> : Identity.<uint8>> {}')).toBe(true);
-  expect(ok('type Identity<T> = T; interface I<T, W<_> = Identity> {}')).toBe(true);
+  expect(ok('type Identity<T: type> = T; interface I<W<_>: type extends Identity.<uint8>> {}')).toBe(true);
+  expect(ok('type Identity<T: type> = T; interface I<T: type, W<_>: type = Identity> {}')).toBe(true);
 });
 
 test('a defaulted parameter may not precede a required one', () => {
@@ -47,14 +47,14 @@ test('a defaulted parameter may not precede a required one', () => {
   // higher-kinded work found it by relying on it: `Iterator<T, R, N, W<_> =
   // Identity>` places its wrapper last BECAUSE of this rule, and an unenforced
   // rule is not a reason for anything.
-  expect(ok('type Identity<T> = T; interface I<W<_> = Identity, T> {}')).toBe(false);
-  expect(ok('type Identity<T> = T; interface I<T, W<_> = Identity> {}')).toBe(true);
+  expect(ok('type Identity<T: type> = T; interface I<W<_>: type = Identity, T: type> {}')).toBe(false);
+  expect(ok('type Identity<T: type> = T; interface I<T: type, W<_>: type = Identity> {}')).toBe(true);
 
   // It is not a rule about kinded parameters - it holds for every parameter,
   // which is where it was missing.
-  expect(ok('interface I<T = uint8, U> {}')).toBe(false);
-  expect(ok('interface I<U, T = uint8> {}')).toBe(true);
-  expect(ok('interface I<U, T = uint8, V = uint8> {}')).toBe(true);
+  expect(ok('interface I<T: type = uint8, U: type> {}')).toBe(false);
+  expect(ok('interface I<U: type, T: type = uint8> {}')).toBe(true);
+  expect(ok('interface I<U: type, T: type = uint8, V: type = uint8> {}')).toBe(true);
 });
 
 test('the shared tokens still mean what they did', () => {
@@ -75,8 +75,8 @@ test('the shared tokens still mean what they did', () => {
  */
 
 test('an unapplied higher-kinded parameter is not a type', () => {
-  expect(ok('class C<W<_>> { v: W; }')).toBe(false);
-  expect(ok('type Identity<T> = T; class C<W<_>> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('class C<W<_>: type> { v: W; }')).toBe(false);
+  expect(ok('type Identity<T: type> = T; class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
 });
 
 test('the refusal names the arity', () => {
@@ -84,7 +84,7 @@ test('the refusal names the arity', () => {
   // `W.<T>` belongs needs to be told how many arguments it wants, and the
   // generics work found a refusal that was right for the wrong words because
   // nothing checked them.
-  const completion = run('class C<W<_, _>> { v: W; }') as unknown as { Type: string, Value: unknown };
+  const completion = run('class C<W<_, _>: type> { v: W; }') as unknown as { Type: string, Value: unknown };
   expect(completion.Type).toBe('throw');
   let message = '';
   for (const [key, desc] of (completion.Value as { properties: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> }).properties) {
@@ -100,16 +100,16 @@ test('arity distinguishes parameters of the same name', () => {
   // `W<_>` and `W<_, _>` are different parameters: one stands for a
   // one-argument declaration and the other for a two-argument one, so a value
   // of one is not a value of the other.
-  expect(ok('class C<W<_>> { v: W.<uint8>; }')).toBe(true);
-  expect(ok('class C<W<_, _>> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('class C<W<_, _>: type> { v: W.<uint8>; }')).toBe(true);
 });
 
 test('an ordinary parameter is untouched', () => {
   // Arity 0 is what every existing generic declares, and the whole generics
   // suite is the real assertion; these are the shapes closest to the change.
-  expect(ok('class C<T> { v: T; }')).toBe(true);
-  expect(ok('class C<T> { m(v: T): T { return v; } }')).toBe(true);
-  expect(ok('function f<T>(x: T): T { return x; }')).toBe(true);
+  expect(ok('class C<T: type> { v: T; }')).toBe(true);
+  expect(ok('class C<T: type> { m(v: T): T { return v; } }')).toBe(true);
+  expect(ok('function f<T: type>(x: T): T { return x; }')).toBe(true);
 });
 
 /**
@@ -129,12 +129,12 @@ test('an ordinary parameter is untouched', () => {
  */
 
 test('a bound higher-kinded parameter applies', () => {
-  expect(ok('type Identity<T> = T; class C<W<_>> { v: W.<uint8>; }')).toBe(true);
-  expect(ok('class C<W<_>> { v: W; }')).toBe(false);
+  expect(ok('type Identity<T: type> = T; class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('class C<W<_>: type> { v: W; }')).toBe(false);
 });
 
 test('an argument must be a generic declaration of matching arity', () => {
-  const P = 'type Identity<T> = T; class One<T> {} class Box<W<_>> {} class Pair<W<_, _>> {} ';
+  const P = 'type Identity<T: type> = T; class One<T: type> {} class Box<W<_>: type> {} class Pair<W<_, _>: type> {} ';
   expect(ok(`${P}function f(x: Box.<Identity>) {}`)).toBe(true);
   expect(ok(`${P}function f(x: Box.<One>) {}`)).toBe(true);
   expect(ok(`${P}function f(x: Pair.<Map>) {}`)).toBe(true);
@@ -146,7 +146,7 @@ test('the two failures carry different messages', () => {
   // The clause distinguishes them because they are different mistakes, and
   // "uint8 is not assignable to Box" - the generic diagnostic, which is what
   // the first attempt produced - is true and useless.
-  const P = 'class Box<W<_>> {} ';
+  const P = 'class Box<W<_>: type> {} ';
   const messageOf = (src: string) => {
     const completion = run(src) as unknown as { Type: string, Value: unknown };
     let message = '';
@@ -209,21 +209,21 @@ test('the two failures carry different messages', () => {
  */
 
 test('a kinded argument works in a parameter annotation', () => {
-  expect(ok('type Identity<T> = T; class B<W<_>> {} function f(x: B.<Identity>) {}')).toBe(true);
+  expect(ok('type Identity<T: type> = T; class B<W<_>: type> {} function f(x: B.<Identity>) {}')).toBe(true);
 });
 
 test('a bare generic declaration is not a type', () => {
   // Correct, and the reason 1 above is a positional problem rather than a
   // missing rule: `Identity` unapplied is a declaration, and a type position
   // should refuse it.
-  expect(ok('type Identity<T> = T; const a: Identity = 1;')).toBe(false);
+  expect(ok('type Identity<T: type> = T; const a: Identity = 1;')).toBe(false);
 });
 
 test('a kinded argument resolves in a const annotation', () => {
   // The positional gap: arguments were resolved as types before the base was
   // known, so a bare generic declaration - which is what a kinded position
   // wants - reported that it "is not a type".
-  const P = 'type Identity<T> = T; class B<W<_>> {} ';
+  const P = 'type Identity<T: type> = T; class B<W<_>: type> {} ';
   // A bare `new B()` at a `B.<Identity>` position CONSTRUCTS `B.<Identity>`:
   // the position's type binds the parameter before the arguments are looked
   // at (#sec-contextual-types, PLAN-v3 Q2-c), a kinded parameter included. The
@@ -242,21 +242,21 @@ test('a kinded argument resolves in a const annotation', () => {
 });
 
 test('applications binding different class wrappers are distinct', () => {
-  const P = 'class One<T> {} class Two<T> {} class B<W<_>> {} ';
+  const P = 'class One<T: type> {} class Two<T: type> {} class B<W<_>: type> {} ';
   expect(ok(`${P}const a: B.<One> = new B.<One>();`)).toBe(true);
   expect(ok(`${P}const a: B.<One> = new B.<Two>();`)).toBe(false);
 });
 
 test('applications binding different alias wrappers are distinct', () => {
-  const P = 'type Identity<T> = T; type Boxed<T> = [].<T>; class B<W<_>> {} ';
+  const P = 'type Identity<T: type> = T; type Boxed<T: type> = [].<T>; class B<W<_>: type> {} ';
   expect(ok(`${P}const a: B.<Identity> = new B.<Identity>();`)).toBe(true);
   expect(ok(`${P}const a: B.<Identity> = new B.<Boxed>();`)).toBe(false);
 
   // And a bare generic alias is still not a type, which is what makes the
   // registration above a change to where the NAME resolves rather than to what
   // an alias means.
-  expect(ok('type Identity<T> = T; const a: Identity = 1;')).toBe(false);
-  expect(ok('type Boxed<T> = [].<T>; const a: Boxed.<uint8> = [1];')).toBe(true);
+  expect(ok('type Identity<T: type> = T; const a: Identity = 1;')).toBe(false);
+  expect(ok('type Boxed<T: type> = [].<T>; const a: Boxed.<uint8> = [1];')).toBe(true);
 });
 
 /**
@@ -275,14 +275,14 @@ test('applications binding different alias wrappers are distinct', () => {
  */
 
 test('a kinded parameter must be supplied by explicit application', () => {
-  const P = 'type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} ';
+  const P = 'type Identity<T: type> = T; function g<W<_>: type, T: type>(x: W.<T>): void {} ';
   expect(ok(`${P}g.<Identity, uint8>(1);`)).toBe(true);
   expect(ok(`${P}g(1);`)).toBe(false);
 
   // Inference for ordinary parameters is untouched, which is the assertion
   // that matters: the refusal is about a kinded parameter and not about
   // generic calls.
-  expect(ok('function f<T>(x: T): T { return x; } const n: uint8 = 1; f(n);')).toBe(true);
+  expect(ok('function f<T: type>(x: T): T { return x; } const n: uint8 = 1; f(n);')).toBe(true);
   expect(ok('function h(x) { return x; } h(5);')).toBe(true);
 });
 
@@ -290,7 +290,7 @@ test('the refusal explains that inference is not attempted', () => {
   // The message says WHY rather than reporting a missing binding. Recovering W
   // and T from one argument admits two consistent answers, so choosing is a
   // search - and #sec-evaluation-budget meters computation rather than search.
-  const completion = run('type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} g(1);') as unknown as { Type: string, Value: unknown };
+  const completion = run('type Identity<T: type> = T; function g<W<_>: type, T: type>(x: W.<T>): void {} g(1);') as unknown as { Type: string, Value: unknown };
   let message = '';
   const value = completion.Value as { properties?: Map<{ stringValue?(): string }, { Value: { stringValue(): string } }> };
   for (const [key, desc] of value.properties ?? []) {
@@ -334,8 +334,8 @@ test('a program may declare its own Identity', () => {
   // The reducing form defers to a user declaration, which is what makes
   // Identity an alias rather than a protocol. The interface attempts shadowed
   // this and broke four tests.
-  expect(ok('type Identity<T> = T; const a: Identity.<uint8> = 1;')).toBe(true);
-  expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
+  expect(ok('type Identity<T: type> = T; const a: Identity.<uint8> = 1;')).toBe(true);
+  expect(ok('type Identity<T: type> = T; class B<W<_>: type> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
 });
 
 test('Identity resolves in every position', () => {
@@ -349,15 +349,15 @@ test('Identity resolves in every position', () => {
   // And as a KINDED ARGUMENT, which is what the unification needs: a
   // higher-kinded parameter binds a generic DECLARATION, so the global binding
   // holds the declaration a prelude parsed rather than a stand-in.
-  expect(ok('class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
-  expect(ok('type Identity<T> = T; class B<W<_>> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
+  expect(ok('class B<W<_>: type> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
+  expect(ok('type Identity<T: type> = T; class B<W<_>: type> {} const b: B.<Identity> = new B.<Identity>();')).toBe(true);
 });
 
 test('deep but finite nesting completes', () => {
   // The budget's other direction: a budget
   // that fires on reasonable code is a bug, so realistic nesting must complete.
-  expect(ok('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]];')).toBe(true);
-  expect(ok('type Bx<T> = [].<T>; class B<W<_>> {} const b: B.<Bx> = new B.<Bx>();')).toBe(true);
+  expect(ok('type Bx<T: type> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]];')).toBe(true);
+  expect(ok('type Bx<T: type> = [].<T>; class B<W<_>: type> {} const b: B.<Bx> = new B.<Bx>();')).toBe(true);
 });
 
 /**
@@ -394,7 +394,7 @@ test('an unbounded type evaluation exhausts the budget and reports', () => {
   // what a host does when it wants the diagnostic rather than the stack.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });
-  const completion = realm.evaluateScriptSkipDebugger('type R<T> = R.<T>; const a: R.<uint8> = 1;') as unknown as { Type: string, Value: unknown };
+  const completion = realm.evaluateScriptSkipDebugger('type R<T: type> = R.<T>; const a: R.<uint8> = 1;') as unknown as { Type: string, Value: unknown };
 
   expect(completion.Type).toBe('throw');
   let message = '';
@@ -414,7 +414,7 @@ test('an ordinary alias is unaffected by the metering', () => {
   // code that terminates.
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm({ typeEvaluationBudget: { steps: 50, records: 50 } });
-  const completion = realm.evaluateScriptSkipDebugger('type Bx<T> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]]; "y";') as unknown as { Type: string, Value: unknown };
+  const completion = realm.evaluateScriptSkipDebugger('type Bx<T: type> = [].<T>; const a: Bx.<Bx.<uint8>> = [[1]]; "y";') as unknown as { Type: string, Value: unknown };
   expect(completion.Type).toBe('normal');
 });
 
@@ -437,5 +437,5 @@ test('a realm binds `Identity` for itself, not for the next one', () => {
   expect(evaluated('let x: Identity.<uint8> = 1; String(Number(x));')).toBe('1');
   // A program may still redeclare the name: the prelude evaluates in a block to
   // keep it free.
-  expect(ok('type Identity<T> = T; let x: Identity.<uint8> = 1;')).toBe(true);
+  expect(ok('type Identity<T: type> = T; let x: Identity.<uint8> = 1;')).toBe(true);
 });

@@ -54,7 +54,7 @@ test("R50: untyped collection", () => {
 });
 
 test("R50: shadowed Set", () => {
-  expect(ok("class Set<T>{add(n:string):void{}}function f(s:Set.<uint8>){s[\"add\"](\"ok\");}f(new Set.<uint8>());")).toBe(true);
+  expect(ok("class Set<T: type>{add(n:string):void{}}function f(s:Set.<uint8>){s[\"add\"](\"ok\");}f(new Set.<uint8>());")).toBe(true);
 });
 
 test("R50: custom structural method", () => {
@@ -106,23 +106,23 @@ test("R50: mutable key remains dynamic", () => {
 });
 
 test("R50: user class dot also preserves signature", () => {
-  expect(ok("class Set<T>{add(n:string):void{}}function f(s:Set.<uint8>){s.add(\"ok\");}f(new Set.<uint8>());")).toBe(true);
+  expect(ok("class Set<T: type>{add(n:string):void{}}function f(s:Set.<uint8>){s.add(\"ok\");}f(new Set.<uint8>());")).toBe(true);
 });
 
 test("R50: user generic named parameter wins", () => {
-  expect(ok("class Set<V>{add(n:V):void{}}function f(s:Set.<V:string>){s[\"add\"](\"ok\");}f(new Set.<string>());")).toBe(true);
+  expect(ok("class Set<V: type>{add(n:V):void{}}function f(s:Set.<V:string>){s[\"add\"](\"ok\");}f(new Set.<string>());")).toBe(true);
 });
 
 test("R50: user class wrong argument rejected", () => {
-  expectStaticTypeError("class Set<T>{add(n:string):void{}}function f(s:Set.<uint8>){s[\"add\"](Symbol());}");
+  expectStaticTypeError("class Set<T: type>{add(n:string):void{}}function f(s:Set.<uint8>){s[\"add\"](Symbol());}");
 });
 
 test("R50: user generic alias shadows library", () => {
-  expect(ok("type Set<T>={add:(n:string)=>void};function f(s:Set.<uint8>){s[\"add\"](\"ok\");}")).toBe(true);
+  expect(ok("type Set<T: type>={add:(n:string)=>void};function f(s:Set.<uint8>){s[\"add\"](\"ok\");}")).toBe(true);
 });
 
 test("R50: user weak class has no intrinsic key bound", () => {
-  expect(ok("class WeakSet<T>{add(n:T):void{}}function f(s:WeakSet.<uint8>){s[\"add\"](1);}f(new WeakSet.<uint8>());")).toBe(true);
+  expect(ok("class WeakSet<T: type>{add(n:T):void{}}function f(s:WeakSet.<uint8>){s[\"add\"](1);}f(new WeakSet.<uint8>());")).toBe(true);
 });
 
 test("R50: computed calls preserve receiver and key effects", () => {

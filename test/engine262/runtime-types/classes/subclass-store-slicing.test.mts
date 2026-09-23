@@ -89,7 +89,7 @@ test('a subclass adding no storage is accepted in those positions too', () => {
 test('the keepers survive the static rule as well', () => {
   expect(evaluated(`${PR}let p: P = new P(); String(p.x);`)).toBe('1');
   expect(evaluated('class MyErr extends Error { } let e: Error = new MyErr(); String(e instanceof Error);')).toBe('true');
-  expect(evaluated(`${PR}function g<T extends P>(a: T): uint32 { return a.y; } String(g.<R>(new R()));`)).toBe('2');
+  expect(evaluated(`${PR}function g<T: type extends P>(a: T): uint32 { return a.y; } String(g.<R>(new R()));`)).toBe('2');
   expect(evaluated(`${PR}const a: [2].<R>; a[0].y = 5; String(a[0].y);`)).toBe('5');
 });
 

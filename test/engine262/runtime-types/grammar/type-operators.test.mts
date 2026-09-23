@@ -78,14 +78,14 @@ test('keyof - intersection unions all keys', () => {
 // Generic type application (`.<T>` syntax): applies and interns by structure.
 test('generic application - interns by structure', () => {
   expectBuilderTrue(`
-    type Box<T> = { value: T };
+    type Box<T: type> = { value: T };
     type A = Box.<uint8>;
     type B = Box.<uint8>;
     String(A === B);
   `);
   // structurally equal to the manual expansion
   expectBuilderTrue(`
-    type Box<T> = { value: T };
+    type Box<T: type> = { value: T };
     type A = Box.<uint8>;
     type Manual = { value: uint8 };
     String(A === Manual);
@@ -94,7 +94,7 @@ test('generic application - interns by structure', () => {
 
 test('generic application - distinguishes by argument', () => {
   expectBuilderTrue(`
-    type Box<T> = { value: T };
+    type Box<T: type> = { value: T };
     type A = Box.<uint8>;
     type B = Box.<uint16>;
     String(A === B ? false : true);
@@ -103,7 +103,7 @@ test('generic application - distinguishes by argument', () => {
 
 test('generic application - identity generic passes its argument through', () => {
   expectBuilderTrue(`
-    type Id<T> = T;
+    type Id<T: type> = T;
     type A = Id.<uint8>;
     String(A === uint8);
   `);
@@ -111,7 +111,7 @@ test('generic application - identity generic passes its argument through', () =>
 
 test('generic application - nests', () => {
   expectBuilderTrue(`
-    type Box<T> = { value: T };
+    type Box<T: type> = { value: T };
     type A = Box.<Box.<uint8>>;
     type B = Box.<Box.<uint8>>;
     String(A === B);
@@ -121,7 +121,7 @@ test('generic application - nests', () => {
 // keyof composed with generic application - the shape the medium tier uses.
 test('keyof o generic application', () => {
   expectBuilderTrue(`
-    type Box<T> = { value: T, label: string };
+    type Box<T: type> = { value: T, label: string };
     type K = keyof Box.<uint8>;
     type Expected = 'value' | 'label';
     String(K === Expected);

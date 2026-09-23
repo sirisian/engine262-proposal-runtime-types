@@ -74,7 +74,7 @@ test('async error', async () => {
   expect(cp.stdout).toMatchInlineSnapshot(`""`);
   expect(cp.stderr).toMatchInlineSnapshot(`
     "Error
-        at <anonymous> (<eval>:1:67)
+        at <anonymous: type> (<eval>:1:67)
     "
   `);
 });
@@ -96,7 +96,7 @@ test('uncaught error', async () => {
   expect(cp.stdout).toMatchInlineSnapshot(`""`);
   expect(cp.stderr).toMatchInlineSnapshot(`
     "Uncaught exception: Error
-        at <anonymous> (<eval>:1:30)
+        at <anonymous: type> (<eval>:1:30)
     "
   `);
 });

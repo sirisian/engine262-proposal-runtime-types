@@ -18,11 +18,11 @@ test("R46: nominal inherited executed", () => {
 });
 
 test("R46: specialized unused", () => {
-  expectStaticTypeError("class R<T>{[Symbol.dispose](n:T):void{}}function f(x:R.<number>){{using r:R.<number>=x;}}");
+  expectStaticTypeError("class R<T: type>{[Symbol.dispose](n:T):void{}}function f(x:R.<number>){{using r:R.<number>=x;}}");
 });
 
 test("R46: specialized executed", () => {
-  expectStaticTypeError("class R<T>{[Symbol.dispose](n:T):void{}}function f(x:R.<number>){{using r:R.<number>=x;}}f(new R.<number>());");
+  expectStaticTypeError("class R<T: type>{[Symbol.dispose](n:T):void{}}function f(x:R.<number>){{using r:R.<number>=x;}}f(new R.<number>());");
 });
 
 test("R46: required ref unused", () => {
@@ -66,7 +66,7 @@ test("R46: nullish viable", () => {
 });
 
 test("R46: unknown type", () => {
-  expect(ok("function f<T>(x:{[Symbol.dispose]:(n:T)=>void}){{using r:{[Symbol.dispose]:(n:T)=>void}=x;}}")).toBe(true);
+  expect(ok("function f<T: type>(x:{[Symbol.dispose]:(n:T)=>void}){{using r:{[Symbol.dispose]:(n:T)=>void}=x;}}")).toBe(true);
 });
 
 test("R46: known viable overload", () => {

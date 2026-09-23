@@ -31,7 +31,7 @@ test('a bad dynamic next argument fails before entering the suspended body', () 
 
 test('next resolves generic protocol types in the generator creation context', () => {
   expect(evaluated(`
-    function* gen<T>(): Generator.<uint8, void, T> { const n = yield 1; globalThis.sent = String(n); }
+    function* gen<T: type>(): Generator.<uint8, void, T> { const n = yield 1; globalThis.sent = String(n); }
     const g: any = gen.<uint8>();
     g.next();
     let failure = "";

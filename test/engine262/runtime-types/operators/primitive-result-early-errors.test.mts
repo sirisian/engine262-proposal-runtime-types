@@ -127,7 +127,7 @@ test.each([
   ],
   [
     "specialized result",
-    "class C<T>{[Symbol.toPrimitive](hint:string):T{throw 0;}}function f(x:C.<symbol>){`${x}`;}"
+    "class C<T: type>{[Symbol.toPrimitive](hint:string):T{throw 0;}}function f(x:C.<symbol>){`${x}`;}"
   ],
   [
     "inherited result",

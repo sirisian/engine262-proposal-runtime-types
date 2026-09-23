@@ -41,7 +41,7 @@ test('the other operators are unchanged', () => {
 
 test('nested type argument lists still close, at any depth', () => {
   // What the splitting exists for, and what suspending it must not break.
-  const Box = 'class Box<T> { v: T | null = null; } ';
+  const Box = 'class Box<T: type> { v: T | null = null; } ';
   expect(evaluated(`${Box}let x: Box.<Box.<uint8>> = new Box.<Box.<uint8>>(); "ok";`)).toBe('ok');
   expect(evaluated(`${Box}let x: Box.<Box.<Box.<uint8>>> = new Box.<Box.<Box.<uint8>>>(); "ok";`)).toBe('ok');
 });

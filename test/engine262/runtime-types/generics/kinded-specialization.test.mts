@@ -24,8 +24,8 @@ import { evaluated, expectThrown } from '../harness.mts';
  * wrongly accepted. Only reflection disagreed.
  */
 
-const ID = 'type Id<T> = T; type Wrap<T> = [1].<T>; ';
-const B = 'class B<W<_>> {} ';
+const ID = 'type Id<T: type> = T; type Wrap<T: type> = [1].<T>; ';
+const B = 'class B<W<_>: type> {} ';
 
 test('a kinded application specializes', () => {
   // The instance is not the base class's: it has the specialization's prototype,
@@ -62,16 +62,16 @@ test('value and type arguments are unchanged', () => {
   // The controls. A fix that reached these would be changing what was already
   // correct: only the kinded case was ever wrong.
   expect(evaluated('class G<N: uint32> { b: [N].<uint8>; } String(Reflect.typeOf(new G.<4>()));')).toBe('G.<4>');
-  expect(evaluated('class P<T> { v: T; } String(Reflect.typeOf(new P.<uint8>()));')).toBe('P.<uint.<8>>');
+  expect(evaluated('class P<T: type> { v: T; } String(Reflect.typeOf(new P.<uint8>()));')).toBe('P.<uint.<8>>');
 });
 
 test('kinded argument validation is unchanged', () => {
   // Specializing over a kinded argument must not weaken what may BE one. Both
   // messages come from `badKindedArgument`, which the annotation path has always
   // called and which the specializer now reaches the same arguments through.
-  expectThrown(`type Two<A, C> = A; ${B} let b: B.<Two>;`,
+  expectThrown(`type Two<A: type, C: type> = A; ${B} let b: B.<Two>;`,
     '"Two" takes "2" type arguments; "W" expects one taking "1"');
   expectThrown(`${B} let b: B.<uint8>;`,
     '"uint.<8>" is not a generic declaration; "W" expects one taking "1"');
-  expect(evaluated(`type One<A> = A; ${B} let b: B.<One>; "ok";`)).toBe('ok');
+  expect(evaluated(`type One<A: type> = A; ${B} let b: B.<One>; "ok";`)).toBe('ok');
 });

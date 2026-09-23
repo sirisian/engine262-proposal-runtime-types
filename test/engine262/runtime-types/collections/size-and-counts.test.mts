@@ -75,7 +75,7 @@ test('a `new T.<Args>()` expression has a Static Type (general, not collections)
   // construction's Static Type is computed, and it converts all three at once.
   expect(ok('const m = new Map.<string, uint8>(); let n: string = m.size;')).toBe(false);
   expect(ok('const a = new [4].<uint8>(); let n: string = a.length;')).toBe(false);
-  expect(ok('class G<T> { x: uint8; } const g = new G.<uint8>(); let n: string = g.x;')).toBe(false);
+  expect(ok('class G<T: type> { x: uint8; } const g = new G.<uint8>(); let n: string = g.x;')).toBe(false);
   // The RUN TIME is unaffected either way - the stamp is applied at construction,
   // so the behaviour is enforced; it is the Early Error that is missing.
   expect(ok('const s = new Set.<uint8>(); const bad = (300 := any); s.add(bad);')).toBe(false);

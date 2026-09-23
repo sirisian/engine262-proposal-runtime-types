@@ -218,11 +218,11 @@ test('expression evaluation', () => {
   // non-generic `f` and expect 'seven', which the engine refuses as the clause
   // says; the refusal is pinned below and the evaluation is asserted here over
   // the form the clause admits.
-  expect(evaluated('function f<T>() { return "seven"; } f.<uint8>();').stringValue()).toBe('seven');
+  expect(evaluated('function f<T: type>() { return "seven"; } f.<uint8>();').stringValue()).toBe('seven');
   expect(evaluated('((3 := uint8) is uint8) === true && (3 is uint8) === false && ("s" is uint8) === false ? "ok" : "no";').stringValue()).toBe('ok');
   // A method's specialization is receiver-independent and a call supplies
   // `this` as any member call does (#sec-generic-function-values).
-  expect(evaluated('const o = { m<T>() { return this === o ? "bound" : "lost"; } }; o.m.<uint8>();').stringValue()).toBe('bound');
+  expect(evaluated('const o = { m<T: type>() { return this === o ? "bound" : "lost"; } }; o.m.<uint8>();').stringValue()).toBe('bound');
 });
 
 test('a specialization of a non-generic value is refused', () => {

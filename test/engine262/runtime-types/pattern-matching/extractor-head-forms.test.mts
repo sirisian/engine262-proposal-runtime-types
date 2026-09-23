@@ -56,7 +56,7 @@ test('the plain name pattern takes both forms, as it always did', () => {
   // production still disagree, which is the gap stated above.
   expect(evaluated('const Ns = { K: class { } }; let x: any = new Ns.K(); '
     + 'let r = match (x) { when Ns.K: 1; default: 2; }; String(r);')).toBe('1');
-  expect(evaluated('class Box<T> { v: T | null = null; } let x: any = new Box.<uint8>(); '
+  expect(evaluated('class Box<T: type> { v: T | null = null; } let x: any = new Box.<uint8>(); '
     + 'let r = match (x) { when Box.<uint8>: 1; default: 2; }; String(r);')).toBe('1');
 });
 
@@ -74,5 +74,5 @@ test('the extractor head rule is unaffected', () => {
 test('ordinary calls are unaffected', () => {
   expect(evaluated('function f(a) { return a; } String(f(3));')).toBe('3');
   expect(evaluated('const o = { f(a) { return a; } }; String(o.f(4));')).toBe('4');
-  expect(evaluated('function f<T>(a: T): T { return a; } String(f.<uint8>(5));')).toBe('5');
+  expect(evaluated('function f<T: type>(a: T): T { return a; } String(f.<uint8>(5));')).toBe('5');
 });

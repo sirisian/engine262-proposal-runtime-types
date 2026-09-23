@@ -38,7 +38,7 @@ test('a type declaration is recorded, exported or not', () => {
 
 test('a generic alias is recorded too', () => {
   // It creates a binding and can be reflected on, so it publishes like any other.
-  expect(aliasesOf('type Box<T> = { v: T };\nexport { Box };\n')).toEqual(['Box']);
+  expect(aliasesOf('type Box<T: type> = { v: T };\nexport { Box };\n')).toEqual(['Box']);
 });
 
 test('a class is here too, exported or not', () => {

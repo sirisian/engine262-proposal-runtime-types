@@ -46,7 +46,7 @@ test('a type argument list still lexes as `.<`', () => {
 });
 
 test('generic application on a call still lexes as `.<`', () => {
-  expect(evaluated('function id<T>(x: T): T { return x; } String(id.<uint8>(3));')).toBe('3');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } String(id.<uint8>(3));')).toBe('3');
 });
 
 // -- the numeric literal boundary ---------------------------------------------

@@ -99,14 +99,14 @@ test('the DEPTH limit is what stops a recursive generic alias', () => {
   // directly in the body or inside a member, and the member may be an object, an
   // array, a tuple, a function parameter, or a union arm.
   const recursions = [
-    'type R<T> = R.<T>; type X = R.<uint8>;',
-    'type N<T> = { next: N.<T> }; type X = N.<uint8>;',
-    'type N<T> = { next: [].<N.<T>> }; type X = N.<uint8>;',
-    'type N<T> = { next: [N.<T>] }; type X = N.<uint8>;',
-    'type N<T> = { f: (N.<T>) => void }; type X = N.<uint8>;',
-    'type N<T> = { next: N.<T> | null }; type X = N.<uint8>;',
+    'type R<T: type> = R.<T>; type X = R.<uint8>;',
+    'type N<T: type> = { next: N.<T> }; type X = N.<uint8>;',
+    'type N<T: type> = { next: [].<N.<T>> }; type X = N.<uint8>;',
+    'type N<T: type> = { next: [N.<T>] }; type X = N.<uint8>;',
+    'type N<T: type> = { f: (N.<T>) => void }; type X = N.<uint8>;',
+    'type N<T: type> = { next: N.<T> | null }; type X = N.<uint8>;',
     // Mutual recursion, which no single declaration's own name would catch.
-    'type A<T> = { b: B.<T> }; type B<T> = { a: A.<T> }; type X = A.<uint8>;',
+    'type A<T: type> = { b: B.<T> }; type B<T: type> = { a: A.<T> }; type X = A.<uint8>;',
   ];
   for (const source of recursions) {
     // A COMPLETION, not a host throw. If the depth limit regresses this line
@@ -119,7 +119,7 @@ test('the DEPTH limit is what stops a recursive generic alias', () => {
 test('the depth limit does not reject ordinary nesting', () => {
   // The limit is a floor set well clear of anything written on purpose. A
   // non-recursive generic, and a legitimately nested one, are untouched.
-  expect(runWithBudget('type Box<T> = { v: T }; type X = Box.<Box.<Box.<uint8>>>; String(1);'))
+  expect(runWithBudget('type Box<T: type> = { v: T }; type X = Box.<Box.<Box.<uint8>>>; String(1);'))
     .toMatchObject({ Type: 'normal' });
   // Non-generic self-reference is a different rule entirely and keeps its own,
   // sharper diagnostic about a finite layout rather than a budget.

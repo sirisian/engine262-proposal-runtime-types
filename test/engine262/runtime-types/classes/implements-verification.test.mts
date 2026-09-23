@@ -23,7 +23,7 @@ test('a member of the wrong type is refused', () => {
 });
 
 test('a generic method satisfies through identity up to renaming, and a different shape does not (F-AB)', () => {
-  const G = 'interface GBus { on<T>(name: string, h: (e: T) => void): void; }';
-  expect(evaluated(`${G} class Ok implements GBus { on<U>(name: string, h: (e: U) => void): void {} } "declared";`)).toBe('declared');
-  expectThrown(`${G} class Bad implements GBus { on<T, U>(name: string, h: (e: T) => void): void {} }`, 'not assignable');
+  const G = 'interface GBus { on<T: type>(name: string, h: (e: T) => void): void; }';
+  expect(evaluated(`${G} class Ok implements GBus { on<U: type>(name: string, h: (e: U) => void): void {} } "declared";`)).toBe('declared');
+  expectThrown(`${G} class Bad implements GBus { on<T: type, U: type>(name: string, h: (e: T) => void): void {} }`, 'not assignable');
 });

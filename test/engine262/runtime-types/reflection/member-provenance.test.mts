@@ -70,7 +70,7 @@ test('a class carries an origin, as every other declaration form does', () => {
   expect(TypeOrigins(cls)[0]?.kind).toBe('ClassDeclaration');
   // A generic class records on both the generic Type Object and the constructor,
   // because a tool may hold either and it is the same question.
-  const generic = typeOf('class G<T> { v: T; }\nG;');
+  const generic = typeOf('class G<T: type> { v: T; }\nG;');
   expect(TypeOrigins(generic)[0]?.name).toBe('G');
 });
 

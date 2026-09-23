@@ -321,8 +321,8 @@ test('a generic parameter is exempt', () => {
   // Nothing is known about what an application will bind, so the declaration
   // stands; the check belongs at the specialization, which this engine does not
   // reach.
-  expectOk('class Box<T> { value: T; }');
-  expectOk('class Box<T> { value: T; } const b = new Box.<uint8>();');
+  expectOk('class Box<T: type> { value: T; }');
+  expectOk('class Box<T: type> { value: T; } const b = new Box.<uint8>();');
 });
 
 test('a registered meta default does NOT satisfy the rule', () => {

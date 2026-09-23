@@ -11,7 +11,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 // Each parameter takes, in order: its positional argument, else the named
 // argument bearing its name, else its default.
 
-const GRID = 'type Grid<T = float64, Cols = uint8> = { t: T, c: Cols }; ';
+const GRID = 'type Grid<T: type = float64, Cols: type = uint8> = { t: T, c: Cols }; ';
 
 test('a named argument reaches the parameter it names', () => {
   // The motivating case: set the last parameter, leave the first defaulted.
@@ -57,5 +57,5 @@ test('positional applications are unchanged', () => {
   expect(evaluated(`${GRID}let g: Grid = { t: 1.0, c: 1 }; String(g.t is float64);`)).toBe('true');
   expect(evaluated('let a: [4].<uint8> = [1, 2, 3, 4]; String(a.length);')).toBe('4');
   expect(evaluated('let a: [].<uint8> = [1]; String(a.length);')).toBe('1');
-  expect(evaluated('type Box<T> = { v: T }; let b: Box.<Box.<uint8>> = { v: { v: 1 } }; String(Number(b.v.v));')).toBe('1');
+  expect(evaluated('type Box<T: type> = { v: T }; let b: Box.<Box.<uint8>> = { v: { v: 1 } }; String(Number(b.v.v));')).toBe('1');
 });

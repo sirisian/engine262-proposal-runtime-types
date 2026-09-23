@@ -38,7 +38,7 @@ test('an EMPTY class still has a default', () => {
   // The case that ruled out the narrower-looking gate: no typed fields, so
   // `IsValueType` answers false, though nothing about it lacks a zero.
   expect(evaluated('class B {} class H { b: B; } const h = new H(); typeof h.b;')).toBe('object');
-  expect(evaluated('type One<A> = A; class B<W<_>> {} let b: B.<One>; "ok";')).toBe('ok');
+  expect(evaluated('type One<A: type> = A; class B<W<_>: type> {} let b: B.<One>; "ok";')).toBe('ok');
 });
 
 test('a value class field still takes its memberwise zero', () => {

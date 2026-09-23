@@ -6,7 +6,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-const V = 'class vec<T, N: uint32> { swizzle<...I: [].<uint32>>(): uint32 { return I.length; } pick<...I: [].<uint32>>(): uint32 { return I[1]; } }';
+const V = 'class vec<T: type, N: uint32> { swizzle<...I: [].<uint32>>(): uint32 { return I.length; } pick<...I: [].<uint32>>(): uint32 { return I[1]; } }';
 
 test('a value pack binds from positional arguments and reads as an array', () => {
   expect(evaluated(`${V} String(new vec.<uint8, 4>().swizzle.<0, 0, 0, 0>());`)).toBe('4');
@@ -56,8 +56,8 @@ test('a spread splices a tuple before binding, to one specialization', () => {
 });
 
 test('a type pack binds a tuple of types', () => {
-  expect(evaluated('class T<...Ts> {} String(T.<uint8, string> === T.<uint8, string>);')).toBe('true');
-  expect(evaluated('class T<...Ts> {} String(T.<uint8, string> === T.<string, uint8>);')).toBe('false');
+  expect(evaluated('class T<...Ts: [].<type>> {} String(T.<uint8, string> === T.<uint8, string>);')).toBe('true');
+  expect(evaluated('class T<...Ts: [].<type>> {} String(T.<uint8, string> === T.<string, uint8>);')).toBe('false');
 });
 
 test('a class with a pack in TYPE position and its own specialization agree', () => {

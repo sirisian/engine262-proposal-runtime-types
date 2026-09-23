@@ -76,7 +76,7 @@ test('what callability does not reach', () => {
   // A generic class's own name inside a static field: typing the target would
   // reach the rule that refuses a bare generic, which this judgment must not
   // provoke.
-  expect(ok('class Box<T> { x: uint8; static default = new Box.<uint8>(); } "ok";')).toBe(true);
+  expect(ok('class Box<T: type> { x: uint8; static default = new Box.<uint8>(); } "ok";')).toBe(true);
 });
 
 test('an OBJECT is not callable either', () => {
@@ -125,7 +125,7 @@ test('a UNION is not callable when no member is', () => {
   // narrowing before the call, even when another arm is callable.
   expectThrown(dead('let u: uint8 | (() => uint8) = uint8(1); let q = u();'), 'is not callable');
   // A TYPE PARAMETER is not judged - it stands for something not yet known.
-  expect(ok(dead('function g<T extends uint8>(v: T) { let q = v(); }'))).toBe(true);
+  expect(ok(dead('function g<T: type extends uint8>(v: T) { let q = v(); }'))).toBe(true);
 });
 
 test('an INTERSECTION is decided, for the opposite reason a union is', () => {

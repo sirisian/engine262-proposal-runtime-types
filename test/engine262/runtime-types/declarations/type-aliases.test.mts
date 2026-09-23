@@ -44,7 +44,7 @@ test('type alias declarations', () => {
     Type: { type: 'TypeReference' },
     WhereClauses: null,
   });
-  expect(statements('type Pair<A, B> = [A, B] where A;')[0]).toMatchObject({
+  expect(statements('type Pair<A: type, B: type> = [A, B] where A;')[0]).toMatchObject({
     type: 'TypeAliasDeclaration',
     TypeParameters: { type: 'TypeParameters' },
     Type: { type: 'TupleType' },
@@ -63,7 +63,7 @@ test('the `type` gate is contextual', () => {
 });
 
 test('interface declarations mix type members and operators', () => {
-  const decl = statements(`interface I<T> {
+  const decl = statements(`interface I<T: type> {
     x: uint8;
     m(a: T): T;
     operator ==(a, b): boolean { return true; };

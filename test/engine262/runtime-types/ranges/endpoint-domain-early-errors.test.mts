@@ -78,7 +78,7 @@ test("R47: ordered class", () => {
 });
 
 test("R47: unknown generic", () => {
-  expect(ok("function f<T>(x:T){return x..<x;}")).toBe(true);
+  expect(ok("function f<T: type>(x:T){return x..<x;}")).toBe(true);
 });
 
 test("R47: object contract", () => {

@@ -79,7 +79,7 @@ test('a BARE nominal is not a top, for a library or a user generic', () => {
   expectStaticTypeError('function f(x: Set) {} let s: Set.<uint8> = new Set(); f(s);');
   expectStaticTypeError('function f(x: Map) {} let m: Map.<string, uint8> = new Map(); f(m);');
   // ...as does the user generic, which always did.
-  expectStaticTypeError('class G<T> { x: uint8; } function f(a: G) {} let g: G.<uint8> = new G.<uint8>(); f(g);');
+  expectStaticTypeError('class G<T: type> { x: uint8; } function f(a: G) {} let g: G.<uint8> = new G.<uint8>(); f(g);');
   // A bare nominal still admits the UNPARAMETERIZED value, which is what it
   // means - and is how untyped collections stay writable. Asserted UNWRAPPED,
   // so the run time answers too: the checker and the run time must agree here,

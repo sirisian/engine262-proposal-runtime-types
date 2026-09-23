@@ -7,33 +7,33 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 test('two generic function types that differ only in a name are one type (alpha-equivalence, J31)', () => {
-  expect(evaluated('type A = <T>(x: T) => T; type B = <U>(x: U) => U; String(A === B);')).toBe('true');
-  expect(evaluated('type A = <T, U>(x: T, y: U) => U; type B = <U, T>(x: U, y: T) => T; String(A === B);')).toBe('true');
+  expect(evaluated('type A = <T: type>(x: T) => T; type B = <U: type>(x: U) => U; String(A === B);')).toBe('true');
+  expect(evaluated('type A = <T: type, U: type>(x: T, y: U) => U; type B = <U: type, T: type>(x: U, y: T) => T; String(A === B);')).toBe('true');
 });
 
 test('a different shape is a different type (J32, J33)', () => {
-  expect(evaluated('type A = <T>(x: T) => T; type B = <T, U>(x: T) => T; String(A === B);')).toBe('false');
-  expect(evaluated('type A = <T>(x: T) => T; type C = (x: uint8) => uint8; String(A === C);')).toBe('false');
-  expect(evaluated('type A = <T>(x: T) => T; type D = <T>(x: T, y: T) => T; String(A === D);')).toBe('false');
+  expect(evaluated('type A = <T: type>(x: T) => T; type B = <T: type, U: type>(x: T) => T; String(A === B);')).toBe('false');
+  expect(evaluated('type A = <T: type>(x: T) => T; type C = (x: uint8) => uint8; String(A === C);')).toBe('false');
+  expect(evaluated('type A = <T: type>(x: T) => T; type D = <T: type>(x: T, y: T) => T; String(A === D);')).toBe('false');
 });
 
 test('a generic function crosses into a CONCRETE slot by instantiation (J35 shape)', () => {
   // The relation infers T = uint8 from the slot's parameter, checks the
   // instantiated signature, and the call through the slot works.
-  expect(evaluated('function id<T>(x: T): T { return x; } let g: (uint8) => uint8 = id; String(g(3));')).toBe('3');
-  expect(evaluated('function first<T>(xs: [].<T>): T { return xs[0]; } let f: ([].<uint8>) => uint8 = first; String(f([7, 8]));')).toBe('7');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } let g: (uint8) => uint8 = id; String(g(3));')).toBe('3');
+  expect(evaluated('function first<T: type>(xs: [].<T>): T { return xs[0]; } let f: ([].<uint8>) => uint8 = first; String(f([7, 8]));')).toBe('7');
 });
 
 test('a concrete function does NOT cross into a generic slot (J36)', () => {
-  expectThrown('let h: <T>(x: T) => T = (x: uint8): uint8 => x;', 'not assignable');
+  expectThrown('let h: <T: type>(x: T) => T = (x: uint8): uint8 => x;', 'not assignable');
 });
 
 test('a generic function crosses into a generic slot of the same shape (J37)', () => {
-  expect(evaluated('function id<T>(x: T): T { return x; } let h: <U>(x: U) => U = id; "ok";')).toBe('ok');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } let h: <U: type>(x: U) => U = id; "ok";')).toBe('ok');
 });
 
 test('an overload set mixes concrete and generic members, concrete winning (J84 shape)', () => {
-  const R = "function route(e: uint8): string { return 'u8'; } function route<T>(e: T): string { return 'g'; }";
+  const R = "function route(e: uint8): string { return 'u8'; } function route<T: type>(e: T): string { return 'g'; }";
   expect(evaluated(`${R} String(route(1));`)).toBe('u8');
   expect(evaluated(`${R} String(route('s'));`)).toBe('g');
   expect(evaluated(`${R} String(route(true));`)).toBe('g');
@@ -47,5 +47,5 @@ test('an overload set mixes concrete and generic members, concrete winning (J84 
 // interface member its own); this flips when instance-to-interface method
 // satisfaction lands.
 test.fails('a class satisfies a generic interface method by shape, with its own parameter names', () => {
-  expect(evaluated('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class SimpleBus { on<U>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
+  expect(evaluated('interface Bus { on<T: type>(name: string, h: (e: T) => void): void; } class SimpleBus { on<U: type>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
 });

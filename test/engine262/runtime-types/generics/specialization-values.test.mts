@@ -7,7 +7,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-const ID = 'function id<T>(x: T): T { return x; }';
+const ID = 'function id<T: type>(x: T): T { return x; }';
 
 test('one specialization per function and ordered bindings, whatever the spelling (J61, J62)', () => {
   expect(evaluated(`${ID} String(id.<uint8> === id.<uint8>);`)).toBe('true');
@@ -23,7 +23,7 @@ test('a specialization is a first-class function: stored, keyed, called later (J
 
 test('its type is the instantiated signature; the bare name keeps the generic one (J67)', () => {
   expect(evaluated(`${ID} String(Reflect.typeOf(id.<uint8>));`)).toBe('(x: uint.<8>) => uint.<8>');
-  expect(evaluated(`${ID} String(Reflect.typeOf(id));`)).toBe('<T>(x: T) => T');
+  expect(evaluated(`${ID} String(Reflect.typeOf(id));`)).toBe('<T: type>(x: T) => T');
 });
 
 test('a method specialization captures no receiver and is receiver-independent (J68, J69)', () => {
@@ -37,7 +37,7 @@ test('where clauses run once, at creation (J65)', () => {
 });
 
 test('typeof reads a type parameter', () => {
-  expect(evaluated('function f<T>(): boolean { return typeof T === typeof uint8; } String(f.<uint8>());')).toBe('true');
+  expect(evaluated('function f<T: type>(): boolean { return typeof T === typeof uint8; } String(f.<uint8>());')).toBe('true');
   expect(evaluated('function g<V: uint32>(): string { return typeof V; } g.<3>();')).toBe('number');
   expect(evaluated('function h<...I: [].<uint32>>(): string { return typeof I; } h.<1, 2>();')).toBe('object');
 });
@@ -61,8 +61,8 @@ test('a VALUE argument displays as it was written', () => {
     '"uint.<8> | string" has no default value');
 
   // A TYPE argument is unchanged, and so is a mixed list.
-  expect(evaluated('class B<T> { v: T; } String(type B.<uint8>);')).toBe('B.<uint.<8>>');
-  expect(evaluated('class M<A, B> { a: A; b: B; } String(type M.<uint8, string>);')).toBe('M.<uint.<8>, string>');
+  expect(evaluated('class B<T: type> { v: T; } String(type B.<uint8>);')).toBe('B.<uint.<8>>');
+  expect(evaluated('class M<A: type, B: type> { a: A; b: B; } String(type M.<uint8, string>);')).toBe('M.<uint.<8>, string>');
   // ...as are the other places an argument list is rendered.
   expect(evaluated('String(type [4].<uint8>);')).toBe('[4].<uint.<8>>');
   expect(evaluated('String(type uint.<7>);')).toBe('uint.<7>');

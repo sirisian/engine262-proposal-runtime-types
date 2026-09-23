@@ -26,8 +26,8 @@ test('`...refs` forwards the run into another ref-rest position', () => {
 });
 
 test('a generic ref rest binds its pack from the referents, and a callback takes the run (B.2, F-T)', () => {
-  expect(evaluated('function apply2<...Cs>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; apply2((ref x: uint32) => { x = 5; }, ref a); String(a);')).toBe('5');
-  expect(evaluated('function apply2<...Cs>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a) + "/" + String(f);')).toBe('2/3');
+  expect(evaluated('function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; apply2((ref x: uint32) => { x = 5; }, ref a); String(a);')).toBe('5');
+  expect(evaluated('function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a) + "/" + String(f);')).toBe('2/3');
 });
 
 test('the second-class rule: a run is never stored, passed whole, or indexed out of range', () => {

@@ -458,15 +458,15 @@ test('a meta declaration may be generic', () => {
   // `TypeParameters?` in the production; the parser read a TypeName and went
   // straight to the brace, so `meta NumberBounds<T: Ordered.<T>> { … }` - the
   // central worked example of primitivemetadata.md - did not parse.
-  const ord = 'interface Ordered<T> { v: T; } ';
-  expect(run(`type NB<T> = { nonZero?: boolean }; meta NB<T> { default = {}; subtype(a, b) { return true; } } "ok";`)).toMatchObject({ Type: 'normal' });
+  const ord = 'interface Ordered<T: type> { v: T; } ';
+  expect(run(`type NB<T: type> = { nonZero?: boolean }; meta NB<T: type> { default = {}; subtype(a, b) { return true; } } "ok";`)).toMatchObject({ Type: 'normal' });
   // The constrained form comes along, because parseTypeParameters is the same
   // one `type`, `interface` and `primitive` already call.
-  expect(run(`${ord} type NB2<T: Ordered.<T>> = { nonZero?: boolean }; `
-    + 'meta NB2<T: Ordered.<T>> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
+  expect(run(`${ord} type NB2<T: type extends Ordered.<T>> = { nonZero?: boolean }; `
+    + 'meta NB2<T: type extends Ordered.<T>> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
   // A hook may name the parameter in its annotations.
-  expect(run(`${ord} type NB3<T: Ordered.<T>> = { nonZero?: boolean }; `
-    + 'meta NB3<T: Ordered.<T>> { default = {}; subtype(sub: NB3.<T>, sup: NB3.<T>): boolean { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
+  expect(run(`${ord} type NB3<T: type extends Ordered.<T>> = { nonZero?: boolean }; `
+    + 'meta NB3<T: type extends Ordered.<T>> { default = {}; subtype(sub: NB3.<T>, sup: NB3.<T>): boolean { return true; } } "ok";')).toMatchObject({ Type: 'normal' });
   // The non-generic form is unchanged, and an empty parameter list is refused by
   // parseTypeParameters rather than by a rule of its own - `type E<> = …` is
   // already a SyntaxError, and this pins that it keeps coming from there.
@@ -474,8 +474,8 @@ test('a meta declaration may be generic', () => {
   expect(run('type NB5<> = { nonZero?: boolean };')).toMatchObject({ Type: 'throw' });
   // Claiming does not depend on the argument, so one type declared twice is
   // still refused whatever parameters are written.
-  expect(run('type NB6<T> = { nonZero?: boolean }; meta NB6<T> { default = {}; subtype(a, b) { return true; } } '
-    + 'meta NB6<U> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'throw' });
+  expect(run('type NB6<T: type> = { nonZero?: boolean }; meta NB6<T: type> { default = {}; subtype(a, b) { return true; } } '
+    + 'meta NB6<U: type> { default = {}; subtype(a, b) { return true; } } "ok";')).toMatchObject({ Type: 'throw' });
 });
 
 test('a base-form meta type has no type parameters to bind', () => {
@@ -485,7 +485,7 @@ test('a base-form meta type has no type parameters to bind', () => {
   // after any TypeName, so this is an early error rather than a parse failure,
   // and it is refused rather than accepted-and-ignored: a program that wrote it
   // would have no way to discover the parameter did nothing.
-  expect(run('meta uint8<T> { default = 0; subtype(a, b) { return true; } }')).toMatchObject({ Type: 'throw' });
+  expect(run('meta uint8<T: type> { default = 0; subtype(a, b) { return true; } }')).toMatchObject({ Type: 'throw' });
   // The base form itself still works without parameters.
   expect(run('meta uint8 { default = 0; subtype(a, b) { return a === b; } } let x: uint8; String(x);')).toMatchObject({ Type: 'normal' });
 });
@@ -500,8 +500,8 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
   // The body is now resolved once with each parameter left FREE, since the keys
   // of a constraint shape do not depend on the argument - which is also why
   // claiming stays at the declaration rather than moving to each instantiation.
-  const generic = 'type G<T> = { gkey?: boolean }; '
-    + 'meta G<T> { default = { gkey: false }; subtype(a, b) { return true; } } ';
+  const generic = 'type G<T: type> = { gkey?: boolean }; '
+    + 'meta G<T: type> { default = { gkey: false }; subtype(a, b) { return true; } } ';
   const plain = 'type F = { fkey?: boolean }; '
     + 'meta F { default = { fkey: false }; subtype(a, b) { return true; } } ';
   // The key is claimed: the "not claimed by any meta type" refusal is gone, and
@@ -514,8 +514,8 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
   // And the hooks RUN: a `subtype` that refuses a crossing is consulted, which
   // is the end-to-end assertion - claiming without hooks would pass the checks
   // above and do nothing.
-  const hooked = 'type GB<T> = { gb?: boolean }; '
-    + 'meta GB<T> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
+  const hooked = 'type GB<T: type> = { gb?: boolean }; '
+    + 'meta GB<T: type> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
   expect(errorMessage(`${hooked} let a: uint8.<{ gb: false }> = (1 := uint8.<{ gb: false }>); let b: uint8.<{ gb: true }> = a;`))
     .toMatch(/is not assignable to/);
   // The DEFAULT supplies the unconstrained constraint, which is the fourth
@@ -524,19 +524,19 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
   // plain value crossing into a constrained position, because MetadataPortion
   // has nothing to compare against. Both forms admit it.
   const dflt = (n: string) => `let plain: uint8 = (5 := uint8); let wide: uint8.<{ ${n}: false }> = plain; String(wide);`;
-  expect(evaluated('type GD<T> = { gd?: boolean }; '
-    + 'meta GD<T> { default = { gd: false }; subtype(sub, sup) { return sup.gd === undefined || sub.gd === sup.gd; } } '
+  expect(evaluated('type GD<T: type> = { gd?: boolean }; '
+    + 'meta GD<T: type> { default = { gd: false }; subtype(sub, sup) { return sup.gd === undefined || sub.gd === sup.gd; } } '
     + dflt('gd'))).toBe('5');
   expect(evaluated('type PD = { pd?: boolean }; '
     + 'meta PD { default = { pd: false }; subtype(sub, sup) { return sup.pd === undefined || sub.pd === sup.pd; } } '
     + dflt('pd'))).toBe('5');
   // A refused crossing reports the same way from either form.
   const refuse = (n: string) => `let a: uint8.<{ ${n}: false }> = (1 := uint8.<{ ${n}: false }>); let b: uint8.<{ ${n}: true }> = a;`;
-  expect(errorMessage('type GR<T> = { gr?: boolean }; meta GR<T> { default = { gr: false }; subtype(s, u) { return false; } } '
+  expect(errorMessage('type GR<T: type> = { gr?: boolean }; meta GR<T: type> { default = { gr: false }; subtype(s, u) { return false; } } '
     + refuse('gr'))).toMatch(/is not assignable to/);
   // The non-generic path is untouched, and a name resolving to nothing still
   // returns quietly rather than throwing.
-  expect(run('type G2<T> = { g2?: boolean }; meta G2<T> { default = {}; subtype(a, b) { return true; } } "ok";'))
+  expect(run('type G2<T: type> = { g2?: boolean }; meta G2<T: type> { default = {}; subtype(a, b) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
 });
 
@@ -553,15 +553,15 @@ test('a hook may name the meta type\'s type parameter in its annotations', () =>
   // deciding about, and the frame is pushed around the Call in ApplyMetaHook -
   // EvaluateBody pushes one only from the FUNCTION's own type parameters, and a
   // hook function has none.
-  const hooked = 'type GG<T> = { gg?: boolean }; '
-    + 'meta GG<T> { default = { gg: false }; '
+  const hooked = 'type GG<T: type> = { gg?: boolean }; '
+    + 'meta GG<T: type> { default = { gg: false }; '
     + 'subtype(sub: GG.<T>, sup: GG.<T>): boolean { return sup.gg === undefined || sub.gg === sup.gg; } } ';
   expect(errorMessage(`${hooked} let a: uint8.<{ gg: false }> = (1 := uint8.<{ gg: false }>); let b: uint8.<{ gg: true }> = a;`))
     .toMatch(/is not assignable to/);
   // An unannotated hook is unchanged - the form every generic meta type is
   // written in today.
-  const bare = 'type GB<T> = { gb?: boolean }; '
-    + 'meta GB<T> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
+  const bare = 'type GB<T: type> = { gb?: boolean }; '
+    + 'meta GB<T: type> { default = { gb: false }; subtype(sub, sup) { return sup.gb === undefined || sub.gb === sup.gb; } } ';
   expect(errorMessage(`${bare} let a: uint8.<{ gb: false }> = (1 := uint8.<{ gb: false }>); let b: uint8.<{ gb: true }> = a;`))
     .toMatch(/is not assignable to/);
   // A non-generic meta type pushes no frame and is untouched.
@@ -569,8 +569,8 @@ test('a hook may name the meta type\'s type parameter in its annotations', () =>
     .toMatchObject({ Type: 'normal' });
   // `describe` builds a diagnostic with no crossing in progress, so no base is
   // bound - and it must not throw for want of one.
-  expect(run('type DD<T> = { dd?: boolean }; '
-    + 'meta DD<T> { default = { dd: false }; subtype(a, b) { return true; } describe(c) { return "d"; } } "ok";'))
+  expect(run('type DD<T: type> = { dd?: boolean }; '
+    + 'meta DD<T: type> { default = { dd: false }; subtype(a, b) { return true; } describe(c) { return "d"; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
 });
 
@@ -588,21 +588,21 @@ test('a meta declaration takes one type parameter, matching its constraint shape
   //
   // All three became reachable only when `meta X<T>` started parsing; they were
   // unenforceable before because the form did not exist.
-  expect(errorMessage('type M2<T, U> = { m2?: boolean }; meta M2<T, U> { default = {}; subtype(a, b) { return true; } }'))
+  expect(errorMessage('type M2<T: type, U: type> = { m2?: boolean }; meta M2<T: type, U: type> { default = {}; subtype(a, b) { return true; } }'))
     .toMatch(/at most one type parameter/);
-  expect(errorMessage('type M3<T, U> = { m3?: boolean }; meta M3<T> { default = {}; subtype(a, b) { return true; } }'))
+  expect(errorMessage('type M3<T: type, U: type> = { m3?: boolean }; meta M3<T: type> { default = {}; subtype(a, b) { return true; } }'))
     .toMatch(/constraint shape takes/);
-  expect(errorMessage('type M4 = { m4?: boolean }; meta M4<T> { default = {}; subtype(a, b) { return true; } }'))
+  expect(errorMessage('type M4 = { m4?: boolean }; meta M4<T: type> { default = {}; subtype(a, b) { return true; } }'))
     .toMatch(/constraint shape takes/);
   // The matching cases are what the count check must not break, and both were
   // measured as accepted before it went in.
-  expect(run('type MB<T> = { mb?: boolean }; meta MB<T> { default = {}; subtype(a, b) { return true; } } "ok";'))
+  expect(run('type MB<T: type> = { mb?: boolean }; meta MB<T: type> { default = {}; subtype(a, b) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
   expect(run('type MC = { mc?: boolean }; meta MC { default = {}; subtype(a, b) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
   // A base-form meta type keeps its OWN message, which says why a primitive can
   // never have a parameter rather than only that the counts differ.
-  expect(errorMessage('meta uint8<T> { default = 0; subtype(a, b) { return true; } }'))
+  expect(errorMessage('meta uint8<T: type> { default = 0; subtype(a, b) { return true; } }'))
     .toMatch(/base-form meta type has no type parameters to bind/);
 });
 
@@ -636,21 +636,21 @@ test('a meta declaration takes one type parameter, matching its constraint shape
   //
   // All three became reachable only when `meta X<T>` started parsing; they were
   // unenforceable before because the form did not exist.
-  expect(errorMessage('type M2<T, U> = { m2?: boolean }; meta M2<T, U> { default = {}; subtype(a, b) { return true; } }'))
+  expect(errorMessage('type M2<T: type, U: type> = { m2?: boolean }; meta M2<T: type, U: type> { default = {}; subtype(a, b) { return true; } }'))
     .toMatch(/at most one type parameter/);
-  expect(errorMessage('type M3<T, U> = { m3?: boolean }; meta M3<T> { default = {}; subtype(a, b) { return true; } }'))
+  expect(errorMessage('type M3<T: type, U: type> = { m3?: boolean }; meta M3<T: type> { default = {}; subtype(a, b) { return true; } }'))
     .toMatch(/constraint shape takes/);
-  expect(errorMessage('type M4 = { m4?: boolean }; meta M4<T> { default = {}; subtype(a, b) { return true; } }'))
+  expect(errorMessage('type M4 = { m4?: boolean }; meta M4<T: type> { default = {}; subtype(a, b) { return true; } }'))
     .toMatch(/constraint shape takes/);
   // The matching cases are what the count check must not break, and both were
   // measured as accepted before it went in.
-  expect(run('type MB<T> = { mb?: boolean }; meta MB<T> { default = {}; subtype(a, b) { return true; } } "ok";'))
+  expect(run('type MB<T: type> = { mb?: boolean }; meta MB<T: type> { default = {}; subtype(a, b) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
   expect(run('type MC = { mc?: boolean }; meta MC { default = {}; subtype(a, b) { return true; } } "ok";'))
     .toMatchObject({ Type: 'normal' });
   // A base-form meta type keeps its OWN message, which says why a primitive can
   // never have a parameter rather than only that the counts differ.
-  expect(errorMessage('meta uint8<T> { default = 0; subtype(a, b) { return true; } }'))
+  expect(errorMessage('meta uint8<T: type> { default = 0; subtype(a, b) { return true; } }'))
     .toMatch(/base-form meta type has no type parameters to bind/);
 });
 
@@ -719,7 +719,7 @@ test('a meta hook is bounded by the evaluation budget', { timeout: 300000 }, () 
   // `runtime.mts` relies on for recursion, here exercised from the other side.
   expect(errorMessage('type NB = { nb?: boolean }; '
     + 'meta NB { default = { nb: false }; subtype(sub, sup) { while (true) { } return true; } } '
-    + 'type Wrap<T> = uint8.<{ nb: true }>; '
+    + 'type Wrap<T: type> = uint8.<{ nb: true }>; '
     + 'let a: uint8.<{ nb: false }> = (1 := uint8.<{ nb: false }>); let b: Wrap.<uint8> = a;'))
     .toMatch(/exhausted at "NB's subtype hook"/);
   // Cost does NOT leak between crossings: three crossings each spending most of

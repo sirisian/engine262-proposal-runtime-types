@@ -244,7 +244,7 @@ test.each([
   },
   {
     "name": "R68-extra-03: generic annotation remains dynamic",
-    "source": "type Bad={then:(resolve:uint8,reject:uint8)=>void};type It={[Symbol.asyncIterator]:()=>{next:()=>{done:false,value:Bad}}};async function* f<T>(it:It):AsyncGenerator.<T,void,void>{yield* it;}",
+    "source": "type Bad={then:(resolve:uint8,reject:uint8)=>void};type It={[Symbol.asyncIterator]:()=>{next:()=>{done:false,value:Bad}}};async function* f<T: type>(it:It):AsyncGenerator.<T,void,void>{yield* it;}",
     "expected": {
       "completion": "normal",
       "bodyRan": "true",

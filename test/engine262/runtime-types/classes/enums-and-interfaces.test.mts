@@ -672,7 +672,7 @@ test('an enum types an array element, and a bare literal does not reach it', () 
 
 test('an enum reaches generics, unions, and narrowing', () => {
   const C = 'enum C { Zero, One } ';
-  expect(evaluated(`${C}function id<T>(x: T): T { return x; } String(id.<C>(C.One) === C.One);`)).toBe('true');
+  expect(evaluated(`${C}function id<T: type>(x: T): T { return x; } String(id.<C>(C.One) === C.One);`)).toBe('true');
   // In a union, `is` narrows to the enum arm.
   expect(evaluated(`${C}function f(x: C | string) { if (x is C) { return "enum"; } return "str"; } f(C.One);`)).toBe('enum');
   expect(evaluated(`${C}function f(x: C | string) { if (x is C) { return "enum"; } return "str"; } f("s");`)).toBe('str');
@@ -732,14 +732,14 @@ test('a CLASS body is judged by table-variance-positions, as an interface is', (
   // The variance itself was always right - `out` is covariant, `in` is
   // contravariant, an undeclared parameter is invariant - so what this adds is
   // the well-formedness half.
-  expectThrown('class Box<out T> { v: T | null = null; }', 'writable field');
-  expectThrown('class Box<out T> { set(x: T): void { } }', 'input position');
-  expectThrown('class Sink<in T> { get(): T | null { return null; } }', 'output position');
-  expectThrown('class Box<in T> { readonly v: T | null = null; }', 'output position');
+  expectThrown('class Box<out T: type> { v: T | null = null; }', 'writable field');
+  expectThrown('class Box<out T: type> { set(x: T): void { } }', 'input position');
+  expectThrown('class Sink<in T: type> { get(): T | null { return null; } }', 'output position');
+  expectThrown('class Box<in T: type> { readonly v: T | null = null; }', 'output position');
   // The well-formed placements, which must keep compiling.
-  expect(evaluated('class Box<out T> { readonly v: T | null = null; } `${typeof Box}`;')).toBe('function');
-  expect(evaluated('class Box<out T> { get(): T | null { return null; } } `${typeof Box}`;')).toBe('function');
-  expect(evaluated('class Sink<in T> { put(x: T): void { } } `${typeof Sink}`;')).toBe('function');
+  expect(evaluated('class Box<out T: type> { readonly v: T | null = null; } `${typeof Box}`;')).toBe('function');
+  expect(evaluated('class Box<out T: type> { get(): T | null { return null; } } `${typeof Box}`;')).toBe('function');
+  expect(evaluated('class Sink<in T: type> { put(x: T): void { } } `${typeof Sink}`;')).toBe('function');
   // An undeclared parameter is invariant and may appear anywhere.
-  expect(evaluated('class Box<T> { v: T | null = null; set(x: T): void { } } `${typeof Box}`;')).toBe('function');
+  expect(evaluated('class Box<T: type> { v: T | null = null; set(x: T): void { } } `${typeof Box}`;')).toBe('function');
 });

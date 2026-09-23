@@ -37,7 +37,7 @@ test('the two comparisons a type registry rests on are different ones', () => {
   // are visible in one program and they do not have to agree, which is worth
   // pinning because a reader expects them to.
   expect(evaluated('const s = new Set(); s.add(0); s.add(-0); String(s.size);')).toBe('1');
-  expect(evaluated('class A<N> { x: uint8; } String((type A.<0>) === (type A.<-0>));')).toBe('false');
+  expect(evaluated('class A<N: type> { x: uint8; } String((type A.<0>) === (type A.<-0>));')).toBe('false');
 });
 
 // ---------------------------------------------------------------------------

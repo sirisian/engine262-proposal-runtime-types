@@ -49,7 +49,7 @@ test('an array can be parameterized', () => {
 });
 
 test('a generic application, a parenthesized type, and a function type', () => {
-  expect(evaluated("type Box<T> = { v: T }; type B = Box.<uint8>.<{ brand: 'B' }>;"
+  expect(evaluated("type Box<T: type> = { v: T }; type B = Box.<uint8>.<{ brand: 'B' }>;"
     + ' String(Reflect.getReflection(B).kind);')).toBe('parameterized');
   expect(evaluated("type Y = (string | uint8).<{ brand: 'B' }>;"
     + ' String(Reflect.getReflection(Y).kind);')).toBe('parameterized');

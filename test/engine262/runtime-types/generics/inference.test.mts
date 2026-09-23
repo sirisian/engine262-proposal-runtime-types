@@ -37,9 +37,9 @@ const join = 'function join<D: string, P: [].<string>>(delimiter: D, ...parts: P
 // -- Inference and return-type evaluation over the bindings --------------------
 test('an unconstrained parameter is inferred and the return type resolves over it', () => {
   // id<T>(x: T): T - T is inferred from the argument's runtime type
-  expect(ok('function id<T>(x: T): T { return x; } Reflect.typeOf(id((5 := uint32))) === uint32;')).toBe(true);
+  expect(ok('function id<T: type>(x: T): T { return x; } Reflect.typeOf(id((5 := uint32))) === uint32;')).toBe(true);
   // an unconstrained parameter infers the widened base of a plain value
-  expect(ok('function id<T>(x: T): T { return x; } Reflect.typeOf(id("hi")) === string;')).toBe(true);
+  expect(ok('function id<T: type>(x: T): T { return x; } Reflect.typeOf(id("hi")) === string;')).toBe(true);
 });
 
 // -- The literal-under-constraint rule -----------------------------------------
@@ -72,9 +72,9 @@ test('String Join (847) - Reflect.typeOf of a generic call is the joined literal
 test('a computed constraint is evaluated over earlier bindings, left to right', () => {
   // pair<T, U: baseOf(T)>: U's constraint reads T (bound first)
   const baseOf = 'function baseOf(T) { return T; } ';
-  expect(ok(`${baseOf}function pair<T, U: baseOf(T)>(x: T, y: U): U { return y; } Reflect.typeOf(pair((5 := uint32), (7 := uint32))) === uint32;`)).toBe(true);
+  expect(ok(`${baseOf}function pair<T: type, U: baseOf(T)>(x: T, y: U): U { return y; } Reflect.typeOf(pair((5 := uint32), (7 := uint32))) === uint32;`)).toBe(true);
   // a binding that violates the computed constraint is rejected
-  expect(evaluated(`${baseOf}function pair<T, U: baseOf(T)>(x: T, y: U): U { return y; } try { pair((5 := uint32), (7 := uint16)); "no-throw"; } catch (e) { "rejected"; }`)).toBe('rejected');
+  expect(evaluated(`${baseOf}function pair<T: type, U: baseOf(T)>(x: T, y: U): U { return y; } try { pair((5 := uint32), (7 := uint16)); "no-throw"; } catch (e) { "rejected"; }`)).toBe('rejected');
 });
 
 // -- The typed-literal value carrier is transparent ----------------------------
@@ -92,7 +92,7 @@ test('a value carrying a literal type still behaves as its underlying primitive'
 // the widened `object` primitive.
 test('pluck over a runtime object infers the key literally from keysOf(T)', () => {
   const kit = 'function keysOf(T) { let ks = Reflect.getReflection(T).properties.map(p => Reflect.makeType({ kind: "literal", value: p.name, base: string })); return ks.length === 1 ? ks[0] : Reflect.makeType({ kind: "union", members: ks }); } ';
-  const pluck = 'function pluck<T, K: keysOf(T)>(o: T, key: K): K { return key; } ';
+  const pluck = 'function pluck<T: type, K: keysOf(T)>(o: T, key: K): K { return key; } ';
   // K binds to the literal key, observable through the returned value
   expect(evaluated(`${kit}${pluck}let user = { name: "n", age: (3 := uint32) }; Reflect.typeOf(pluck(user, "name")) === type "name" ? "ok" : "no";`)).toBe('ok');
   // a key not on the object fails the keysOf(T) constraint
@@ -119,11 +119,11 @@ test('a TYPE parameter given a literal argument reads as the type', () => {
   // because the parser collapsed `:` and `extends` into one field, leaving
   // GetValue to guess from the bound record's kind, which is `literal` for a
   // type parameter given a literal argument too.
-  expect(evaluated("type L = 'abc'; function f<P>() { return Reflect.getReflection(P).kind; }"
+  expect(evaluated("type L = 'abc'; function f<P: type>() { return Reflect.getReflection(P).kind; }"
     + ' String(f.<L>());')).toBe('literal');
-  expect(evaluated("type L = 'abc'; function f<P extends string>() { return Reflect.getReflection(P).kind; }"
+  expect(evaluated("type L = 'abc'; function f<P: type extends string>() { return Reflect.getReflection(P).kind; }"
     + ' String(f.<L>());')).toBe('literal');
-  expect(evaluated("type L = 'abc'; function f<P>() { return P === L; } String(f.<L>());")).toBe('true');
+  expect(evaluated("type L = 'abc'; function f<P: type>() { return P === L; } String(f.<L>());")).toBe('true');
 });
 
 test('a VALUE parameter still reads as its value', () => {
@@ -141,14 +141,14 @@ test('one literal serves as both kinds of argument without interference', () => 
   // expects 'literal'.
   const src = "type L = 'abc';"
     + ' function v<P: string>() { return String(P); }'
-    + ' function ty<P>() { return Reflect.getReflection(P).kind; }';
+    + ' function ty<P: type>() { return Reflect.getReflection(P).kind; }';
   expect(evaluated(`${src} String(v.<L>() + '|' + ty.<L>() + '|' + v.<L>());`)).toBe('abc|literal|abc');
   expect(evaluated(`${src} String(ty.<L>() + '|' + v.<L>() + '|' + ty.<L>());`)).toBe('literal|abc|literal');
 });
 
 test('every literal kind reaches a type parameter as a type', () => {
   for (const literal of ["'abc'", '42', 'true']) {
-    expect(evaluated(`type L = ${literal}; function f<P>() { return Reflect.getReflection(P).kind; }`
+    expect(evaluated(`type L = ${literal}; function f<P: type>() { return Reflect.getReflection(P).kind; }`
       + ' String(f.<L>());')).toBe('literal');
   }
 });
@@ -162,7 +162,7 @@ test('other type kinds are unaffected', () => {
     ["'a' | 'b'", 'union'],
   ];
   for (const [written, kind] of cases) {
-    expect(evaluated(`type L = ${written}; function f<P>() { return Reflect.getReflection(P).kind; }`
+    expect(evaluated(`type L = ${written}; function f<P: type>() { return Reflect.getReflection(P).kind; }`
       + ' String(f.<L>());')).toBe(kind);
   }
 });
@@ -180,7 +180,7 @@ test('a type variable is inferred from a CALLBACK, in both directions', () => {
   // checked, never that the right thing was inferred: an earlier survey of this
   // area read six capabilities as working on the strength of refusals, and four
   // of them refused every annotation, right or wrong.
-  const F = 'function f<K>(cb: () => K): K { return cb(); } ';
+  const F = 'function f<K: type>(cb: () => K): K { return cb(); } ';
   expectStaticTypeError(`${F} let s: string = f(() => (1 := uint8));`);
   expect(ok(`${F} let s: uint8 = f(() => (1 := uint8));`)).toBe(true);
 
@@ -191,7 +191,7 @@ test('a type variable is inferred from a CALLBACK, in both directions', () => {
 
   // A variable in the callback's PARAMETER position binds too, which is the
   // other half of a signature's shape.
-  const P = 'function p<T>(cb: (v: T) => void, x: T): T { return x; } ';
+  const P = 'function p<T: type>(cb: (v: T) => void, x: T): T { return x; } ';
   expectStaticTypeError(`${P} let s: string = p((v: uint8) => {}, (1 := uint8));`);
   expect(ok(`${P} let s: uint8 = p((v: uint8) => {}, (1 := uint8));`)).toBe(true);
 });
@@ -201,7 +201,7 @@ test('two variables bind from one call, which is `Map.groupBy`\'s shape', () => 
   // where T comes from the items and K from the callback's RETURN and from
   // nowhere else. This is that shape written as a user generic, and it is what
   // the standard library's typed statics rest on.
-  const G = 'function g<T, K>(a: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
+  const G = 'function g<T: type, K: type>(a: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
     + 'const a: [].<uint8> = [1]; ';
   // Guarded by `if (false)`, so what is asserted is the STATIC property: the
   // stub returns *undefined*, which no Map annotation admits at run time, and a
@@ -223,7 +223,7 @@ test('a type variable is inferred through an INTERFACE-typed parameter', () => {
   // Recovered by RECONSTRUCTION: for each unbound variable, rebuild the
   // interface at that variable and ask whether it is the parameter's own type.
   // Exact, and it cannot mistake a hand-written object type for an interface.
-  const F = 'function f<T>(i: Iterable.<T>): T { throw new Error(); } ';
+  const F = 'function f<T: type>(i: Iterable.<T>): T { throw new Error(); } ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expectStaticTypeError(guard(`${F} const a: [].<uint8> = [1]; let s: string = f(a);`));
   expect(ok(guard(`${F} const a: [].<uint8> = [1]; let s: uint8 = f(a);`))).toBe(true);
@@ -244,7 +244,7 @@ test('an INFERRED binding reaches a callback\'s unannotated parameter', () => {
   //
   // This is the design's stated purpose for the standard library's signatures,
   // "so fully typed call sites infer their callbacks".
-  const G = 'function g<T>(a: [].<T>, cb: (v: T) => void) {} const a: [].<uint8> = [1]; ';
+  const G = 'function g<T: type>(a: [].<T>, cb: (v: T) => void) {} const a: [].<uint8> = [1]; ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expectStaticTypeError(guard(`${G} g(a, (v) => { let s: string = v; });`));
   expect(ok(guard(`${G} g(a, (v) => { let s: uint8 = v; });`))).toBe(true);
@@ -279,7 +279,7 @@ test('a BLOCK-bodied callback binds a variable from its return', () => {
   // A wrong body is still refused - the wanted type GUIDES the contribution
   // rather than replacing it - which is the property that keeps this from making
   // every unannotated body trivially conform.
-  const G = 'function gb<T, K>(i: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
+  const G = 'function gb<T: type, K: type>(i: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
     + 'const a: [].<uint8> = [1]; ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expect(ok(guard(`${G} let m: Map.<string, [].<uint8>> = gb(a, (v) => { return "k"; });`))).toBe(true);
@@ -292,7 +292,7 @@ test('a type variable is inferred through a UNION parameter', () => {
   // had no case for a union - so a variable inside one bound nothing and
   // `f<T>(x: [].<T> | Set.<T>)` was unconstrained however plainly the argument
   // matched an arm.
-  const F = 'function f<T>(x: [].<T> | Set.<T>): T { throw new Error(); } ';
+  const F = 'function f<T: type>(x: [].<T> | Set.<T>): T { throw new Error(); } ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expectStaticTypeError(guard(`${F} const a: [].<uint8> = [1]; let s: string = f(a);`));
   expect(ok(guard(`${F} const a: [].<uint8> = [1]; let s: uint8 = f(a);`))).toBe(true);
@@ -300,7 +300,7 @@ test('a type variable is inferred through a UNION parameter', () => {
   expectStaticTypeError(guard(`${F} let c: Set.<uint8> = new Set(); let s: string = f(c);`));
   expect(ok(guard(`${F} let c: Set.<uint8> = new Set(); let s: uint8 = f(c);`))).toBe(true);
   // A union with a plain arm - `T | undefined`, the shape an optional takes.
-  const P = 'function p<T>(x: T | undefined): T { throw new Error(); } const a: uint8 = (1 := uint8); ';
+  const P = 'function p<T: type>(x: T | undefined): T { throw new Error(); } const a: uint8 = (1 := uint8); ';
   expectStaticTypeError(guard(`${P} let s: string = p(a);`));
   expect(ok(guard(`${P} let s: uint8 = p(a);`))).toBe(true);
 });
@@ -313,8 +313,8 @@ test('the arm that binds is chosen by KIND, not by position', () => {
   // from the array arm, while the same union written the other way round worked.
   // Order is not supposed to decide this.
   const guard = (src: string) => `if (false) { ${src} } 1;`;
-  const forward = 'function f<T>(x: [].<T> | Set.<T>): T { throw new Error(); } ';
-  const reversed = 'function h<T>(x: Set.<T> | [].<T>): T { throw new Error(); } ';
+  const forward = 'function f<T: type>(x: [].<T> | Set.<T>): T { throw new Error(); } ';
+  const reversed = 'function h<T: type>(x: Set.<T> | [].<T>): T { throw new Error(); } ';
   for (const [name, decl, call] of [['forward', forward, 'f'], ['reversed', reversed, 'h']]) {
     expectStaticTypeError(guard(`${decl} let c: Set.<uint8> = new Set(); let s: string = ${call}(c);`));
     expect(ok(guard(`${decl} let c: Set.<uint8> = new Set(); let s: uint8 = ${call}(c);`)), name).toBe(true);
@@ -332,7 +332,7 @@ test('a RESULT-ONLY variable is bound by the call\'s contextual type', () => {
   // #sec-overloading-on-return-type calls its contextual type and which
   // `staticTypeIn` already records on the node for overload resolution. This
   // reads the same record for a second purpose.
-  const F = 'function f<T>(): T { throw new Error(); } ';
+  const F = 'function f<T: type>(): T { throw new Error(); } ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expect(ok(guard(`${F} let n: uint8 = f(); let good: uint8 = n;`))).toBe(true);
   expectStaticTypeError(guard(`${F} let n: uint8 = f(); let bad: string = n;`));
@@ -346,13 +346,13 @@ test('an ARGUMENT beats the contextual type', () => {
   // The context is consulted AFTER the arguments and only for variables they
   // leave unbound: an argument is a stronger statement than a position, and a
   // contextual match must not overrule what was passed.
-  const P = 'function p<T>(x: T): T { return x; } const a: uint8 = (1 := uint8); ';
+  const P = 'function p<T: type>(x: T): T { return x; } const a: uint8 = (1 := uint8); ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expect(ok(guard(`${P} let n: uint8 = p(a);`))).toBe(true);
   expectStaticTypeError(guard(`${P} let n: string = p(a);`));
   // A signature with BOTH kinds binds each from its own source - T from the
   // argument, U from the annotation.
-  const M = 'function m<T, U>(x: T): U { throw new Error(); } const a: uint8 = (1 := uint8); ';
+  const M = 'function m<T: type, U: type>(x: T): U { throw new Error(); } const a: uint8 = (1 := uint8); ';
   expect(ok(guard(`${M} let n: string = m(a); let good: string = n;`))).toBe(true);
   expectStaticTypeError(guard(`${M} let n: string = m(a); let bad: uint8 = n;`));
 });
@@ -372,7 +372,7 @@ test('a constraint of any shape keeps the argument\'s literal', () => {
 });
 
 test('an unconstrained parameter still widens', () => {
-  expect(evaluated('function f<T>(a: T): T { return a; } String(Reflect.typeOf(f(1)));')).toBe('number');
+  expect(evaluated('function f<T: type>(a: T): T { return a; } String(Reflect.typeOf(f(1)));')).toBe('number');
   expect(evaluated('function f<T: uint8>(a: T): T { return a; } String(Reflect.typeOf(f(1)));')).toBe('uint.<8>');
 });
 
@@ -446,7 +446,7 @@ test('the other value-parameter forms are unaffected', () => {
   expect(evaluated('function g<N: uint32>(): uint32 where N > 2 { return (1 := uint32); } String(g.<4>());')).toBe('1');
   expect(ok('class G<N: uint32> { } let g: G.<4> = new G.<4>();')).toBe(true);
   // And a TYPE parameter, the `extends` spelling, takes a type argument.
-  expect(evaluated('function f<T extends uint8>(a: T): T { return a; } String(f.<uint8>(1));')).toBe('1');
+  expect(evaluated('function f<T: type extends uint8>(a: T): T { return a; } String(f.<uint8>(1));')).toBe('1');
 });
 
 // -- A composite literal at a constrained parameter ----------------------------
@@ -457,20 +457,20 @@ test('an object literal adapts to the parameter\'s constraint', () => {
   // binding, while the same literal at a plain `o: { a: uint8 }` parameter
   // adapted and was accepted, as did the explicit `f.<{ a: uint8 }>(...)`.
   // One argument, one target shape, three spellings, two answers.
-  expect(evaluated('function f<T extends { a: uint8 }>(o: T): T { return o; } String(f({ a: 1 }).a);')).toBe('1');
-  expect(evaluated('function f<T extends { a: { b: uint8 } }>(o: T): T { return o; } '
+  expect(evaluated('function f<T: type extends { a: uint8 }>(o: T): T { return o; } String(f({ a: 1 }).a);')).toBe('1');
+  expect(evaluated('function f<T: type extends { a: { b: uint8 } }>(o: T): T { return o; } '
     + 'String(f({ a: { b: 1 } }).a.b);')).toBe('1');
   // The spellings that already worked, pinned.
-  expect(evaluated('function f<T extends { a: uint8 }>(o: T): T { return o; } '
+  expect(evaluated('function f<T: type extends { a: uint8 }>(o: T): T { return o; } '
     + 'String(f.<{ a: uint8 }>({ a: 1 }).a);')).toBe('1');
-  expect(evaluated('function f<T extends { a: uint8 }>(o: T): T { return o; } '
+  expect(evaluated('function f<T: type extends { a: uint8 }>(o: T): T { return o; } '
     + 'let o: { a: uint8 } = { a: 1 }; String(f(o).a);')).toBe('1');
 });
 
 test('adapting does not admit what the constraint refuses', () => {
   // And the diagnostics are now the MEMBER's rather than the whole shape's,
   // which is what adapting buys beside the acceptance.
-  const F = 'function f<T extends { a: uint8 }>(o: T): T { return o; } ';
+  const F = 'function f<T: type extends { a: uint8 }>(o: T): T { return o; } ';
   expectStaticTypeError(`${F}f({ a: 'x' });`);
   expectStaticTypeError(`${F}f({ a: 300 });`);
   expectStaticTypeError(`${F}f({ a: 1, b: 2 });`);
@@ -478,7 +478,7 @@ test('adapting does not admit what the constraint refuses', () => {
 });
 
 test('an unconstrained parameter still takes the literal bare', () => {
-  expect(evaluated('function f<T>(o: T): T { return o; } String(Reflect.typeOf(f({ a: 1 })));')).toBe('{ a: number }');
+  expect(evaluated('function f<T: type>(o: T): T { return o; } String(Reflect.typeOf(f({ a: 1 })));')).toBe('{ a: number }');
 });
 
 // -- An array argument binds the literals it was written with ------------------
@@ -488,20 +488,20 @@ test('an array argument at a constrained parameter keeps its elements\' literals
   // `t: [].<uint8>` parameter and not an inferred binding. The tuple of element
   // literal types is what the PACK path already binds for trailing arguments -
   // "A PACK binds a tuple of literals" - applied to one array argument.
-  expect(evaluated('function f<T extends [].<uint8>>(t: T): T { return t; } String(f([1])[0]);')).toBe('1');
-  expect(evaluated('function f<T extends [uint8]>(t: T): T { return t; } String(f([1])[0]);')).toBe('1');
-  expect(evaluated('function f<T extends [].<string>>(t: T): T { return t; } f([\'a\'])[0];')).toBe('a');
+  expect(evaluated('function f<T: type extends [].<uint8>>(t: T): T { return t; } String(f([1])[0]);')).toBe('1');
+  expect(evaluated('function f<T: type extends [uint8]>(t: T): T { return t; } String(f([1])[0]);')).toBe('1');
+  expect(evaluated('function f<T: type extends [].<string>>(t: T): T { return t; } f([\'a\'])[0];')).toBe('a');
 });
 
 test('the constraint still decides what an array argument may hold', () => {
-  expectStaticTypeError('function f<T extends [].<uint8>>(t: T): T { return t; } f([300]);');
-  expectStaticTypeError("function f<T extends [].<uint8>>(t: T): T { return t; } f(['x']);");
+  expectStaticTypeError('function f<T: type extends [].<uint8>>(t: T): T { return t; } f([300]);');
+  expectStaticTypeError("function f<T: type extends [].<uint8>>(t: T): T { return t; } f(['x']);");
   // An element that is itself an Object has no literal type, so such an array
   // declines the rule and contributes its own type, as before.
-  expectThrown('function f<T extends [].<[].<uint8>>>(t: T): T { return t; } f([[1]]);',
+  expectThrown('function f<T: type extends [].<[].<uint8>>>(t: T): T { return t; } f([[1]]);',
     'is not assignable to');
 });
 
 test('an unconstrained parameter still widens an array argument', () => {
-  expect(evaluated('function f<T>(t: T): T { return t; } String(Reflect.typeOf(f([1])));')).toBe('[].<number>');
+  expect(evaluated('function f<T: type>(t: T): T { return t; } String(Reflect.typeOf(f([1])));')).toBe('[].<number>');
 });

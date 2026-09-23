@@ -68,9 +68,9 @@ test('a head mentioning a type parameter defers to the application', () => {
   // It reads a parameter that is not bound, so whether it carries a matcher is
   // not known until the declaration is applied - the same deferral
   // #sec-evaluatetotypeobject draws everywhere else.
-  expect(ok('function f<T>(Foo: T, x: any) { return match (x) { when Foo(let a): 1; default: 2; }; }')).toBe(true);
+  expect(ok('function f<T: type>(Foo: T, x: any) { return match (x) { when Foo(let a): 1; default: 2; }; }')).toBe(true);
   // And the application is judged.
-  expectThrownKind('function f<T>(Foo: T, x: any) { return match (x) { when Foo(let a): 1; default: 2; }; } '
+  expectThrownKind('function f<T: type>(Foo: T, x: any) { return match (x) { when Foo(let a): 1; default: 2; }; } '
     + 'let r = f.<uint8>(5, 1);', 'TypeError');
 });
 

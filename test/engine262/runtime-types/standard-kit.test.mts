@@ -233,11 +233,11 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['prefixed', 'typeof std.prefixed === "function" && std.prefixed.length === 1', ''],
   ['stringPattern', 'typeof std.stringPattern === "function"', ''],
   ['inverse', 'typeof std.inverse === "function" && std.inverse.length === 2 && unpack(new Box.<uint8>(1)) === "uint.<8>"',
-    'class Box<T> { v: T; constructor(v: T) { this.v = v; } }' + NL
+    'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function unboxed(Bs) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Bs).elements.map((e) => ({ type: Reflect.getReflection(e.type).generic.arguments[0] })) }); }' + NL
     + '@std.inverse(unboxed)' + NL
     + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); }' + NL
-    + 'function unpack<...Ts>(...bs: boxesOf(Ts)): string { return Reflect.getReflection(Ts).elements.map((e) => String(e.type)).join(","); }'],
+    + 'function unpack<...Ts: [].<type>>(...bs: boxesOf(Ts)): string { return Reflect.getReflection(Ts).elements.map((e) => String(e.type)).join(","); }'],
 ];
 
 test('the table covers every export, and only exports', async () => {

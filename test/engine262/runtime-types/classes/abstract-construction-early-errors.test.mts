@@ -72,11 +72,11 @@ test.each([
 test.each([
   [
     "generic alias",
-    "abstract class A<T>{m():T;}const K=A;function f(){new K.<uint8>();}"
+    "abstract class A<T: type>{m():T;}const K=A;function f(){new K.<uint8>();}"
   ],
   [
     "specialized alias",
-    "abstract class A<T>{m():T;}const K=A.<uint8>;function f(){new K();}"
+    "abstract class A<T: type>{m():T;}const K=A.<uint8>;function f(){new K();}"
   ],
   [
     "class expression direct",

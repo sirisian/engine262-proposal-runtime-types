@@ -319,7 +319,7 @@ test.each([
   ],
   [
     "R56-E07: generic private receiver stays open",
-    "class C{#x:uint8=1;f<T>(o:T){return o.#x;}}",
+    "class C{#x:uint8=1;f<T: type>(o:T){return o.#x;}}",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -328,7 +328,7 @@ test.each([
   ],
   [
     "R56-E08: generic private getter specialized remains valid",
-    "class C<T>{#v:T;constructor(v:T){this.#v=v;}get #x():T{return this.#v;}f(o:C.<T>):T{return o.#x;}}const c=new C.<uint8>(1);globalThis.settled=String(c.f(c));",
+    "class C<T: type>{#v:T;constructor(v:T){this.#v=v;}get #x():T{return this.#v;}f(o:C.<T>):T{return o.#x;}}const c=new C.<uint8>(1);globalThis.settled=String(c.f(c));",
     {
       "completion": "normal",
       "bodyRan": "true",

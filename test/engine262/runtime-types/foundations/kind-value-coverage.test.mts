@@ -44,8 +44,8 @@ test('every Type Record kind admits a value', () => {
   expect(evaluated('let s: shared uint8 = 1; String(Number(s));')).toBe('1');
 
   // ~parameter~ (a generic parameter) and ~application~ (a generic instantiated)
-  expect(evaluated('function f<T>(x: T): T { return x; } let n: uint8 = 5; String(Number(f.<uint8>(n)));')).toBe('5');
-  expect(evaluated('type Box<T> = { v: T }; let b: Box.<uint8> = { v: 1 }; String(Number(b.v));')).toBe('1');
+  expect(evaluated('function f<T: type>(x: T): T { return x; } let n: uint8 = 5; String(Number(f.<uint8>(n)));')).toBe('5');
+  expect(evaluated('type Box<T: type> = { v: T }; let b: Box.<uint8> = { v: 1 }; String(Number(b.v));')).toBe('1');
 
   // ~parameterized~ needs its metadata claimed and a conversion declared.
   expect(evaluated(`${META} let a: float64.<{ m: 1 }> = 5; String(Number(a));`)).toBe('5');

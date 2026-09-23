@@ -74,24 +74,24 @@ test('a window is a member of the array and tuple family', () => {
   // Type Record the way a vector does, for the same reason: the type is not
   // recoverable from the value.
   expect(evaluated('const b = new ArrayBuffer(4);'
-    + ' function f<T extends [].<any>>(p: T) { return p.length; } String(f(Span.<uint8>(b)));')).toBe('4');
-  expect(evaluated('function f<T extends [].<any>>(p: T) { return p.length; }'
+    + ' function f<T: type extends [].<any>>(p: T) { return p.length; } String(f(Span.<uint8>(b)));')).toBe('4');
+  expect(evaluated('function f<T: type extends [].<any>>(p: T) { return p.length; }'
     + ' function w(s: Span.<uint32>) { return s; }'
     + ' let a: [].<uint32> = [1, 2]; String(f(w(a)));')).toBe('2');
-  expect(evaluated('function f<T extends [].<any>>(p: T) { return p.length; }'
+  expect(evaluated('function f<T: type extends [].<any>>(p: T) { return p.length; }'
     + ' class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' String(f(s.fields.x));')).toBe('1');
   // the controls: what the bound admitted before must still be admitted, and
   // what it refused must still be refused
-  expect(evaluated('function f<T extends [].<any>>(p: T) { return p.length; } String(f([1, 2, 3]));')).toBe('3');
-  expect(evaluated('function f<T extends [].<any>>(p: T) { return p.length; }'
+  expect(evaluated('function f<T: type extends [].<any>>(p: T) { return p.length; } String(f([1, 2, 3]));')).toBe('3');
+  expect(evaluated('function f<T: type extends [].<any>>(p: T) { return p.length; }'
     + ' let t: [uint8, uint8] = [1, 2]; String(f(t));')).toBe('2');
   // Refused, and refused BEFORE the source runs: `{}` against `[].<any>` is
   // decidable from the types, and #sec-type-errors makes a determinable type
   // error an Early Error, which a `try`/`catch` cannot catch. This asserted the
   // catchable kind, which pinned the instrument rather than the rule - what the
   // comment above asks for is that the refusal still happens.
-  expectStaticTypeError('function f<T extends [].<any>>(p: T) { return p.length; } f({});');
+  expectStaticTypeError('function f<T: type extends [].<any>>(p: T) { return p.length; } f({});');
 });
 
 // -- membership is structural, not a prototype chain --------------------------

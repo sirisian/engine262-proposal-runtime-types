@@ -129,7 +129,7 @@ test.each([
   ],
   [
     "specialized inherited return",
-    "class B<T>{[Symbol.iterator]():T{throw 1;}}class C extends B.<number>{}function f(x:C){[...x];}"
+    "class B<T: type>{[Symbol.iterator]():T{throw 1;}}class C extends B.<number>{}function f(x:C){[...x];}"
   ],
   [
     "sync fallback raw scalar",

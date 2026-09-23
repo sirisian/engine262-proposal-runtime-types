@@ -36,7 +36,7 @@ test('nor call a function that is not evaluable, or that the program reassigns',
 
 test('a type position may not read a mutable binding', () => {
   expectStaticTypeError('let K = uint8; let x: K = 3;');
-  expectStaticTypeError('let k = uint8; function g<T = k>(x: T) {}');
+  expectStaticTypeError('let k = uint8; function g<T: type = k>(x: T) {}');
   expectStaticTypeError('let N = 4; let a: [N].<uint8>;');
 });
 
@@ -47,7 +47,7 @@ test('immutable bindings, evaluable functions, generic parameters and the librar
   // A recursive builder is judged by what it reads.
   expect(evaluated('function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); } type T = [uint8 = fact(4)]; let t: T = []; String(t[0]);')).toBe('24');
   expect(evaluated('const k = 5; enum E { A = k, B = A + 1 } String(E.B);')).toBe('6');
-  expect(evaluated('function id<T>(x: T): T { let y: T = x; return y; } String(id(3));')).toBe('3');
+  expect(evaluated('function id<T: type>(x: T): T { let y: T = x; return y; } String(id(3));')).toBe('3');
   expect(evaluated('type T = [uint8 = Math.max(1, 2)]; let t: T = []; String(t[0]);')).toBe('2');
 });
 

@@ -94,11 +94,11 @@ test('6.8 a generic function may carry a typed rest away from the end', () => {
   // it runs in - `[].<T>` before substitution - admits rather than throwing,
   // since the assignment distributes and the per-parameter check enforces.
   expect(evaluated(`
-    function f<T>(...a: [].<T>, b: string) { return a.length + ":" + b; }
+    function f<T: type>(...a: [].<T>, b: string) { return a.length + ":" + b; }
     f.<number>(1, 2, "x");
   `)).toBe('2:x');
   expect(evaluated(`
-    function f<T>(...a: [].<T>) { return a.length; }
+    function f<T: type>(...a: [].<T>) { return a.length; }
     String(f.<number>(1, 2));
   `)).toBe('2');
 });

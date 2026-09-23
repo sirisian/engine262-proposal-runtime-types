@@ -13,7 +13,7 @@ test('one readonly alternative suffices, including structural and interface view
   expectStaticTypeError('class A { readonly x: uint8 = 1; } class B { x: uint8 = 2; } function unused(o: A | B) { o.x = 3; }');
   expectStaticTypeError('function unused(o: { readonly x: uint8, a: string } | { x: uint8, b: string }) { o.x = 1; }');
   expectStaticTypeError('interface A { readonly x: uint8; a: string } interface B { x: uint8; b: string } function unused(o: A | B) { o.x++; }');
-  expectStaticTypeError('class Base<T> { readonly x: T; } class A extends Base.<uint8> {} class B { x: uint8; } function unused(o: A | B) { o.x = 3; }');
+  expectStaticTypeError('class Base<T: type> { readonly x: T; } class A extends Base.<uint8> {} class B { x: uint8; } function unused(o: A | B) { o.x = 3; }');
 });
 
 test('symbol-keyed union writes enforce readonly too', () => {

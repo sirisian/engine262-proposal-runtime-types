@@ -40,7 +40,7 @@ test('a callee may be an alias, an applied primitive, or a generic application',
   // would miss them.
   expect(evaluated('type U = uint32; String(Number(U(1)));')).toBe('1');
   expect(evaluated('String(rational.<64>(1));')).toBe('1');
-  expect(evaluated('type A<T> = T; String(Number(A.<uint32>(1)));')).toBe('1');
+  expect(evaluated('type A<T: type> = T; String(Number(A.<uint32>(1)));')).toBe('1');
 });
 
 test('a CLASS callee is not a conversion', () => {

@@ -292,7 +292,7 @@ test.each([
   },
   {
     "name": "R66-extra-06: class generic shadows outer value",
-    "source": "function f(T:uint8){class C<T>{[T(1)](){}}}",
+    "source": "function f(T:uint8){class C<T: type>{[T(1)](){}}}",
     "expected": {
       "completion": "normal",
       "bodyRan": "true",

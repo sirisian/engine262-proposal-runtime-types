@@ -20,13 +20,13 @@ import { evaluated, expectThrown, expectThrownFlagOff, ok, expectStaticTypeError
  */
 
 test('every array and tuple satisfies the array-family bound', () => {
-  const G = "function g<T extends [].<any>>(v: T): string { return 'ok'; } ";
+  const G = "function g<T: type extends [].<any>>(v: T): string { return 'ok'; } ";
   expect(evaluated(`${G}const a: [].<number> = [1]; g(a);`)).toBe('ok');
   expect(evaluated(`${G}const a: [4].<uint8> = [1, 2, 3, 4]; g(a);`)).toBe('ok');
   expect(evaluated(`${G}const t: [number, string] = [1, 'a']; g(t);`)).toBe('ok');
   expect(evaluated(`${G}g([1, 'a']);`)).toBe('ok');
   // the other spelling the design documents use
-  expect(evaluated("function g<T extends [].<any>>(v: T): string { return 'ok'; }"
+  expect(evaluated("function g<T: type extends [].<any>>(v: T): string { return 'ok'; }"
     + ' const a: [].<number> = [1]; g(a);')).toBe('ok');
 });
 
@@ -59,9 +59,9 @@ test('a store through the wider view is still checked', () => {
 
 test('the bound composes with the rest of the array work', () => {
   // a parameter bound by the family may be indexed and measured
-  expect(evaluated("function g<T extends [].<any>>(v: T) { return v[0]; }"
+  expect(evaluated("function g<T: type extends [].<any>>(v: T) { return v[0]; }"
     + ' const a: [].<uint8> = [7]; String(g(a));')).toBe('7');
-  expect(evaluated('function g<T extends [].<any>>(v: T) { return v.length; }'
+  expect(evaluated('function g<T: type extends [].<any>>(v: T) { return v.length; }'
     + " const t: [number, string] = [1, 'a']; String(g(t));")).toBe('2');
   // a borrow taken through the wider view writes the original
   expect(evaluated('const a: [].<uint8> = [1]; const b: [].<any> = a;'
@@ -118,8 +118,8 @@ test('an element type is inferred from an array argument', () => {
   // `string`, so returning one is too - see `#sec-issubtype`. The inference
   // being demonstrated - `T` bound to the element type of the argument - is
   // unaffected.
-  expect(evaluated("function g<T>(v: [].<T>): T { return v[0]; } g(['a']);")).toBe('a');
-  expect(evaluated('function g<T>(v: [].<T>): T { return v[0]; } String(g([(1 := int32)]));')).toBe('1');
+  expect(evaluated("function g<T: type>(v: [].<T>): T { return v[0]; } g(['a']);")).toBe('a');
+  expect(evaluated('function g<T: type>(v: [].<T>): T { return v[0]; } String(g([(1 := int32)]));')).toBe('1');
 });
 
 test('mixed, nested, and non-array values are unaffected', () => {

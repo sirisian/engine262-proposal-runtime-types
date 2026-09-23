@@ -49,7 +49,7 @@ test('the interface and object-type spellings are one function type', () => {
 });
 
 test('a generic call signature, and a callable interface in a union without parentheses', () => {
-  expect(evaluated('interface Id { <T>(x: T): T } function f(i: Id) { return i(5); } String(f((x) => x));')).toBe('5');
+  expect(evaluated('interface Id { <T: type>(x: T): T } function f(i: Id) { return i(5); } String(f((x) => x));')).toBe('5');
   // README 1196: "The interface spelling of a call signature is bounded by its
   // braces, so it needs none" - where the arrow form would.
   expect(evaluated('interface I { (uint32): uint32 } let b: I | null = null; String(b);')).toBe('null');
@@ -133,5 +133,5 @@ test('a parameter is a typed binding at run time, as a let is', () => {
   // reassignment through an untyped value was unchecked at run time.
   expectThrownKind('function f(a: uint8) { a = g(); } function g() { return "s"; } f(1);', 'TypeError');
   expect(evaluated('function f(a: uint8) { a = g(); return String(a is uint8); } function g() { return 5; } f(1);')).toBe('true');
-  expect(evaluated('function id<T>(v: T) { return v; } String(id(3));')).toBe('3');
+  expect(evaluated('function id<T: type>(v: T) { return v; } String(id(3));')).toBe('3');
 });

@@ -14,7 +14,7 @@ test.each([
   'class B { get x(): uint8 { return 1; } } class C extends B { bad() { super.x = 2; } }',
   'class C { get x(): uint8 { return 1; } constructor() { this.x = 2; } }',
   'class C { get [Symbol.dispose](): uint8 { return 1; } } function unused(c: C) { c[Symbol.dispose] = 2; }',
-  'class C<T> { get x(): T { throw 0; } } function unused(c: C.<uint8>) { c.x = 2; }',
+  'class C<T: type> { get x(): T { throw 0; } } function unused(c: C.<uint8>) { c.x = 2; }',
   'class B { get x(): uint8 { return 1; } set x(v: uint8) {} } class C extends B { get x(): uint8 { return 1; } } function unused(c: C) { c.x = 2; }',
   'class C { get x() { return uint8(1); } } function unused(c: C) { (c.x) = 2; }',
 ])('rejects a known getter-only store before evaluation: %s', expectStaticTypeError);

@@ -23,8 +23,8 @@ test('class membership does not call its custom matcher', () => {
 });
 
 test('generic matchers infer extracted positions from their subjects', () => {
-  expectStaticTypeError('class E { static [Symbol.customMatcher]<T>(v: T): [T] { return [v]; } } function f(v: uint8) { return match(v) { when E(let x): { let a: [uint8] = x; a; } default: [0]; }; }');
-  expect(evaluated('class E { static [Symbol.customMatcher]<T>(v: T): [T] { return [v]; } } String(match(uint8(1)) { when E(let x): x; default: 0; });')).toBe('1');
+  expectStaticTypeError('class E { static [Symbol.customMatcher]<T: type>(v: T): [T] { return [v]; } } function f(v: uint8) { return match(v) { when E(let x): { let a: [uint8] = x; a; } default: [0]; }; }');
+  expect(evaluated('class E { static [Symbol.customMatcher]<T: type>(v: T): [T] { return [v]; } } String(match(uint8(1)) { when E(let x): x; default: 0; });')).toBe('1');
 });
 
 test('nullable matcher returns preserve non-match and successful tuple positions', () => {

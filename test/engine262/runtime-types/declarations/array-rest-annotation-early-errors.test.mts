@@ -50,11 +50,11 @@ test("R54: scalar alias executed", () => {
 });
 
 test("R54: unconstrained type parameter unused", () => {
-  expectStaticTypeError("function f<T>(x:any){let [...r:T]=x;}");
+  expectStaticTypeError("function f<T: type>(x:any){let [...r:T]=x;}");
 });
 
 test("R54: unconstrained type parameter executed", () => {
-  expectStaticTypeError("function f<T>(x:any){let [...r:T]=x;}f.<uint8>([]);");
+  expectStaticTypeError("function f<T: type>(x:any){let [...r:T]=x;}f.<uint8>([]);");
 });
 
 test("R54: array rest annotated object currently accepted", () => {
@@ -86,7 +86,7 @@ test("R54: array alias valid", () => {
 });
 
 test("R54: array constrained type parameter", () => {
-  expect(ok("function f<T extends [].<any>>(x:any){let [...r:T]=x;}f.<[].<uint8>>([1]);")).toBe(true);
+  expect(ok("function f<T: type extends [].<any>>(x:any){let [...r:T]=x;}f.<[].<uint8>>([1]);")).toBe(true);
 });
 
 test("R54: unknown source still checks elements at runtime", () => {
@@ -118,7 +118,7 @@ test("R54: method rest annotation", () => {
 });
 
 test("R54: scalar constrained generic rest", () => {
-  expectStaticTypeError("function f<T extends number>(x:any){let [...r:T]=x;}");
+  expectStaticTypeError("function f<T: type extends number>(x:any){let [...r:T]=x;}");
 });
 
 test("R54: shadowed array alias resolves locally", () => {

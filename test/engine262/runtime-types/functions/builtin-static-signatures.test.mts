@@ -835,10 +835,10 @@ test('a type PARAMETER rest is judged by its CONSTRAINT', () => {
   // An unconstrained parameter is refused, which is the rule asking for
   // `<C extends [].<any>>` - the form `regexp.md` and `typechallenges.md`
   // already write.
-  expect(ok('if (false) { function f<C extends [].<any>>(...a: C) { return 1; } } 1;')).toBe(true);
-  expect(ok('if (false) { function f<C extends [].<uint32>>(...a: C) { return 1; } } 1;')).toBe(true);
-  expectStaticTypeError('function f<C>(...a: C) { return 1; }');
-  expectStaticTypeError('function f<C extends string>(...a: C) { return 1; }');
+  expect(ok('if (false) { function f<C: type extends [].<any>>(...a: C) { return 1; } } 1;')).toBe(true);
+  expect(ok('if (false) { function f<C: type extends [].<uint32>>(...a: C) { return 1; } } 1;')).toBe(true);
+  expectStaticTypeError('function f<C: type>(...a: C) { return 1; }');
+  expectStaticTypeError('function f<C: type extends string>(...a: C) { return 1; }');
 });
 
 test('the rest-annotation rule leaves the neighbouring forms alone', () => {
@@ -934,10 +934,10 @@ test('a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
   // subtype only upward. Read by subtyping alone, the same pair answered one way
   // at the top level - `let e: Error = a` for an `any` a is admitted - and
   // another one position in.
-  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<any> = new Box.<any>(); let q: Box.<A> = p; } 1;`)).toBe(true);
+  expect(ok(`if (false) { ${SUB} class Box<out T: type> { } let p: Box.<any> = new Box.<any>(); let q: Box.<A> = p; } 1;`)).toBe(true);
   // Covariance still goes ONE WAY, and a real subtype pair still flows.
-  expect(ok(`if (false) { ${SUB} class Box<out T> { } let p: Box.<B> = new Box.<B>(); let q: Box.<A> = p; } 1;`)).toBe(true);
-  expectStaticTypeError(`${SUB} class Box<out T> { } let p: Box.<A> = new Box.<A>(); let q: Box.<B> = p;`);
+  expect(ok(`if (false) { ${SUB} class Box<out T: type> { } let p: Box.<B> = new Box.<B>(); let q: Box.<A> = p; } 1;`)).toBe(true);
+  expectStaticTypeError(`${SUB} class Box<out T: type> { } let p: Box.<A> = new Box.<A>(); let q: Box.<B> = p;`);
 });
 
 test('covariant assignability does not reach an INVARIANT parameter', () => {
@@ -945,7 +945,7 @@ test('covariant assignability does not reach an INVARIANT parameter', () => {
   // `Map.<string, uint8>` used as `Map.<string, number>` "would accept a Number
   // into storage typed uint8". Map is deliberately absent from the library
   // variance table.
-  expectStaticTypeError(`${SUB} class Box<T> { } let p: Box.<any> = new Box.<any>(); let q: Box.<A> = p;`);
+  expectStaticTypeError(`${SUB} class Box<T: type> { } let p: Box.<any> = new Box.<any>(); let q: Box.<A> = p;`);
   expectStaticTypeError('let m: Map.<string, uint8> = new Map.<string, uint8>(); let n: Map.<string, number> = m;');
   expectStaticTypeError('let m: Map.<string, any> = new Map.<string, any>(); let n: Map.<string, uint8> = m;');
 });

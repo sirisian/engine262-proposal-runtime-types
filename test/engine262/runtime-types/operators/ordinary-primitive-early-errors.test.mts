@@ -102,7 +102,7 @@ test.each([
 test.each([
   [
     "specialized fallback",
-    "class C<T>{[Symbol.toPrimitive]:null=null;toString():T{throw 0;}valueOf():object{return {};}}function f(x:C.<object>){`${x}`;}"
+    "class C<T: type>{[Symbol.toPrimitive]:null=null;toString():T{throw 0;}valueOf():object{return {};}}function f(x:C.<object>){`${x}`;}"
   ],
   [
     "inherited fallback",

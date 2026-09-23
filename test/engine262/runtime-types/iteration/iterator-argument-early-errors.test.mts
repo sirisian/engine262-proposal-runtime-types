@@ -137,7 +137,7 @@ test.each([
   ],
   [
     "generic specialization",
-    "class C<T>{[Symbol.iterator](n:T):{next:()=>object}{return {next(){return {};}};}}function f(x:C.<number>){const []=x;}"
+    "class C<T: type>{[Symbol.iterator](n:T):{next:()=>object}{return {next(){return {};}};}}function f(x:C.<number>){const []=x;}"
   ],
   [
     "all invalid overloads",
@@ -174,7 +174,7 @@ test.each([
   ],
   [
     "unbound generic",
-    "class C<T>{[Symbol.iterator](n:T):{next:()=>object}{return {next(){return {};}};}}function f<T>(x:C.<T>){const []=x;}"
+    "class C<T: type>{[Symbol.iterator](n:T):{next:()=>object}{return {next(){return {};}};}}function f<T: type>(x:C.<T>){const []=x;}"
   ],
   [
     "overload viable",

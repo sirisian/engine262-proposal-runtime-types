@@ -8,7 +8,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 
 // ---- B.1 SIMD slice: value packs, where over class parameters, value view, specialized values, identity ----
 const VEC = `
-class vec<T, N: uint32> {
+class vec<T: type, N: uint32> {
   #lanes: [].<T>;
   constructor(xs: [].<T>) { this.#lanes = xs; }
   swizzle<...I: [].<uint32>>(): [].<T> where I.every((i) => i < N) && I.length > 0 {
@@ -43,7 +43,7 @@ test('the pack reflects with its variadic flag', () => {
 
 // ---- B.2 ECS: ref-distribution, two same-bound packs, named runs, forwarding ----
 test('two same-bound adjacent type packs bind by names and positionally', () => {
-  const W = 'class Component {} class Transform extends Component {} class Velocity extends Component {} class Frozen extends Component {} class World { each<...Cs extends [].<Component>, ...Not extends [].<Component>>(): string { return String(Reflect.getReflection(Cs).elements.length) + "/" + String(Reflect.getReflection(Not).elements.length); } }';
+  const W = 'class Component {} class Transform extends Component {} class Velocity extends Component {} class Frozen extends Component {} class World { each<...Cs: [].<type> extends [].<Component>, ...Not: [].<type> extends [].<Component>>(): string { return String(Reflect.getReflection(Cs).elements.length) + "/" + String(Reflect.getReflection(Not).elements.length); } }';
   expect(evaluated(`${W} new World().each.<Cs: Transform, Not: Frozen>();`)).toBe('1/1');
   expect(evaluated(`${W} new World().each.<Transform, Velocity>();`)).toBe('2/0');
 });
@@ -52,16 +52,16 @@ test('a pack infers from ref-rest arguments, and a ref run forwards', () => {
   // `ref ...xs: Cs` binds NO array - the run of the callers' locations - and
   // Cs binds from the referents' types; `cb(...xs)` forwards the run into the
   // callback's ref-rest position; each `ref x` in the callback writes through.
-  expect(evaluated('function apply2<...Cs>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a === 2 && f === 3);')).toBe('true');
+  expect(evaluated('function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a === 2 && f === 3);')).toBe('true');
 });
 
 // ---- B.3 Typed event bus: generic signature records end to end ----
-const BUS = 'class Click { x: uint8 = 1; } class KeyDown {} function logAny<T>(e: T): void {} function route(e: Click): string { return "click"; } function route<T>(e: T): string { return "one"; } function route<...Es>(...es: Es): string { return "many"; }';
+const BUS = 'class Click { x: uint8 = 1; } class KeyDown {} function logAny<T: type>(e: T): void {} function route(e: Click): string { return "click"; } function route<T: type>(e: T): string { return "one"; } function route<...Es: [].<type>>(...es: Es): string { return "many"; }';
 
 test('identity, the assignability directions, and the overload ladder compose', () => {
-  expect(evaluated(`${BUS} type Handler = <T>(e: T) => void; String(Reflect.typeOf(logAny) === Handler);`)).toBe('true');
-  expect(evaluated(`${BUS} let h: <U>(e: U) => void = logAny; "ok";`)).toBe('ok');
-  expectThrown(`${BUS} let h2: <T>(e: T) => void = (e: Click): void => {};`, 'not assignable');
+  expect(evaluated(`${BUS} type Handler = <T: type>(e: T) => void; String(Reflect.typeOf(logAny) === Handler);`)).toBe('true');
+  expect(evaluated(`${BUS} let h: <U: type>(e: U) => void = logAny; "ok";`)).toBe('ok');
+  expectThrown(`${BUS} let h2: <T: type>(e: T) => void = (e: Click): void => {};`, 'not assignable');
   expect(evaluated(`${BUS} let g: (e: Click) => void = logAny; g(new Click()); "ok";`)).toBe('ok');
   expect(evaluated(`${BUS} route(new Click());`)).toBe('click');
   expect(evaluated(`${BUS} route(new KeyDown());`)).toBe('one');
@@ -76,12 +76,12 @@ test('a class satisfies a generic interface by shape under its own parameter nam
   // This was not a gap: classes are NOMINAL here, so an instance satisfies an
   // interface by declaring `implements` (an object literal satisfies by shape).
   // Under `implements`, the generic method compares up to renaming.
-  expect(evaluated('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class SimpleBus implements Bus { on<U>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
+  expect(evaluated('interface Bus { on<T: type>(name: string, h: (e: T) => void): void; } class SimpleBus implements Bus { on<U: type>(name: string, h: (e: U) => void): void {} } let b: Bus = new SimpleBus(); "ok";')).toBe('ok');
   expect(evaluated('interface Bus { on(name: string): void; } let b: Bus = { on(name: string): void {} }; "ok";')).toBe('ok');
 });
 
 test('implements refuses a generic method of a different shape', () => {
-  expectThrown('interface Bus { on<T>(name: string, h: (e: T) => void): void; } class Bad implements Bus { on<T, U>(name: string, h: (e: T) => void): void {} }', 'not assignable');
+  expectThrown('interface Bus { on<T: type>(name: string, h: (e: T) => void): void; } class Bad implements Bus { on<T: type, U: type>(name: string, h: (e: T) => void): void {} }', 'not assignable');
 });
 
 test('the pack member of an overload set takes what the others cannot', () => {
@@ -94,7 +94,7 @@ test('a specialization chain grows a tuple by splicing', () => {
   // splices a rest element whose type is a tuple, and the class specialization
   // keys on the canonical record. (`Reader.<…>` in expression position is the
   // specialized CONSTRUCTOR; the type is `type Reader.<…>`.)
-  expect(evaluated('class Reader<Ts extends [].<any> = []> { read<T>(): Reader.<[...Ts, T]> { return new Reader.<[...Ts, T]>(); } } const r = new Reader().read.<uint8>().read.<string>(); String(r instanceof Reader.<[uint8, string]> && Reflect.typeOf(r) === type Reader.<[uint8, string]>);')).toBe('true');
+  expect(evaluated('class Reader<Ts: type extends [].<any> = []> { read<T: type>(): Reader.<[...Ts, T]> { return new Reader.<[...Ts, T]>(); } } const r = new Reader().read.<uint8>().read.<string>(); String(r instanceof Reader.<[uint8, string]> && Reflect.typeOf(r) === type Reader.<[uint8, string]>);')).toBe('true');
   expect(evaluated('type A = [...[uint8, string], boolean]; String(A === type [uint8, string, boolean]);')).toBe('true');
 });
 
@@ -102,11 +102,11 @@ test('polymorphic recursion is stopped by the budget, not the stack', () => {
   // Nested specialized calls each push a frame; past the depth limit the
   // application is refused with a diagnostic naming the budget - before this
   // the host's stack died and took the test worker with it.
-  expectThrown('function grow<...Ts>(...xs: Ts): uint32 { return grow.<...Ts, uint8>(...xs, 0); } grow();', 'budget');
+  expectThrown('function grow<...Ts: [].<type>>(...xs: Ts): uint32 { return grow.<...Ts, uint8>(...xs, 0); } grow();', 'budget');
 });
 
 // ---- B.5 The binder kitchen sink: every argument form against one declaration ----
-const STRESS = 'function stress<T = float64, ...I: [].<uint32>, N: uint32, ...S: [].<string>, M: uint32 = 3>(): string where I.every((i) => i < N) { return String(I.length) + "/" + String(N) + "/" + String(S.length) + "/" + String(M); }';
+const STRESS = 'function stress<T: type = float64, ...I: [].<uint32>, N: uint32, ...S: [].<string>, M: uint32 = 3>(): string where I.every((i) => i < N) { return String(I.length) + "/" + String(N) + "/" + String(S.length) + "/" + String(M); }';
 
 test('positional, named, named-run, spread, and default forms bind one declaration', () => {
   expect(evaluated(`${STRESS} stress.<uint8, 0, 1, 2, N: 4, S: "a", "b">();`)).toBe('3/4/2/3');
@@ -158,19 +158,19 @@ test('a default reads an earlier pack - function form', () => {
 
 // ---- B.6 The inference ladder, one function per rung ----
 test('rung one - direct, recursive, and through explicit arguments', () => {
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } String(tup(1, "a"));')).toBe('2');
-  expect(evaluated('function pairUp<T, ...Rest>(p: [T, ...Rest]): uint64 { return p.length; } String(pairUp([1, "a", true]));')).toBe('3');
+  expect(evaluated('function tup<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } String(tup(1, "a"));')).toBe('2');
+  expect(evaluated('function pairUp<T: type, ...Rest: [].<type>>(p: [T, ...Rest]): uint64 { return p.length; } String(pairUp([1, "a", true]));')).toBe('3');
   expect(evaluated('function lit<...K: [].<string>>(...ks: K): string { return K[1]; } lit("a", "b");')).toBe('b');
 });
 
 test('rung two - trial over a closed pack constraint', () => {
-  expect(evaluated('function maskOf(Bs) { const es = Reflect.getReflection(Bs).elements; const a = es[0].type === type true; const b = es[1].type === type true; return a ? (b ? uint8 : uint16) : (b ? int8 : string); } function withFlags<...Bs extends [2].<boolean>>(m: maskOf(Bs)): uint32 { return Reflect.getReflection(Bs).elements.length; } String(withFlags(1 := uint16));')).toBe('2');
+  expect(evaluated('function maskOf(Bs) { const es = Reflect.getReflection(Bs).elements; const a = es[0].type === type true; const b = es[1].type === type true; return a ? (b ? uint8 : uint16) : (b ? int8 : string); } function withFlags<...Bs: [].<type> extends [2].<boolean>>(m: maskOf(Bs)): uint32 { return Reflect.getReflection(Bs).elements.length; } String(withFlags(1 := uint16));')).toBe('2');
 });
 
 // The positive half - a builder WITH `@inverse` binding the pack - is in
 // generics/declared-inverses.test.mts (it imports the kit, so it runs as a module).
 test('rung three - a builder with no inverse refuses, NAMING the builder', () => {
-  expectThrown('function wrapOf(Ts) { return Ts; } function j3<...Ts>(...ps: wrapOf(Ts)): uint64 { return ps.length; } j3(1);', 'wrapOf declares no inverse');
+  expectThrown('function wrapOf(Ts) { return Ts; } function j3<...Ts: [].<type>>(...ps: wrapOf(Ts)): uint64 { return ps.length; } j3(1);', 'wrapOf declares no inverse');
 });
 
 test('a pack refuses to bind from a spread of unknown length', () => {
@@ -179,23 +179,23 @@ test('a pack refuses to bind from a spread of unknown length', () => {
   // checks never fired. A truly dynamic array is a parameter of array type;
   // a const initialized from a literal has an extent the checker may know.
   //` returns the count.)
-  expectThrown('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } function u(dyn: [].<uint32>): uint32 { return tup(...dyn); }', 'statically known length');
+  expectThrown('function tup<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } function u(dyn: [].<uint32>): uint32 { return tup(...dyn); }', 'statically known length');
 });
 
 test('a tuple spreads into a pack, and a pack forwards', () => {
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } const two: [uint8, string] = [1, "a"]; String(tup(...two));')).toBe('2');
-  expect(evaluated('function inner<...Ts>(...xs: Ts): uint64 { return xs.length; } function outer<...Ts>(...xs: Ts): uint64 { return inner(...xs); } String(outer(1, "a", true));')).toBe('3');
+  expect(evaluated('function tup<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } const two: [uint8, string] = [1, "a"]; String(tup(...two));')).toBe('2');
+  expect(evaluated('function inner<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } function outer<...Ts: [].<type>>(...xs: Ts): uint64 { return inner(...xs); } String(outer(1, "a", true));')).toBe('3');
 });
 
 // ---- B.7 Reflection, library names, generic-typed slots ----
 test('named arguments on user and library generics nest, and a generic slot forwards inference', () => {
-  expect(evaluated('type Grid<T = float64, Rows: uint32 = 4, Cols: uint32 = 4> = [].<T>; let g: Grid.<Cols: 8> = []; "ok";')).toBe('ok');
+  expect(evaluated('type Grid<T: type = float64, Rows: uint32 = 4, Cols: uint32 = 4> = [].<T>; let g: Grid.<Cols: 8> = []; "ok";')).toBe('ok');
   expect(evaluated("let m: Map.<V: uint8, K: string> = new Map(); m.set('k', 1); String(m.get('k'));")).toBe('1');
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } let forward: <...Us>(...xs: Us) => uint64 = tup; String(forward(1, "a"));')).toBe('2');
+  expect(evaluated('function tup<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } let forward: <...Us: [].<type>>(...xs: Us) => uint64 = tup; String(forward(1, "a"));')).toBe('2');
 });
 
 test('the declaration reflects its whole parameter list', () => {
   expect(evaluated(`${STRESS} const tps = Reflect.getReflection(Reflect.typeOf(stress)).signatures[0].typeParameters; tps.map((t) => t.name).join(",");`)).toBe('T,I,N,S,M');
   expect(evaluated(`${STRESS} const tps = Reflect.getReflection(Reflect.typeOf(stress)).signatures[0].typeParameters; String(tps[1].variadic && tps[3].variadic && !tps[2].variadic);`)).toBe('true');
-  expect(evaluated('function tup<...Ts>(...xs: Ts): uint64 { return xs.length; } type TupT = <...Us>(...xs: Us) => uint64; String(Reflect.typeOf(tup) === TupT);')).toBe('true');
+  expect(evaluated('function tup<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } type TupT = <...Us: [].<type>>(...xs: Us) => uint64; String(Reflect.typeOf(tup) === TupT);')).toBe('true');
 });

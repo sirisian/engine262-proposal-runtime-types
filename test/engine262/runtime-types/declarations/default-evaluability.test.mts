@@ -64,8 +64,8 @@ test('the ordinary defaults are untouched', () => {
 test('a default in a generic type is judged at its application', () => {
   // Its position type mentions a parameter no argument has bound, so the
   // deferral of #sec-evaluatetotypeobject applies as it does everywhere else.
-  expect(evaluated('type T<X> = [X, uint8 = 1]; let t: T.<uint8> = [1]; String(t[1]);')).toBe('1');
-  expect(evaluated('type T<X> = { a: X, b?: uint8 = 1 }; let t: T.<uint8> = { a: 1 }; String(t.b);')).toBe('1');
+  expect(evaluated('type T<X: type> = [X, uint8 = 1]; let t: T.<uint8> = [1]; String(t[1]);')).toBe('1');
+  expect(evaluated('type T<X: type> = { a: X, b?: uint8 = 1 }; let t: T.<uint8> = { a: 1 }; String(t.b);')).toBe('1');
 });
 
 test('the syntactic half keeps its own diagnostic', () => {

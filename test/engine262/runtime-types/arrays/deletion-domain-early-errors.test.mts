@@ -124,7 +124,7 @@ test.each([
   ],
   [
     "unknown element type",
-    "function f<T>(a:[].<T>){delete a[0];}"
+    "function f<T: type>(a:[].<T>){delete a[0];}"
   ],
   [
     "empty tuple default",

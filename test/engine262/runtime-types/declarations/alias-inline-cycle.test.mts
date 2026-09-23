@@ -69,9 +69,9 @@ test('a generic alias is judged at its application, not at its declaration', () 
   // Its body mentions a parameter no argument has bound, so whether a cycle
   // closes inline is not decided until it is applied - the deferral
   // #sec-evaluatetotypeobject draws for a type reading an unbound parameter.
-  expect(evaluated('type Box<T> = { v: T }; let b: Box.<uint8> = { v: 1 }; String(b.v);')).toBe('1');
+  expect(evaluated('type Box<T: type> = { v: T }; let b: Box.<uint8> = { v: 1 }; String(b.v);')).toBe('1');
   // And the application is judged.
-  expectStaticTypeError('type Box<T> = { v: T }; type L = Box.<L>;');
+  expectStaticTypeError('type Box<T: type> = { v: T }; type L = Box.<L>;');
 });
 
 test('an interface is not walked, and that is not an omission', () => {

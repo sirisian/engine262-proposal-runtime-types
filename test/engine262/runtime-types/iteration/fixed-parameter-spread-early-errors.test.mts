@@ -98,7 +98,7 @@ test("R48: upstream number to string conversion", () => {
 });
 
 test("R48: unknown generic contribution", () => {
-  expect(ok("function take(n:uint8):void{}function f<T>(xs:{[Symbol.iterator]:()=>Generator.<T,void,void>}){take(...xs);}")).toBe(true);
+  expect(ok("function take(n:uint8):void{}function f<T: type>(xs:{[Symbol.iterator]:()=>Generator.<T,void,void>}){take(...xs);}")).toBe(true);
 });
 
 test("R48: mutable array iterator unknown", () => {

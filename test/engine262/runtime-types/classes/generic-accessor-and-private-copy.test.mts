@@ -5,7 +5,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 test.each([
   [
     "B12-E01: specialized getter read",
-    "class C<T>{get x():T{throw 0;}}function f(c:C.<uint8>){let s:string=c.x;}",
+    "class C<T: type>{get x():T{throw 0;}}function f(c:C.<uint8>){let s:string=c.x;}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -17,7 +17,7 @@ test.each([
   ],
   [
     "B12-E02: specialized setter rejects incompatible store",
-    "class C<T>{set x(v:T){}}function f(c:C.<uint8>){c.x=\"bad\";}",
+    "class C<T: type>{set x(v:T){}}function f(c:C.<uint8>){c.x=\"bad\";}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -29,7 +29,7 @@ test.each([
   ],
   [
     "B12-E03: specialized setter accepts compatible store",
-    "class C<T>{set x(v:T){globalThis.settled=String(v);}}function f(c:C.<uint8>){c.x=1;}f(new C.<uint8>());",
+    "class C<T: type>{set x(v:T){globalThis.settled=String(v);}}function f(c:C.<uint8>){c.x=1;}f(new C.<uint8>());",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -39,7 +39,7 @@ test.each([
   ],
   [
     "B12-E04: write-only parameter is found and substituted",
-    "class C<T>{get x():string{return \"read\";}set x(v:T|string){globalThis.settled=String(v);}}function f(c:C.<uint8>){c.x=1;}f(new C.<uint8>());",
+    "class C<T: type>{get x():string{return \"read\";}set x(v:T|string){globalThis.settled=String(v);}}function f(c:C.<uint8>){c.x=1;}f(new C.<uint8>());",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -49,7 +49,7 @@ test.each([
   ],
   [
     "B12-E05: outer alias cannot replace setter parameter",
-    "type T=string;class C<T>{set x(v:T){globalThis.settled=String(v);}}function f(c:C.<uint8>){c.x=1;}f(new C.<uint8>());",
+    "type T=string;class C<T: type>{set x(v:T){globalThis.settled=String(v);}}function f(c:C.<uint8>){c.x=1;}f(new C.<uint8>());",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -59,7 +59,7 @@ test.each([
   ],
   [
     "B12-E06: inherited getter specialization",
-    "class B<T>{get x():T{throw 0;}}class C extends B.<uint8>{}function f(c:C){let s:string=c.x;}",
+    "class B<T: type>{get x():T{throw 0;}}class C extends B.<uint8>{}function f(c:C){let s:string=c.x;}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -71,7 +71,7 @@ test.each([
   ],
   [
     "B12-E07: inherited setter specialization",
-    "class B<T>{set x(v:T){globalThis.settled=String(v);}}class C extends B.<uint8>{}function f(c:C){c.x=1;}f(new C());",
+    "class B<T: type>{set x(v:T){globalThis.settled=String(v);}}class C extends B.<uint8>{}function f(c:C){c.x=1;}f(new C());",
     {
       "completion": "normal",
       "bodyRan": "true",

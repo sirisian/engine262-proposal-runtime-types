@@ -264,7 +264,7 @@ test.each([
   ],
   [
     "R57-E02: inherited specialized with",
-    "class B<T>{get with():T{throw 0;}}class C extends B.<uint8>{}function f(o:C){import(\"m\",o);}",
+    "class B<T: type>{get with():T{throw 0;}}class C extends B.<uint8>{}function f(o:C){import(\"m\",o);}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -276,7 +276,7 @@ test.each([
   ],
   [
     "R57-E03: unknown generic with",
-    "function f<T>(o:{with:T}){import(\"m\",o);}",
+    "function f<T: type>(o:{with:T}){import(\"m\",o);}",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -324,7 +324,7 @@ test.each([
   ],
   [
     "R57-E07: generic getter with outer alias",
-    "type T=object;class O<T>{get with():T{throw 0;}}function f(o:O.<uint8>){import(\"m\",o);}",
+    "type T=object;class O<T: type>{get with():T{throw 0;}}function f(o:O.<uint8>){import(\"m\",o);}",
     {
       "completion": "throw",
       "bodyRan": "false",

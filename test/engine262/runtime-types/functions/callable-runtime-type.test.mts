@@ -35,11 +35,11 @@ test('a built-in, a bound function and a Proxy declare nothing and are the untyp
 });
 
 test('a signature resolves under the frame the function captured', () => {
-  expect(evaluated('function mk<T>(x: T) { return (y: T): T => y; } String(Reflect.typeOf(mk((1 := uint8))));')).toBe('(y: uint.<8>) => uint.<8>');
-  expect(evaluated('function mk<T>(x: T) { return { f: (y: T): T => y }; } String(Reflect.typeOf(mk((1 := uint8))));')).toBe('{ f: (y: uint.<8>) => uint.<8> }');
+  expect(evaluated('function mk<T: type>(x: T) { return (y: T): T => y; } String(Reflect.typeOf(mk((1 := uint8))));')).toBe('(y: uint.<8>) => uint.<8>');
+  expect(evaluated('function mk<T: type>(x: T) { return { f: (y: T): T => y }; } String(Reflect.typeOf(mk((1 := uint8))));')).toBe('{ f: (y: uint.<8>) => uint.<8> }');
   // A generic declaration's method reports over the class's parameters, as its constructor does.
-  expect(evaluated('class Box<T> { v: T; m(y: T): T { return y; } constructor(v: T) { this.v = v; } } String(Reflect.typeOf(Box.prototype.m));')).toBe('<T>(y: T) => T');
-  expect(evaluated('class Box<T> { v: T; constructor(v: T) { this.v = v; } } String(Reflect.typeOf(Box)) + " | " + String(Reflect.typeOf(Box.<uint8>));')).toBe('<T>(v: T) => Box.<T> | (v: uint.<8>) => Box.<uint.<8>>');
+  expect(evaluated('class Box<T: type> { v: T; m(y: T): T { return y; } constructor(v: T) { this.v = v; } } String(Reflect.typeOf(Box.prototype.m));')).toBe('<T: type>(y: T) => T');
+  expect(evaluated('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } String(Reflect.typeOf(Box)) + " | " + String(Reflect.typeOf(Box.<uint8>));')).toBe('<T: type>(v: T) => Box.<T> | (v: uint.<8>) => Box.<uint.<8>>');
 });
 
 test('a signature resolves when asked, in the function\'s own scope', () => {
@@ -65,15 +65,15 @@ test('a computed-type formal stays dynamic; an unresolved annotation is rejected
 // Inference through a callable.
 
 test('inference reaches through a callable property, on both sides', () => {
-  expect(evaluated('function g<T>(o: { f: (x: T) => void }): string { return String(T); } g({ f: (x: uint8) => {} });')).toBe('uint.<8>');
-  expect(evaluated('class W<T> { constructor(o: { f: (x: T) => void }) {} } String(Reflect.typeOf(new W({ f: (x: uint8) => {} })));')).toBe('W.<uint.<8>>');
-  expect(evaluated('function g<T>(os: [].<{ f: (x: T) => void }>): string { return String(T); } g([{ f: (x: uint8) => {} }]);')).toBe('uint.<8>');
+  expect(evaluated('function g<T: type>(o: { f: (x: T) => void }): string { return String(T); } g({ f: (x: uint8) => {} });')).toBe('uint.<8>');
+  expect(evaluated('class W<T: type> { constructor(o: { f: (x: T) => void }) {} } String(Reflect.typeOf(new W({ f: (x: uint8) => {} })));')).toBe('W.<uint.<8>>');
+  expect(evaluated('function g<T: type>(os: [].<{ f: (x: T) => void }>): string { return String(T); } g([{ f: (x: uint8) => {} }]);')).toBe('uint.<8>');
   // The checker infers the same result type.
-  expectStaticTypeError('function g<T>(o: { f: (x: T) => void }): T { throw new Error(); } const r: string = g({ f: (x: uint8) => {} });');
+  expectStaticTypeError('function g<T: type>(o: { f: (x: T) => void }): T { throw new Error(); } const r: string = g({ f: (x: uint8) => {} });');
   // A callback argument contributes its parameter type directly.
-  expect(evaluated('function g<T>(f: (x: T) => void): string { return String(T); } g((x: uint8) => {});')).toBe('uint.<8>');
+  expect(evaluated('function g<T: type>(f: (x: T) => void): string { return String(T); } g((x: uint8) => {});')).toBe('uint.<8>');
   // An unannotated callable contributes any.
-  expect(evaluated('function g<T>(o: { f: (x: T) => void }): string { return String(T); } g({ f: (x) => {} });')).toBe('any');
+  expect(evaluated('function g<T: type>(o: { f: (x: T) => void }): string { return String(T); } g({ f: (x) => {} });')).toBe('any');
 });
 
 // Function-typed boundaries.
@@ -116,7 +116,7 @@ test('a rest typed by a fixed tuple is positional in the relation', () => {
   // Found by the boundary check: a pack bound from two arguments reads as
   // `[uint32, float32]`, and a positional callback must be assignable to it.
   expect(evaluated('String(Reflect.isAssignable(type (x: uint32, y: float32) => void, type (...xs: [uint32, float32]) => void));')).toBe('true');
-  expect(evaluated('function apply2<...Cs>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a) + "/" + String(f);')).toBe('2/3');
+  expect(evaluated('function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a) + "/" + String(f);')).toBe('2/3');
 });
 
 test('the catch-all stays [[Untyped]] and a written any signature does not', () => {

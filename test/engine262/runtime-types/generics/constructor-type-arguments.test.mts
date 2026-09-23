@@ -14,7 +14,7 @@ import { evaluated, ok, expectThrown, expectStaticTypeError } from '../harness.m
 // in a body for a binding, `Object.isExtensible` for sealing, a store that must
 // be refused for a field's type.
 
-const BOX = 'class Box<T> { v: T; constructor(v: T) { this.v = v; } } ';
+const BOX = 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } ';
 const ALIAS = `${BOX} const C = Box; `;
 
 /** The runtime side alone: a throw inside try/catch is a runtime TypeError, not a static one. */
@@ -118,18 +118,18 @@ test('an overload selected by return type reads the call\'s own position, not an
 });
 
 test('C5: a call binds from its context before its arguments, both sides, and a seed the argument contradicts is dropped', () => {
-  const F = 'function f<T>(x: T): T { return x; } ';
+  const F = 'function f<T: type>(x: T): T { return x; } ';
   expect(evaluated(`${F} const r: uint8 = f(1); String(Reflect.typeOf(r));`)).toBe('uint.<8>');
   expectStaticTypeError(`${F} const r: uint8 = f("s");`);
   expect(evaluated(`${F} function g(): uint8 { return f(1); } String(Reflect.typeOf(g()));`)).toBe('uint.<8>');
   // A stale or foreign context costs nothing: the argument decides.
   expect(evaluated(`${F} function g(): uint8 { f("s"); return 1; } String(g());`)).toBe('1');
   // Bound through the declared return's shape.
-  expect(evaluated(`${BOX} function mk<T>(x: T): Box.<T> { return new Box(x); } const b: Box.<uint8> = mk(1); String(Reflect.typeOf(b)) + " " + String(Reflect.typeOf(b.v));`)).toBe('Box.<uint.<8>> uint.<8>');
-  expectStaticTypeError(`${BOX} function mk<T>(x: T): Box.<T> { return new Box(x); } const b: Box.<uint8> = mk("s");`);
+  expect(evaluated(`${BOX} function mk<T: type>(x: T): Box.<T> { return new Box(x); } const b: Box.<uint8> = mk(1); String(Reflect.typeOf(b)) + " " + String(Reflect.typeOf(b.v));`)).toBe('Box.<uint.<8>> uint.<8>');
+  expectStaticTypeError(`${BOX} function mk<T: type>(x: T): Box.<T> { return new Box(x); } const b: Box.<uint8> = mk("s");`);
   // A callback's inferred return contradicts a seed as an argument's type does.
-  expectStaticTypeError('function f<K>(cb: () => K): K { return cb(); } let s: string = f(() => (1 := uint8));');
-  expect(evaluated('function f<K>(cb: () => K): K { return cb(); } let s: uint8 = f(() => (1 := uint8)); String(Reflect.typeOf(s));')).toBe('uint.<8>');
+  expectStaticTypeError('function f<K: type>(cb: () => K): K { return cb(); } let s: string = f(() => (1 := uint8));');
+  expect(evaluated('function f<K: type>(cb: () => K): K { return cb(); } let s: uint8 = f(() => (1 := uint8)); String(Reflect.typeOf(s));')).toBe('uint.<8>');
   // The runtime alone (a call the checker cannot see through - a function
   // read out of an untyped array): same answers.
   expect(evaluated(`${F} const fs: any = [f]; const r: uint8 = fs[0](1); String(Reflect.typeOf(r));`)).toBe('uint.<8>');
@@ -139,43 +139,43 @@ test('C5: a call binds from its context before its arguments, both sides, and a 
 // -- 2b. Which parameters are reachable --------------------------------------
 
 test('B1: every parameter reached by a formal binds', () => {
-  const PAIR = 'class Pair<A, C> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } ';
+  const PAIR = 'class Pair<A: type, C: type> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } ';
   expect(evaluated(`${PAIR} String(Reflect.typeOf(new Pair((1 := uint8), "s")));`)).toBe('Pair.<uint.<8>, string>');
   expect(evaluated(`${PAIR} const p: Pair.<uint8, string> = new Pair(1, "s"); String(Reflect.typeOf(p));`)).toBe('Pair.<uint.<8>, string>');
 });
 
 test('B2/Q4: a parameter nothing reaches and no default is the naming error, both sides', () => {
-  const K = 'class K<T> { items: [].<T> = []; } ';
+  const K = 'class K<T: type> { items: [].<T> = []; } ';
   expectStaticTypeError(`${K} new K();`);
   expect(evaluated(`${K} const KC = K; ${caught('new KC(); r = "admitted";')}`)).toContain('is not determined by the arguments and has no default');
   expect(evaluated(`${K} String(Reflect.typeOf(new K.<uint8>().items));`)).toBe('[].<uint.<8>>');
   expect(evaluated(`${K} const k: K.<uint8> = new K(); String(Reflect.typeOf(k.items));`)).toBe('[].<uint.<8>>');
   // The function path agrees: no `any` fallback.
-  expectThrown('function f<A, B>(x: A): string { return String(B); } f((1 := uint8));', 'is not determined by the arguments and has no default');
+  expectThrown('function f<A: type, B: type>(x: A): string { return String(B); } f((1 := uint8));', 'is not determined by the arguments and has no default');
 });
 
 test('B4: a parameter reached through a shape binds structurally, on both sides', () => {
   // The structural rung (unify.mts) is one walk shared by the checker over
   // Static Types and by the runtime core over runtime types: `[].<T>`,
   // `Map.<K, V>`, a callback's signature, a union arm, `Iterable.<T>`.
-  const L = 'class L<T> { items: [].<T>; constructor(items: [].<T>) { this.items = items; } } ';
+  const L = 'class L<T: type> { items: [].<T>; constructor(items: [].<T>) { this.items = items; } } ';
   expect(evaluated(`${L} const a: [].<uint8> = [1]; String(Reflect.typeOf(new L(a))) + " " + String(Reflect.typeOf(new L(a).items));`)).toBe('L.<uint.<8>> [].<uint.<8>>');
   expect(evaluated(`${L} const LC = L; const a: [].<uint8> = [1]; String(Reflect.typeOf(new LC(a)));`)).toBe('L.<uint.<8>>');
   expect(evaluated(`${L} String(Reflect.typeOf(new L([1, 2])));`)).toBe('L.<number>');
-  expect(evaluated('function g<K, V>(m: Map.<K, V>): string { return String(K) + "," + String(V); } const m: Map.<string, uint8> = new Map(); g(m);')).toBe('string,uint.<8>');
-  expect(evaluated('function g<K>(cb: () => K): string { return String(K); } g((): uint8 => 1);')).toBe('uint.<8>');
-  expect(evaluated('function g<T>(cb: (x: T) => void): string { return String(T); } g((x: uint8) => {});')).toBe('uint.<8>');
-  expect(evaluated('function g<T>(x: [].<T> | Set.<T>): string { return String(T); } const s: Set.<uint8> = new Set(); g(s);')).toBe('uint.<8>');
-  expect(evaluated('function g<T>(i: Iterable.<T>): string { return String(T); } const a: [].<uint16> = [1]; g(a);')).toBe('uint.<16>');
+  expect(evaluated('function g<K: type, V: type>(m: Map.<K, V>): string { return String(K) + "," + String(V); } const m: Map.<string, uint8> = new Map(); g(m);')).toBe('string,uint.<8>');
+  expect(evaluated('function g<K: type>(cb: () => K): string { return String(K); } g((): uint8 => 1);')).toBe('uint.<8>');
+  expect(evaluated('function g<T: type>(cb: (x: T) => void): string { return String(T); } g((x: uint8) => {});')).toBe('uint.<8>');
+  expect(evaluated('function g<T: type>(x: [].<T> | Set.<T>): string { return String(T); } const s: Set.<uint8> = new Set(); g(s);')).toBe('uint.<8>');
+  expect(evaluated('function g<T: type>(i: Iterable.<T>): string { return String(T); } const a: [].<uint16> = [1]; g(a);')).toBe('uint.<16>');
   // An object-typed formal binds through its properties, on both sides.
-  expect(evaluated('function g<T>(o: { a: T }): string { return String(T); } g({ a: (1 := uint8) });')).toBe('uint.<8>');
-  expectStaticTypeError('function g<T>(o: { a: T }): T { return o.a; } const r: string = g({ a: (1 := uint8) });');
-  expect(evaluated('class W<T> { constructor(o: { v: T }) {} } String(Reflect.typeOf(new W({ v: (1 := uint8) })));')).toBe('W.<uint.<8>>');
+  expect(evaluated('function g<T: type>(o: { a: T }): string { return String(T); } g({ a: (1 := uint8) });')).toBe('uint.<8>');
+  expectStaticTypeError('function g<T: type>(o: { a: T }): T { return o.a; } const r: string = g({ a: (1 := uint8) });');
+  expect(evaluated('class W<T: type> { constructor(o: { v: T }) {} } String(Reflect.typeOf(new W({ v: (1 := uint8) })));')).toBe('W.<uint.<8>>');
   // REACHED but UNTYPED - an unannotated callback - is `any` ("unknown here"),
   // which is a different claim from "reached by nothing" (the error above).
-  expect(evaluated('function g<T>(cb: (x: T) => void): string { return String(T); } g((x) => {});')).toBe('any');
+  expect(evaluated('function g<T: type>(cb: (x: T) => void): string { return String(T); } g((x) => {});')).toBe('any');
   // A builder formal is rung three's, never resolved over a placeholder here.
-  expectThrown('function wrapOf(T) { return T; } function j<T>(x: wrapOf(T)): uint32 { return 1; } j(1);', 'declares no inverse');
+  expectThrown('function wrapOf(T) { return T; } function j<T: type>(x: wrapOf(T)): uint32 { return 1; } j(1);', 'declares no inverse');
 });
 
 test('B3: a value parameter binds the literal, converted to its constraint', () => {
@@ -188,18 +188,18 @@ test('B3: a value parameter binds the literal, converted to its constraint', () 
 });
 
 test('B5/B6: inference beats a default; a default fills what nothing reaches', () => {
-  const A = 'class A<T = uint8> { a: T; constructor(a: T) { this.a = a; } } ';
+  const A = 'class A<T: type = uint8> { a: T; constructor(a: T) { this.a = a; } } ';
   expect(evaluated(`${A} String(Reflect.typeOf(new A(5)));`)).toBe('A.<number>');
   expect(evaluated(`${A} String(Reflect.typeOf(new A("s")));`)).toBe('A.<string>');
   expect(evaluated(`${A} const AC = A; String(Reflect.typeOf(new AC(5)));`)).toBe('A.<number>');
-  expect(evaluated('class D<T = uint8> { m() { return String(T); } } new D().m();')).toBe('uint.<8>');
-  expect(evaluated('function f<A, B = string>(x: A): string { return String(B); } f((1 := uint8));')).toBe('string');
+  expect(evaluated('class D<T: type = uint8> { m() { return String(T); } } new D().m();')).toBe('uint.<8>');
+  expect(evaluated('function f<A: type, B: type = string>(x: A): string { return String(B); } f((1 := uint8));')).toBe('string');
 });
 
 // -- 2e/Q7-a. Defaults and the bare name in type position ---------------------
 
 test('E4/E5/E6: `A`, `A.<>` and a trailing default are one type, both sides', () => {
-  const A = 'class A<T = uint8> { a: T; constructor(a: T) { this.a = a; } } ';
+  const A = 'class A<T: type = uint8> { a: T; constructor(a: T) { this.a = a; } } ';
   expect(evaluated(`${A} const x: A.<> = new A(5); String(Reflect.typeOf(x));`)).toBe('A.<uint.<8>>');
   expect(evaluated(`${A} const x: A = new A.<>(5); String(Reflect.typeOf(x));`)).toBe('A.<uint.<8>>');
   expect(evaluated(`${A} let x: A; String(Reflect.typeOf(x)) + " " + String(Reflect.typeOf(x.a));`)).toBe('A.<uint.<8>> uint.<8>');
@@ -215,9 +215,9 @@ test('A5/F2/Q7-a: a bare name where a parameter has no default is the naming err
   expectThrown(`${BOX} String(type Box);`, 'has no argument and no default');
   expectThrown(`${BOX} class S extends Box {}`, 'is not determined by the arguments and has no default');
   // With defaults, the heritage is the defaulted specialization.
-  expect(evaluated('class A<T = uint8> { a: T; constructor(a: T) { this.a = a; } } class S extends A {} const s = new S(3); String(Reflect.typeOf(s.a)) + " " + String(s instanceof A.<uint8>);')).toBe('uint.<8> true');
+  expect(evaluated('class A<T: type = uint8> { a: T; constructor(a: T) { this.a = a; } } class S extends A {} const s = new S(3); String(Reflect.typeOf(s.a)) + " " + String(s instanceof A.<uint8>);')).toBe('uint.<8> true');
   // A bare name as a type ARGUMENT is a declaration (a kinded position), untouched.
-  expect(evaluated(`${BOX} class B<W<_>> {} String(type B.<Box>);`)).toBe('B.<Box>');
+  expect(evaluated(`${BOX} class B<W<_>: type> {} String(type B.<Box>);`)).toBe('B.<Box>');
 });
 
 test('H6/Q7: `Box.<any>` is the family, on both sides', () => {
@@ -232,7 +232,7 @@ test('H6/Q7: `Box.<any>` is the family, on both sides', () => {
 // -- 2f. Identity, membership, inheritance -----------------------------------
 
 test('G1/G2/Q5: new.target is the specialization for both spellings; a foreign newTarget is refused', () => {
-  const B2 = 'let t; class B2<T> { v: T; constructor(v: T) { t = new.target; this.v = v; } } ';
+  const B2 = 'let t; class B2<T: type> { v: T; constructor(v: T) { t = new.target; this.v = v; } } ';
   expect(evaluated(`${B2} new B2.<uint8>(1); String(t === B2.<uint8>);`)).toBe('true');
   expect(evaluated(`${B2} new B2((1 := uint8)); String(t === B2.<uint8>) + " " + String(t === B2);`)).toBe('true false');
   expect(evaluated(`${BOX} ${caught('Reflect.construct(Box, [(1 := uint8)], class Unrelated {}); r = "admitted";')}`)).toContain('is a generic class');
@@ -254,9 +254,9 @@ test('H2/H3/H4/Q7-i: the declaration is the family for instanceof', () => {
 });
 
 test('H8: the declaration reflects as a generic signature over its own parameters', () => {
-  expect(evaluated(`${BOX} String(Reflect.typeOf(Box));`)).toBe('<T>(v: T) => Box.<T>');
+  expect(evaluated(`${BOX} String(Reflect.typeOf(Box));`)).toBe('<T: type>(v: T) => Box.<T>');
   expect(evaluated(`${BOX} String(Reflect.typeOf(Box.<uint8>));`)).toBe('(v: uint.<8>) => Box.<uint.<8>>');
-  expect(evaluated('class Pair<A, C> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } String(Reflect.typeOf(Pair));')).toBe('<A, C>(a: A, c: C) => Pair.<A, C>');
+  expect(evaluated('class Pair<A: type, C: type> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } String(Reflect.typeOf(Pair));')).toBe('<A: type, C: type>(a: A, c: C) => Pair.<A, C>');
 });
 
 test('a member read on an instantiation is checked statically at the argument', () => {
@@ -266,24 +266,24 @@ test('a member read on an instantiation is checked statically at the argument', 
   expectStaticTypeError(`${BOX} const n: string = new Box.<number>(1).v;`);
   expectStaticTypeError(`${BOX} const b = new Box((1 := uint8)); const n: string = b.v;`);
   expect(evaluated(`${BOX} const b = new Box((1 := uint8)); const n: uint8 = b.v; String(Reflect.typeOf(n));`)).toBe('uint.<8>');
-  expect(evaluated('class Pair<A, C> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } const p = new Pair((1 := uint8), "s"); const s: string = p.c; s;')).toBe('s');
+  expect(evaluated('class Pair<A: type, C: type> { a: A; c: C; constructor(a: A, c: C) { this.a = a; this.c = c; } } const p = new Pair((1 := uint8), "s"); const s: string = p.c; s;')).toBe('s');
   // Inside the body `T` is the class's own parameter - it shadows a same-named
   // outer alias, and a literal is not a value of it, as in a generic function.
-  expect(evaluated('type T = uint8; class C<T> { v: T; constructor(v: T) { this.v = v; } } String(Reflect.typeOf(new C("s")));')).toBe('C.<string>');
-  expectStaticTypeError('class A<T> { value: T = 0; }');
+  expect(evaluated('type T = uint8; class C<T: type> { v: T; constructor(v: T) { this.v = v; } } String(Reflect.typeOf(new C("s")));')).toBe('C.<string>');
+  expectStaticTypeError('class A<T: type> { value: T = 0; }');
 });
 
 // -- 2c. The function path, for comparison ----------------------------------
 
 test('C3: a generic body constructs the specialization over its own parameter', () => {
-  expect(evaluated(`${BOX} function w<T>(x: T): Box.<T> { return new Box(x); } String(Reflect.typeOf(w((1 := uint8))));`)).toBe('Box.<uint.<8>>');
-  expect(evaluated(`${BOX} class W<T> { b: Box.<T>; constructor(x: T) { this.b = new Box(x); } } String(Reflect.typeOf(new W.<uint8>(1).b));`)).toBe('Box.<uint.<8>>');
+  expect(evaluated(`${BOX} function w<T: type>(x: T): Box.<T> { return new Box(x); } String(Reflect.typeOf(w((1 := uint8))));`)).toBe('Box.<uint.<8>>');
+  expect(evaluated(`${BOX} class W<T: type> { b: Box.<T>; constructor(x: T) { this.b = new Box(x); } } String(Reflect.typeOf(new W.<uint8>(1).b));`)).toBe('Box.<uint.<8>>');
 });
 
 test('the kinded explicit argument binds (previously an unbound `any`)', () => {
-  expect(evaluated('type Identity<T> = T; function m<W<_>>() { return String(W); } m.<Identity>();')).toBe('Identity');
-  expect(evaluated('type Identity<T> = T; class C { m<W<_>>() { return String(W); } } String(new C().m.<Identity>());')).toBe('Identity');
-  expect(ok('type Identity<T> = T; function g<W<_>, T>(x: W.<T>): void {} g(1);')).toBe(false);
+  expect(evaluated('type Identity<T: type> = T; function m<W<_>: type>() { return String(W); } m.<Identity>();')).toBe('Identity');
+  expect(evaluated('type Identity<T: type> = T; class C { m<W<_>: type>() { return String(W); } } String(new C().m.<Identity>());')).toBe('Identity');
+  expect(ok('type Identity<T: type> = T; function g<W<_>: type, T: type>(x: W.<T>): void {} g(1);')).toBe(false);
 });
 
 test('conformance: the checker and the runtime agree row by row', () => {

@@ -22,7 +22,7 @@ test('a class reflects through its constructor', () => {
 test('and `typeof` is untouched', () => {
   // The constraint that rules out attaching the record.
   expect(evaluated('class K { } typeof K;')).toBe('function');
-  expect(evaluated('class Box<T> { v: T; } typeof Box;')).toBe('function');
+  expect(evaluated('class Box<T: type> { v: T; } typeof Box;')).toBe('function');
   // While every other type object reports "object", as the spec requires - in a
   // text that ADMITS. `#sec-type-names` excepts `typeof` from admitting, so a
   // probe alone leaves the name unbound, which is what keeps an existing

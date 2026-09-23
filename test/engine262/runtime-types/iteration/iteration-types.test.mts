@@ -278,7 +278,7 @@ test('applying type arguments to a Type Object is not a no-op', () => {
   expect(evaluated('String(IterableIterator.<uint8> === IterableIterator.<uint16>);')).toBe('false');
 
   // The alias path, which already worked, must keep working.
-  expect(evaluated('type L<T> = [].<T>; String(L === L.<uint8>);')).toBe('false');
+  expect(evaluated('type L<T: type> = [].<T>; String(L === L.<uint8>);')).toBe('false');
 
   // A CONSTRUCTOR is not a Type Object, and `Map.<K, V>` yields the
   // constructor - which is what `new Map.<K, V>()` needs. Distinctness for

@@ -143,7 +143,7 @@ test.each([
   ],
   [
     "inherited specialized method",
-    "class B<T>{[Symbol.toPrimitive](hint:string):T{throw 1;}}class C extends B.<object>{}function f(x:C){({[x]:1});}"
+    "class B<T: type>{[Symbol.toPrimitive](hint:string):T{throw 1;}}class C extends B.<object>{}function f(x:C){({[x]:1});}"
   ],
   [
     "computed binding key",

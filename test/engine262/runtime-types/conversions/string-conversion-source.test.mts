@@ -62,7 +62,7 @@ test('conversions that are not from a string are untouched', () => {
   // A union source that a numeric conversion can accept is not a string source.
   expect(evaluated('let s: string | uint8 = 1; let x = (s := uint8); String(x);')).toBe('1');
   // An unbound type parameter says nothing yet, so the declaration stands.
-  expect(ok('function f<T>(v: T) { return (v := uint8); }')).toBe(true);
+  expect(ok('function f<T: type>(v: T) { return (v := uint8); }')).toBe(true);
 });
 
 test('a source the checker cannot see is judged at run time', () => {

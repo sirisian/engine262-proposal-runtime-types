@@ -256,7 +256,7 @@ test.each([
   },
   {
     "name": "R70-22: local generic Map is not intrinsic",
-    "source": "class Map<K,V>{constructor(x:any){}}new Map.<string,uint8>([[\"x\",\"bad\"]]);",
+    "source": "class Map<K: type,V: type>{constructor(x:any){}}new Map.<string,uint8>([[\"x\",\"bad\"]]);",
     "expected": {
       "completion": "normal",
       "bodyRan": "true",

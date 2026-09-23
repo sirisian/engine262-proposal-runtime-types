@@ -110,11 +110,11 @@ test('console: a typed const initializer retains its type in later entries', () 
 });
 
 test('link time: an imported specialized constructor checks its argument', () => linkWith(
-  'export class C<T> { constructor(x: T) {} }',
+  'export class C<T: type> { constructor(x: T) {} }',
   'import { C } from "dep"; function unused() { new C.<uint8>("s"); }',
 ).then((r) => expect(r).toBe('threw')));
 
 test('link time: an imported specialized constructor admits a fitting literal', () => linkWith(
-  'export class C<T> { x: T; constructor(x: T) { this.x = x; } }',
+  'export class C<T: type> { x: T; constructor(x: T) { this.x = x; } }',
   'import { C } from "dep"; const c = (new C.<uint8>(1)); let n: uint8 = c.x;',
 ).then((r) => expect(r).toBe('ok')));

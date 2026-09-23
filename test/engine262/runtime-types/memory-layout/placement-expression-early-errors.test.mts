@@ -228,7 +228,7 @@ test.each([
   ],
   [
     "R60-E01: nested generic body",
-    "class C{x:uint8=0;}function f<T>(b:ArrayBuffer){return new(b,do {function bad<U>(n:uint8){n();}0;}) C();}",
+    "class C{x:uint8=0;}function f<T: type>(b:ArrayBuffer){return new(b,do {function bad<U: type>(n:uint8){n();}0;}) C();}",
     {
       "completion": "throw",
       "bodyRan": "false",

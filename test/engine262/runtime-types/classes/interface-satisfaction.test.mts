@@ -239,9 +239,9 @@ test('two interfaces relate by width, and only where they are two', () => {
   // the declaration-site variance question, and comparing their structures made
   // every generic interface covariant by inference. A declaration carrying no
   // modifier is invariant, "the conservative default".
-  expect(evaluated('interface B<T> { get(): T } '
+  expect(evaluated('interface B<T: type> { get(): T } '
     + 'String(Reflect.isAssignable(type B.<uint8>, type B.<uint8 | string>));')).toBe('false');
-  expect(evaluated('interface P<out T> { get(): T } '
+  expect(evaluated('interface P<out T: type> { get(): T } '
     + 'String(Reflect.isAssignable(type P.<uint8>, type P.<uint8 | string>));')).toBe('true');
 });
 

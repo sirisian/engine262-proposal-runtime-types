@@ -44,8 +44,8 @@ test('a class name denotes its class type', () => {
   // is a distinct class object with a Type Object of its own. (A bare `G` in
   // type position names `G.<>`, an error where T has no default - PLAN-v3
   // Q7-a - so the application is written.)
-  expect(evaluated('class G<T> {} String((type G.<uint8>) === G);')).toBe('false');
-  expectThrown('class G<T> {} type G;');
+  expect(evaluated('class G<T: type> {} String((type G.<uint8>) === G);')).toBe('false');
+  expectThrown('class G<T: type> {} type G;');
   // The class type is stable: the same class yields the same Type Object.
   expect(evaluated('class A {} type A1 = A; type A2 = A; A1 === A2 ? "same" : "different";')).toBe('same');
   // Distinct classes are distinct types even when structurally identical.

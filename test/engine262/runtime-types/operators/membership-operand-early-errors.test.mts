@@ -22,7 +22,7 @@ test('type objects and custom hasInstance methods remain valid', () => {
 
 test('unknown and object-containing types keep runtime eligibility checks', () => {
   expect(ok('function unused(n: uint8 | { x: uint8 }) { "x" in n; }')).toBe(true);
-  expect(ok('function unused<T>(n: T) { ({}) instanceof n; }')).toBe(true);
+  expect(ok('function unused<T: type>(n: T) { ({}) instanceof n; }')).toBe(true);
   expect(ok('function unused(n: any) { "x" in n; ({}) instanceof n; }')).toBe(true);
   expectThrownKind('function f(n: any) { "x" in n; } f(uint8(1));', 'TypeError');
   expectThrownKind('function f(n: any) { ({}) instanceof n; } f(uint8(1));', 'TypeError');

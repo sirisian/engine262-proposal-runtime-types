@@ -19,10 +19,10 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 test('value admits a value type class and refuses a dynamic one', () => {
   expect(evaluated(`class Enemy { hp: uint16 = 0; }
-    class Store<T extends value> { xs: [].<T> = []; }
+    class Store<T: type extends value> { xs: [].<T> = []; }
     new Store.<Enemy>(); 'ok';`)).toBe('ok');
   expectStaticTypeError(`dynamic class D { y = 1; }
-    class Store<T extends value> { xs: [].<T> = []; }
+    class Store<T: type extends value> { xs: [].<T> = []; }
     new Store.<D>();`);
 });
 
@@ -30,24 +30,24 @@ test('plain is the narrower bound, and the two differ on a real case', () => {
   // A value type with no layout: `value` admits it, `plain` does not. This is
   // the case that separates the two bounds, and the one the store needs refused.
   expect(evaluated(`class S { s: string = ''; }
-    class VStore<T extends value> { xs: [].<T> = []; }
+    class VStore<T: type extends value> { xs: [].<T> = []; }
     new VStore.<S>(); 'ok';`)).toBe('ok');
   expectStaticTypeError(`class S { s: string = ''; }
-    class PStore<T extends plain> { xs: [].<T> = []; }
+    class PStore<T: type extends plain> { xs: [].<T> = []; }
     new PStore.<S>();`);
 });
 
 test('plain admits scalars and laid-out classes, nested included', () => {
   expect(evaluated(`class V { x: float32 = 0; y: float32 = 0; }
     class Body { pos: V; vel: V; }
-    class PStore<T extends plain> { xs: [].<T> = []; }
+    class PStore<T: type extends plain> { xs: [].<T> = []; }
     new PStore.<uint8>(); new PStore.<Body>(); 'ok';`)).toBe('ok');
 });
 
 test('plain refuses a class holding a reference', () => {
   expectStaticTypeError(`reference class R { x: uint8 = 1; }
     class H { r: R | null = null; }
-    class PStore<T extends plain> { xs: [].<T> = []; }
+    class PStore<T: type extends plain> { xs: [].<T> = []; }
     new PStore.<H>();`);
 });
 

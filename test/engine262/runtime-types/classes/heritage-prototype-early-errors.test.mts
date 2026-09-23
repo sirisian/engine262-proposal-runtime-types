@@ -70,7 +70,7 @@ test("R55: unknown prototype member", () => {
 });
 
 test("R55: unknown prototype type", () => {
-  expect(ok("function f<T>(base:{prototype:T}){class C extends base{}}")).toBe(true);
+  expect(ok("function f<T: type>(base:{prototype:T}){class C extends base{}}")).toBe(true);
 });
 
 test("R55: any retains runtime", () => {
@@ -102,11 +102,11 @@ test("R55: inherited prototype contract is checked", () => {
 });
 
 test("R55: specialized prototype contract is checked", () => {
-  expectStaticTypeError("class Base<T>{prototype:T;}function f(base:Base.<number>){class C extends base{}}");
+  expectStaticTypeError("class Base<T: type>{prototype:T;}function f(base:Base.<number>){class C extends base{}}");
 });
 
 test("R55: generic unknown prototype remains dynamic", () => {
-  expect(ok("class Base<T>{prototype:T;}function f<T>(base:Base.<T>){class C extends base{}}")).toBe(true);
+  expect(ok("class Base<T: type>{prototype:T;}function f<T: type>(base:Base.<T>){class C extends base{}}")).toBe(true);
 });
 
 test("R55: prototype with viable object alternative", () => {

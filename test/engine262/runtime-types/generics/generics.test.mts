@@ -14,62 +14,62 @@ import { evaluated, ok, expectThrown, run } from '../harness.mts';
 
 // -- Generic type aliases ------------------------------------------------------
 test('generics: a generic type alias applies its arguments', () => {
-  expect(evaluated('type Box<T> = { value: T }; type IB = Box.<uint8>; Reflect.getReflection(IB).kind;')).toBe('object');
+  expect(evaluated('type Box<T: type> = { value: T }; type IB = Box.<uint8>; Reflect.getReflection(IB).kind;')).toBe('object');
   // substitution: T is replaced by the argument in the reflected structure
-  expect(ok('type Box<T> = { value: T }; type IB = Box.<uint8>; Reflect.getReflection(IB).properties[0].type === uint8;')).toBe(true);
+  expect(ok('type Box<T: type> = { value: T }; type IB = Box.<uint8>; Reflect.getReflection(IB).properties[0].type === uint8;')).toBe(true);
 });
 
 test('generics: a multi-parameter alias applies each argument', () => {
-  expect(evaluated('type Pair<A, B> = { first: A, second: B }; type P = Pair.<uint8, string>; String(Reflect.getReflection(P).properties.length);')).toBe('2');
-  expect(ok('type Pair<A, B> = { first: A, second: B }; type P = Pair.<uint8, string>; let r = Reflect.getReflection(P); r.properties[0].type === uint8 && r.properties[1].type === string;')).toBe(true);
+  expect(evaluated('type Pair<A: type, B: type> = { first: A, second: B }; type P = Pair.<uint8, string>; String(Reflect.getReflection(P).properties.length);')).toBe('2');
+  expect(ok('type Pair<A: type, B: type> = { first: A, second: B }; type P = Pair.<uint8, string>; let r = Reflect.getReflection(P); r.properties[0].type === uint8 && r.properties[1].type === string;')).toBe(true);
 });
 
 test('generics: generic application nests', () => {
-  expect(evaluated('type Box<T> = { value: T }; type BB = Box.<Box.<uint8>>; Reflect.getReflection(BB).kind;')).toBe('object');
+  expect(evaluated('type Box<T: type> = { value: T }; type BB = Box.<Box.<uint8>>; Reflect.getReflection(BB).kind;')).toBe('object');
   // the inner element is itself an object type
-  expect(evaluated('type Box<T> = { value: T }; type BB = Box.<Box.<uint8>>; Reflect.getReflection(Reflect.getReflection(BB).properties[0].type).kind;')).toBe('object');
+  expect(evaluated('type Box<T: type> = { value: T }; type BB = Box.<Box.<uint8>>; Reflect.getReflection(Reflect.getReflection(BB).properties[0].type).kind;')).toBe('object');
 });
 
 // -- Generic interfaces --------------------------------------------------------
 test('generics: a generic interface declares and applies', () => {
-  expect(evaluated('interface Container<T> { value: T; } typeof Container;')).toBe('object');
+  expect(evaluated('interface Container<T: type> { value: T; } typeof Container;')).toBe('object');
   // an object satisfies the applied interface structurally
-  expect(evaluated('interface Container<T> { value: T; } let c = { value: (5 := uint8) }; String(c.value);')).toBe('5');
+  expect(evaluated('interface Container<T: type> { value: T; } let c = { value: (5 := uint8) }; String(c.value);')).toBe('5');
 });
 
 // -- Generic classes (parse + run) ---------------------------------------------
 test('generics: a generic class declares, constructs, and applies', () => {
-  expect(evaluated('class Box<T> { } typeof Box;')).toBe('function');
+  expect(evaluated('class Box<T: type> { } typeof Box;')).toBe('function');
   // construct with inferred and explicit type arguments. A bare construction
   // binds T from the formal annotated with it (PLAN-v3 Q1); a constructor whose
   // formal is unannotated reaches T through nothing, and the bare form is then
   // the naming error (PLAN-v3 Q4) rather than an instance whose T is open.
-  expect(evaluated('class Box<T> { constructor(v: T) { this.v = v; } } String(new Box((5 := uint8)).v);')).toBe('5');
-  expect(evaluated('class Box<T> { constructor(v) { this.v = v; } } String(new Box.<uint8>((5 := uint8)).v);')).toBe('5');
-  expectThrown('class Box<T> { constructor(v) { this.v = v; } } new Box((5 := uint8));', 'is not determined by the arguments and has no default');
+  expect(evaluated('class Box<T: type> { constructor(v: T) { this.v = v; } } String(new Box((5 := uint8)).v);')).toBe('5');
+  expect(evaluated('class Box<T: type> { constructor(v) { this.v = v; } } String(new Box.<uint8>((5 := uint8)).v);')).toBe('5');
+  expectThrown('class Box<T: type> { constructor(v) { this.v = v; } } new Box((5 := uint8));', 'is not determined by the arguments and has no default');
 });
 
 test('generics: a generic class may constrain its parameter', () => {
-  expect(evaluated('class Box<T extends object> { } typeof Box;')).toBe('function');
+  expect(evaluated('class Box<T: type extends object> { } typeof Box;')).toBe('function');
   // a generic class expression, including the unnamed form
-  expect(evaluated('let Box = class<T> { }; typeof Box;')).toBe('function');
+  expect(evaluated('let Box = class<T: type> { }; typeof Box;')).toBe('function');
 });
 
 // -- Generic functions (parse + run) -------------------------------------------
 test('generics: a generic function declares, calls, and applies', () => {
-  expect(evaluated('function id<T>(x: T): T { return x; } typeof id;')).toBe('function');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } typeof id;')).toBe('function');
   // inferred call; a parameter no formal names is the naming error (PLAN-v3 Q4)
-  expect(evaluated('function id<T>(x: T) { return x; } String(id(5));')).toBe('5');
-  expectThrown('function id<T>(x) { return x; } id(5);', 'is not determined by the arguments and has no default');
+  expect(evaluated('function id<T: type>(x: T) { return x; } String(id(5));')).toBe('5');
+  expectThrown('function id<T: type>(x) { return x; } id(5);', 'is not determined by the arguments and has no default');
   // explicit .<T> application
-  expect(ok('function id<T>(x) { return x; } id.<uint8>((5 := uint8)) === (5 := uint8);')).toBe(true);
+  expect(ok('function id<T: type>(x) { return x; } id.<uint8>((5 := uint8)) === (5 := uint8);')).toBe(true);
 });
 
 test('generics: generic function expressions parse, named and unnamed', () => {
-  expect(evaluated('let f = function<T>(x: T) { return x; }; String(f(7));')).toBe('7');
-  expect(evaluated('let f = function id<T>(x: T) { return x; }; String(f(8));')).toBe('8');
+  expect(evaluated('let f = function<T: type>(x: T) { return x; }; String(f(7));')).toBe('7');
+  expect(evaluated('let f = function id<T: type>(x: T) { return x; }; String(f(8));')).toBe('8');
   // async generic function
-  expect(evaluated('async function f<T>(x) { return x; } typeof f;')).toBe('function');
+  expect(evaluated('async function f<T: type>(x) { return x; } typeof f;')).toBe('function');
 });
 
 // -- The mixin form (a generic function returning a class) ---------------------
@@ -96,26 +96,26 @@ test('generics: a class type parameter reaches a field annotation', () => {
   // `null` is not a value of an opaque `T` any more than `5` is
   // (generic-body-checking, "a value of the bound is not a value of the
   // parameter") - which is the checking the field's type now takes part in.
-  expect(ok('class B<T> { v: T = null; }')).toBe(false);
-  expect(ok('class B<T> { v: T; constructor(v: T) { this.v = v; } }')).toBe(true);
+  expect(ok('class B<T: type> { v: T = null; }')).toBe(false);
+  expect(ok('class B<T: type> { v: T; constructor(v: T) { this.v = v; } }')).toBe(true);
   // Uninitialized too: a parameter has no default, which is what leaves the
   // field alone rather than checking `undefined` against it.
-  expect(ok('class B<T> { v: T; }')).toBe(true);
+  expect(ok('class B<T: type> { v: T; }')).toBe(true);
   // An accessor's backing field is the same position.
-  expect(ok('class B<T> { accessor v: T = null; }')).toBe(false);
-  expect(ok('class B<T> { accessor v: T; }')).toBe(true);
+  expect(ok('class B<T: type> { accessor v: T = null; }')).toBe(false);
+  expect(ok('class B<T: type> { accessor v: T; }')).toBe(true);
   // The positions that already worked must keep working.
-  expect(ok('class B<T> { constructor(v: T) {} }')).toBe(true);
-  expect(ok('class B<T> { m(v: T) {} }')).toBe(true);
+  expect(ok('class B<T: type> { constructor(v: T) {} }')).toBe(true);
+  expect(ok('class B<T: type> { m(v: T) {} }')).toBe(true);
   // ...and a method BODY reads the class's `T` as the opaque parameter it is,
   // exactly as a generic function's body does (`function f<T>() { let v: T =
   // 5; }` is refused), now that the class scope is pushed for the whole body.
   // These passed before because `T` in a body resolved to nothing at all.
-  expect(ok('class B<T> { m(): T { return null; } }')).toBe(false);
-  expect(ok('class B<T> { get v(): T { return null; } }')).toBe(false);
-  expect(ok('class B<T> { m() { const x: T = null; } }')).toBe(false);
-  expect(ok('class B<T> { m(v: T): T { const x: T = v; return x; } }')).toBe(true);
-  expect(ok('class P<T> {} class B<T> extends P.<T> {}')).toBe(true);
+  expect(ok('class B<T: type> { m(): T { return null; } }')).toBe(false);
+  expect(ok('class B<T: type> { get v(): T { return null; } }')).toBe(false);
+  expect(ok('class B<T: type> { m() { const x: T = null; } }')).toBe(false);
+  expect(ok('class B<T: type> { m(v: T): T { const x: T = v; return x; } }')).toBe(true);
+  expect(ok('class P<T: type> {} class B<T: type> extends P.<T> {}')).toBe(true);
 });
 
 /**
@@ -138,7 +138,7 @@ test('generics: a generic class is usable end to end', () => {
   // uninitialized field of a parameter type was checked against it, and the
   // constructor could not be called.
   expect(ok(`
-    class A<T = uint8> {
+    class A<T: type = uint8> {
       a: T;
       constructor(a: T) { this.a = a; }
     }
@@ -148,9 +148,9 @@ test('generics: a generic class is usable end to end', () => {
 });
 
 test('generics: a method of a generic class is callable', () => {
-  expect(ok('class B<T> { m(v: T): T { return v; } } new B.<uint8>().m(1);')).toBe(true);
-  expect(ok('class B<T> { static v: T; }')).toBe(true);
-  expect(ok('class B<T> { v: T; } new B.<uint8>();')).toBe(true);
+  expect(ok('class B<T: type> { m(v: T): T { return v; } } new B.<uint8>().m(1);')).toBe(true);
+  expect(ok('class B<T: type> { static v: T; }')).toBe(true);
+  expect(ok('class B<T: type> { v: T; } new B.<uint8>();')).toBe(true);
 });
 
 /**
@@ -199,7 +199,7 @@ test('generics: an application is a distinct type', () => {
   // generics.md: "Each application - A.<uint8>, A.<uint16> - is a distinct type
   // with its own type object." Both sides had been dropping their arguments, so
   // two empty argument lists agreed and every application matched every other.
-  const A = 'class A<T> { m(v: T) {} } ';
+  const A = 'class A<T: type> { m(v: T) {} } ';
   expect(ok(`${A}const x: A.<uint8> = new A.<uint8>();`)).toBe(true);
   expect(ok(`${A}const x: A.<uint16> = new A.<uint8>();`)).toBe(false);
 });
@@ -209,12 +209,12 @@ test('generics: a user generic is invariant', () => {
   // library type before, which reaches a different path.
   expect(ok(`
     class S {} class C extends S {}
-    class Box<T> { m(v: T) {} }
+    class Box<T: type> { m(v: T) {} }
     const b: Box.<S> = new Box.<C>();
   `)).toBe(false);
   expect(ok(`
     class S {}
-    class Box<T> { m(v: T) {} }
+    class Box<T: type> { m(v: T) {} }
     const b: Box.<S> = new Box.<S>();
   `)).toBe(true);
 });
@@ -248,7 +248,7 @@ test('generics: a type parameter is reachable as a value', () => {
   // VALUE binding, so ResolveBinding cannot find it and the reference arrives
   // unresolvable. The parameter frames are where it lives.
   expect(evaluated(`
-    function f<T>(x: T): boolean { return T === uint8; }
+    function f<T: type>(x: T): boolean { return T === uint8; }
     const n: uint8 = 1;
     String(f(n));
   `)).toBe('true');
@@ -256,7 +256,7 @@ test('generics: a type parameter is reachable as a value', () => {
   // It is the bound type, not the declared name: an argument of a different
   // type binds a different T.
   expect(evaluated(`
-    function f<T>(x: T): boolean { return T === uint8; }
+    function f<T: type>(x: T): boolean { return T === uint8; }
     const s: uint16 = 1;
     String(f(s));
   `)).toBe('false');
@@ -275,13 +275,13 @@ test('generics: the deferred surface is refused, not silently wrong', () => {
   // Both declarations bind one type parameter: `uint8` is a parameter name
   // in this grammar, so these signatures are identical up to renaming.
   expect(ok(`
-    function f<T>(x: T): T { return x; }
-    function f<uint8>(x: uint8): uint8 { return x; }
+    function f<T: type>(x: T): T { return x; }
+    function f<uint8: type>(x: uint8): uint8 { return x; }
   `)).toBe(false);
 
   // Generic parameters on a decorator do not parse. This is the form that
   // appears in generics.md and in the hooks row of #table-extension-hooks.
-  expect(ok('function d<T>(c: Reflect.ClassField) {} class C { @d.<uint8> f: uint8 = 1; }')).toBe(false);
+  expect(ok('function d<T: type>(c: Reflect.ClassField) {} class C { @d.<uint8> f: uint8 = 1; }')).toBe(false);
 
   // A VALUE type parameter declares, which is worth pinning separately: the
   // hooks row defers "argument-bound value generics and inference from an
@@ -292,29 +292,29 @@ test('generics: the deferred surface is refused, not silently wrong', () => {
 // -- Generic type aliases --------------------------------------------------------
 
 test('generic aliases instantiate by substitution and intern', () => {
-  expect(evaluated(`type Pair<A, B> = [A, B];
+  expect(evaluated(`type Pair<A: type, B: type> = [A, B];
     type P1 = Pair.<uint8, string>;
     type P2 = Pair.<uint8, string>;
     P1 === P2 ? "same" : "different";`)).toBe('same');
   // Substitution is transparent: the instantiation is the substituted type.
-  expect(evaluated('type Pair<A, B> = [A, B]; type P = Pair.<uint8, string>; type T2 = [uint8, string]; P === T2 ? "same" : "different";')).toBe('same');
-  expect(evaluated('type Pair<A, B> = [A, B]; type P = Pair.<uint8, string>; [(1 := uint8), "a"] instanceof P ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type Pair<A, B> = [A, B]; Pair.<uint8, string> !== Pair.<string, uint8> ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type Pair<A: type, B: type> = [A, B]; type P = Pair.<uint8, string>; type T2 = [uint8, string]; P === T2 ? "same" : "different";')).toBe('same');
+  expect(evaluated('type Pair<A: type, B: type> = [A, B]; type P = Pair.<uint8, string>; [(1 := uint8), "a"] instanceof P ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type Pair<A: type, B: type> = [A, B]; Pair.<uint8, string> !== Pair.<string, uint8> ? "ok" : "no";')).toBe('ok');
 });
 
 test('generic structural bodies substitute', () => {
-  expect(evaluated(`type Box<T> = { v: T };
+  expect(evaluated(`type Box<T: type> = { v: T };
     type B = Box.<number>;
     ({ v: 1 } is B) && !({ v: "s" } is B) ? "ok" : "no";`)).toBe('ok');
-  expect(evaluated('type Box<T> = { v: T }; type N = Box.<Box.<number>>; ({ v: { v: 1 } } is N) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type Box<T: type> = { v: T }; type N = Box.<Box.<number>>; ({ v: { v: 1 } } is N) ? "ok" : "no";')).toBe('ok');
 });
 
 test('expression-position type arguments specialize', () => {
-  expect(evaluated('type Pair<A, B> = [A, B]; const P = Pair.<uint8, string>; type Q = Pair.<uint8, string>; P === Q ? "same" : "different";')).toBe('same');
+  expect(evaluated('type Pair<A: type, B: type> = [A, B]; const P = Pair.<uint8, string>; type Q = Pair.<uint8, string>; P === Q ? "same" : "different";')).toBe('same');
 });
 
 test('arity mismatches throw', () => {
-  expect(run('type Pair<A, B> = [A, B]; type P = Pair.<uint8>;')).toMatchObject({ Type: 'throw' });
+  expect(run('type Pair<A: type, B: type> = [A, B]; type P = Pair.<uint8>;')).toMatchObject({ Type: 'throw' });
 });
 
 /**
@@ -332,13 +332,13 @@ test('arity mismatches throw', () => {
  */
 test('a class type parameter is in scope for its methods', () => {
   // The bug: an outer alias of the same name won.
-  expect(ok('type T = string; class C<T> { m(v: T) { return v; } } new C.<uint8>().m(5);')).toBe(true);
+  expect(ok('type T = string; class C<T: type> { m(v: T) { return v; } } new C.<uint8>().m(5);')).toBe(true);
   // Unaffected without a collision.
-  expect(ok('class C<T> { m(v: T) { return v; } } new C.<uint8>().m(5);')).toBe(true);
+  expect(ok('class C<T: type> { m(v: T) { return v; } } new C.<uint8>().m(5);')).toBe(true);
   // The regression a walk (rather than a named class) caused before.
-  expect(ok('class B<T> { m(v: T): T { return v; } } new B.<uint8>().m(1);')).toBe(true);
+  expect(ok('class B<T: type> { m(v: T): T { return v; } } new B.<uint8>().m(1);')).toBe(true);
   // A method's OWN parameter still shadows the class's, being pushed above it.
-  expect(ok('class C2<T> { m<T>(v: T) { return v; } } new C2.<uint8>().m(5);')).toBe(true);
+  expect(ok('class C2<T: type> { m<T: type>(v: T) { return v; } } new C2.<uint8>().m(5);')).toBe(true);
   // A VALUE parameter is untouched: it is not a type and is not pushed here.
   expect(ok('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return this.b.length; } } new S.<4>().len;')).toBe(true);
 });

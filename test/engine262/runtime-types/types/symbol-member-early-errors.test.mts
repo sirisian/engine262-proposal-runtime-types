@@ -8,7 +8,7 @@ test.each([
   'function unused(o: { [Symbol.dispose]: (x: uint8) => void }) { o[Symbol.dispose]("bad"); }',
   'function unused(o: { [Symbol.dispose]: uint8 } | null) { o?.[Symbol.dispose](); }',
   'class C { [Symbol.dispose]: uint8 = 1; } function unused(c: C) { c[Symbol.dispose](); }',
-  'class B<T> { [Symbol.dispose]: T; } class C extends B.<uint8> {} function unused(c: C) { c[Symbol.dispose](); }',
+  'class B<T: type> { [Symbol.dispose]: T; } class C extends B.<uint8> {} function unused(c: C) { c[Symbol.dispose](); }',
   'interface I { [Symbol.dispose]: uint8 } function unused(o: I) { o[Symbol.dispose](); }',
   'const K = Symbol(); type T = { [K]: uint8 }; function unused(o: T) { o[K](); }',
   'const K = Symbol.dispose; function unused(o: { [Symbol.dispose]: uint8 }) { o[K](); }',
@@ -29,7 +29,7 @@ test('union symbol reads require a declaration on each alternative', () => {
 
 test('valid methods and inherited specialized reads execute', () => {
   expect(evaluated('class C { [Symbol.dispose](x: uint8): uint8 { return x; } } String(new C()[Symbol.dispose](1));')).toBe('1');
-  expect(evaluated('class B<T> { [Symbol.dispose]: T; } class C extends B.<uint8> {} let c: C = new C(); let n: uint8 = c[Symbol.dispose]; String(n);')).toBe('0');
+  expect(evaluated('class B<T: type> { [Symbol.dispose]: T; } class C extends B.<uint8> {} let c: C = new C(); let n: uint8 = c[Symbol.dispose]; String(n);')).toBe('0');
 });
 
 test('unknown symbol identities and shadowed names retain dynamic lookup', () => {

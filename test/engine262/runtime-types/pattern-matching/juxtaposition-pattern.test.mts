@@ -51,7 +51,7 @@ test('`P {}` agrees with `P`, which is the overlap rule holding', () => {
 test('every spelling of a MatchNamePattern heads it', () => {
   expect(evaluated('const Ns = { P: class { x: uint8 = (1 := uint8); } }; let v: any = new Ns.P(); '
     + 'let r = match (v) { when Ns.P { x: let n }: n; default: 0; }; String(r);')).toBe('1');
-  expect(evaluated('class Box<T> { v: T | null = null; } let b: any = new Box.<uint8>(); '
+  expect(evaluated('class Box<T: type> { v: T | null = null; } let b: any = new Box.<uint8>(); '
     + 'let r = match (b) { when Box.<uint8> { v: _ }: "y"; default: "n"; }; r;')).toBe('y');
   expect(evaluated('interface I { x: uint8; } let v: any = { x: (1 := uint8) }; '
     + 'let r = match (v) { when I { x: let n }: n; default: 0; }; String(r);')).toBe('1');

@@ -28,6 +28,6 @@ test('finite nested classes and static fields are not inline cycles', () => {
 });
 
 test('generic and dynamic class layouts retain their resolution stage', () => {
-  expect(evaluated('class C<T> { x: T; } String(new C.<uint8>().x);')).toBe('0');
+  expect(evaluated('class C<T: type> { x: T; } String(new C.<uint8>().x);')).toBe('0');
   expect(evaluated('dynamic class C { x: C | null = null; } String(new C().x);')).toBe('null');
 });

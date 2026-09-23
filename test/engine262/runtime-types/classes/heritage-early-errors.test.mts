@@ -104,11 +104,11 @@ test.each([
   ],
   [
     "generic value shadow",
-    "const B=(x:uint8)=>x;class C<B:any> extends B{}"
+    "const B=(x:uint8)=>x;class C<B: any> extends B{}"
   ],
   [
     "generic base",
-    "class B<T>{}class C<T> extends B.<T>{}new C.<uint8>();"
+    "class B<T: type>{}class C<T: type> extends B.<T>{}new C.<uint8>();"
   ],
   [
     "captured write invalidates",

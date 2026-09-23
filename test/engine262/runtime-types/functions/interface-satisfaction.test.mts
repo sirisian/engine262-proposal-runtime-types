@@ -182,7 +182,7 @@ test('a generic interface is NOT satisfied by a class that never declared it', (
   // `sec-object-types` says it from the other side: "Every interface has one [a
   // structural form]. A class has none: a class states a construction and an
   // identity as well as a shape, and it is the identity that its type is for."
-  expectThrows('interface Box<T> { get(): T; } class C { get(): uint8 { return (1 := uint8); } } '
+  expectThrows('interface Box<T: type> { get(): T; } class C { get(): uint8 { return (1 := uint8); } } '
     + 'let b: Box.<uint8> = new C();');
   // NOT asserted here: the `implements` route, which should make it a subtype
   // "by the declared hierarchy" and is REFUSED today - `"C" is not assignable to
@@ -190,7 +190,7 @@ test('a generic interface is NOT satisfied by a class that never declared it', (
   // settled here is which routes EXIST, not whether each works.
   //
   // An OBJECT satisfies it structurally, which is the route the list names.
-  expectOk('interface Box<T> { get(): T; } let b: Box.<uint8> = { get() { return (1 := uint8); } };');
+  expectOk('interface Box<T: type> { get(): T; } let b: Box.<uint8> = { get() { return (1 := uint8); } };');
 });
 
 test('two interfaces of one shape stay ambiguous', () => {

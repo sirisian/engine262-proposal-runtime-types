@@ -217,7 +217,7 @@ test('with std:types - 20  Promise.all', () => {
     default: throw new TypeError(\`promiseAll: \${String(T)} is not an array or tuple type\`);
   }
 }
-function promiseAll<T>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.genericApplication(type Promise, [std.mapElements(type [1, 2, Promise.<uint32>], std.awaited)])
+function promiseAll<T: type>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.genericApplication(type Promise, [std.mapElements(type [1, 2, Promise.<uint32>], std.awaited)])
   === type Promise.<[1, 2, uint32]>);`));
   expectBuilderTrue(kit(`function settled(T: type): type {
   const node = reflect(T);
@@ -227,7 +227,7 @@ function promiseAll<T>(values: T): Promise.<settled(T)> { /* implementation else
     default: throw new TypeError(\`promiseAll: \${String(T)} is not an array or tuple type\`);
   }
 }
-function promiseAll<T>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.mapElements(type [].<uint32 | Promise.<string>>, std.awaited) === type [].<uint32 | string>);`));
+function promiseAll<T: type>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.mapElements(type [].<uint32 | Promise.<string>>, std.awaited) === type [].<uint32 | string>);`));
 });
 
 test('with std:types - 62  Type Lookup', () => {
@@ -443,7 +443,7 @@ function vueOptions(D: type, C: type, M: type): type {
     prop('methods', withThisOnMethods(M, self)),
   ]);
 }
-function simpleVue<D, C, M>(options: vueOptions(D, C, M)): any { /* implementation elsewhere */ return undefined; }\nString(std.mapPropertyTypes(type { fullname(): string, amount(): uint32 }, std.returnType)
+function simpleVue<D: type, C: type, M: type>(options: vueOptions(D, C, M)): any { /* implementation elsewhere */ return undefined; }\nString(std.mapPropertyTypes(type { fullname(): string, amount(): uint32 }, std.returnType)
   === type { fullname: string, amount: uint32 });`));
 });
 
@@ -478,7 +478,7 @@ function vueProps(Props: type, D: type, C: type, M: type): type {
     prop('methods', withThisOnMethods(M, self)),
   ]);
 }
-function vueBasicProps<P, D, C, M>(options: vueProps(P, D, C, M)): any { /* implementation elsewhere */ return undefined; }
+function vueBasicProps<P: type, D: type, C: type, M: type>(options: vueProps(P, D, C, M)): any { /* implementation elsewhere */ return undefined; }
 class ClassA {}\nString(std.returnType(type (v: any) => string) === string);`));
 });
 

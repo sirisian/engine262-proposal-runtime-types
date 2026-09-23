@@ -3,7 +3,7 @@ import { expectStaticTypeError, expectThrownKind, ok } from '../harness.mts';
 
 test.each([
   'class C { x: uint8; } const c = ((new C())); const n = c.x;',
-  'function id<T>(x: T): T { return x; } const n = (id.<uint8>(1));',
+  'function id<T: type>(x: T): T { return x; } const n = (id.<uint8>(1));',
   'function value(): uint8 { return 1; } const n = value();',
   'const n = (1 := uint8);',
   'let x: uint8 = 1; const n = x;',

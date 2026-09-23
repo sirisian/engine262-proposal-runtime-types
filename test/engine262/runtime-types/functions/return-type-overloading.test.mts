@@ -154,8 +154,8 @@ test('a generic call is untouched by the argument context', () => {
   // bound until the call binds it, so resolving it here fails - and that
   // failure must not escape, since this is offering a contextual type rather
   // than checking anything.
-  expect(evaluated('function id<T>(x: T): T { return x; } String(id("hi"));')).toBe('hi');
-  expect(evaluated('function id<T>(x: T): T { return x; } String(Reflect.typeOf(id("hi")) === string);')).toBe('true');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } String(id("hi"));')).toBe('hi');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } String(Reflect.typeOf(id("hi")) === string);')).toBe('true');
 });
 
 /**
@@ -181,8 +181,8 @@ test('a generic function body is untouched', () => {
   // The regression guard: a generic function's return annotation names a type
   // parameter that is not bound yet, so it contributes no contextual type
   // rather than failing.
-  expect(evaluated('function id<T>(x: T): T { return x; } String(id("hi"));')).toBe('hi');
-  expect(evaluated('function id<T>(x: T): T { return x; } String(Reflect.typeOf(id("hi")) === string);')).toBe('true');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } String(id("hi"));')).toBe('hi');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } String(Reflect.typeOf(id("hi")) === string);')).toBe('true');
 });
 
 /**

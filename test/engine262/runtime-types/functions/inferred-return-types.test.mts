@@ -348,22 +348,22 @@ test('a generic call is typed where its return is concrete', () => {
   // #sec-generics. A generic call had no Static Type at all, because
   // the CALLEE `g.<uint8>` - a TypeArgumentsExpression - had none, so nothing
   // downstream could be checked however completely the function was annotated.
-  expectEarly('function f(): uint32 { return 5; } function g<T>(a: T) { return f(); } const s: string = g.<uint8>(1);', 'uint.<32>');
-  expectOk('function f(): uint32 { return 5; } function g<T>(a: T) { return f(); } const u: uint32 = g.<uint8>(1);');
+  expectEarly('function f(): uint32 { return 5; } function g<T: type>(a: T) { return f(); } const s: string = g.<uint8>(1);', 'uint.<32>');
+  expectOk('function f(): uint32 { return 5; } function g<T: type>(a: T) { return f(); } const u: uint32 = g.<uint8>(1);');
 });
 
 test('a return that names a type parameter is bound by the call', () => {
   // #sec-generics. `T` now denotes the parameter its declaration binds
   // — for the whole signature and body — and a call that supplies type
   // arguments substitutes them, so `first.<uint32>([1])` is a `uint32`.
-  expectEarly('function first<T>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');
-  expectOk('function first<T>(a: [].<T>): T { return a[0]; } const u: uint32 = first.<uint32>([1]);');
+  expectEarly('function first<T: type>(a: [].<T>): T { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');
+  expectOk('function first<T: type>(a: [].<T>): T { return a[0]; } const u: uint32 = first.<uint32>([1]);');
   // A call that supplies no type arguments binds them from what it PASSES.
-  expectEarly('let x: uint32 = 5; function id<T>(v: T): T { return v; } const s: string = id(x);', 'uint.<32>');
-  expectOk('let x: uint32 = 5; function id<T>(v: T): T { return v; } const u: uint32 = id(x);');
+  expectEarly('let x: uint32 = 5; function id<T: type>(v: T): T { return v; } const s: string = id(x);', 'uint.<32>');
+  expectOk('let x: uint32 = 5; function id<T: type>(v: T): T { return v; } const u: uint32 = id(x);');
   // An argument that says nothing about `T` leaves it unbound, and an unbound
   // type parameter constrains nothing rather than refusing the call.
-  expectOk('function id<T>(v: T): T { return v; } id(5); id("hi");');
+  expectOk('function id<T: type>(v: T): T { return v; } id(5); id("hi");');
 });
 test('an inference-sourced error says where the type came from', () => {
   // The gate this document set for itself: participation is non-local on
@@ -384,12 +384,12 @@ test('a generic function infers a return over its type parameters', () => {
   // UNINSTANTIATED body, so a contribution may mention the declaration's type
   // parameters and the published type is an expression over them, substituted
   // at each call.
-  expectEarly('function first<T>(a: [].<T>) { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');
-  expectOk('function first<T>(a: [].<T>) { return a[0]; } const u: uint32 = first.<uint32>([1]);');
+  expectEarly('function first<T: type>(a: [].<T>) { return a[0]; } const s: string = first.<uint32>([1]);', 'uint.<32>');
+  expectOk('function first<T: type>(a: [].<T>) { return a[0]; } const u: uint32 = first.<uint32>([1]);');
   // Bound from the argument rather than written.
-  expectEarly('let x: uint32 = 5; function id<T>(v: T) { return v; } const s: string = id(x);', 'uint.<32>');
+  expectEarly('let x: uint32 = 5; function id<T: type>(v: T) { return v; } const s: string = id(x);', 'uint.<32>');
   // A binding reached through a container.
-  expectEarly('let a: [].<uint32> = [1]; function first<T>(x: [].<T>): T { return x[0]; } const s: string = first(a);', 'uint.<32>');
+  expectEarly('let a: [].<uint32> = [1]; function first<T: type>(x: [].<T>): T { return x[0]; } const s: string = first(a);', 'uint.<32>');
 });
 
 test('a published type over type parameters is not enforced at the boundary', () => {
@@ -397,7 +397,7 @@ test('a published type over type parameters is not enforced at the boundary', ()
   // sees one function for every instantiation - so enforcing it there would
   // refuse `id(5)` against a bare `T`. The checker publishes it and substitutes
   // per call; the run time is told nothing.
-  expectOk('function id<T>(v: T) { return v; } id(5); id("hi"); id({});');
+  expectOk('function id<T: type>(v: T) { return v; } id(5); id("hi"); id({});');
 });
 
 test('an inferred reference return is a location', () => {

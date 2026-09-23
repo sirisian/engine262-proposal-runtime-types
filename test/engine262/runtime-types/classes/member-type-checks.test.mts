@@ -18,8 +18,8 @@ test('private accessors keep distinct read and write types', () => {
 
 test('private names retain lexical identity and generic arguments', () => {
   expect(ok('class A { #x: uint8 = 1; make() { return class B { #x: string = "s"; good() { this.#x = "t"; } }; } } new (new A().make())().good();')).toBe(true);
-  expectStaticTypeError('class Box<T> { #x: T; bad(other: Box.<uint8>) { other.#x = "s"; } }');
-  expect(ok('class Box<T> { #x: T; good(other: Box.<uint8>) { other.#x = 2; } }')).toBe(true);
+  expectStaticTypeError('class Box<T: type> { #x: T; bad(other: Box.<uint8>) { other.#x = "s"; } }');
+  expect(ok('class Box<T: type> { #x: T; good(other: Box.<uint8>) { other.#x = 2; } }')).toBe(true);
   expect(evaluated('class C { #x: uint8 = 1; } String("x" in new C());')).toBe('false');
 });
 

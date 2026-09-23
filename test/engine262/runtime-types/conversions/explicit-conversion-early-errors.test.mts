@@ -27,7 +27,7 @@ test('explicit numeric narrowing remains a conversion rather than assignment', (
 
 test('unknown types, generic bodies and partially convertible unions defer', () => {
   expect(ok('function unused(x: any) { x := uint8; uint8(x); }')).toBe(true);
-  expect(ok('function unused<T>(x: T) { x := uint8; uint8(x); }')).toBe(true);
+  expect(ok('function unused<T: type>(x: T) { x := uint8; uint8(x); }')).toBe(true);
   expect(ok('function unused(x: boolean | uint16) { x := uint8; uint8(x); }')).toBe(true);
   expectThrownKind('function convert(x: any) { return uint8(x); } convert(true);', 'TypeError');
 });

@@ -237,7 +237,7 @@ test.each([
   ],
   [
     "R59-21: using-generic",
-    "function f<T>(n:T){using x=n;}",
+    "function f<T: type>(n:T){using x=n;}",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -296,7 +296,7 @@ test.each([
   ],
   [
     "R59-E04: specialized disposer",
-    "class R<T>{[Symbol.dispose](x:T):void{}}function f(r:R.<uint8>){using x=r;}",
+    "class R<T: type>{[Symbol.dispose](x:T):void{}}function f(r:R.<uint8>){using x=r;}",
     {
       "completion": "throw",
       "bodyRan": "false",
@@ -381,7 +381,7 @@ test.each([
   ],
   [
     "R59-E12: generic getter disposer specialized",
-    "class R<T>{get [Symbol.dispose]():T{throw 0;}}function f(r:R.<uint8>){using x=r;}",
+    "class R<T: type>{get [Symbol.dispose]():T{throw 0;}}function f(r:R.<uint8>){using x=r;}",
     {
       "completion": "throw",
       "bodyRan": "false",

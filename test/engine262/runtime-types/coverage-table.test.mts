@@ -74,8 +74,8 @@ test("this session's own surfaces hold end to end", () => {
   // Higher-kinded parameters, the unified iteration types, and the SIMD lane
   // operations - one construction each, as a guard against a later change
   // quietly undoing one.
-  expect(ok('type Identity<T> = T; class B<W<_>> { v: W.<uint8>; } const b: B.<Identity> = new B.<Identity>();')).toBe(true);
-  expect(ok('class B<W<_>> {} const b: B.<uint8> = null;')).toBe(false);
+  expect(ok('type Identity<T: type> = T; class B<W<_>: type> { v: W.<uint8>; } const b: B.<Identity> = new B.<Identity>();')).toBe(true);
+  expect(ok('class B<W<_>: type> {} const b: B.<uint8> = null;')).toBe(false);
   expect(ok('function* g(): uint8 { yield 1; } const i: Iterator.<uint8> = g();')).toBe(true);
   expect(ok('async function* a(): uint8 { yield 1; } const i: AsyncIterator.<uint8> = a();')).toBe(true);
   expect(evaluated('const v = float32x4(1, 2, 3, 4); String(v.wzyx);')).toBe('(4, 3, 2, 1)');

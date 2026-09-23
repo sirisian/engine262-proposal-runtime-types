@@ -554,6 +554,7 @@ export abstract class TypeParser extends ExpressionParser {
     this.expect(dotted ? Token.PERIOD_LT : Token.LT);
     this.noFuseGT += 1;
     const TypeParameterList: ParseNode.TypeParameter[] = [];
+    let reportedEntries = 0;
     do {
       if (this.test(Token.GT)) {
         break; // trailing comma
@@ -588,13 +589,57 @@ export abstract class TypeParser extends ExpressionParser {
       // constraint is the type of what it collects, and what it binds is a
       // tuple; the marker sits where a rest parameter's does.
       param.IsVariadic = this.eat(Token.ELLIPSIS);
+      // proposal-runtime-types #sec-type-parameters: an entry is a PARAMETER
+      // only when a name is followed by `:` (or by its higher-kinded holes and
+      // then `:`). Every other entry is an ARGUMENT of a specialization list
+      // (#sec-specialization-lists), and which it is follows from the syntax
+      // alone, never from what a name resolves to.
+      //
+      // Selecting among specializations is not implemented yet, and the
+      // specification requires a list that cannot be selected to be REPORTED
+      // rather than accepted and ignored. The old bare-name forms get the
+      // correction their author most likely meant.
+      const binderAhead = this.test(Token.IDENTIFIER) && (this.testAhead(Token.COLON) || this.testAhead(Token.LT));
+      if (!binderAhead) {
+        const entry = this.startNode<ParseNode.TypeParameter>();
+        if (this.test(Token.CONST)) {
+          this.next();
+          const name = this.test(Token.IDENTIFIER) ? this.peek().value : '';
+          this.parseBindingIdentifier();
+          if (this.eat(Token.COLON)) {
+            this.parseType();
+          }
+          if (this.eat(Token.EXTENDS)) {
+            this.parseType();
+          }
+          this.addEarlyError(Throw.SyntaxError('$1', `a capture, \`const ${name}\`, belongs to a specialization list, and specialization is not supported yet`), entry);
+          reportedEntries += 1;
+          continue;
+        }
+        if (this.test(Token.IDENTIFIER) && !this.testAhead(Token.PERIOD) && !this.testAhead(Token.PERIOD_LT) && !this.testAhead(Token.LBRACK)) {
+          const name = this.peek().value as string;
+          const pack = param.IsVariadic ? '...' : '';
+          const domain = param.IsVariadic ? '[].<type>' : 'type';
+          this.parseBindingIdentifier();
+          let message = `\`${pack}${name}\` has no domain, so it is an argument, and specialization is not supported yet; a type parameter is declared as \`${pack}${name}: ${domain}\``;
+          if (this.eat(Token.EXTENDS)) {
+            this.parseType();
+            message = `a parameter states its domain before its bound: write \`${pack}${name}: ${domain} extends ...\``;
+          }
+          if (this.eat(Token.ASSIGN)) {
+            this.parseType();
+            message = `a parameter states its domain before its default: write \`${pack}${name}: ${domain} = ...\``;
+          }
+          this.addEarlyError(Throw.SyntaxError('$1', message), entry);
+          reportedEntries += 1;
+          continue;
+        }
+        this.parseType();
+        this.addEarlyError(Throw.SyntaxError('$1', 'an argument in a declaration\'s list specializes a declared family, and specialization is not supported yet'), entry);
+        reportedEntries += 1;
+        continue;
+      }
       param.BindingIdentifier = this.parseBindingIdentifier();
-      // proposal-runtime-types #sec-higher-kinded-parameters: a parameter is
-      // higher-kinded when its name is followed by a bracketed list of `_`,
-      // and the count of holes is its arity. `_` is the pattern wildcard,
-      // reused positionally the way `%` is the remainder operator and the
-      // pipeline topic: a type parameter list is a position where a pattern
-      // cannot appear, so the token is unambiguous and already means a hole.
       let Arity = 0;
       if (this.test(Token.LT)) {
         this.next();
@@ -615,24 +660,27 @@ export abstract class TypeParser extends ExpressionParser {
         }
       }
       param.Arity = Arity;
-      // `:` and `extends` are NOT one
-      // declaration. sec-generic-parameters-as-values: a TYPE parameter is
-      // "declared with `extends` or unbounded" and denotes, in an expression
-      // position, the Type Object bound to it; a VALUE parameter is "declared
-      // with `:` and a value type", bound to the literal type of its argument
-      // "with the value recoverable as that type's one value".
-      //
-      // Collapsing them here discarded the distinction before any consumer
-      // could see it, so `GetValue` fell back to asking whether the BOUND
-      // RECORD was a literal - true for a type parameter given a literal
-      // argument too. That is why `function f<P>() { return P.length; }`
-      // answered 3 rather than reporting a type.
-      param.IsValueParameter = this.eat(Token.COLON);
-      if (param.IsValueParameter || this.eat(Token.EXTENDS)) {
-        param.TypeParameterConstraint = this.parseType();
-      } else {
-        param.TypeParameterConstraint = null;
+      // The domain decides the kind (#sec-parameter-kinds): `type` declares a
+      // type parameter, `[].<type>` a pack of types, and any other domain a
+      // value parameter. The node keeps the checker's existing reading, in
+      // which TypeParameterConstraint is what an argument is checked against
+      // (the spec's EffectiveConstraint): the bound for a type parameter and
+      // the domain for a value parameter. A domain written through an alias of
+      // `type` is resolved by kind in a later phase; here it reads as a value.
+      this.expect(Token.COLON);
+      const domain = this.parseType();
+      const domainText = domain.sourceText.replace(/\s+/g, '');
+      const typeKind = domainText === 'type' || (param.IsVariadic && domainText === '[].<type>');
+      if (Arity > 0 && !typeKind) {
+        this.addEarlyError(Throw.SyntaxError('$1', 'a higher-kinded parameter\'s domain is `type`, which is what an application of it yields'), domain);
       }
+      const bound = this.eat(Token.EXTENDS) ? this.parseType() : null;
+      if (bound && !typeKind) {
+        this.addEarlyError(Throw.SyntaxError('$1', 'a value parameter has no `extends` bound; narrow its values with a `where` clause'), bound);
+      }
+      param.IsValueParameter = !typeKind;
+      param.TypeParameterDomain = domain;
+      param.TypeParameterConstraint = typeKind ? bound : domain;
       param.TypeParameterDefault = this.eat(Token.ASSIGN) ? this.parseType() : null;
       // proposal-runtime-types: a parameter carrying a default may not precede
       // one that does not, since an application supplying fewer arguments than
@@ -659,7 +707,7 @@ export abstract class TypeParser extends ExpressionParser {
       }
       TypeParameterList.push(this.finishNode(param, 'TypeParameter'));
     } while (this.eat(Token.COMMA));
-    if (TypeParameterList.length === 0) {
+    if (TypeParameterList.length === 0 && reportedEntries === 0) {
       return this.unexpected();
     }
     this.expect(Token.GT);
@@ -1100,7 +1148,17 @@ export abstract class TypeParser extends ExpressionParser {
     // type - `operator [number, number, string]()`, the tuple conversion target
     // of README's own example - is a conversion, and claiming every `[` for the
     // index operator made that a Syntax Error at `number`.
-    if (this.test(Token.LBRACK) && this.testAhead(Token.RBRACK)) {
+    // With explicit domains an index operator's own list always opens with a
+    // parameter, `operator[].<I: uint32>(index: I)`, while `operator [].<number>()`
+    // is a CONVERSION to the type `[].<number>`. Under the old grammar the bare
+    // `number` read as a parameter name, so the conversion parsed as an index
+    // operator by accident; the raw text after `.<` now decides.
+    const afterBrackets = this.test(Token.LBRACK) && this.testAhead(Token.RBRACK)
+      ? this.source.slice(this.peek().startIndex).match(/^\[\s*\]\s*\.<\s*(?:(?:in|out)\s+)?(?:\.\.\.)?\s*(?:const\b|[A-Za-z_$][\w$]*\s*(?:<[\s_,]*>)?\s*:)/)
+      : null;
+    const conversionToArray = this.test(Token.LBRACK) && this.testAhead(Token.RBRACK)
+      && /^\[\s*\]\s*\.</.test(this.source.slice(this.peek().startIndex)) && !afterBrackets;
+    if (this.test(Token.LBRACK) && this.testAhead(Token.RBRACK) && !conversionToArray) {
       this.expect(Token.LBRACK);
       this.expect(Token.RBRACK);
       node.OperatorName = '[]';

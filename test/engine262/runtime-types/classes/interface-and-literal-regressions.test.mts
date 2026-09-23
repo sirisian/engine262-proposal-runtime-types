@@ -75,9 +75,9 @@ test('a method in an object type is checked, and its type parameters are in scop
   expect(accepts('interface I { n: uint8 } let p: I = { n: 1 };')).toBe(true);
   // A PARAMETERISED nominal's structure is unsubstituted, so its members must be
   // substituted before comparison - `Box<T>` carries `T`, not the argument.
-  expect(accepts('interface Box<T> { get(): T; } let b: Box.<uint8> = { get() { return (1 := uint8); } };')).toBe(true);
-  expect(accepts('interface Box<T> { get(): T; } let b: Box.<uint8> = { get() { return "s"; } };')).toBe(false);
-  expect(accepts('interface I<T> { n: T } let c: I.<uint8> = { n: "s" };')).toBe(false);
+  expect(accepts('interface Box<T: type> { get(): T; } let b: Box.<uint8> = { get() { return (1 := uint8); } };')).toBe(true);
+  expect(accepts('interface Box<T: type> { get(): T; } let b: Box.<uint8> = { get() { return "s"; } };')).toBe(false);
+  expect(accepts('interface I<T: type> { n: T } let c: I.<uint8> = { n: "s" };')).toBe(false);
 
   // ...and a METHOD's key is compared like any other. `checkObjectLiteralAgainst`
   // skipped every non-PropertyDefinition, so an intersection of CONFLICTING
@@ -95,10 +95,10 @@ test('a method in an object type is checked, and its type parameters are in scop
     let o: { m(): uint8 } = s;`)).toBe(true);
 
   // A method's OWN type parameters are in scope across its signature.
-  expect(accepts('type G = { m<T>(v: T): T };')).toBe(true);
-  expect(accepts('type G = { m<A, B>(a: A, b: B): A };')).toBe(true);
+  expect(accepts('type G = { m<T: type>(v: T): T };')).toBe(true);
+  expect(accepts('type G = { m<A: type, B: type>(a: A, b: B): A };')).toBe(true);
   // ...and nowhere else: a sibling member naming `T` is still unbound.
-  expect(rejects('type G = { m<T>(v: T): T, n: T };')).toBe(true);
+  expect(rejects('type G = { m<T: type>(v: T): T, n: T };')).toBe(true);
 });
 
 test('an interface member type is resolved and its failures reported', () => {
@@ -117,7 +117,7 @@ test('an interface member type is resolved and its failures reported', () => {
   // A forward reference to a type declared later keeps working.
   expect(accepts('interface I { n: L; } type L = uint8; let i: I = { n: (1 := uint8) };')).toBe(true);
   // The method's own type-parameter frame reaches the interface path too.
-  expect(accepts('interface I { m<T>(v: T): T; }')).toBe(true);
+  expect(accepts('interface I { m<T: type>(v: T): T; }')).toBe(true);
 });
 
 test('an untyped literal adapts at an INTERSECTION where the arms agree', () => {
@@ -198,7 +198,7 @@ test('freshness reaches a COMPOSITE and an INTERFACE target', () => {
 
   // The same rule at an interface, which the RUN TIME misses entirely.
   expect(accepts('interface I { n: int32 } let c: I = { n: (1 := int32), u: "s" };')).toBe(false);
-  expect(accepts('interface I<T> { n: T } let c: I.<int32> = { n: (1 := int32), u: "s" };')).toBe(false);
+  expect(accepts('interface I<T: type> { n: T } let c: I.<int32> = { n: (1 := int32), u: "s" };')).toBe(false);
   expect(accepts('interface I { n: int32 } function f(p: I) { return 1; } f({ n: (1 := int32), u: "s" });')).toBe(false);
   expect(accepts('interface I { n: int32 } let c: I = { n: (1 := int32) };')).toBe(true);
 
@@ -298,23 +298,23 @@ test('a parameterised type substitutes its index signatures', () => {
   // in check.mts had no signature arm at all and serves the ALIAS spelling;
   // `SubstituteTypeArguments` in runtime.mts copied [[IndexSignatures]] verbatim
   // beside a walked [[Properties]] and serves the NOMINAL one. Both were needed.
-  expect(accepts('interface B<T> { [k: string]: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
-  expect(accepts('type B<T> = { [k: string]: T }; let s: { [k: string]: uint8 } = {}; let b: B.<uint8> = s;')).toBe(true);
+  expect(accepts('interface B<T: type> { [k: string]: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('type B<T: type> = { [k: string]: T }; let s: { [k: string]: uint8 } = {}; let b: B.<uint8> = s;')).toBe(true);
   // The exact-match row is the sharp one: a source carrying the very signature
   // the target wants was refused.
-  expect(accepts('interface B<T> { [k: string]: T } let s: { [k: string]: uint8 } = {}; let b: B.<uint8> = s;')).toBe(true);
+  expect(accepts('interface B<T: type> { [k: string]: T } let s: { [k: string]: uint8 } = {}; let b: B.<uint8> = s;')).toBe(true);
   // The KEY is substituted as well as the value.
-  expect(accepts('type M<K, V> = { [k: K]: V }; let m: M.<string, uint8> = { a: (1 := uint8) };')).toBe(true);
+  expect(accepts('type M<K: type, V: type> = { [k: K]: V }; let m: M.<string, uint8> = { a: (1 := uint8) };')).toBe(true);
 
   // ...and a source that does NOT fit still refuses, both ways.
-  expect(accepts('interface B<T> { [k: string]: T } let s: { [k: string]: string } = {}; let b: B.<uint8> = s;')).toBe(false);
-  expect(accepts('interface B<T> { [k: string]: T } let b: B.<uint8> = { n: "s" };')).toBe(false);
+  expect(accepts('interface B<T: type> { [k: string]: T } let s: { [k: string]: string } = {}; let b: B.<uint8> = s;')).toBe(false);
+  expect(accepts('interface B<T: type> { [k: string]: T } let b: B.<uint8> = { n: "s" };')).toBe(false);
 
   // The arm is GATED on `mentionsTypeParameter`, which was missing the same
   // case - the shape where an arm existed and was gated off so the fix did
   // nothing. These rows fail if only one half is applied.
-  expect(accepts('interface B<T> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
-  expect(accepts('interface B<T> { m(): T; } let b: B.<uint8> = { m() { return (1 := uint8); } };')).toBe(true);
+  expect(accepts('interface B<T: type> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('interface B<T: type> { m(): T; } let b: B.<uint8> = { m() { return (1 := uint8); } };')).toBe(true);
 });
 
 test('a parameterised tuple substitutes its elements', () => {
@@ -322,26 +322,26 @@ test('a parameterised tuple substitutes its elements', () => {
   // the PLURAL [[Elements]] a tuple carries was not - one letter apart, at
   // check.mts:1519 and :2527. Three edits, as the substitution walks needed: the predicate the arm
   // is gated on, the alias walk, and the nominal one.
-  expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
-  expect(accepts('type P<T> = [T, string]; let s: [uint8, string] = [(1 := uint8), "s"]; let p: P.<uint8> = s;')).toBe(true);
-  expect(accepts('type P<T, U> = [T, U]; let p: P.<uint8, string> = [(1 := uint8), "s"];')).toBe(true);
-  expect(accepts('type P<T> = [T]; let p: P.<uint8> = [(1 := uint8)];')).toBe(true);
+  expect(accepts('type P<T: type> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('type P<T: type> = [T, string]; let s: [uint8, string] = [(1 := uint8), "s"]; let p: P.<uint8> = s;')).toBe(true);
+  expect(accepts('type P<T: type, U: type> = [T, U]; let p: P.<uint8, string> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('type P<T: type> = [T]; let p: P.<uint8> = [(1 := uint8)];')).toBe(true);
 
   // A tuple inside a NOMINAL reaches the runtime walk, not the checker's - this
   // row stayed REFUSED with only the two check.mts edits and is what proves the
   // third is needed.
-  expect(accepts('interface B<T> { n: [T, string] } let b: B.<uint8> = { n: [(1 := uint8), "s"] };')).toBe(true);
+  expect(accepts('interface B<T: type> { n: [T, string] } let b: B.<uint8> = { n: [(1 := uint8), "s"] };')).toBe(true);
 
   // A REST marker and a NESTED tuple ride along; each element is spread, so only
   // [[Type]] is replaced.
-  expect(accepts('type P<T> = [T, ...string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
-  expect(accepts('type P<T> = [[T], string]; let p: P.<uint8> = [[(1 := uint8)], "s"];')).toBe(true);
+  expect(accepts('type P<T: type> = [T, ...string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('type P<T: type> = [[T], string]; let p: P.<uint8> = [[(1 := uint8)], "s"];')).toBe(true);
 
   // ...and a value that does not fit still refuses, generic or not.
-  expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = ["s", "s"];')).toBe(false);
+  expect(accepts('type P<T: type> = [T, string]; let p: P.<uint8> = ["s", "s"];')).toBe(false);
   expect(accepts('type P = [uint8, string]; let p: P = ["s", "s"];')).toBe(false);
   // A generic ARRAY, which carries the singular field, was never affected.
-  expect(accepts('type A<T> = [].<T>; let a: A.<uint8> = [(1 := uint8)];')).toBe(true);
+  expect(accepts('type A<T: type> = [].<T>; let a: A.<uint8> = [(1 := uint8)];')).toBe(true);
 });
 
 test('the runtime substitution walk reaches every kind it must', () => {
@@ -350,26 +350,26 @@ test('the runtime substitution walk reaches every kind it must', () => {
   // returned UNSUBSTITUTED at the tail, silently. That asymmetry is why all
   // three substitution defects were found on the NOMINAL side after the alias
   // side worked.
-  expect(accepts('interface B<T> { n: [].<T> } let b: B.<uint8> = { n: [(1 := uint8)] };')).toBe(true);
-  expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
+  expect(accepts('interface B<T: type> { n: [].<T> } let b: B.<uint8> = { n: [(1 := uint8)] };')).toBe(true);
+  expect(accepts('interface I<T: type> { v: T } interface B<T: type> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
   // The arms must COMPOSE: a handled kind containing an unhandled one failed.
-  expect(accepts('interface B<T> { n: [].<[T, string]> } let b: B.<uint8> = { n: [[(1 := uint8), "s"]] };')).toBe(true);
-  expect(accepts('interface B<T> { n: [[].<T>, string] } let b: B.<uint8> = { n: [[(1 := uint8)], "s"] };')).toBe(true);
-  expect(accepts('interface B<T> { n: { m: [].<T> } } let b: B.<uint8> = { n: { m: [(1 := uint8)] } };')).toBe(true);
+  expect(accepts('interface B<T: type> { n: [].<[T, string]> } let b: B.<uint8> = { n: [[(1 := uint8), "s"]] };')).toBe(true);
+  expect(accepts('interface B<T: type> { n: [[].<T>, string] } let b: B.<uint8> = { n: [[(1 := uint8)], "s"] };')).toBe(true);
+  expect(accepts('interface B<T: type> { n: { m: [].<T> } } let b: B.<uint8> = { n: { m: [(1 := uint8)] } };')).toBe(true);
 
   // A CONCRETE argument needs no substitution and always passed - that contrast
   // is what identifies the nested case as [[Arguments]], not [[Structure]].
-  expect(accepts('interface I<T> { v: T } interface B { n: I.<uint8> } let b: B = { n: { v: (1 := uint8) } };')).toBe(true);
+  expect(accepts('interface I<T: type> { v: T } interface B { n: I.<uint8> } let b: B = { n: { v: (1 := uint8) } };')).toBe(true);
 
   // ...and wrong values still refuse through both new arms.
-  expect(accepts('interface B<T> { n: [].<T> } let b: B.<uint8> = { n: ["s"] };')).toBe(false);
-  expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: "s" } };')).toBe(false);
+  expect(accepts('interface B<T: type> { n: [].<T> } let b: B.<uint8> = { n: ["s"] };')).toBe(false);
+  expect(accepts('interface I<T: type> { v: T } interface B<T: type> { n: I.<T> } let b: B.<uint8> = { n: { v: "s" } };')).toBe(false);
 
   // Every arm does `seen.set` before filling, so a cycle terminates. Nothing
   // exercised this before the change; an arm that omits it hangs.
-  expect(rejects('interface Node<T> { v: T, next: Node.<T> | undefined } let n: Node.<uint8> = { v: (1 := uint8), next: undefined };')).toBe(false);
-  expect(rejects('interface A<T> { b: B.<T> | undefined } interface B<T> { a: A.<T> | undefined } let a: A.<uint8> = { b: undefined };')).toBe(false);
-  expect(rejects('interface Tree<T> { v: T, kids: [].<Tree.<T>> }')).toBe(false);
+  expect(rejects('interface Node<T: type> { v: T, next: Node.<T> | undefined } let n: Node.<uint8> = { v: (1 := uint8), next: undefined };')).toBe(false);
+  expect(rejects('interface A<T: type> { b: B.<T> | undefined } interface B<T: type> { a: A.<T> | undefined } let a: A.<uint8> = { b: undefined };')).toBe(false);
+  expect(rejects('interface Tree<T: type> { v: T, kids: [].<Tree.<T>> }')).toBe(false);
 });
 
 test("an object literal's shape carries readonly", () => {
@@ -523,7 +523,7 @@ test('a nested literal at a recursive type takes its wanted member types', () =>
   expect(accepts('type A = { b: B | null }; type B = { a: A | null }; const v: A = { b: { a: null } };')).toBe(true);
   // A recursive INTERFACE and a GENERIC one, which fail the same way.
   expect(accepts('interface I { value: uint8, next: I | null } const n: I = { value: 1, next: { value: 2, next: null } };')).toBe(true);
-  expect(accepts('interface N<T> { v: T, next: N.<T> | null } const n: N.<uint8> = { v: (1 := uint8), next: { v: (2 := uint8), next: null } };')).toBe(true);
+  expect(accepts('interface N<T: type> { v: T, next: N.<T> | null } const n: N.<uint8> = { v: (1 := uint8), next: { v: (2 := uint8), next: null } };')).toBe(true);
 
   // A genuinely wrong nested value is still refused - adaptation happens ONLY
   // where the member is assignable.
@@ -560,10 +560,10 @@ test('mentionsTypeParameter terminates on a cyclic record', () => {
   // The generic machinery this predicate gates is unchanged - it is what the
   // substitution defects all turned on, so a `seen` set that returned the wrong answer
   // would show here first.
-  expect(accepts('interface B<T> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
-  expect(accepts('type P<T> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
-  expect(accepts('interface B<T> { [k: string]: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
-  expect(accepts('interface I<T> { v: T } interface B<T> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
+  expect(accepts('interface B<T: type> { n: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('type P<T: type> = [T, string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('interface B<T: type> { [k: string]: T } let b: B.<uint8> = { n: (1 := uint8) };')).toBe(true);
+  expect(accepts('interface I<T: type> { v: T } interface B<T: type> { n: I.<T> } let b: B.<uint8> = { n: { v: (1 := uint8) } };')).toBe(true);
 });
 
 test('freshness reaches a UNION target', () => {
@@ -621,7 +621,7 @@ test('an empty array literal is refused where no array fits', () => {
   // `[].<any>` were BOTH measured and both refuse `let a: U = []` where
   // `U = [].<T>` - an array whose element is an opaque type PARAMETER, which no
   // concrete element type is assignable to. This row is why.
-  expect(accepts('function f<T, U = [].<T>>(v: T) { let a: U = []; return 1; }')).toBe(true);
+  expect(accepts('function f<T: type, U: type = [].<T>>(v: T) { let a: U = []; return 1; }')).toBe(true);
 
   // Every target an array CAN satisfy is untouched.
   expect(accepts('let a: [].<uint8> = [];')).toBe(true);
@@ -1282,7 +1282,7 @@ test('an alias declared in a NESTED list is published before the signatures', ()
   // SHADOWING an outer one are all unaffected.
   expect(accepts(`function w() { ${L}function f(p: L) { return 1; } f({ v: (1 := uint8), next: null }); }`)).toBe(true);
   expect(accepts('function w() { type A2 = { b: B2 | null }; type B2 = { a: A2 | null }; const v: A2 = { b: { a: null } }; }')).toBe(true);
-  expect(accepts('function w() { type G<T> = { v: T }; let g: G.<uint8> = { v: (1 := uint8) }; }')).toBe(true);
+  expect(accepts('function w() { type G<T: type> = { v: T }; let g: G.<uint8> = { v: (1 := uint8) }; }')).toBe(true);
   expect(accepts(`${L}function w() { type L = { z: string }; let x: L = { z: "s" }; }`)).toBe(true);
 });
 
@@ -1353,19 +1353,19 @@ test('a class implements a GENERIC interface at its arguments', () => {
   //
   // The arguments are on the `implements` reference, and are bound to the
   // interface's parameters and substituted, as at any other parameterized use.
-  expect(accepts('interface G<T> { x: T; } class C implements G.<uint8> { x: uint8; }'
+  expect(accepts('interface G<T: type> { x: T; } class C implements G.<uint8> { x: uint8; }'
     + ' let g: G.<uint8> = new C();')).toBe(true);
-  expect(accepts('interface G<T, U> { x: T; y: U; }'
+  expect(accepts('interface G<T: type, U: type> { x: T; y: U; }'
     + ' class C implements G.<uint8, string> { x: uint8; y: string; }')).toBe(true);
-  expect(accepts('interface G<T> { x: T; } class C implements G.<string> { x: string; }')).toBe(true);
-  expect(evaluated('interface G<T> { x: T; } class C implements G.<uint8> { x: uint8; }'
+  expect(accepts('interface G<T: type> { x: T; } class C implements G.<string> { x: string; }')).toBe(true);
+  expect(evaluated('interface G<T: type> { x: T; } class C implements G.<uint8> { x: uint8; }'
     + ' String(new C() is G.<uint8>);')).toBe('true');
 
   // A member of the WRONG type is still refused, and the message names the
   // SUBSTITUTED type rather than the parameter.
-  expect(accepts('interface G<T> { x: T; } class C implements G.<uint8> { x: string; }')).toBe(false);
+  expect(accepts('interface G<T: type> { x: T; } class C implements G.<uint8> { x: string; }')).toBe(false);
   // A MISSING member is still refused.
-  expect(accepts('interface G<T> { x: T; } class C implements G.<uint8> { }')).toBe(false);
+  expect(accepts('interface G<T: type> { x: T; } class C implements G.<uint8> { }')).toBe(false);
   // A non-generic interface has no arguments to bind.
   expect(accepts('interface S { x: uint8; } class C implements S { x: uint8; } let s: S = new C();')).toBe(true);
 });

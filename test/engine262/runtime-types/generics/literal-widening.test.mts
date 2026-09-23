@@ -27,14 +27,14 @@ test('a literal that does not fit is still refused, joined or alone', () => {
 
 test('a single argument is unchanged', () => {
   expect(evaluated('function f<T: uint8>(x: T): T { return x; } `${f(200)}`;')).toBe('200');
-  expect(evaluated('function id<T>(x: T): T { return x; } `${Reflect.typeOf(id(200))}`;')).toBe('number');
+  expect(evaluated('function id<T: type>(x: T): T { return x; } `${Reflect.typeOf(id(200))}`;')).toBe('number');
 });
 
 test('a context seed still wins over an argument', () => {
   // The seed is a different RUNG of the ladder - "a call binds from its context
   // BEFORE its arguments" - and joining with it broke nine tests. Only
   // same-rung contributions join.
-  expect(evaluated('function f<T>(x: T): T { return x; } let u: uint8 = f(1 := uint8); `${u}`;')).toBe('1');
+  expect(evaluated('function f<T: type>(x: T): T { return x; } let u: uint8 = f(1 := uint8); `${u}`;')).toBe('1');
 });
 
 test('an UNCONSTRAINED pack widens its elements, as a scalar does', () => {
@@ -43,12 +43,12 @@ test('an UNCONSTRAINED pack widens its elements, as a scalar does', () => {
   // types unwidened gave `[1, 'a']`, so a builder over the pack produced a
   // return type of literals and a body returning anything else was refused
   // against `"1"`.
-  expect(evaluated('function wrap<...Ts>(...xs: Ts): Ts { return xs; } `${Reflect.typeOf(wrap(1, "a"))}`;')).toBe('[].<number | string>');
+  expect(evaluated('function wrap<...Ts: [].<type>>(...xs: Ts): Ts { return xs; } `${Reflect.typeOf(wrap(1, "a"))}`;')).toBe('[].<number | string>');
   // A builder over the pack sees the widened elements, so a body building other
   // values from them still satisfies the declared return.
-  expect(evaluated('class Box<T> { v: T; constructor(v: T) { this.v = v; } } '
+  expect(evaluated('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } '
     + 'function boxesOf(Ts) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Ts).elements.map((e) => { const t = e.type; return { type: type Box.<t> }; }) }); } '
-    + 'function wrap<...Ts>(...xs: Ts): boxesOf(Ts) { return xs.map((x) => new Box(x)); } `${wrap(1, "a").length}`;')).toBe('2');
+    + 'function wrap<...Ts: [].<type>>(...xs: Ts): boxesOf(Ts) { return xs.map((x) => new Box(x)); } `${wrap(1, "a").length}`;')).toBe('2');
 });
 
 test('the checker binds from the call\'s context, as the run time does', () => {
@@ -57,10 +57,10 @@ test('the checker binds from the call\'s context, as the run time does', () => {
   // in a typed position binds - visible once the checker's bindings are handed
   // over. The seed stands over the arguments because unification joins only
   // among argument contributions.
-  expect(evaluated('function f<T>(x: T): T { return x; } const r: uint8 = f(1); `${Reflect.typeOf(r)}`;')).toBe('uint.<8>');
+  expect(evaluated('function f<T: type>(x: T): T { return x; } const r: uint8 = f(1); `${Reflect.typeOf(r)}`;')).toBe('uint.<8>');
   // A stale or foreign context costs nothing: the argument decides where the
   // position requires nothing of the call.
-  expect(evaluated('function f<T>(x: T): T { return x; } function g(): uint8 { f("s"); return (1 := uint8); } `${g()}`;')).toBe('1');
+  expect(evaluated('function f<T: type>(x: T): T { return x; } function g(): uint8 { f("s"); return (1 := uint8); } `${g()}`;')).toBe('1');
 });
 
 test('a COMPUTED constraint keeps the literal, as a written one does', () => {
@@ -69,7 +69,7 @@ test('a COMPUTED constraint keeps the literal, as a written one does', () => {
   // resolved record made the parameter look unconstrained, so the literal was
   // widened - `K: keysOf(T)` gave `string` where `K: "a" | "b"` gave `'name'`,
   // for the same argument in the same position.
-  expectThrown('function keysOf(T) { return string; } function pluck<T, K: keysOf(T)>(o: T, key: K): K { return key; } '
+  expectThrown('function keysOf(T) { return string; } function pluck<T: type, K: keysOf(T)>(o: T, key: K): K { return key; } '
     + 'let u = { name: "n" }; let n: uint8 = pluck(u, "name");', '"\'name\'" is not assignable to "uint.<8>"');
   // The written constraint, unchanged, for comparison.
   expectThrown('function pick<K: "name" | "age">(k: K): K { return k; } let n: uint8 = pick("name");',
@@ -83,7 +83,7 @@ test('the checker\'s bindings are checked at the run time, and reach every kind'
   // computed constraint runs its builder only there - and because a value
   // parameter is excluded, being read in the body as a value rather than a type.
   const keys = 'function keysOf(T) { let ks = Reflect.getReflection(T).properties.map(p => Reflect.makeType({ kind: "literal", value: p.name, base: string })); return ks.length === 1 ? ks[0] : Reflect.makeType({ kind: "union", members: ks }); } ';
-  const pluck = 'function pluck<T, K: keysOf(T)>(o: T, key: K): K { return key; } ';
+  const pluck = 'function pluck<T: type, K: keysOf(T)>(o: T, key: K): K { return key; } ';
   expect(evaluated(`${keys}${pluck}let user = { name: "n" }; \`\${Reflect.typeOf(pluck(user, "name")) === type "name"}\`;`)).toBe('true');
   expectThrown(`${keys}${pluck}let user = { name: "n" }; pluck(user, "missing");`, 'is not assignable to');
   // A VALUE pack is still bound as a value in the body.

@@ -3409,8 +3409,14 @@ export namespace ParseNode {
      */
     readonly Arity?: number;
     readonly TypeParameterConstraint: Type | null;
-    /** Declared with `:` - a VALUE parameter - rather than `extends` or unbounded. */
+    /**
+     * A VALUE parameter: its domain is not `type` (#sec-parameter-kinds). When
+     * *true*, TypeParameterConstraint is the domain; when *false*, it is the
+     * `extends` bound or *null* - the spec's EffectiveConstraint either way.
+     */
     readonly IsValueParameter: boolean;
+    /** The written domain, `type` in `T: type` and `uint32` in `N: uint32`. */
+    readonly TypeParameterDomain?: Type;
     /**
      * proposal-runtime-types #sec-type-parameters: declared with `...` - a
      * VARIADIC parameter, collecting any number of arguments into a tuple

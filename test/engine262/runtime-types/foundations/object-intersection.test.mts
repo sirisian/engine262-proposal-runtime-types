@@ -120,7 +120,7 @@ test('a REQUIRED member of `never` empties the object', () => {
   expect(isNever('type T = { a: { b: { c: never } } };')).toBe('true');
   // Reached through parameters, since writing the empty intersection is
   // itself an error (#sec-intersection-type-early-errors).
-  expect(evaluated('type F<T, U> = { a: T & U }; type G = F.<uint32, string>; String(G === never);')).toBe('true');
+  expect(evaluated('type F<T: type, U: type> = { a: T & U }; type G = F.<uint32, string>; String(G === never);')).toBe('true');
 });
 
 test('a required position of `never` empties a TUPLE, as it does an object', () => {
@@ -128,7 +128,7 @@ test('a required position of `never` empties a TUPLE, as it does an object', () 
   // named, so a generic instantiated at the empty type must answer the same way
   // whether the shape is positional or keyed - it once did not, and
   // `Pair.<uint8, never>` stood while `Result.<uint8, never>` reduced.
-  const PAIR = 'type Pair<A, B> = [A, B]; type Result<T, E> = { value: T, error: E };';
+  const PAIR = 'type Pair<A: type, B: type> = [A, B]; type Result<T: type, E: type> = { value: T, error: E };';
   expect(evaluated(`${PAIR} String((type Pair.<uint8, never>) === never);`)).toBe('true');
   expect(evaluated(`${PAIR} String((type Result.<uint8, never>) === never);`)).toBe('true');
 
@@ -205,9 +205,9 @@ test('a computation reaching an empty intersection gets `never` and does not thr
   expect(evaluated(
     "String(Reflect.makeType({ kind: 'intersection', members: [type number, type bigint] }) === never);",
   )).toBe('true');
-  expect(ok('type F<T> = { a: uint32 } & { a: T };')).toBe(true);
-  expect(evaluated('type F<T> = { a: uint32 } & { a: T }; type G = F.<string>; String(G === never);')).toBe('true');
-  expect(evaluated('type F<T> = { a: number } & { a: T }; type G = F.<5>; type U = { a: 5 }; String(G === U);')).toBe('true');
+  expect(ok('type F<T: type> = { a: uint32 } & { a: T };')).toBe(true);
+  expect(evaluated('type F<T: type> = { a: uint32 } & { a: T }; type G = F.<string>; String(G === never);')).toBe('true');
+  expect(evaluated('type F<T: type> = { a: number } & { a: T }; type G = F.<5>; type U = { a: 5 }; String(G === U);')).toBe('true');
 });
 
 test('an explicitly written `never` member stays exempt', () => {
@@ -268,7 +268,7 @@ test('the class rule spares every pair that shares a value', () => {
   // judged - a rule on the syntax must not reject an instantiation that may
   // never happen.
   expect(ok('class A { x: uint8 = 1; } type T = A & never;')).toBe(true);
-  expect(ok('class A { x: uint8 = 1; } type F<T> = A & T;')).toBe(true);
+  expect(ok('class A { x: uint8 = 1; } type F<T: type> = A & T;')).toBe(true);
 });
 
 test('`Symbol.hasInstance` does not reach the judgment the rule rests on', () => {

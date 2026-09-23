@@ -30,7 +30,7 @@ function artifactFor(source: string): Promise<ReturnType<typeof ProduceArtifact>
 }
 
 const WITH_GENERIC = 'function mk(T: type): type { return T; }\n'
-  + 'export function f<T>(v: T): mk(T) { return v; }\n'
+  + 'export function f<T: type>(v: T): mk(T) { return v; }\n'
   + 'type Page = { a: uint8 };\n'
   + 'export { Page };\n';
 
@@ -48,7 +48,7 @@ test('an open application is skipped, and the rest of the surface survives', asy
 test('a closed application is pre-evaluated and carried, which is the point', async () => {
   // "every closed application among them pre-evaluated" - `Box.<uint8>` has no
   // unbound slot, so it is evaluated and its result travels.
-  const artifact = (await artifactFor('type Box<T> = { v: T };\ntype B = Box.<uint8>;\nexport { B };\n'))!;
+  const artifact = (await artifactFor('type Box<T: type> = { v: T };\ntype B = Box.<uint8>;\nexport { B };\n'))!;
   expect(Object.keys(artifact.table.exports)).toEqual(['B']);
   expect(artifact.skipped).toEqual({});
 });

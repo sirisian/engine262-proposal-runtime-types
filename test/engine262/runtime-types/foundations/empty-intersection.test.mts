@@ -18,7 +18,7 @@ test('the two halves reach the SAME shapes, whatever names the base', () => {
   expectThrown("type E = string.<{ brand: 'E' }>; type U = E & uint8;");
   // What must NOT be diagnosed: a base that declares type parameters is being
   // APPLIED, so its object-shaped argument is a type and not a record.
-  expect(evaluated('type Box<T> = { value: T }; type U = Box.<{ a: uint8 }>;'
+  expect(evaluated('type Box<T: type> = { value: T }; type U = Box.<{ a: uint8 }>;'
     + ' String(Reflect.getReflection(U).kind);')).toBe('object');
 });
 
@@ -210,7 +210,7 @@ test('an explicitly written `never` member is exempt from the diagnostic', () =>
 test('a generic body is not diagnosed for an instantiation that may not happen', () => {
   // AreDisjoint is conservative over an unresolved parameter, so the DECLARATION
   // stands and only a use that actually pairs disjoint types is reported.
-  expect(evaluated('type F<T> = T & string; String(1);')).toBe('1');
+  expect(evaluated('type F<T: type> = T & string; String(1);')).toBe('1');
 });
 
 test('an alias for an empty intersection reports once, at its own declaration', () => {

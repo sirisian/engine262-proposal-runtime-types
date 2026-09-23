@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown, ok } from '../harness.mts';
 
-const P = 'interface P<T> { x: T; } ';
+const P = 'interface P<T: type> { x: T; } ';
 const o = 'let o = {}; o.x = (1 := uint8); ';
 
 test('a generic interface discriminates its type arguments', () => {
@@ -26,7 +26,7 @@ test('the wrong argument is refused at every boundary, not just `is`', () => {
   expectThrown(`${P} ${o} function f(p: P.<string>): string { return p.x; } f(o);`);
   // And a declared, checked implementation crossed it too - not only ad-hoc
   // object literals.
-  expectThrown('interface GS<T> { x: T; } class GI implements GS.<uint8> { x: uint8; } '
+  expectThrown('interface GS<T: type> { x: T; } class GI implements GS.<uint8> { x: uint8; } '
     + 'let h: GS.<string> = new GI();');
 });
 
@@ -47,7 +47,7 @@ test('what the fix must not disturb', () => {
   // An interface whose parameter is UNUSED must still admit every application.
   // A rule phrased as "the argument must match" rather than "the parameter must
   // be substituted" gets this backwards and refuses them all.
-  expect(evaluated('interface U<T> { y: uint8; } let s = {}; s.y = (1 := uint8); String(s is U.<string>);')).toBe('true');
+  expect(evaluated('interface U<T: type> { y: uint8; } let s = {}; s.y = (1 := uint8); String(s is U.<string>);')).toBe('true');
   // `any` substituted is still `any`.
   expect(evaluated(`${P} ${o} String(o is P.<any>);`)).toBe('true');
   // A NON-generic interface has no parameters to substitute.
@@ -58,8 +58,8 @@ test('what the fix must not disturb', () => {
   // A class implementing a generic interface still satisfies it. The
   // `implements` clause is REQUIRED - a class does not satisfy an interface by
   // shape alone.
-  expect(ok('interface GS2<T> { x: T; } class GI2 implements GS2.<uint8> { x: uint8; } '
+  expect(ok('interface GS2<T: type> { x: T; } class GI2 implements GS2.<uint8> { x: uint8; } '
     + 'let g: GS2.<uint8> = new GI2();')).toBe(true);
   // A generic ALIAS was already correct and is untouched.
-  expect(evaluated('type A<T> = { x: T }; let s = {}; s.x = (1 := uint8); String(s is A.<string>);')).toBe('false');
+  expect(evaluated('type A<T: type> = { x: T }; let s = {}; s.x = (1 := uint8); String(s is A.<string>);')).toBe('false');
 });

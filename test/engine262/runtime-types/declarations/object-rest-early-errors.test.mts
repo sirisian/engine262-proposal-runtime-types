@@ -250,8 +250,8 @@ test.each([
 // Adjacent controls and regressions found while implementing the recommendation.
 test.each([
   [
-    "R13-extra-44: function f<T extends uint8>(o:any){let {...r:T}=o;}",
-    "function f<T extends uint8>(o:any){let {...r:T}=o;}",
+    "R13-extra-44: function f<T: type extends uint8>(o:any){let {...r:T}=o;}",
+    "function f<T: type extends uint8>(o:any){let {...r:T}=o;}",
     {
       "completion": "throw",
       "kind": "StaticTypeError",
@@ -262,8 +262,8 @@ test.each([
     }
   ],
   [
-    "R13-extra-45: function f<T>(o:any){let {...r:T}=o;}f.<object>({});",
-    "function f<T>(o:any){let {...r:T}=o;}f.<object>({});",
+    "R13-extra-45: function f<T: type>(o:any){let {...r:T}=o;}f.<object>({});",
+    "function f<T: type>(o:any){let {...r:T}=o;}f.<object>({});",
     {
       "completion": "normal",
       "kind": null,

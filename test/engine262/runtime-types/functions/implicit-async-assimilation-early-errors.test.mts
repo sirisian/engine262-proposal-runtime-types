@@ -54,7 +54,7 @@ test("R53: viable union", () => {
 });
 
 test("R53: unknown generic", () => {
-  expect(ok("async function f<T>(x:T){return x;}")).toBe(true);
+  expect(ok("async function f<T: type>(x:T){return x;}")).toBe(true);
 });
 
 test("R53: sync return does not assimilate", () => {

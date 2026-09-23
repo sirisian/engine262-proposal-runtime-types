@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-const G = 'class G<T> { x: uint8; } ';
+const G = 'class G<T: type> { x: uint8; } ';
 
 test('a specialized instance is a member of its own type', () => {
   // OUTSTANDING item N. A generic class APPLICATION is a distinct constructor
@@ -40,7 +40,7 @@ test('the shapes that already worked are unchanged', () => {
   expect(evaluated(`${G} let b: G.<uint8> = new G(); String(b is G.<uint8>);`)).toBe('true');
   expectThrown(`${G} new G();`, 'is not determined by the arguments and has no default');
   expect(evaluated(`${G} let b: G.<uint8> = new G.<uint8>(); String(b.x);`)).toBe('0');
-  expect(evaluated('class C<T = uint8> { x: uint8; } let c: C = new C(); String(c.x);')).toBe('0');
+  expect(evaluated('class C<T: type = uint8> { x: uint8; } let c: C = new C(); String(c.x);')).toBe('0');
 });
 
 test('the three-way contradiction is resolved, not traded', () => {

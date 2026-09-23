@@ -109,7 +109,7 @@ test.each([
   ],
   [
     "specialized method",
-    "class B<T>{then(a:T,b:T):void{}}async function f(x:B.<number>){await x;}"
+    "class B<T: type>{then(a:T,b:T):void{}}async function f(x:B.<number>){await x;}"
   ],
   [
     "scalar callback union",
@@ -158,7 +158,7 @@ test.each([
   ],
   [
     "generic callback contract",
-    "async function f<T>(x:{then:(a:T,b:T)=>void}){await x;}"
+    "async function f<T: type>(x:{then:(a:T,b:T)=>void}){await x;}"
   ],
   [
     "viable callback union",

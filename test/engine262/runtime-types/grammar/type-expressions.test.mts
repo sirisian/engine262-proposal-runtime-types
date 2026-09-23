@@ -229,7 +229,7 @@ test('type parameters with constraint and default', () => {
   // arguments fills from the end - and the rule is enforced now where it was
   // only stated before. The ordering was incidental to this test, which is
   // about parsing a constraint and a default together.
-  const p = makeParser('<U extends A.B, T: Comparable = uint8>');
+  const p = makeParser('<U: type extends A.B, T: Comparable = uint8>');
   const params = p.parseTypeParameters();
   expect(TokenNames[p.peek().type]).toBe('EOS');
   expect(params).toMatchObject({
