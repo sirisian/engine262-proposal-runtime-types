@@ -88,9 +88,22 @@ test('D2: a domain admitting Type Objects alongside other values is refused', ()
 
 // Recorded gaps, each owned by a later part of the plan.
 
-test.fails('D6: a parameter named after a predefined type shadows it in the body too', () => {
-  // The annotation reads the parameter and the body reads the builtin.
+test('D6: a parameter named after a predefined type shadows it in the body too', () => {
   expect(evaluated('function f<uint32: type>() { return String(uint32 === string); } f.<string>();')).toBe('true');
+  expect(evaluated('function f<uint32: type>(x: uint32): string { return String(uint32); } f.<string>("a");')).toBe('string');
+  expect(evaluated('class C<string: type> { m() { return String(string); } } new C.<uint8>().m();')).toBe('uint.<8>');
+});
+
+test('#sec-generic-parameters-as-values: a type parameter is scoped lexically', () => {
+  // It shadows every enclosing binding of its name...
+  expect(evaluated('let T = 5; function f<T: type>() { return String(T); } f.<string>();')).toBe('string');
+  expect(evaluated('const N = 1; function f<N: uint32>() { return String(N * 2); } f.<7>();')).toBe('14');
+  expect(evaluated('let T = 9; class Box<T: type> { m() { return String(T); } } new Box.<string>().m();')).toBe('string');
+  expect(evaluated('let T = 5; function f<T: type>() { return () => String(T); } f.<string>()();')).toBe('string');
+  // ...and the body's own declarations shadow it, as they shadow a parameter's.
+  expect(evaluated('function f<T: type>() { { let T = 5; return String(T); } } f.<string>();')).toBe('5');
+  // Outside the declaration the enclosing binding is untouched.
+  expect(evaluated('let T = 5; function f<T: type>() { return T; } f.<string>(); String(T);')).toBe('5');
 });
 
 test('D3: a bound written as a domain is refused at the declaration', () => {

@@ -603,6 +603,13 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   // 2. Let classScope be NewDeclarativeEnvironment(env).
   const classScope = new DeclarativeEnvironmentRecord(env);
+  // proposal-runtime-types #sec-generic-parameters-as-values: the class's type
+  // parameters are in scope for its heritage and every element, just outside
+  // the class binding, which is where GetIdentifierReference looks for them.
+  const classTypeParameters = (ClassTail as { parent?: { TypeParameters?: ParseNode.TypeParameters | null } }).parent?.TypeParameters;
+  if (classTypeParameters && classTypeParameters.TypeParameterList.length > 0) {
+    classScope.TypeParameterList = classTypeParameters.TypeParameterList;
+  }
   // The class whose members are about to be evaluated, so their decorator
   // contexts can name it. Restored rather than cleared, since a class may be
   // declared inside another class's element.

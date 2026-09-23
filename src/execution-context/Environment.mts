@@ -16,10 +16,12 @@ import {
   type ValueEvaluator,
 } from '../completion.mts';
 import { JSStringMap } from '../utils/container.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import { RequireArrayBorrowLive } from '../abstract-ops/reference-operations.mts';
-import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { RequireType, functionTypeParameters } from '../abstract-ops/runtime-types.mts';
+import { lookupTypeParameter } from '../type-system/runtime.mts';
 import {
   Assert,
   DefinePropertyOrThrow,
@@ -39,6 +41,13 @@ import {
 
 /** https://tc39.es/ecma262/#sec-environment-records */
 export abstract class EnvironmentRecord {
+  /**
+   * proposal-runtime-types #sec-generic-parameters-as-values: the type
+   * parameters a generic CLASS declares, on its class scope. A function's are
+   * read from its [[FunctionObject]] instead. See TypeParameterInScopeAt.
+   */
+  TypeParameterList?: readonly ParseNode.TypeParameter[];
+
   readonly OuterEnv: EnvironmentRecord | null;
 
   constructor(outerEnv: EnvironmentRecord | null) {
@@ -1137,9 +1146,49 @@ export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSS
       ThisValue: undefined,
     }));
   } else {
+    // proposal-runtime-types #sec-generic-parameters-as-values: a generic
+    // declaration's type parameters are in scope for its signature and body,
+    // lexically: inside everything that encloses the declaration, and outside
+    // everything the body declares. Their bindings live in the type parameter
+    // frames rather than in this environment, so the walk marks the name
+    // resolved HERE, at the declaration's own environment, and GetValue reads
+    // the frame. Consulting the frames only once the name was otherwise
+    // unresolvable let every enclosing binding win - `let T = 5` outside
+    // `function f<T: type>()` made `T` read 5 in the body - and let a
+    // built-in type name win over a parameter named after it, which plan D6
+    // says the parameter shadows everywhere.
+    if (exceptedFromTypeNames !== true && TypeParameterInScopeAt(env, name)) {
+      return NormalCompletion(new ReferenceRecord({
+        Base: 'unresolvable',
+        ReferencedName: name,
+        Strict: strict,
+        ThisValue: undefined,
+      }));
+    }
     // a. Let outer be env.[[OuterEnv]].
     const outer = env.OuterEnv;
     // b. Return ? GetIdentifierReference(outer, name, strict).
     return yield* GetIdentifierReference(outer, name, strict, exceptedFromTypeNames);
   }
+}
+
+/**
+ * Whether _env_ is the environment of a generic declaration that declares a
+ * type parameter named _name_, with a binding for it in the active frames: a
+ * function's environment, for the function's own parameters, or a generic
+ * class's class scope. A parameter with no active binding is left to the rest
+ * of the walk, as before.
+ */
+function TypeParameterInScopeAt(env: EnvironmentRecord, name: JSStringValue): boolean {
+  if (!agentForTypeNames.feature('runtime-types')) {
+    return false;
+  }
+  const list = env instanceof FunctionEnvironmentRecord
+    ? functionTypeParameters(env.FunctionObject as never)
+    : env.TypeParameterList;
+  if (!list) {
+    return false;
+  }
+  const text = name.stringValue();
+  return list.some((p) => p.BindingIdentifier?.name === text) && lookupTypeParameter(text) !== null;
 }
