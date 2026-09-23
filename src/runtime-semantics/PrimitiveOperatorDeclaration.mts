@@ -142,11 +142,14 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     const operatorParameterNames = ((e.TypeParameters?.TypeParameterList ?? []) as readonly {
       BindingIdentifier?: { name?: string },
     }[]).map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
-    if (blockParameterNames.length > 0 || operatorParameterNames.length > 0) {
+    const components = ComponentCapturesOf(node as ParseNode.PrimitiveOperatorDeclaration);
+    if (blockParameterNames.length > 0 || operatorParameterNames.length > 0 || components.length > 0) {
       deferred = {
         parameterNames: blockParameterNames,
         operatorParameterNames,
         parameterConstraints: blockParameterConstraints,
+        componentNames: components.map((c) => c.BindingIdentifier.name),
+        componentIndices: components.map((c) => c.Index),
         parameterTypeNode: first?.TypeAnnotation?.Type,
         returnTypeNode: e.TypeAnnotation?.Type,
       };

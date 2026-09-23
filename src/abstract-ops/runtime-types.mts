@@ -2461,6 +2461,13 @@ export interface DeferredOperatorTypes {
   /** The OPERATOR's own type parameters, which name the argument's metadata. */
   readonly operatorParameterNames?: readonly string[];
   readonly parameterConstraints?: readonly unknown[];
+  /**
+   * #sec-primitive-operator-blocks: the block's COMPONENT captures, `E` of
+   * `primitive complex<const E><...>`, and the position of the primitive's
+   * parameter each stands for. Bound from the receiver's own arguments.
+   */
+  readonly componentNames?: readonly string[];
+  readonly componentIndices?: readonly number[];
   readonly parameterTypeNode: unknown;
   readonly returnTypeNode: unknown;
 }
@@ -2532,22 +2539,31 @@ export function LookupPrimitiveOperator(value: Value, opText: string): readonly 
   if (tables.size === 0) {
     return [];
   }
-  let name: string | null = null;
+  // The blocks that may speak for _value_, most specific first: a block over
+  // its exact primitive, `primitive uint8`, and then one over the FAMILY that
+  // primitive belongs to, `primitive uint<const W>`. A fixed width is a fixed
+  // slot, which is more specific than a capture (plan section 6.1), so the
+  // exact block is consulted first whatever order the two were declared in.
+  const names: string[] = [];
   if (isTypedNumber(value)) {
     const record = (value as TypedNumberValue).TypeRecord as TypeRecord;
     const base = record.Kind === 'parameterized' ? record.Base : record;
     if (base.Kind === 'primitive') {
-      name = base.Arguments && base.Arguments.length > 0
-        ? `${base.Name}${base.Arguments[0]}`
-        : base.Name;
+      if (base.Arguments && base.Arguments.length > 0) {
+        names.push(`${base.Name}${base.Arguments[0]}`);
+      }
+      names.push(base.Name);
     }
   } else if (value instanceof NumberValue) {
-    name = 'number';
+    names.push('number');
+  } else if (isComplexObject(value)) {
+    // A complex is an object, and was never looked up at all, so a block over
+    // `complex` declared operators that no complex receiver reached.
+    names.push('complex');
+  } else if (isRationalObject(value)) {
+    names.push('rational');
   }
-  if (name === null) {
-    return [];
-  }
-  return tables.get(name)?.get(opText) ?? [];
+  return names.flatMap((name) => tables.get(name)?.get(opText) ?? []);
 }
 
 /**

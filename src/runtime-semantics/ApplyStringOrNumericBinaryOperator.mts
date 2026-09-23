@@ -15,7 +15,9 @@ import { isRangeBinaryOperator, rangeBinaryOperator } from '../type-system/range
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { isTypedNumber, TypedNumberValue } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode } from '../type-system/runtime.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf } from '../type-system/runtime.mts';
+import { makePrimitive } from '../type-system/records.mts';
+import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata } from '../abstract-ops/runtime-types.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
@@ -106,7 +108,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // stood in for it (F4). Landing the block REPLACES that diagnostic with
   // dispatch rather than deleting it - a program that declares no block still
   // gets told why its expression did not work.
-  if (surroundingAgent.feature('runtime-types') && !(lval instanceof ObjectValue)) {
+  if (surroundingAgent.feature('runtime-types') && (!(lval instanceof ObjectValue) || isComplexObject(lval) || isRationalObject(lval))) {
     // "at most one definition with a body may match ... where no definition
     // with a body matches, the primitive operation runs". MATCHING is on the
     // right operand against the definition's parameter type, and skipping that
@@ -127,14 +129,30 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       let deferredReturnType = null;
       let framePushed = false;
       let deferredSpokenFor: object[] = [];
-      if (entry.deferred && isTypedNumber(lval)) {
-        const carried = (lval as TypedNumberValue).TypeRecord as TypeRecord;
-        if (carried.Kind === 'parameterized') {
+      const componentNames = entry.deferred?.componentNames ?? [];
+      if (entry.deferred && (isTypedNumber(lval) || componentNames.length > 0)) {
+        const carried = RuntimeTypeOf(lval);
+        if (carried.Kind === 'parameterized' || componentNames.length > 0) {
           const frame = new Map<string, TypeRecord>();
+          // #sec-primitive-operator-blocks: a COMPONENT capture is bound from
+          // the receiver's own argument at its position - `complex128`'s
+          // `float64`, `uint16`'s `16` - and a width is bound as the literal a
+          // written value argument resolves to. A position the record leaves
+          // out holds the primitive's default.
+          const base = carried.Kind === 'parameterized' ? carried.Base : carried;
+          componentNames.forEach((name, i) => {
+            const index = entry.deferred!.componentIndices?.[i] ?? i;
+            const argument = base.Kind === 'primitive' ? (base.Arguments ?? [])[index] ?? PrimitiveParameterDefault(base.Name, index) : undefined;
+            if (argument !== undefined) {
+              frame.set(name, typeof argument === 'number'
+                ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as unknown as TypeRecord
+                : argument as TypeRecord);
+            }
+          });
           // The meta type each parameter speaks for, resolved from its
           // constraint, so the parameter binds to THAT meta type's portion.
           const spokenFor: object[] = [];
-          for (let pi = 0; pi < entry.deferred.parameterNames.length; pi += 1) {
+          for (let pi = 0; pi < entry.deferred.parameterNames.length && carried.Kind === 'parameterized'; pi += 1) {
             const name = entry.deferred.parameterNames[pi]!;
             const constraintNode = entry.deferred.parameterConstraints?.[pi];
             let portion = carried.Metadata;
@@ -158,7 +176,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
             // other kind left `float64.<D>` unparameterized and the result
             // unstamped, silently, with the arithmetic still giving the right
             // number.
-            frame.set(name, metadataAsObjectRecord(carried.Metadata));
+            frame.set(name, metadataAsObjectRecord((carried as TypeRecord & { Kind: 'parameterized' }).Metadata));
           }
           // The frame stays pushed for the WHOLE invocation, not only while
           // the types are resolved: the operator's own parameter boundary

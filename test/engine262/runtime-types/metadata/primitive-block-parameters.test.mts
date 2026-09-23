@@ -72,8 +72,8 @@ test('a component capture: its slot\'s domain, and where it may be named', () =>
   // D9: a capture takes its slot's domain; writing another is refused.
   expectThrown('type P = { phase: int32 }; primitive complex<const E: P><const T: P> {}', 'restates that slot\'s domain');
   expectThrown('primitive complex<const E, const F><const T: P> {}', '`complex` declares 1 parameter');
-  // An operator's signature would need it bound from each receiver.
-  expectThrown(`${CX}primitive complex<const E><const S: P> { operator +(rhs: complex.<E>.<S>) { return this; } }`, 'which an operator\'s signature cannot yet name');
+  // An operator's signature binds it from each receiver: see
+  // operators/primitive-block-dispatch.test.mts.
 });
 
 test('a block parameter is still unknown outside its block', () => {

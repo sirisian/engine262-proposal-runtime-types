@@ -732,3 +732,11 @@ export function BlockCapturesOf(declaration: {
 } | null | undefined): (ComponentCaptureView | MetadataCaptureView)[] {
   return [...ComponentCapturesOf(declaration), ...MetadataCapturesOf(declaration)];
 }
+
+/**
+ * The default of the predefined primitive _name_'s parameter at _index_, where
+ * its record may omit the argument: `rational.<64>` is recorded as `rational`.
+ */
+export function PrimitiveParameterDefault(name: string, index: number): number | undefined {
+  return name === 'rational' && index === 0 ? 64 : undefined;
+}
