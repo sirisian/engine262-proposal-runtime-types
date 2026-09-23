@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-layout-control.
@@ -59,8 +59,10 @@ test('a control with no argument is unaffected', () => {
 
 test('the size a literal fixes is still enforced', () => {
   // The rule the dropped control was disabling: "It is a type error for a field
-  // to be placed outside the size a `size` fixes" (#sec-natural-alignment).
-  expectThrownKind('@size(2) class A { x: float64 = 0; }', 'TypeError');
+  // to be placed outside the size a `size` fixes" (#sec-natural-alignment). A
+  // literal control is read where the class is written, so the checker reports
+  // it before the program runs (size-overflow-early-errors.test.mts).
+  expectStaticTypeError('@size(2) class A { x: float64 = 0; }');
   // And it now fires for the named-constant spelling too, by refusing earlier -
   // where before, the control vanished and the class was silently accepted.
   expectThrownKind('const N = 2; @size(N) class A { x: float64 = 0; }', 'TypeError');

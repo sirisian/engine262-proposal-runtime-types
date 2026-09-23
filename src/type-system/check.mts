@@ -10,6 +10,7 @@ import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
+import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { templateArgumentType, isTemplateArgumentType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
@@ -32,7 +33,10 @@ import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration } from './com
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
-import { IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver } from './layout.mts';
+import {
+  IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
+  ComputeClassLayout, type ClassLayout,
+} from './layout.mts';
 import {
   libraryTypeParameterNames as libraryTypeParameterNamesShared,
   orderTypeArguments as orderTypeArgumentsShared,
@@ -5063,6 +5067,67 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const heritage = (cls as unknown as { ClassTail?: { ClassHeritage?: { type?: string, name?: string } | null } | null }).ClassTail?.ClassHeritage;
     return heritage?.type === 'IdentifierReference' && typeof heritage.name === 'string' ? classNodes.get(heritage.name) : undefined;
   };
+  /**
+   * #sec-natural-alignment: "It is a type error for a field to be placed
+   * outside the size a `size` fixes." Every layout control takes a numeric
+   * literal (#sec-layout-control), so the placement is known where the class is
+   * written; the run time computed it when the class was evaluated and threw a
+   * *TypeError* there. The checker runs the same `ComputeClassLayout` over the
+   * resolved field types.
+   *
+   * A class whose layout cannot be computed here - an untyped field, a base the
+   * checker has not recorded, or a field of a class not yet evaluated - is left
+   * to that run-time check, which still stands behind this one.
+   */
+  const staticLayouts = new Map<ParseNode, ReturnType<typeof ComputeClassLayout>>();
+  const staticClassLayoutOf = (cls: ParseNode, seen: Set<ParseNode> = new Set()): ReturnType<typeof ComputeClassLayout> => {
+    if (staticLayouts.has(cls)) return staticLayouts.get(cls)!;
+    if (seen.has(cls)) return null;
+    seen.add(cls);
+    let baseLayout: ClassLayout | null = null;
+    const heritage = (cls as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
+    if (heritage) {
+      const base = heritageClassOf(cls);
+      if (!base) return null;
+      const computed = staticClassLayoutOf(base, seen);
+      if (computed === null || 'cycle' in computed || 'overflow' in computed) return null;
+      baseLayout = computed;
+    }
+    const fields: { key: string, type: TypeRecord, controls?: ReturnType<typeof readFieldControls> }[] = [];
+    for (const element of classBodyOf(cls)) {
+      if (element.type !== 'FieldDefinition') continue;
+      const field = element as unknown as {
+        static?: boolean, TypeAnnotation?: ParseNode.TypeAnnotation | null, Decorators?: readonly ParseNode.Decorator[] | null,
+        ClassElementName?: { type?: string, name?: string, value?: string },
+      };
+      if (field.static) continue;
+      if (!field.TypeAnnotation) return null;
+      const type = resolveType(field.TypeAnnotation.Type);
+      if (!type) return null;
+      const key = field.ClassElementName?.name ?? field.ClassElementName?.value ?? '';
+      fields.push({ key, type, controls: readFieldControls(field.Decorators) });
+    }
+    const decorators = (cls as unknown as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+    const result = ComputeClassLayout(baseLayout, fields, readClassControls(decorators), cls);
+    staticLayouts.set(cls, result);
+    return result;
+  };
+  const checkedDeclaredSizes = new WeakSet<object>();
+  const checkDeclaredSize = (cls: ParseNode): void => {
+    if (checkedDeclaredSizes.has(cls)) return;
+    checkedDeclaredSizes.add(cls);
+    const decorators = (cls as unknown as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
+    if (readClassControls(decorators).size === undefined || firstUnreadableControl(decorators)) return;
+    for (const element of classBodyOf(cls)) {
+      if (element.type === 'FieldDefinition' && firstUnreadableControl((element as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators)) return;
+    }
+    const layout = staticClassLayoutOf(cls);
+    if (layout !== null && 'overflow' in layout) {
+      const className = (cls as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? '(anonymous class)';
+      errors.push(Throw.StaticTypeError('$1 declares size $2 but its fields need $3 bytes',
+        Value(className), Value(String(layout.overflow.size)), Value(String(layout.overflow.need))).Value as ObjectValue);
+    }
+  };
   const checkInheritedFieldRedeclarations = (cls: ParseNode): void => {
     if (checkedFieldRedeclarations.has(cls)) return;
     checkedFieldRedeclarations.add(cls);
@@ -7757,6 +7822,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
   };
+  /**
+   * #sec-function-types: "It is a type error if a parameter without an
+   * |Initializer| and not marked `?` follows one with an |Initializer|, save a
+   * rest parameter" - read, with the same paragraph's example `(string = '5',
+   * named: uint32)`, as a rule about the parameters no call can reach. A NAMED
+   * required parameter after a default is filled by a named argument
+   * (#sec-named-arguments), `f(named: 3)`, which leaves the default to be
+   * taken. An UNNAMED one can be reached only positionally, and a call that
+   * reaches it has supplied the defaulted position too, so that default could
+   * never be taken - the reason #sec-array-and-tuple-types gives a tuple's
+   * trailing-default rule.
+   *
+   * Only function TYPES and call signatures: a function or method DECLARATION
+   * is ordinary ECMAScript here, and `function f(a = 1, b) {}` is unchanged.
+   */
+  const checkFunctionTypeParameterOrder = (list: readonly ParseNode.FunctionTypeParameter[]): void => {
+    let sawDefault = false;
+    for (const p of list) {
+      if (p.IsThis || p.Rest) continue;
+      if (p.Initializer) {
+        sawDefault = true;
+        continue;
+      }
+      if (sawDefault && !p.Optional && !p.BindingIdentifier) {
+        errors.push(Throw.StaticTypeError('an unnamed required parameter may not follow a parameter with a default in a function type, since no call can fill it without also filling the default; name it, give it a default, or mark it optional').Value as ObjectValue);
+        return;
+      }
+    }
+  };
+
   const sweepTypePositions = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -7767,6 +7862,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (typeof n.type !== 'string') return;
     if (n.type === 'TypeAnnotation' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
     if (n.type === 'TypeAliasDeclaration' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
+    if (Array.isArray(n.FunctionTypeParameterList)) checkFunctionTypeParameterOrder(n.FunctionTypeParameterList as readonly ParseNode.FunctionTypeParameter[]);
     for (const tp of (n.TypeParameters as { TypeParameterList?: readonly { TypeParameterConstraint?: ParseNode | null, TypeParameterDefault?: ParseNode | null }[] } | null | undefined)?.TypeParameterList ?? []) {
       if (tp.TypeParameterConstraint) checkTypePositionEvaluability(tp.TypeParameterConstraint);
       if (tp.TypeParameterDefault) checkTypePositionEvaluability(tp.TypeParameterDefault);
@@ -8227,6 +8323,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const userDeclared = classNodes.has(parameterizedName) || interfaceNodes.has(parameterizedName)
             || aliasNodes.has(parameterizedName);
           if (!userDeclared) checkWeakKeyConstraint(parameterizedName, args);
+          if (!userDeclared && parameterizedName === 'Composite' && !shadowedByProgram('Composite')) checkCompositeArgument(args);
+          if (!userDeclared && parameterizedName === 'SoA' && !shadowedByProgram('SoA')) checkSoAElement(args);
           const builtinOrLibrary = userDeclared ? null : builtinTypeRecord(parameterizedName, args)
             ?? iterationInterfaceRecord(parameterizedName, args)
             ?? libraryTypeRecord(parameterizedName, args);
@@ -10217,6 +10315,105 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * generic holds weakly must be assignable to `object | symbol`. One check for
    * both the annotation path and the `new` path.
    */
+  /**
+   * #sec-composite-function: `Composite` "is the head of the composite type
+   * family: applying |TypeArguments| to it ... yields the Type Object of the
+   * composite type over the argument. It is a type error if the argument is not
+   * an ~object~, ~tuple~, ~array~, or interface type, or if it has a
+   * Symbol-keyed member, since a composite's keys are Strings."
+   *
+   * Checked at the application, in a type position and in an expression, as
+   * the weak holders' key rule is. Before this `Composite.<uint8>` was
+   * accepted, and calling it failed at run time with "1 is not an object".
+   */
+  /**
+   * #sec-structure-of-arrays: "_T_ must be a value type class or a primitive
+   * ... a class with a field of no layout has nothing to split and is a type
+   * error." Judged at the application, from the class's declaration, because
+   * `SoAColumnsOf` reads the evaluated class's layout and a class in the same
+   * source text has none while the checker runs; the application was accepted
+   * and the failure surfaced later, at `byteLength` or under another rule.
+   *
+   * A field has no layout when it carries no annotation, or when its type has
+   * none: a `string`, an `object`, a dynamic array, or a class that itself has
+   * a field of no layout. A field whose type the checker cannot resolve is left
+   * to the run time. The run time's further refusals - a private field and a
+   * bit-field, which have a layout but no column form - are not stated by the
+   * clause and are not raised here.
+   */
+  const soaFieldWithoutLayout = (cls: ParseNode, seen: Set<ParseNode> = new Set()): { field: string, type: string } | 'unknown' | null => {
+    if (seen.has(cls)) return null;
+    seen.add(cls);
+    for (let at: ParseNode | undefined = cls; at; at = heritageClassOf(at)) {
+      const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
+      for (const element of classBodyOf(at)) {
+        if (element.type !== 'FieldDefinition') continue;
+        const field = element as unknown as {
+          static?: boolean, TypeAnnotation?: ParseNode.TypeAnnotation | null,
+          ClassElementName?: { name?: string, value?: string },
+        };
+        if (field.static) continue;
+        const name = field.ClassElementName?.name ?? field.ClassElementName?.value ?? '(computed)';
+        if (!field.TypeAnnotation) return { field: name, type: 'no annotation' };
+        const type = resolveType(field.TypeAnnotation.Type);
+        if (!type || type.Kind === 'any' || type.Kind === 'parameter' || mentionsTypeParameter(type)) return 'unknown';
+        const declaration = type.Kind === 'nominal' ? (type as { Declaration?: ParseNode }).Declaration : undefined;
+        if (declaration && (declaration.type === 'ClassDeclaration' || declaration.type === 'ClassExpression')
+            && (type as { Constructor?: unknown }).Constructor === undefined) {
+          const inner = soaFieldWithoutLayout(declaration, seen);
+          if (inner === 'unknown') return 'unknown';
+          if (inner) return { field: name, type: displayType(type) };
+          continue;
+        }
+        if (!LayoutOf(type)) return { field: name, type: displayType(type) };
+      }
+      if (heritage && !heritageClassOf(at)) return 'unknown';
+    }
+    return null;
+  };
+  const checkSoAElement = (args: readonly (TypeRecord | number)[]): void => {
+    const element = args[0];
+    if (element === undefined || typeof element === 'number' || element.Kind !== 'nominal') return;
+    const declaration = (element as { Declaration?: ParseNode }).Declaration;
+    let problem: { field: string, type: string } | 'unknown' | null = null;
+    if (declaration && (declaration.type === 'ClassDeclaration' || declaration.type === 'ClassExpression')
+        && (element as { Constructor?: unknown }).Constructor === undefined) {
+      problem = soaFieldWithoutLayout(declaration);
+    } else if ((element as { Constructor?: unknown }).Constructor !== undefined && element.EnumMembers === undefined && !LayoutOf(element)) {
+      problem = { field: '(a field)', type: 'a type with no layout' };
+    }
+    if (problem && problem !== 'unknown') {
+      errors.push(Throw.StaticTypeError('$1 cannot be split into columns: its field $2 has $3, and a field of no layout has nothing to split',
+        Value(displayType(element)), Value(problem.field), Value(problem.type === 'no annotation' ? 'no annotation' : `type ${problem.type}`)).Value as ObjectValue);
+    }
+  };
+
+  const checkCompositeArgument = (args: readonly (TypeRecord | number)[]): void => {
+    if (args.length !== 1) return;
+    const argument = args[0]!;
+    if (typeof argument === 'number') {
+      errors.push(Throw.StaticTypeError('the argument of Composite must be an object, tuple, array or interface type, and $1 is not', Value(`a literal type of number`)).Value as ObjectValue);
+      return;
+    }
+    if (argument.Kind === 'any' || argument.Kind === 'parameter' || mentionsTypeParameter(argument)) return;
+    const isInterface = argument.Kind === 'nominal'
+      && (argument as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration';
+    const shape = isInterface ? structureOf(argument) : argument;
+    if (!shape || shape.Kind === 'any') return;
+    if (shape.Kind !== 'object' && shape.Kind !== 'tuple' && shape.Kind !== 'array') {
+      errors.push(Throw.StaticTypeError('the argument of Composite must be an object, tuple, array or interface type, and $1 is not', Value(displayType(argument))).Value as ObjectValue);
+      return;
+    }
+    if (shape.Kind === 'object') {
+      const symbolKeyed = (shape as { Properties: readonly { key: string | SymbolValue }[] }).Properties.find((p) => typeof p.key !== 'string');
+      if (symbolKeyed) {
+        const description = (symbolKeyed.key as SymbolValue).Description;
+        const shown = description && description !== Value.undefined ? (description as JSStringValue).stringValue() : 'a symbol';
+        errors.push(Throw.StaticTypeError('the argument of Composite has the Symbol-keyed member $1, and a composite\'s keys are Strings', Value(`[${shown}]`)).Value as ObjectValue);
+      }
+    }
+  };
+
   const checkWeakKeyConstraint = (libraryName: string, args: readonly (TypeRecord | number)[]): void => {
     const slot = WEAK_KEY_PARAMETER[libraryName];
     if (slot === undefined || args.length <= slot) {
@@ -12284,6 +12481,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const specialization = node as ParseNode.TypeArgumentsExpression;
         const base = staticType(specialization.Expression);
         const bare = patternExpression(specialization.Expression);
+        if (bare?.type === 'IdentifierReference' && bare.name === 'Composite' && !shadowedByProgram('Composite')) {
+          const compositeArgs = specialization.TypeArguments.TypeArgumentList.map((a) => resolveType(a as ParseNode.Type));
+          if (compositeArgs.every((a) => a !== null)) checkCompositeArgument(compositeArgs as TypeRecord[]);
+        }
         const classTarget = bare?.type === 'IdentifierReference' ? classTypeOf(bare.name) : null;
         if (classTarget?.Kind === 'nominal') {
           const declaration = classTarget.Declaration;
@@ -13699,6 +13900,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // annotation: `new WeakMap.<string, uint8>()` was the one
                 // position of seven the annotation-side check did not reach.
                 if (base.LibraryName) checkWeakKeyConstraint(base.LibraryName, valueArgs);
+                if (base.LibraryName === 'SoA') checkSoAElement(valueArgs);
                 // The constructor's ITERABLE argument. `new WeakSet.<T>(iter)` adds
                 // each element and `new WeakMap.<K, V>(iter)` sets each pair, so an
                 // element (or a pair's key) that could not be passed to `add`/`set`
@@ -18165,7 +18367,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     for (const n of list) {
-      if (n.type === 'ClassDeclaration') checkInheritedFieldRedeclarations(n);
+      if (n.type === 'ClassDeclaration') {
+        checkInheritedFieldRedeclarations(n);
+        checkDeclaredSize(n);
+      }
     }
     for (const n of classNodes.values()) {
       instanceTypeOf(n);
@@ -20409,6 +20614,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-collection-construction: "It is a type error if an established
+   * surviving key, value or element cannot undergo the conversion required
+   * above." A numeric literal must fit the element type - `300` cannot become
+   * a `uint8` - and a source no conversion reaches is refused: a string is not
+   * a conversion source for a numeric type (#sec-parsing). The explicit
+   * conversion's availability is the test, so nothing an explicit `:=` could
+   * convert is refused here.
+   */
+  const conversionImpossible = (source: TypeRecord, wanted: TypeRecord): boolean => {
+    if (wanted.Kind === 'union') return wanted.Members.length > 0 && wanted.Members.every((arm) => conversionImpossible(source, arm));
+    if (source.Kind === 'literal' && wanted.Kind === 'primitive' && isNumericOperandName(wanted.Name)
+        && source.Value instanceof NumberValue && !literalFitsNumericType(source, wanted)) return true;
+    const widened = source.Kind === 'literal' ? source.Base : source;
+    return explicitConversionAvailability(widened, wanted) === 'impossible';
+  };
+
   const checkedCollectionSeeds = new WeakMap<ParseNode, Set<TypeRecord>>();
   const checkCollectionSeed = (node: ParseNode.NewExpression, target: Known): void => {
     if (target?.Kind !== 'nominal' || !['Map', 'Set'].includes(target.LibraryName ?? '')) return;
@@ -20417,7 +20639,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const args = node.Arguments ?? [];
     if (args.some((arg) => arg.type === 'AssignmentRestElement' || arg.type === 'NamedArgument')) return;
     const seed = patternExpression(args[0]);
-    if (seed?.type !== 'ArrayLiteral' || seed.ElementList.some((el) => !el || el.type === 'SpreadElement')) return;
+    if (!seed) return;
+    const literalSeed = seed.type === 'ArrayLiteral' && !seed.ElementList.some((el) => !el || el.type === 'SpreadElement');
+    // A seed that is not a literal is judged by its Static Type: an array or
+    // tuple whose element type is known establishes every element it holds.
+    const seedType = literalSeed ? null : staticType(seed);
+    const typedSeed = !literalSeed && (seedType?.Kind === 'array' || seedType?.Kind === 'tuple');
+    if (!literalSeed && !typedSeed) return;
     const realm = surroundingAgent.currentRealmRecord;
     const intrinsic = realm.Intrinsics;
     const adder = name === 'Map' ? 'set' : 'add';
@@ -20457,6 +20685,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return protocolArgumentFails(source, wanted);
     };
     const positions = target.Arguments;
+    if (typedSeed) {
+      // #sec-collection-construction: "an established surviving key, value or
+      // element" - for a typed seed, every element its type establishes.
+      const elements = seedType!.Kind === 'array'
+        ? [(seedType as { Element: TypeRecord }).Element]
+        : (seedType as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => e.Type);
+      const refuse = (source: TypeRecord, wanted: TypeRecord | number | undefined): boolean => !!wanted && typeof wanted !== 'number'
+        && !mentionsTypeParameter(wanted) && conversionImpossible(source, wanted);
+      for (const element of elements) {
+        if (name === 'Set') {
+          if (refuse(element, positions[0])) {
+            errors.push(Throw.StaticTypeError('a $1 seed element of type $2 cannot be converted to $3', Value(name), Value(displayType(element)), Value(displayType(positions[0] as TypeRecord))).Value as ObjectValue);
+            return;
+          }
+          continue;
+        }
+        const entry = element.Kind === 'tuple' ? (element as { Elements: readonly { Type: TypeRecord }[] }).Elements.map((e) => e.Type) : null;
+        if (!entry || entry.length < 2) continue;
+        for (const [index, wanted] of [[0, positions[0]], [1, positions[1]]] as const) {
+          if (refuse(entry[index]!, wanted)) {
+            errors.push(Throw.StaticTypeError('a $1 seed element of type $2 cannot be converted to $3', Value(name), Value(displayType(entry[index]!)), Value(displayType(wanted as TypeRecord))).Value as ObjectValue);
+            return;
+          }
+        }
+      }
+      return;
+    }
+    if (seed.type !== 'ArrayLiteral') return;
     const reject = (value: ParseNode, wanted: TypeRecord | number | undefined): void => {
       if (wanted && typeof wanted !== 'number' && refuses(value, wanted)) errors.push(Throw.StaticTypeError(
         'a final $1 seed entry cannot be converted to $2', Value(name), Value(displayType(wanted)),
@@ -22780,6 +23036,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ClassDeclaration':
       case 'ClassExpression': {
         checkInheritedFieldRedeclarations(n);
+        checkDeclaredSize(n);
         const heritage = n.ClassTail.ClassHeritage;
         if (heritage) pushBlock(() => {
           // The class self-name is still in its TDZ during heritage evaluation.
