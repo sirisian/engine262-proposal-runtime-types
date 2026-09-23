@@ -62,6 +62,9 @@ test('what the rule does not reach is still permitted', () => {
 test('a collision the pass cannot resolve is still caught at the declaration', () => {
   // An initializer naming a binding the pass cannot read is not pre-evaluated,
   // so the rule is decided where the declaration runs - which is the deferral
-  // #sec-type-errors permits, and the refusal still happens.
-  expectThrownKind("const s = Symbol('s'); enum E: symbol { A = s } enum F: symbol { B = s }", 'TypeError');
+  // #sec-type-errors permits, and the refusal still happens. Reached here
+  // through a SECOND binding: two enumerators reading the same one are refused
+  // before the program runs (enum-identity-early-errors.test.mts).
+  expectThrownKind("const s = Symbol('s'); const t = s; enum E: symbol { A = s } enum F: symbol { B = t }", 'TypeError');
+  expectStaticTypeError("const s = Symbol('s'); enum E: symbol { A = s } enum F: symbol { B = s }");
 });

@@ -6595,8 +6595,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (params.length === 0) {
       return;
     }
-    if (params.some((p) => p.Variadic === true)
-      || writtenArgs.some((a) => (a as { type?: string }).type === 'NamedTypeArgument')) {
+    // A named argument rides on its type node as [[ArgumentName]]; there is no
+    // separate node type, so testing for one never matched and a named list
+    // was counted - which reported `h.<V: uint8>` against a two-parameter `h`
+    // as an arity mismatch before the unknown name could be named.
+    if (params.some((p) => p.Variadic === true)) {
+      return;
+    }
+    const names = writtenArgs.map((a) => typeArgumentNameOfShared(a));
+    if (names.some((n) => n !== undefined)) {
+      // A named list is not counted. Where it is well formed - positional
+      // arguments first, every name a parameter's, none repeated - a required
+      // parameter it leaves unsupplied is still refused here, as the count
+      // refused it before; where it is not, the binding reports the Syntax
+      // Error that names the mistake.
+      const paramNames = params.map((p) => p.Name);
+      const firstNamed = names.findIndex((n) => n !== undefined);
+      const named = names.filter((n): n is string => n !== undefined);
+      const wellFormed = names.every((n, i) => (i < firstNamed ? n === undefined : n !== undefined))
+        && named.every((n) => paramNames.includes(n)) && new Set(named).size === named.length;
+      if (!wellFormed) return;
+      const supplied = new Set([...paramNames.slice(0, firstNamed), ...named]);
+      const missing = params.find((p) => !p.DefaultNode && p.Name !== undefined && !supplied.has(p.Name));
+      if (missing) {
+        errors.push(Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default', Value(missing.Name!), Value(subject)).Value as ObjectValue);
+      }
       return;
     }
     const firstDefaulted = params.findIndex((p) => p.DefaultNode);
@@ -6805,6 +6828,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   // ---- enums --------------------------------------------------------
+
+  /**
+   * #sec-enums: "It is a type error if an enumerator's value is already an
+   * enumerator of another enum of the same agent." Where the underlying type's
+   * values carry their own identity - an object, a function, a symbol - an
+   * enumerator IS its initializer's value, so two enums naming one value would
+   * give it two nominal types. Content-compared values are exempt: two enums
+   * may both name 0.
+   *
+   * Identity is a run-time fact, so this decides only what is evident from the
+   * source: two enumerators of different enums whose initializers read the same
+   * immutable binding hold the same value. Every other collision is still
+   * refused when the second declaration evaluates. Sharing within ONE enum is
+   * admitted, as the clause's rule is between enums.
+   */
+  const enumeratorBindings = new Map<object, { enumName: string, member: string, enumNode: ParseNode }>();
+  const carriesIdentity = (type: Known): boolean => {
+    if (!type) return false;
+    if (type.Kind === 'union') return type.Members.some(carriesIdentity);
+    if (type.Kind === 'primitive') return ['object', 'symbol'].includes(type.Name);
+    // A class or library instance is an object; an enum's values take their
+    // underlying type's reading, which that enum's own check has decided.
+    if (type.Kind === 'nominal') return type.EnumMembers === undefined;
+    return type.Kind === 'object' || type.Kind === 'function' || type.Kind === 'array' || type.Kind === 'tuple';
+  };
+  const checkEnumeratorIdentity = (n: ParseNode.EnumDeclaration, underlying: Known): void => {
+    if (!carriesIdentity(underlying)) return;
+    for (const member of n.EnumMemberList) {
+      const read = patternExpression(member.Initializer as ParseNode | undefined);
+      if (read?.type !== 'IdentifierReference') continue;
+      const declaration = ResolveBindingDeclaration(read, read.name);
+      const immutable = declaration && (declaration.kind === 'const'
+        || (declaration.kind === 'function' && !assignedNames.has(read.name) && !hasDirectEval));
+      if (!declaration || !immutable) continue;
+      const prior = enumeratorBindings.get(declaration.node);
+      if (prior && prior.enumNode !== n) {
+        errors.push(Throw.StaticTypeError(
+          '$1 of $2 reads $3, which is already enumerator $4 of $5; a value may be an enumerator of at most one enum',
+          Value(member.IdentifierName.name), Value(n.BindingIdentifier.name), Value(read.name), Value(prior.member), Value(prior.enumName),
+        ).Value as ObjectValue);
+        continue;
+      }
+      if (!prior) enumeratorBindings.set(declaration.node, { enumName: n.BindingIdentifier.name, member: member.IdentifierName.name, enumNode: n });
+    }
+  };
+
 
   // Carried across entries as well, and for the reason stated where it is
   // declared: an enum resolved freshly on each mention would give the checker two
@@ -7862,6 +7931,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-higher-kinded-parameters: "Within the declaration that introduces
+   * it, a higher-kinded parameter may appear only applied. It is not a type,
+   * so a type position naming one unapplied is a type error, and the message
+   * states the arity the parameter expects." `function f<W<_>: type>(x: W)`
+   * was accepted, and its calls then failed as "Box.<uint8> is not
+   * assignable to Box". A name written as a type ARGUMENT is not a type
+   * position of its own - forwarding a higher-kinded parameter is written
+   * that way - and is left to the argument's kind check.
+   */
+  const checkUnappliedHigherKinded = (root: ParseNode): void => {
+    const insideTypeArguments = (node: ParseNode): boolean => {
+      for (let at = node.parent as ParseNode | undefined; at && at !== root.parent; at = at.parent as ParseNode | undefined) {
+        if (at.type === 'TypeArguments') return true;
+      }
+      return false;
+    };
+    const visit = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+        return;
+      }
+      const n = node as ParseNode & Record<string, unknown>;
+      if (typeof n.type !== 'string') return;
+      if (n.type === 'TypeReference') {
+        const ref = n as unknown as { TypeArguments?: unknown, TypeName: { IdentifierReference: ParseNode & { name: string }, MemberNames: readonly unknown[] } };
+        if (!ref.TypeArguments && ref.TypeName.MemberNames.length === 0) {
+          const name = ref.TypeName.IdentifierReference.name;
+          const declaration = ResolveBindingDeclaration(ref.TypeName.IdentifierReference, name);
+          if (declaration?.kind === 'type-parameter') {
+            const tp = ((declaration.node as unknown as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string }, Arity?: number }[] } })
+              .TypeParameters?.TypeParameterList ?? []).find((t) => t.BindingIdentifier?.name === name);
+            if (tp?.Arity && tp.Arity > 0 && !insideTypeArguments(n)) {
+              errors.push(Throw.StaticTypeError('$1 takes $2 type arguments and cannot be used unapplied',
+                Value(name), Value(String(tp.Arity))).Value as ObjectValue);
+              return;
+            }
+          }
+        }
+      }
+      for (const key of Object.keys(n)) {
+        if (key === 'parent' || key === 'location' || key === 'sourceText' || key === 'strict') continue;
+        visit(n[key]);
+      }
+    };
+    visit(root);
+  };
+
   const sweepTypePositions = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -7871,6 +7989,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const n = node as ParseNode & Record<string, unknown>;
     if (typeof n.type !== 'string') return;
     if (n.type === 'TypeAnnotation' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
+    if (n.type === 'TypeAnnotation' && n.Type) checkUnappliedHigherKinded(n.Type as ParseNode);
     if (n.type === 'TypeAliasDeclaration' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
     if (Array.isArray(n.FunctionTypeParameterList)) checkFunctionTypeParameterOrder(n.FunctionTypeParameterList as readonly ParseNode.FunctionTypeParameter[]);
     for (const tp of (n.TypeParameters as { TypeParameterList?: readonly { TypeParameterConstraint?: ParseNode | null, TypeParameterDefault?: ParseNode | null }[] } | null | undefined)?.TypeParameterList ?? []) {
@@ -9345,6 +9464,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * call's evaluation raises the diagnostic. (The split runs by arity alone
    * here; a second pack needs the element bounds, which is not yet done.)
    */
+  /**
+   * What an argument written for a higher-kinded parameter denotes as a
+   * DECLARATION. A bare generic name is not a type - resolving `Box` alone
+   * answers nothing - so a class or interface is looked up by name; a
+   * parameter in scope is left alone (passing a higher-kinded parameter along
+   * is how one is forwarded); anything else is what it resolves to, which for
+   * `uint8` is a type that is no declaration at all.
+   */
+  const kindedArgumentOf = (node: ParseNode): TypeRecord | null => {
+    const ref = node as { type?: string, TypeArguments?: unknown, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } };
+    if (ref.type === 'TypeReference' && !ref.TypeArguments && !ref.TypeName?.MemberNames?.length) {
+      const name = ref.TypeName?.IdentifierReference?.name;
+      if (!name || typeParameterInScope(name)) return null;
+      const declared = classTypeOf(name) ?? interfaceTypeOf(name);
+      if (declared) return declared as TypeRecord;
+    }
+    const resolved = resolveType(node as ParseNode.Type);
+    return resolved && resolved.Kind !== 'any' && resolved.Kind !== 'parameter' ? resolved : null;
+  };
+
   const bindExplicitTypeArguments = (typeParams: readonly TypeParameterRecord[], argNodes: readonly ParseNode[], into: Map<string, TypeRecord>, validation?: { complete: boolean, application: ParseNode.TypeArgumentsExpression }): void => {
     if (validation && !validation.complete) requireTypeArgumentArity(argNodes, typeParams, 'the call');
     type Entry = { node: ParseNode | null, record: TypeRecord | null, name: string | undefined };
@@ -9414,12 +9553,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           missing: `the type parameter ${name} has no argument and no default`,
           unmatched: 'the type arguments do not match the parameter list',
         };
-        errors.push(Throw.StaticTypeError('$1', Value(messages[assigned.kind])).Value as ObjectValue);
+        // #sec-type-references makes three of these refusals Syntax Errors - a
+        // name that is not a parameter, a name supplied twice, and a positional
+        // argument after a named one - and #sec-bindtypearguments says that
+        // where the applied declaration is known statically they "are the
+        // Syntax Errors of" that clause. They are facts about the argument list
+        // as written, not about the types it names.
+        const syntactic = assigned.kind === 'unknown-name' || assigned.kind === 'supplied-twice' || assigned.kind === 'positional-after-named';
+        errors.push((syntactic
+          ? Throw.SyntaxError('$1', Value(messages[assigned.kind]))
+          : Throw.StaticTypeError('$1', Value(messages[assigned.kind]))).Value as ObjectValue);
       }
       return;
     }
     typeParams.forEach((tp, k) => {
       const run = assigned.runs[k]!;
+      // #sec-higher-kinded-parameters: an argument bound to a higher-kinded
+      // parameter must be a generic declaration of its arity - "An argument
+      // that is not a generic declaration at all is a type error naming the
+      // argument", and one "of the wrong parameter count is a type error naming
+      // both counts". The class-application path judged this; an explicit
+      // argument to a generic FUNCTION did not, so `f.<uint8>` at `W<_>` was
+      // accepted and `f.<Box>` at `W<_, _>` failed only at run time.
+      if (validation && tp.Arity > 0 && !tp.Variadic && run[0]?.node) {
+        const argument = kindedArgumentOf(run[0].node);
+        if (argument) {
+          const bad = badKindedArgument({
+            Declaration: { TypeParameters: { TypeParameterList: [{ BindingIdentifier: { name: tp.Name }, Arity: tp.Arity }] } },
+          } as unknown as TypeRecord, [argument]);
+          if (bad) {
+            errors.push((bad.kind === 'not-generic'
+              ? Throw.StaticTypeError('$1 is not a generic declaration; $2 expects one taking $3 type arguments',
+                Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)))
+              : Throw.StaticTypeError('$1 takes $2 type arguments; $3 expects one taking $4',
+                Value(displayType(bad.argument)), Value(String(bad.supplied)), Value(bad.parameter), Value(String(bad.wanted)))
+            ).Value as ObjectValue);
+            return;
+          }
+        }
+      }
       const resolvedRun = run.map((e) => e.record ?? resolveType(e.node as ParseNode.Type));
       if (resolvedRun.some((r) => !r)) {
         return;
@@ -13620,13 +13792,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // range needs no per-element check. A window whose length is not
             // stated has nothing to decide against and keeps the run-time check.
             const spanExtent = spanExtentOfReceiver(receiver);
-            const spanIndex = patternExpression(m.Expression) as { type?: string, value?: unknown };
-            if (spanExtent !== undefined && spanIndex.type === 'NumericLiteral'
-                && typeof spanIndex.value === 'number'
-                && (!Number.isInteger(spanIndex.value) || spanIndex.value < 0 || spanIndex.value >= spanExtent)) {
+            // A signed literal and a `const` bound to one decide the index as a
+            // bare literal does: `-1` is a unary minus over `1`, and was read as
+            // no literal at all.
+            const spanIndex = singletonTupleIndex(m.Expression);
+            if (spanExtent !== undefined && spanIndex !== null
+                && ((typeof spanIndex === 'number' && !Number.isInteger(spanIndex)) || spanIndex < 0 || Number(spanIndex) >= spanExtent)) {
               const completion = Throw.StaticTypeError(
                 '$1 is not an index of $2',
-                Value(String(spanIndex.value)),
+                Value(String(spanIndex)),
                 Value(displayType(receiver!)),
               ) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
@@ -13640,15 +13814,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // runs rather than as a run-time RangeError, which is what lets a
             // bounds check be elided where the index is proven.
             //
-            // Parentheses are transparent; unary signs and computed indices
-            // retain their existing runtime checks.
-            const index = patternExpression(m.Expression) as { type?: string, value?: number };
-            if (!isDeleteOperand && index.type === 'NumericLiteral' && typeof receiver.Extent === 'number'
-                && typeof index.value === 'number'
-                && (!Number.isInteger(index.value) || index.value < 0 || index.value >= receiver.Extent)) {
+            // Parentheses are transparent, and so is a sign:
+            // #sec-overloading-of-the-standard-library refuses an index that is
+            // "negative, not an integer, or not less than the extent", and a
+            // negative index can only be written with a unary minus. A `const`
+            // bound to such a literal decides it too, as it does for a tuple.
+            // Computed indices retain their existing runtime checks.
+            const index = singletonTupleIndex(m.Expression);
+            if (!isDeleteOperand && index !== null && typeof receiver.Extent === 'number'
+                && ((typeof index === 'number' && !Number.isInteger(index)) || index < 0 || Number(index) >= receiver.Extent)) {
               const completion = Throw.StaticTypeError(
                 '$1 is not an index of $2',
-                Value(String(index.value)),
+                Value(String(index)),
                 Value(displayType(receiver)),
               ) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
@@ -14291,6 +14468,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const argument = rightLit ? rightNode : typedExpressionView(rightNode, rightT);
           return operatorResult(declared, [argument], node);
         }
+        // A literal operand is left untyped here to adopt its context; for this
+        // judgment it is a number, which is all `literalOperand` recognizes.
+        if (token && rightNode && checkUndeclaredClassOperator(node, token,
+          leftLit ? makePrimitive('number') : leftT, rightLit ? makePrimitive('number') : rightT)) return neverType;
         if (token && checkBinaryConversion(node, token, leftNode, rightNode)) return neverType;
         // A `+` WITH A STRING OPERAND IS A CONCATENATION, and its type is
         // `string`. #sec-conversions gives a value of a numeric type a
@@ -18824,6 +19005,105 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
+  /**
+   * #sec-operator-declarations: "Division does not commute, so no such block
+   * exists for it and `2 / v` stays a type error, which is correct, since it is
+   * not defined" - and #sec-which-operations-each-family-defines: "An operator
+   * whose operation the operand's type does not define is a type error."
+   *
+   * A typed class is a nominal type held to the operators it declares. The
+   * conversion-contract judgment below reports only a conversion that fails on
+   * every path, and a typed class inherits `Object.prototype`'s `valueOf` and
+   * `toString`, so `2 / v` converted `v` to a String and answered NaN. Refused
+   * here where the class declares neither the operator nor a primitive
+   * conversion of its own (`valueOf`, `toString` or `Symbol.toPrimitive`),
+   * which is the declared escape; `+` with a possibly-String operand is
+   * concatenation and is left alone; and a class on the RIGHT is left alone
+   * wherever a `primitive` block could supply the operator, since dispatch
+   * keys on the left operand. Untyped classes are unaffected.
+   */
+  const undeclaredOperatorFailures = new WeakSet<ParseNode>();
+  let primitiveBlockOperators: Set<string> | null = null;
+  const primitiveBlockDeclares = (operator: string, leftType: Known): boolean => {
+    if (!primitiveBlockOperators) {
+      primitiveBlockOperators = new Set();
+      const scan = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+          node.forEach(scan);
+          return;
+        }
+        const n = node as ParseNode & Record<string, unknown>;
+        if (typeof n.type !== 'string') return;
+        if (n.type === 'PrimitiveOperatorDeclaration') {
+          for (const e of (n as unknown as ParseNode.PrimitiveOperatorDeclaration).OperatorDefinitionList ?? []) {
+            if (e.type === 'OperatorDefinition' && e.OperatorName) primitiveBlockOperators!.add(e.OperatorName);
+          }
+        }
+        for (const key of Object.keys(n)) {
+          if (key !== 'parent' && key !== 'location' && key !== 'sourceText' && key !== 'strict') scan(n[key]);
+        }
+      };
+      scan(statementList);
+    }
+    if (primitiveBlockOperators.has(operator)) return true;
+    const base = leftType?.Kind === 'literal' ? leftType.Base : leftType;
+    if (base?.Kind !== 'primitive') return true;
+    const receiver = base.Arguments && base.Arguments.length > 0 && typeof base.Arguments[0] === 'number' ? `${base.Name}${base.Arguments[0]}` : base.Name;
+    return RegisteredPrimitiveOperators(receiver, operator).length > 0;
+  };
+  const typedClassDeclarationOf = (type: Known): ParseNode | undefined => {
+    const t = type?.Kind === 'reference' ? type.Target as TypeRecord : type;
+    if (!t || t.Kind !== 'nominal' || t.EnumMembers !== undefined) return undefined;
+    const declaration = classDeclarationOf(t) as ParseNode | undefined;
+    if (!declaration) return undefined;
+    for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
+      if (classBodyOf(at).some((e) => e.type === 'FieldDefinition' && (e as { TypeAnnotation?: unknown }).TypeAnnotation)) return declaration;
+    }
+    return undefined;
+  };
+  const declaresPrimitiveConversion = (declaration: ParseNode): boolean => {
+    for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
+      for (const element of classBodyOf(at)) {
+        if (element.type !== 'MethodDefinition' || (element as { static?: boolean }).static) continue;
+        const key = (element as unknown as { ClassElementName?: { type?: string, name?: string, ComputedPropertyName?: { type?: string, MemberExpression?: { name?: string }, IdentifierName?: { name?: string } } } }).ClassElementName;
+        if (key?.type === 'IdentifierName' && (key.name === 'valueOf' || key.name === 'toString')) return true;
+        const computed = key?.ComputedPropertyName;
+        if (computed?.type === 'MemberExpression' && computed.MemberExpression?.name === 'Symbol' && computed.IdentifierName?.name === 'toPrimitive') return true;
+      }
+      if ((at as unknown as { ClassTail?: { ClassHeritage?: unknown } }).ClassTail?.ClassHeritage && !heritageClassOf(at)) return true;
+    }
+    return false;
+  };
+  // The operand types are passed in by the arithmetic arm, which has them:
+  // asking `staticType` again re-types every nested operand at every level, and
+  // `a+a+...+a` then takes exponential time.
+  const checkUndeclaredClassOperator = (node: ParseNode, operator: string, leftType: Known, rightType: Known): boolean => {
+    const leftClass = typedClassDeclarationOf(leftType);
+    const rightClass = leftClass ? undefined : typedClassDeclarationOf(rightType);
+    if (!leftClass && !rightClass) return false;
+    const mayBeString = (t: Known): boolean => {
+      if (!t || t.Kind === 'any' || t.Kind === 'parameter') return true;
+      if (t.Kind === 'union') return t.Members.some(mayBeString);
+      const base = t.Kind === 'literal' ? t.Base : t;
+      return base.Kind === 'primitive' && base.Name === 'string';
+    };
+    if (operator === '+' && (mayBeString(leftType) || mayBeString(rightType))) return false;
+    const ordered = ['<', '>', '<=', '>='].includes(operator);
+    if (leftClass) {
+      if (declaredOperator(leftType, operator) || (ordered && declaredOperator(leftType, '<'))) return false;
+      if (declaresPrimitiveConversion(leftClass)) return false;
+    } else {
+      if (!leftType || leftType.Kind === 'any' || leftType.Kind === 'parameter' || !knownNonObject(leftType)) return false;
+      if (declaresPrimitiveConversion(rightClass!) || primitiveBlockDeclares(operator, leftType)) return false;
+    }
+    if (!undeclaredOperatorFailures.has(node)) {
+      undeclaredOperatorFailures.add(node);
+      errors.push(Throw.StaticTypeError('$1 is not defined for $2', Value(operator), Value(displayType((leftClass ? leftType : rightType) as TypeRecord))).Value as ObjectValue);
+    }
+    return true;
+  };
+
   const binaryConversionFailures = new WeakSet<ParseNode>();
   const checkBinaryConversion = (node: ParseNode, operator: string, left: ParseNode, right: ParseNode): boolean => {
     const leftParticipates = operandParticipates(left);
@@ -21370,7 +21650,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rel = n as ParseNode.RelationalExpression;
         if (rel.RelationalExpression) {
           if (['<', '<=', '>', '>='].includes(rel.operator)) {
-            checkBinaryConversion(n, rel.operator, rel.RelationalExpression, rel.ShiftExpression);
+            if (!checkUndeclaredClassOperator(n, rel.operator, staticType(rel.RelationalExpression), staticType(rel.ShiftExpression))) {
+              checkBinaryConversion(n, rel.operator, rel.RelationalExpression, rel.ShiftExpression);
+            }
           } else if (rel.operator === 'in') {
             checkPrimitiveConversion(rel.RelationalExpression, 'string');
           } else if (rel.operator === 'instanceof' && operandParticipates(rel.ShiftExpression)
@@ -21688,6 +21970,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         });
         const underlying = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : builtinTypeRecord('int32');
+        checkEnumeratorIdentity(n, underlying);
         for (const member of n.EnumMemberList) {
           const init = member.Initializer;
           if (!init) {

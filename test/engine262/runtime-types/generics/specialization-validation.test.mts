@@ -1,18 +1,28 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrown, ok } from '../harness.mts';
+import { evaluated, expectEarlyError, expectStaticTypeError, expectThrown, ok } from '../harness.mts';
 
 test.each([
   'function f<T: type extends string>(x: T): T { return x; } const s = f.<uint8>;',
   'function f<T: type>(x: T): T { return x; } const s = f.<uint8, string>;',
   'function f<T: type, U: type>(x: T): T { return x; } const s = f.<uint8>;',
-  'function f<T: type>(x: T): T { return x; } const s = f.<Missing: uint8>;',
-  'function f<T: type>(x: T): T { return x; } const s = f.<T: uint8, T: string>;',
-  'function f<T: type, U: type>(x: T): T { return x; } const s = f.<T: uint8, string>;',
   'function f<N: uint8>(): void {} const s = f.<"s">;',
   'class C { m<T: type extends string>(x: T): T { return x; } } const s = new C().m.<uint8>;',
 ])('specialization arguments are checked at value creation: %s', (source) => {
   expectStaticTypeError(source);
   expectStaticTypeError(`function unused() { ${source} }`);
+});
+
+// #sec-type-references: a named argument that names no parameter, a name
+// supplied twice, and a positional argument after a named one are Syntax
+// Errors, and #sec-bindtypearguments says so again where the applied
+// declaration is known statically.
+test.each([
+  'function f<T: type>(x: T): T { return x; } const s = f.<Missing: uint8>;',
+  'function f<T: type>(x: T): T { return x; } const s = f.<T: uint8, T: string>;',
+  'function f<T: type, U: type>(x: T): T { return x; } const s = f.<T: uint8, string>;',
+])('a malformed named argument list is a Syntax Error at value creation: %s', (source) => {
+  expectEarlyError(source, 'SyntaxError');
+  expectEarlyError(`function unused() { ${source} }`, 'SyntaxError');
 });
 
 test('defaulted specializations publish a concrete type and preserve const inference', () => {

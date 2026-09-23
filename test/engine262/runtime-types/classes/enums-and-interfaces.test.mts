@@ -517,10 +517,16 @@ test('carrying the enum leaves the value usable as its underlying type', () => {
 // The claim is recorded outside the value, and a value may be claimed once.
 test('a value may be an enumerator of at most one enum', () => {
   const K = 'class K { constructor(v) { this.v = v; } } ';
-  expectThrownKind(`${K}const k = new K(1); enum A: K { X = k } enum B: K { Y = k } "ran";`, 'TypeError');
-  expectThrownKind('const s = Symbol("s"); enum A: symbol { X = s } enum B: symbol { Y = s } "ran";', 'TypeError');
-  expectThrownKind('type F = (uint8) => uint8; const g = (x) => x; '
-    + 'enum A: F { X = g } enum B: F { Y = g } "ran";', 'TypeError');
+  // Two enumerators reading ONE immutable binding hold one value, which the
+  // source shows, so the collision is refused before the program runs
+  // (enum-identity-early-errors.test.mts).
+  expectStaticTypeError(`${K}const k = new K(1); enum A: K { X = k } enum B: K { Y = k } "ran";`);
+  expectStaticTypeError('const s = Symbol("s"); enum A: symbol { X = s } enum B: symbol { Y = s } "ran";');
+  expectStaticTypeError('type F = (uint8) => uint8; const g = (x) => x; '
+    + 'enum A: F { X = g } enum B: F { Y = g } "ran";');
+  // Sharing the checker cannot see - through a second binding - is still
+  // refused, when the second declaration evaluates.
+  expectThrownKind(`${K}const k = new K(1); const j = k; enum A: K { X = k } enum B: K { Y = j } "ran";`, 'TypeError');
   // A distinct value per enum is the ordinary way to write it, and is unaffected.
   expect(evaluated(`${K}enum A: K { X = new K(1) } enum B: K { Y = new K(1) } String(A.X is B);`)).toBe('false');
   // Two enumerators of ONE declaration may share a value, as they may for any

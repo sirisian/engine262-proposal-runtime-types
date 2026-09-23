@@ -36,9 +36,11 @@ test('an out-of-bounds READ is a RangeError', () => {
   // run-time RangeError remains the answer for every index that is not.
   expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[9];');
   expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[4];');
-  // `-1` is a unary expression rather than a literal, so it is not among the
-  // indices this decides and stays the run time's.
-  expectThrownKind('const a: [4].<float32> = [1, 2, 3, 4]; a[-1];', 'RangeError');
+  // `-1` is a unary minus over a literal, and a negative index can only be
+  // written that way, so it is decided here too: the clause refuses an index
+  // that is "negative, not an integer, or not less than the extent"
+  // (fixed-extent-signed-index.test.mts).
+  expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[-1];');
   // A DYNAMIC extent is bounds-checked too: its length is what it is, even
   // though it may grow.
   expectThrownKind('const a: [].<float32> = [1, 2, 3]; a[9];', 'RangeError');
