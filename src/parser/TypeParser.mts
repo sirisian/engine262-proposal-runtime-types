@@ -685,6 +685,18 @@ export abstract class TypeParser extends ExpressionParser {
     }
     this.expect(Token.GT);
     this.noFuseGT -= 1;
+    // #sec-type-parameters-static-semantics-early-errors: "It is a Syntax
+    // Error if the BoundNames of two |TypeParameter|s of the list are the
+    // same." The later one shadowed the earlier, silently.
+    const declaredNames = new Set<string>();
+    for (const tp of TypeParameterList) {
+      const name = tp.BindingIdentifier?.name;
+      if (name === undefined) continue;
+      if (declaredNames.has(name)) {
+        this.addEarlyError(Throw.SyntaxError('$1', `the type parameter ${name} is declared twice in one list`), tp);
+      }
+      declaredNames.add(name);
+    }
     node.TypeParameterList = TypeParameterList;
     node.SpecializationEntryList = SpecializationEntryList;
     node.EntryKinds = EntryKinds;
@@ -716,9 +728,10 @@ export abstract class TypeParser extends ExpressionParser {
     const domain = this.parseType();
     const domainText = domain.sourceText.replace(/\s+/g, '');
     const typeKind = domainText === 'type' || (param.IsVariadic && domainText === '[].<type>');
-    if (Arity > 0 && !typeKind) {
-      this.addEarlyError(Throw.SyntaxError('$1', 'a higher-kinded parameter\'s domain is `type`, which is what an application of it yields'), domain);
-    }
+    // A higher-kinded parameter whose domain is not written `type` is refused
+    // by the checker: #sec-parameterkind throws a *TypeError* for it at the
+    // declaration, which is a type error rather than a Syntax Error.
+    param.HigherKindedDomainWritten = Arity > 0 ? typeKind : undefined;
     const bound = this.eat(Token.EXTENDS) ? this.parseType() : null;
     if (bound && !typeKind) {
       this.addEarlyError(Throw.SyntaxError('$1', 'a value parameter has no `extends` bound; narrow its values with a `where` clause'), bound);

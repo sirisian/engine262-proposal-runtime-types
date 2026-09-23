@@ -3479,6 +3479,12 @@ export namespace ParseNode {
 
   // TypeParameter : BindingIdentifier TypeParameterConstraint? TypeParameterDefault?
   export interface TypeParameter extends BaseParseNode {
+    /**
+     * proposal-runtime-types #sec-parameterkind: for a higher-kinded parameter,
+     * whether its domain is WRITTEN `type`. The checker refuses one that is not,
+     * as the type error the operation's throw is.
+     */
+    HigherKindedDomainWritten?: boolean;
     readonly type: 'TypeParameter';
     readonly BindingIdentifier: BindingIdentifier;
     /**

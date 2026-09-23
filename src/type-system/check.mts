@@ -3092,6 +3092,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
+  /**
+   * #sec-parameterkind: "If _p_ has a |TypeParameterHoles|, then: If _written_
+   * is not the |Type| `type`, throw a *TypeError* exception." The throw happens
+   * at the declaration, which #sec-type-errors makes a type error. The parser
+   * raised it as a Syntax Error; it reads the spelling, as the operation does,
+   * and reports the kind of error the operation throws.
+   */
+  const checkedHigherKindedLists = new WeakSet<object>();
+  const checkHigherKindedDomains = (declaration: ParseNode): void => {
+    const list = (declaration as unknown as { TypeParameters?: { TypeParameterList?: readonly { HigherKindedDomainWritten?: boolean }[] } | null }).TypeParameters?.TypeParameterList;
+    if (!list || checkedHigherKindedLists.has(list)) return;
+    checkedHigherKindedLists.add(list);
+    for (const tp of list) {
+      if (tp.HigherKindedDomainWritten === false) {
+        errors.push(Throw.StaticTypeError('$1', 'a higher-kinded parameter\'s domain is `type`, which is what an application of it yields').Value as ObjectValue);
+      }
+    }
+  };
+
   const pushTypeParameterScopeOf = (declaration: ParseNode | null | undefined, only?: 'type-only'): boolean => {
     const list = (declaration as unknown as {
       TypeParameters?: {
@@ -3144,11 +3163,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           type DomainRecord = { Kind: string, Name?: string, Declaration?: { type?: string }, Members?: readonly DomainRecord[] };
           const mixed = (d: DomainRecord): boolean => d.Kind === 'any' || d.Kind === 'type' || (d.Kind === 'primitive' && d.Name === 'type')
             || (d.Kind === 'union' && (d.Members ?? []).some(mixed));
+          // #sec-ispermittedvaluedomain admits a primitive other than `type`,
+          // an enumeration or literal type, a union of such, a meta type's
+          // constraint shape, and an array or tuple of value domains - "No
+          // other object type is a value domain". The `object` type and an
+          // object shape no `meta` declaration claims hold objects, so they are
+          // refused with the function, class and interface cases. An array or
+          // tuple binds by the LITERAL type of its argument, the tuple of its
+          // elements' literal types, which is content rather than identity, so
+          // it is refused only where its elements hold objects. A pack's domain
+          // is its collection type, and it is the ELEMENT that is judged.
+          const metaClaimed = (): boolean => {
+            const written = (tp as { TypeParameterDomain?: { type?: string, TypeName?: { IdentifierReference?: { name?: string } } } }).TypeParameterDomain;
+            const named = written?.type === 'TypeReference' ? written.TypeName?.IdentifierReference?.name : undefined;
+            if (!named) return false;
+            // A shape a `meta` declaration here claims is admitted, and so is a
+            // name this source text does not declare, whose claim the checker
+            // cannot see; a BUILT-IN name such as `object` is neither.
+            return metaShapeNames().has(named) || (!aliasNodes.has(named) && !builtinTypeRecord(named));
+          };
           const objectLike = (d: DomainRecord): boolean => d.Kind === 'function'
             || (d.Kind === 'nominal' && (d.Declaration?.type === 'InterfaceDeclaration' || d.Declaration?.type === 'ClassDeclaration'))
+            || (d.Kind === 'primitive' && d.Name === 'object')
+            || (d.Kind === 'array' && !!(d as unknown as { Element?: DomainRecord }).Element && objectLike((d as unknown as { Element: DomainRecord }).Element))
+            || (d.Kind === 'tuple' && ((d as unknown as { Elements?: readonly { Type: DomainRecord }[] }).Elements ?? []).some((e) => objectLike(e.Type)))
+            || (d.Kind === 'object' && !metaClaimed())
             || (d.Kind === 'union' && (d.Members ?? []).some(objectLike));
           const domain = resolvedConstraint as DomainRecord;
-          const objectDomain = !mixed(domain) && objectLike(domain);
+          const judgedDomain = (tp as { IsVariadic?: boolean }).IsVariadic === true && domain.Kind === 'array'
+            ? (domain as unknown as { Element: DomainRecord }).Element
+            : domain;
+          const objectDomain = !mixed(domain) && objectLike(judgedDomain);
           // #sec-parameter-kinds: a parameter's kind is read from how its
           // domain is WRITTEN - `type`, `[].<type>` for a pack, or holes - so
           // the kind is known wherever the declaration is read, without
@@ -4562,6 +4607,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * the base-form of L5685, "a meta type that constrains a base without
    * naming any field of it", which is how a brand is written.
    */
+  /** The names a `meta` declaration of this source text claims as a constraint shape. */
+  let metaShapeNameSet: Set<string> | null = null;
+  const metaShapeNames = (): Set<string> => {
+    if (metaShapeNameSet) return metaShapeNameSet;
+    metaShapeNameSet = new Set();
+    const scan = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(scan);
+        return;
+      }
+      const n = node as ParseNode & Record<string, unknown>;
+      if (typeof n.type !== 'string') return;
+      if (n.type === 'MetaDeclaration') {
+        const name = (n as unknown as ParseNode.MetaDeclaration).TypeName?.IdentifierReference?.name;
+        if (name) metaShapeNameSet!.add(name);
+      }
+      for (const key of Object.keys(n)) {
+        if (key !== 'parent' && key !== 'location' && key !== 'sourceText' && key !== 'strict') scan(n[key]);
+      }
+    };
+    scan(statementList);
+    return metaShapeNameSet;
+  };
+
   const checkMetaDeclaration = (declaration: ParseNode.MetaDeclaration): void => {
     const name = declaration.TypeName?.IdentifierReference?.name;
     if (!name) {
@@ -18605,8 +18675,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkOperatorAmbiguity(n);
         checkPartialClass(n, list);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        const partialOfKnown = ((n as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('partial')
+          && !!name && classNodes.has(name) && classNodes.get(name) !== n;
+        const reopened = partialOfKnown ? classNodes.get(name!) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } : undefined;
         if (name) {
           classNodes.set(name, n);
+        }
+        // A partial of a GENERIC class re-opens it with the class's own
+        // parameters in scope (plan OQ1 A). The run time does not yet carry a
+        // partial's members to a specialization - `new Box.<uint8>()` sees none
+        // of them - so it is reported as unsupported rather than accepted and
+        // silently dropped, as #sec-specialization-lists asks of a
+        // specialization an implementation cannot select.
+        if (reopened && (reopened.TypeParameters?.TypeParameterList?.length ?? 0) > 0) {
+          errors.push(Throw.StaticTypeError('a partial declaration of the generic class $1 is not supported yet: its members would not reach a specialization', Value(name!)).Value as ObjectValue);
         }
         // `ClassModifiers` is a list of STRINGS, not of nodes.
         const modifiers = (n as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
@@ -18631,6 +18713,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkVariancePositions(n);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
+          // As for a class: a partial of a GENERIC interface would see the
+          // interface's parameters (plan OQ1 A), but its members are not merged
+          // into an application - `I.<uint8>` read the partial's members alone -
+          // so it is reported as unsupported rather than mis-merged.
+          const reopened = (n as { Partial?: boolean }).Partial ? interfaceNodes.get(name) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined : undefined;
+          if (reopened && reopened !== n && (reopened.TypeParameters?.TypeParameterList?.length ?? 0) > 0) {
+            errors.push(Throw.StaticTypeError('a partial declaration of the generic interface $1 is not supported yet: its members would not reach an application', Value(name)).Value as ObjectValue);
+          }
           recordInterfaceDeclaration(name, n);
           interfaceNodes.set(name, n);
         }
@@ -21637,6 +21727,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const n = node as ParseNode;
     if ((n as { TypeParameters?: unknown }).TypeParameters) {
       checkTypeParameterReads(n);
+      checkHigherKindedDomains(n);
       const scope = pushTypeParameterScopeOf(n);
       if (scope) typeParameterScopes.pop();
     }

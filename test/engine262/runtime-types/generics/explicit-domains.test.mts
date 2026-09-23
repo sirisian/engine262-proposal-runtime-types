@@ -70,7 +70,10 @@ test('specialization lists and captures are reported, not accepted and ignored',
 
 test('a value parameter has no extends bound, and a higher-kinded one has domain type', () => {
   expectEarlyError('function f<N: uint32 extends 4>() {}', 'SyntaxError');
-  expectEarlyError('class B<W<_>: uint32> {}', 'SyntaxError');
+  // #sec-parameterkind throws a *TypeError* for a holes parameter whose domain
+  // is not written `type`, at the declaration: a type error
+  // (higher-kinded-domain-kind.test.mts).
+  expectEarlyError('class B<W<_>: uint32> {}', 'StaticTypeError');
 });
 
 test('`out` stays an ordinary name', () => {

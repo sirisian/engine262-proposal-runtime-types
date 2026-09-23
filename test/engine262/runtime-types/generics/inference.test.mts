@@ -398,8 +398,10 @@ test('an argument with no literal type contributes its own type', () => {
   // run time's own inference is what binds. The composite constraint is still
   // refused here, as it is statically; what this pins is that the refusal says
   // which types disagreed.
+  // An object shape is not a value domain at all (#sec-ispermittedvaluedomain),
+  // so the declaration is refused before any call reaches the binder.
   expectThrown('function f<T: { a: uint8 }>(o: T): T { return o; } let g: any = f; g({ a: 1 });',
-    'is not assignable to');
+    'is not a value domain');
   // An ARRAY is the exception: it has a literal type, the tuple of its
   // elements' literal types, which is the shape the PACK path already binds.
   // So this one now SUCCEEDS, where the object above still cannot.
