@@ -10735,6 +10735,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * through the frames and stopping at the first that declares the name - so
    * an inner `let` shadowing a constant `const` is not read as constant.
    */
+  /** Range literals already judged by the element-fit rule, reported once each. */
+  const rangeElementFitReported = new WeakSet<ParseNode>();
+
   const constExactValue = (name: string): bigint | null => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       if (frames[i].declaredNames.has(name) || frames[i].bindingKinds.has(name)
@@ -11443,8 +11446,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && typeof contextual.Arguments[0] !== 'number'
         ? (contextual.Arguments[0] as TypeRecord | undefined) ?? null
         : null;
-      // The endpoints are checked against that element, so an out-of-range one
-      // is caught here exactly as an array element is.
+      // Each endpoint is READ at that element, so a literal endpoint takes the
+      // element's type. Whether the range FITS the element is a separate
+      // question, answered below by the elements it produces - not here by the
+      // endpoints, since a half-open range's end is never produced.
       const fromEndpoint = (n: ParseNode | null): TypeRecord | null => {
         const t = staticTypeIn(n as ParseNode | null, contextualElement);
         return t && t.Kind === 'literal' ? t.Base : t;
@@ -11468,6 +11473,75 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const literalBased = (t: TypeRecord | null) => !!t && t.Kind === 'primitive' && t.Name === 'number';
       const typedEndpoint = !literalBased(start) ? start : (!literalBased(end) ? end : null);
       const element = contextualElement ?? typedEndpoint ?? start ?? end ?? anyTypeRecord;
+      // RULE 1: A RANGE READ AT AN ELEMENT TYPE FITS BY ITS ELEMENTS.
+      //
+      // A range read at an element type - at an annotated binding, a parameter,
+      // a return, an assignment target, or a `for`-`of` head - claims that every
+      // value it produces is a value of that type. Nothing checked the claim:
+      // `let r: ClosedRange.<uint8> = 0..=256` was accepted, and the element 256
+      // flowed out typed `number` from a range whose type said `uint8`, caught
+      // only where it happened to reach a typed store.
+      //
+      // The check is on the FIRST AND LAST ELEMENT, not the endpoints. A
+      // half-open range's end is the stop and is never produced: `0..<256`
+      // yields 0 through 255, every byte, and must fit `uint8` although 256
+      // does not. An endpoint rule would refuse the most natural byte loop
+      // there is. So an open start moves the first element up by one, an open
+      // end moves the last down by one, and the four forms are:
+      //
+      //   a..=b  first a,     last b        a<..=b  first a + 1, last b
+      //   a..<b  first a,     last b - 1    a<..<b  first a + 1, last b - 1
+      //
+      // An EMPTY range fits any type - a descending `10..<0` and a `5..<5` hold
+      // nothing, per ranges.md - and an UNBOUNDED or infinite end, `0..` or
+      // `0..<Infinity`, fits no bounded type, producing values without limit.
+      //
+      // Scoped to a sized integer element: `number` and `bigint` have no limit
+      // to exceed, and a float's elements are not a successor sequence. And to
+      // compile-time endpoints: `0..<n` is not decided here, and the typed-store
+      // checks that refuse 256 at run time continue to cover it.
+      if (contextualElement && isIntegerValueType(contextualElement) && r.RangeStart
+        && !rangeElementFitReported.has(node)) {
+        const unparen = (n: ParseNode | null | undefined): ParseNode | null | undefined => {
+          let x = n;
+          while (x && x.type === 'ParenthesizedExpression') {
+            x = (x as unknown as { Expression?: ParseNode }).Expression;
+          }
+          return x;
+        };
+        const isInfinity = (n: ParseNode | null | undefined): boolean => {
+          const x = unparen(n) as { type?: string, name?: string } | null | undefined;
+          return x?.type === 'IdentifierReference' && x.name === 'Infinity';
+        };
+        const elemName = (contextualElement as { Name: string }).Name;
+        const elemArgs = (contextualElement as { Arguments: readonly (TypeRecord | number)[] }).Arguments;
+        const fits = (v: bigint) => fitsNumericType(v, elemName, elemArgs);
+        const report = (completion: ThrowCompletion) => {
+          rangeElementFitReported.add(node);
+          errors.push(completion.Value as ObjectValue);
+        };
+        const startValue = foldConstant(r.RangeStart as ParseNode);
+        if (startValue !== null) {
+          const first = startValue + (r.RangeStartBound === 'open' ? 1n : 0n);
+          if (!r.RangeEnd || isInfinity(r.RangeEnd)) {
+            report(Throw.StaticTypeError('this range has no upper bound, so it produces values that are not values of $1',
+              Value(displayType(contextualElement))) as ThrowCompletion);
+          } else {
+            const endValue = foldConstant(r.RangeEnd as ParseNode);
+            if (endValue !== null) {
+              const last = endValue - (r.RangeEndBound === 'open' ? 1n : 0n);
+              // first > last is an empty range: nothing is produced, so it fits.
+              if (first <= last) {
+                const offending = !fits(first) ? first : !fits(last) ? last : null;
+                if (offending !== null) {
+                  report(Throw.StaticTypeError('$1 is not a value of $2, and this range produces it',
+                    Value(String(offending)), Value(displayType(contextualElement))) as ThrowCompletion);
+                }
+              }
+            }
+          }
+        }
+      }
       const ordinal = (bound: 'closed' | 'open' | null) => (bound === 'open' ? 1 : 0);
       if (!r.RangeStart && !r.RangeEnd) {
         return libraryTypeRecord('RangeFull', contextualElement ? [contextualElement] : []);
