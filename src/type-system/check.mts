@@ -11100,8 +11100,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * tuple's positions as a union, a `string`'s characters, and a nominal's own
    * type arguments.
    */
-  const iteratedElementType = (expr: ParseNode): Known => {
-    const source = staticType(expr);
+  const iteratedElementType = (expr: ParseNode, typedSource?: Known): Known => {
+    // A caller that has already typed the iterable - with a contextual type,
+    // as a `for`-`of` head does for a literal - passes that type, so the
+    // element is derived by this one implementation rather than a second.
+    const source = typedSource !== undefined ? typedSource : staticType(expr);
     if (!source) {
       return null;
     }
@@ -21424,21 +21427,60 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           errors.push(Throw.StaticTypeError('the iterator cannot satisfy the closing contract of this break').Value as ObjectValue);
         }
       }
-      const iterated = enumerating ? makePrimitive('string') : source ? iteratedElementType(source) : null;
-      const element = (node as ParseNode).type === 'ForAwaitStatement' ? awaitedType(iterated) : iterated;
-      walk(source);
-      // ...and the binding's own ANNOTATION, where it writes one, so that
-      // `for (const x: string of arr)` on a `[].<uint8>` is refused rather than
-      // run with the binding taking the element type above.
-      // The annotation wins as the binding's type - it is declared, where the
-      // element type is inferred - and the element type must be assignable to
-      // it, since that is what the loop will put there.
+      // The binding's own ANNOTATION, where it writes one. It is resolved
+      // before the iterable is typed, because it can decide how a literal
+      // iterable is read.
       const annotationNode = ((f.ForDeclaration ?? f.ForBinding) as unknown as {
         ForBinding?: { TypeAnnotation?: ParseNode.TypeAnnotation | null },
         TypeAnnotation?: ParseNode.TypeAnnotation | null,
       } | undefined);
       const loopAnnotation = annotationNode?.ForBinding?.TypeAnnotation ?? annotationNode?.TypeAnnotation;
       const declaredLoopType = loopAnnotation ? resolveType(loopAnnotation.Type) : null;
+      // RULE 2: A LITERAL ITERABLE IN THE HEAD TAKES THE BINDING'S ANNOTATION.
+      //
+      // #sec-contextual-types gives the `Initializer` of an annotated binding
+      // the annotated type, and an array literal's elements the element type of
+      // a known array. A `for`-`of` binding "takes the same annotation" but has
+      // no initializer - its value comes from iterating - so the table reached
+      // no row and the iterable was typed with nothing. `for (const b: uint8 of
+      // 0..<256)` read the range as a range of `number` and was refused with
+      // "number is not assignable to uint.<8>", naming a type the author never
+      // wrote, though `let r: ClosedOpenRange.<uint8> = 0..<256` is accepted.
+      // The loop head was the one place a literal sat beside an annotation and
+      // ignored it.
+      //
+      // So a range or array literal WRITTEN DIRECTLY in the head is read with
+      // the annotation as its element type: a range through the very arm an
+      // annotated binding uses - so the two cannot disagree, and Rule 1 decides
+      // whether it fits - and an array literal as `[].<T>`, whose elements the
+      // element row then types.
+      //
+      // Nothing else is retyped. An iterable that is a call or a binding keeps
+      // the type it was given where it was produced - "a contextual type does
+      // not reach INTO a call" - and the annotation checks its elements below,
+      // as before. A plain `for`-`of` only: `for await` would need its element
+      // wrapped, and `for`-`in` enumerates keys.
+      let contextuallyTyped: Known | undefined;
+      if (declaredLoopType && source && (node as ParseNode).type === 'ForOfStatement') {
+        let literal: ParseNode | null | undefined = source;
+        while (literal && literal.type === 'ParenthesizedExpression') {
+          literal = (literal as unknown as { Expression?: ParseNode }).Expression;
+        }
+        if (literal?.type === 'RangeExpression') {
+          contextuallyTyped = staticTypeIn(source, libraryTypeRecord('Range', [declaredLoopType as TypeRecord, 0, 0]) as Known);
+        } else if (literal?.type === 'ArrayLiteral') {
+          contextuallyTyped = staticTypeIn(source,
+            { Kind: 'array', Element: declaredLoopType, Extent: 'dynamic' } as unknown as Known);
+        }
+      }
+      const iterated = enumerating ? makePrimitive('string')
+        : source ? iteratedElementType(source, contextuallyTyped) : null;
+      const element = (node as ParseNode).type === 'ForAwaitStatement' ? awaitedType(iterated) : iterated;
+      walk(source);
+      // The annotation wins as the binding's type - it is declared, where the
+      // element type is inferred - and the element type must be assignable to
+      // it, since that is what the loop will put there. So `for (const x: string
+      // of arr)` on a `[].<uint8>` is refused rather than run.
       if (declaredLoopType && element && element.Kind !== 'any'
           && !IsAssignable(element as TypeRecord, declaredLoopType as TypeRecord)) {
         const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(element as TypeRecord)), Value(displayType(declaredLoopType as TypeRecord))) as ThrowCompletion;

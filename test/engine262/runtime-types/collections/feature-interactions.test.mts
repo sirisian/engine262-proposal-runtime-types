@@ -134,7 +134,13 @@ test('a collection is a reference, so it has no layout and cannot be an SoA elem
 
 test('a range-bounded key type, and a range iterated into a collection', () => {
   expect(ok('let m: Map.<uint8.<1..=6>, string> = new Map(); m.set(3, "x");')).toBe(true);
-  expect(evaluated('const s = new Set.<uint32>(); for (const i of 0..<3) s.add(i); String(s.size);')).toBe('3');
+  // The loop variable is ANNOTATED, and the annotation reads the range literal
+  // as a range of `uint32` - #sec-contextual-types gives a literal iterable in
+  // a `for`-`of` head the binding's type. Without it, `i` is a `number` and
+  // `s.add(i)` is refused: an unannotated loop variable would have to take its
+  // type from its later use, which is whole-function inference, and every row
+  // of the contextual-type table is local instead.
+  expect(evaluated('const s = new Set.<uint32>(); for (const i: uint32 of 0..<3) s.add(i); String(s.size);')).toBe('3');
 });
 
 test('a vector as a value and as an element', () => {
