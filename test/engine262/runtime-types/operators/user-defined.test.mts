@@ -357,7 +357,7 @@ test('a parameterized primitive block declares operators per parameterization', 
   // carries the same metadata.
   const dim = 'type Dim = { m: number }; '
     + 'meta Dim { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } validate(v, c) { return true; } } '
-    + 'primitive float64 <D: Dim> { operator +(rhs: float64.<D>): float64.<D> { return this + rhs; } } '
+    + 'primitive float64 <const D: Dim> { operator +(rhs: float64.<D>): float64.<D> { return this + rhs; } } '
     + 'const a = (3 := float64.<{ m: 1 }>); ';
   expect(evaluated(`${dim} const b = (4 := float64.<{ m: 1 }>); const c = a + b; String(Number(c));`)).toBe('7');
   expect(evaluated(`${dim} const b = (4 := float64.<{ m: 1 }>); const c = a + b; String(c is float64.<{ m: 1 }>);`)).toBe('true');

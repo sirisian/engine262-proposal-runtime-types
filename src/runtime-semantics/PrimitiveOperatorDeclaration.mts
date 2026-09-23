@@ -2,6 +2,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { MetadataCapturesOf } from '../type-system/specialization-patterns.mts';
 import { surroundingAgent, EnsureCompletion, Q, type PlainEvaluator } from '#self';
 
 /**
@@ -33,7 +34,9 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
   // definition contributes its `default` instead.
   const blockParameterNames: string[] = [];
   const blockParameterConstraints: (unknown | null)[] = [];
-  for (const tp of (node as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: unknown }[] } | null }).TypeParameters?.TypeParameterList ?? []) {
+  // #sec-primitive-operator-blocks: the block's list is a specialization list
+  // of captures, `<const D: Dim>`, each naming its meta type.
+  for (const tp of MetadataCapturesOf(node as { TypeParameters?: ParseNode.TypeParameters | null })) {
     if (typeof tp.BindingIdentifier?.name === 'string') {
       blockParameterNames.push(tp.BindingIdentifier.name);
       blockParameterConstraints.push(tp.TypeParameterConstraint ?? null);

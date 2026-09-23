@@ -1,8 +1,13 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
- * A PRIMITIVE OPERATOR BLOCK'S OWN TYPE PARAMETERS ARE IN SCOPE.
+ * A PRIMITIVE OPERATOR BLOCK'S CAPTURES OF METADATA ARE IN SCOPE.
+ *
+ * #sec-primitive-operator-blocks now writes the block's list as a
+ * specialization list whose captures bind metadata, `primitive
+ * complex<const T: P>`: the written domain names the meta type (plan D9, a
+ * metadata position). The history below is of the earlier parameter form.
  *
  * #sec-primitive-operator-blocks: "A declaration of the form `primitive` _T_ _P_
  * `{` ... `}`, where _T_ names a primitive type and _P_ is an optional
@@ -22,12 +27,12 @@ import { evaluated, expectThrown } from '../harness.mts';
 
 const CX = `type P = { phase: int32 };
 meta P { default = { phase: 0 }; subtype(a: P, b: P): boolean { return true; } }
-primitive complex<T: P> { operator complex.<T>() { return this; } }
+primitive complex<const T: P> { operator complex.<T>() { return this; } }
 type Ph = complex.<float64>.<{ phase: 1 }>;
 `;
 const RAT = `type U = { unit: int32 };
 meta U { default = { unit: 0 }; subtype(a: U, b: U): boolean { return true; } }
-primitive rational<T: U> { operator rational.<T>() { return this; } }
+primitive rational<const T: U> { operator rational.<T>() { return this; } }
 type Ratio = rational.<64>.<{ unit: 1 }>;
 `;
 
@@ -58,4 +63,18 @@ test('the parameterless form is unchanged', () => {
     primitive decimal128 { operator decimal128.<C>() { return this; } }
     type Cents = decimal128.<{ scale: 2 }>;
     const d: decimal128 = 19.9; const p: Cents = d; String(p);`)).toBe('19.9');
+});
+
+test('#sec-type-parameters-static-semantics-early-errors: the list captures metadata and declares no parameters', () => {
+  expectEarlyError('primitive complex<T: P> {}', 'SyntaxError');
+  expectThrown('primitive complex<T: P> {}', 'write `const T: P`');
+  // Only captures naming their meta type are implemented; any other pattern
+  // over a primitive, including the component patterns of primitivemetadata.md,
+  // is reported as unsupported rather than accepted and ignored.
+  expectThrown('type D = { m: int32 }; primitive float32<const T> {}', 'other patterns over a primitive are not supported yet');
+  expectThrown('primitive float32<float64> {}', 'other patterns over a primitive are not supported yet');
+  expectThrown('primitive float32<...const Ds: D> {}', 'other patterns over a primitive are not supported yet');
+  expectThrown('primitive vector<float32.<const D: Dimensions>, const N: uint32> {}', 'other patterns over a primitive are not supported yet');
+  // A `partial` declaration's primary is elsewhere, too.
+  expectEarlyError('class Box<T: type> {} partial class Box<T: type> {}', 'SyntaxError');
 });

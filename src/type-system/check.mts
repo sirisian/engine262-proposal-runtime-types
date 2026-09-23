@@ -1,4 +1,5 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
+import { MetadataCapturesOf } from './specialization-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -3102,6 +3103,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }[],
       },
     } | null | undefined)?.TypeParameters?.TypeParameterList;
+    // A primitive block binds its captures of metadata, not parameters.
+    if (declaration?.type === 'PrimitiveOperatorDeclaration') {
+      return pushTypeParameterScopeOf({ TypeParameters: { TypeParameterList: MetadataCapturesOf(declaration as { TypeParameters?: ParseNode.TypeParameters | null }) } } as unknown as ParseNode, only);
+    }
     if (!list || list.length === 0) {
       return false;
     }
@@ -8172,8 +8177,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // failure, in contrast, is an obligation, never evidence for `any`.
     const enclosingParameters = new Set<string>();
     for (let parent: ParseNode | undefined = node.parent; parent; parent = parent.parent) {
-      const list = (parent as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList ?? [];
-      list.forEach((param) => enclosingParameters.add(param.BindingIdentifier.name));
+      // Through typeParameterNamesOf, which also reads a primitive block's
+      // captures of metadata.
+      (typeParameterNamesOf(parent) ?? []).forEach((name) => enclosingParameters.add(name));
     }
     let open = node.type === 'TypeReference' && node.parent?.type === 'TypeArguments'
       && !node.TypeArguments && !!((aliasNodes.get(node.TypeName.IdentifierReference.name) as ParseNode.TypeAliasDeclaration | undefined)?.TypeParameters
@@ -21207,7 +21213,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkPrimitiveOperatorBlock = (node: ParseNode.PrimitiveOperatorDeclaration): void => {
     const typeName = (node.TypeName as unknown as { IdentifierReference?: { name?: string } } | null)?.IdentifierReference?.name;
     if (typeof typeName !== 'string') return;
-    if ((node as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length) return;
+    if (MetadataCapturesOf(node as { TypeParameters?: ParseNode.TypeParameters | null }).length) return;
     for (const e of node.OperatorDefinitionList ?? []) {
       if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FunctionBody || !e.FormalParameters) continue;
       if ((e.TypeParameters?.TypeParameterList ?? []).length > 0) continue;

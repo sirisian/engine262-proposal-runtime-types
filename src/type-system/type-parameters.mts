@@ -4,6 +4,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 // `records.mts`; nothing here reads them now.
 import type { TypeRecord, Known } from './records.mts';
 import { unifyTypeParameters } from './unify.mts';
+import { MetadataCapturesOf } from './specialization-patterns.mts';
 
 /**
  * proposal-runtime-types #sec-generics and #sec-parameterized-types:
@@ -40,9 +41,13 @@ export const scopeOfNames = (names: Iterable<string>): Map<string, Known | null>
 
 /** Read _declaration_'s type parameter names, or ~none~ where it binds none. */
 export const typeParameterNamesOf = (declaration: ParseNode | null | undefined): readonly string[] | null => {
-  const list = (declaration as unknown as {
-    TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] },
-  } | null | undefined)?.TypeParameters?.TypeParameterList;
+  // #sec-primitive-operator-blocks: a primitive block binds its captures of
+  // metadata, `<const D: Dim>`, and declares no parameters.
+  const list = declaration?.type === 'PrimitiveOperatorDeclaration'
+    ? MetadataCapturesOf(declaration as { TypeParameters?: ParseNode.TypeParameters | null })
+    : (declaration as unknown as {
+      TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] },
+    } | null | undefined)?.TypeParameters?.TypeParameterList;
   if (!list || list.length === 0) {
     return null;
   }

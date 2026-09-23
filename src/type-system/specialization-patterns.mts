@@ -621,3 +621,39 @@ export function ValidateSpecializationList<S>(
   entries.forEach(visit);
   return diagnostics;
 }
+
+/** A primitive block's capture, viewed as the parameter the block's readers bind. */
+export interface MetadataCaptureView {
+  readonly BindingIdentifier: ParseNode.BindingIdentifier;
+  /** The written domain: the meta type whose portion of the metadata the capture binds. */
+  readonly TypeParameterConstraint: ParseNode.Type | null;
+  readonly TypeParameterDefault: null;
+  readonly IsVariadic: false;
+}
+
+/**
+ * #sec-primitive-operator-blocks: the captures of a primitive block's list,
+ * `primitive float32<const D: Dimensions>`, each binding the receiver's
+ * metadata of its written meta type (plan D9: in a metadata position the
+ * written domain selects the meta type). The block has no parameters of its
+ * own; this is the one place its readers - the checker's scope for its
+ * operator bodies and the run time's frame - learn what it binds.
+ */
+export function MetadataCapturesOf(declaration: { readonly TypeParameters?: ParseNode.TypeParameters | null } | null | undefined): MetadataCaptureView[] {
+  const list = declaration?.TypeParameters;
+  if (!list || list.ListKind !== 'specialization') {
+    return [];
+  }
+  const views: MetadataCaptureView[] = [];
+  for (const entry of list.SpecializationEntryList ?? []) {
+    if (entry.Pattern.type === 'CaptureBinding') {
+      views.push({
+        BindingIdentifier: entry.Pattern.BindingIdentifier,
+        TypeParameterConstraint: entry.Pattern.TypeParameterDomain,
+        TypeParameterDefault: null,
+        IsVariadic: false,
+      });
+    }
+  }
+  return views;
+}
