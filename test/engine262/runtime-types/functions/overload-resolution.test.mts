@@ -246,6 +246,22 @@ test('the structural reading is the interface\'s alone', () => {
   expect(evaluated('interface I { a: uint8 } interface J { a: uint8 } String(I === J);')).toBe('false');
 });
 
-test('plain Boolean arguments can select a converting String overload', () => {
-  expect(evaluated('function f(x: uint8): string { return "u"; } function f(x: string): string { return x; } f(true);')).toBe('true');
+test('a Boolean reaches a String overload by explicit conversion, not by selection', () => {
+  // `ResolveOverload` decides viability by ASSIGNABILITY: "If some element of
+  // _args_ is not assignable to the type of the parameter that receives it, then
+  // Continue." Static assignability contains no conversion - `PrimitiveConvert`
+  // is reached only from `RequireType` at an `any` boundary and from the
+  // explicit cast - so a Boolean is viable for neither signature.
+  //
+  // This test was titled "plain Boolean arguments can select a converting String
+  // overload", and asserted exactly that. The algorithm rules it out.
+  const f = 'function f(x: uint8): string { return "u"; } function f(x: string): string { return x; } ';
+  expectStaticTypeError(`${f}f(true);`);
+  // Through `any`, BOTH signatures are viable - `any` is assignable to each -
+  // and they tie on rank and on specificity, so the call is ambiguous rather
+  // than resolved.
+  expectThrown(`${f}let b: any = true; f(b);`, 'ambiguous');
+  // A Boolean does reach the String overload, by saying so: the explicit
+  // conversion produces a `string`, which that signature accepts.
+  expect(evaluated(`${f}f(true := string);`)).toBe('true');
 });

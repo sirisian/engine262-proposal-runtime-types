@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown, ok } from '../harness.mts';
+import { evaluated, expectThrown, ok, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-type-errors. A determinable type violation is an Early Error, so
@@ -41,8 +41,20 @@ test('an abstract class cannot be instantiated', () => {
     + ' class B extends A { m(): uint8 { return uint8(1); } } let q = new B();'))).toBe(true);
   expect(ok(dead('abstract class A { x: uint8 = uint8(1); }'
     + ' class B extends A { constructor() { super(); } } let q = new B();'))).toBe(true);
-  // Reached through a BINDING the class is not named, and the run time answers.
-  expect(ok(dead('abstract class A { abstract m(): uint8; } const K = A; let a = new K();'))).toBe(true);
+  // Reached through a STABLE binding the class is still named, so the refusal
+  // follows it: "The direct-instantiation restriction follows a constructor
+  // identity proved through stable binding origins, including aliases". A
+  // `const` is such an origin, and so is a `let` that is never reassigned.
+  expectThrown(dead('abstract class A { abstract m(): uint8; } const K = A; let a = new K();'),
+    'abstract class');
+  // A binding whose origin CANNOT be proved - reassigned on one path - is not
+  // followed, and the run time answers: the abstract constructor's
+  // [[Construct]] "throws a *TypeError* exception when NewTarget is that
+  // constructor itself, so a dynamic construction fails at run time".
+  const unstable = 'abstract class A { abstract m(): uint8; }'
+    + ' class B extends A { m(): uint8 { return uint8(1); } }';
+  expect(ok(dead(`${unstable} function g(c) { let K = A; if (c) { K = B; } let a = new K(); }`))).toBe(true);
+  expectThrownKind(`${unstable} let K = A; let c = false; if (c) { K = B; } let a = new K();`, 'TypeError');
 });
 
 test('what callability does not reach', () => {
