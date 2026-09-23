@@ -20482,6 +20482,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // Whether a name, seen where it is used, is a `ref` rest parameter: the
+  // innermost frame that knows the name decides, as the read-side check does.
+  const isRefRestName = (name: string): boolean => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const fr = frames[i] as { declaredNames: Set<string>, refRestNames?: Set<string> };
+      if (fr.refRestNames?.has(name)) {
+        return true;
+      }
+      if (fr.declaredNames.has(name)) {
+        return false;
+      }
+    }
+    return false;
+  };
+
   const checkInvocation = (expression: ParseNode, construct: boolean): void => {
     const fact = invocationFact(expression);
     if (fact?.typed && !(construct ? fact.constructible : fact.callable)) {
@@ -22364,6 +22379,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           walk(a.LeftHandSideExpression);
           walk(a.AssignmentExpression);
           return;
+        }
+        // #sec-ref-rest-parameters: a `ref` rest "binds no array", and its name
+        // is usable in exactly three forms - spread into another `ref` rest,
+        // `name[k]` with a constant `k`, and `name.length` - "and any other use
+        // is the escape error". The checker "refuses every other form where it
+        // can see the name - an index that is not a constant, a property, a
+        // bare read, a STORE, a whole pass".
+        //
+        // Two of those escaped through an assignment. A STORE of the run,
+        // `xs = []`, puts the name in target position, which is never visited
+        // as a read, so the read-side check never saw it. And a BARE READ into
+        // an untyped target, `let s; s = xs`, was only walked: the right-hand
+        // side is type-checked when the target has a type, which is why
+        // `let s: any; s = xs` was refused and `let s; s = xs` was not.
+        //
+        // Writing THROUGH a collected reference is not a store of the run and
+        // stays permitted: `xs[0] = 1` assigns to the first caller's variable,
+        // which is what `ref` exists to do.
+        {
+          const lhs = a.LeftHandSideExpression as unknown as { type?: string, name?: string };
+          if (lhs?.type === 'IdentifierReference' && typeof lhs.name === 'string' && isRefRestName(lhs.name)) {
+            errors.push(Throw.StaticTypeError('$1', Value(`a ref rest binds no array: ${lhs.name} cannot be stored to`)).Value as ObjectValue);
+          }
+          const rhs = a.AssignmentExpression as unknown as { type?: string, name?: string };
+          // Confined to a `ref` rest name. Visiting every bare right-hand
+          // identifier would type-check untyped assignments generally, which is
+          // a far wider change than this rule asks for and could surface
+          // unrelated checks in code that never wrote a type.
+          if (rhs?.type === 'IdentifierReference' && typeof rhs.name === 'string' && isRefRestName(rhs.name)) {
+            // Visited as a read, so the read-side check decides it exactly as it
+            // does for a typed target - one rule, one message, one site.
+            staticType(a.AssignmentExpression as ParseNode);
+          }
         }
         requireWritableMember(a.LeftHandSideExpression);
         // EVERY assignment unseats the place it writes, not only the compound
