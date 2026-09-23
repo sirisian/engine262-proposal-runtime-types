@@ -85,8 +85,14 @@ test.fails('D6: a parameter named after a predefined type shadows it in the body
   expect(evaluated('function f<uint32: type>() { return String(uint32 === string); } f.<string>();')).toBe('true');
 });
 
-test.fails('D3: a bound written as a domain is refused at the declaration', () => {
+test('D3: a bound written as a domain is refused at the declaration', () => {
   expectEarlyError('interface Ord { lt(o: any): boolean; } function f<T: Ord>() {}', 'StaticTypeError');
+  expectEarlyError('class K {} function f<T: K>() {}', 'StaticTypeError');
+  expectEarlyError('function f<V: (x: uint8) => uint8>() {}', 'StaticTypeError');
+  expectThrown('interface Ord { lt(o: any): boolean; } function f<T: Ord>() {}', 'did you mean `T: type extends Ord`?');
+  // value domains stay admitted: enumerations, literal unions, primitives
+  expect(evaluated('enum E: uint8 { A, B }; function f<C: E>(): string { return String(C); } f.<E.B>();')).toBe('1');
+  expect(evaluated('function f<V: 1 | 2>(): string { return String(V); } f.<2>();')).toBe('2');
 });
 
 test.fails('#sec-parameter-kinds: an alias of type declares a type parameter', () => {

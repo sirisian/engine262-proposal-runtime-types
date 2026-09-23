@@ -3118,6 +3118,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // at all", and inference reads exactly that distinction: a constrained
         // parameter keeps the literal a call supplies, an unconstrained one
         // widens it. Recording the node's presence keeps the two apart.
+        // #sec-parameter-kinds (plan D3): a value parameter's domain must be a
+        // value domain. An interface, a class, or a function type is not one -
+        // its values are objects, which no generic argument can be - and
+        // `T: Ordered.<T>` is almost always a bound written where a domain
+        // goes, the spelling Rust, Swift, and Kotlin use for one. Refused here,
+        // where it is written, instead of at some later application. A
+        // primitive block's list is a pattern over metadata, not a list of
+        // parameters, and is not judged by this rule.
+        if ((tp as { IsValueParameter?: boolean }).IsValueParameter && resolvedConstraint
+          && !(declaration && /Primitive/.test((declaration as { type: string }).type))) {
+          const domain = resolvedConstraint as { Kind: string, Declaration?: { type?: string } };
+          const objectDomain = domain.Kind === 'function'
+            || (domain.Kind === 'nominal' && (domain.Declaration?.type === 'InterfaceDeclaration' || domain.Declaration?.type === 'ClassDeclaration'));
+          if (objectDomain) {
+            const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'B';
+            errors.push(Throw.StaticTypeError('$1', `\`${name}: ${written}\` declares a value parameter, and \`${written}\` is not a value domain; did you mean \`${name}: type extends ${written}\`?`).Value as ObjectValue);
+          }
+        }
         scope.set(name, resolvedConstraint);
         if (!resolvedConstraint) {
           computedConstraintNames.add(name);
