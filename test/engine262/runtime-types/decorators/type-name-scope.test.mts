@@ -61,7 +61,10 @@ test('the shadow is found even when its TYPE is unknown to the checker', () => {
   // what it holds. Asking the binding TYPE table answers false for exactly these
   // - the shadows that matter most - so the check reads the declared NAMES.
   expect(checker('const Token = uint8; ', 'Token')).toBe('allows');
-  expect(checker('let Token; ', 'Token')).toBe('allows');
+  // A `let` shadow is found too, and is then refused for its own reason: a type
+  // position must be compile-time evaluable, and a read of a `let` is not
+  // (#sec-iscompiletimeevaluable). The intrinsic is not what refuses it.
+  expect(checker('let Token; ', 'Token')).toBe('refuses');
   // A closed function declaration is available during type evaluation.
   // It shadows the intrinsic, but the function value is not itself a type.
   expect(checker('function Token() {} ', 'Token')).toBe('refuses');

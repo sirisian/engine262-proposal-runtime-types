@@ -28,10 +28,14 @@ test('the type query is written `Reflect.typeOf`', () => {
   // Each row is the replacement for a row above, and the whole reason the
   // operator could go: nothing is lost by removing it.
   expect(evaluated('const q: uint8 = 1; let v: Reflect.typeOf(q) = 2; "ok";')).toBe('ok');
-  expect(evaluated('let x = (5 := uint8); type T = Reflect.typeOf(x); (T === uint8) ? "yes" : "no";')).toBe('yes');
+  // The binding is `const`: a type position is compile-time evaluable, and a
+  // read of a `let` is not (#sec-iscompiletimeevaluable).
+  expect(evaluated('const x = (5 := uint8); type T = Reflect.typeOf(x); (T === uint8) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('enum C { Zero } type K = keyof Reflect.typeOf(C); String("Zero" is K);')).toBe('true');
   // Member paths and the prefix operators keep working over it.
-  expect(evaluated('let o = { n: (5 := uint8) }; type A = Reflect.typeOf(o.n); (A === uint8) ? "yes" : "no";')).toBe('yes');
+  // The binding is `const`: a type position is compile-time evaluable, and a
+  // read of a `let` is not (#sec-iscompiletimeevaluable).
+  expect(evaluated('const o = { n: (5 := uint8) }; type A = Reflect.typeOf(o.n); (A === uint8) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('enum C { Zero } type K = keyof (Reflect.typeOf(C)); String("Zero" is K);')).toBe('true');
 });
 

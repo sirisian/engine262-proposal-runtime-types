@@ -107,14 +107,15 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // dispatch rather than deleting it - a program that declares no block still
   // gets told why its expression did not work.
   if (surroundingAgent.feature('runtime-types') && !(lval instanceof ObjectValue)) {
-    const entry = LookupPrimitiveOperator(lval, opText);
     // "at most one definition with a body may match ... where no definition
     // with a body matches, the primitive operation runs". MATCHING is on the
     // right operand against the definition's parameter type, and skipping that
     // test is not a shortcut: a `primitive number { operator *(rhs: V) }` would
     // otherwise capture EVERY multiplication of two numbers in the program and
-    // fail on its own parameter.
-    if (entry) {
+    // fail on its own parameter. The definitions are tried in declaration
+    // order; the checker refuses a second definition for one pair of types, so
+    // where parameter types are known at most one admits the operand.
+    for (const entry of LookupPrimitiveOperator(lval, opText)) {
       // #sec-primitive-operator-blocks: a PARAMETERIZED block declares its
       // operators "for each parameterization its parameters admit", so the
       // block's parameter is bound from the RECEIVER and the operand and result

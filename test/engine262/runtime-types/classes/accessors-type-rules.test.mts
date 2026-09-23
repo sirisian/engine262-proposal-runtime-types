@@ -52,7 +52,11 @@ test('the rule applies where it should and nowhere else', () => {
   expect(evaluated('class B { b: uint8 = 1; } class D extends B { accessor a: uint8 = 2; } String(new D().a);')).toBe('2');
   // A plain FIELD override is not governed by this rule - the field/accessor
   // substitution rule is a separate one and is not implemented (see below).
-  expect(evaluated('class B { a: uint32 = 1; } class D extends B { a: uint32 = 2; } String(new D().a);')).toBe('2');
+  // Over an UNTYPED base field no rule applies at all.
+  expect(evaluated('class B { a = 1; } class D extends B { a: uint32 = 2; } String(new D().a);')).toBe('2');
+  // Over a TYPED one the redeclaration is refused, but by #sec-typed-classes's
+  // one-declaration rule (inherited-field-redeclaration.test.mts), not this one.
+  expect(outcome('class B { a: uint32 = 1; } class D extends B { a: uint32 = 2; }')).toBe('StaticTypeError');
 });
 
 test('a class NOTHING REFERENCES is checked, which is the infrastructure', () => {

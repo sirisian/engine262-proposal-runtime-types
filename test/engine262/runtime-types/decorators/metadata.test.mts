@@ -85,9 +85,11 @@ test('every class-family context carries metadata, and it READS BACK', () => {
 
   // A MEMBER's metadata is keyed by the CONSTRUCTOR, not by the home object it
   // was defined on - an instance member's home object is the prototype, so
-  // storing it there wrote where nothing would read.
+  // storing it there wrote where nothing would read. The subclass declares a
+  // member of its own rather than redeclaring `a`, which #sec-typed-classes
+  // refuses for an inherited typed field.
   expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "A"; } '
-    + 'class A { @f a: uint8 = 1; } class B extends A { a: uint8 = 2; } '
+    + 'class A { @f a: uint8 = 1; } class B extends A { b: uint8 = 2; } '
     + 'String(Reflect.getMetadata.<Reflect.ClassField, B>("a")[k]);')).toBe('A');
   // And two members do not share one object.
   expect(evaluated('const k = Symbol("k"); function f(c) { c.metadata[k] = "a"; } '

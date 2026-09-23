@@ -2416,11 +2416,22 @@ interface PrimitiveOperatorEntry {
   readonly fn: Value,
   readonly parameterType: TypeRecord | null,
   readonly deferred?: DeferredOperatorTypes,
+  /** The OperatorDefinition that declared it, so a re-check of the same source does not meet itself. */
+  readonly node?: object,
 }
 
-const primitiveOperatorTables = new WeakMap<object, Map<string, Map<string, PrimitiveOperatorEntry>>>();
+/**
+ * Each operator of a primitive holds a LIST of definitions, one per parameter
+ * type. #sec-operator-declarations keys the global table by the PAIR of types -
+ * "two definitions for one pair of types is a type error at the second
+ * declaration" - so `primitive number { operator *(rhs: A) ... operator *(rhs:
+ * B) ... }` declares two entries. Keying by the operator text alone made the
+ * second overwrite the first, and `2 * new A()` fell through to the primitive
+ * multiplication and produced NaN.
+ */
+const primitiveOperatorTables = new WeakMap<object, Map<string, Map<string, PrimitiveOperatorEntry[]>>>();
 
-function primitiveTablesForAgent(): Map<string, Map<string, PrimitiveOperatorEntry>> {
+function primitiveTablesForAgent(): Map<string, Map<string, PrimitiveOperatorEntry[]>> {
   const agent = surroundingAgent as unknown as object;
   let table = primitiveOperatorTables.get(agent);
   if (!table) {
@@ -2454,14 +2465,30 @@ export interface DeferredOperatorTypes {
   readonly returnTypeNode: unknown;
 }
 
-export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null, deferred?: DeferredOperatorTypes): void {
+export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null, deferred?: DeferredOperatorTypes, node?: object): void {
   const tables = primitiveTablesForAgent();
   let ops = tables.get(typeName);
   if (!ops) {
     ops = new Map();
     tables.set(typeName, ops);
   }
-  ops.set(opText, { fn, parameterType, deferred });
+  let entries = ops.get(opText);
+  if (!entries) {
+    entries = [];
+    ops.set(opText, entries);
+  }
+  entries.push({ fn, parameterType, deferred, node });
+}
+
+/**
+ * The definitions already registered for _typeName_'s _opText_, for the
+ * checker's duplicate rule (#sec-operator-declarations). A block evaluated by an
+ * earlier Script or by a dependency Module is in the table by the time a later
+ * source text is checked, which is what makes "the second declaration" well
+ * defined across source texts.
+ */
+export function RegisteredPrimitiveOperators(typeName: string, opText: string): readonly PrimitiveOperatorEntry[] {
+  return primitiveTablesForAgent().get(typeName)?.get(opText) ?? [];
 }
 
 /**
@@ -2497,13 +2524,13 @@ export function IsInsideOperatorBody(): boolean {
   return operatorBodyDepth > 0;
 }
 
-export function LookupPrimitiveOperator(value: Value, opText: string): PrimitiveOperatorEntry | null {
+export function LookupPrimitiveOperator(value: Value, opText: string): readonly PrimitiveOperatorEntry[] {
   if (operatorBodyDepth > 0) {
-    return null;
+    return [];
   }
   const tables = primitiveTablesForAgent();
   if (tables.size === 0) {
-    return null;
+    return [];
   }
   let name: string | null = null;
   if (isTypedNumber(value)) {
@@ -2518,9 +2545,9 @@ export function LookupPrimitiveOperator(value: Value, opText: string): Primitive
     name = 'number';
   }
   if (name === null) {
-    return null;
+    return [];
   }
-  return tables.get(name)?.get(opText) ?? null;
+  return tables.get(name)?.get(opText) ?? [];
 }
 
 /**

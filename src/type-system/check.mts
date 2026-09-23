@@ -5,11 +5,12 @@ import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, Sy
 import type { ThrowCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
-import { ContractFactsOf, NumericArmRank } from '../abstract-ops/runtime-types.mts';
+import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators } from '../abstract-ops/runtime-types.mts';
 import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
+import { FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { templateArgumentType, isTemplateArgumentType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
@@ -27,7 +28,7 @@ import {
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
-import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
+import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
@@ -3013,6 +3014,79 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *   Generic TYPE parameters, generic VALUE parameters and type PACKS are three
    *   features wearing one name.
    */
+  /**
+   * #sec-computed-constraints: "Parameters bind left to right", and a
+   * constraint or default "may be a |ComputedType| that reads parameters
+   * declared earlier in the same |TypeParameterList|. It is a type error for it
+   * to read the parameter it belongs to or one declared later in the list."
+   *
+   * Checked once per declaration, where the list is written. Before this, a
+   * later parameter was silently read at each CALL, which bound it first and so
+   * disagreed with the declaration's own left-to-right reading, and a self-read
+   * through `keyof` resolved to `never` and surfaced as a refused argument.
+   *
+   * Two readings are distinguished, because the design writes one of them on
+   * purpose. A FORWARD read is refused in every form: nothing a later parameter
+   * will be bound to exists when this one's constraint is evaluated. A SELF
+   * read is refused in a default, which is substituted before the parameter
+   * has a binding, and in the forms that EVALUATE over their operand - a
+   * computed type, `keyof`, an indexed access. A self read through a type's
+   * own application, `T: Ordered.<T>`, is the F-bounded constraint the design
+   * uses for `NumberBounds`, and stays admitted: it is checked against the
+   * binding once the binding exists, as Rust checks `T: PartialOrd<T>`.
+   */
+  const checkedTypeParameterLists = new WeakSet<object>();
+  const EVALUATED_TYPE_FORMS = new Set(['ComputedType', 'KeyOfType', 'IndexedAccessType']);
+  const withinEvaluatedTypeForm = (reference: ParseNode, root: ParseNode): boolean => {
+    for (let at: ParseNode | undefined = reference; at && at !== root; at = at.parent as ParseNode | undefined) {
+      if (EVALUATED_TYPE_FORMS.has(at.type)) return true;
+    }
+    return EVALUATED_TYPE_FORMS.has(root.type);
+  };
+  const checkTypeParameterReads = (declaration: ParseNode): void => {
+    const list = (declaration as unknown as {
+      TypeParameters?: {
+        TypeParameterList?: readonly {
+          BindingIdentifier?: { name?: string },
+          TypeParameterConstraint?: ParseNode | null,
+          TypeParameterDefault?: ParseNode | null,
+        }[],
+      } | null,
+    }).TypeParameters?.TypeParameterList;
+    if (!list || list.length === 0 || checkedTypeParameterLists.has(list)) return;
+    checkedTypeParameterLists.add(list);
+    const names = list.map((tp) => tp.BindingIdentifier?.name ?? '');
+    list.forEach((tp, index) => {
+      const own = names[index];
+      const earlier = names.slice(0, index);
+      const parts: ['constraint' | 'default', ParseNode | null | undefined][] = [
+        ['constraint', tp.TypeParameterConstraint], ['default', tp.TypeParameterDefault],
+      ];
+      for (const [part, root] of parts) {
+        if (!root) continue;
+        for (const reference of FreeReferences(root)) {
+          const read = reference.name;
+          if (earlier.includes(read)) continue;
+          if (read === own) {
+            if (part === 'constraint' && !withinEvaluatedTypeForm(reference, root)) continue;
+            errors.push((part === 'constraint'
+              ? Throw.StaticTypeError('the constraint of type parameter $1 reads its own name, which is not bound until its constraint has been evaluated', Value(own))
+              : Throw.StaticTypeError('the default of type parameter $1 reads its own name, which has no binding when its default is substituted', Value(own))
+            ).Value as ObjectValue);
+            break;
+          }
+          if (names.indexOf(read, index + 1) !== -1) {
+            errors.push((part === 'constraint'
+              ? Throw.StaticTypeError('the constraint of type parameter $1 reads $2, which is declared after it; type parameters bind left to right, so declare it first', Value(own), Value(read))
+              : Throw.StaticTypeError('the default of type parameter $1 reads $2, which is declared after it; type parameters bind left to right, so declare it first', Value(own), Value(read))
+            ).Value as ObjectValue);
+            break;
+          }
+        }
+      }
+    });
+  };
+
   const pushTypeParameterScopeOf = (declaration: ParseNode | null | undefined, only?: 'type-only'): boolean => {
     const list = (declaration as unknown as {
       TypeParameters?: {
@@ -4923,6 +4997,71 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // ---- classes ------------------------------------------------------
 
+  /**
+   * #sec-typed-classes: a field is declared once along a class chain. "It is a
+   * type error ... for an inherited field to be redeclared, since the
+   * redeclaration would have no defined offset" (#sec-natural-alignment), and
+   * that rule is applied here to every class whose inherited field is TYPED,
+   * not only to value type classes.
+   *
+   * The reason is the same outside the layout clause. A typed field has one
+   * declared type, and subtyping, readonly permission and the store check all
+   * read that one declaration. Before this, a same-type redeclaration was laid
+   * out twice - `(type B2).byteLength` counted `x` again while an instance had
+   * one `x` - and a changed type made the subclass silently not a subtype of
+   * its base, reported far away as "B2 is not assignable to B".
+   *
+   * The chain is followed through heritage written as a class name this
+   * checker has recorded; a heritage it cannot resolve contributes nothing,
+   * and a private name is per class and cannot be redeclared.
+   */
+  const checkedFieldRedeclarations = new WeakSet<object>();
+  const fieldNameOf = (element: ParseNode): string | null => {
+    if (element.type !== 'FieldDefinition') return null;
+    const field = element as unknown as { static?: boolean, accessor?: boolean, ClassElementName?: { type?: string, name?: string, value?: string } };
+    if (field.static || field.accessor) return null;
+    const key = field.ClassElementName;
+    if (key?.type === 'IdentifierName' && typeof key.name === 'string') return key.name;
+    if (key?.type === 'StringLiteral' && typeof key.value === 'string') return key.value;
+    return null;
+  };
+  const classBodyOf = (cls: ParseNode): readonly ParseNode[] => (cls as unknown as {
+    ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
+  }).ClassTail?.ClassBody ?? [];
+  const heritageClassOf = (cls: ParseNode): ParseNode | undefined => {
+    const heritage = (cls as unknown as { ClassTail?: { ClassHeritage?: { type?: string, name?: string } | null } | null }).ClassTail?.ClassHeritage;
+    return heritage?.type === 'IdentifierReference' && typeof heritage.name === 'string' ? classNodes.get(heritage.name) : undefined;
+  };
+  const checkInheritedFieldRedeclarations = (cls: ParseNode): void => {
+    if (checkedFieldRedeclarations.has(cls)) return;
+    checkedFieldRedeclarations.add(cls);
+    const inherited = new Map<string, string>();
+    const seen = new Set<ParseNode>([cls]);
+    for (let base = heritageClassOf(cls); base && !seen.has(base); base = heritageClassOf(base)) {
+      seen.add(base);
+      const baseName = (base as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? 'its base';
+      for (const element of classBodyOf(base)) {
+        const name = fieldNameOf(element);
+        if (name !== null && (element as { TypeAnnotation?: unknown }).TypeAnnotation && !inherited.has(name)) {
+          inherited.set(name, baseName);
+        }
+      }
+    }
+    if (inherited.size === 0) return;
+    const className = (cls as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? '(anonymous class)';
+    for (const element of classBodyOf(cls)) {
+      const name = fieldNameOf(element);
+      const from = name === null ? undefined : inherited.get(name);
+      if (from !== undefined) {
+        errors.push(Throw.StaticTypeError(
+          '$1 redeclares $2, a typed field it inherits from $3; a field is declared once along a class chain, so assign a different value in the constructor',
+          Value(className), Value(name!), Value(from),
+        ).Value as ObjectValue);
+      }
+    }
+  };
+
+
   const classTypeMemo = new Map<ParseNode, Known>();
 
   /** Class expressions seen by the walk, which no name registers. */
@@ -6232,7 +6371,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || params.some((q) => (q as unknown as { IsVariadic?: boolean }).IsVariadic === true)) {
       return args.filter((arg): arg is TypeRecord | number => arg !== undefined);
     }
-    const className = (decl as unknown as { BindingIdentifier?: { name?: string } } | undefined)?.BindingIdentifier?.name ?? 'the class';
+    const className = (decl as unknown as { BindingIdentifier?: { name?: string } } | undefined)?.BindingIdentifier?.name ?? '(anonymous class)';
     const out: (TypeRecord | number)[] = [];
     const bindings = new Map<string, TypeRecord>();
     params.forEach((q, i) => {
@@ -6466,7 +6605,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // parameter (#sec-bindtypearguments, "a parameter left by all
     // three is an error"), reported once here and the construction typed at
     // `any` in that position so the walk can go on.
-    const className = (decl as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? 'the class';
+    const className = (decl as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '(anonymous class)';
     const out: (TypeRecord | number)[] = [];
     for (const q of params) {
       const name = nameOf(q);
@@ -7534,11 +7673,77 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * "void is the default return type" says. Factored out of the FunctionType
    * arm so the three spellings cannot drift.
    */
+  /**
+   * #sec-iscompiletimeevaluable, bindings included: a read of a `let` or `var`,
+   * of a `const` whose initializer is not evaluable, or a call of a function
+   * whose body is not, is refused as surely as an `await` is. The syntactic
+   * floor alone admitted `let k = 5; type T = [uint8 = k];`. Resolved
+   * lexically, so it answers the same whenever the walk reaches it.
+   */
+  const evaluabilityViolation = CompileTimeEvaluabilityChecker({
+    assigned: (name) => assignedNames.has(name) || hasDirectEval,
+  });
+
   const checkDefaultEvaluability = (initializer: ParseNode): void => {
-    const outside = FirstNonEvaluableForm(initializer);
+    const outside = evaluabilityViolation(initializer);
     if (outside !== undefined) errors.push(Throw.StaticTypeError(
       'a type default must be compile-time evaluable, and $1 is not', Value(outside),
     ).Value as ObjectValue);
+  };
+
+  /**
+   * #sec-evaluatetotypeobject: "It is a type error if an expression appears in
+   * type position and EvaluateToTypeObject of it is ~empty~", and a type
+   * annotation that is not compile-time evaluable is the first example
+   * #sec-type-errors gives. A type position read a `let` or `var` freely:
+   * `let K = uint8; let x: K = 3;` was accepted and meant whatever `K` held when
+   * the annotation ran.
+   *
+   * Swept once over the source text, over each annotation, alias, and type
+   * parameter constraint and default. A default WITHIN a type (a tuple
+   * element's or a member's) is judged where it is resolved, by the default
+   * rule, and is skipped here so it is reported once.
+   */
+  const sweptTypePositions = new WeakSet<object>();
+  const withinDefault = (reference: ParseNode, root: ParseNode): boolean => {
+    for (let at: ParseNode | undefined = reference; at && at !== root; at = at.parent as ParseNode | undefined) {
+      const parent = at.parent as { Initializer?: unknown } | undefined;
+      if (parent && parent.Initializer === at) return true;
+    }
+    return false;
+  };
+  const checkTypePositionEvaluability = (root: ParseNode): void => {
+    if (sweptTypePositions.has(root)) return;
+    sweptTypePositions.add(root);
+    for (const reference of FreeReferences(root)) {
+      if (withinDefault(reference, root)) continue;
+      const declaration = ResolveBindingDeclaration(reference, reference.name);
+      if (!declaration || !['let', 'var', 'const', 'function'].includes(declaration.kind)) continue;
+      const outside = evaluabilityViolation(reference);
+      if (outside !== undefined) {
+        errors.push(Throw.StaticTypeError('a type must be compile-time evaluable, and $1 is not', Value(outside)).Value as ObjectValue);
+        return;
+      }
+    }
+  };
+  const sweepTypePositions = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(sweepTypePositions);
+      return;
+    }
+    const n = node as ParseNode & Record<string, unknown>;
+    if (typeof n.type !== 'string') return;
+    if (n.type === 'TypeAnnotation' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
+    if (n.type === 'TypeAliasDeclaration' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
+    for (const tp of (n.TypeParameters as { TypeParameterList?: readonly { TypeParameterConstraint?: ParseNode | null, TypeParameterDefault?: ParseNode | null }[] } | null | undefined)?.TypeParameterList ?? []) {
+      if (tp.TypeParameterConstraint) checkTypePositionEvaluability(tp.TypeParameterConstraint);
+      if (tp.TypeParameterDefault) checkTypePositionEvaluability(tp.TypeParameterDefault);
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'parent' || key === 'location' || key === 'sourceText' || key === 'strict') continue;
+      sweepTypePositions(n[key]);
+    }
   };
 
   const checkMemberDefault = (member: ParseNode.TypeMember): void => {
@@ -17928,6 +18133,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         sealedSubclasses.get(baseNode)!.push(n);
       }
     }
+    for (const n of list) {
+      if (n.type === 'ClassDeclaration') checkInheritedFieldRedeclarations(n);
+    }
     for (const n of classNodes.values()) {
       instanceTypeOf(n);
     }
@@ -20362,6 +20570,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return view;
   };
 
+  /**
+   * #sec-operator-declarations: "A `primitive` block adds to a global operator
+   * table; two definitions for one pair of types is a type error at the second
+   * declaration."
+   *
+   * The pair is the receiver the block names and the operand type of the
+   * definition's parameter. A definition is compared with the earlier ones of
+   * this source text and with those already REGISTERED by source texts that
+   * evaluated before it - an earlier Script, or a Module this one depends on,
+   * since the checking pass runs after its dependencies evaluate. That is what
+   * makes "the second declaration" one well-defined place across modules.
+   *
+   * Only definitions with a body take part: a bodiless definition contributes
+   * metadata and runs the primitive operation, so it does not occupy the
+   * table. A parameterized block, or an operator with type parameters of its
+   * own, resolves its operand type per invocation and cannot be compared here.
+   */
+  const primitiveOperatorPairs = new Map<string, { type: TypeRecord | null, node: object }[]>();
+  const samePrimitiveOperand = (a: TypeRecord | null, b: TypeRecord | null): boolean => (a === null || b === null ? a === b : SameType(a, b));
+  const checkPrimitiveOperatorBlock = (node: ParseNode.PrimitiveOperatorDeclaration): void => {
+    const typeName = (node.TypeName as unknown as { IdentifierReference?: { name?: string } } | null)?.IdentifierReference?.name;
+    if (typeof typeName !== 'string') return;
+    if ((node as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length) return;
+    for (const e of node.OperatorDefinitionList ?? []) {
+      if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FunctionBody || !e.FormalParameters) continue;
+      if ((e.TypeParameters?.TypeParameterList ?? []).length > 0) continue;
+      const first = e.FormalParameters[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
+      let operand: TypeRecord | null = null;
+      if (first?.TypeAnnotation) {
+        const resolved = resolveType(first.TypeAnnotation.Type);
+        if (!resolved) continue;
+        operand = resolved;
+      }
+      const opText = e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName;
+      const key = `${typeName}\u0000${opText}`;
+      const earlier = primitiveOperatorPairs.get(key) ?? [];
+      const duplicate = earlier.some((prior) => samePrimitiveOperand(prior.type, operand))
+        || RegisteredPrimitiveOperators(typeName, opText).some((entry) => entry.node !== e && !entry.deferred
+          && samePrimitiveOperand(entry.parameterType, operand));
+      if (duplicate) {
+        errors.push(Throw.StaticTypeError(
+          'operator $1 on $2 with an operand of $3 is already declared by an earlier primitive block',
+          Value(e.OperatorName), Value(typeName), Value(operand ? displayType(operand) : 'any'),
+        ).Value as ObjectValue);
+        continue;
+      }
+      earlier.push({ type: operand, node: e });
+      primitiveOperatorPairs.set(key, earlier);
+    }
+  };
+
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
@@ -20640,8 +20899,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const n = node as ParseNode;
     if ((n as { TypeParameters?: unknown }).TypeParameters) {
+      checkTypeParameterReads(n);
       const scope = pushTypeParameterScopeOf(n);
       if (scope) typeParameterScopes.pop();
+    }
+    if (n.type === 'PrimitiveOperatorDeclaration') {
+      checkPrimitiveOperatorBlock(n as ParseNode.PrimitiveOperatorDeclaration);
     }
     switch (n.type) {
       case 'SuperProperty':
@@ -21062,6 +21325,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-enums also permits a sequential initializer function. Check
         // that function's result against the underlying type, and check an
         // ordinary initializer directly against it.
+        // #sec-enums: "it is a type error for it to name the enumerator it
+        // belongs to or one declared later, since the evaluation proceeds in
+        // declaration order and the binding does not yet exist", and "the
+        // enum's own name is not in scope there, being uninitialized until the
+        // declaration completes". All three were left to the run time, which
+        // threw a ReferenceError at the first evaluation of the declaration:
+        // the pre-pass counted such a name as a free reference and skipped the
+        // enum rather than refusing it. A name some binding INSIDE the
+        // initializer declares - a sequential function's parameter, say - is
+        // that binding's, and is not reported.
+        const enumName = n.BindingIdentifier.name;
+        n.EnumMemberList.forEach((member, index) => {
+          if (!member.Initializer) return;
+          const own = member.IdentifierName.name;
+          const earlier = names.slice(0, index);
+          for (const reference of FreeReferences(member.Initializer)) {
+            const read = reference.name;
+            if (earlier.includes(read)) continue;
+            let completion: ThrowCompletion | null = null;
+            if (read === own) {
+              completion = Throw.StaticTypeError('the initializer of enumerator $1 names itself; an initializer may name only the enumerators declared before it', Value(own)) as ThrowCompletion;
+            } else if (names.slice(index + 1).includes(read)) {
+              completion = Throw.StaticTypeError('the initializer of enumerator $1 names $2, which is declared after it; an initializer may name only the enumerators declared before it', Value(own), Value(read)) as ThrowCompletion;
+            } else if (read === enumName) {
+              completion = Throw.StaticTypeError('the initializer of enumerator $1 names the enum $2, which is uninitialized until its declaration completes; name an earlier enumerator directly', Value(own), Value(read)) as ThrowCompletion;
+            }
+            if (completion) {
+              errors.push(completion.Value as ObjectValue);
+              break;
+            }
+          }
+          // #sec-enums: "Every initializer is evaluated in the compile-time
+          // evaluable fragment, since an enumerator is a constant of the
+          // program." Every enumerator name is passed as bound: the earlier
+          // ones are evaluable by #sec-iscompiletimeevaluable's enumerator
+          // case, and the rest were reported just above.
+          const outside = evaluabilityViolation(member.Initializer, new Set(names));
+          if (outside !== undefined) {
+            errors.push(Throw.StaticTypeError('an enumerator initializer must be compile-time evaluable, and $1 is not', Value(outside)).Value as ObjectValue);
+          }
+        });
         const underlying = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : builtinTypeRecord('int32');
         for (const member of n.EnumMemberList) {
           const init = member.Initializer;
@@ -22396,6 +22700,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ClassDeclaration':
       case 'ClassExpression': {
+        checkInheritedFieldRedeclarations(n);
         const heritage = n.ClassTail.ClassHeritage;
         if (heritage) pushBlock(() => {
           // The class self-name is still in its TDZ during heritage evaluation.
@@ -22785,6 +23090,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   collectMutations(statementList);
   hoistVarBindings(statementList);
+  sweepTypePositions(statementList);
   walk(statementList);
   const reportedReferenceWrites = new Set<ParseNode>();
   CheckReferencePermissions(referenceAnalysisRoots, referenceOperations, (origin, write) => {

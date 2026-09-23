@@ -148,7 +148,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     }
     (opFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
     const key = e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName;
-    RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred);
+    RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred, e);
   }
   return undefined;
 }

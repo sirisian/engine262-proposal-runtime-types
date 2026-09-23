@@ -90,17 +90,22 @@ export function FirstNonEvaluableForm(node: ParseNode | undefined | null): strin
       return undefined;
     }
     const record = value as { type?: string, name?: string };
-    if (typeof record.type === 'string') {
-      const excluded = EXCLUDED_TYPES.get(record.type);
-      if (excluded !== undefined) {
-        return excluded;
-      }
-      const name = referencedName(record);
-      if (name !== undefined) {
-        const byName = EXCLUDED_NAMES.get(name);
-        if (byName !== undefined) {
-          return byName;
-        }
+    // Only PARSE NODES are descended into. The checker decorates some nodes
+    // with records - a construction carries its `ContextualType` - and a
+    // nominal record's [[Declaration]] is the class's own declaration node, so
+    // walking into one reported `new K(1)` as "a class declaration".
+    if (typeof record.type !== 'string') {
+      return undefined;
+    }
+    const excluded = EXCLUDED_TYPES.get(record.type);
+    if (excluded !== undefined) {
+      return excluded;
+    }
+    const name = referencedName(record);
+    if (name !== undefined) {
+      const byName = EXCLUDED_NAMES.get(name);
+      if (byName !== undefined) {
+        return byName;
       }
     }
     for (const [key, child] of Object.entries(record)) {

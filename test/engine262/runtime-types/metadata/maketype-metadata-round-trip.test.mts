@@ -29,8 +29,10 @@ test('a pattern built by makeType is the type the annotation declares', () => {
 });
 
 test('and validates through it, since it is the same type', () => {
-  expect(evaluated(`let T = ${MK}; let v: T = "aaa"; String(v);`)).toBe('aaa');
-  expect(evaluated(`let T = ${MK}; let m = "ok"; try { let v: T = "b"; } catch (e) { m = "refused"; } m;`)).toBe('refused');
+  // `const`, not `let`: a type position is compile-time evaluable, and a read
+  // of a mutable binding is not (#sec-iscompiletimeevaluable).
+  expect(evaluated(`const T = ${MK}; let v: T = "aaa"; String(v);`)).toBe('aaa');
+  expect(evaluated(`const T = ${MK}; let m = "ok"; try { let v: T = "b"; } catch (e) { m = "refused"; } m;`)).toBe('refused');
 });
 
 test('metadata that was already canonical is unaffected', () => {

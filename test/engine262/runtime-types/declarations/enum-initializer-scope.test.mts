@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-enums and #sec-compile-time-evaluation.
@@ -35,15 +35,27 @@ test('an initializer may name an enumerator declared before it', () => {
 
 test('naming itself or a later enumerator is refused', () => {
   // "Parameters bind left to right" is the shape #sec-computed-constraints uses
-  // for the same question about type parameters.
-  expectThrown('enum E: uint8 { A = A + 1 } "accepted";', 'is not defined');
-  expectThrown('enum E: uint8 { A = B + 1, B = 1 } "accepted";', 'is not defined');
+  // for the same question about type parameters. #sec-enums states it as a
+  // TYPE ERROR - "it is a type error for it to name the enumerator it belongs
+  // to or one declared later" - so it is refused before the program runs, not
+  // at the first evaluation of the declaration as a ReferenceError.
+  expectStaticTypeError('enum E: uint8 { A = A + 1 } "accepted";');
+  expectStaticTypeError('enum E: uint8 { A = B + 1, B = 1 } "accepted";');
+  // A later enumerator's name is reserved within the enum even where an outer
+  // binding of that name exists, and inside a nested function as well.
+  expectStaticTypeError('const B = 5; enum E: uint8 { A = B, B = 2 } "accepted";');
+  expectStaticTypeError('enum E: uint8 { A = ((i, n) => B), B = 3 } "accepted";');
 });
 
 test("the enum's own name stays in its temporal dead zone", () => {
   // Binding the MEMBERS does not bind the enum, so the qualified spelling is
-  // the ordinary dead-zone error and not a second way to write the above.
-  expectThrown('enum E: uint8 { A = 1, B = E.A + 1 } "accepted";', 'cannot be used before initialization');
+  // not a second way to write the above. #sec-enums: "the enum's own name is
+  // not in scope there, being uninitialized until the declaration completes".
+  expectStaticTypeError('enum E: uint8 { A = 1, B = E.A + 1 } "accepted";');
+});
+
+test('a name bound inside the initializer is its own binding', () => {
+  expect(evaluated('enum S: string { A = (i, name) => name, B } String(S.B);')).toBe('B');
 });
 
 test('every form that already worked still does', () => {

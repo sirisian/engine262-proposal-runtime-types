@@ -189,3 +189,51 @@ export function FirstEvaluabilityViolation(root: ParseNode): EvaluabilityViolati
   visit(root);
   return found;
 }
+
+/**
+ * Every identifier reference in _root_ that no binding within _root_ declares,
+ * in source order.
+ *
+ * The same COARSE scoping as FirstFreeReference: a name bound anywhere inside
+ * _root_ - a parameter, a local, a nested function's own declaration - counts
+ * as bound throughout it. That errs toward reporting nothing, which is the
+ * right direction for a rule that turns a reference into an early error: a
+ * shadowed name is never reported, and an unshadowed one always is.
+ */
+export function FreeReferences(root: ParseNode): readonly (ParseNode & { name: string })[] {
+  const bound = new Set<string>();
+  const found: (ParseNode & { name: string })[] = [];
+  const skip = (key: string) => key === 'location' || key === 'sourceText' || key === 'strict' || key === 'parent';
+  const collect = (node: unknown): void => {
+    if (node === null || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(collect);
+      return;
+    }
+    const n = node as ParseNode & { type?: string, name?: string };
+    if (typeof n.type !== 'string') return;
+    if (n.type === 'BindingIdentifier' && typeof n.name === 'string') bound.add(n.name);
+    for (const key of Object.keys(n)) {
+      if (!skip(key)) collect((n as unknown as Record<string, unknown>)[key]);
+    }
+  };
+  const visit = (node: unknown): void => {
+    if (node === null || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    const n = node as ParseNode & { type?: string, name?: string };
+    if (typeof n.type !== 'string') return;
+    if (n.type === 'IdentifierReference' && typeof n.name === 'string' && !bound.has(n.name)) {
+      found.push(n as ParseNode & { name: string });
+      return;
+    }
+    for (const key of Object.keys(n)) {
+      if (!skip(key)) visit((n as unknown as Record<string, unknown>)[key]);
+    }
+  };
+  collect(root);
+  visit(root);
+  return found;
+}
