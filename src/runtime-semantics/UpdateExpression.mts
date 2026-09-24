@@ -5,6 +5,12 @@ import { typedBinary } from '../type-system/arithmetic.mts';
 import { Q, X } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Throw } from '../host-defined/error-messages.mts';
+import { CreateRationalValue, isRationalObject, rationalAdd, rationalSub } from '../intrinsics/Rational.mts';
+import {
+  CreateDecimalValue, DecimalPartsInRange, decimalAdd, decimalSubtract, isDecimalObject, type DecimalObject,
+} from '../intrinsics/Decimal.mts';
+import { isComplexObject } from '../intrinsics/Complex.mts';
+import type { ThrowCompletion } from '../completion.mts';
 import { surroundingAgent,
   Assert,
   Call,
@@ -15,6 +21,34 @@ import { surroundingAgent,
   ToNumeric,
   Z,
 } from '#self';
+
+/**
+ * proposal-runtime-types #sec-which-operations-each-family-defines: an update
+ * steps a value by its family's unit. A rational and a decimal step IN their
+ * own type - neither has a Number value, so ToNumeric threw for both - and a
+ * complex number has no step, so an update of one is refused rather than
+ * evaluated to NaN+0i through ToNumeric (plan OQ3 C). Answers *undefined* for
+ * every other value, which keeps the ordinary path.
+ */
+function stepExactNumeric(value: Value, operator: '++' | '--'): Value | ThrowCompletion | undefined {
+  const realmRec = surroundingAgent.currentRealmRecord;
+  if (isRationalObject(value)) {
+    const one = CreateRationalValue(1n, 1n, realmRec);
+    return operator === '++' ? rationalAdd(value, one, realmRec) : rationalSub(value, one, realmRec);
+  }
+  if (isDecimalObject(value)) {
+    const one = CreateDecimalValue(1n, 0, value.DecimalWidth, realmRec) as DecimalObject;
+    const r = operator === '++' ? decimalAdd(value, one) : decimalSubtract(value, one);
+    if (!DecimalPartsInRange(r.parts, r.width)) {
+      return Throw.RangeError('a decimal result is outside the range of $1', Value(`decimal${r.width}`));
+    }
+    return CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
+  }
+  if (isComplexObject(value)) {
+    return Throw.TypeError('$1 is not defined for $2', Value(operator), Value('complex'));
+  }
+  return undefined;
+}
 
 // proposal-runtime-types R6 (Option A): a typed number is a numeric value, so
 // ++/-- produce and consume it alongside Number and BigInt.
@@ -77,6 +111,12 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
         Q(yield* PutValue(lhs, updated));
         return rawOld;
       }
+      const exactStep = stepExactNumeric(rawOld, '++');
+      if (exactStep !== undefined) {
+        const stepped = Q(exactStep);
+        Q(yield* PutValue(lhs, stepped));
+        return rawOld;
+      }
       let newValue: AnyNumericValue;
       let oldValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
@@ -114,6 +154,12 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
       if (decOp !== null) {
         const updated = Q(yield* Call(decOp, rawOld, []));
         Q(yield* PutValue(lhs, updated));
+        return rawOld;
+      }
+      const exactStep = stepExactNumeric(rawOld, '--');
+      if (exactStep !== undefined) {
+        const stepped = Q(exactStep);
+        Q(yield* PutValue(lhs, stepped));
         return rawOld;
       }
       let newValue: AnyNumericValue;
@@ -155,6 +201,12 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
         Q(yield* PutValue(expr, updated));
         return updated;
       }
+      const exactStep = stepExactNumeric(rawOld, '++');
+      if (exactStep !== undefined) {
+        const stepped = Q(exactStep);
+        Q(yield* PutValue(expr, stepped));
+        return stepped;
+      }
       let newValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {
         // Both operands are of the same type here, so the mixed-type check of
@@ -191,6 +243,12 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
         const updated = Q(yield* Call(decOp, rawOld, []));
         Q(yield* PutValue(expr, updated));
         return updated;
+      }
+      const exactStep = stepExactNumeric(rawOld, '--');
+      if (exactStep !== undefined) {
+        const stepped = Q(exactStep);
+        Q(yield* PutValue(expr, stepped));
+        return stepped;
       }
       let newValue: AnyNumericValue;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(rawOld)) {

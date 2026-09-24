@@ -180,7 +180,9 @@ export function FirstEvaluabilityViolation(root: ParseNode): EvaluabilityViolati
       }
     }
     for (const key of Object.keys(n)) {
-      if (key === 'location' || key === 'sourceText' || key === 'strict') {
+      // `parent` points back up the tree: a node from a whole program, as the
+      // checker passes, would otherwise be walked from its ancestors again.
+      if (key === 'location' || key === 'sourceText' || key === 'strict' || key === 'parent') {
         continue;
       }
       visit((n as unknown as Record<string, unknown>)[key]);

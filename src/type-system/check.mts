@@ -12,7 +12,7 @@ import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { templateArgumentType, isTemplateArgumentType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
@@ -2061,6 +2061,13 @@ export interface DeferredTypeCheck {
   functions: ReadonlyMap<string, ParseNode>;
   aliases: ReadonlyMap<string, TypeRecord>;
   runtimeNames: ReadonlySet<string>;
+  /**
+   * A CALL whose type parameter only trial specialization can bind: the pass
+   * runs the trial over the arguments' Static Types rather than evaluating
+   * _node_, which is the formal's builder annotation and supplies the names
+   * the trial will need in scope.
+   */
+  trial?: { declaration: ParseNode, argumentTypes: readonly TypeRecord[] };
 }
 const deferredTypeChecks = new WeakMap<object, Map<object, DeferredTypeCheck>>();
 const evaluatedTypeNodes = new WeakMap<object, TypeRecord>();
@@ -8069,6 +8076,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(root);
   };
 
+  /**
+   * #sec-computed-types: a |ComputedType|'s "call must be compile-time
+   * evaluable", and "a call that is not evaluable ... is a type error". The
+   * run time applies the discipline on what a builder can NAME when it calls
+   * one (`runtime.mts`, through FirstEvaluabilityViolation over the builder's
+   * source), so `function b() { return Date.now() > 0 ? uint8 : string; }` was
+   * refused only where an annotation `b()` ran - and never in a signature
+   * nothing called. The same judgment is made here, statically, for every
+   * builder call a type position writes whose callee is a function declaration
+   * in this source text, with the run time's words.
+   */
+  const judgedBuilders = new WeakSet<object>();
+  const checkBuilderCalls = (root: ParseNode): void => {
+    const visit = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+        return;
+      }
+      const n = node as ParseNode & Record<string, unknown>;
+      if (typeof n.type !== 'string') return;
+      if (n.type === 'ComputedType' && !judgedBuilders.has(n)) {
+        judgedBuilders.add(n);
+        const callee = (n as unknown as ParseNode.ComputedType).Callee as unknown as { type?: string, TypeName?: { IdentifierReference?: ParseNode & { name?: string } }, TypeArguments?: unknown };
+        const reference = callee.type === 'TypeReference' && !callee.TypeArguments ? callee.TypeName?.IdentifierReference : undefined;
+        if (reference?.name) {
+          const declaration = ResolveBindingDeclaration(reference, reference.name);
+          if (declaration?.kind === 'function') {
+            const violation = FirstEvaluabilityViolation(declaration.node);
+            if (violation !== undefined) {
+              errors.push(Throw.StaticTypeError('a builder is not compile-time evaluable: it names $1 ($2)', Value(violation.name), Value(violation.why)).Value as ObjectValue);
+            }
+          }
+        }
+      }
+      for (const key of Object.keys(n)) {
+        if (key === 'parent' || key === 'location' || key === 'sourceText' || key === 'strict') continue;
+        visit(n[key]);
+      }
+    };
+    visit(root);
+  };
+
   const sweepTypePositions = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -8080,6 +8130,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (n.type === 'TypeAnnotation' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
     if (n.type === 'TypeAnnotation' && n.Type) checkUnappliedHigherKinded(n.Type as ParseNode);
     if (n.type === 'TypeAliasDeclaration' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
+    if (n.type === 'TypeAnnotation' && n.Type) checkBuilderCalls(n.Type as ParseNode);
+    if (n.type === 'TypeAliasDeclaration' && n.Type) checkBuilderCalls(n.Type as ParseNode);
     if (Array.isArray(n.FunctionTypeParameterList)) checkFunctionTypeParameterOrder(n.FunctionTypeParameterList as readonly ParseNode.FunctionTypeParameter[]);
     for (const tp of (n.TypeParameters as { TypeParameterList?: readonly { TypeParameterConstraint?: ParseNode | null, TypeParameterDefault?: ParseNode | null }[] } | null | undefined)?.TypeParameterList ?? []) {
       if (tp.TypeParameterConstraint) checkTypePositionEvaluability(tp.TypeParameterConstraint);
@@ -12722,6 +12774,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const numeric = erasedKeepingBrand(operand);
         const base = numeric?.Kind === 'parameterized' ? numeric.Base : numeric;
+        // #sec-which-operations-each-family-defines: an update steps by the
+        // family's unit, and the complex numbers have no step - they are the
+        // family the table leaves unordered, and `c++` evaluated to NaN+0i,
+        // silently losing the value. Rational and decimal numbers step by one
+        // in their own type (plan OQ3 C).
+        if (base?.Kind === 'primitive' && base.Name === 'complex') {
+          if (!undefinedUpdateReported.has(node)) {
+            undefinedUpdateReported.add(node);
+            errors.push(Throw.StaticTypeError('$1 is not defined for $2', Value(node.operator), Value(displayType(operand as TypeRecord))).Value as ObjectValue);
+          }
+          return numeric;
+        }
         if (base?.Kind === 'primitive' && (isNumericValueTypeName(base.Name) || base.Name === 'bigint' || base.Name === 'number')) {
           return numeric;
         }
@@ -14940,6 +15004,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * of an unknown type, so it stops both judgments rather than being guessed
    * at - the alternative is reporting an arity the program does not have.
    */
+  /**
+   * #sec-range-literals: "A range literal read at an element type _T_, where a
+   * contextual type gives it one, is a type error unless every element it
+   * produces is a value of _T_." The judgment lives where a range meets a
+   * `Range`-family contextual type, which a `for`-`of` head and an annotation
+   * supply. An array literal's spread, a spread argument into a typed rest, and
+   * a collection's seed give a range an element type too, and did not consult
+   * it: `[...0..=256]` at `[].<uint8>` failed only when 256 reached the store.
+   * Each now reads the range at a `Range.<T>` of its element type, which is the
+   * same judgment and reports once per range.
+   */
+  const checkRangeAtElement = (expr: ParseNode | null | undefined, element: Known | number | undefined): void => {
+    let x = expr;
+    while (x && x.type === 'ParenthesizedExpression') x = (x as unknown as { Expression?: ParseNode }).Expression;
+    if (x?.type !== 'RangeExpression' || !element || typeof element === 'number') return;
+    staticTypeIn(x, libraryTypeRecord('Range', [element as TypeRecord, 0, 0]) as Known);
+  };
+
   const checkArrayLiteralAgainst = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'array' }) => {
     const elements = expandValueSpreads((node.ElementList ?? []) as readonly ParseNode[]);
     let spread = false;
@@ -14951,6 +15033,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if ((el as ParseNode).type === 'SpreadElement') {
         spread = true;
         const operand = (el as ParseNode.SpreadElement).AssignmentExpression;
+        checkRangeAtElement(operand, target.Element);
         const contribution = StaticIterationContribution(staticType(operand), structureOf);
         requireAssignable(contribution.element, target.Element);
         walk(el as ParseNode);
@@ -19292,6 +19375,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const binaryConversionFailures = new WeakSet<ParseNode>();
+  const undefinedUpdateReported = new WeakSet<ParseNode>();
   const checkBinaryConversion = (node: ParseNode, operator: string, left: ParseNode, right: ParseNode): boolean => {
     const leftParticipates = operandParticipates(left);
     const rightParticipates = operandParticipates(right);
@@ -20409,6 +20493,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // An open rest pack is bound by the specialization.
             if (!wanted || !mentionsTypeParameter(wanted)) {
               if (spread) {
+                checkRangeAtElement(argument.AssignmentExpression, wanted);
                 requireAssignable(StaticIterationContribution(staticType(argument.AssignmentExpression), structureOf).element, wanted);
               } else {
                 requireAssignable(staticTypeIn(argument, wanted), wanted);
@@ -21131,6 +21216,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // tuple whose element type is known establishes every element it holds.
     const seedType = literalSeed ? null : staticType(seed);
     const typedSeed = !literalSeed && (seedType?.Kind === 'array' || seedType?.Kind === 'tuple');
+    // A range seed is read at the collection's element type (#sec-range-literals).
+    if (name === 'Set' && seed.type === 'RangeExpression') {
+      checkRangeAtElement(seed, target.Arguments[0]);
+      return;
+    }
     if (!literalSeed && !typedSeed) return;
     const realm = surroundingAgent.currentRealmRecord;
     const intrinsic = realm.Intrinsics;
@@ -21250,6 +21340,74 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     return false;
+  };
+
+  /**
+   * #sec-trial-specialization: a trial that leaves "zero or more than one"
+   * candidate, or that would exceed the ceiling of 64, "is a type error asking
+   * for explicit arguments". The trials ran only when the call bound its
+   * arguments, at run time, so each of those refusals was a run-time TypeError
+   * - and a call in a function nothing invoked raised nothing.
+   *
+   * The walk cannot evaluate a builder, so the call is recorded as an
+   * obligation of the checking pass, which runs the run time's own trial over
+   * the arguments' Static Types. Recorded only where the answer is decided by
+   * what the source shows: a call to a generic function of this source text
+   * with no type arguments written and no spread or named argument, every
+   * argument's Static Type known, and a type parameter with a CLOSED
+   * constraint that a formal's builder annotation reads.
+   */
+  const recordTrialObligation = (call: ParseNode.CallExpression): void => {
+    const callee = patternExpression(call.CallExpression) as { type?: string, name?: string } | null;
+    if (callee?.type !== 'IdentifierReference' || !callee.name) return;
+    const declaration = functionNodes.get(callee.name) as (ParseNode & {
+      TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null, FormalParameters?: readonly ParseNode[],
+    }) | undefined;
+    const list = declaration?.TypeParameters?.TypeParameterList;
+    if (!declaration || !list || list.length === 0 || !declaration.FormalParameters) return;
+    if (shadowedByProgram(callee.name) && !functionNodes.has(callee.name)) return;
+    const args = (call.Arguments ?? []) as readonly ParseNode[];
+    if (args.some((a) => a.type === 'AssignmentRestElement' || a.type === 'NamedArgument')) return;
+    const argumentTypes = args.map((a) => staticType(a));
+    if (argumentTypes.some((t) => !t || t.Kind === 'any' || mentionsTypeParameter(t))) return;
+    const closed = (t: Known): boolean => !!t && (t.Kind === 'literal'
+      || (t.Kind === 'primitive' && t.Name === 'boolean')
+      || (t.Kind === 'nominal' && t.EnumMembers !== undefined)
+      || (t.Kind === 'union' && t.Members.length > 0 && t.Members.every(closed)));
+    const trialed = list.filter((tp) => !tp.IsValueParameter && !tp.IsVariadic && tp.TypeParameterConstraint
+      && closed(resolveType(tp.TypeParameterConstraint)));
+    if (trialed.length === 0) return;
+    const names = new Set(trialed.map((tp) => tp.BindingIdentifier.name));
+    let annotation: ParseNode.Type | null = null;
+    for (const formal of declaration.FormalParameters) {
+      const type = (formal as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation?.Type;
+      if (type?.type === 'ComputedType' && FreeReferences(type).some((r) => names.has(r.name))) {
+        annotation = type;
+        break;
+      }
+    }
+    if (!annotation) return;
+    const constants = new Map<string, Value>();
+    const aliases = new Map<string, TypeRecord>();
+    for (const frame of frames) {
+      for (const name of frame.declaredNames) {
+        constants.delete(name);
+        aliases.delete(name);
+      }
+      for (const [name, value] of frame.constLiteralValues) {
+        if (value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(Number.MIN_SAFE_INTEGER)) {
+          constants.set(name, Value(Number(value)));
+        }
+      }
+      for (const [name, type] of frame.aliases) {
+        aliases.set(name, type);
+      }
+    }
+    unresolvedTypes.set(call, {
+      node: annotation, constants, aliases, functions: new Map(functionNodes),
+      runtimeNames: new Set([...enumNodes.keys(), ...classNodes.keys()]),
+      trial: { declaration, argumentTypes: argumentTypes as TypeRecord[] },
+    });
   };
 
   const checkInvocation = (expression: ParseNode, construct: boolean): void => {
@@ -22711,6 +22869,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'CallExpression': {
+        recordTrialObligation(n as ParseNode.CallExpression);
         checkProxyTarget(n.CallExpression, n.Arguments ?? [], true);
         // A CALL may reassign a binding some function body assigns to, and the
         // walk cannot see into the callee, so every such name loses its
@@ -23216,6 +23375,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const declared = declaredOperator(staticType(operand), `unary ${n.operator}`);
           if (declared) checkStoreResult(operand, typedExpressionView(n, operatorResult(declared, [], n)));
           else {
+            // Typing the update is what judges whether its family has a step.
+            staticType(n);
             checkBuiltinUpdate(n, operand);
             checkLengthMutation(operand, n.operator);
           }

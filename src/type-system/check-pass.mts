@@ -2,7 +2,10 @@ import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
-import { DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame, EvaluateRefinementPredicate, ValuePackView } from './runtime.mts';
+import {
+  DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
+  EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments,
+} from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
@@ -11,7 +14,7 @@ import {
   typeDeclarationNamesInPass,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
-import { Value } from '../value.mts';
+import { JSStringValue, ObjectValue, Value } from '../value.mts';
 import { SetMetResolution } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './records.mts';
@@ -25,7 +28,7 @@ import {
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
-import { Evaluate, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
+import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
 /**
  * The names the compile-time-evaluable fragment guarantees.
@@ -65,6 +68,17 @@ const FRAGMENT_FLOOR: readonly string[] = [
   'undefined', 'NaN', 'Infinity',
   'String', 'Number', 'BigInt', 'Boolean', 'Symbol', 'Object', 'Array', 'Math', 'JSON',
   'Map', 'Set', 'RegExp', 'Reflect',
+];
+
+// A BUILDER may also name the error constructors, which are deterministic: a
+// builder that builds one to throw is the ordinary way it refuses its
+// arguments. Leaving them out meant such a builder was never evaluated here,
+// so its throw escaped at run time as the program's own exception - where
+// #sec-computed-types makes "a call ... that completes abruptly" a type error,
+// which the obligation's evaluation reports. Only the builder path admits them:
+// a type DEFAULT that throws is evaluated where the program runs, as before.
+const ERROR_CONSTRUCTORS: readonly string[] = [
+  'Error', 'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError', 'EvalError', 'URIError', 'AggregateError',
 ];
 
 /**
@@ -696,7 +710,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     // A builder may close over runtime state. Only execute closed builders
     // here; evaluating such a closure speculatively could mutate that state.
     const allowed = new Set([...bindings.keys(), ...obligation.aliases.keys(), ...obligation.functions.keys(),
-      ...FRAGMENT_FLOOR]);
+      ...FRAGMENT_FLOOR, ...ERROR_CONSTRUCTORS]);
     for (const name of dependencies) {
       const fn = obligation.functions.get(name);
       if (!fn) continue;
@@ -723,6 +737,35 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     context.LexicalEnvironment = scope;
     try {
       BeginFragmentEvaluation();
+      if (obligation.trial) {
+        // #sec-trial-specialization, run here over the arguments' Static Types
+        // with the run time's own trial, ceiling and messages: a trial that
+        // binds none, several, or more than the ceiling allows is a type error
+        // asking for explicit arguments.
+        const declaration = obligation.trial.declaration as unknown as {
+          TypeParameters: { TypeParameterList: readonly ParseNode.TypeParameter[] }, FormalParameters: readonly ParseNode[],
+        };
+        let trialed;
+        try {
+          trialed = EnsureCompletion(yield* InferGenericBindingsFrom(
+            declaration.TypeParameters.TypeParameterList, declaration.FormalParameters, staticArguments(obligation.trial.argumentTypes),
+          ));
+        } finally {
+          EndFragmentEvaluation();
+        }
+        if (trialed.Type !== 'normal') {
+          const thrown = trialed.Value;
+          const message = thrown instanceof ObjectValue
+            ? EnsureCompletion(yield* Get(thrown, Value('message')))
+            : undefined;
+          const raw = message && message.Type === 'normal' && message.Value instanceof JSStringValue
+            ? message.Value.stringValue() : inspect(thrown);
+          // The run time's message is itself a quoted value; quote it once.
+          const text = raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+          return Throw.StaticTypeError('the call cannot be specialized: $1', Value(text));
+        }
+        continue;
+      }
       let result;
       try {
         result = EnsureCompletion(yield* TypeNodeToTypeRecord(obligation.node));

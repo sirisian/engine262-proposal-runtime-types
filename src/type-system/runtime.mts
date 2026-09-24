@@ -1353,6 +1353,28 @@ export function valueArguments(args: readonly Value[]): InferenceArguments {
 }
 
 /**
+ * The checker's oracle: the arguments' Static Types, for a trial run before the
+ * program does (#sec-trial-specialization). A type is its own literal type
+ * where it is one, and an argument satisfies a type where its Static Type is
+ * assignable to it - the static reading the interface above names alongside
+ * the run time's.
+ */
+export function staticArguments(types: readonly TypeRecord[]): InferenceArguments {
+  return {
+    length: types.length,
+    * typeOf(i) {
+      return types[i]!;
+    },
+    * literalTypeOf(i) {
+      return types[i]!;
+    },
+    * satisfies(i, t) {
+      return IsAssignable(types[i]!, t);
+    },
+  };
+}
+
+/**
  * Forward verification: every annotated formal, evaluated over the frame as it
  * stands, accepts the arguments it receives. The check an explicitly
  * specialized call faces, performed by the same operations, and shared by the
