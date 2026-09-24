@@ -18,7 +18,8 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
-import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue } from '../abstract-ops/runtime-types.mts';
+import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels } from '../abstract-ops/runtime-types.mts';
+import { IsSubtype } from '../type-system/relations.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
@@ -31,7 +32,7 @@ import {
   CreateDecimalValue,
 } from '../intrinsics/Decimal.mts';
 import {
-  Assert, R, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, LookupPrimitiveOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
+  Assert, R, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
 
 
 /**
@@ -117,7 +118,16 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     // fail on its own parameter. The definitions are tried in declaration
     // order; the checker refuses a second definition for one pair of types, so
     // where parameter types are known at most one admits the operand.
-    for (const entry of LookupPrimitiveOperator(lval, opText)) {
+    // #sec-primitive-operator-blocks: within the most specific block level
+    // with an admitting definition, the definition whose operand type is the
+    // most specific is chosen, whatever the declaration order - the rule the
+    // language's function overloads already follow - and admitting
+    // definitions none of which is more specific than the rest are an
+    // ambiguity, as an ambiguous call is. Every definition of a level is
+    // therefore prepared before any is invoked.
+    for (const level of LookupPrimitiveOperatorLevels(lval, opText)) {
+    const candidates: PreparedPrimitiveOperator[] = [];
+    for (const entry of level) {
       // #sec-primitive-operator-blocks: a PARAMETERIZED block declares its
       // operators "for each parameterization its parameters admit", so the
       // block's parameter is bound from the RECEIVER and the operand and result
@@ -129,6 +139,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       let deferredReturnType = null;
       let framePushed = false;
       let deferredSpokenFor: object[] = [];
+      let entryFrame: Map<string, TypeRecord> | null = null;
       const componentNames = entry.deferred?.componentNames ?? [];
       if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0)) {
         const carried = RuntimeTypeOf(lval);
@@ -200,6 +211,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
           }
           pushTypeParameterFrame(frame);
           framePushed = true;
+          entryFrame = frame;
           if (entry.deferred.parameterTypeNode) {
             deferredParameterType = Q(yield* ResolveTypeNode(entry.deferred.parameterTypeNode as never));
           }
@@ -212,61 +224,70 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       const admits = effectiveParameter === null
         ? true
         : Q(yield* IsOfType(rval, effectiveParameter));
-      if (!admits && framePushed) {
+      if (framePushed) {
         popTypeParameterFrame();
         framePushed = false;
       }
       if (admits) {
-        EnterOperatorBody();
-        let raw;
-        try {
-          raw = Q(yield* Call(entry.fn as never, lval, [rval]));
-        } finally {
-          LeaveOperatorBody();
-          if (framePushed) {
-            popTypeParameterFrame();
-            framePushed = false;
-          }
-        }
-        // "The metadata of a result comes from the return type annotations
-        // alone." The body computed a raw value; the return type says what it
-        // carries, which for a dimension-preserving operator is the receiver's
-        // own parameterization.
-        if (deferredReturnType !== null && deferredReturnType.Kind === 'parameterized') {
-          // "The portions the matching return types evaluate to are merged into
-          // one flat metadata object, each meta type contributing its `default`
-          // where no matching definition mentions it."
-          // The receiver's carried type: a typed number's, or a complex's or
-          // rational's once it crossed into a parameterization.
-          const receiverType = RuntimeTypeOf(lval);
-          const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized'
-            ? receiverType.Metadata
-            : deferredReturnType.Metadata).types;
-          const mergedMetadata = MergeOperatorResultMetadata(
-            deferredSpokenFor.map((metaType) => ({ metaType, portion: MetadataPortion(deferredReturnType!.Metadata, metaType) })),
-            governing,
-          );
-          deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
-          if (isTypedNumber(raw)) {
-            return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
-          }
-          // A complex or rational result carries the return type as a typed
-          // number does, on a fresh value.
-          const stamped = StampFamilyValue(raw, deferredReturnType);
-          if (stamped !== undefined) {
-            return stamped;
-          }
-          if (raw instanceof NumberValue) {
-            return new TypedNumberValue(Number((raw as unknown as { value: number }).value), deferredReturnType);
-          }
-        }
-        return raw;
+        candidates.push({
+          entry,
+          frame: entryFrame,
+          parameter: effectiveParameter,
+          returnType: deferredReturnType,
+          spokenFor: deferredSpokenFor,
+          fixed: !OperandNamesCapture(entry.deferred),
+        });
       }
     }
+    const chosen = MostSpecificPrimitiveOperator(candidates);
+    if (chosen === 'ambiguous') {
+      return Throw.TypeError('$1', `operator ${opText} is ambiguous for this operand: two definitions of one primitive block level admit it, and neither operand type is more specific than the other`);
+    }
+    if (chosen === undefined) {
+      continue;
+    }
+    let deferredReturnType = chosen.returnType;
+    const deferredSpokenFor = chosen.spokenFor;
+    // The frame stays pushed for the WHOLE invocation: the operator's own
+    // parameter boundary resolves the block's names when the body is entered.
+    if (chosen.frame) {
+      pushTypeParameterFrame(chosen.frame);
+    }
+    EnterOperatorBody();
+    let raw;
+    try {
+      raw = Q(yield* Call(chosen.entry.fn as never, lval, [rval]));
+    } finally {
+      LeaveOperatorBody();
+      if (chosen.frame) {
+        popTypeParameterFrame();
+      }
+    }
+    if (deferredReturnType !== null && deferredReturnType.Kind === 'parameterized') {
+      const receiverType = RuntimeTypeOf(lval);
+      const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized'
+        ? receiverType.Metadata
+        : deferredReturnType.Metadata).types;
+      const returnMetadata = deferredReturnType.Metadata;
+      const mergedMetadata = MergeOperatorResultMetadata(
+        deferredSpokenFor.map((metaType) => ({ metaType, portion: MetadataPortion(returnMetadata, metaType) })),
+        governing,
+      );
+      deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
+      if (isTypedNumber(raw)) {
+        return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
+      }
+      const stamped = StampFamilyValue(raw, deferredReturnType);
+      if (stamped !== undefined) {
+        return stamped;
+      }
+      if (raw instanceof NumberValue) {
+        return new TypedNumberValue(Number((raw as unknown as { value: number }).value), deferredReturnType);
+      }
+    }
+    return raw;
+    }
   }
-  // proposal-runtime-types (operatoroverloading.md): the mirror image, where the
-  // operator is declared by the RIGHT operand. Dispatch keys on the left, so this
-  // would otherwise coerce and produce a value the program did not ask for.
   if (RightOperandDeclaresOperator(lval, rval, opText)) {
     return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', opText);
   }
@@ -522,4 +543,61 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     };
     return Q(operations[opText](lnum, rnum as NumberValue));
   }
+}
+
+interface PreparedPrimitiveOperator {
+  readonly entry: { readonly fn: unknown };
+  readonly frame: Map<string, TypeRecord> | null;
+  readonly parameter: TypeRecord | null;
+  readonly returnType: TypeRecord | null;
+  readonly spokenFor: object[];
+  /** The operand is written without the block's captures: `uint.<16>`, not `uint.<W>`. */
+  readonly fixed: boolean;
+}
+
+/** Whether a deferred definition's operand annotation names one of its block's captures. */
+function OperandNamesCapture(deferred: { readonly parameterTypeNode?: unknown, readonly parameterNames?: readonly string[], readonly componentNames?: readonly string[] } | undefined): boolean {
+  if (!deferred?.parameterTypeNode) {
+    return false;
+  }
+  const names = new Set([...(deferred.parameterNames ?? []), ...(deferred.componentNames ?? [])]);
+  const scan = (value: unknown): boolean => {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.some(scan);
+    }
+    const n = value as { type?: string, name?: string };
+    if (n.type === 'IdentifierReference' && typeof n.name === 'string' && names.has(n.name)) {
+      return true;
+    }
+    return Object.entries(n).some(([k, x]) => k !== 'parent' && k !== 'location' && scan(x));
+  };
+  return scan(deferred.parameterTypeNode);
+}
+
+/**
+ * The admitting definition whose operand type is a subtype of every other's,
+ * *undefined* where none admits, or ~ambiguous~. A definition with no operand
+ * type admits everything and is the least specific.
+ */
+function MostSpecificPrimitiveOperator(candidates: readonly PreparedPrimitiveOperator[]): PreparedPrimitiveOperator | 'ambiguous' | undefined {
+  if (candidates.length <= 1) {
+    return candidates[0];
+  }
+  // Equal operand types at this receiver - `uint.<W>` with W bound to 16
+  // beside `uint.<16>` - are ordered as patterns are: a fixed operand is more
+  // specific than one naming a capture (plan section 6.1).
+  const atLeastAsSpecific = (c: PreparedPrimitiveOperator, d: PreparedPrimitiveOperator) => {
+    if (d.parameter === null) {
+      return c.parameter !== null || c.fixed || !d.fixed;
+    }
+    if (c.parameter === null || !IsSubtype(c.parameter, d.parameter, [])) {
+      return false;
+    }
+    return !IsSubtype(d.parameter, c.parameter, []) || c.fixed || !d.fixed;
+  };
+  const winners = candidates.filter((c) => candidates.every((d) => d === c || atLeastAsSpecific(c, d)));
+  return winners.length === 1 ? winners[0] : 'ambiguous';
 }

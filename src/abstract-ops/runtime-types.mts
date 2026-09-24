@@ -2549,6 +2549,15 @@ export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: 
     entries = [];
     ops.set(opText, entries);
   }
+  // One definition is registered once. A block is evaluated by the check
+  // pass, for what the checker needs to know of its casts, and again when the
+  // program runs, and each evaluation registered the definition anew: harmless
+  // while the first admitting entry won, and a false ambiguity once the most
+  // specific is chosen among all that admit. The first registration is kept,
+  // which is the one dispatch has always used.
+  if (node !== undefined && entries.some((e) => e.node === node)) {
+    return;
+  }
   entries.push({ fn, parameterType, deferred, node });
 }
 
@@ -2629,6 +2638,40 @@ export function LookupPrimitiveOperator(value: Value, opText: string): readonly 
     names.push('rational');
   }
   return names.flatMap((name) => tables.get(name)?.get(opText) ?? []);
+}
+
+/**
+ * #sec-primitive-operator-blocks: the definitions of LookupPrimitiveOperator
+ * grouped by the specificity of their block, most specific first - the
+ * receiver's exact primitive, then its family - so that a dispatch chooses
+ * within one level before it looks at the next.
+ */
+export function LookupPrimitiveOperatorLevels(value: Value, opText: string): readonly (readonly PrimitiveOperatorEntry[])[] {
+  if (operatorBodyDepth > 0) {
+    return [];
+  }
+  const tables = primitiveTablesForAgent();
+  if (tables.size === 0) {
+    return [];
+  }
+  const names: string[] = [];
+  if (isTypedNumber(value)) {
+    const record = (value as TypedNumberValue).TypeRecord as TypeRecord;
+    const base = record.Kind === 'parameterized' ? record.Base : record;
+    if (base.Kind === 'primitive') {
+      if (base.Arguments && base.Arguments.length > 0) {
+        names.push(`${base.Name}${base.Arguments[0]}`);
+      }
+      names.push(base.Name);
+    }
+  } else if (value instanceof NumberValue) {
+    names.push('number');
+  } else if (isComplexObject(value)) {
+    names.push('complex');
+  } else if (isRationalObject(value)) {
+    names.push('rational');
+  }
+  return names.map((name) => tables.get(name)?.get(opText) ?? []);
 }
 
 /**

@@ -74,3 +74,30 @@ test('operands that differ are not duplicates', () => {
   expect(evaluated(`primitive uint8 { operator *(rhs: string): string { return 'e'; } }
     primitive uint<const W> { operator *(rhs: string): string { return 'f'; } } String((3 := uint8) * 'x');`)).toBe('e');
 });
+
+test('within one level, the most specific admitting operand is chosen, in either order', () => {
+  // The rule the language's function overloads follow: a general and a
+  // special definition may stand together, and the special one wins where
+  // both admit. Before, the first declared won.
+  const general = `primitive float64 { operator *(rhs: string): string { return 'string'; } }`;
+  const special = `primitive float64 { operator *(rhs: 'x'): string { return 'x'; } }`;
+  const run = `String((2 := float64) * 'x') + ' ' + String((2 := float64) * 'y');`;
+  expect(evaluated(`${general} ${special} ${run}`)).toBe('x string');
+  expect(evaluated(`${special} ${general} ${run}`)).toBe('x string');
+});
+
+test('equal operands at one receiver are ordered as patterns: fixed before capture', () => {
+  // At a uint16 receiver `uint.<W>` is `uint.<16>`; the fixed one is more specific.
+  const own = `primitive uint<const W> { operator +(rhs: uint.<W>): string { return 'own'; } }`;
+  const sixteen = `primitive uint<const V> { operator +(rhs: uint.<16>): string { return 'sixteen'; } }`;
+  const run = `String((3 := uint16) + (4 := uint16)) + ' ' + String((3 := uint8) + (4 := uint8));`;
+  expect(evaluated(`${own} ${sixteen} ${run}`)).toBe('sixteen own');
+  expect(evaluated(`${sixteen} ${own} ${run}`)).toBe('sixteen own');
+});
+
+test('overlapping operands neither more specific than the other are ambiguous where both admit', () => {
+  const blocks = `primitive float64 { operator *(rhs: 'x' | 'y'): string { return 'xy'; } }
+    primitive float64 { operator *(rhs: 'y' | 'z'): string { return 'yz'; } }`;
+  expect(evaluated(`${blocks} String((2 := float64) * 'x') + ' ' + String((2 := float64) * 'z');`)).toBe('xy yz');
+  expectThrown(`${blocks} (2 := float64) * 'y';`, 'operator * is ambiguous for this operand');
+});
