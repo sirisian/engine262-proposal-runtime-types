@@ -19,10 +19,32 @@ const Z = 'const z = (1 := complex64) + (2i := complex64); ';
 test('every Number context refuses a complex', () => {
   for (const src of [
     `${C}Number(c);`, `${Z}Number(z);`, `${C}Math.floor(c);`,
-    `${C}Math.max(c, 1);`, `${C}c == 3;`, `${C}isNaN(c);`,
+    `${C}Math.max(c, 1);`, `${C}c == 3;`, `${C}isFinite(c);`,
   ]) {
     expectThrownKind(src, 'TypeError');
   }
+});
+
+test('isNaN answers for a complex: true exactly when either component is NaN', () => {
+  // The one Number context with a real answer - a complex can be NaN through
+  // either part - so, as for a decimal, it answers rather than refusing. This is
+  // Python's cmath.isnan and Julia's isnan.
+  expect(evaluated(`${C}String(isNaN(c));`)).toBe('false');
+  expect(evaluated(`${Z}String(isNaN(z));`)).toBe('false');
+  expect(evaluated('String(isNaN(complex(NaN, 0)));')).toBe('true');
+  expect(evaluated('String(isNaN(complex(0, NaN)));')).toBe('true');
+  expect(evaluated('String(isNaN(complex(NaN, NaN)));')).toBe('true');
+  // Infinite is not NaN.
+  expect(evaluated('String(isNaN(complex(Infinity, 0)));')).toBe('false');
+  // Number.isNaN, which the predicates table pairs with isNaN, answers alike.
+  expect(evaluated('String(Number.isNaN(complex(NaN, 0)));')).toBe('true');
+  expect(evaluated(`${C}String(Number.isNaN(c));`)).toBe('false');
+});
+
+test('the other Number statics answer as they do today', () => {
+  // A complex is not a Number, so these non-coercing statics say false.
+  expect(evaluated(`${C}String(Number.isFinite(c));`)).toBe('false');
+  expect(evaluated(`${C}String(Number.isInteger(c));`)).toBe('false');
 });
 
 test('the explicit way to a real is `.real`', () => {

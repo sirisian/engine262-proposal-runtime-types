@@ -2,6 +2,7 @@ import {
   BigIntValue, NumberValue, ObjectValue, isTypedNumber, type Value,
 } from '../value.mts';
 import { isDecimalObject } from '../intrinsics/Decimal.mts';
+import { isComplexObject } from '../intrinsics/Complex.mts';
 import type { TypeRecord } from './records.mts';
 
 /**
@@ -111,6 +112,22 @@ export function numericPredicate(value: Value, which: NumericPredicate, surface:
       }
       default: return undefined;
     }
+  }
+  // A COMPLEX answers `isNaN` - and `Number.isNaN`, which the table pairs with
+  // it - by its COMPONENTS: *true* exactly when either is NaN. That is what
+  // Python's `cmath.isnan` and Julia's `isnan` answer, and it is the one Number
+  // context in which a complex has a real answer: a complex has no Number value,
+  // but it can be NaN, through either part. Without this, `isNaN(c)` reached
+  // ToNumber - once answering *true* for the complex number 3, from the text
+  // "3+0i", and now refused along with every other Number context.
+  //
+  // The other predicates are left to their callers: `isFinite` performs
+  // ToNumber and so refuses a complex, and the `Number` statics answer *false*
+  // for a value that is not a Number, as they do today.
+  if (isComplexObject(value)) {
+    return which === 'isNaN'
+      ? Number.isNaN(value.ComplexReal) || Number.isNaN(value.ComplexImaginary)
+      : undefined;
   }
   if (isTypedNumber(value)) {
     const t = value.TypeRecord as TypeRecord;
