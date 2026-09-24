@@ -49,6 +49,12 @@ test('a block for one meta type judges only its portion, and the result merges p
     const a: float32.<{ m: 1, lo: 5 }> = 3; const b: float32.<{ m: 1, lo: 5 }> = 4;`;
   // "each meta type contributing its default where no matching definition
   // mentions it": D's portion from the definition, B's default.
-  expect(evaluated(`${two} const c = a * b; String(c) + ' ' + String(Reflect.typeOf(c));`)).toBe('12 float32.<{ m: 2, lo: 0 }>');
+  expect(evaluated(`${two} String(a * b) + ' ' + String(Reflect.typeOf(a * b));`)).toBe('12 float32.<{ m: 2, lo: 0 }>');
+  // The checker types the result as the contribution, `float32.<{ m: 2 }>`,
+  // whose unmentioned meta types are their defaults - the merged result
+  // exactly - so it is precise before the program runs.
   expect(evaluated(`${two} const c: float32.<{ m: 2, lo: 0 }> = a * b; String(Reflect.typeOf(c));`)).toBe('float32.<{ m: 2, lo: 0 }>');
+  expect(evaluated(`${two} const c: float32.<{ m: 2 }> = a * b; String(c);`)).toBe('12');
+  expectEarlyError(`${two} const c: float32.<{ m: 2, lo: 5 }> = a * b;`, 'StaticTypeError');
+  expectEarlyError(`${two} const c: float32.<{ m: 1, lo: 5 }> = a * b;`, 'StaticTypeError');
 });

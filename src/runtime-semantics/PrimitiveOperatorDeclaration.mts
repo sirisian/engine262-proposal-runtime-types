@@ -115,7 +115,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     // registered with no function: dispatch reads its types, and the
     // primitive operation computes the value.
     const bodyless = !e.FunctionBody;
-    if (bodyless && e.FormalParameters.length !== 1) {
+    if (bodyless && e.FormalParameters.length > 1) {
       continue;
     }
     // The receiver is the primitive, so the body sees the left operand as

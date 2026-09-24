@@ -1,5 +1,5 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
+import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import { MatchComponentListRaw, ComponentOperandAdmits, InstantiateComponentType, BindMetadataCaptures } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -13084,6 +13084,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const operand = inner ? staticType(inner) : null;
         const declared = unary.operator ? declaredOperator(operand, `unary ${unary.operator}`) : null;
         if (declared) return operatorResult(declared, [], node);
+        // #sec-primitive-operator-blocks: a block's unary `-` gives the result
+        // its type, as dispatch invokes or stamps it.
+        if (unary.operator === '-' && operand) {
+          const blocked = bodylessResult('unary -', operand as TypeRecord, operand as TypeRecord, true);
+          if (blocked !== undefined) return blocked;
+        }
         if (inner && ['+', '-', '~'].includes(unary.operator ?? '')
           && checkPrimitiveConversion(inner, 'number', (result) => result.Kind === 'primitive'
             && (result.Name === 'symbol' || (unary.operator === '+' && result.Name === 'bigint')))) return neverType;
@@ -22013,6 +22019,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
     for (const e of node.OperatorDefinitionList ?? []) {
       if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FunctionBody || !e.FormalParameters) continue;
+      // #sec-operator-declarations, for a UNARY operator: a block whose header
+      // captures no metadata speaks for its primitive's own values, whose
+      // unary `-` the type already defines, so a body there redeclares it. A
+      // block capturing metadata speaks for its parameterizations, types of
+      // their own, as the design's dimensioned vector's `operator-()` does.
+      if (e.FormalParameters.length === 0
+          && (node.MetadataParameters?.Captures?.length ?? 0) === 0
+          && NestedComponentCapturesOf(node).length === 0) {
+        const completion = Throw.StaticTypeError('$1', `unary operator "${e.OperatorName}" on "${typeName}" redeclares an operation the type already defines; declare it in a block that captures metadata`) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+        continue;
+      }
       if ((e.TypeParameters?.TypeParameterList ?? []).length > 0) continue;
       const first = e.FormalParameters[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
       let operand: TypeRecord | null = null;
@@ -22117,8 +22135,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (n.type === 'PrimitiveOperatorDeclaration') {
           const name = (n.TypeName as unknown as { IdentifierReference?: { name?: string } } | null)?.IdentifierReference?.name;
           for (const def of n.OperatorDefinitionList ?? []) {
-            if (typeof name !== 'string' || def.type !== 'OperatorDefinition' || !def.OperatorName || !def.FormalParameters || def.FormalParameters.length !== 1) continue;
-            const key = `${name}\u0000${def.OperatorName}`;
+            if (typeof name !== 'string' || def.type !== 'OperatorDefinition' || !def.OperatorName || !def.FormalParameters || def.FormalParameters.length > 1) continue;
+            const key = def.FormalParameters.length === 0 ? `${name}\u0000unary ${def.OperatorName}` : `${name}\u0000${def.OperatorName}`;
             const list = index.get(key) ?? [];
             list.push({ def, block: n });
             index.set(key, list);
@@ -22145,7 +22163,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * captures are bound as dispatch binds them, the receiver's components and
    * metadata, and one contributing definition's return type is the result.
    */
-  const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | null | undefined => {
+  const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord, withBodies = false): TypeRecord | null | undefined => {
     // A vector's metadata is its lanes', so a vector is judged by its own type.
     const isVector = left.Kind === 'primitive' && left.Name === 'vector';
     if (!isVector && (left.Kind !== 'parameterized' || left.Base.Kind !== 'primitive')) return undefined;
@@ -22156,12 +22174,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     levels.push(base.Name);
     const resolveNode = (n: ParseNode) => resolveType(n as ParseNode.Type);
     const found: TypeRecord[] = [];
-    // The meta types' shapes the contributing blocks claim, to see whether the
-    // receiver carries metadata no contribution speaks for.
-    const claimed = new Set<string>();
     for (const name of levels) {
       for (const { def, block } of blockDefinitionsFor(name, op)) {
-        if (def.FunctionBody) continue;
+        if (def.FunctionBody && !withBodies) continue;
         // One path for every block, as dispatch binds: the component list is
         // matched against the receiver's arguments, each metadata capture takes
         // its meta type's portion of the receiver's metadata, the operand is
@@ -22178,30 +22193,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           for (const [k, v] of metadata) bound.set(k, v);
         }
         const captures = [...(components?.Captures ?? []), ...metadataCaptures];
-        const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined)?.TypeAnnotation;
         if (annotation && !ComponentOperandAdmits(annotation.Type as unknown as ParseNode, captures, bound, right, resolveNode)) continue;
         const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, bound, resolveNode) : null;
+        // A definition with a body computes the value, so its return type is
+        // the result's - for a unary operator, where no mixing rule decides it.
+        if (def.FunctionBody) {
+          return returns && typeof returns === 'object' ? returns : null;
+        }
         if (returns && typeof returns === 'object' && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) {
           found.push(returns);
-          for (const c of metadataCaptures) {
-            const shape = c.TypeParameterDomain ? resolveNode(c.TypeParameterDomain as unknown as ParseNode) : null;
-            for (const p of (shape as { Properties?: readonly { key?: unknown }[] } | null)?.Properties ?? []) {
-              const key = typeof p.key === 'string' ? p.key : (p.key as { stringValue?: () => string })?.stringValue?.();
-              if (key) claimed.add(key);
-            }
-          }
         }
       }
     }
     if (found.length !== 1) return undefined;
-    // "each meta type contributing its default where no matching definition
-    // mentions it": a receiver carrying metadata no contribution claims takes
-    // that meta type's DEFAULT in the result, which is known only once the meta
-    // declaration is evaluated. The result is left unknown rather than guessed.
-    if (left.Kind === 'parameterized' && claimed.size > 0
-        && Object.keys(left.Metadata as Record<string, unknown>).some((k) => !claimed.has(k))) {
-      return null;
-    }
+    // A receiver carrying metadata no contribution claims takes that meta
+    // type's DEFAULT in the result ("each meta type contributing its default
+    // where no matching definition mentions it"), and the contributed type
+    // already says so: a parameterization's unmentioned meta types ARE their
+    // defaults, so `float32.<{ m: 2 }>` is the merged result exactly. A
+    // comparison that needs a default's value is judged where meta types are
+    // registered, through the deferred metadata checks, before the program runs.
     return found[0];
   };
   const blockOperatorResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | null | undefined => {

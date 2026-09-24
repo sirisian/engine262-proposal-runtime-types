@@ -48,6 +48,9 @@ test('different pairs for one operator coexist and each dispatches', () => {
 test('a different receiver or arity is a different pair', () => {
   expect(evaluated('primitive uint8 { operator+(rhs: string): string { return "a"; } } '
     + 'primitive uint16 { operator+(rhs: string): string { return "b"; } } "ok";')).toBe('ok');
-  expect(evaluated('class V { x: float64 = 1; } '
-    + 'primitive number { operator-(rhs: V): string { return "b"; } operator-(): number { return 0; } } "ok";')).toBe('ok');
+  // A unary definition in a block capturing metadata: one in `primitive number
+  // { ... }` would redeclare number's own negation, refused since unary
+  // definitions dispatch (operators/unary-blocks.test.mts).
+  expect(evaluated('type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } } class V { x: float64 = 1; } '
+    + 'primitive float64<const X: D> { operator-(rhs: V): string { return "b"; } operator-(): float64.<X> { return this; } } "ok";')).toBe('ok');
 });

@@ -36,6 +36,7 @@ import {
   ToPropertyKey,
   Throw,
   isArrayIndex,
+  EnterOperatorBody, LeaveOperatorBody, DispatchPrimitiveBlockOperator, isBodylessContributions, StampBodylessContributions,
 } from '#self';
 import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
 import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
@@ -305,6 +306,31 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
   // proposal-runtime-types R3: read the raw value first; a typed number keeps
   // its type through unary minus, and must be seen before ToNumeric unwraps it.
   const rawValue = Q(yield* GetValue(expr));
+  // #sec-primitive-operator-blocks: a block's unary `-` speaks for its
+  // receiver before the primitive negation, as its binary operators do - the
+  // design's dimensioned vector declares `operator-()`. Unary definitions were
+  // registered and never looked up, so they parsed and did nothing.
+  if (surroundingAgent.feature('runtime-types')) {
+    const dispatched = Q(yield* DispatchPrimitiveBlockOperator(rawValue, 'unary -', Value.undefined));
+    if (isBodylessContributions(dispatched)) {
+      EnterOperatorBody();
+      let raw;
+      try {
+        raw = Q(yield* ApplyUnaryMinus(rawValue));
+      } finally {
+        LeaveOperatorBody();
+      }
+      return StampBodylessContributions(rawValue, raw as Value, dispatched);
+    }
+    if (dispatched !== undefined) {
+      return dispatched;
+    }
+  }
+  return yield* ApplyUnaryMinus(rawValue);
+}
+
+/** The primitive negation of an evaluated operand. */
+function* ApplyUnaryMinus(rawValue: Value): ValueEvaluator {
   if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
     return typedUnary('-', rawValue as TypedNumberValue);
   }
