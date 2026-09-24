@@ -241,6 +241,23 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
   throw OutOfRange.exhaustive(val);
 }
 
+/**
+ * Whether `value` is a value of a numeric type of this proposal - the set the
+ * unary `+` rule names. #sec-numeric-types gives the families: "Each integer,
+ * binary floating-point, decimal floating-point, rational, complex, and vector
+ * type is a numeric type". One predicate for the whole set, one family per line
+ * against that list, so a family missing from it can be seen: the inline guard
+ * this replaces named four and left out complex, whose `+c` then reached
+ * ToNumber and answered NaN.
+ */
+function isProposalNumericValue(value: Value): boolean {
+  return value instanceof TypedNumberValue // integer, and binary floating-point
+    || isDecimalObject(value) // decimal floating-point
+    || isRationalObject(value) // rational
+    || isComplexObject(value) // complex
+    || value instanceof VectorValue; // vector
+}
+
 /** https://tc39.es/ecma262/#sec-unary-plus-operator-runtime-semantics-evaluation */
 //   UnaryExpression : `+` UnaryExpression
 function* Evaluate_UnaryExpression_Plus({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
@@ -258,11 +275,11 @@ function* Evaluate_UnaryExpression_Plus({ UnaryExpression }: ParseNode.UnaryExpr
   // continues to apply ToNumber otherwise."
   //
   // Unchanged means unchanged - there is nothing to compute, which is why this
-  // is one guard over the four families rather than the four branches unary
-  // minus needs to negate each of them. Reaching ToNumber instead stripped an
-  // integer or float to a plain Number, answered NaN for a rational, and threw
-  // for a decimal or a vector with a message about arithmetic this operator
-  // does not perform.
+  // is one membership test over the families rather than the per-family
+  // branches unary minus needs to negate each of them. Reaching ToNumber
+  // instead stripped an integer or float to a plain Number, answered NaN for a
+  // rational or a complex, and threw for a decimal or a vector with a message
+  // about arithmetic this operator does not perform.
   //
   // The clause records that this is a DECISION and that it splits from BigInt,
   // whose `+x` throws precisely because `+x` is the coercion idiom: "The same
@@ -271,11 +288,9 @@ function* Evaluate_UnaryExpression_Plus({ UnaryExpression }: ParseNode.UnaryExpr
   // operator on a class in the design, so unary `+` already means more than
   // ToNumber ... This clause follows the design. If the committee prefers
   // consistency with BigInt, the change is to this step alone." That change is
-  // this one guard throwing rather than returning, which is why the four
-  // families share it.
-  if (surroundingAgent.feature('runtime-types')
-      && (rawValue instanceof TypedNumberValue || rawValue instanceof VectorValue
-        || isDecimalObject(rawValue) || isRationalObject(rawValue))) {
+  // this one guard throwing rather than returning, which is why the families
+  // share it.
+  if (surroundingAgent.feature('runtime-types') && isProposalNumericValue(rawValue)) {
     return rawValue;
   }
   // 2. Return ? ToNumber(? GetValue(expr)).
