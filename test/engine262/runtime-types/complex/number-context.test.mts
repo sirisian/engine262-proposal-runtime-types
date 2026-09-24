@@ -19,7 +19,7 @@ const Z = 'const z = (1 := complex64) + (2i := complex64); ';
 test('every Number context refuses a complex', () => {
   for (const src of [
     `${C}Number(c);`, `${Z}Number(z);`, `${C}Math.floor(c);`,
-    `${C}Math.max(c, 1);`, `${C}c == 3;`, `${C}isFinite(c);`,
+    `${C}Math.max(c, 1);`, `${C}c == 3;`,
   ]) {
     expectThrownKind(src, 'TypeError');
   }
@@ -41,10 +41,25 @@ test('isNaN answers for a complex: true exactly when either component is NaN', (
   expect(evaluated(`${C}String(Number.isNaN(c));`)).toBe('false');
 });
 
-test('the other Number statics answer as they do today', () => {
-  // A complex is not a Number, so these non-coercing statics say false.
-  expect(evaluated(`${C}String(Number.isFinite(c));`)).toBe('false');
+test('isFinite answers for a complex: true exactly when both components are finite', () => {
+  // The other classification predicate with a real answer, as Python's
+  // cmath.isfinite and Julia's isfinite give it. Number.isFinite, which the
+  // predicates table pairs with isFinite, answers alike.
+  for (const surface of ['isFinite', 'Number.isFinite']) {
+    expect(evaluated(`${C}String(${surface}(c));`)).toBe('true');
+    expect(evaluated(`${Z}String(${surface}(z));`)).toBe('true');
+    expect(evaluated(`String(${surface}(complex(Infinity, 0)));`)).toBe('false');
+    expect(evaluated(`String(${surface}(complex(0, -Infinity)));`)).toBe('false');
+    // NaN is not finite, so a NaN component makes the complex not finite.
+    expect(evaluated(`String(${surface}(complex(NaN, 0)));`)).toBe('false');
+  }
+});
+
+test('the integer predicates answer as they do today', () => {
+  // They ask about a place on the real line, which a complex does not have; a
+  // complex is not a Number, so these non-coercing statics say false.
   expect(evaluated(`${C}String(Number.isInteger(c));`)).toBe('false');
+  expect(evaluated(`${C}String(Number.isSafeInteger(c));`)).toBe('false');
 });
 
 test('the explicit way to a real is `.real`', () => {

@@ -113,21 +113,28 @@ export function numericPredicate(value: Value, which: NumericPredicate, surface:
       default: return undefined;
     }
   }
-  // A COMPLEX answers `isNaN` - and `Number.isNaN`, which the table pairs with
-  // it - by its COMPONENTS: *true* exactly when either is NaN. That is what
-  // Python's `cmath.isnan` and Julia's `isnan` answer, and it is the one Number
-  // context in which a complex has a real answer: a complex has no Number value,
-  // but it can be NaN, through either part. Without this, `isNaN(c)` reached
-  // ToNumber - once answering *true* for the complex number 3, from the text
-  // "3+0i", and now refused along with every other Number context.
+  // A COMPLEX answers the two CLASSIFICATION predicates by its COMPONENTS, as
+  // Python's `cmath.isnan` and `cmath.isfinite` and Julia's `isnan` and
+  // `isfinite` do. A complex has no Number value, but a float component can be
+  // NaN or infinite, so these two questions have real answers for it:
   //
-  // The other predicates are left to their callers: `isFinite` performs
-  // ToNumber and so refuses a complex, and the `Number` statics answer *false*
-  // for a value that is not a Number, as they do today.
+  //   `isNaN`     *true* exactly when EITHER component is NaN
+  //   `isFinite`  *true* exactly when BOTH components are finite - so a NaN
+  //               component makes it *false*, NaN not being finite
+  //
+  // Each also answers its non-coercing `Number.` twin, which the table pairs
+  // with it. Without this, both reached ToNumber - once answering from the text
+  // "3+0i", so `isNaN` of the complex number 3 was *true*, and then refused.
+  //
+  // `Number.isInteger` and `Number.isSafeInteger` stay undeclared: they ask
+  // about a place on the real line, which a complex does not have, and answer
+  // *false* for it as for any value that is not a Number.
   if (isComplexObject(value)) {
-    return which === 'isNaN'
-      ? Number.isNaN(value.ComplexReal) || Number.isNaN(value.ComplexImaginary)
-      : undefined;
+    switch (which) {
+      case 'isNaN': return Number.isNaN(value.ComplexReal) || Number.isNaN(value.ComplexImaginary);
+      case 'isFinite': return Number.isFinite(value.ComplexReal) && Number.isFinite(value.ComplexImaginary);
+      default: return undefined;
+    }
   }
   if (isTypedNumber(value)) {
     const t = value.TypeRecord as TypeRecord;
