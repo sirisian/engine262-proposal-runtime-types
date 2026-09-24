@@ -22401,10 +22401,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return out;
           };
           const references: Node[] = [];
-          let redeclared = false;
+          const declarations: Node[] = [];
           const collect = (n: Node): void => {
             if (n.type === 'BindingIdentifier' && n.name === name) {
-              redeclared = true;
+              declarations.push(n);
             }
             if (n.type === 'IdentifierReference' && n.name === name) {
               references.push(n);
@@ -22412,6 +22412,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             children(n).forEach(collect);
           };
           collect(f.Statement as unknown as Node);
+          // A REDECLARATION SHADOWS ONLY ITS OWN SCOPE. `{ const i = 5; } s.add(i)`
+          // declares an `i` inside the block, but the `s.add(i)` after it is the loop
+          // binding. This bailed out on any redeclaration in the body, refusing that
+          // loop. Now each declaration's scope is found, and only references inside it
+          // are set aside: the nearest block, function, arrow, `catch` or nested loop -
+          // except that a function or class declaration's own NAME binds in the scope
+          // enclosing the declaration, not in its body.
+          const body = f.Statement as unknown as Node;
+          const scopeKinds = new Set(['Block', 'ArrowFunction', 'AsyncArrowFunction',
+            'FunctionDeclaration', 'FunctionExpression', 'AsyncFunctionDeclaration', 'AsyncFunctionExpression',
+            'GeneratorDeclaration', 'GeneratorExpression', 'AsyncGeneratorDeclaration', 'AsyncGeneratorExpression',
+            'MethodDefinition', 'Catch', 'ForOfStatement', 'ForInStatement', 'ForStatement', 'ForAwaitStatement']);
+          const declarationNameKinds = new Set(['FunctionDeclaration', 'AsyncFunctionDeclaration',
+            'GeneratorDeclaration', 'AsyncGeneratorDeclaration', 'ClassDeclaration']);
+          const within = (inner: Node, outer: Node): boolean => {
+            for (let p: Node | undefined = inner; p; p = p.parent) {
+              if (p === outer) {
+                return true;
+              }
+            }
+            return false;
+          };
+          const shadowScopes = new Set<Node>();
+          // A declaration whose scope cannot be placed inside the body is not
+          // understood, and turns inference off, as before.
+          let redeclared = false;
+          for (const declaration of declarations) {
+            let scope: Node | undefined = declaration.parent;
+            if (scope?.type && declarationNameKinds.has(scope.type)) {
+              scope = scope.parent;
+            }
+            while (scope && !(scope.type && scopeKinds.has(scope.type))) {
+              scope = scope.parent;
+            }
+            if (scope && within(scope, body)) {
+              shadowScopes.add(scope);
+            } else {
+              redeclared = true;
+            }
+          }
+          const shadowed = (reference: Node): boolean => {
+            for (let p: Node | undefined = reference.parent; p; p = p.parent) {
+              if (shadowScopes.has(p)) {
+                return true;
+              }
+              if (p === body) {
+                break;
+              }
+            }
+            return false;
+          };
+          const loopReferences = redeclared ? [] : references.filter((r) => !shadowed(r));
           literalIterableUnshadowed = !redeclared;
           const mentionsBinding = (n: Node): boolean => (n.type === 'IdentifierReference' && n.name === name)
             || children(n).some(mentionsBinding);
@@ -22419,7 +22471,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && isNumericValueTypeName((t as { Name?: string }).Name);
           const wanted: TypeRecord[] = [];
           let blocked = false;
-          for (const reference of redeclared ? [] : references) {
+          for (const reference of loopReferences) {
             const parent = reference.parent;
             if (!parent) {
               continue;
@@ -22454,6 +22506,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   blocked = true;
                 }
               }
+            }
+            // A UNION asks for its numeric member when it has exactly one, as a literal
+            // takes it: `let x: uint8 | string = 3` is a `uint8`. Inferring the binding
+            // that member keeps it off the other members - at run time `uint8 | string`
+            // would take an out-of-range number as the STRING "300", where the literal
+            // `300` is refused before the program runs. With two numeric members
+            // (`uint8 | int16`) the literal's choice is a ranking, and inferring through
+            // it would be a silent pick, so such a union asks for nothing.
+            if (asked && asked.Kind === 'union') {
+              const numericMembers = (asked as unknown as { Members: readonly Known[] }).Members
+                .filter((m) => narrowNumeric(m));
+              asked = numericMembers.length === 1 ? numericMembers[0]! : null;
             }
             if (narrowNumeric(asked)) {
               wanted.push(asked as TypeRecord);
