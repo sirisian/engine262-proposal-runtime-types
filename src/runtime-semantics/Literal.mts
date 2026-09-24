@@ -2,7 +2,7 @@ import { Value } from '../value.mts';
 import { StringValue, NumericValue } from '../static-semantics/all.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { NormalCompletion } from '../completion.mts';
+import { EnsureCompletion, NormalCompletion, type ThrowCompletion } from '../completion.mts';
 
 /** https://tc39.es/ecma262/#sec-literals-runtime-semantics-evaluation */
 // Literal :
@@ -10,7 +10,7 @@ import { NormalCompletion } from '../completion.mts';
 //   BooleanLiteral
 //   NumericLiteral
 //   StringLiteral
-export function Evaluate_Literal(Literal: ParseNode.Literal): NormalCompletion<Value> {
+export function Evaluate_Literal(Literal: ParseNode.Literal): NormalCompletion<Value> | ThrowCompletion {
   switch (Literal.type) {
     case 'NullLiteral':
       // 1. Return null.
@@ -27,7 +27,9 @@ export function Evaluate_Literal(Literal: ParseNode.Literal): NormalCompletion<V
       throw OutOfRange.nonExhaustive(Literal);
     case 'NumericLiteral':
       // 1. Return the NumericValue of NumericLiteral as defined in 11.8.3.
-      return NormalCompletion(NumericValue(Literal));
+      // A literal read at a rational type is built from its digits, and is a
+      // RangeError where it does not fit the type's `int.<N>` fields.
+      return EnsureCompletion(NumericValue(Literal));
     case 'StringLiteral':
       return NormalCompletion(StringValue(Literal));
     default:

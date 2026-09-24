@@ -85,6 +85,9 @@ test('a source the table has no row for is a TypeError, by every path', () => {
 test('neighbouring conversions are unchanged', () => {
   expectThrownKind('Number("NaN") := bigint;', 'RangeError');
   expect(evaluated('String(Number("NaN") := int64);')).toBe('0');
-  // The 64-bit bound of rational.<64> is not enforced yet, here or anywhere.
-  expect(evaluated('String((Number("1e30") := rational).numerator > 0);')).toBe('true');
+  // The 64-bit bound of rational.<64> is now enforced, and by all three paths,
+  // since they share one conversion: 10**30 does not fit int.<64>.
+  for (const src of [call('Number("1e30")'), op('Number("1e30")'), boundary('Number("1e30")')]) {
+    expectThrownKind(src, 'RangeError');
+  }
 });

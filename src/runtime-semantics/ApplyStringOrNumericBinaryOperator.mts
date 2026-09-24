@@ -27,7 +27,7 @@ import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
 } from '../intrinsics/Rational.mts';
-import { Q } from '../completion.mts';
+import { Q, type ThrowCompletion } from '../completion.mts';
 import { IsOfType } from '../type-system/runtime.mts';
 import {
   isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder,
@@ -750,7 +750,7 @@ function isVectorType(t: TypeRecord | null | undefined): boolean {
   return !!t && t.Kind === 'primitive' && t.Name === 'vector';
 }
 
-export function StampBodylessContributions(lval: Value, raw: Value, found: BodylessContributions): Value {
+export function StampBodylessContributions(lval: Value, raw: Value, found: BodylessContributions): Value | ThrowCompletion {
   // A vector's metadata is its LANES': the contributing definition's return
   // type is the result's type, with each lane carrying its lane type. One
   // contribution decides it; the per-meta-type merge of a scalar's portions

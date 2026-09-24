@@ -1,5 +1,5 @@
 import {
-  Value, ObjectValue, NumberValue, isTypedNumber,
+  Value, ObjectValue, NumberValue, isTypedNumber, TypedNumberValue,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { Q, type ValueEvaluator, type ThrowCompletion } from '../completion.mts';
@@ -14,7 +14,7 @@ import {
   OrdinaryObjectCreate,
   CreateBuiltinFunction, ToNumber,
   Descriptor,
-  F, X,
+  X,
   type OrdinaryObject,
   Realm,
 } from '#self';
@@ -64,8 +64,40 @@ function canonicalize(num: bigint, den: bigint): { num: bigint, den: bigint } {
   return { num: num / g, den: den / g };
 }
 
-export function CreateRationalValue(numerator: bigint, denominator: bigint, realmRec: Realm, typeRecord?: unknown): RationalObject {
+/**
+ * The width _N_ of a `rational.<N>` type record: its argument where it has one,
+ * and 64 for the bare `rational`, which is `rational.<64>`.
+ */
+export function rationalWidthOf(typeRecord: unknown): number {
+  const width = (typeRecord as { Arguments?: readonly unknown[] } | undefined)?.Arguments?.[0];
+  return typeof width === 'number' ? width : 64;
+}
+
+/**
+ * Every `rational` value is built here - by conversion, arithmetic, literals,
+ * `Math` and `++` alike - so this is the one place the type's BOUND is enforced,
+ * and no path can reach a value without passing it.
+ *
+ * #sec-rational-types: `rational.<N>` holds "the exact rational numbers
+ * representable as a quotient of two values of `int.<N>`", and "an operation
+ * whose exact result is not representable, including one whose normalized
+ * numerator or denominator falls outside `int.<N>`, throws a RangeError rather
+ * than rounding." These were unbounded BigInts and nothing checked, so
+ * `rational(2**62, 1) * rational(2**62, 1)` was a numerator of 2**124.
+ *
+ * The check is on the NORMALIZED fraction: an intermediate may exceed the width
+ * so long as the reduced result fits, which the BigInt arithmetic computes
+ * exactly. The canonical denominator is positive, so it must fit 1 to
+ * 2**(N-1) - 1; the numerator must fit all of `int.<N>`.
+ */
+export function CreateRationalValue(numerator: bigint, denominator: bigint, realmRec: Realm, typeRecord?: unknown): RationalObject | ThrowCompletion {
   const { num, den } = canonicalize(numerator, denominator);
+  const width = BigInt(rationalWidthOf(typeRecord));
+  const max = (1n << (width - 1n)) - 1n;
+  if (num < -max - 1n || num > max || den > max) {
+    return Throw.RangeError('$1 is not in the range of $2', Value(`${num}/${den}`),
+      Value(width === 64n ? 'rational' : `rational.<${width}>`));
+  }
   const proto = realmRec.Intrinsics['%rational.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['RationalNumerator', 'RationalDenominator']) as Mutable<RationalObject>;
   obj.RationalNumerator = num;
@@ -80,22 +112,22 @@ export function CreateRationalValue(numerator: bigint, denominator: bigint, real
 }
 
 // Exact arithmetic over canonical rationals. Each returns a fresh canonical value.
-export function rationalAdd(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject {
+export function rationalAdd(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
   return CreateRationalValue(a.RationalNumerator * b.RationalDenominator + b.RationalNumerator * a.RationalDenominator, a.RationalDenominator * b.RationalDenominator, realmRec);
 }
-export function rationalSub(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject {
+export function rationalSub(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
   return CreateRationalValue(a.RationalNumerator * b.RationalDenominator - b.RationalNumerator * a.RationalDenominator, a.RationalDenominator * b.RationalDenominator, realmRec);
 }
-export function rationalMul(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject {
+export function rationalMul(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
   return CreateRationalValue(a.RationalNumerator * b.RationalNumerator, a.RationalDenominator * b.RationalDenominator, realmRec);
 }
-export function rationalDiv(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | { zero: true } {
+export function rationalDiv(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion | { zero: true } {
   if (b.RationalNumerator === 0n) {
     return { zero: true };
   }
   return CreateRationalValue(a.RationalNumerator * b.RationalDenominator, a.RationalDenominator * b.RationalNumerator, realmRec);
 }
-export function rationalPow(a: RationalObject, exp: bigint, realmRec: Realm): RationalObject | { zero: true } {
+export function rationalPow(a: RationalObject, exp: bigint, realmRec: Realm): RationalObject | ThrowCompletion | { zero: true } {
   if (exp >= 0n) {
     return CreateRationalValue(a.RationalNumerator ** exp, a.RationalDenominator ** exp, realmRec);
   }
@@ -124,6 +156,16 @@ export function rationalEquals(a: RationalObject, b: RationalObject): boolean {
 // An integer argument to the constructor, from a Number holding an integer or a
 // typed integer value. A non-integer is not accepted in this core.
 function integerArg(v: Value): bigint | null {
+  // A typed INTEGER is read exactly. Read through its Number, an `int64` above
+  // 2**53 rounds: `rational(x, 1)` for an `int64` x of 2**63 - 1 became 2**63
+  // and overflowed `int.<64>`, and 2**53 + 1 became ...992. The one-argument
+  // conversion already reads it exactly; the two-argument form now does too.
+  if (isTypedNumber(v)) {
+    const record = v.TypeRecord as { Kind?: string, Name?: string };
+    if (record.Kind === 'primitive' && isIntegerTypeName(record.Name as string)) {
+      return v.bigintValue(); // eslint-disable-line @engine262/mathematical-value -- the exact value of a wide integer; R is reachable only through ToNumber, which rounds an int64 above 2**53
+    }
+  }
   let n: number | undefined;
   // NumberValue and TypedNumberValue expose numberValue(); R would assert on a
   // TypedNumberValue, so this mirrors the typed-arithmetic module's access.
@@ -305,7 +347,13 @@ function* RationalProto_numerator(_args: Arguments, { thisValue }: FunctionCallC
   if (!self) {
     return Throw.TypeError('$1 is not a rational', thisValue);
   }
-  return F(Number(self.RationalNumerator));
+  // The `int.<N>` field itself, exactly - rational.md: "`.numerator` and
+  // `.denominator` return the `int.<N>` fields." This returned a Number, so a
+  // field above 2**53 read back rounded: a numerator of 2**53+1 was ...992. The
+  // bound guarantees the field fits `int.<N>`, and `Math.floor` already returns
+  // an `int.<N>` this way.
+  const fieldType = { Kind: 'primitive', Name: 'int', Arguments: [rationalWidthOf((self as { TypeRecord?: unknown }).TypeRecord)] };
+  return new TypedNumberValue(self.RationalNumerator, fieldType as never);
 }
 /** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
 function* RationalProto_denominator(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -313,7 +361,13 @@ function* RationalProto_denominator(_args: Arguments, { thisValue }: FunctionCal
   if (!self) {
     return Throw.TypeError('$1 is not a rational', thisValue);
   }
-  return F(Number(self.RationalDenominator));
+  // The `int.<N>` field itself, exactly - rational.md: "`.numerator` and
+  // `.denominator` return the `int.<N>` fields." This returned a Number, so a
+  // field above 2**53 read back rounded: a numerator of 2**53+1 was ...992. The
+  // bound guarantees the field fits `int.<N>`, and `Math.floor` already returns
+  // an `int.<N>` this way.
+  const fieldType = { Kind: 'primitive', Name: 'int', Arguments: [rationalWidthOf((self as { TypeRecord?: unknown }).TypeRecord)] };
+  return new TypedNumberValue(self.RationalDenominator, fieldType as never);
 }
 /** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
 function* RationalProto_reciprocal(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {

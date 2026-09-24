@@ -32,7 +32,10 @@ export function* Evaluate_PropertyName(PropertyName: ParseNode.PropertyNameLike 
       return Value(PropertyName.value);
     case 'NumericLiteral': {
       // 1. Let nbr be the NumericValue of NumericLiteral.
-      const nbr = NumericValue(PropertyName);
+      // A property name is a key, never read at a rational type, so the one
+      // path by which NumericValue can throw - a rational literal that does
+      // not fit - is not reached here.
+      const nbr = X(NumericValue(PropertyName));
       // 2. Return ! ToString(nbr).
       return X(ToString(nbr));
     }

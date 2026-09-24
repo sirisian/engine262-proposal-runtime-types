@@ -12,7 +12,7 @@ import { VectorValue,
   type NativeSteps,
   type FunctionCallContext,
 } from '../value.mts';
-import { EnsureCompletion, Q, X, isEvaluator, type ValueEvaluator } from '../completion.mts';
+import { EnsureCompletion, Q, X, isEvaluator, type ValueEvaluator, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { endpointOf, type RangeObject } from './Range.mts';
@@ -57,7 +57,9 @@ import {
  * rows that round (trunc, floor, ceil, round and the transcendentals) are not,
  * and still reach the refusal below.
  */
-function decimalOrRationalAbs(x: Value): Value | undefined {
+// A RangeError is possible: the magnitude of a numerator of -2**(N-1) is
+// 2**(N-1), one past the largest `int.<N>`.
+function decimalOrRationalAbs(x: Value): Value | ThrowCompletion | undefined {
   const realmRec = surroundingAgent.currentRealmRecord;
   if (isDecimalObject(x)) {
     const sig = (x as { DecimalSignificand: bigint }).DecimalSignificand;
@@ -139,7 +141,7 @@ function decimalOrRationalSign(x: Value): Value | undefined {
   }
   if (isRationalObject(x)) {
     const num = (x as { RationalNumerator: bigint }).RationalNumerator;
-    return CreateRationalValue(num === 0n ? 0n : (num < 0n ? -1n : 1n), 1n, realmRec);
+    return X(CreateRationalValue(num === 0n ? 0n : (num < 0n ? -1n : 1n), 1n, realmRec)); // -1, 0 or 1 always fits
   }
   return undefined;
 }

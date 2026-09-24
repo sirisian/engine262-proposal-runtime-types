@@ -1,7 +1,7 @@
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
-import { Q, X, EnsureCompletion, isEvaluator, Await } from '../completion.mts';
+import { Q, X, EnsureCompletion, isEvaluator, Await, type ThrowCompletion } from '../completion.mts';
 // Placed with the other `./` imports and NOT after `../intrinsics/`, which
 // `import-x/order` asks for and which `./all.mts` and `./array-view.mts` below
 // already decline: moved there it forms a cycle through `array-view.mts` and
@@ -3410,7 +3410,7 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
  * parameterization _t_, or *undefined* for any other value. A decimal is made
  * fresh by its own path.
  */
-export function StampFamilyValue(value: Value, t: TypeRecord): Value | undefined {
+export function StampFamilyValue(value: Value, t: TypeRecord): Value | ThrowCompletion | undefined {
   const realm = surroundingAgent.currentRealmRecord;
   if (isComplexObject(value)) {
     const c = value as unknown as { ComplexReal: number, ComplexImaginary: number, ComplexComponent: unknown };

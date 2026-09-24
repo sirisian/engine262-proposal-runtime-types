@@ -33,7 +33,7 @@ import { surroundingAgent,
 function stepExactNumeric(value: Value, operator: '++' | '--'): Value | ThrowCompletion | undefined {
   const realmRec = surroundingAgent.currentRealmRecord;
   if (isRationalObject(value)) {
-    const one = CreateRationalValue(1n, 1n, realmRec);
+    const one = X(CreateRationalValue(1n, 1n, realmRec)); // 1/1 always fits
     return operator === '++' ? rationalAdd(value, one, realmRec) : rationalSub(value, one, realmRec);
   }
   if (isDecimalObject(value)) {
