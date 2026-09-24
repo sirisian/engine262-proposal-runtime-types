@@ -941,6 +941,19 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   if (s === null || s === undefined || t === null || t === undefined) {
     return false;
   }
+  // #sec-vector-types: a vector whose lanes are a parameterization is a
+  // subtype of the vector of the same count over a supertype of its lane, as
+  // the lane is a subtype of its base: `vector.<float32.<{ m: 1 }>, 3>` is
+  // where a `float32x3` is expected, as a meter is where a `float32` is. The
+  // left lane must be the parameterization - one representation throughout -
+  // so numeric lane widening, which changes the representation, stays out.
+  if (s.Kind === 'primitive' && t.Kind === 'primitive' && s.Name === 'vector' && t.Name === 'vector'
+      && s.Arguments[1] === t.Arguments[1]
+      && typeof s.Arguments[0] === 'object' && typeof t.Arguments[0] === 'object'
+      && (s.Arguments[0] as TypeRecord).Kind === 'parameterized'
+      && IsSubtype(s.Arguments[0] as TypeRecord, t.Arguments[0] as TypeRecord, assumptions)) {
+    return true;
+  }
   if (SameTypeWithAssumptions(s, t, assumptions)) {
     return true;
   }

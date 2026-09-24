@@ -696,6 +696,12 @@ export function validateVectorType(t: TypeRecord): string | null {
  * (spec sec-vector-types).
  */
 function isLaneType(t: TypeRecord): boolean {
+  // A parameterization of a lane type is a lane type: `vector.<float32.<{ m: 1 }>, 3>`
+  // is a vector of meters, with the representation of `vector.<float32, 3>`,
+  // since a parameterization has exactly the representation of its base.
+  if (t.Kind === 'parameterized') {
+    return isLaneType(t.Base);
+  }
   if (t.Kind !== 'primitive') {
     return false;
   }
