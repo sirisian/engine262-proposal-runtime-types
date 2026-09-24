@@ -85,19 +85,28 @@ test('a typed use does not silently change arithmetic elsewhere in the loop', ()
   // an untyped operand, so the only one that fails if blocking is removed (measured).
   // The hazard inference must not introduce. `b.push(i)` asks for a `uint8`; were
   // `i` inferred one, `i * 200` would silently become 144. Instead inference is
-  // blocked, `i` stays a `number`, and the typed use is refused - exactly as today.
-  expectStaticTypeError('const b: [].<uint8> = []; let t = 0; for (const i of 2..<3) { b.push(i); t = t + i * 200; }');
+  // blocked and `i` stays a `number`, so `t` is 400. The push is still accepted - the
+  // binding is literal-derived, so the value is converted where it enters the array.
+  const loop = 'const b: [].<uint8> = []; let t = 0; for (const i of 2..<3) { b.push(i); t = t + i * 200; }';
+  expect(evaluated(`${loop} String(t);`)).toBe('400');
+  expect(evaluated(`${loop} String(Reflect.typeOf(b[0]));`)).toBe('uint.<8>');
 });
 
-test('an argument built from the binding does not infer from the call', () => {
-  // The argument is `i + 1`, not `i`, so `s.add` asks nothing of `i` directly, and
-  // `i` stays a `number`. Refused as today.
-  expectStaticTypeError('const s = new Set.<uint32>(); for (const i of 0..<3) s.add(i + 1);');
+test('an argument built from the binding is converted, without inferring', () => {
+  // The argument is `i + 1`, not `i`, so `s.add` asks nothing of `i` directly and `i`
+  // stays a `number`. But `i + 1` of a literal-derived `i` and a literal is still
+  // literal-derived, so the argument is converted at the boundary.
+  const loop = 'const s = new Set.<uint32>(); let t = \'\'; for (const i of 0..<3) { s.add(i + 1); t = String(Reflect.typeOf(i)); }';
+  expect(evaluated(`${loop} String([...s].join(','));`)).toBe('1,2,3');
+  expect(evaluated(`${loop} t;`)).toBe('number');
 });
 
-test('uses that disagree infer nothing', () => {
-  expectStaticTypeError(
-    'const s = new Set.<uint32>(); const u = new Set.<int8>(); for (const i of 0..<3) { s.add(i); u.add(i); }');
+test('uses that disagree infer nothing, and each is converted', () => {
+  // No single type satisfies both, so nothing is inferred and `i` stays a `number`;
+  // each use converts it independently, as `(0..<3).step(1)` already does.
+  const loop = 'const s = new Set.<uint32>(); const u = new Set.<int8>(); for (const i of 0..<3) { s.add(i); u.add(i); }';
+  expect(evaluated(`${loop} String([...s].length + [...u].length);`)).toBe('6');
+  expect(evaluated(`${loop} String(Reflect.typeOf([...u][0]));`)).toBe('int.<8>');
 });
 
 test('a use that asks for no numeric type leaves the binding a number', () => {

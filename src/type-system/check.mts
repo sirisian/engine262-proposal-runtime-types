@@ -2607,6 +2607,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * On the MAP rather than at its callers: there are seven of these maps and
    * many write sites, and a journal that lives with the map cannot miss one.
    */
+  // Loop bindings over an untyped literal iterable that were NOT inferred a type.
+  // Such a value behaves as a numeric literal does at a typed boundary - it is
+  // accepted where a numeric value type is asked for, and converted there at run
+  // time - and is refused where a literal is refused, at a `string`. See the
+  // `for`-`of` handler and `requireAssignable`.
+  const literalDerivedNumbers = new WeakSet<object>();
   const trialJournal: { map: Map<ParseNode, unknown>, key: ParseNode, had: boolean, old: unknown }[] = [];
 
   let trialDepth = 0;
@@ -3754,6 +3760,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const requireAssignable = (source: Known, target: Known) => {
     if (!source || !target) {
+      return;
+    }
+    // A literal-derived loop binding, at a numeric value type: accepted, as a numeric
+    // literal is. The value is a run-time `number`, converted at this boundary by
+    // RequireType - the same conversion `(0..<3).step(1)` already relies on.
+    if (typeof source === 'object' && literalDerivedNumbers.has(source as object)
+        && target.Kind === 'primitive' && isNumericValueTypeName((target as { Name?: string }).Name)) {
       return;
     }
     // A SUBCLASS MAY NOT BE STORED WHERE A BASE VALUE TYPE CLASS IS DECLARED.
@@ -15079,6 +15092,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && rv?.Kind === 'primitive' && ['int', 'uint', 'number', 'bigint'].includes(rv.Name)) return lv;
         if (lv && rv) {
           if (SameType(lv, rv)) {
+            // A LITERAL-DERIVED LOOP BINDING IN ARITHMETIC. This returned the LEFT
+            // operand's record, so the mark followed whichever operand came first:
+            // `s.add(i + n)` for a declared `n: number` was accepted and
+            // `s.add(n + i)` refused. A literal settles which is right -
+            // `s.add(5 + n)` is refused in either order, because the declared `n`
+            // makes the sum a real `number`. So the result stays literal-derived
+            // only when BOTH operands are; a declared `number` on either side makes
+            // it a plain `number`. (A literal operand does not reach here - its
+            // type is null above, and the adoption paths return the other side.)
+            const leftDerived = !!leftT && literalDerivedNumbers.has(leftT as object);
+            const rightDerived = !!rightT && literalDerivedNumbers.has(rightT as object);
+            if (leftDerived || rightDerived) {
+              if (leftDerived && rightDerived) {
+                const derived = { ...(lv as object) } as Known;
+                literalDerivedNumbers.add(derived as object);
+                return derived;
+              }
+              // An unregistered copy: a plain `number`, carrying no mark.
+              return { ...(lv as object) } as Known;
+            }
             return lv;
           }
           // A primitive block's definition for this pair is the meaning of
@@ -22138,6 +22171,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // an operand whose other operand is untyped (`i * 200`, `i + 1`) - there a
       // narrower `i` would change the result, which is the one thing this must not do.
       let inferredLoopType: Known = null;
+      let literalIterableUnshadowed = false;
       if (!declaredLoopType && source && (node as ParseNode).type === 'ForOfStatement'
           && typeof name === 'string' && f.Statement) {
         let iterable: ParseNode | null | undefined = source;
@@ -22180,6 +22214,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             children(n).forEach(collect);
           };
           collect(f.Statement as unknown as Node);
+          literalIterableUnshadowed = !redeclared;
           const mentionsBinding = (n: Node): boolean => (n.type === 'IdentifierReference' && n.name === name)
             || children(n).some(mentionsBinding);
           const narrowNumeric = (t: Known): boolean => !!t && t.Kind === 'primitive'
@@ -22286,7 +22321,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(element as TypeRecord)), Value(displayType(loopType as TypeRecord))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
-      const bindingType = loopType ?? element;
+      let bindingType = loopType ?? element;
+      // WHERE INFERENCE DECLINED, the binding still came from untyped literals, so
+      // it is marked to behave as one at a typed boundary: `s.add(i)` into a
+      // `Set.<uint32>` and `u.add(i)` into a `Set.<int8>` in the same loop are both
+      // accepted, each converted at run time, as `(0..<3).step(1)` already is.
+      //
+      // Only at a BOUNDARY. `a + i` for a `uint8` `a` is not relaxed: arithmetic
+      // has no run-time conversion point, so it would pass here and be refused when
+      // run. And not at a `string`, where a numeric literal is refused too.
+      if (!loopType && literalIterableUnshadowed && bindingType
+          && bindingType.Kind === 'primitive' && (bindingType as { Name?: string }).Name === 'number') {
+        bindingType = { ...(bindingType as object) } as Known;
+        literalDerivedNumbers.add(bindingType as object);
+      }
       const walkBody = () => {
         const binding = (f.ForDeclaration as ParseNode.ForDeclaration | undefined)?.ForBinding ?? f.ForBinding;
         const check = () => {
