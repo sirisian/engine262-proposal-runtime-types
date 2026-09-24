@@ -827,6 +827,23 @@ export function IsBigIntContextLiteral(node: object): boolean {
  * double the two are indistinguishable.
  */
 const decimalLiterals = new WeakMap<object, 32 | 64 | 128>();
+
+/**
+ * The type an unannotated `for`-`of` binding was INFERRED to have, keyed by its
+ * |ForBinding|, for the run time to apply as it applies a written annotation.
+ *
+ * Inference is decided by the checker, but a written annotation also acts at run
+ * time: each element is converted to it, and the binding retains it. Without the
+ * run-time half, `i` was a `uint8` to the checker and a plain `number` when run, so
+ * `a + i` for a `uint8` `a` passed the checker and was then refused mixing a
+ * `number` with a `uint8`. The annotated form does not have that gap, and an
+ * inferred annotation must not either.
+ */
+const inferredLoopBindingTypes = new WeakMap<object, TypeRecord>();
+
+export function InferredLoopBindingType(node: object): TypeRecord | undefined {
+  return inferredLoopBindingTypes.get(node);
+}
 const complexLiteralComponents = new WeakMap<object, TypeRecord>();
 
 export function DecimalContextLiteralWidth(node: object): 32 | 64 | 128 | undefined {
@@ -21901,6 +21918,125 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } | undefined);
       const loopAnnotation = annotationNode?.ForBinding?.TypeAnnotation ?? annotationNode?.TypeAnnotation;
       const declaredLoopType = loopAnnotation ? resolveType(loopAnnotation.Type) : null;
+      // AN UNANNOTATED BINDING OVER A LITERAL ITERABLE TAKES THE TYPE ITS USES ASK
+      // FOR, as though annotated. In `for (const i of 0..<3) s.add(i)` for a
+      // `Set.<uint32>`, `i` is a `uint32`: the one use asks for it.
+      //
+      // Decided BEFORE the body is walked, and supplied where a written annotation
+      // is, so that everything downstream - retyping the literal, the element rule's
+      // range check, the binding's type - is the annotated path unchanged. It cannot
+      // be decided after the walk: during a single walk `i` would be a `number`, and
+      // every expression built from it (`a + i` in `const r: uint8 = a + i`) would
+      // carry a type derived from `number` onward, giving false errors.
+      //
+      // Each use's type comes from the part of the use that is NOT `i` - the callee
+      // of `s.add(i)`, the annotation of `let x: uint8 = i`, the target of `x = i`,
+      // the other operand of `a + i`. Those parts do not mention `i`, so typing them
+      // here caches exactly what the real walk would compute.
+      //
+      // `i` stays a `number`, exactly as without this, when nothing asks for a type;
+      // when uses disagree; when the name is redeclared in the body; or when `i` is
+      // an operand whose other operand is untyped (`i * 200`, `i + 1`) - there a
+      // narrower `i` would change the result, which is the one thing this must not do.
+      let inferredLoopType: Known = null;
+      if (!declaredLoopType && source && (node as ParseNode).type === 'ForOfStatement'
+          && typeof name === 'string' && f.Statement) {
+        let iterable: ParseNode | null | undefined = source;
+        while (iterable && iterable.type === 'ParenthesizedExpression') {
+          iterable = (iterable as unknown as { Expression?: ParseNode }).Expression;
+        }
+        if (iterable?.type === 'RangeExpression' || iterable?.type === 'ArrayLiteral') {
+          type Node = { type?: string, name?: string, parent?: Node } & Record<string, unknown>;
+          const binaryKinds = new Set(['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression',
+            'ShiftExpression', 'RelationalExpression', 'EqualityExpression',
+            'BitwiseANDExpression', 'BitwiseXORExpression', 'BitwiseORExpression']);
+          const children = (n: Node): Node[] => {
+            const out: Node[] = [];
+            for (const k of Object.keys(n)) {
+              if (k === 'parent' || k === 'location') {
+                continue;
+              }
+              const v = n[k];
+              if (Array.isArray(v)) {
+                for (const c of v) {
+                  if (c && typeof c === 'object' && 'type' in (c as object)) {
+                    out.push(c as Node);
+                  }
+                }
+              } else if (v && typeof v === 'object' && 'type' in (v as object)) {
+                out.push(v as Node);
+              }
+            }
+            return out;
+          };
+          const references: Node[] = [];
+          let redeclared = false;
+          const collect = (n: Node): void => {
+            if (n.type === 'BindingIdentifier' && n.name === name) {
+              redeclared = true;
+            }
+            if (n.type === 'IdentifierReference' && n.name === name) {
+              references.push(n);
+            }
+            children(n).forEach(collect);
+          };
+          collect(f.Statement as unknown as Node);
+          const mentionsBinding = (n: Node): boolean => (n.type === 'IdentifierReference' && n.name === name)
+            || children(n).some(mentionsBinding);
+          const narrowNumeric = (t: Known): boolean => !!t && t.Kind === 'primitive'
+            && isNumericValueTypeName((t as { Name?: string }).Name);
+          const wanted: TypeRecord[] = [];
+          let blocked = false;
+          for (const reference of redeclared ? [] : references) {
+            const parent = reference.parent;
+            if (!parent) {
+              continue;
+            }
+            let asked: Known = null;
+            if (parent.type === 'CallExpression' && Array.isArray(parent.Arguments)
+                && (parent.Arguments as unknown[]).includes(reference)) {
+              const callee = callableForm(staticType(parent.CallExpression as ParseNode)) as {
+                Signatures?: readonly { Parameters: readonly { Type?: TypeRecord }[] }[],
+              } | null;
+              // One signature only: an overloaded call has no single parameter type
+              // until an overload is chosen, and the choice depends on this argument.
+              if (callee?.Signatures && callee.Signatures.length === 1) {
+                const at = (parent.Arguments as unknown[]).indexOf(reference);
+                asked = callee.Signatures[0]!.Parameters[at]?.Type ?? null;
+              }
+            } else if ((parent.type === 'LexicalBinding' || parent.type === 'VariableDeclaration')
+                && parent.Initializer === reference && parent.TypeAnnotation) {
+              asked = resolveType((parent.TypeAnnotation as { Type: ParseNode }).Type);
+            } else if (parent.type === 'AssignmentExpression' && parent.AssignmentExpression === reference
+                && parent.AssignmentOperator === '=') {
+              asked = staticType(parent.LeftHandSideExpression as ParseNode);
+            } else if (parent.type && binaryKinds.has(parent.type)) {
+              const other = children(parent).find((c) => c !== reference);
+              if (!other || other.type === 'NumericLiteral' || mentionsBinding(other)) {
+                blocked = true;
+              } else {
+                const otherType = staticType(other as unknown as ParseNode);
+                if (narrowNumeric(otherType)) {
+                  asked = otherType;
+                } else {
+                  blocked = true;
+                }
+              }
+            }
+            if (narrowNumeric(asked)) {
+              wanted.push(asked as TypeRecord);
+            }
+          }
+          if (!blocked && wanted.length > 0 && wanted.every((t) => SameType(t, wanted[0]!))) {
+            inferredLoopType = wanted[0]! as Known;
+            const forBinding = (f.ForDeclaration as { ForBinding?: object } | undefined)?.ForBinding ?? f.ForBinding;
+            if (forBinding) {
+              inferredLoopBindingTypes.set(forBinding as object, wanted[0]!);
+            }
+          }
+        }
+      }
+      const loopType = declaredLoopType ?? inferredLoopType;
       // RULE 2: A LITERAL ITERABLE IN THE HEAD TAKES THE BINDING'S ANNOTATION.
       //
       // #sec-contextual-types gives the `Initializer` of an annotated binding
@@ -21926,16 +22062,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // as before. A plain `for`-`of` only: `for await` would need its element
       // wrapped, and `for`-`in` enumerates keys.
       let contextuallyTyped: Known | undefined;
-      if (declaredLoopType && source && (node as ParseNode).type === 'ForOfStatement') {
+      if (loopType && source && (node as ParseNode).type === 'ForOfStatement') {
         let literal: ParseNode | null | undefined = source;
         while (literal && literal.type === 'ParenthesizedExpression') {
           literal = (literal as unknown as { Expression?: ParseNode }).Expression;
         }
         if (literal?.type === 'RangeExpression') {
-          contextuallyTyped = staticTypeIn(source, libraryTypeRecord('Range', [declaredLoopType as TypeRecord, 0, 0]) as Known);
+          contextuallyTyped = staticTypeIn(source, libraryTypeRecord('Range', [loopType as TypeRecord, 0, 0]) as Known);
         } else if (literal?.type === 'ArrayLiteral') {
           contextuallyTyped = staticTypeIn(source,
-            { Kind: 'array', Element: declaredLoopType, Extent: 'dynamic' } as unknown as Known);
+            { Kind: 'array', Element: loopType, Extent: 'dynamic' } as unknown as Known);
         }
       }
       const iterated = enumerating ? makePrimitive('string')
@@ -21946,12 +22082,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // element type is inferred - and the element type must be assignable to
       // it, since that is what the loop will put there. So `for (const x: string
       // of arr)` on a `[].<uint8>` is refused rather than run.
-      if (declaredLoopType && element && element.Kind !== 'any'
-          && !IsAssignable(element as TypeRecord, declaredLoopType as TypeRecord)) {
-        const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(element as TypeRecord)), Value(displayType(declaredLoopType as TypeRecord))) as ThrowCompletion;
+      if (loopType && element && element.Kind !== 'any'
+          && !IsAssignable(element as TypeRecord, loopType as TypeRecord)) {
+        const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(element as TypeRecord)), Value(displayType(loopType as TypeRecord))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
-      const bindingType = declaredLoopType ?? element;
+      const bindingType = loopType ?? element;
       const walkBody = () => {
         const binding = (f.ForDeclaration as ParseNode.ForDeclaration | undefined)?.ForBinding ?? f.ForBinding;
         const check = () => {
@@ -21959,7 +22095,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const declaration = f.ForDeclaration as ParseNode.ForDeclaration | undefined;
             recordBindingKinds(binding, declaration?.LetOrConst !== 'const',
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1], !!decl?.Ref, !!f.ForBinding);
-            checkPattern(binding as PatternNode, { type: bindingType, typed: !!declaredLoopType || (!!source && operandParticipates(source)) }, true, !enumerating,
+            checkPattern(binding as PatternNode, { type: bindingType, typed: !!loopType || (!!source && operandParticipates(source)) }, true, !enumerating,
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1]);
           } else if (f.LeftHandSideExpression) {
             checkPattern(f.LeftHandSideExpression as PatternNode, { type: element }, false);

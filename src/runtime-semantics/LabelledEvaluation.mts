@@ -29,6 +29,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { CreateRefBinding } from '../execution-context/Environment.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { InferredLoopBindingType } from '../type-system/check.mts';
 import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
 import {
@@ -610,7 +611,11 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
   const binding = lhs.type === 'ForDeclaration' ? lhs.ForBinding : lhsKind === 'varBinding' ? lhs as ParseNode.ForBinding : null;
   const annotation = surroundingAgent.feature('runtime-types') ? binding?.TypeAnnotation : null;
   const storeIterationValue = function* (reference: ReferenceRecord | Value, value: Value, initialize: boolean): PlainEvaluator {
-    const declared = annotation ? Q(yield* TypeNodeToTypeRecord(annotation.Type)) : null;
+    // A binding the checker INFERRED a type for is treated as annotated with it:
+    // each element converted, and the type retained for later writes.
+    const inferred = !annotation && binding && surroundingAgent.feature('runtime-types')
+      ? InferredLoopBindingType(binding as object) ?? null : null;
+    const declared = annotation ? Q(yield* TypeNodeToTypeRecord(annotation.Type)) : inferred;
     const checked = declared ? Q(yield* RequireType(value, declared)) : value;
     let result;
     if (initialize) {
