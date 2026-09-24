@@ -3,7 +3,7 @@ import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperato
 import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { MetadataCapturesOf, ComponentCapturesOf, NestedComponentCapturesOf } from '../type-system/specialization-patterns.mts';
-import { ComponentListTypeNodes } from '../type-system/component-patterns.mts';
+import { ComponentListTypeNodes, FixedTypeSubtrees } from '../type-system/component-patterns.mts';
 import { surroundingAgent, EnsureCompletion, Q, Value, type PlainEvaluator } from '#self';
 
 /**
@@ -166,8 +166,26 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
         }
       }
     }
+    const declaration = node as ParseNode.PrimitiveOperatorDeclaration;
+    const captureDeclarations = [...(declaration.ComponentParameters?.Captures ?? []), ...(declaration.MetadataParameters?.Captures ?? [])];
+    let operandResolved: Map<object, TypeRecord> | undefined;
+    const operandNode = first?.TypeAnnotation?.Type as unknown as ParseNode | undefined;
+    if (operandNode && captureDeclarations.length > 0) {
+      operandResolved = new Map();
+      // The captures' domains too: a metadata capture's portion is projected
+      // by the meta type its domain names.
+      const domains = captureDeclarations.map((c) => c.TypeParameterDomain as unknown as ParseNode | null).filter((d): d is ParseNode => !!d);
+      for (const fixed of [...FixedTypeSubtrees(operandNode, new Set(captureDeclarations.map((c) => c.BindingIdentifier.name))), ...domains]) {
+        const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(fixed as never));
+        if (resolved.Type === 'normal') {
+          operandResolved.set(fixed, resolved.Value as unknown as TypeRecord);
+        }
+      }
+    }
     if (blockParameterNames.length > 0 || operatorParameterNames.length > 0 || components.length > 0 || bodyless || componentResolved) {
       deferred = {
+        captureDeclarations,
+        operandResolved,
         parameterNames: blockParameterNames,
         operatorParameterNames,
         parameterConstraints: blockParameterConstraints,

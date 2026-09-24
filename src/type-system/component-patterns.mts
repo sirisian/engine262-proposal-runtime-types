@@ -21,7 +21,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { MetadataPortion, MetaTypeForConstraint } from '../abstract-ops/runtime-types.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { Value } from '../value.mts';
-import { builtinTypeRecord, makePrimitive, type TypeRecord } from './records.mts';
+import { builtinTypeRecord, makePrimitive, type TypeRecord, type MetadataRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import {
   MatchSpecializationList, MatchSpecializationPattern, PrimitiveDeclaresParameters, PrimitiveParameterKinds, PrimitiveParameterDefault,
@@ -89,13 +89,13 @@ export function MatchComponentListRaw(
  */
 export function ComponentOperandAdmits(
   operand: ParseNode,
-  list: ParseNode.TypeParameters,
+  captures: readonly ParseNode.CaptureBinding[],
   bindings: ReadonlyMap<string, Argument>,
   right: TypeRecord,
   resolve: (node: ParseNode) => TypeRecord | null,
 ): boolean {
   try {
-    return MatchSpecializationPattern(operand, list.Captures ?? [], right, componentHost(resolve), 'specialization', bindings) !== 'no-match';
+    return MatchSpecializationPattern(operand, captures, right, componentHost(resolve), 'specialization', bindings) !== 'no-match';
   } catch {
     return false;
   }
@@ -134,6 +134,45 @@ export function InstantiateComponentType(
     }
   }
   return resolve(node);
+}
+
+/** The part of _metadata_ whose keys _shape_, an object type, declares; all of it where the shape is not an object type. */
+function PortionByShape(metadata: MetadataRecord, shape: TypeRecord | null): MetadataRecord {
+  const properties = (shape as { Kind?: string, Properties?: readonly { key?: unknown }[] } | null)?.Properties;
+  if (!shape || shape.Kind !== 'object' || !properties) {
+    return metadata;
+  }
+  const keys = new Set(properties.map((p) => (typeof p.key === 'string' ? p.key : (p.key as { stringValue?: () => string })?.stringValue?.())));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(metadata as Record<string, unknown>)) {
+    if (keys.has(k)) out[k] = v;
+  }
+  return out as MetadataRecord;
+}
+
+/**
+ * The bindings of a primitive block's METADATA captures, `X` of `primitive
+ * float32<const X: D>`, for a receiver of type _receiver_: each the portion of
+ * the receiver's metadata its written meta type claims, as dispatch binds it;
+ * *null* where the receiver carries no metadata.
+ */
+export function BindMetadataCaptures(
+  captures: readonly ParseNode.CaptureBinding[],
+  receiver: TypeRecord,
+  resolve: (node: ParseNode) => TypeRecord | null,
+): Map<string, Argument> | null {
+  if (receiver.Kind !== 'parameterized') {
+    return null;
+  }
+  const host = componentHost(resolve);
+  const out = new Map<string, Argument>();
+  for (const c of captures) {
+    if (!c.TypeParameterDomain) continue;
+    const value = host.metadataOf(receiver, c.TypeParameterDomain);
+    if (value === null) return null;
+    out.set(c.BindingIdentifier.name, value);
+  }
+  return out;
 }
 
 function componentHost(resolve: (node: ParseNode) => TypeRecord | null): SpecializationMatchHost<Argument> {
@@ -190,7 +229,14 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       // resolves a result's type ahead of evaluation - the capture binds the
       // lane's whole metadata, which is its meta type's portion wherever one
       // meta type governs the lane (as the scalar result's checking assumes).
-      return metadataAsObjectRecord(metaType === undefined ? subject.Metadata : MetadataPortion(subject.Metadata, metaType));
+      if (metaType !== undefined) {
+        return metadataAsObjectRecord(MetadataPortion(subject.Metadata, metaType));
+      }
+      // Before the meta type is registered - statically - its portion is the
+      // metadata's keys that its written shape declares: a portion by the
+      // domain's own properties, as the run time's portion is by the keys the
+      // meta type claims.
+      return metadataAsObjectRecord(PortionByShape(subject.Metadata, domain));
     },
     evaluate: () => {
       throw new Error('a component pattern has no forward computation');
@@ -228,4 +274,31 @@ function contains(root: unknown, target: object): boolean {
     return root.some((r) => contains(r, target));
   }
   return Object.entries(root).some(([k, v]) => k !== 'parent' && k !== 'location' && contains(v, target));
+}
+
+/**
+ * The maximal subtrees of the type node _node_ that name none of _names_ - the
+ * fixed parts of an operand annotation, which the run time resolves once so the
+ * synchronous matcher can read them.
+ */
+export function FixedTypeSubtrees(node: ParseNode, names: ReadonlySet<string>): ParseNode[] {
+  const mentions = (n: unknown): boolean => {
+    if (!n || typeof n !== 'object') return false;
+    if (Array.isArray(n)) return n.some(mentions);
+    const v = n as { type?: string, name?: string };
+    if (v.type === 'IdentifierReference' && typeof v.name === 'string' && names.has(v.name)) return true;
+    return Object.entries(v).some(([k, x]) => k !== 'parent' && k !== 'location' && mentions(x));
+  };
+  const out: ParseNode[] = [];
+  const visit = (n: ParseNode): void => {
+    if (!mentions(n)) {
+      out.push(n);
+      return;
+    }
+    if (n.type === 'TypeReference' && n.TypeArguments) {
+      (n.TypeArguments.TypeArgumentList as unknown as ParseNode[]).forEach(visit);
+    }
+  };
+  visit(node);
+  return out;
 }

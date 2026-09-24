@@ -1,7 +1,6 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
-import { MatchComponentListRaw, ComponentOperandAdmits, InstantiateComponentType } from './component-patterns.mts';
-import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
+import { BlockCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
+import { MatchComponentListRaw, ComponentOperandAdmits, InstantiateComponentType, BindMetadataCaptures } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -15141,7 +15140,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // typing it had.
           if (token && isVector(leftT) && isVector(rightT) && SameType(leftT as TypeRecord, rightT as TypeRecord)) {
             const contributed = bodylessResult(token, leftT as TypeRecord, rightT as TypeRecord);
-            if (contributed) return contributed;
+            if (contributed !== undefined) return contributed;
           }
         }
         if (token && reportNumericUnion(token, leftT, rightT, leftLit, rightLit)) return neverType;
@@ -15192,7 +15191,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (SameType(lv, rv)) {
             if (token) {
               const contributed = bodylessResult(token, lv, rv);
-              if (contributed) return contributed;
+              if (contributed !== undefined) return contributed;
             }
             // A LITERAL-DERIVED LOOP BINDING IN ARITHMETIC. This returned the LEFT
             // operand's record, so the mark followed whichever operand came first:
@@ -22146,7 +22145,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * captures are bound as dispatch binds them, the receiver's components and
    * metadata, and one contributing definition's return type is the result.
    */
-  const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | undefined => {
+  const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | null | undefined => {
     // A vector's metadata is its lanes', so a vector is judged by its own type.
     const isVector = left.Kind === 'primitive' && left.Name === 'vector';
     if (!isVector && (left.Kind !== 'parameterized' || left.Base.Kind !== 'primitive')) return undefined;
@@ -22155,47 +22154,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const firstArgument = (base.Arguments ?? [])[0];
     if (typeof firstArgument === 'number') levels.push(`${base.Name}${firstArgument}`);
     levels.push(base.Name);
+    const resolveNode = (n: ParseNode) => resolveType(n as ParseNode.Type);
     const found: TypeRecord[] = [];
+    // The meta types' shapes the contributing blocks claim, to see whether the
+    // receiver carries metadata no contribution speaks for.
+    const claimed = new Set<string>();
     for (const name of levels) {
       for (const { def, block } of blockDefinitionsFor(name, op)) {
         if (def.FunctionBody) continue;
-        // A component list with a nested pattern is bound, admitted, and
-        // instantiated by the matcher, as dispatch binds it: the checker's own
-        // resolution keeps a capture as a constrained parameter, which drops
-        // `float32.<D>`'s metadata and leaves N opaque.
-        if (NestedComponentCapturesOf(block).length > 0 && block.ComponentParameters) {
-          const list = block.ComponentParameters;
-          const resolveNode = (n: ParseNode) => resolveType(n as ParseNode.Type);
-          const bound = MatchComponentListRaw(list, base.Name, base.Arguments ?? [], resolveNode);
-          if (!bound) continue;
-          const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          if (annotation && !ComponentOperandAdmits(annotation.Type as unknown as ParseNode, list, bound, right, resolveNode)) continue;
-          const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, bound, resolveNode) : null;
-          if (returns && typeof returns === 'object' && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) found.push(returns);
-          continue;
+        // One path for every block, as dispatch binds: the component list is
+        // matched against the receiver's arguments, each metadata capture takes
+        // its meta type's portion of the receiver's metadata, the operand is
+        // admitted by matching with those captures as references - so a
+        // block for one meta type judges only that meta type's portion - and
+        // the return type is instantiated from them.
+        const components = block.ComponentParameters?.ListKind === 'specialization' ? block.ComponentParameters : null;
+        const metadataCaptures = block.MetadataParameters?.Captures ?? [];
+        const bound = components ? MatchComponentListRaw(components, base.Name, base.Arguments ?? [], resolveNode) : new Map<string, number | TypeRecord>();
+        if (!bound) continue;
+        if (metadataCaptures.length > 0) {
+          const metadata = BindMetadataCaptures(metadataCaptures, left, resolveNode);
+          if (!metadata) continue;
+          for (const [k, v] of metadata) bound.set(k, v);
         }
-        const scope = new Map<string, Known | null>();
-        for (const c of BlockCapturesOf(block)) {
-          if ('Index' in c) {
-            const arg = (base.Arguments ?? [])[c.Index];
-            scope.set(c.BindingIdentifier.name, typeof arg === 'object' ? arg as Known : null);
-          } else if (left.Kind === 'parameterized') {
-            scope.set(c.BindingIdentifier.name, metadataAsObjectRecord(left.Metadata) as Known);
+        const captures = [...(components?.Captures ?? []), ...metadataCaptures];
+        const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        if (annotation && !ComponentOperandAdmits(annotation.Type as unknown as ParseNode, captures, bound, right, resolveNode)) continue;
+        const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, bound, resolveNode) : null;
+        if (returns && typeof returns === 'object' && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) {
+          found.push(returns);
+          for (const c of metadataCaptures) {
+            const shape = c.TypeParameterDomain ? resolveNode(c.TypeParameterDomain as unknown as ParseNode) : null;
+            for (const p of (shape as { Properties?: readonly { key?: unknown }[] } | null)?.Properties ?? []) {
+              const key = typeof p.key === 'string' ? p.key : (p.key as { stringValue?: () => string })?.stringValue?.();
+              if (key) claimed.add(key);
+            }
           }
-        }
-        typeParameterScopes.push(scope);
-        try {
-          const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-          const operand = annotation ? resolveType(annotation.Type) : null;
-          if (annotation && (!operand || !IsSubtype(right, operand, []))) continue;
-          const returns = def.TypeAnnotation ? resolveType(def.TypeAnnotation.Type) : null;
-          if (returns && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) found.push(returns);
-        } finally {
-          typeParameterScopes.pop();
         }
       }
     }
-    return found.length === 1 ? found[0] : undefined;
+    if (found.length !== 1) return undefined;
+    // "each meta type contributing its default where no matching definition
+    // mentions it": a receiver carrying metadata no contribution claims takes
+    // that meta type's DEFAULT in the result, which is known only once the meta
+    // declaration is evaluated. The result is left unknown rather than guessed.
+    if (left.Kind === 'parameterized' && claimed.size > 0
+        && Object.keys(left.Metadata as Record<string, unknown>).some((k) => !claimed.has(k))) {
+      return null;
+    }
+    return found[0];
   };
   const blockOperatorResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | null | undefined => {
     const base = left.Kind === 'parameterized' ? left.Base : left;

@@ -20,7 +20,7 @@ import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels } from '../abstract-ops/runtime-types.mts';
 import { IsSubtype } from '../type-system/relations.mts';
-import { MatchComponentList } from '../type-system/component-patterns.mts';
+import { MatchComponentList, ComponentOperandAdmits } from '../type-system/component-patterns.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
@@ -424,11 +424,15 @@ interface PreparedPrimitiveOperator {
 }
 
 /** Whether a deferred definition's operand annotation names one of its block's captures. */
-function OperandNamesCapture(deferred: { readonly parameterTypeNode?: unknown, readonly parameterNames?: readonly string[], readonly componentNames?: readonly string[] } | undefined): boolean {
+function OperandNamesCapture(deferred: {
+  readonly parameterTypeNode?: unknown, readonly parameterNames?: readonly string[], readonly componentNames?: readonly string[],
+  readonly captureDeclarations?: readonly unknown[],
+} | undefined): boolean {
   if (!deferred?.parameterTypeNode) {
     return false;
   }
-  const names = new Set([...(deferred.parameterNames ?? []), ...(deferred.componentNames ?? [])]);
+  const declared = (deferred.captureDeclarations ?? []).map((c) => (c as { BindingIdentifier: { name: string } }).BindingIdentifier.name);
+  const names = new Set([...(deferred.parameterNames ?? []), ...(deferred.componentNames ?? []), ...declared]);
   const scan = (value: unknown): boolean => {
     if (!value || typeof value !== 'object') {
       return false;
@@ -619,8 +623,22 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
       }
       const effectiveParameter = deferredParameterType ?? entry.parameterType;
       let admits: boolean;
+      const captures = (entry.deferred?.captureDeclarations ?? []) as ParseNode.CaptureBinding[];
+      const operandNode = entry.deferred?.parameterTypeNode as ParseNode | undefined;
       if (componentMismatch) {
         admits = false;
+      } else if (entryFrame && operandNode && captures.length > 0 && OperandNamesCapture(entry.deferred)) {
+        // An operand naming the block's captures, `float32.<X>`, is admitted
+        // by the specialization matcher with those captures as references: a
+        // block for one meta type judges only that meta type's portion of the
+        // operand, so a Dimensions block applies to a value that also carries
+        // bounds. Testing the whole resolved type read the unmentioned meta
+        // types as their defaults, and such a block never applied.
+        const seed = new Map<string, TypeRecord | number>();
+        for (const [name, value] of entryFrame) {
+          seed.set(name, value.Kind === 'literal' ? R((value as unknown as { Value: NumberValue }).Value) as number : value);
+        }
+        admits = ComponentOperandAdmits(operandNode, captures, seed, RuntimeTypeOf(rval), (n) => entry.deferred!.operandResolved?.get(n) ?? null);
       } else if (effectiveParameter === null) {
         admits = true;
       } else {

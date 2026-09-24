@@ -2595,6 +2595,14 @@ export interface DeferredOperatorTypes {
   readonly componentList?: unknown;
   readonly componentPrimitive?: string;
   readonly componentResolved?: ReadonlyMap<object, TypeRecord>;
+  /**
+   * Every capture the block's header declares, and the fixed parts of the
+   * operand annotation resolved when the block was evaluated: an operand that
+   * names a capture is admitted by the specialization matcher, judging only
+   * the portions the block's captures speak for.
+   */
+  readonly captureDeclarations?: readonly unknown[];
+  readonly operandResolved?: ReadonlyMap<object, TypeRecord>;
   readonly parameterTypeNode: unknown;
   readonly returnTypeNode: unknown;
 }
