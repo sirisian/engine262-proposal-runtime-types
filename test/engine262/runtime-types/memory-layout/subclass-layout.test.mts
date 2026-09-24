@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
  * A subclass that declares no fields of its own.
@@ -53,8 +53,15 @@ test('a base-typed binding holding the subclass is non-extensible', () => {
   // literal as the key it names (`immutablyBound`), so `const k = 'extra'` is
   // judged exactly as `v.extra` is and refused early - which this line once
   // relied on it NOT doing. A `let` may be reassigned and is not folded, so the
-  // write reaches the run time, where the non-extensible instance ignores it.
-  expect(evaluated(`${V} class X extends V { } let v: V = new X(); let k = 'extra'; v[k] = 1; String(v[k]);`)).toBe('undefined');
+  // write reaches the run time, where the seal refuses it.
+  //
+  // The refusal THROWS. #sec-typed-storage says an add "in sloppy mode ...
+  // fails SILENTLY", but this script is not sloppy: its own `let v: V` is a
+  // TypeAnnotation, and "Strict Mode for Annotated Code" makes "a Script whose
+  // own body contains a TypeAnnotation" strict mode code. In strict code a
+  // refused [[Set]] is a TypeError. This line once expected the silent sloppy
+  // result, *undefined*, in a script its own annotation made strict.
+  expectThrownKind(`${V} class X extends V { } let v: V = new X(); let k = 'extra'; v[k] = 1;`, 'TypeError');
 });
 
 test('an array of the subclass has a layout', () => {
