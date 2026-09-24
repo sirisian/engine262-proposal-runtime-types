@@ -3,7 +3,7 @@ import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperato
 import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { MetadataCapturesOf, ComponentCapturesOf } from '../type-system/specialization-patterns.mts';
-import { surroundingAgent, EnsureCompletion, Q, type PlainEvaluator } from '#self';
+import { surroundingAgent, EnsureCompletion, Q, Value, type PlainEvaluator } from '#self';
 
 /**
  * proposal-runtime-types #sec-primitive-operator-blocks: `primitive T { ... }`
@@ -105,16 +105,25 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       RegisterPrimitiveCast(typeName, target, castFn);
       continue;
     }
-    if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FunctionBody || !e.FormalParameters) {
+    if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FormalParameters) {
+      continue;
+    }
+    // #sec-primitive-operator-blocks: "any number of definitions without a
+    // body may match, each contributing its own meta type's portion of the
+    // result through its return type". A bodyless binary definition is
+    // registered with no function: dispatch reads its types, and the
+    // primitive operation computes the value.
+    const bodyless = !e.FunctionBody;
+    if (bodyless && e.FormalParameters.length !== 1) {
       continue;
     }
     // The receiver is the primitive, so the body sees the left operand as
     // `this` exactly as a class operator's body does.
-    const opFn = OrdinaryFunctionCreate(
+    const opFn = bodyless ? Value.undefined : OrdinaryFunctionCreate(
       surroundingAgent.intrinsic('%Function.prototype%'),
       'operator',
       e.FormalParameters,
-      e.FunctionBody,
+      e.FunctionBody!,
       'non-lexical-this',
       env,
       privEnv,
@@ -143,7 +152,7 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       BindingIdentifier?: { name?: string },
     }[]).map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
     const components = ComponentCapturesOf(node as ParseNode.PrimitiveOperatorDeclaration);
-    if (blockParameterNames.length > 0 || operatorParameterNames.length > 0 || components.length > 0) {
+    if (blockParameterNames.length > 0 || operatorParameterNames.length > 0 || components.length > 0 || bodyless) {
       deferred = {
         parameterNames: blockParameterNames,
         operatorParameterNames,
@@ -159,7 +168,9 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
         parameterType = resolved.Value as unknown as TypeRecord;
       }
     }
-    (opFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
+    if (!bodyless) {
+      (opFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
+    }
     const key = e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName;
     RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred, e);
   }

@@ -1,5 +1,6 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
+import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -15181,6 +15182,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && rv?.Kind === 'primitive' && ['int', 'uint', 'number', 'bigint'].includes(rv.Name)) return lv;
         if (lv && rv) {
           if (SameType(lv, rv)) {
+            if (token) {
+              const contributed = bodylessResult(token, lv, rv);
+              if (contributed) return contributed;
+            }
             // A LITERAL-DERIVED LOOP BINDING IN ARITHMETIC. This returned the LEFT
             // operand's record, so the mark followed whichever operand came first:
             // `s.add(i + n)` for a declared `n: number` was accepted and
@@ -22121,6 +22126,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       blockDefinitionIndex = index;
     }
     return blockDefinitionIndex.get(`${typeName}\u0000${op}`) ?? [];
+  };
+  /**
+   * #sec-primitive-operator-blocks: the result type the BODYLESS definitions
+   * give `left op right` for two operands of one parameterized type, or
+   * *undefined* where none admits. "Any number of definitions without a body
+   * may match, each contributing its own meta type's portion of the result
+   * through its return type", and the run time stamps the primitive
+   * operation's result with it; typing the result as the operand type left
+   * the checker expecting metadata the value no longer carries. The block's
+   * captures are bound as dispatch binds them, the receiver's components and
+   * metadata, and one contributing definition's return type is the result.
+   */
+  const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | undefined => {
+    if (left.Kind !== 'parameterized' || left.Base.Kind !== 'primitive') return undefined;
+    const base = left.Base;
+    const levels: string[] = [];
+    const firstArgument = (base.Arguments ?? [])[0];
+    if (typeof firstArgument === 'number') levels.push(`${base.Name}${firstArgument}`);
+    levels.push(base.Name);
+    const found: TypeRecord[] = [];
+    for (const name of levels) {
+      for (const { def, block } of blockDefinitionsFor(name, op)) {
+        if (def.FunctionBody) continue;
+        const scope = new Map<string, Known | null>();
+        for (const c of BlockCapturesOf(block)) {
+          if ('Index' in c) {
+            const arg = (base.Arguments ?? [])[c.Index];
+            scope.set(c.BindingIdentifier.name, typeof arg === 'object' ? arg as Known : null);
+          } else {
+            scope.set(c.BindingIdentifier.name, metadataAsObjectRecord(left.Metadata) as Known);
+          }
+        }
+        typeParameterScopes.push(scope);
+        try {
+          const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          const operand = annotation ? resolveType(annotation.Type) : null;
+          if (annotation && (!operand || !IsSubtype(right, operand, []))) continue;
+          const returns = def.TypeAnnotation ? resolveType(def.TypeAnnotation.Type) : null;
+          if (returns && returns.Kind === 'parameterized') found.push(returns);
+        } finally {
+          typeParameterScopes.pop();
+        }
+      }
+    }
+    return found.length === 1 ? found[0] : undefined;
   };
   const blockOperatorResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | null | undefined => {
     const base = left.Kind === 'parameterized' ? left.Base : left;

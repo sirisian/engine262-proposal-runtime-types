@@ -42,7 +42,7 @@ import {
  * rebuilds the same parameterization. Each property is a ~literal~ record,
  * which is the form the projection hands back unchanged.
  */
-function metadataAsObjectRecord(metadata: MetadataRecord): TypeRecord {
+export function metadataAsObjectRecord(metadata: MetadataRecord): TypeRecord {
   const Properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
   if (metadata && typeof metadata === 'object') {
     for (const key of Object.keys(metadata as unknown as Record<string, unknown>)) {
@@ -112,6 +112,24 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // gets told why its expression did not work.
   {
     const dispatched = Q(yield* DispatchPrimitiveBlockOperator(lval, opText, rval));
+    if (isBodylessContributions(dispatched)) {
+      // No definition with a body: the primitive operation computes the value,
+      // with block lookups suspended as within an operator body, and the
+      // bodyless definitions supply its metadata.
+      EnterOperatorBody();
+      let raw;
+      try {
+        // Typed explicitly: the recursive reference would make this function's
+        // inferred return type circular.
+        const primitiveOperation = ApplyStringOrNumericBinaryOperator as unknown as (
+          l: Value, o: BinaryOperator, r: Value, lit?: typeof literals, c?: TypeRecord,
+        ) => PlainEvaluator<Value>;
+        raw = Q(yield* primitiveOperation(lval, opText, rval, literals, contextualType));
+      } finally {
+        LeaveOperatorBody();
+      }
+      return StampBodylessContributions(lval, raw as Value, dispatched);
+    }
     if (dispatched !== undefined) {
       return dispatched;
     }
@@ -439,10 +457,15 @@ function MostSpecificPrimitiveOperator(candidates: readonly PreparedPrimitiveOpe
  * the receiver's exact block before its family's, and within a level the most
  * specific admitting operand, an ambiguity being a *TypeError*.
  */
-export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rval: Value): PlainEvaluator<Value | undefined> {
+export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rval: Value): PlainEvaluator<Value | BodylessContributions | undefined> {
   if (!surroundingAgent.feature('runtime-types') || (lval instanceof ObjectValue && !isComplexObject(lval) && !isRationalObject(lval))) {
     return undefined;
   }
+  // The admitting definitions WITHOUT a body, from every level: each
+  // contributes its meta type's portion of the result's metadata, whichever
+  // definition with a body - or the primitive operation - computes the value.
+  const contributions: PreparedPrimitiveOperator[] = [];
+  const contributedPortions = new Map<object, MetadataRecord>();
     // "at most one definition with a body may match ... where no definition
     // with a body matches, the primitive operation runs". MATCHING is on the
     // right operand against the definition's parameter type, and skipping that
@@ -561,7 +584,13 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
         popTypeParameterFrame();
         framePushed = false;
       }
-      if (admits) {
+      if (admits && chosenBodyless(entry)) {
+        if (deferredReturnType?.Kind === 'parameterized') {
+          contributions.push({
+            entry, frame: entryFrame, parameter: effectiveParameter, returnType: deferredReturnType, spokenFor: deferredSpokenFor, fixed: true,
+          });
+        }
+      } else if (admits) {
         candidates.push({
           entry,
           frame: entryFrame,
@@ -578,6 +607,15 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     }
     if (chosen === undefined) {
       continue;
+    }
+    // The bodyless definitions' portions join the chosen definition's own.
+    for (const c of contributions) {
+      for (const metaType of c.spokenFor) {
+        if (!chosen.spokenFor.includes(metaType)) {
+          chosen.spokenFor.push(metaType);
+          contributedPortions.set(metaType, MetadataPortion((c.returnType as TypeRecord & { Kind: 'parameterized' }).Metadata, metaType));
+        }
+      }
     }
     let deferredReturnType = chosen.returnType;
     const deferredSpokenFor = chosen.spokenFor;
@@ -603,7 +641,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
         : deferredReturnType.Metadata).types;
       const returnMetadata = deferredReturnType.Metadata;
       const mergedMetadata = MergeOperatorResultMetadata(
-        deferredSpokenFor.map((metaType) => ({ metaType, portion: MetadataPortion(returnMetadata, metaType) })),
+        deferredSpokenFor.map((metaType) => ({ metaType, portion: contributedPortions.get(metaType) ?? MetadataPortion(returnMetadata, metaType) })),
         governing,
       );
       deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
@@ -620,5 +658,46 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     }
     return raw;
     }
-  return undefined;
+  return contributions.length > 0 ? { contributions } : undefined;
 }
+
+/** The bodyless definitions admitting an operand where no definition with a body does. */
+export interface BodylessContributions {
+  readonly contributions: readonly PreparedPrimitiveOperator[];
+}
+
+export function isBodylessContributions(value: unknown): value is BodylessContributions {
+  return typeof value === 'object' && value !== null && !(value instanceof Value) && 'contributions' in value;
+}
+
+/** A registered definition without a body has no function to call. */
+function chosenBodyless(entry: { readonly fn: unknown }): boolean {
+  return entry.fn === Value.undefined;
+}
+
+/**
+ * #sec-primitive-operator-blocks: the primitive operation's result _raw_
+ * carrying the metadata the matching bodyless definitions contribute - each
+ * meta type's portion from its definition's return type, and the default of
+ * every other governing meta type.
+ */
+export function StampBodylessContributions(lval: Value, raw: Value, found: BodylessContributions): Value {
+  const portions = found.contributions.flatMap((c) => c.spokenFor.map((metaType) => ({
+    metaType, portion: MetadataPortion((c.returnType as TypeRecord & { Kind: 'parameterized' }).Metadata, metaType),
+  })));
+  if (portions.length === 0) {
+    return raw;
+  }
+  const receiverType = RuntimeTypeOf(lval);
+  const first = found.contributions[0].returnType as TypeRecord & { Kind: 'parameterized' };
+  const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized' ? receiverType.Metadata : first.Metadata).types;
+  const merged = MergeOperatorResultMetadata(portions, governing);
+  const rawType = RuntimeTypeOf(raw);
+  const base = rawType.Kind === 'parameterized' ? rawType.Base : rawType;
+  const stampedType = { Kind: 'parameterized', Base: base, Metadata: merged } as unknown as TypeRecord;
+  if (isTypedNumber(raw)) {
+    return new TypedNumberValue((raw as TypedNumberValue).value, stampedType);
+  }
+  return StampFamilyValue(raw, stampedType) ?? raw;
+}
+

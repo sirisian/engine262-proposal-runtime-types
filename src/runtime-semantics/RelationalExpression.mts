@@ -16,7 +16,7 @@ import { AbruptCompletion } from '../completion.mts';
 import { JSStringValue, TypedNumberValue } from '../value.mts';
 import { TypedOperandType } from '../type-system/arithmetic.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
-import { DispatchPrimitiveBlockOperator } from './ApplyStringOrNumericBinaryOperator.mts';
+import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLessThan,
   SameValue,
@@ -187,7 +187,8 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // looked up, so such a definition parsed and the built-in comparison ran.
   if (operator === '<' || operator === '>' || operator === '<=' || operator === '>=') {
     const dispatched = Q(yield* DispatchPrimitiveBlockOperator(lval, operator, rval));
-    if (dispatched !== undefined) {
+    // A Boolean carries no metadata, so bodyless contributions have nothing to do.
+    if (dispatched !== undefined && !isBodylessContributions(dispatched)) {
       return ToBoolean(dispatched);
     }
   }

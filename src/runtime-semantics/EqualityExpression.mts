@@ -7,7 +7,7 @@ import { Value, ObjectValue } from '../value.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
-import { DispatchPrimitiveBlockOperator } from './ApplyStringOrNumericBinaryOperator.mts';
+import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLooselyEqual,
   GetValue,
@@ -75,7 +75,8 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
   // with `!=` its negation as for a class.
   if (operator === '==' || operator === '!=') {
     const dispatched = Q(yield* DispatchPrimitiveBlockOperator(lval, '==', rval));
-    if (dispatched !== undefined) {
+    // A Boolean carries no metadata, so bodyless contributions have nothing to do.
+    if (dispatched !== undefined && !isBodylessContributions(dispatched)) {
       const truthy = ToBoolean(dispatched) === Value.true;
       return (operator === '==') === truthy ? Value.true : Value.false;
     }
