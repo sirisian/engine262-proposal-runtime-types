@@ -63,7 +63,7 @@ function canonicalize(num: bigint, den: bigint): { num: bigint, den: bigint } {
   return { num: num / g, den: den / g };
 }
 
-export function CreateRationalValue(numerator: bigint, denominator: bigint, realmRec: Realm): RationalObject {
+export function CreateRationalValue(numerator: bigint, denominator: bigint, realmRec: Realm, typeRecord?: unknown): RationalObject {
   const { num, den } = canonicalize(numerator, denominator);
   const proto = realmRec.Intrinsics['%rational.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['RationalNumerator', 'RationalDenominator']) as Mutable<RationalObject>;
@@ -73,7 +73,8 @@ export function CreateRationalValue(numerator: bigint, denominator: bigint, real
   // for it, which is how a decimal VALUE satisfies a `decimal64` annotation. A
   // rational carried none, so once `rational` became a primitive type the value
   // and the type no longer matched and every binding refused its own literal.
-  (obj as Mutable<RationalObject> & { TypeRecord?: unknown }).TypeRecord = makePrimitive('rational', []);
+  // A crossing into a parameterization passes the parameterized type.
+  (obj as Mutable<RationalObject> & { TypeRecord?: unknown }).TypeRecord = typeRecord ?? makePrimitive('rational', []);
   return obj;
 }
 

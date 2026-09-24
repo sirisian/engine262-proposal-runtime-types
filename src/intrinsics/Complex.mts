@@ -53,12 +53,24 @@ export function isComplexObject(value: Value): value is ComplexObject {
   return value instanceof ObjectValue && 'ComplexReal' in value;
 }
 
-export function CreateComplexValue(real: number, imaginary: number, component: unknown, realmRec: Realm): ComplexObject {
+export function CreateComplexValue(real: number, imaginary: number, component: unknown, realmRec: Realm, typeRecord?: unknown): ComplexObject {
   const proto = realmRec.Intrinsics['%complex.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['ComplexReal', 'ComplexImaginary', 'ComplexComponent']) as Mutable<ComplexObject>;
   obj.ComplexReal = real;
   obj.ComplexImaginary = imaginary;
   obj.ComplexComponent = component;
+  // #sec-primitive-metadata: a complex that crossed into a parameterization
+  // carries it, as a decimal and a typed number do, so its metadata is read
+  // off the value. The crossing makes a fresh complex, never stamps the one it
+  // was given: a complex is a primitive value, and every alias of the original
+  // keeps the type it had.
+  //
+  // Not a listed slot, and not named `TypeRecord`: a listed slot starts as the
+  // undefined VALUE, which read as a carried type, and an object whose
+  // `TypeRecord` is filled is what `isTypeObject` takes for a Type Object.
+  if (typeRecord !== undefined) {
+    (obj as unknown as { ComplexTypeRecord: unknown }).ComplexTypeRecord = typeRecord;
+  }
   return obj;
 }
 

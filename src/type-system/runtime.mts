@@ -2113,6 +2113,11 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
       || (value as { RationalNumerator?: bigint })?.RationalNumerator !== undefined) {
     return (value as unknown as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
   }
+  // A complex carries a type only once it has crossed into a
+  // parameterization; otherwise its component alone says what it is.
+  if ((value as { ComplexReal?: number })?.ComplexReal !== undefined) {
+    return (value as unknown as { ComplexTypeRecord?: TypeRecord }).ComplexTypeRecord;
+  }
   return undefined;
 }
 

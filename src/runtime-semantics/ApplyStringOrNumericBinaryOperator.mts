@@ -18,7 +18,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
-import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata } from '../abstract-ops/runtime-types.mts';
+import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue } from '../abstract-ops/runtime-types.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
@@ -130,7 +130,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       let framePushed = false;
       let deferredSpokenFor: object[] = [];
       const componentNames = entry.deferred?.componentNames ?? [];
-      if (entry.deferred && (isTypedNumber(lval) || componentNames.length > 0)) {
+      if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0)) {
         const carried = RuntimeTypeOf(lval);
         if (carried.Kind === 'parameterized' || componentNames.length > 0) {
           const frame = new Map<string, TypeRecord>();
@@ -236,8 +236,11 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
           // "The portions the matching return types evaluate to are merged into
           // one flat metadata object, each meta type contributing its `default`
           // where no matching definition mentions it."
-          const governing = GoverningMetaTypes((lval as TypedNumberValue).TypeRecord && ((lval as TypedNumberValue).TypeRecord as TypeRecord).Kind === 'parameterized'
-            ? ((lval as TypedNumberValue).TypeRecord as TypeRecord & { Kind: 'parameterized' }).Metadata
+          // The receiver's carried type: a typed number's, or a complex's or
+          // rational's once it crossed into a parameterization.
+          const receiverType = RuntimeTypeOf(lval);
+          const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized'
+            ? receiverType.Metadata
             : deferredReturnType.Metadata).types;
           const mergedMetadata = MergeOperatorResultMetadata(
             deferredSpokenFor.map((metaType) => ({ metaType, portion: MetadataPortion(deferredReturnType!.Metadata, metaType) })),
@@ -246,6 +249,12 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
           deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
           if (isTypedNumber(raw)) {
             return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
+          }
+          // A complex or rational result carries the return type as a typed
+          // number does, on a fresh value.
+          const stamped = StampFamilyValue(raw, deferredReturnType);
+          if (stamped !== undefined) {
+            return stamped;
           }
           if (raw instanceof NumberValue) {
             return new TypedNumberValue(Number((raw as unknown as { value: number }).value), deferredReturnType);

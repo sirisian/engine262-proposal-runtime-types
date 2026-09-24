@@ -3224,6 +3224,26 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
   return MetaTypeGoverns(metadata, metaType);
 }
 
+/**
+ * #sec-primitive-metadata: a fresh complex or rational carrying the
+ * parameterization _t_, or *undefined* for any other value. A decimal is made
+ * fresh by its own path.
+ */
+export function StampFamilyValue(value: Value, t: TypeRecord): Value | undefined {
+  const realm = surroundingAgent.currentRealmRecord;
+  if (isComplexObject(value)) {
+    const c = value as unknown as { ComplexReal: number, ComplexImaginary: number, ComplexComponent: unknown };
+    const base = t.Kind === 'parameterized' ? t.Base : t;
+    const component = base.Kind === 'primitive' && typeof base.Arguments?.[0] === 'object' ? base.Arguments[0] : c.ComplexComponent;
+    return CreateComplexValue(c.ComplexReal, c.ComplexImaginary, component, realm, t);
+  }
+  if (isRationalObject(value)) {
+    const r = value as unknown as { RationalNumerator: bigint, RationalDenominator: bigint };
+    return CreateRationalValue(r.RationalNumerator, r.RationalDenominator, realm, t);
+  }
+  return undefined;
+}
+
 export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
   // The raw-body rule reaches the CAST too, and not only the binary operators:
   // a cast body returning `this` has its return checked against the cast's own
@@ -3344,7 +3364,10 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
         if (isDecimalObject(unwrapped) || isRationalObject(unwrapped) || isComplexObject(unwrapped)) {
           // The body handed back a value of the family already; it carries its
           // own representation and must not be flattened into a typed number.
-          return unwrapped;
+          // It is copied carrying the target, as a typed number is rewrapped:
+          // the metadata rides the value, and the value the cast was given is
+          // left as it was.
+          return StampFamilyValue(unwrapped, t) ?? unwrapped;
         }
         if (isTypedNumber(unwrapped)) {
           return new TypedNumberValue(unwrapped.value, t);

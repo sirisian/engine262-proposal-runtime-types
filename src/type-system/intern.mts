@@ -41,8 +41,15 @@ export function isTypeObject(value: unknown): value is TypeObject {
   // The slot must also be FILLED. `'TypeRecord' in value` is true of a slot that
   // exists and holds nothing, which is how `decimal128` reached the walk below
   // and crashed the host on `record.Kind`.
+  //
+  // And a VALUE of a family represented as an object - a decimal or a
+  // rational - carries a filled [[TypeRecord]] for the same reason a typed
+  // primitive does, so the slot alone admitted it too: `const r: rational =
+  // 1 / 3; let v: r = 2` resolved `r` as a type while the `uint8` form above
+  // was refused. Those values are recognised by their own slots.
   return value instanceof ObjectValue
-    && (value as { TypeRecord?: unknown }).TypeRecord !== undefined;
+    && (value as { TypeRecord?: unknown }).TypeRecord !== undefined
+    && !('DecimalSignificand' in value) && !('RationalNumerator' in value);
 }
 
 /** #sec-canonicalizetype */
