@@ -411,11 +411,40 @@ function* ComplexConstructor([real = Value(0), imaginary = Value(0)]: Arguments)
   return CreateComplexValue(re, im, undefined, surroundingAgent.currentRealmRecord);
 }
 
+/**
+ * REFUSES: a complex has no Number value.
+ *
+ * `ToNumber` reaches an object through `ToPrimitive`, which calls `valueOf`
+ * first. With none defined here, it fell to the inherited one, got the object
+ * back, and went on to `toString` - so `ToNumber` of `3 + 0i` parsed the text
+ * "3+0i" and answered NaN. Every Number context took that silent wrong answer:
+ * `Number(c)` and `Math.floor(c)` were NaN, `isNaN(c)` was true for the complex
+ * number 3, and `c == 3` was false though 3 + 0i equals 3.
+ *
+ * complex.md: "Conversions are explicit in both directions: `complex(x)` lifts
+ * a real onto the plane, `.real` projects back off it" - and on ordering,
+ * "silently comparing real parts or magnitudes would hide the mistake". So the
+ * answer is neither the real part nor NaN but a refusal, as `decimal` and
+ * `rational` refuse, for `decimal`'s stated reason: a NaN is "nonsense that
+ * looks like a value", a real part "a wrong value that looks right", and "both
+ * are worse than an error".
+ *
+ * Text is unaffected: `String(c)` and a template ask `ToPrimitive` for a
+ * string, which calls `toString` first and never reaches this.
+ */
+function* ComplexProto_valueOf(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+  if (!isComplexObject(thisValue)) {
+    return Throw.TypeError('$1 is not a $2', thisValue, Value('complex'));
+  }
+  return Throw.TypeError('a complex has no Number value; this operation is not defined for complex numbers');
+}
+
 export function bootstrapComplexPrototype(realmRec: Realm): void {
   const proto = bootstrapPrototype(realmRec, [
     ['real', [ComplexProto_real]],
     ['imaginary', [ComplexProto_imaginary]],
     ['toString', ComplexProto_toString, 0],
+    ['valueOf', ComplexProto_valueOf, 0],
   ], realmRec.Intrinsics['%Object.prototype%'], 'complex');
   realmRec.Intrinsics['%complex.prototype%'] = proto;
 }

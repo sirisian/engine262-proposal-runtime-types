@@ -510,6 +510,7 @@ export interface Throw {
   | 'cannot take a ref of a property of a primitive'
   | 'cannot take a ref of a value; a ref needs a variable, a property, or an array element'
   | 'capacity is available on an array with an element type'
+  | 'a complex has no Number value; this operation is not defined for complex numbers'
   | 'a decimal has no Number value; this operation is not defined for decimals'
   | 'a rational has no Number value; this operation is not defined for rationals'
   | 'a decimal result is outside the range of $1'
