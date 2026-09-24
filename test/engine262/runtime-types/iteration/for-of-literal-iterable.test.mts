@@ -65,3 +65,9 @@ test('what already worked is unchanged', () => {
   expect(ok('for (const i of 0..<3) {}')).toBe(true);
   expect(evaluated(intoBytes('const a: [].<uint8> = [1, 2]; for (const x: uint8 of a) s.add(x);'))).toBe('2');
 });
+
+test('a float loop annotation reaches the float element rule', () => {
+  expectThrown('for (const x: float16 of 0..<4000) {}', '2049');
+  expect(ok('for (const x: float16 of 0..<2049) {}')).toBe(true);
+  expectThrown('for (const x: float32 of 0.5..<1e39) {}', 'overflows');
+});

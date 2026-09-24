@@ -11621,11 +11621,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // nothing, per ranges.md - and an UNBOUNDED or infinite end, `0..` or
       // `0..<Infinity`, fits no bounded type, producing values without limit.
       //
-      // Scoped to a sized integer element: `number` and `bigint` have no limit
-      // to exceed, and a float's elements are not a successor sequence. And to
-      // compile-time endpoints: `0..<n` is not decided here, and the typed-store
-      // checks that refuse 256 at run time continue to cover it.
-      if (contextualElement && isIntegerValueType(contextualElement) && r.RangeStart
+      // WHERE THE ELEMENT TYPE COMES FROM. From context, or - where there is
+      // none - from a TYPED ENDPOINT: `s..<300` with `s: uint8` is a range of
+      // `uint8`, and nothing checked it though it produces 256 through 299. An
+      // endpoint that does not fold to a constant is still bounded by its own
+      // type: `s` is some value from 0 to 255. So the rule judges the widest the
+      // range could reach - its lowest possible first element, its highest
+      // possible last - which decides every case soundly without knowing `s`.
+      // A literal start is judged by the first element, a literal end by the
+      // last, and a range that bound makes empty for every value of the typed
+      // endpoint, `300..=e` with `e: uint8`, fits as any empty range does.
+      //
+      // FLOAT ELEMENT TYPES. A range with whole-integer endpoints iterates by 1
+      // whatever its element type, and it yields the integer it steps to - it
+      // rounds nothing. So a `float16` range reaching 2049 yields 2049, which
+      // `float16` cannot hold (it holds integers exactly only to 2**11). The
+      // rule is the same - every element a value of the type - and for a float
+      // it means EXACTLY a value. A range with a non-integer endpoint is an
+      // interval with no implicit step; it has no elements to judge, and only
+      // an endpoint that overflows the type is refused.
+      //
+      // Not decided here: an endpoint known only at run time beyond its type
+      // (`0..<n` for an untyped `n`), and a typed FLOAT endpoint, where whether
+      // the range iterates at all turns on whether its run-time value is whole.
+      // `number` and `bigint` have no limit to exceed.
+      const fitElement = contextualElement ?? typedEndpoint;
+      const fitName = fitElement && fitElement.Kind === 'primitive' ? (fitElement as { Name: string }).Name : null;
+      const fitIsInteger = !!fitElement && isIntegerValueType(fitElement);
+      const fitIsFloat = fitName !== null && isFloatTypeName(fitName);
+      if (fitElement && (fitIsInteger || fitIsFloat) && r.RangeStart
         && !rangeElementFitReported.has(node)) {
         const unparen = (n: ParseNode | null | undefined): ParseNode | null | undefined => {
           let x = n;
@@ -11638,30 +11662,160 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const x = unparen(n) as { type?: string, name?: string } | null | undefined;
           return x?.type === 'IdentifierReference' && x.name === 'Infinity';
         };
-        const elemName = (contextualElement as { Name: string }).Name;
-        const elemArgs = (contextualElement as { Arguments: readonly (TypeRecord | number)[] }).Arguments;
-        const fits = (v: bigint) => fitsNumericType(v, elemName, elemArgs);
+        // The signed Number a numeric literal denotes, through parentheses and
+        // unary signs; null for anything that is not a Number literal.
+        const literalNumber = (n: ParseNode | null | undefined): number | null => {
+          let sign = 1;
+          let x: ParseNode | null | undefined = n;
+          while (x) {
+            if (x.type === 'NumericLiteral') {
+              const v = (x as unknown as { value: unknown }).value;
+              return typeof v === 'number' ? sign * v : null;
+            }
+            if (x.type === 'ParenthesizedExpression') {
+              x = (x as unknown as { Expression?: ParseNode }).Expression;
+              continue;
+            }
+            if (x.type === 'UnaryExpression') {
+              const u = x as unknown as { operator?: string, UnaryExpression?: ParseNode };
+              if (u.operator !== '-' && u.operator !== '+') {
+                return null;
+              }
+              if (u.operator === '-') {
+                sign = -sign;
+              }
+              x = u.UnaryExpression;
+              continue;
+            }
+            return null;
+          }
+          return null;
+        };
         const report = (completion: ThrowCompletion) => {
           rangeElementFitReported.add(node);
           errors.push(completion.Value as ObjectValue);
         };
-        const startValue = foldConstant(r.RangeStart as ParseNode);
-        if (startValue !== null) {
-          const first = startValue + (r.RangeStartBound === 'open' ? 1n : 0n);
-          if (!r.RangeEnd || isInfinity(r.RangeEnd)) {
-            report(Throw.StaticTypeError('this range has no upper bound, so it produces values that are not values of $1',
-              Value(displayType(contextualElement))) as ThrowCompletion);
-          } else {
-            const endValue = foldConstant(r.RangeEnd as ParseNode);
-            if (endValue !== null) {
-              const last = endValue - (r.RangeEndBound === 'open' ? 1n : 0n);
-              // first > last is an empty range: nothing is produced, so it fits.
-              if (first <= last) {
-                const offending = !fits(first) ? first : !fits(last) ? last : null;
-                if (offending !== null) {
-                  report(Throw.StaticTypeError('$1 is not a value of $2, and this range produces it',
-                    Value(String(offending)), Value(displayType(contextualElement))) as ThrowCompletion);
+        const shown = Value(displayType(fitElement));
+        const startOpen = r.RangeStartBound === 'open' ? 1n : 0n;
+        const endOpen = r.RangeEndBound === 'open' ? 1n : 0n;
+        const unbounded = !r.RangeEnd || isInfinity(r.RangeEnd);
+        const noUpperBound = () => report(Throw.StaticTypeError(
+          'this range has no upper bound, so it produces values that are not values of $1', shown) as ThrowCompletion);
+        const produces = (v: bigint) => report(Throw.StaticTypeError(
+          '$1 is not a value of $2, and this range produces it', Value(String(v)), shown) as ThrowCompletion);
+        if (fitIsInteger) {
+          const bounds = (t: TypeRecord): [bigint, bigint] | null => {
+            const w = (t as { Arguments: readonly (TypeRecord | number)[] }).Arguments[0];
+            if (typeof w !== 'number') {
+              return null;
+            }
+            const bits = BigInt(w);
+            return (t as { Name: string }).Name === 'int'
+              ? [-(1n << (bits - 1n)), (1n << (bits - 1n)) - 1n]
+              : [0n, (1n << bits) - 1n];
+          };
+          const target = bounds(fitElement);
+          // An endpoint's possible values: exactly its value where it folds to a
+          // constant; otherwise its own sized-integer type's range; otherwise
+          // unknown, and the range is not decided here.
+          const span = (n: ParseNode | null | undefined, t: TypeRecord | null): [bigint, bigint] | null => {
+            if (!n) {
+              return null;
+            }
+            const v = foldConstant(n);
+            if (v !== null) {
+              return [v, v];
+            }
+            // A literal that does not fold is not an integer, so it is not a
+            // value any integer type bounds.
+            if (literalNumber(n) !== null) {
+              return null;
+            }
+            return t && isIntegerValueType(t) ? bounds(t) : null;
+          };
+          const first = span(r.RangeStart as ParseNode, start);
+          if (target !== null && first !== null) {
+            const [lo, hi] = target;
+            const firstLo = first[0] + startOpen;
+            if (unbounded) {
+              noUpperBound();
+            } else {
+              const last = span(r.RangeEnd as ParseNode, end);
+              if (last !== null) {
+                const lastHi = last[1] - endOpen;
+                // firstLo > lastHi: empty for every value the endpoints can
+                // take, so nothing is produced and the range fits.
+                if (firstLo <= lastHi) {
+                  const fits = (v: bigint) => v >= lo && v <= hi;
+                  const offending = !fits(firstLo) ? firstLo : !fits(lastHi) ? lastHi : null;
+                  if (offending !== null) {
+                    produces(offending);
+                  }
                 }
+              }
+            }
+          }
+        } else {
+          // Significand width and largest exponent of each binary float.
+          const format: Record<string, readonly [number, number]> = {
+            float16: [11, 15], float32: [24, 127], float64: [53, 1023], float128: [113, 16383],
+          };
+          const [p, emax] = format[fitName as string];
+          const P = 1n << BigInt(p);
+          const maxFinite = (P - 1n) << BigInt(emax + 1 - p);
+          // An integer is exactly a value of the float when it does not
+          // overflow and its odd part fits the significand.
+          const exact = (n: bigint): boolean => {
+            if (n === 0n) {
+              return true;
+            }
+            let m = n < 0n ? -n : n;
+            if (m > maxFinite) {
+              return false;
+            }
+            while ((m & 1n) === 0n) {
+              m >>= 1n;
+            }
+            return m < P;
+          };
+          const startInt = foldConstant(r.RangeStart as ParseNode);
+          const endInt = r.RangeEnd && !isInfinity(r.RangeEnd) ? foldConstant(r.RangeEnd as ParseNode) : null;
+          // Whole-integer endpoints: the range iterates by 1 and has elements.
+          if (startInt !== null && (!r.RangeEnd || endInt !== null)) {
+            const firstEl = startInt + startOpen;
+            if (!r.RangeEnd) {
+              // Unbounded, it passes 2**p and yields integers the type cannot hold.
+              noUpperBound();
+            } else {
+              const lastEl = (endInt as bigint) - endOpen;
+              if (firstEl <= lastEl) {
+                // Consecutive integers are all exact inside +-2**p; past it,
+                // one of any two neighbours is odd and too wide. So the first
+                // inexact element is the first, its successor, the first
+                // element past 2**p, or that one's successor.
+                const past = firstEl > P + 1n ? firstEl : P + 1n;
+                const offending = [firstEl, firstEl + 1n, past, past + 1n]
+                  .filter((v) => v >= firstEl && v <= lastEl)
+                  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+                  .find((v) => !exact(v));
+                if (offending !== undefined) {
+                  produces(offending);
+                }
+              }
+            }
+          } else {
+            // An INTERVAL: no implicit elements, so only an endpoint that
+            // overflows the type is refused. A rounding endpoint is accepted,
+            // as `let x: float32 = 0.1` is.
+            for (const n of [r.RangeStart, r.RangeEnd] as (ParseNode | null)[]) {
+              if (!n || isInfinity(n)) {
+                continue;
+              }
+              const v = literalNumber(n);
+              if (v !== null && Number.isFinite(v) && !Number.isFinite(wrapToType(v, fitElement) as number)) {
+                report(Throw.StaticTypeError('$1 overflows $2, so this range cannot hold it',
+                  Value(String(v)), shown) as ThrowCompletion);
+                break;
               }
             }
           }
