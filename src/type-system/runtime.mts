@@ -22,7 +22,8 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject } from '../abstract-ops/runtime-types.mts';
+import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import type { OverloadSignature } from './overloads.mts';
 import { PublishedReturnTypeOf } from './check.mts';
 import { skipDebugger } from '../evaluator.mts';
@@ -398,6 +399,18 @@ export function* ValuePackView(bound: TypeRecord): ValueEvaluator {
   Q(yield* SetIntegrityLevel(view, 'frozen'));
   packValueViews.set(bound as unknown as object, view);
   return view;
+}
+
+/**
+ * Marks _record_ as the binding of a VALUE parameter: a metadata capture
+ * (`const X: Dimensions`) or an operator's metadata parameter (`D2:
+ * Dimensions`), which an expression reads as the metadata object - the design's
+ * `multiplyDimensions(D, D2)` passes them to a function - rather than as a
+ * Type Object.
+ */
+export function markValueParameterBinding<T extends TypeRecord>(record: T): T {
+  valueParameterBindings.add(record as unknown as object);
+  return record;
 }
 
 export function isValueParameterBinding(record: TypeRecord): boolean {
@@ -4554,6 +4567,23 @@ export function MetaTypeNamedByArgument(t: TypeRecord): object | undefined {
   return found;
 }
 
+/** The metadata record of a metadata object computed by a builder: its own string-keyed data, nested objects as nested records. */
+function* MetadataRecordFromObjectValue(value: ObjectValue): PlainEvaluator<MetadataRecord> {
+  const out: Record<string, unknown> = {};
+  for (const key of Q(yield* value.OwnPropertyKeys())) {
+    if (!(key instanceof JSStringValue)) {
+      continue;
+    }
+    const v = Q(yield* Get(value, key));
+    if (v instanceof ObjectValue && !isTypeObject(v)) {
+      out[key.stringValue()] = Q(yield* MetadataRecordFromObjectValue(v));
+    } else {
+      out[key.stringValue()] = v;
+    }
+  }
+  return out as MetadataRecord;
+}
+
 export function MetadataObjectFromType(t: TypeRecord): MetadataRecord {
   const fields: Record<string, unknown> = Object.create(null);
   if (t.Kind === 'object') {
@@ -5914,6 +5944,20 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       const args = node.TypeArguments.TypeArgumentList;
       const argRecords: TypeRecord[] = [];
       for (const a of args) {
+        // A computed argument in this METADATA position may yield the metadata
+        // itself - the design's `float32.<multiplyDimensions(D, D2)>` returns
+        // a Dimensions object - which is the metadata of the type, not a type.
+        if (args.length === 1 && (a as { type?: string }).type === 'ComputedType') {
+          const computed = Q(yield* evaluateComputedType(a as never));
+          if (isTypeObject(computed)) {
+            argRecords.push(computed.TypeRecord as TypeRecord);
+            continue;
+          }
+          if (computed instanceof ObjectValue) {
+            argRecords.push(metadataAsObjectRecord(Q(yield* MetadataRecordFromObjectValue(computed))));
+            continue;
+          }
+        }
         argRecords.push(Q(yield* TypeNodeToTypeRecord(a)));
       }
       const metadataRecord = argRecords.length === 1 && argRecords[0]!.Kind === 'object'
@@ -6476,7 +6520,12 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
     if (bareName !== undefined) {
       const boundParam = lookupTypeParameter(bareName);
       if (boundParam !== null) {
-        args.push(GetTypeObject(boundParam));
+        // A metadata VALUE parameter - `D` of `multiplyDimensions(D, D2)` - is
+        // passed as its metadata object, which is what the builder computes
+        // with; a type parameter is passed as its Type Object.
+        args.push(boundParam.Kind === 'object' && isValueParameterBinding(boundParam)
+          ? MetadataAsObject(MetadataObjectFromType(boundParam))
+          : GetTypeObject(boundParam));
         continue;
       }
     }

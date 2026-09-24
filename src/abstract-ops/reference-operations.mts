@@ -1,7 +1,8 @@
 import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
-import { isValueParameterBinding, lookupTypeParameter, ValuePackView } from '../type-system/runtime.mts';
+import { isValueParameterBinding, lookupTypeParameter, ValuePackView, MetadataObjectFromType } from '../type-system/runtime.mts';
+import { MetadataAsObject } from './runtime-types.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import {
   ReferenceRecord,
@@ -151,6 +152,11 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
         // is what makes `I.length` and `I[k]` constants a `where` can test.
         if (bound.Kind === 'tuple' && isValueParameterBinding(bound)) {
           return Q(yield* ValuePackView(bound));
+        }
+        // A metadata value parameter reads as its metadata object, the form
+        // a meta type's hooks receive, so a builder call can compute with it.
+        if (bound.Kind === 'object' && isValueParameterBinding(bound)) {
+          return MetadataAsObject(MetadataObjectFromType(bound));
         }
         return GetTypeObject(bound);
       }

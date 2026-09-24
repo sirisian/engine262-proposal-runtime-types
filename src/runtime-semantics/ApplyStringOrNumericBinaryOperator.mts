@@ -1,4 +1,4 @@
-import { SetPendingCalleeContext } from '../type-system/runtime.mts';
+import { SetPendingCalleeContext, markValueParameterBinding } from '../type-system/runtime.mts';
 import {
   isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow, CreateComplexValue,
   type ComplexObject,
@@ -81,7 +81,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         EnterOperatorBody();
         let raw;
         try {
-          raw = Q(yield* vectorBinaryOperator(lval, opText, rval));
+          raw = Q(yield* vectorBinaryOperator(WithoutMetadata(lval), opText, WithoutMetadata(rval)));
         } finally {
           LeaveOperatorBody();
         }
@@ -146,7 +146,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         const primitiveOperation = ApplyStringOrNumericBinaryOperator as unknown as (
           l: Value, o: BinaryOperator, r: Value, lit?: typeof literals, c?: TypeRecord,
         ) => PlainEvaluator<Value>;
-        raw = Q(yield* primitiveOperation(lval, opText, rval, literals, contextualType));
+        raw = Q(yield* primitiveOperation(WithoutMetadata(lval), opText, WithoutMetadata(rval), literals, contextualType));
       } finally {
         LeaveOperatorBody();
       }
@@ -576,7 +576,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
                 portion = MetadataPortion(carried.Metadata, metaType);
               }
             }
-            frame.set(name, metadataAsObjectRecord(portion));
+            frame.set(name, markValueParameterBinding(metadataAsObjectRecord(portion)));
           }
           deferredSpokenFor = spokenFor;
           for (const name of [] as string[]) {
@@ -588,7 +588,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
             // other kind left `float64.<D>` unparameterized and the result
             // unstamped, silently, with the arithmetic still giving the right
             // number.
-            frame.set(name, metadataAsObjectRecord((carried as TypeRecord & { Kind: 'parameterized' }).Metadata));
+            frame.set(name, markValueParameterBinding(metadataAsObjectRecord((carried as TypeRecord & { Kind: 'parameterized' }).Metadata)));
           }
           // The frame stays pushed for the WHOLE invocation, not only while
           // the types are resolved: the operator's own parameter boundary
@@ -608,7 +608,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
           if (operatorNames.length > 0 && isTypedNumber(rval)
               && (rval.TypeRecord as TypeRecord).Kind === 'parameterized') {
             const argCarried = rval.TypeRecord as TypeRecord & { Kind: 'parameterized' };
-            frame.set(operatorNames[0]!, metadataAsObjectRecord(argCarried.Metadata));
+            frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argCarried.Metadata)));
           }
           pushTypeParameterFrame(frame);
           framePushed = true;
@@ -745,6 +745,32 @@ function chosenBodyless(entry: { readonly fn: unknown }): boolean {
  * meta type's portion from its definition's return type, and the default of
  * every other governing meta type.
  */
+/**
+ * #sec-primitive-operator-blocks: "where no definition with a body matches,
+ * the primitive operation runs" - on the VALUES, whose metadata the bodyless
+ * definitions supply. The operands are handed to it as their base type, so a
+ * `Dimensions` operator over `float32.<{ m: 1 }>` and `float32.<{ m: 2 }>`
+ * computes the product rather than refusing the two as different types; the
+ * result is stamped with the contributions afterwards.
+ */
+export function WithoutMetadata(value: Value): Value {
+  if (isTypedNumber(value)) {
+    const record = (value as TypedNumberValue).TypeRecord as TypeRecord;
+    return record.Kind === 'parameterized' ? new TypedNumberValue((value as TypedNumberValue).value, record.Base) : value;
+  }
+  if ((value as { type?: string }).type === 'Vector') {
+    const vector = value as unknown as VectorValue;
+    const type = vector.TypeRecord as TypeRecord & { Kind: 'primitive', Arguments: readonly (TypeRecord | number)[] };
+    const lane = type.Arguments?.[0] as TypeRecord | undefined;
+    if (lane?.Kind !== 'parameterized') {
+      return value;
+    }
+    const lanes = vector.lanes.map((l: Value) => WithoutMetadata(l));
+    return new VectorValue(lanes, { ...type, Arguments: [lane.Base, ...type.Arguments.slice(1)] } as unknown as TypeRecord) as unknown as Value;
+  }
+  return value;
+}
+
 /** A vector type, whose metadata is its lane type's. */
 function isVectorType(t: TypeRecord | null | undefined): boolean {
   return !!t && t.Kind === 'primitive' && t.Name === 'vector';
