@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
  * #sec-primitive-operator-blocks: "at most one definition with a body may
@@ -43,4 +43,34 @@ test("plan section 6.1: the exact primitive's block is more specific than the fa
   const run = `String((3 := uint8) * 'x') + ' ' + String((3 := uint16) * 'x');`;
   expect(evaluated(`${exact} ${family} ${run}`)).toBe('exact family');
   expect(evaluated(`${family} ${exact} ${run}`)).toBe('exact family');
+});
+
+test('#sec-primitive-operator-blocks: two blocks at one level declaring one operand is an early error, captures renamed', () => {
+  // Blocks with captures were not checked at all, so the one declared first
+  // silently won at run time.
+  expectEarlyError(`primitive uint<const W> { operator *(rhs: string): string { return 'a'; } }
+    primitive uint<const V> { operator *(rhs: string): string { return 'b'; } }`, 'StaticTypeError');
+  // An operand naming a capture is the same operand under another capture name...
+  expectThrown(`primitive uint<const W> { operator +(rhs: uint.<W>): string { return 'a'; } }
+    primitive uint<const V> { operator +(rhs: uint.<V>): string { return 'b'; } }`, 'with an operand of "uint.<V>" is already declared');
+  // ...and a block over every float64 conflicts with a metadata block over every float64.
+  const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
+  expectEarlyError(`${D} primitive float64 { operator *(rhs: string): string { return 'a'; } }
+    primitive float64<const X: D> { operator *(rhs: string): string { return 'b'; } }`, 'StaticTypeError');
+  expectThrown(`${D} primitive float64<const X: D> { operator +(rhs: float64.<X>): float64.<X> { return this + rhs; } }
+    primitive float64<const Y: D> { operator +(rhs: float64.<Y>): float64.<Y> { return this + rhs; } }`, 'with an operand of "float64.<Y>"');
+});
+
+test('operands that differ are not duplicates', () => {
+  // Overloads by operand type.
+  expect(evaluated(`primitive uint<const W> { operator *(rhs: string): string { return 'a'; } }
+    primitive uint<const V> { operator *(rhs: number): string { return 'b'; } }
+    String((3 := uint16) * 'x') + String((3 := uint16) * 2);`)).toBe('ab');
+  // The receiver's own metadata is not any float64: `float64.<X>` names a capture, `float64` none.
+  const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
+  expect(evaluated(`${D} primitive float64<const X: D> { operator +(rhs: float64.<X>): float64.<X> { return this + rhs; } }
+    primitive float64 { operator +(rhs: float64): string { return 'plain'; } } 'ok';`)).toBe('ok');
+  // Different specificity levels are not a conflict: the exact block wins.
+  expect(evaluated(`primitive uint8 { operator *(rhs: string): string { return 'e'; } }
+    primitive uint<const W> { operator *(rhs: string): string { return 'f'; } } String((3 := uint8) * 'x');`)).toBe('e');
 });

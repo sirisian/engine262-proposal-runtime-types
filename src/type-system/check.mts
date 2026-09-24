@@ -21375,37 +21375,100 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * table. A parameterized block, or an operator with type parameters of its
    * own, resolves its operand type per invocation and cannot be compared here.
    */
-  const primitiveOperatorPairs = new Map<string, { type: TypeRecord | null, node: object }[]>();
+  const primitiveOperatorPairs = new Map<string, { type: TypeRecord | null, node: object, roles: string }[]>();
   const samePrimitiveOperand = (a: TypeRecord | null, b: TypeRecord | null): boolean => (a === null || b === null ? a === b : SameType(a, b));
   const checkPrimitiveOperatorBlock = (node: ParseNode.PrimitiveOperatorDeclaration): void => {
     const typeName = (node.TypeName as unknown as { IdentifierReference?: { name?: string } } | null)?.IdentifierReference?.name;
     if (typeof typeName !== 'string') return;
-    if (BlockCapturesOf(node).length) return;
+    // #sec-primitive-operator-blocks: "two that do is an early error" holds
+    // for a block with captures too. Its operand types may name them, so they
+    // are resolved in the block's scope, and each capture is renamed by its
+    // ROLE - the component position it stands for, or the meta type it
+    // captures - so that `uint<const W> { +(rhs: uint.<W>) }` and
+    // `uint<const V> { +(rhs: uint.<V>) }` are seen as the duplicates they are.
+    // Skipping such blocks left the runtime to pick by declaration order.
+    const captureRoles = new Map<string, string>();
+    for (const c of BlockCapturesOf(node)) {
+      captureRoles.set(c.BindingIdentifier.name, 'Index' in c
+        ? `#component${c.Index}`
+        : `#meta:${(c.TypeParameterConstraint as { sourceText?: string } | null)?.sourceText ?? ''}`);
+    }
+    const byRole = (record: TypeRecord | null): TypeRecord | null => {
+      if (!record || captureRoles.size === 0) return record;
+      const seen = new Map<object, unknown>();
+      const rename = (value: unknown): unknown => {
+        if (!value || typeof value !== 'object') return value;
+        if (seen.has(value)) return seen.get(value);
+        if (Array.isArray(value)) {
+          const out: unknown[] = [];
+          seen.set(value, out);
+          value.forEach((v) => out.push(rename(v)));
+          return out;
+        }
+        const v = value as { Kind?: string, Name?: string };
+        if (v.Kind === 'parameter' && typeof v.Name === 'string' && captureRoles.has(v.Name)) {
+          return { ...v, Name: captureRoles.get(v.Name) };
+        }
+        if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+        const out: Record<string, unknown> = {};
+        seen.set(value, out);
+        for (const [k, x] of Object.entries(value)) out[k] = rename(x);
+        return out;
+      };
+      return rename(record) as TypeRecord;
+    };
+    const scoped = captureRoles.size > 0 && pushTypeParameterScopeOf(node);
+    try {
     for (const e of node.OperatorDefinitionList ?? []) {
       if (e.type !== 'OperatorDefinition' || !e.OperatorName || !e.FunctionBody || !e.FormalParameters) continue;
       if ((e.TypeParameters?.TypeParameterList ?? []).length > 0) continue;
       const first = e.FormalParameters[0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined;
       let operand: TypeRecord | null = null;
+      let written = 'any';
+      // The captures the operand's annotation names, by role. Resolution may
+      // not keep an open metadata argument - `float64.<X>` resolves as
+      // `float64` - so two operands are the same only if they also name the
+      // same captures: `float64.<X>`, the receiver's own metadata, is not
+      // `float64`, any float64 at all.
+      let roles = '';
       if (first?.TypeAnnotation) {
-        const resolved = resolveType(first.TypeAnnotation.Type);
-        if (!resolved) continue;
+        const raw = resolveType(first.TypeAnnotation.Type);
+        const resolved = byRole(raw);
+        if (!resolved || !raw) continue;
         operand = resolved;
+        written = (first.TypeAnnotation.Type as { sourceText?: string }).sourceText ?? displayType(raw);
+        const named = new Set<string>();
+        const scan = (value: unknown): void => {
+          if (!value || typeof value !== 'object') return;
+          if (Array.isArray(value)) {
+            value.forEach(scan);
+            return;
+          }
+          const n = value as { type?: string, name?: string };
+          if (n.type === 'IdentifierReference' && typeof n.name === 'string' && captureRoles.has(n.name)) named.add(captureRoles.get(n.name)!);
+          for (const [k, x] of Object.entries(n)) if (k !== 'parent' && k !== 'location') scan(x);
+        };
+        scan(first.TypeAnnotation.Type);
+        roles = [...named].sort().join(',');
       }
       const opText = e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName;
       const key = `${typeName}\u0000${opText}`;
       const earlier = primitiveOperatorPairs.get(key) ?? [];
-      const duplicate = earlier.some((prior) => samePrimitiveOperand(prior.type, operand))
+      const duplicate = earlier.some((prior) => prior.roles === roles && samePrimitiveOperand(prior.type, operand))
         || RegisteredPrimitiveOperators(typeName, opText).some((entry) => entry.node !== e && !entry.deferred
           && samePrimitiveOperand(entry.parameterType, operand));
       if (duplicate) {
         errors.push(Throw.StaticTypeError(
           'operator $1 on $2 with an operand of $3 is already declared by an earlier primitive block',
-          Value(e.OperatorName), Value(typeName), Value(operand ? displayType(operand) : 'any'),
+          Value(e.OperatorName), Value(typeName), Value(written),
         ).Value as ObjectValue);
         continue;
       }
-      earlier.push({ type: operand, node: e });
+      earlier.push({ type: operand, node: e, roles });
       primitiveOperatorPairs.set(key, earlier);
+    }
+    } finally {
+      if (scoped) typeParameterScopes.pop();
     }
   };
 
