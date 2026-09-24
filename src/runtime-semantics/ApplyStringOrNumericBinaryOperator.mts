@@ -20,6 +20,7 @@ import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels } from '../abstract-ops/runtime-types.mts';
 import { IsSubtype } from '../type-system/relations.mts';
+import type { PlainEvaluator } from '../evaluator.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
@@ -109,183 +110,10 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // stood in for it (F4). Landing the block REPLACES that diagnostic with
   // dispatch rather than deleting it - a program that declares no block still
   // gets told why its expression did not work.
-  if (surroundingAgent.feature('runtime-types') && (!(lval instanceof ObjectValue) || isComplexObject(lval) || isRationalObject(lval))) {
-    // "at most one definition with a body may match ... where no definition
-    // with a body matches, the primitive operation runs". MATCHING is on the
-    // right operand against the definition's parameter type, and skipping that
-    // test is not a shortcut: a `primitive number { operator *(rhs: V) }` would
-    // otherwise capture EVERY multiplication of two numbers in the program and
-    // fail on its own parameter. The definitions are tried in declaration
-    // order; the checker refuses a second definition for one pair of types, so
-    // where parameter types are known at most one admits the operand.
-    // #sec-primitive-operator-blocks: within the most specific block level
-    // with an admitting definition, the definition whose operand type is the
-    // most specific is chosen, whatever the declaration order - the rule the
-    // language's function overloads already follow - and admitting
-    // definitions none of which is more specific than the rest are an
-    // ambiguity, as an ambiguous call is. Every definition of a level is
-    // therefore prepared before any is invoked.
-    for (const level of LookupPrimitiveOperatorLevels(lval, opText)) {
-    const candidates: PreparedPrimitiveOperator[] = [];
-    for (const entry of level) {
-      // #sec-primitive-operator-blocks: a PARAMETERIZED block declares its
-      // operators "for each parameterization its parameters admit", so the
-      // block's parameter is bound from the RECEIVER and the operand and result
-      // types are resolved against that binding. `operator +(rhs: float64.<D>):
-      // float64.<D>` is then dimension-preserving addition: it admits an
-      // operand of the receiver's own parameterization and nothing else, and
-      // the result carries the same metadata.
-      let deferredParameterType = null;
-      let deferredReturnType = null;
-      let framePushed = false;
-      let deferredSpokenFor: object[] = [];
-      let entryFrame: Map<string, TypeRecord> | null = null;
-      const componentNames = entry.deferred?.componentNames ?? [];
-      if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0)) {
-        const carried = RuntimeTypeOf(lval);
-        if (carried.Kind === 'parameterized' || componentNames.length > 0) {
-          const frame = new Map<string, TypeRecord>();
-          // #sec-primitive-operator-blocks: a COMPONENT capture is bound from
-          // the receiver's own argument at its position - `complex128`'s
-          // `float64`, `uint16`'s `16` - and a width is bound as the literal a
-          // written value argument resolves to. A position the record leaves
-          // out holds the primitive's default.
-          const base = carried.Kind === 'parameterized' ? carried.Base : carried;
-          componentNames.forEach((name, i) => {
-            const index = entry.deferred!.componentIndices?.[i] ?? i;
-            const argument = base.Kind === 'primitive' ? (base.Arguments ?? [])[index] ?? PrimitiveParameterDefault(base.Name, index) : undefined;
-            if (argument !== undefined) {
-              frame.set(name, typeof argument === 'number'
-                ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as unknown as TypeRecord
-                : argument as TypeRecord);
-            }
-          });
-          // The meta type each parameter speaks for, resolved from its
-          // constraint, so the parameter binds to THAT meta type's portion.
-          const spokenFor: object[] = [];
-          for (let pi = 0; pi < entry.deferred.parameterNames.length && carried.Kind === 'parameterized'; pi += 1) {
-            const name = entry.deferred.parameterNames[pi]!;
-            const constraintNode = entry.deferred.parameterConstraints?.[pi];
-            let portion = carried.Metadata;
-            if (constraintNode) {
-              const constraint = Q(yield* ResolveTypeNode(constraintNode as never));
-              const metaType = MetaTypeForConstraint(constraint);
-              if (metaType !== undefined) {
-                spokenFor.push(metaType);
-                portion = MetadataPortion(carried.Metadata, metaType);
-              }
-            }
-            frame.set(name, metadataAsObjectRecord(portion));
-          }
-          deferredSpokenFor = spokenFor;
-          for (const name of [] as string[]) {
-            // The parameter stands for the receiver's METADATA, and it is
-            // bound as an ~object~ record reproducing it. That form is not a
-            // convenience: `float64.<D>` builds a parameterization only where
-            // its type argument is an object record, and anything else falls
-            // through to the bare base - which is why binding a record of any
-            // other kind left `float64.<D>` unparameterized and the result
-            // unstamped, silently, with the arithmetic still giving the right
-            // number.
-            frame.set(name, metadataAsObjectRecord((carried as TypeRecord & { Kind: 'parameterized' }).Metadata));
-          }
-          // The frame stays pushed for the WHOLE invocation, not only while
-          // the types are resolved: the operator's own parameter boundary
-          // resolves `float64.<D>` when the body is entered, and popping first
-          // leaves that resolution without the binding - which is where
-          // "D is not defined" came from, raised inside the body of the very
-          // operator that declared D.
-          // #sec-primitive-operator-blocks: bind the OPERATOR's own type
-          // parameters to the ARGUMENT's metadata, beside the block's binding of
-          // the receiver's. One `set` each, into the same frame, which stays
-          // pushed for the whole invocation - so `float64.<{ bounds: ... B2 ... }>`
-          // in the return type can speak about the operand the caller passed.
-          //
-          // Only the first is bound: an operator takes one argument, so a second
-          // name would have nothing to name.
-          const operatorNames = entry.deferred.operatorParameterNames ?? [];
-          if (operatorNames.length > 0 && isTypedNumber(rval)
-              && (rval.TypeRecord as TypeRecord).Kind === 'parameterized') {
-            const argCarried = rval.TypeRecord as TypeRecord & { Kind: 'parameterized' };
-            frame.set(operatorNames[0]!, metadataAsObjectRecord(argCarried.Metadata));
-          }
-          pushTypeParameterFrame(frame);
-          framePushed = true;
-          entryFrame = frame;
-          if (entry.deferred.parameterTypeNode) {
-            deferredParameterType = Q(yield* ResolveTypeNode(entry.deferred.parameterTypeNode as never));
-          }
-          if (entry.deferred.returnTypeNode) {
-            deferredReturnType = Q(yield* ResolveTypeNode(entry.deferred.returnTypeNode as never));
-          }
-        }
-      }
-      const effectiveParameter = deferredParameterType ?? entry.parameterType;
-      const admits = effectiveParameter === null
-        ? true
-        : Q(yield* IsOfType(rval, effectiveParameter));
-      if (framePushed) {
-        popTypeParameterFrame();
-        framePushed = false;
-      }
-      if (admits) {
-        candidates.push({
-          entry,
-          frame: entryFrame,
-          parameter: effectiveParameter,
-          returnType: deferredReturnType,
-          spokenFor: deferredSpokenFor,
-          fixed: !OperandNamesCapture(entry.deferred),
-        });
-      }
-    }
-    const chosen = MostSpecificPrimitiveOperator(candidates);
-    if (chosen === 'ambiguous') {
-      return Throw.TypeError('$1', `operator ${opText} is ambiguous for this operand: two definitions of one primitive block level admit it, and neither operand type is more specific than the other`);
-    }
-    if (chosen === undefined) {
-      continue;
-    }
-    let deferredReturnType = chosen.returnType;
-    const deferredSpokenFor = chosen.spokenFor;
-    // The frame stays pushed for the WHOLE invocation: the operator's own
-    // parameter boundary resolves the block's names when the body is entered.
-    if (chosen.frame) {
-      pushTypeParameterFrame(chosen.frame);
-    }
-    EnterOperatorBody();
-    let raw;
-    try {
-      raw = Q(yield* Call(chosen.entry.fn as never, lval, [rval]));
-    } finally {
-      LeaveOperatorBody();
-      if (chosen.frame) {
-        popTypeParameterFrame();
-      }
-    }
-    if (deferredReturnType !== null && deferredReturnType.Kind === 'parameterized') {
-      const receiverType = RuntimeTypeOf(lval);
-      const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized'
-        ? receiverType.Metadata
-        : deferredReturnType.Metadata).types;
-      const returnMetadata = deferredReturnType.Metadata;
-      const mergedMetadata = MergeOperatorResultMetadata(
-        deferredSpokenFor.map((metaType) => ({ metaType, portion: MetadataPortion(returnMetadata, metaType) })),
-        governing,
-      );
-      deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
-      if (isTypedNumber(raw)) {
-        return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
-      }
-      const stamped = StampFamilyValue(raw, deferredReturnType);
-      if (stamped !== undefined) {
-        return stamped;
-      }
-      if (raw instanceof NumberValue) {
-        return new TypedNumberValue(Number((raw as unknown as { value: number }).value), deferredReturnType);
-      }
-    }
-    return raw;
+  {
+    const dispatched = Q(yield* DispatchPrimitiveBlockOperator(lval, opText, rval));
+    if (dispatched !== undefined) {
+      return dispatched;
     }
   }
   if (RightOperandDeclaresOperator(lval, rval, opText)) {
@@ -600,4 +428,197 @@ function MostSpecificPrimitiveOperator(candidates: readonly PreparedPrimitiveOpe
   };
   const winners = candidates.filter((c) => candidates.every((d) => d === c || atLeastAsSpecific(c, d)));
   return winners.length === 1 ? winners[0] : 'ambiguous';
+}
+
+
+/**
+ * #sec-primitive-operator-blocks: the definition a primitive block gives the
+ * binary operator _opText_ for the receiver _lval_ and the operand _rval_,
+ * invoked, or *undefined* where no block's definition admits the pair. Shared
+ * by the arithmetic, relational, and equality operators, which dispatch alike:
+ * the receiver's exact block before its family's, and within a level the most
+ * specific admitting operand, an ambiguity being a *TypeError*.
+ */
+export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rval: Value): PlainEvaluator<Value | undefined> {
+  if (!surroundingAgent.feature('runtime-types') || (lval instanceof ObjectValue && !isComplexObject(lval) && !isRationalObject(lval))) {
+    return undefined;
+  }
+    // "at most one definition with a body may match ... where no definition
+    // with a body matches, the primitive operation runs". MATCHING is on the
+    // right operand against the definition's parameter type, and skipping that
+    // test is not a shortcut: a `primitive number { operator *(rhs: V) }` would
+    // otherwise capture EVERY multiplication of two numbers in the program and
+    // fail on its own parameter. The definitions are tried in declaration
+    // order; the checker refuses a second definition for one pair of types, so
+    // where parameter types are known at most one admits the operand.
+    // #sec-primitive-operator-blocks: within the most specific block level
+    // with an admitting definition, the definition whose operand type is the
+    // most specific is chosen, whatever the declaration order - the rule the
+    // language's function overloads already follow - and admitting
+    // definitions none of which is more specific than the rest are an
+    // ambiguity, as an ambiguous call is. Every definition of a level is
+    // therefore prepared before any is invoked.
+    for (const level of LookupPrimitiveOperatorLevels(lval, opText)) {
+    const candidates: PreparedPrimitiveOperator[] = [];
+    for (const entry of level) {
+      // #sec-primitive-operator-blocks: a PARAMETERIZED block declares its
+      // operators "for each parameterization its parameters admit", so the
+      // block's parameter is bound from the RECEIVER and the operand and result
+      // types are resolved against that binding. `operator +(rhs: float64.<D>):
+      // float64.<D>` is then dimension-preserving addition: it admits an
+      // operand of the receiver's own parameterization and nothing else, and
+      // the result carries the same metadata.
+      let deferredParameterType = null;
+      let deferredReturnType = null;
+      let framePushed = false;
+      let deferredSpokenFor: object[] = [];
+      let entryFrame: Map<string, TypeRecord> | null = null;
+      const componentNames = entry.deferred?.componentNames ?? [];
+      if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0)) {
+        const carried = RuntimeTypeOf(lval);
+        if (carried.Kind === 'parameterized' || componentNames.length > 0) {
+          const frame = new Map<string, TypeRecord>();
+          // #sec-primitive-operator-blocks: a COMPONENT capture is bound from
+          // the receiver's own argument at its position - `complex128`'s
+          // `float64`, `uint16`'s `16` - and a width is bound as the literal a
+          // written value argument resolves to. A position the record leaves
+          // out holds the primitive's default.
+          const base = carried.Kind === 'parameterized' ? carried.Base : carried;
+          componentNames.forEach((name, i) => {
+            const index = entry.deferred!.componentIndices?.[i] ?? i;
+            const argument = base.Kind === 'primitive' ? (base.Arguments ?? [])[index] ?? PrimitiveParameterDefault(base.Name, index) : undefined;
+            if (argument !== undefined) {
+              frame.set(name, typeof argument === 'number'
+                ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as unknown as TypeRecord
+                : argument as TypeRecord);
+            }
+          });
+          // The meta type each parameter speaks for, resolved from its
+          // constraint, so the parameter binds to THAT meta type's portion.
+          const spokenFor: object[] = [];
+          for (let pi = 0; pi < entry.deferred.parameterNames.length && carried.Kind === 'parameterized'; pi += 1) {
+            const name = entry.deferred.parameterNames[pi]!;
+            const constraintNode = entry.deferred.parameterConstraints?.[pi];
+            let portion = carried.Metadata;
+            if (constraintNode) {
+              const constraint = Q(yield* ResolveTypeNode(constraintNode as never));
+              const metaType = MetaTypeForConstraint(constraint);
+              if (metaType !== undefined) {
+                spokenFor.push(metaType);
+                portion = MetadataPortion(carried.Metadata, metaType);
+              }
+            }
+            frame.set(name, metadataAsObjectRecord(portion));
+          }
+          deferredSpokenFor = spokenFor;
+          for (const name of [] as string[]) {
+            // The parameter stands for the receiver's METADATA, and it is
+            // bound as an ~object~ record reproducing it. That form is not a
+            // convenience: `float64.<D>` builds a parameterization only where
+            // its type argument is an object record, and anything else falls
+            // through to the bare base - which is why binding a record of any
+            // other kind left `float64.<D>` unparameterized and the result
+            // unstamped, silently, with the arithmetic still giving the right
+            // number.
+            frame.set(name, metadataAsObjectRecord((carried as TypeRecord & { Kind: 'parameterized' }).Metadata));
+          }
+          // The frame stays pushed for the WHOLE invocation, not only while
+          // the types are resolved: the operator's own parameter boundary
+          // resolves `float64.<D>` when the body is entered, and popping first
+          // leaves that resolution without the binding - which is where
+          // "D is not defined" came from, raised inside the body of the very
+          // operator that declared D.
+          // #sec-primitive-operator-blocks: bind the OPERATOR's own type
+          // parameters to the ARGUMENT's metadata, beside the block's binding of
+          // the receiver's. One `set` each, into the same frame, which stays
+          // pushed for the whole invocation - so `float64.<{ bounds: ... B2 ... }>`
+          // in the return type can speak about the operand the caller passed.
+          //
+          // Only the first is bound: an operator takes one argument, so a second
+          // name would have nothing to name.
+          const operatorNames = entry.deferred.operatorParameterNames ?? [];
+          if (operatorNames.length > 0 && isTypedNumber(rval)
+              && (rval.TypeRecord as TypeRecord).Kind === 'parameterized') {
+            const argCarried = rval.TypeRecord as TypeRecord & { Kind: 'parameterized' };
+            frame.set(operatorNames[0]!, metadataAsObjectRecord(argCarried.Metadata));
+          }
+          pushTypeParameterFrame(frame);
+          framePushed = true;
+          entryFrame = frame;
+          if (entry.deferred.parameterTypeNode) {
+            deferredParameterType = Q(yield* ResolveTypeNode(entry.deferred.parameterTypeNode as never));
+          }
+          if (entry.deferred.returnTypeNode) {
+            deferredReturnType = Q(yield* ResolveTypeNode(entry.deferred.returnTypeNode as never));
+          }
+        }
+      }
+      const effectiveParameter = deferredParameterType ?? entry.parameterType;
+      const admits = effectiveParameter === null
+        ? true
+        : Q(yield* IsOfType(rval, effectiveParameter));
+      if (framePushed) {
+        popTypeParameterFrame();
+        framePushed = false;
+      }
+      if (admits) {
+        candidates.push({
+          entry,
+          frame: entryFrame,
+          parameter: effectiveParameter,
+          returnType: deferredReturnType,
+          spokenFor: deferredSpokenFor,
+          fixed: !OperandNamesCapture(entry.deferred),
+        });
+      }
+    }
+    const chosen = MostSpecificPrimitiveOperator(candidates);
+    if (chosen === 'ambiguous') {
+      return Throw.TypeError('$1', `operator ${opText} is ambiguous for this operand: two definitions of one primitive block level admit it, and neither operand type is more specific than the other`);
+    }
+    if (chosen === undefined) {
+      continue;
+    }
+    let deferredReturnType = chosen.returnType;
+    const deferredSpokenFor = chosen.spokenFor;
+    // The frame stays pushed for the WHOLE invocation: the operator's own
+    // parameter boundary resolves the block's names when the body is entered.
+    if (chosen.frame) {
+      pushTypeParameterFrame(chosen.frame);
+    }
+    EnterOperatorBody();
+    let raw;
+    try {
+      raw = Q(yield* Call(chosen.entry.fn as never, lval, [rval]));
+    } finally {
+      LeaveOperatorBody();
+      if (chosen.frame) {
+        popTypeParameterFrame();
+      }
+    }
+    if (deferredReturnType !== null && deferredReturnType.Kind === 'parameterized') {
+      const receiverType = RuntimeTypeOf(lval);
+      const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized'
+        ? receiverType.Metadata
+        : deferredReturnType.Metadata).types;
+      const returnMetadata = deferredReturnType.Metadata;
+      const mergedMetadata = MergeOperatorResultMetadata(
+        deferredSpokenFor.map((metaType) => ({ metaType, portion: MetadataPortion(returnMetadata, metaType) })),
+        governing,
+      );
+      deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
+      if (isTypedNumber(raw)) {
+        return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
+      }
+      const stamped = StampFamilyValue(raw, deferredReturnType);
+      if (stamped !== undefined) {
+        return stamped;
+      }
+      if (raw instanceof NumberValue) {
+        return new TypedNumberValue(Number((raw as unknown as { value: number }).value), deferredReturnType);
+      }
+    }
+    return raw;
+    }
+  return undefined;
 }

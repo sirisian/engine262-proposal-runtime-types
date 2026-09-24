@@ -16,6 +16,7 @@ import { AbruptCompletion } from '../completion.mts';
 import { JSStringValue, TypedNumberValue } from '../value.mts';
 import { TypedOperandType } from '../type-system/arithmetic.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { DispatchPrimitiveBlockOperator } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLessThan,
   SameValue,
@@ -180,6 +181,16 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // the RIGHT operand is not reached, since dispatch keys on the left. Report it
   // rather than falling through to the abstract comparison, whose answer would not
   // be the one the declared operator gives.
+  // #sec-primitive-operator-blocks: a primitive block's comparison for the
+  // pair - the tolerance comparison of a dimensioned float, or a comparison
+  // with another type - is dispatched as its arithmetic is. It was never
+  // looked up, so such a definition parsed and the built-in comparison ran.
+  if (operator === '<' || operator === '>' || operator === '<=' || operator === '>=') {
+    const dispatched = Q(yield* DispatchPrimitiveBlockOperator(lval, operator, rval));
+    if (dispatched !== undefined) {
+      return ToBoolean(dispatched);
+    }
+  }
   if ((operator === '<' || operator === '>' || operator === '<=' || operator === '>=')
       && RightOperandDeclaresOperator(lval, rval, operator)) {
     return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', operator);

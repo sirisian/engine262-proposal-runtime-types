@@ -7,6 +7,7 @@ import { Value, ObjectValue } from '../value.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
+import { DispatchPrimitiveBlockOperator } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
   IsLooselyEqual,
   GetValue,
@@ -70,6 +71,15 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
   // proposal-runtime-types (operatoroverloading.md): an equality operator declared
   // by the RIGHT operand is not reached, since dispatch keys on the left. Report it
   // rather than falling through to the abstract equality comparison.
+  // #sec-primitive-operator-blocks: a primitive block's `==` for the pair,
+  // with `!=` its negation as for a class.
+  if (operator === '==' || operator === '!=') {
+    const dispatched = Q(yield* DispatchPrimitiveBlockOperator(lval, '==', rval));
+    if (dispatched !== undefined) {
+      const truthy = ToBoolean(dispatched) === Value.true;
+      return (operator === '==') === truthy ? Value.true : Value.false;
+    }
+  }
   if ((operator === '==' || operator === '!=')
       && RightOperandDeclaresOperator(lval, rval, '==')) {
     return Throw.TypeError('operator $1 is declared by the right operand, but operator dispatch keys on the left operand', '==');

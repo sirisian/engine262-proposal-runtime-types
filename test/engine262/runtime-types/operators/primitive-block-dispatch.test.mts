@@ -30,11 +30,11 @@ test('a block over a family reaches each member, with its component bound', () =
   // A position the record leaves out holds the default: rational.<64> is `rational`.
   expect(evaluated(`primitive rational<const W> { operator *(rhs: string): string { return 'r' + String(W); } }
     const r: rational = 1 / 3; String(r * 'x');`)).toBe('r64');
-  // A type component: complex128's is float64, complex64's float32.
-  expect(evaluated(`primitive complex<const E> { operator +(rhs: complex.<E>): string { return 'same:' + String(E); } }
-    const a: complex128 = 1 + 2i; const c: complex128 = 3 + 4i;
-    const b: complex64 = 1 + 2i; const d: complex64 = 5 + 6i;
-    String(a + c) + ' ' + String(b + d);`)).toBe('same:float64 same:float32');
+  // A type component: complex128's is float64, complex64's float32. (An
+  // operand of the receiver's own type would redeclare complex addition.)
+  expect(evaluated(`primitive complex<const E> { operator *(rhs: string): string { return 'same:' + String(E); } }
+    const a: complex128 = 1 + 2i; const b: complex64 = 1 + 2i;
+    String(a * 'x') + ' ' + String(b * 'x');`)).toBe('same:float64 same:float32');
 });
 
 test("plan section 6.1: the exact primitive's block is more specific than the family's, in either order", () => {
@@ -51,8 +51,8 @@ test('#sec-primitive-operator-blocks: two blocks at one level declaring one oper
   expectEarlyError(`primitive uint<const W> { operator *(rhs: string): string { return 'a'; } }
     primitive uint<const V> { operator *(rhs: string): string { return 'b'; } }`, 'StaticTypeError');
   // An operand naming a capture is the same operand under another capture name...
-  expectThrown(`primitive uint<const W> { operator +(rhs: uint.<W>): string { return 'a'; } }
-    primitive uint<const V> { operator +(rhs: uint.<V>): string { return 'b'; } }`, 'with an operand of "uint.<V>" is already declared');
+  expectThrown(`primitive uint<const W> { operator +(rhs: [2].<uint.<W>>): string { return 'a'; } }
+    primitive uint<const V> { operator +(rhs: [2].<uint.<V>>): string { return 'b'; } }`, 'with an operand of "[2].<uint.<V>>" is already declared');
   // ...and a block over every float64 conflicts with a metadata block over every float64.
   const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
   expectEarlyError(`${D} primitive float64 { operator *(rhs: string): string { return 'a'; } }
@@ -66,10 +66,12 @@ test('operands that differ are not duplicates', () => {
   expect(evaluated(`primitive uint<const W> { operator *(rhs: string): string { return 'a'; } }
     primitive uint<const V> { operator *(rhs: number): string { return 'b'; } }
     String((3 := uint16) * 'x') + String((3 := uint16) * 2);`)).toBe('ab');
-  // The receiver's own metadata is not any float64: `float64.<X>` names a capture, `float64` none.
+  // The receiver's own metadata is not one fixed metadata: `float64.<X>` names
+  // a capture, `float64.<{ m: 1 }>` none, although the checker resolves an open
+  // metadata argument away. (A plain `float64` operand would redeclare addition.)
   const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
   expect(evaluated(`${D} primitive float64<const X: D> { operator +(rhs: float64.<X>): float64.<X> { return this + rhs; } }
-    primitive float64 { operator +(rhs: float64): string { return 'plain'; } } 'ok';`)).toBe('ok');
+    primitive float64 { operator +(rhs: float64.<{ m: 1 }>): string { return 'fixed'; } } 'ok';`)).toBe('ok');
   // Different specificity levels are not a conflict: the exact block wins.
   expect(evaluated(`primitive uint8 { operator *(rhs: string): string { return 'e'; } }
     primitive uint<const W> { operator *(rhs: string): string { return 'f'; } } String((3 := uint8) * 'x');`)).toBe('e');
@@ -87,12 +89,14 @@ test('within one level, the most specific admitting operand is chosen, in either
 });
 
 test('equal operands at one receiver are ordered as patterns: fixed before capture', () => {
-  // At a uint16 receiver `uint.<W>` is `uint.<16>`; the fixed one is more specific.
-  const own = `primitive uint<const W> { operator +(rhs: uint.<W>): string { return 'own'; } }`;
-  const sixteen = `primitive uint<const V> { operator +(rhs: uint.<16>): string { return 'sixteen'; } }`;
-  const run = `String((3 := uint16) + (4 := uint16)) + ' ' + String((3 := uint8) + (4 := uint8));`;
-  expect(evaluated(`${own} ${sixteen} ${run}`)).toBe('sixteen own');
-  expect(evaluated(`${sixteen} ${own} ${run}`)).toBe('sixteen own');
+  // At a receiver carrying { m: 1 } `float64.<X>` is `float64.<{ m: 1 }>`; the
+  // fixed one is more specific.
+  const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
+  const own = `primitive float64<const X: D> { operator *(rhs: float64.<X>): string { return 'own'; } }`;
+  const fixed = `primitive float64 { operator *(rhs: float64.<{ m: 1 }>): string { return 'fixed'; } }`;
+  const run = `String((2 := float64.<{ m: 1 }>) * (3 := float64.<{ m: 1 }>)) + ' ' + String((2 := float64.<{ m: 2 }>) * (3 := float64.<{ m: 2 }>));`;
+  expect(evaluated(`${D} ${own} ${fixed} ${run}`)).toBe('fixed own');
+  expect(evaluated(`${D} ${fixed} ${own} ${run}`)).toBe('fixed own');
 });
 
 test('overlapping operands neither more specific than the other are ambiguous where both admit', () => {
@@ -124,4 +128,34 @@ test('the checker chooses among definitions as dispatch does', () => {
   expectThrown(`primitive float64 { operator *(rhs: 'x' | uint8): string { return 'a'; } }
     primitive float64 { operator *(rhs: uint8 | 'y'): string { return 'b'; } }
     (2 := float64) * (3 := uint8);`, 'is ambiguous for an operand of uint.<8>');
+});
+
+test('#sec-operator-declarations: a block may not redeclare an operation its type already defines', () => {
+  // "a program cannot redefine uint8 addition" - the block ran instead.
+  expectThrown(`primitive uint8 { operator +(rhs: uint8): string { return 'r'; } }`, 'redeclares an operation the type already defines');
+  expectThrown(`primitive float64 { operator <(rhs: float64): boolean { return true; } }`, 'redeclares an operation the type already defines');
+  // Over a family, an operand of the same family is some member's own pair.
+  expectThrown(`primitive uint<const W> { operator +(rhs: uint.<W>): string { return 'r'; } }`, 'redeclares');
+  expectThrown(`primitive complex { operator *(rhs: complex): string { return 'r'; } }`, 'redeclares');
+  // A parameterization, another type, and another width are not defined by the receiver.
+  const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
+  expect(evaluated(`${D} primitive float64<const X: D> { operator *(rhs: float64.<X>): string { return 'ok'; } } 'ok';`)).toBe('ok');
+  expect(evaluated(`primitive uint16 { operator +(rhs: uint8): string { return 'ok'; } } 'ok';`)).toBe('ok');
+  expectThrown(`${D} primitive float64<const X: D> { operator *(rhs: float64): string { return 'r'; } }`, 'redeclares');
+});
+
+test('a block\'s comparisons are dispatched, as its arithmetic is', () => {
+  // The design's tolerance comparisons on a dimensioned float were parsed and
+  // never looked up, so the built-in comparison ran.
+  const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
+  const cmp = `primitive float64<const X: D> {
+    operator <(rhs: float64.<X>): boolean { return true; }
+    operator ==(rhs: float64.<X>): boolean { return true; } }`;
+  const a = 'const a = (5 := float64.<{ m: 1 }>); const b = (2 := float64.<{ m: 1 }>);';
+  expect(evaluated(`${D} ${cmp} ${a} String(a < b) + ' ' + String(a == b) + ' ' + String(a != b);`)).toBe('true true false');
+  // The built-in comparisons are untouched.
+  expect(evaluated(`String((5 := float64) < (2 := float64)) + ' ' + String((5 := float64) == (5 := float64));`)).toBe('false true');
+  // Across types, the checker and the run time agree.
+  expect(evaluated(`primitive float64 { operator <(rhs: uint8): boolean { return true; } } String((5 := float64) < (9 := uint8));`)).toBe('true');
+  expectThrown('(5 := float64) < (9 := uint8);', 'are different numeric types and do not mix');
 });

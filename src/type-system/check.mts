@@ -1,5 +1,5 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf } from './specialization-patterns.mts';
+import { BlockCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -14821,7 +14821,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
-          if (lvc && rvc && !ordinaryNumericOrdering(strictOperator, lvc, rvc) && !SameType(lvc, rvc)) {
+          if (lvc && rvc && !ordinaryNumericOrdering(strictOperator, lvc, rvc) && !SameType(lvc, rvc)
+              // A block's comparison for the pair is its meaning, and the run
+              // time dispatches it as it dispatches arithmetic.
+              && blockOperatorResult(strictOperator, lvc, rvc) === undefined) {
             const completion = Throw.StaticTypeError(
               '$1 and $2 are different numeric types and do not mix',
               Value(displayType(lvc)), Value(displayType(rvc)),
@@ -21864,6 +21867,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         scan(first.TypeAnnotation.Type);
         roles = [...named].sort().join(',');
+        // #sec-operator-declarations: "An operator that the operand's type
+        // already defines ... may not be redeclared for that type, so a
+        // program cannot redefine `uint8` addition." A definition WITH A BODY
+        // replaces the operation for its pair, so one whose operand is the
+        // receiver's own unparameterized type redeclares the built-in pair and
+        // is refused. For a primitive that declares parameters - `uint`,
+        // `complex` - a block covers every member, and an operand of the same
+        // family coincides with some member's own type (`uint.<W>` always,
+        // `uint.<16>` at `uint16`). A parameterization, `float64.<X>`, is a
+        // type of its own, which is how the metadata extension declares its
+        // operators; another type, `uint8` or `string`, is not defined by the
+        // receiver; and a bodyless definition only contributes metadata.
+        // An operand naming a metadata capture, `float64.<X>`, is a
+        // parameterization even where the open argument resolves away.
+        if (e.FormalParameters.length === 1 && raw.Kind === 'primitive' && !roles.includes('#meta:')) {
+          const family = PrimitiveDeclaresParameters(typeName);
+          const own = family ? null : builtinTypeRecord(typeName, []);
+          if (family ? raw.Name === typeName : (own !== null && SameType(raw, own))) {
+            const completion = Throw.StaticTypeError('$1', `operator "${e.OperatorName}" on "${typeName}" with an operand of "${written}" redeclares an operation the type already defines; declare it for a parameterization carrying metadata, or for another operand type`) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+            continue;
+          }
+        }
       }
       const opText = e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName;
       const key = `${typeName}\u0000${opText}`;
