@@ -1503,6 +1503,22 @@ function innermostLiteral(node: ParseNode): ParseNode {
  * predicate from paths that build a record from it, and matching it costs
  * nothing.
  */
+/**
+ * Whether a function literal is an ENUMERATOR'S INITIALIZER - `Zero = (index, name) =>
+ * index * 100` - possibly parenthesized. Such a literal produces each member's value,
+ * and the enum CONVERTS that value to its underlying type. So its return type is a
+ * conversion target, not a return type the literal takes: `index * 100` is a `number`
+ * that becomes a `float32`. A function-typed POSITION is different - there the literal
+ * takes the signature and its body is checked against it.
+ */
+function isEnumeratorInitializer(fn: object): boolean {
+  let p = (fn as { parent?: { type?: string, parent?: unknown } }).parent;
+  while (p && p.type === 'ParenthesizedExpression') {
+    p = p.parent as typeof p;
+  }
+  return p?.type === 'EnumMember';
+}
+
 function isNumericValueTypeName(name: string | undefined): boolean {
   return name === 'uint' || name === 'int'
     || name === 'float' || name === 'float16' || name === 'float32'
@@ -12999,7 +13015,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const Parameters = params.map((prm, i) => parameterFromDeclaration(prm, types[i] ?? anyTypeRecord));
           let Return = literal.TypeAnnotation ? resolveType(literal.TypeAnnotation.Type) : null;
           if (Return && generator) Return = generatorDeclaredType(Return, asyncGenerator);
-          if (!literal.TypeAnnotation) {
+          // A literal at a function-typed position TAKES that position's return type
+          // (#sec-contextual-types: "the signature so taken is the Static Type of the
+          // expression"), as `publishLiteralReturn` publishes it for the run time. It
+          // was inferred from the body with the context only as a hint, which for an
+          // `async` literal built `Promise.<T, any>` - not assignable to the target's
+          // `Promise.<T>`, so `const a: () => Promise.<uint8> = async () => 3` was
+          // refused while the annotated form was accepted.
+          const takenReturn = !literal.TypeAnnotation && wantedReturn && !isEnumeratorInitializer(node)
+            && wantedReturn.Kind !== 'void' && wantedReturn.Kind !== 'parameter' && wantedReturn.Kind !== 'any'
+            ? wantedReturn : null;
+          if (takenReturn) {
+            Return = takenReturn as TypeRecord;
+          } else if (!literal.TypeAnnotation) {
             // A resumable literal's result is its carrier, while inference reads
             // the yielded or resolved values within its body.
             const mode = generator ? 'yield' : asyncFunction ? 'resolve' : 'return';
@@ -18302,6 +18330,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const publishLiteralReturn = (fn: ParseNode, parameterTypes: readonly Known[]): void => {
     if ((fn as { TypeAnnotation?: unknown }).TypeAnnotation) {
+      return;
+    }
+    // A LITERAL IN A CONTEXTUAL POSITION TAKES ITS TARGET'S RETURN TYPE. The
+    // specification: a function or arrow expression "in a position whose contextual
+    // type is a function type takes that type's signature for every position it
+    // leaves unannotated: a parameter's type, the return type ... The signature so
+    // taken is the Static Type of the expression". So the return type is TAKEN, and
+    // published for the run time to enforce, as a written annotation would be.
+    //
+    // This inferred it instead, with no context: `const fn: () => uint8 = () => 3`
+    // inferred the literal `3`, published nothing, and `fn()` returned an unconverted
+    // `number` - where a contextually typed METHOD returned a `uint8`. A `void`
+    // context is never recorded, and a type parameter is not a type to enforce, so
+    // both keep the inference below.
+    const taken = isEnumeratorInitializer(fn) ? undefined : contextualReturnTypes.get(fn);
+    if (taken && taken.Kind !== 'void' && taken.Kind !== 'parameter' && taken.Kind !== 'any') {
+      publishedReturnTypes.set(fn as unknown as object, taken as TypeRecord);
       return;
     }
     const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
@@ -24624,7 +24669,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }));
           bodyTypeParams = pushTypeParameterScopeOf(n as ParseNode);
           try {
-            enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true);
+            // As for an arrow: a function EXPRESSION in a contextual position takes the
+            // target's return type. A declaration is in no such position, so it has no
+            // entry here and this passes nothing for it.
+            enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
+              undefined, undefined, undefined, isEnumeratorInitializer(n) ? null : contextualReturnTypes.get(n) ?? null);
           } finally {
             if (bodyTypeParams) {
               typeParameterScopes.pop();
@@ -24640,7 +24689,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
           return ann ? resolveType(ann.Type) : null;
         }));
-        enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true, contextualParameterTypes.get(n));
+        // A CONTEXTUALLY TYPED ARROW takes its target's return type, as it takes its
+        // parameter types. #sec-contextual-types: a function or arrow expression "in a
+        // position whose contextual type is a function type takes that type's signature
+        // for every position it leaves unannotated: a parameter's type, the return type
+        // ... The signature so taken is the Static Type of the expression". The
+        // parameters were passed; the return type, recorded beside them in
+        // `contextualReturnTypes`, was not - so `const fn: () => uint8 = () => 3`
+        // returned an unconverted `number`, where a contextually typed METHOD, whose
+        // call does pass it, returned a `uint8`.
+        enterFunction(n.ArrowParameters, n.TypeAnnotation ?? null, n.ConciseBody as never, true,
+          contextualParameterTypes.get(n), undefined, undefined,
+          isEnumeratorInitializer(n) ? null : contextualReturnTypes.get(n) ?? null);
         return;
       case 'OperatorDefinition': {
         if (!n.FunctionBody && !n.GeneratorBody) {
