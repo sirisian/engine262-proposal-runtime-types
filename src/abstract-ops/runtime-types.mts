@@ -1119,7 +1119,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // no-implicit-widening rule that holds between any two numeric types - so
     // this reaches only where a literal is being placed.
     if (t.Name === 'complex' && !isComplexObject(value)
-        && (value instanceof NumberValue || isTypedNumber(value))) {
+        && (value instanceof NumberValue || isTypedNumber(value) || value instanceof BigIntValue)) {
       const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
       const lifted = Q(yield* CheckedConvertValue(value, component));
       const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue));
@@ -1529,7 +1529,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // a literal no `float32` holds is no `complex64` either. A real VALUE reaches
   // an operator rather than this boundary, and is refused there.
   if (t.Kind === 'primitive' && t.Name === 'complex' && !isComplexObject(value)
-      && (value instanceof NumberValue || isTypedNumber(value))) {
+      && (value instanceof NumberValue || isTypedNumber(value) || value instanceof BigIntValue)) {
     const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
     const lifted = Q(yield* CheckedConvertValue(value, component));
     const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue));
@@ -1917,6 +1917,20 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         }
         return Q(yield* ToString(value));
       case 'number':
+        // A BigInt into `number` rounds to the nearest double, exactly as it does
+        // into `float64`, and is refused only where it would overflow to an
+        // infinity - #sec-requiretype's exception names a rounding "to an
+        // infinity", not every rounding. `number` and `float64` are one
+        // double-precision type; a BigInt was refused for the first and
+        // accepted for the second. `ToNumber` cannot be used: it throws for a
+        // BigInt by design, which is the operator rule and not this boundary.
+        if (value instanceof BigIntValue) {
+          const rounded = Number(R(value) as bigint);
+          if (!Number.isFinite(rounded)) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          return Value(rounded);
+        }
         if (!isNumberConversionSource(value)) {
           return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
         }
@@ -1937,16 +1951,48 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
           if (record.Kind === 'primitive' && isIntegerTypeName(record.Name)) {
             return Value(value.bigintValue());
           }
+          // A typed FLOAT converts where it holds an integer, as a Number does
+          // below and as a float converts into a sized integer: `float32` 5.0
+          // into `int32` is 5, and was refused into `bigint` alone. A fraction,
+          // NaN or an infinity would truncate or has no integer, so it is a
+          // RangeError - the conversion exists and this value does not survive
+          // it - rather than the TypeError it was.
+          if (record.Kind === 'primitive' && isFloatTypeName(record.Name)) {
+            // The MATHEMATICAL value, since the question is whether it is an
+            // integer and what integer it is - a signed zero is immaterial
+            // there, unlike a stored payload, which keeps its sign.
+            const f = R(Q(yield* ToNumber(value))) as number;
+            if (!Number.isInteger(f)) {
+              return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+            }
+            return Value(BigInt(f));
+          }
+        }
+        // An integer-valued RATIONAL converts, as it does into a sized integer;
+        // a rational with a fractional part would truncate, so it is refused.
+        if (isRationalObject(value)) {
+          const rn = (value as unknown as { RationalNumerator: bigint }).RationalNumerator;
+          const rd = (value as unknown as { RationalDenominator: bigint }).RationalDenominator;
+          if (rn % rd !== 0n) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          return Value(rn / rd);
         }
         // The checked rule for the same source: exact where the Number is an
         // integer, a RangeError where it is not, since a BigInt has no
         // fraction to round into.
         if (value instanceof NumberValue) {
           const bn = R(value) as number;
-          // Beyond 2**53 a Number no longer distinguishes adjacent integers, so
-          // converting one would report a value the source may never have
-          // written. Refuse rather than guess.
-          if (!Number.isSafeInteger(bn)) {
+          // Every finite integer-valued double is exactly one BigInt, so the
+          // test is whether the Number IS an integer, not whether it is a SAFE
+          // one. This refused beyond 2**53, reasoning that a Number there may
+          // not be the integer the source wrote. That is true, but the loss
+          // happened where the literal became a Number, before this boundary,
+          // which receives a value and not source text: `uint64` accepts the
+          // same Number here, and JavaScript's own `BigInt(2 ** 60)` answers it
+          // exactly. The one boundary where the digits ARE available - JSON -
+          // refuses for both types, and keeps doing so.
+          if (!Number.isInteger(bn)) {
             return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
           }
           return Value(BigInt(bn));
@@ -2024,10 +2070,29 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
           // represents it exactly.
           const payload = Number(R(value) as bigint);
           const rounded = wrapToType(payload, t);
-          if (!Number.isFinite(rounded) || BigInt(rounded) !== (R(value) as bigint)) {
+          // Only an OVERFLOW to infinity is refused. This refused any rounding
+          // - `BigInt(rounded) !== value` - under the comment above, but
+          // #sec-requiretype's exception is a rounding "to an infinity", and
+          // every other source rounds finitely into a float here: `int64`
+          // 2**60+1 into `float64` is 2**60, and the same value as a BigInt was
+          // a RangeError.
+          if (!Number.isFinite(rounded)) {
             return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
           }
           return new TypedNumberValue(rounded, t);
+        }
+        // A BigInt into a SIZED INTEGER converts where it is in range, as every
+        // other integer does, and is a RangeError where it would wrap. It was a
+        // TypeError outright: a BigInt is not an `isNumericConversionSource`,
+        // so `5n` never reached `uint8` - and a union such as `uint8 | string`
+        // then skipped its exact numeric member and stored `5n` as the string
+        // "5", the textification #sec-selectunionmember exists to prevent.
+        if (value instanceof BigIntValue && isIntegerTypeName(t.Name)) {
+          const b = R(value) as bigint;
+          if (!fitsNumericType(b, t.Name, t.Arguments)) {
+            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+          }
+          return new TypedNumberValue(wrapToType(b, t), t);
         }
         if (!isNumericConversionSource(value)) {
           if (value instanceof JSStringValue || value instanceof TypedStringValue) {
