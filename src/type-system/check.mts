@@ -8228,6 +8228,95 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-defaultvalueof for a CLASS type, read from the declaration.
+   *
+   * "It is a type error to declare a binding or a field with a type _t_ and no
+   * initializer when DefaultValueOf(_t_) is ~none~" (#sec-default-values), and
+   * DefaultValueOf gives a class a default only through a declared zero, or
+   * field by field for a value type class. The checking pass left every class
+   * type to the evaluation of its declaration (`defaultNeedsEvaluatedClass`),
+   * so `let q: Q;` was refused only when it ran, and a field `q: Q` or a
+   * declaration in a function nothing called was never refused.
+   *
+   * Answers ~none~ only where the declaration settles it: no declared zero, and
+   * either a field whose type is certainly not a value type - a function type,
+   * an object shape, `object`, a dynamic array - which makes the class a
+   * reference class, or a field whose type certainly has no default. Anything
+   * it cannot settle - an untyped field, a base it cannot resolve, a type it
+   * does not recognize - is ~unknown~, and stays with the run time.
+   */
+  type DefaultVerdict = 'has' | 'none' | 'unknown';
+  const staticDefaultOf = (type: Known, seen: Set<object> = new Set()): DefaultVerdict => {
+    if (!type) return 'unknown';
+    if (seen.has(type)) return 'unknown';
+    seen.add(type);
+    switch (type.Kind) {
+      case 'primitive':
+        if (type.Name === 'symbol') return 'none';
+        return ['object', 'type'].includes(type.Name) ? 'unknown' : 'has';
+      case 'literal':
+        return 'has';
+      case 'union':
+        return type.Members.some((m) => m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')) ? 'has' : 'unknown';
+      case 'array':
+        if (type.Extent === 'dynamic' || type.Extent === 0) return 'has';
+        return typeof type.Extent === 'number' ? staticDefaultOf(type.Element, seen) : 'unknown';
+      case 'tuple': {
+        let verdict: DefaultVerdict = 'has';
+        for (const e of type.Elements) {
+          if (e.Rest || e.Initial !== 'none') continue;
+          const inner = staticDefaultOf(e.Type, seen);
+          if (inner === 'none') return 'none';
+          if (inner === 'unknown') verdict = 'unknown';
+        }
+        return verdict;
+      }
+      case 'nominal':
+        return classDefaultOf(type, seen);
+      default:
+        return 'unknown';
+    }
+  };
+  const certainlyNotValueType = (type: Known): boolean => !!type && (type.Kind === 'function' || type.Kind === 'object'
+    || (type.Kind === 'primitive' && type.Name === 'object')
+    || (type.Kind === 'array' && type.Extent === 'dynamic'));
+  const classDefaultOf = (type: TypeRecord, seen: Set<object>): DefaultVerdict => {
+    if (type.Kind !== 'nominal' || type.EnumMembers !== undefined || (type as { LibraryName?: string }).LibraryName !== undefined) return 'unknown';
+    const declaration = (type as { Declaration?: ParseNode }).Declaration;
+    if (!declaration || declaration.type !== 'ClassDeclaration') return 'unknown';
+    if ((type as { Arguments?: readonly unknown[] }).Arguments?.length) return 'unknown';
+    const hasDeclaredZero = classBodyOf(declaration).some((e) => e.type === 'FieldDefinition'
+      && (e as { static?: boolean }).static
+      && (e as unknown as { ClassElementName?: { name?: string } }).ClassElementName?.name === 'default');
+    if (hasDeclaredZero) return 'has';
+    if (((declaration as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('reference')) return 'none';
+    let verdict: DefaultVerdict = 'has';
+    for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
+      const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
+      for (const element of classBodyOf(at)) {
+        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+        const annotation = (element as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        if (!annotation) return 'unknown';
+        const fieldType = resolveType(annotation.Type);
+        if (!fieldType || fieldType.Kind === 'any' || mentionsTypeParameter(fieldType)) return 'unknown';
+        // A field of a type that is not a value type makes this a reference
+        // class, which has no default without a declared zero.
+        if (certainlyNotValueType(fieldType)) return 'none';
+        const inner = staticDefaultOf(fieldType, seen);
+        if (inner === 'none') return 'none';
+        if (inner === 'unknown') verdict = 'unknown';
+      }
+      if (heritage && !heritageClassOf(at)) return 'unknown';
+    }
+    return verdict;
+  };
+  const refuseClassWithoutDefault = (declared: TypeRecord): boolean => {
+    if (staticDefaultOf(declared) !== 'none') return false;
+    errors.push(Throw.StaticTypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(declared))).Value as ObjectValue);
+    return true;
+  };
+
   const checkDefaultInitialization = (type: TypeRecord, seen = new Set<TypeRecord>()): void => {
     if (seen.has(type)) return;
     seen.add(type);
@@ -17373,6 +17462,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const enumAtoms = Atoms(subjectType ?? undefined);
       const chainAtoms = AtomsOfType(subjectType ?? undefined);
       const overEnumerators = enumAtoms.some((a) => a.owner !== undefined);
+      // #sec-match-exhaustiveness: "It is a type error for a `match` not to be
+      // exhaustive." The atom judgment below covers a subject with finitely many
+      // values - a boolean, an enum, a sealed class - and gives up on a union
+      // with a literal member or a member of its own with no atoms, so `match (t)
+      // { when uint8: ... }` over `uint8 | string` was accepted and threw
+      // "matched no clause" at run time. Such a subject is judged member by
+      // member: each member must be covered by an unguarded clause's pattern,
+      // which is the clause's remainder folded to `never`.
+      const unionSubject = subjectType?.Kind === 'union' ? subjectType : null;
+      if (!me.All && chainAtoms.length === 0 && !overEnumerators && unionSubject
+          && !me.Clauses.some((clause) => clause.Pattern === null)
+          && unionSubject.Members.every((member) => member.Kind !== 'any' && !mentionsTypeParameter(member))) {
+        // A string or number literal pattern covers the literal member it names,
+        // which a union of literals is made of: `when "a":` covers `'a'`. Read
+        // here only; the reachability judgment keeps its own reading.
+        const literalPatternCovers = (pattern: ParseNode, member: TypeRecord): boolean => {
+          const p = pattern as unknown as { type?: string, Literal?: { type?: string, value?: unknown } };
+          if (p.type === 'MatchOrPattern') {
+            const or = pattern as unknown as { Left: ParseNode, Right: ParseNode };
+            return literalPatternCovers(or.Left, member) || literalPatternCovers(or.Right, member);
+          }
+          if (p.type !== 'MatchLiteralPattern' || !p.Literal || member.Kind !== 'literal') return false;
+          const want = (member as { Value: unknown }).Value;
+          if (p.Literal.type === 'StringLiteral' && typeof p.Literal.value === 'string') {
+            return (want as { stringValue?: () => string }).stringValue?.() === p.Literal.value;
+          }
+          if (p.Literal.type === 'NumericLiteral' && typeof p.Literal.value === 'number') {
+            return want instanceof NumberValue && R(want) === p.Literal.value;
+          }
+          return false;
+        };
+        const uncovered = unionSubject.Members.filter((member) => !me.Clauses.some((clause) => clause.Pattern !== null
+          && !clause.Guard && (structuralPatternCovers(clause.Pattern, member) || literalPatternCovers(clause.Pattern, member))));
+        if (uncovered.length > 0) {
+          errors.push((Throw.StaticTypeError(
+            'match over $1 is missing $2 and has no default',
+            Value(displayType(subjectType!)),
+            Value(uncovered.map((member) => displayType(member)).join(', ')),
+          ) as ThrowCompletion).Value as ObjectValue);
+        }
+      }
       if (!me.All && chainAtoms.length > 0 && !overEnumerators) {
         const coveredAtoms = new Set<string>();
         let chainDefault = false;
@@ -23216,6 +23346,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // its default is the specialization's question.
           if (declared && declared.Kind !== 'parameter' && declared.Kind !== 'deferred' && !n.Initializer && !n.TypedInitializer) {
             checkDefaultInitialization(declared);
+            refuseClassWithoutDefault(declared as TypeRecord);
             const written = (n.TypeAnnotation?.Type as { type?: string, TypeName?: { IdentifierReference?: { name?: string } } } | undefined);
             defaultsNeeded.push({
               node: n as ParseNode,
@@ -24188,6 +24319,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // #sec-typed-classes: a field without an initializer needs a
             // default. check-pass.mts resolves this after metadata processing.
             const written = n.TypeAnnotation.Type;
+            refuseClassWithoutDefault(declared as TypeRecord);
             defaultsNeeded.push({
               node: n, type: declared, display: displayType(declared),
               annotationName: written.type === 'TypeReference' ? written.TypeName.IdentifierReference?.name : undefined,
