@@ -1158,10 +1158,60 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // An integral Number is exactly a BigInt, so it converts. This is what
         // lets typed code write `65` where a `bigint` is wanted rather than
         // `65n`: the suffix exists because BigInt predates a type system that
-        // could take a literal's type from its context. The cast rule
-        // truncates toward zero, as the other integer targets do.
+        // could take a literal's type from its context.
+        //
+        // #sec-conversions: an explicit conversion "is an instruction to discard
+        // information ... and does not fail merely because information is lost".
+        // So a FINITE value with a fraction truncates toward zero, as it does
+        // into every other integer target - `5.5 := bigint` is `5n`, while
+        // JavaScript's own `BigInt(5.5)`, a separate operation, still throws.
+        //
+        // NaN and the infinities are REFUSED. Discarding information needs a
+        // value to discard it from, and neither has an integer part to keep. A
+        // fixed-width target gives them 0 because its conversion is total - a
+        // reduction modulo 2**M must send every input somewhere, and the ToInt32
+        // shape sends these to 0. `bigint` has no width to reduce modulo and no
+        // maximum to saturate an infinity to, so any integer chosen would be
+        // arbitrary. Rust's big integer refuses them for the same reason
+        // (`num-bigint`'s `from_f64` returns `None` for a non-finite input, while
+        // truncating "to match the rounding of casting from float to int"), as
+        // Python's `int` does.
+        //
+        // Every numeric source is handled HERE. This handled only a Number and
+        // sent every other source to the CHECKED conversion, which refuses a lost
+        // fraction by design - so `(5.5 := float32) := bigint` and a `rational`
+        // 5.5 threw where a Number 5.5 truncated. And the Number path crashed
+        // the host on NaN: `Math.trunc(NaN)` is NaN, and the host's own
+        // `BigInt(NaN)` threw from outside the engine.
+        const refuse = () => Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
         if (value instanceof NumberValue) {
-          return Value(BigInt(Math.trunc(R(value) as number)));
+          const n = R(value) as number;
+          if (!Number.isFinite(n)) {
+            return refuse();
+          }
+          return Value(BigInt(Math.trunc(n)));
+        }
+        if (isTypedNumber(value)) {
+          const record = value.TypeRecord as TypeRecord;
+          if (record.Kind === 'primitive' && isIntegerTypeName(record.Name)) {
+            return Value(value.bigintValue()); // eslint-disable-line @engine262/mathematical-value -- the exact value of a wide integer; R is reachable only through ToNumber, which rounds an int64 above 2**53
+          }
+          if (record.Kind === 'primitive' && isFloatTypeName(record.Name)) {
+            // The MATHEMATICAL value: the question is which integer the value
+            // truncates to, where a signed zero is immaterial.
+            const f = R(Q(yield* ToNumber(value))) as number;
+            if (!Number.isFinite(f)) {
+              return refuse();
+            }
+            return Value(BigInt(Math.trunc(f)));
+          }
+        }
+        if (isRationalObject(value)) {
+          // A BigInt quotient truncates toward zero, as the table's rational
+          // row gives.
+          const rn = (value as unknown as { RationalNumerator: bigint }).RationalNumerator;
+          const rd = (value as unknown as { RationalDenominator: bigint }).RationalDenominator;
+          return Value(rn / rd);
         }
         break;
       }
