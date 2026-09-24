@@ -22392,6 +22392,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (iterable?.type === 'RangeExpression' || iterable?.type === 'ArrayLiteral') {
           type Node = { type?: string, name?: string, parent?: Node } & Record<string, unknown>;
+          // Nodes that open a function: a `return` inside one returns from IT, not from
+          // the function containing the loop.
+          const functionKinds = new Set(['ArrowFunction', 'AsyncArrowFunction', 'FunctionDeclaration',
+            'FunctionExpression', 'AsyncFunctionDeclaration', 'AsyncFunctionExpression',
+            'GeneratorDeclaration', 'GeneratorExpression', 'AsyncGeneratorDeclaration',
+            'AsyncGeneratorExpression', 'MethodDefinition']);
           const binaryKinds = new Set(['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression',
             'ShiftExpression', 'RelationalExpression', 'EqualityExpression',
             'BitwiseANDExpression', 'BitwiseXORExpression', 'BitwiseORExpression']);
@@ -22508,6 +22514,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             } else if (parent.type === 'AssignmentExpression' && parent.AssignmentExpression === reference
                 && parent.AssignmentOperator === '=') {
               asked = staticType(parent.LeftHandSideExpression as ParseNode);
+            } else if (parent.type === 'ReturnStatement' && parent.Expression === reference) {
+              // `return i` asks for the return type - #sec-contextual-types: "the operand
+              // of a `return` in a function with a return annotation". The checker has
+              // already pushed it for the function containing the loop, with the
+              // awaited type for an `async` function and the return (not yield) type
+              // for a generator, and a CONTEXTUAL return type where the function takes
+              // one from a target - which the specification makes the function's own.
+              // So it is read, not recomputed.
+              //
+              // Only for a `return` of THAT function. A `return` inside a function
+              // nested in the loop belongs to the nested function, which is not
+              // entered yet: the stack still holds the outer type, and reading it would
+              // give the wrong one. Such a return asks for nothing.
+              let nestedFunction = false;
+              for (let p: Node | undefined = parent.parent; p && p !== body; p = p.parent) {
+                if (p.type && functionKinds.has(p.type)) {
+                  nestedFunction = true;
+                  break;
+                }
+              }
+              if (!nestedFunction) {
+                asked = returnTypes[returnTypes.length - 1] ?? null;
+              }
             } else if (parent.type && binaryKinds.has(parent.type)) {
               const other = children(parent).find((c) => c !== reference);
               if (!other || other.type === 'NumericLiteral' || mentionsBinding(other)) {
