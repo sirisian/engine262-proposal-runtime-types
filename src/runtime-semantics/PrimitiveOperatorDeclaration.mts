@@ -2,7 +2,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { MetadataCapturesOf, ComponentCapturesOf } from '../type-system/specialization-patterns.mts';
+import { MetadataCapturesOf, ComponentCapturesOf, NestedComponentCapturesOf } from '../type-system/specialization-patterns.mts';
+import { ComponentListTypeNodes } from '../type-system/component-patterns.mts';
 import { surroundingAgent, EnsureCompletion, Q, Value, type PlainEvaluator } from '#self';
 
 /**
@@ -152,13 +153,29 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       BindingIdentifier?: { name?: string },
     }[]).map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
     const components = ComponentCapturesOf(node as ParseNode.PrimitiveOperatorDeclaration);
-    if (blockParameterNames.length > 0 || operatorParameterNames.length > 0 || components.length > 0 || bodyless) {
+    // A component list holding a nested pattern is bound by the matcher; its
+    // type nodes are resolved here, once, since the matcher is synchronous.
+    const componentList = (node as ParseNode.PrimitiveOperatorDeclaration).ComponentParameters;
+    let componentResolved: Map<object, TypeRecord> | undefined;
+    if (componentList && NestedComponentCapturesOf(node as ParseNode.PrimitiveOperatorDeclaration).length > 0) {
+      componentResolved = new Map();
+      for (const typeNode of ComponentListTypeNodes(componentList)) {
+        const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(typeNode as never));
+        if (resolved.Type === 'normal') {
+          componentResolved.set(typeNode, resolved.Value as unknown as TypeRecord);
+        }
+      }
+    }
+    if (blockParameterNames.length > 0 || operatorParameterNames.length > 0 || components.length > 0 || bodyless || componentResolved) {
       deferred = {
         parameterNames: blockParameterNames,
         operatorParameterNames,
         parameterConstraints: blockParameterConstraints,
         componentNames: components.map((c) => c.BindingIdentifier.name),
         componentIndices: components.map((c) => c.Index),
+        componentList: componentResolved ? componentList : undefined,
+        componentPrimitive: componentResolved ? typeName : undefined,
+        componentResolved,
         parameterTypeNode: first?.TypeAnnotation?.Type,
         returnTypeNode: e.TypeAnnotation?.Type,
       };

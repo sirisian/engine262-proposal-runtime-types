@@ -724,13 +724,33 @@ export function ComponentCapturesOf(declaration: { readonly ComponentParameters?
   return views;
 }
 
-/** Every name a primitive block's header binds: its component captures, then its metadata captures. */
+/**
+ * The captures NESTED in a block's component list - `D` of
+ * `vector<float32.<const D: Dimensions>, const N: uint32>` - which the
+ * specialization matcher binds from the receiver's argument, each viewed with
+ * its written domain.
+ */
+export function NestedComponentCapturesOf(declaration: { readonly ComponentParameters?: ParseNode.TypeParameters | null } | null | undefined): MetadataCaptureView[] {
+  const list = declaration?.ComponentParameters;
+  if (!list || list.ListKind !== 'specialization') {
+    return [];
+  }
+  const topLevel = new Set((list.SpecializationEntryList ?? []).map((e) => e.Pattern));
+  return (list.Captures ?? []).filter((c) => !topLevel.has(c)).map((c) => ({
+    BindingIdentifier: c.BindingIdentifier,
+    TypeParameterConstraint: c.TypeParameterDomain,
+    TypeParameterDefault: null,
+    IsVariadic: false,
+  }));
+}
+
+/** Every name a primitive block's header binds: its component captures, nested ones included, then its metadata captures. */
 export function BlockCapturesOf(declaration: {
   readonly TypeParameters?: ParseNode.TypeParameters | null,
   readonly ComponentParameters?: ParseNode.TypeParameters | null,
   readonly MetadataParameters?: ParseNode.TypeParameters | null,
 } | null | undefined): (ComponentCaptureView | MetadataCaptureView)[] {
-  return [...ComponentCapturesOf(declaration), ...MetadataCapturesOf(declaration)];
+  return [...ComponentCapturesOf(declaration), ...NestedComponentCapturesOf(declaration), ...MetadataCapturesOf(declaration)];
 }
 
 /**

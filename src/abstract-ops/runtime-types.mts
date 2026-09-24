@@ -2583,6 +2583,15 @@ export interface DeferredOperatorTypes {
    */
   readonly componentNames?: readonly string[];
   readonly componentIndices?: readonly number[];
+  /**
+   * The block's component list where it holds a nested pattern -
+   * `vector<float32.<const D: Dimensions>, const N: uint32>` - bound by the
+   * specialization matcher, with the primitive's name and the list's type
+   * nodes resolved when the block was evaluated.
+   */
+  readonly componentList?: unknown;
+  readonly componentPrimitive?: string;
+  readonly componentResolved?: ReadonlyMap<object, TypeRecord>;
   readonly parameterTypeNode: unknown;
   readonly returnTypeNode: unknown;
 }
@@ -2720,6 +2729,9 @@ export function LookupPrimitiveOperatorLevels(value: Value, opText: string): rea
     names.push('complex');
   } else if (isRationalObject(value)) {
     names.push('rational');
+  } else if (value.type === 'Vector') {
+    // A vector's blocks are over the family, `primitive vector<...>`.
+    names.push('vector');
   }
   return names.map((name) => tables.get(name)?.get(opText) ?? []);
 }

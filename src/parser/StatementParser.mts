@@ -1,5 +1,6 @@
 import { builtinTypeRecord } from '../type-system/records.mts';
 import { PrimitiveDeclaresParameters, PrimitiveParameterKinds } from '../type-system/specialization-patterns.mts';
+import { CollectCaptures } from './TypeParser.mts';
 import type { Mutable } from '../utils/language.mts';
 import { Token, isAutomaticSemicolon } from './tokens.mts';
 import { TypeParser } from './TypeParser.mts';
@@ -503,7 +504,24 @@ export abstract class StatementParser extends TypeParser {
               : `\`${capture}\` stands in a ${kind} component of \`${name}\`, and \`${pattern.TypeParameterDomain!.sourceText}\` restates that slot's domain as another; a capture takes its slot's domain, so it needs none written`), entry);
             return;
           }
-          this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's component list is supported only as \`_\` or a capture in each position; ${unsupported}`), entry);
+          // A pattern over a TYPE component, matched by the specialization
+          // matcher against the receiver's argument: a fixed type, `float32`,
+          // or an application of a primitive that declares no parameters with
+          // one metadata capture - its `.<...>` is a metadata position, so
+          // `vector<float32.<const D: Dimensions>, const N: uint32>` binds the
+          // lanes' Dimensions as D.
+          if (kinds[q] === 'type' && pattern.type === 'TypeReference' && pattern.TypeName.MemberNames.length === 0) {
+            const args = (pattern.TypeArguments?.TypeArgumentList ?? []) as unknown as ParseNode[];
+            const nested = args.filter((a) => a.type === 'CaptureBinding') as ParseNode.CaptureBinding[];
+            if (nested.length === 0 && CollectCaptures(args).length === 0) {
+              return;
+            }
+            if (!PrimitiveDeclaresParameters(pattern.TypeName.IdentifierReference.name) && args.length === 1
+                && nested.length === 1 && nested[0].TypeParameterDomain && !nested[0].IsVariadic && nested[0].Arity === 0) {
+              return;
+            }
+          }
+          this.addEarlyError(Throw.SyntaxError('$1', `a primitive block's component list is supported only as \`_\`, a capture, a fixed type, or a primitive with one metadata capture, \`float32.<const D: Dim>\`, in each position; ${unsupported}`), entry);
         });
       }
     }

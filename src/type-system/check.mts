@@ -1,5 +1,6 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
+import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
+import { MatchComponentList } from './component-patterns.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -15135,6 +15136,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
+          // A vector block's bodyless definition gives the lane-wise result its
+          // type, as dispatch stamps it; with none, vector arithmetic keeps the
+          // typing it had.
+          if (token && isVector(leftT) && isVector(rightT) && SameType(leftT as TypeRecord, rightT as TypeRecord)) {
+            const contributed = bodylessResult(token, leftT as TypeRecord, rightT as TypeRecord);
+            if (contributed) return contributed;
+          }
         }
         if (token && reportNumericUnion(token, leftT, rightT, leftLit, rightLit)) return neverType;
         if (erasedKeepingBrand(leftT)?.Kind !== 'union' && erasedKeepingBrand(rightT)?.Kind !== 'union') {
@@ -22139,8 +22147,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * metadata, and one contributing definition's return type is the result.
    */
   const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | undefined => {
-    if (left.Kind !== 'parameterized' || left.Base.Kind !== 'primitive') return undefined;
-    const base = left.Base;
+    // A vector's metadata is its lanes', so a vector is judged by its own type.
+    const isVector = left.Kind === 'primitive' && left.Name === 'vector';
+    if (!isVector && (left.Kind !== 'parameterized' || left.Base.Kind !== 'primitive')) return undefined;
+    const base = (isVector ? left : (left as TypeRecord & { Kind: 'parameterized' }).Base) as TypeRecord & { Kind: 'primitive' };
     const levels: string[] = [];
     const firstArgument = (base.Arguments ?? [])[0];
     if (typeof firstArgument === 'number') levels.push(`${base.Name}${firstArgument}`);
@@ -22150,12 +22160,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const { def, block } of blockDefinitionsFor(name, op)) {
         if (def.FunctionBody) continue;
         const scope = new Map<string, Known | null>();
-        for (const c of BlockCapturesOf(block)) {
-          if ('Index' in c) {
-            const arg = (base.Arguments ?? [])[c.Index];
-            scope.set(c.BindingIdentifier.name, typeof arg === 'object' ? arg as Known : null);
-          } else {
-            scope.set(c.BindingIdentifier.name, metadataAsObjectRecord(left.Metadata) as Known);
+        // A component list with a nested pattern is bound by the matcher, as
+        // dispatch binds it; a receiver it does not match is not spoken for.
+        if (NestedComponentCapturesOf(block).length > 0 && block.ComponentParameters) {
+          const matched = MatchComponentList(block.ComponentParameters, base.Name, base.Arguments ?? [], (n) => resolveType(n as ParseNode.Type));
+          if (!matched) continue;
+          for (const [name, value] of matched) scope.set(name, value as Known);
+        } else {
+          for (const c of BlockCapturesOf(block)) {
+            if ('Index' in c) {
+              const arg = (base.Arguments ?? [])[c.Index];
+              scope.set(c.BindingIdentifier.name, typeof arg === 'object' ? arg as Known : null);
+            } else if (left.Kind === 'parameterized') {
+              scope.set(c.BindingIdentifier.name, metadataAsObjectRecord(left.Metadata) as Known);
+            }
           }
         }
         typeParameterScopes.push(scope);
@@ -22164,7 +22182,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const operand = annotation ? resolveType(annotation.Type) : null;
           if (annotation && (!operand || !IsSubtype(right, operand, []))) continue;
           const returns = def.TypeAnnotation ? resolveType(def.TypeAnnotation.Type) : null;
-          if (returns && returns.Kind === 'parameterized') found.push(returns);
+          if (returns && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) found.push(returns);
         } finally {
           typeParameterScopes.pop();
         }

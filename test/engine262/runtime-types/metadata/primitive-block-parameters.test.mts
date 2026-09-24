@@ -111,7 +111,10 @@ test('#sec-type-parameters-static-semantics-early-errors: the list captures meta
   expectThrown('type D = { m: int32 }; primitive float32<const T> {}', 'other patterns over a primitive are not supported yet');
   expectThrown('primitive float32<float64> {}', 'other patterns over a primitive are not supported yet');
   expectThrown('primitive float32<...const Ds: D> {}', 'other patterns over a primitive are not supported yet');
-  expectThrown('primitive vector<float32.<const D: Dimensions>, const N: uint32> {}', 'other patterns over a primitive are not supported yet');
+  // The design's `vector<float32.<const D: Dimensions>, const N: uint32>` is
+  // supported (operators/vector-blocks.test.mts); a nested pattern of any other
+  // shape still is not.
+  expectThrown('primitive vector<uint.<const W>, const N: uint32> {}', 'other patterns over a primitive are not supported yet');
   // A `partial` declaration's primary is elsewhere, too.
   expectEarlyError('class Box<T: type> {} partial class Box<T: type> {}', 'SyntaxError');
 });

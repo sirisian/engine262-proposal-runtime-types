@@ -13,13 +13,15 @@ import { vectorBinaryOperator } from '../type-system/vector-ops.mts';
 import type { MetadataRecord } from '../type-system/records.mts';
 import { isRangeBinaryOperator, rangeBinaryOperator } from '../type-system/range-ops.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
-import { isTypedNumber, TypedNumberValue } from '../value.mts';
+import { isTypedNumber, TypedNumberValue, VectorValue } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels } from '../abstract-ops/runtime-types.mts';
 import { IsSubtype } from '../type-system/relations.mts';
+import { MatchComponentList } from '../type-system/component-patterns.mts';
+import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
 import {
@@ -69,6 +71,26 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // sum and no `*` cannot run the example that motivates sum.
   if (surroundingAgent.feature('runtime-types')
       && (lval.type === 'Vector' || rval.type === 'Vector')) {
+    // #sec-primitive-operator-blocks: a block over `vector` speaks for a vector
+    // receiver before the lane-wise operation, as a block does for any other
+    // primitive; it was never consulted, so the design's dimensioned-vector
+    // block had nothing to apply to.
+    if (lval.type === 'Vector') {
+      const dispatched = Q(yield* DispatchPrimitiveBlockOperator(lval, opText, rval));
+      if (isBodylessContributions(dispatched)) {
+        EnterOperatorBody();
+        let raw;
+        try {
+          raw = Q(yield* vectorBinaryOperator(lval, opText, rval));
+        } finally {
+          LeaveOperatorBody();
+        }
+        return StampBodylessContributions(lval, raw as Value, dispatched);
+      }
+      if (dispatched !== undefined) {
+        return dispatched;
+      }
+    }
     return Q(yield* vectorBinaryOperator(lval, opText, rval));
   }
   // proposal-runtime-types (ranges.md "Types"): interval arithmetic. The bounds
@@ -497,10 +519,29 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
       let deferredSpokenFor: object[] = [];
       let entryFrame: Map<string, TypeRecord> | null = null;
       const componentNames = entry.deferred?.componentNames ?? [];
-      if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0)) {
+      const componentList = entry.deferred?.componentList as ParseNode.TypeParameters | undefined;
+      let componentMismatch = false;
+      if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0 || componentList)) {
         const carried = RuntimeTypeOf(lval);
-        if (carried.Kind === 'parameterized' || componentNames.length > 0) {
+        if (carried.Kind === 'parameterized' || componentNames.length > 0 || componentList) {
           const frame = new Map<string, TypeRecord>();
+          // A component list with a nested pattern is matched against the
+          // receiver's own arguments by the specialization matcher: the
+          // lanes' type and count of a vector. A receiver it does not match
+          // is one the definition does not speak for.
+          if (componentList) {
+            const receiverBase = carried.Kind === 'parameterized' ? carried.Base : carried;
+            const matched = receiverBase.Kind === 'primitive'
+              ? MatchComponentList(componentList, entry.deferred.componentPrimitive!, receiverBase.Arguments ?? [], (n) => entry.deferred!.componentResolved?.get(n) ?? null)
+              : null;
+            if (matched) {
+              for (const [name, value] of matched) {
+                frame.set(name, value);
+              }
+            } else {
+              componentMismatch = true;
+            }
+          }
           // #sec-primitive-operator-blocks: a COMPONENT capture is bound from
           // the receiver's own argument at its position - `complex128`'s
           // `float64`, `uint16`'s `16` - and a width is bound as the literal a
@@ -577,15 +618,20 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
         }
       }
       const effectiveParameter = deferredParameterType ?? entry.parameterType;
-      const admits = effectiveParameter === null
-        ? true
-        : Q(yield* IsOfType(rval, effectiveParameter));
+      let admits: boolean;
+      if (componentMismatch) {
+        admits = false;
+      } else if (effectiveParameter === null) {
+        admits = true;
+      } else {
+        admits = Q(yield* IsOfType(rval, effectiveParameter));
+      }
       if (framePushed) {
         popTypeParameterFrame();
         framePushed = false;
       }
       if (admits && chosenBodyless(entry)) {
-        if (deferredReturnType?.Kind === 'parameterized') {
+        if (deferredReturnType?.Kind === 'parameterized' || isVectorType(deferredReturnType)) {
           contributions.push({
             entry, frame: entryFrame, parameter: effectiveParameter, returnType: deferredReturnType, spokenFor: deferredSpokenFor, fixed: true,
           });
@@ -681,7 +727,27 @@ function chosenBodyless(entry: { readonly fn: unknown }): boolean {
  * meta type's portion from its definition's return type, and the default of
  * every other governing meta type.
  */
+/** A vector type, whose metadata is its lane type's. */
+function isVectorType(t: TypeRecord | null | undefined): boolean {
+  return !!t && t.Kind === 'primitive' && t.Name === 'vector';
+}
+
 export function StampBodylessContributions(lval: Value, raw: Value, found: BodylessContributions): Value {
+  // A vector's metadata is its LANES': the contributing definition's return
+  // type is the result's type, with each lane carrying its lane type. One
+  // contribution decides it; the per-meta-type merge of a scalar's portions
+  // has no counterpart until a lane is governed by several meta types.
+  if ((raw as { type?: string }).type === 'Vector') {
+    const vector = raw as unknown as VectorValue;
+    const vectorReturns = found.contributions.map((c) => c.returnType).filter(isVectorType) as (TypeRecord & { Kind: 'primitive' })[];
+    if (vectorReturns.length !== 1) {
+      return raw;
+    }
+    const resultType = vectorReturns[0];
+    const laneType = resultType.Arguments[0] as TypeRecord;
+    const lanes = vector.lanes.map((lane: Value) => (isTypedNumber(lane) ? new TypedNumberValue((lane as TypedNumberValue).value, laneType) : lane));
+    return new VectorValue(lanes, resultType) as unknown as Value;
+  }
   const portions = found.contributions.flatMap((c) => c.spokenFor.map((metaType) => ({
     metaType, portion: MetadataPortion((c.returnType as TypeRecord & { Kind: 'parameterized' }).Metadata, metaType),
   })));
