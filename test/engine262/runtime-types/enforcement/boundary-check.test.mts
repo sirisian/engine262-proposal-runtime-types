@@ -127,13 +127,21 @@ test('the checked boundary admits no bare value into a parameterization: the cas
 });
 
 test('a BigInt is a conversion source for the float families', () => {
-  // The lossy cast rounds to the width; the checked boundary admits exactly
-  // where the width represents the value exactly, and RangeErrors where it
-  // rounds.
+  // The lossy cast rounds to the width. The checked boundary rounds too, for a
+  // FLOAT target: #sec-requiretype refuses a conversion that would "wrap,
+  // truncate toward zero, or round a finite value to an infinity", and rounding
+  // to the nearest FINITE double is none of those. So `2n ** 70n + 1n`, which no
+  // double holds exactly, is admitted as the nearest one; only a BigInt too large
+  // for any finite double is refused. (An integer target is different - there a
+  // BigInt that does not fit would WRAP, which is refused; see below.)
   expect(evaluated('String((3n := float64));')).toBe('3');
   expect(evaluated('String(float64(3n));')).toBe('3');
   expect(evaluated('let f: float64 = 3n; String(f);')).toBe('3');
-  expectThrown('let f: float64 = (2n ** 70n) + 1n; "admitted";');
+  // The `+ 1n` is gone: the nearest double to 2**70 + 1 is 2**70. Compared as
+  // text, since `f` is a typed `float64` and `2 ** 70` a plain `number`, and
+  // strict equality does not hold between a typed value and an untyped one.
+  expect(evaluated('let f: float64 = (2n ** 70n) + 1n; String(String(f) === String(2 ** 70));')).toBe('true');
+  expectThrown('let f: float64 = 2n ** 1100n; "admitted";');
   // An integer target was refused while "exactness at the wide widths" was the
   // pinned prerequisite. It has landed - a type wider than 53 bits carries its
   // value exactly - so an integer target takes a BigInt on the same terms the

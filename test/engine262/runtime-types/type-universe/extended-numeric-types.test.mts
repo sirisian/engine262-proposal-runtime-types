@@ -278,9 +278,15 @@ test('numeric types: ToBigInt refuses a numeric value rather than crashing', () 
   // between two numeric types: an integer type's values are mathematical
   // integers, so each is a BigInt exactly.
   expect(evaluated('String(bigint((3 := uint32)));')).toBe('3');
-  // A float is refused for the reason the line above it gives - it has a
-  // fraction to lose, and a BigInt has nowhere to put one.
-  expectThrownKind('bigint((1.5 := float64));', 'TypeError');
+  // A float with a fraction CONVERTS here, by truncating: `bigint(x)` is a CAST,
+  // and every integer type's cast truncates a fraction toward zero -
+  // `int32((1.5 := float64))` and `int64((1.5 := float64))` are both 1. This
+  // asserted a TypeError, from when `bigint` was the one integer type that
+  // refused a typed float at a cast; it now takes the rule the others do.
+  // The fraction IS still refused where refusing is the rule - at a checked
+  // boundary, `let x: bigint = <1.5>`, a RangeError (tested above).
+  expect(evaluated('String(bigint((1.5 := float64)));')).toBe('1');
+  expect(evaluated('String(int32((1.5 := float64)));')).toBe('1');
 });
 
 test('numeric types: a literal at `bigint` is read from its source text', () => {
@@ -312,11 +318,17 @@ test('numeric types: a literal at `bigint` is read from its source text', () => 
   // A non-integer literal denotes no BigInt and is still refused.
   expectThrown('let x: bigint = 1.5;');
   expectThrown('let x: bigint = 1e400;');
-  // A Number that is NOT a literal keeps the 2**53 bound, and there the bound
-  // is the truth rather than a limitation: the information is gone by the time
-  // the value exists, so admitting it would report digits the source never
-  // wrote.
-  expectThrownKind('function anyv() { return 9007199254740993; } let x: bigint = anyv();', 'RangeError');
+  // A Number that is NOT a literal converts by its value, beyond 2**53 as below
+  // it: every finite integer-valued double is exactly one BigInt. This refused
+  // beyond 2**53, reasoning that such a Number may not be the integer the source
+  // wrote - true, but that loss happened where the literal BECAME a Number,
+  // before this boundary, which receives a value and not source text. `uint64`
+  // accepts the same Number, and `BigInt(2 ** 60)` answers it exactly. So the
+  // `9007199254740993` returned here is already the double `...992`, and that is
+  // what converts. The literal written directly at `bigint`, above, is where the
+  // source digits still exist, and is read exactly.
+  expect(evaluated('function anyv() { return 9007199254740993; } let x: bigint = anyv(); String(x);'))
+    .toBe('9007199254740992');
 });
 
 test('numeric types: the `number` target admits numeric values only', () => {
