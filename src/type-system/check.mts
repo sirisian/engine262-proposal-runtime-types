@@ -22370,7 +22370,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             } else if ((parent.type === 'LexicalBinding' || parent.type === 'VariableDeclaration')
                 && parent.Initializer === reference && parent.TypeAnnotation) {
-              asked = resolveType((parent.TypeAnnotation as { Type: ParseNode }).Type);
+              asked = resolveType((parent.TypeAnnotation as ParseNode.TypeAnnotation).Type);
             } else if (parent.type === 'AssignmentExpression' && parent.AssignmentExpression === reference
                 && parent.AssignmentOperator === '=') {
               asked = staticType(parent.LeftHandSideExpression as ParseNode);
