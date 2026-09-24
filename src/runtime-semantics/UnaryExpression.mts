@@ -39,7 +39,7 @@ import {
 } from '#self';
 import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
 import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
-import { isRationalObject } from '../intrinsics/Rational.mts';
+import { isRationalObject, rationalNegate } from '../intrinsics/Rational.mts';
 import { isFloat128Object } from '../intrinsics/Float128.mts';
 
 /** https://tc39.es/ecma262/#sec-delete-operator-runtime-semantics-evaluation */
@@ -326,6 +326,15 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(rawValue)) {
     const negated = decimalNegate(rawValue);
     return CreateDecimalValue(negated.parts.significand, negated.parts.exponent, negated.width, surroundingAgent.currentRealmRecord);
+  }
+  // proposal-runtime-types #sec-which-operations-each-family-defines gives the
+  // rational family unaryMinus too (rational.md: "unary `-` negates the
+  // numerator"). Without this branch a rational fell through to ToNumeric, which
+  // has no Number value for one, so even `-rational(3, 4)` was a TypeError - while
+  // the checker, reading the same table, rightly accepted it. `~` and `%` stay
+  // refused: the table lists neither for rationals.
+  if (surroundingAgent.feature('runtime-types') && isRationalObject(rawValue)) {
+    return rationalNegate(rawValue, surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types (ranges.md "Types"): negating a range reflects it, so
   // the endpoints exchange places and carry their bounds with them - the image of

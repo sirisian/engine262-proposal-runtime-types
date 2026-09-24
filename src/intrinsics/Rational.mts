@@ -121,6 +121,18 @@ export function rationalSub(a: RationalObject, b: RationalObject, realmRec: Real
 export function rationalMul(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
   return CreateRationalValue(a.RationalNumerator * b.RationalNumerator, a.RationalDenominator * b.RationalDenominator, realmRec);
 }
+/**
+ * `rational::unaryMinus` - #sec-which-operations-each-family-defines lists it for
+ * the rational family, and rational.md says "unary `-` negates the numerator".
+ * The type record is kept, so a `rational.<N>` stays one. Built through the one
+ * constructor, so negating a numerator of -2**(N-1), whose magnitude does not fit
+ * `int.<N>`, is the bound's RangeError. A rational has no negative zero, so -0/1
+ * is 0/1.
+ */
+export function rationalNegate(a: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
+  return CreateRationalValue(-a.RationalNumerator, a.RationalDenominator, realmRec,
+    (a as { TypeRecord?: unknown }).TypeRecord);
+}
 export function rationalDiv(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion | { zero: true } {
   if (b.RationalNumerator === 0n) {
     return { zero: true };
