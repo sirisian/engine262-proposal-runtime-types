@@ -1521,6 +1521,49 @@ function isNumericOperandName(name: string | undefined): boolean {
 }
 
 /** Whether a type is an integer value type - `uint` or `int` at any width. */
+/**
+ * The value of a constant expression whose leaves are all BigInt literals -
+ * `1n`, `-128n`, `10n ** 39n` - or *null*. It lets a BigInt constant be judged
+ * against its contextual type as the Number constant folder lets `-128` be.
+ */
+function foldBigIntConstant(node: ParseNode): bigint | null {
+  const e = node as ParseNode & {
+    value?: unknown, operator?: string, Expression?: ParseNode, UnaryExpression?: ParseNode,
+    AdditiveExpression?: ParseNode, MultiplicativeExpression?: ParseNode, MultiplicativeOperator?: string,
+    ExponentiationExpression?: ParseNode, UpdateExpression?: ParseNode,
+  };
+  switch (e.type) {
+    case 'NumericLiteral':
+      return typeof e.value === 'bigint' ? e.value : null;
+    case 'ParenthesizedExpression':
+      return e.Expression ? foldBigIntConstant(e.Expression) : null;
+    case 'UnaryExpression': {
+      const v = e.UnaryExpression ? foldBigIntConstant(e.UnaryExpression) : null;
+      if (v === null) return null;
+      // Unary `+` on a BigInt throws, so only negation folds.
+      return e.operator === '-' ? -v : null;
+    }
+    case 'AdditiveExpression': {
+      const l = e.AdditiveExpression ? foldBigIntConstant(e.AdditiveExpression) : null;
+      const r = e.MultiplicativeExpression ? foldBigIntConstant(e.MultiplicativeExpression) : null;
+      if (l === null || r === null) return null;
+      return e.operator === '+' ? l + r : l - r;
+    }
+    case 'MultiplicativeExpression': {
+      const l = e.MultiplicativeExpression ? foldBigIntConstant(e.MultiplicativeExpression) : null;
+      const r = e.ExponentiationExpression ? foldBigIntConstant(e.ExponentiationExpression) : null;
+      return l !== null && r !== null && e.MultiplicativeOperator === '*' ? l * r : null;
+    }
+    case 'ExponentiationExpression': {
+      const l = e.UpdateExpression ? foldBigIntConstant(e.UpdateExpression) : null;
+      const r = e.ExponentiationExpression ? foldBigIntConstant(e.ExponentiationExpression) : null;
+      return l !== null && r !== null && r >= 0n && r < 4096n ? l ** r : null;
+    }
+    default:
+      return null;
+  }
+}
+
 function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
   return !!t && t.Kind === 'primitive'
     && ((t as { Name?: string }).Name === 'uint' || (t as { Name?: string }).Name === 'int');
@@ -12356,6 +12399,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return contextual;
       }
     }
+    // #sec-requiretype, #table-numeric-conversions: `bigint` is an ordinary
+    // numeric type at a boundary, so a BigInt LITERAL is judged by its value
+    // as a Number literal is: `const a: int64 = 1n` holds, `300n` into `int8`
+    // is out of range, and a float or `number` takes it unless it overflows.
+    // The static rule for a literal is the dynamic rule applied to a value
+    // known now; refusing `1n` here while the boundary accepted it at run
+    // time, and while `5` into `bigint` was accepted, was the one literal
+    // asymmetry.
+    // Contextual typing never refuses, as for a Number literal: a constant
+    // that fits takes the contextual type, and one that does not keeps its
+    // own, so an annotation's boundary refuses it ("300n" is not assignable to
+    // "int.<8>") while an explicit conversion, `uint8(300n)`, still wraps it.
+    const big = contextual ? foldBigIntConstant(node) : null;
+    if (contextual && big !== null) {
+      const prim = contextual as TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] };
+      if (isIntegerValueType(contextual) && fitsNumericType(big, prim.Name, prim.Arguments)) {
+        return contextual;
+      }
+      // Binary floats are named primitives, `float32` and `float64`; `number`
+      // is a float64. A float takes the value by rounding unless it overflows.
+      const floatName = contextual.Kind === 'primitive' ? contextual.Name : undefined;
+      const floatWidth = floatName === 'number' || floatName === 'float64' ? 64 : (floatName === 'float32' ? 32 : undefined);
+      if (floatWidth !== undefined && Number.isFinite(floatWidth === 32 ? Math.fround(Number(big)) : Number(big))) {
+        return contextual;
+      }
+      // Against a numeric target it does not fit, the constant keeps its own
+      // type, the BigInt literal, so the boundary refuses it statically as it
+      // refuses `1e39` into `float32` - and a folded expression is judged
+      // exactly as a bare literal is.
+      if (isIntegerValueType(contextual) || floatWidth !== undefined) {
+        return { Kind: 'literal', Value: Value(big), Base: makePrimitive('bigint') } as TypeRecord;
+      }
+    }
     if (node.type === 'NumericLiteral' && contextual && bigintTarget(contextual)) {
       const exact = exactBigIntOf(node as ParseNode.NumericLiteral);
       if (exact !== null) {
@@ -15001,6 +15077,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (lv && rv) {
           if (SameType(lv, rv)) {
             return lv;
+          }
+          // A primitive block's definition for this pair is the meaning of
+          // the operator, not an implicit conversion; the mixing rule applies
+          // where no block speaks for the pair.
+          if (token) {
+            const declared = blockOperatorResult(token, lv, rv);
+            if (declared !== undefined) {
+              return declared;
+            }
           }
           const completion = Throw.StaticTypeError('$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
@@ -21799,6 +21884,94 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } finally {
       if (scoped) typeParameterScopes.pop();
     }
+  };
+
+  /**
+   * #sec-primitive-operator-blocks, for the checker: the result type of the
+   * binary operator _op_ on a _left_ of a primitive type and a _right_ of
+   * another numeric type, where a primitive block defines it - *undefined*
+   * where no block does. The numeric-mixing rule is about IMPLICIT conversion,
+   * and a block operator converts nothing: it defines the operation, which the
+   * run time dispatches to, so refusing it here left the checker and the run
+   * time disagreeing about `(2 := float64) * (3 := uint8)`.
+   *
+   * The choice is the one dispatch makes: the receiver's exact block before
+   * its family's, and within a level the definition whose operand type is the
+   * most specific of those admitting _right_, whatever their order. Several
+   * admitting with none most specific is refused, as an ambiguous call is.
+   * The program's blocks are collected once, so a block declared after its
+   * first use counts as it does at run time.
+   */
+  let blockDefinitionIndex: Map<string, { def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration }[]> | null = null;
+  const blockDefinitionsFor = (typeName: string, op: string) => {
+    if (!blockDefinitionIndex) {
+      const index = new Map<string, { def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration }[]>();
+      const visit = (value: unknown): void => {
+        if (!value || typeof value !== 'object') return;
+        if (Array.isArray(value)) {
+          value.forEach(visit);
+          return;
+        }
+        const n = value as ParseNode;
+        if (n.type === 'PrimitiveOperatorDeclaration') {
+          const name = (n.TypeName as unknown as { IdentifierReference?: { name?: string } } | null)?.IdentifierReference?.name;
+          for (const def of n.OperatorDefinitionList ?? []) {
+            if (typeof name !== 'string' || def.type !== 'OperatorDefinition' || !def.OperatorName || !def.FormalParameters || def.FormalParameters.length !== 1) continue;
+            const key = `${name}\u0000${def.OperatorName}`;
+            const list = index.get(key) ?? [];
+            list.push({ def, block: n });
+            index.set(key, list);
+          }
+          return;
+        }
+        for (const [k, v] of Object.entries(n)) {
+          if (k !== 'parent' && k !== 'location') visit(v);
+        }
+      };
+      visit(root);
+      blockDefinitionIndex = index;
+    }
+    return blockDefinitionIndex.get(`${typeName}\u0000${op}`) ?? [];
+  };
+  const blockOperatorResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | null | undefined => {
+    const base = left.Kind === 'parameterized' ? left.Base : left;
+    if (base.Kind !== 'primitive') return undefined;
+    const levels: string[] = [];
+    const first = (base.Arguments ?? [])[0];
+    if (typeof first === 'number') levels.push(`${base.Name}${first}`);
+    levels.push(base.Name);
+    for (const name of levels) {
+      const admitting: { operand: TypeRecord | null, def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration }[] = [];
+      for (const { def, block } of blockDefinitionsFor(name, op)) {
+        const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+        const scoped = BlockCapturesOf(block).length > 0 && pushTypeParameterScopeOf(block);
+        let operand: TypeRecord | null = null;
+        try {
+          operand = annotation ? resolveType(annotation.Type) : null;
+        } finally {
+          if (scoped) typeParameterScopes.pop();
+        }
+        if (annotation && !operand) continue; // an operand the checker cannot resolve is left to the run time
+        if (operand === null || IsSubtype(right, operand, [])) admitting.push({ operand, def, block });
+      }
+      if (admitting.length === 0) continue;
+      const atLeastAsSpecific = (a: TypeRecord | null, b: TypeRecord | null) => b === null || (a !== null && IsSubtype(a, b, []));
+      const winners = admitting.filter((c) => admitting.every((d) => d === c || atLeastAsSpecific(c.operand, d.operand)));
+      if (winners.length !== 1) {
+        const completion = Throw.StaticTypeError('$1', `operator ${op} on ${displayType(left)} is ambiguous for an operand of ${displayType(right)}: two definitions of one primitive block level admit it, and neither operand type is more specific than the other`) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+        return null;
+      }
+      const returns = winners[0].def.TypeAnnotation;
+      if (!returns) return null;
+      const scoped = BlockCapturesOf(winners[0].block).length > 0 && pushTypeParameterScopeOf(winners[0].block);
+      try {
+        return resolveType(returns.Type);
+      } finally {
+        if (scoped) typeParameterScopes.pop();
+      }
+    }
+    return undefined;
   };
 
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {

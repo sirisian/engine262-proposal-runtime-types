@@ -101,3 +101,27 @@ test('overlapping operands neither more specific than the other are ambiguous wh
   expect(evaluated(`${blocks} String((2 := float64) * 'x') + ' ' + String((2 := float64) * 'z');`)).toBe('xy yz');
   expectThrown(`${blocks} (2 := float64) * 'y';`, 'operator * is ambiguous for this operand');
 });
+
+test('the checker types a block operator across numeric types as the run time dispatches it', () => {
+  // The numeric-mixing rule refused `(2 := float64) * (3 := uint8)` even where a
+  // block defines `*` for a uint8 operand, which the run time dispatches to.
+  // A block operator converts nothing: it is the operation's meaning.
+  const block = `primitive float64 { operator *(rhs: uint8): string { return 'u8'; } }`;
+  expect(evaluated(`${block} const s: string = (2 := float64) * (3 := uint8); s;`)).toBe('u8');
+  // The block's return type is the result type, so a wrong annotation is static.
+  expectEarlyError(`${block} const n: float64 = (2 := float64) * (3 := uint8);`, 'StaticTypeError');
+  // Where no definition admits the operand, the mixing rule still applies.
+  expectThrown(`${block} (2 := float64) * (3 := uint16);`, 'are different numeric types and do not mix');
+  expectThrown('(2 := float64) * (3 := uint8);', 'are different numeric types and do not mix');
+  // A block declared after its first use counts, as it does at run time.
+  expect(evaluated(`const s: string = (2 := float64) * (3 := uint8); ${block} s;`)).toBe('u8');
+});
+
+test('the checker chooses among definitions as dispatch does', () => {
+  expect(evaluated(`primitive uint8 { operator +(rhs: float64): string { return 'exact'; } }
+    primitive uint<const W> { operator +(rhs: float64): string { return 'family'; } }
+    const s: string = (3 := uint8) + (2 := float64); s;`)).toBe('exact');
+  expectThrown(`primitive float64 { operator *(rhs: 'x' | uint8): string { return 'a'; } }
+    primitive float64 { operator *(rhs: uint8 | 'y'): string { return 'b'; } }
+    (2 := float64) * (3 := uint8);`, 'is ambiguous for an operand of uint.<8>');
+});

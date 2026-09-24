@@ -1458,6 +1458,9 @@ export function canonicalTypeText(t: TypeRecord, seen: readonly TypeRecord[] = [
       if (typeof v?.booleanValue === 'function') {
         return String(v.booleanValue());
       }
+      if (typeof (v as { value?: unknown } | undefined)?.value === 'bigint') {
+        return `${(v as unknown as { value: bigint }).value}n`;
+      }
       return displayType(t, seen);
     }
     case 'union':
@@ -1542,6 +1545,11 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       const v = (t as { Value?: { stringValue?(): string } }).Value;
       if (v && typeof v.stringValue === 'function') {
         return `'${v.stringValue()}'`;
+      }
+      // A BigInt literal reads as written, `5n`: the generic value display
+      // printed the engine's own object for it, `{ value: 5 }`.
+      if (v && typeof (v as { value?: unknown }).value === 'bigint') {
+        return `${(v as unknown as { value: bigint }).value}n`;
       }
       const shown = displayMetadataValue(v);
       return shown === 'undefined' || shown === '[object Object]'

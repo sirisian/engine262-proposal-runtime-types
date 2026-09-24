@@ -260,10 +260,15 @@ test('comparisons and masks work at 64 bits', () => {
     + ' String(m.select(int64x2(7, 7), int64x2(9, 9)).x);')).toBe('7');
 });
 
-test('a BigInt is not a 64-bit integer', () => {
-  // "Cannot mix uint64 and bigint" - the families convert explicitly
-  expectThrown('const a: int64 = 1n;');
-  expectThrown('int64x2(1n, 2n);');
+test('a BigInt crosses into a lane by value, and never mixes in an operator', () => {
+  // #sec-requiretype: `bigint` is an ordinary numeric type at a boundary
+  // (numerics/bigint-boundary.test.mts), and a lane argument crosses one. This
+  // test said the families never convert implicitly, which was the rule before
+  // that change; what still holds is that an OPERATOR never converts.
+  expect(evaluated('String(int64x2(1n, 2n));')).toBe('(1, 2)');
+  expect(evaluated('String(int32x4(1n, 2n, 3n, 4n));')).toBe('(1, 2, 3, 4)');
+  expectThrown('int32x4(2147483648n, 2n, 3n, 4n);', 'is not in the range of');
+  expectThrown('(1 := int64) + 1n;', 'Cannot mix BigInt and other types');
 });
 
 // -- Lane-type conversion --------------------------------------------------------
