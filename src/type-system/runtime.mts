@@ -24,6 +24,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject } from '../abstract-ops/runtime-types.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
+import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
 import { PublishedReturnTypeOf } from './check.mts';
 import { skipDebugger } from '../evaluator.mts';
@@ -4875,6 +4876,25 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           // generic declaration resolves to that declaration unapplied, and the
           // validation below refuses it where the parameter was not kinded. The
           // check follows the resolution rather than gating it.
+          // #sec-primitive-metadata: the one argument of a primitive that
+          // declares no parameters is its METADATA, so a computed argument may
+          // yield the metadata itself - the design's
+          // `float32.<multiplyDimensions(D, D2)>` returns a Dimensions object -
+          // which is the type's metadata, not a type. Handled before the
+          // declaration probe, so the builder is evaluated once here.
+          if ((argNode as { type?: string }).type === 'ComputedType' && node.TypeArguments.TypeArgumentList.length === 1
+              && builtinTypeRecord(name, []) !== null && !PrimitiveDeclaresParameters(name)) {
+            const computed = Q(yield* evaluateComputedType(argNode as never));
+            if (isTypeObject(computed)) {
+              argRecords.push(computed.TypeRecord as TypeRecord);
+              continue;
+            }
+            if (computed instanceof ObjectValue) {
+              argRecords.push(metadataAsObjectRecord(Q(yield* MetadataRecordFromObjectValue(computed))));
+              continue;
+            }
+            return Throw.TypeError('$1', Value(`the computed argument of ${name} is neither a type nor a metadata object`));
+          }
           const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode))) as TypeRecord | undefined;
           if (asDecl !== undefined) {
             argRecords.push(asDecl);

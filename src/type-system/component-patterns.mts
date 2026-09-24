@@ -94,11 +94,35 @@ export function ComponentOperandAdmits(
   right: TypeRecord,
   resolve: (node: ParseNode) => TypeRecord | null,
 ): boolean {
+  return MatchComponentOperand(operand, captures, bindings, right, resolve) !== null;
+}
+
+/**
+ * ComponentOperandAdmits with the bindings it produced: the seeded captures,
+ * and any the operand binds on first use - an operator's own metadata
+ * parameter, `Y` of `operator *.<Y: Dim>(rhs: float32.<Y>)`, binds the
+ * right operand's portion for Y's meta type - or *null* where it does not
+ * admit _right_.
+ */
+export function MatchComponentOperand(
+  operand: ParseNode,
+  captures: readonly (ParseNode.CaptureBinding | ParseNode.TypeParameter)[],
+  bindings: ReadonlyMap<string, Argument>,
+  right: TypeRecord,
+  resolve: (node: ParseNode) => TypeRecord | null,
+): Map<string, Argument> | null {
+  let matched;
   try {
-    return MatchSpecializationPattern(operand, captures, right, componentHost(resolve), 'specialization', bindings) !== 'no-match';
+    matched = MatchSpecializationPattern(operand, captures as readonly ParseNode.CaptureBinding[], right, componentHost(resolve), 'specialization', bindings);
   } catch {
-    return false;
+    return null;
   }
+  if (matched === 'no-match') {
+    return null;
+  }
+  const out = new Map(bindings);
+  for (const b of matched) out.set(b.Capture.Name, b.Value);
+  return out;
 }
 
 /**

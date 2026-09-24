@@ -1,6 +1,6 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
-import { MatchComponentListRaw, ComponentOperandAdmits, InstantiateComponentType, BindMetadataCaptures } from './component-patterns.mts';
+import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -1563,6 +1563,14 @@ function foldBigIntConstant(node: ParseNode): bigint | null {
     default:
       return null;
   }
+}
+
+/** Whether the type node _node_ holds a computed argument, a builder call only running can answer. */
+function containsComputedType(node: unknown): boolean {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(containsComputedType);
+  if ((node as { type?: string }).type === 'ComputedType') return true;
+  return Object.entries(node).some(([k, v]) => k !== 'parent' && k !== 'location' && containsComputedType(v));
 }
 
 function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
@@ -15229,6 +15237,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (declared !== undefined) {
               return declared;
             }
+            // A bodyless definition for the pair - a Dimensions `*` over two
+            // dimensions - is its meaning too.
+            const contributed = bodylessResult(token, lv, rv);
+            if (contributed !== undefined) {
+              return contributed;
+            }
           }
           const completion = Throw.StaticTypeError('$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
@@ -22174,6 +22188,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     levels.push(base.Name);
     const resolveNode = (n: ParseNode) => resolveType(n as ParseNode.Type);
     const found: TypeRecord[] = [];
+    let unknownContribution = false;
     for (const name of levels) {
       for (const { def, block } of blockDefinitionsFor(name, op)) {
         if (def.FunctionBody && !withBodies) continue;
@@ -22192,10 +22207,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!metadata) continue;
           for (const [k, v] of metadata) bound.set(k, v);
         }
-        const captures = [...(components?.Captures ?? []), ...metadataCaptures];
+        // The operator's own type parameters - `Y` of `operator *.<Y: Dim>` -
+        // are captures of the operand too, bound on first use.
+        const operatorParameters = ((def.TypeParameters as { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null)?.TypeParameterList ?? []);
+        const captures = [...(components?.Captures ?? []), ...metadataCaptures, ...operatorParameters];
         const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined)?.TypeAnnotation;
-        if (annotation && !ComponentOperandAdmits(annotation.Type as unknown as ParseNode, captures, bound, right, resolveNode)) continue;
-        const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, bound, resolveNode) : null;
+        let admitted: Map<string, number | TypeRecord> | null = bound;
+        if (annotation) {
+          admitted = MatchComponentOperand(annotation.Type as unknown as ParseNode, captures, bound, right, resolveNode);
+        }
+        if (!admitted) continue;
+        const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, admitted, resolveNode) : null;
+        // A return computed by a builder - `float32.<mul(X, Y)>` - is known
+        // only when the builder runs; the definition applies, its type is
+        // left unknown rather than guessed.
+        if (!def.FunctionBody && def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)
+            && !(returns && typeof returns === 'object' && returns.Kind === 'parameterized')) {
+          unknownContribution = true;
+          continue;
+        }
         // A definition with a body computes the value, so its return type is
         // the result's - for a unary operator, where no mixing rule decides it.
         if (def.FunctionBody) {
@@ -22206,6 +22236,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
+    if (unknownContribution && found.length === 0) return null;
     if (found.length !== 1) return undefined;
     // A receiver carrying metadata no contribution claims takes that meta
     // type's DEFAULT in the result ("each meta type contributing its default

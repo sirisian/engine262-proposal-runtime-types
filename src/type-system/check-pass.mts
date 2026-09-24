@@ -1,3 +1,4 @@
+import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
@@ -768,7 +769,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
       let result;
       try {
-        result = EnsureCompletion(yield* TypeNodeToTypeRecord(obligation.node));
+        result = EnsureCompletion(yield* TypeNodeToTypeRecord((MetadataApplicationOf(obligation.node) ?? obligation.node) as typeof obligation.node));
       } finally {
         EndFragmentEvaluation();
       }
@@ -1124,4 +1125,28 @@ export function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEval
     return false;
   }
   return true;
+}
+
+/**
+ * #sec-primitive-metadata: the application `float32.<multiplyDimensions(D, D2)>`
+ * enclosing a computed argument in a METADATA position - the one argument of a
+ * primitive that declares no parameters - or *undefined*. A computed metadata
+ * argument yields the metadata itself, not a type, so it is evaluated as part
+ * of its application rather than alone, where it is rightly "not a type".
+ */
+function MetadataApplicationOf(node: unknown): ParseNode | undefined {
+  const computed = node as { type?: string, parent?: unknown };
+  if (computed?.type !== 'ComputedType') {
+    return undefined;
+  }
+  let up = computed.parent as { type?: string, parent?: unknown, TypeName?: { MemberNames?: readonly unknown[], IdentifierReference?: { name?: string } }, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } | undefined;
+  for (let i = 0; i < 2 && up && up.type !== 'TypeReference'; i += 1) {
+    up = up.parent as typeof up;
+  }
+  const name = up?.TypeName?.IdentifierReference?.name;
+  if (!up || up.type !== 'TypeReference' || !name || (up.TypeName?.MemberNames?.length ?? 0) !== 0
+      || up.TypeArguments?.TypeArgumentList?.length !== 1 || builtinTypeRecord(name, []) === null || PrimitiveDeclaresParameters(name)) {
+    return undefined;
+  }
+  return up as unknown as ParseNode;
 }
