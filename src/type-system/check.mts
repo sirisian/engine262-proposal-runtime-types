@@ -1,6 +1,6 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
-import { MatchComponentList } from './component-patterns.mts';
+import { MatchComponentListRaw, ComponentOperandAdmits, InstantiateComponentType } from './component-patterns.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -22159,21 +22159,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const name of levels) {
       for (const { def, block } of blockDefinitionsFor(name, op)) {
         if (def.FunctionBody) continue;
-        const scope = new Map<string, Known | null>();
-        // A component list with a nested pattern is bound by the matcher, as
-        // dispatch binds it; a receiver it does not match is not spoken for.
+        // A component list with a nested pattern is bound, admitted, and
+        // instantiated by the matcher, as dispatch binds it: the checker's own
+        // resolution keeps a capture as a constrained parameter, which drops
+        // `float32.<D>`'s metadata and leaves N opaque.
         if (NestedComponentCapturesOf(block).length > 0 && block.ComponentParameters) {
-          const matched = MatchComponentList(block.ComponentParameters, base.Name, base.Arguments ?? [], (n) => resolveType(n as ParseNode.Type));
-          if (!matched) continue;
-          for (const [name, value] of matched) scope.set(name, value as Known);
-        } else {
-          for (const c of BlockCapturesOf(block)) {
-            if ('Index' in c) {
-              const arg = (base.Arguments ?? [])[c.Index];
-              scope.set(c.BindingIdentifier.name, typeof arg === 'object' ? arg as Known : null);
-            } else if (left.Kind === 'parameterized') {
-              scope.set(c.BindingIdentifier.name, metadataAsObjectRecord(left.Metadata) as Known);
-            }
+          const list = block.ComponentParameters;
+          const resolveNode = (n: ParseNode) => resolveType(n as ParseNode.Type);
+          const bound = MatchComponentListRaw(list, base.Name, base.Arguments ?? [], resolveNode);
+          if (!bound) continue;
+          const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          if (annotation && !ComponentOperandAdmits(annotation.Type as unknown as ParseNode, list, bound, right, resolveNode)) continue;
+          const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, bound, resolveNode) : null;
+          if (returns && typeof returns === 'object' && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) found.push(returns);
+          continue;
+        }
+        const scope = new Map<string, Known | null>();
+        for (const c of BlockCapturesOf(block)) {
+          if ('Index' in c) {
+            const arg = (base.Arguments ?? [])[c.Index];
+            scope.set(c.BindingIdentifier.name, typeof arg === 'object' ? arg as Known : null);
+          } else if (left.Kind === 'parameterized') {
+            scope.set(c.BindingIdentifier.name, metadataAsObjectRecord(left.Metadata) as Known);
           }
         }
         typeParameterScopes.push(scope);

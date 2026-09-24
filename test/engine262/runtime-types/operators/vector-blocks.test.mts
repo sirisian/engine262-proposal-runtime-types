@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
  * #sec-primitive-operator-blocks over `vector`: the design's dimensioned-vector
@@ -45,4 +45,17 @@ test('a bodyless definition gives the lane-wise result its type, lanes included'
 test("the component list admits the design's shapes and refuses others as unsupported", () => {
   // `uint` declares a parameter, so `uint.<...>` is not a metadata position.
   expectThrown('primitive vector<uint.<const W>, const N: uint32> {}', 'not supported yet');
+});
+
+test('the checker types a bodyless vector result as dispatch stamps it', () => {
+  const block = `primitive vector<float32.<const D: Dim>, const N: uint32> {
+    operator +(rhs: vector.<float32.<D>, N>): vector.<float32.<{ m: 5 }>, N>; }`;
+  expect(evaluated(`${D} ${block} const c: vector.<float32.<{ m: 5 }>, 4> = a + a; String(Reflect.typeOf(c));`))
+    .toBe('vector.<float32.<{ m: 5 }>, 4>');
+  // The operand's own type is refused statically, not only at the boundary.
+  expectEarlyError(`${D} ${block} const c: V = a + a;`, 'StaticTypeError');
+  // The design's form returns the receiver's own dimension and count.
+  const preserving = `primitive vector<float32.<const D: Dim>, const N: uint32> {
+    operator +(rhs: vector.<float32.<D>, N>): vector.<float32.<D>, N>; }`;
+  expect(evaluated(`${D} ${preserving} const c: V = a + a; String(Reflect.typeOf(c));`)).toBe('vector.<float32.<{ m: 1 }>, 4>');
 });

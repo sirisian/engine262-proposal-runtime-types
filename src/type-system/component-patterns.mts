@@ -24,9 +24,10 @@ import { Value } from '../value.mts';
 import { builtinTypeRecord, makePrimitive, type TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import {
-  MatchSpecializationList, PrimitiveDeclaresParameters, PrimitiveParameterKinds,
+  MatchSpecializationList, MatchSpecializationPattern, PrimitiveDeclaresParameters, PrimitiveParameterKinds, PrimitiveParameterDefault,
   type PatternSlotParameter, type SpecializationMatchHost,
 } from './specialization-patterns.mts';
+import { MetadataObjectFromType } from './runtime.mts';
 
 type Argument = TypeRecord | number;
 
@@ -42,11 +43,102 @@ export function MatchComponentList(
   args: readonly Argument[],
   resolve: (node: ParseNode) => TypeRecord | null,
 ): Map<string, TypeRecord> | null {
+  const raw = MatchComponentListRaw(list, name, args, resolve);
+  if (!raw) {
+    return null;
+  }
+  const bindings = new Map<string, TypeRecord>();
+  for (const [capture, value] of raw) {
+    // A value component, the lane count, binds as the literal a written value
+    // argument resolves to, as a width does.
+    bindings.set(capture, typeof value === 'number'
+      ? { Kind: 'literal', Value: Value(value), Base: makePrimitive('number') } as unknown as TypeRecord
+      : value);
+  }
+  return bindings;
+}
+
+/** MatchComponentList's bindings as the matcher produced them: a value component as its number. */
+export function MatchComponentListRaw(
+  list: ParseNode.TypeParameters,
+  name: string,
+  args: readonly Argument[],
+  resolve: (node: ParseNode) => TypeRecord | null,
+): Map<string, Argument> | null {
   const primary: PatternSlotParameter<Argument>[] = PrimitiveParameterKinds(name).map((_kind, i) => ({
     Name: `#${i}`, Variadic: false, HasDefault: false,
   }));
+  let matched;
+  try {
+    matched = MatchSpecializationList(list, primary, args, componentHost(resolve));
+  } catch {
+    return null;
+  }
+  if (matched === 'no-match') {
+    return null;
+  }
+  return new Map(matched.map((b) => [b.Capture.Name, b.Value]));
+}
+
+/**
+ * Whether the operand annotation of a block definition, `vector.<float32.<D>,
+ * N>`, admits _right_, with the block's component captures bound as
+ * _bindings_: the annotation is matched as a pattern whose capture uses are
+ * references, so a metadata capture compares metadata and a count compares
+ * the count.
+ */
+export function ComponentOperandAdmits(
+  operand: ParseNode,
+  list: ParseNode.TypeParameters,
+  bindings: ReadonlyMap<string, Argument>,
+  right: TypeRecord,
+  resolve: (node: ParseNode) => TypeRecord | null,
+): boolean {
+  try {
+    return MatchSpecializationPattern(operand, list.Captures ?? [], right, componentHost(resolve), 'specialization', bindings) !== 'no-match';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The type a block definition's annotation denotes with the block's component
+ * captures substituted: `vector.<float32.<D>, N>` with D the lanes' metadata
+ * and N the count. The checker's own resolution keeps a capture as a
+ * constrained parameter, which drops a metadata argument (`float32.<D>` reads
+ * as `float32`) and leaves a count opaque, so the annotation is instantiated
+ * here from the bindings; anything else is left to _resolve_.
+ */
+export function InstantiateComponentType(
+  node: ParseNode,
+  bindings: ReadonlyMap<string, Argument>,
+  resolve: (node: ParseNode) => TypeRecord | null,
+): Argument | null {
+  if (node.type === 'TypeReference' && node.TypeName.MemberNames.length === 0) {
+    const name = node.TypeName.IdentifierReference.name;
+    if (!node.TypeArguments && bindings.has(name)) {
+      return bindings.get(name)!;
+    }
+    if (node.TypeArguments) {
+      const args = (node.TypeArguments.TypeArgumentList as unknown as ParseNode[]).map((a) => InstantiateComponentType(a, bindings, resolve));
+      if (args.every((a) => a !== null)) {
+        if (PrimitiveDeclaresParameters(name)) {
+          return builtinTypeRecord(name, args as (TypeRecord | number)[]) ?? resolve(node);
+        }
+        const base = builtinTypeRecord(name, []);
+        const metadata = args[0];
+        if (base && args.length === 1 && typeof metadata === 'object' && metadata.Kind === 'object') {
+          return { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
+        }
+      }
+    }
+  }
+  return resolve(node);
+}
+
+function componentHost(resolve: (node: ParseNode) => TypeRecord | null): SpecializationMatchHost<Argument> {
   const same = (a: Argument, b: Argument) => (typeof a === 'number' || typeof b === 'number' ? a === b : SameType(a, b));
-  const host: SpecializationMatchHost<Argument> = {
+  return {
     resolveFixed: (node) => {
       const record = resolve(node);
       if (!record) {
@@ -60,8 +152,17 @@ export function MatchComponentList(
     // one metadata parameter, whose argument is the parameterized type itself.
     constructorOf: (typeName) => {
       const inner = typeName.IdentifierReference.name;
-      if (typeName.MemberNames.length !== 0 || PrimitiveDeclaresParameters(inner)) {
+      if (typeName.MemberNames.length !== 0) {
         return null;
+      }
+      // A primitive that declares parameters - `vector` - exposes them.
+      if (PrimitiveDeclaresParameters(inner)) {
+        return {
+          Name: inner,
+          Parameters: PrimitiveParameterKinds(inner).map((_kind, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false })),
+          argumentsOf: (subject) => (typeof subject === 'object' && subject.Kind === 'primitive' && subject.Name === inner ? subject.Arguments ?? [] : null),
+          defaultOf: (q) => PrimitiveParameterDefault(inner, q),
+        };
       }
       const base = builtinTypeRecord(inner, []);
       if (!base) {
@@ -96,24 +197,6 @@ export function MatchComponentList(
     },
     satisfiesBound: () => true,
   };
-  let matched;
-  try {
-    matched = MatchSpecializationList(list, primary, args, host);
-  } catch {
-    return null;
-  }
-  if (matched === 'no-match') {
-    return null;
-  }
-  const bindings = new Map<string, TypeRecord>();
-  for (const b of matched) {
-    // A value component, the lane count, binds as the literal a written value
-    // argument resolves to, as a width does.
-    bindings.set(b.Capture.Name, typeof b.Value === 'number'
-      ? { Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as unknown as TypeRecord
-      : b.Value);
-  }
-  return bindings;
 }
 
 /** The type nodes of a component list the matcher may resolve: its fixed entries and its captures' domains. */

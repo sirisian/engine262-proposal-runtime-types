@@ -268,20 +268,25 @@ class Matcher<S> {
     return this.mode === 'type-subject' ? host.structuralMatch(subject, fixed) : host.sameArgument(subject, fixed);
   }
 
-  private bind(capture: CaptureRecord, pattern: ParseNode, subject: S, metadataSlot: boolean): boolean {
-    const bound = this.env.get(capture);
-    if (bound !== undefined) {
-      return this.host.sameArgument(subject, bound);
-    }
+  private bind(capture: CaptureRecord, _pattern: ParseNode, subject: S, metadataSlot: boolean): boolean {
     let value = subject;
     // A written domain in a metadata position selects the meta type whose
-    // metadata the capture binds, `float32.<const D: Dimensions>`.
-    if (metadataSlot && pattern.type === 'CaptureBinding' && pattern.TypeParameterDomain) {
-      const metadata = this.host.metadataOf(subject, pattern.TypeParameterDomain);
+    // metadata the capture binds, `float32.<const D: Dimensions>`. A REPEATED
+    // use in a metadata position, `float32.<D>`, compares that metadata too:
+    // comparing the whole subject against the bound metadata could never
+    // succeed, so the projection comes before the comparison, by the domain
+    // the capture's declaration writes.
+    const domain = capture.Declaration.TypeParameterDomain;
+    if (metadataSlot && domain) {
+      const metadata = this.host.metadataOf(subject, domain);
       if (metadata === null) {
         return false;
       }
       value = metadata;
+    }
+    const bound = this.env.get(capture);
+    if (bound !== undefined) {
+      return this.host.sameArgument(value, bound);
     }
     this.env.set(capture, value);
     return true;
@@ -494,9 +499,18 @@ export function MatchSpecializationPattern<S>(
   subject: S,
   host: SpecializationMatchHost<S>,
   mode: SpecializationMatchMode,
+  seed?: ReadonlyMap<string, S>,
 ): CaptureBindingRecord<S>[] | 'no-match' {
   const records = CaptureRecordsOf(captures);
   const matcher = new Matcher(host, records, mode);
+  // Captures already bound elsewhere - a primitive block's component captures,
+  // bound from the receiver - are references here, compared and not rebound.
+  for (const record of records) {
+    const value = seed?.get(record.Name);
+    if (value !== undefined) {
+      matcher.env.set(record, value);
+    }
+  }
   if (!matcher.match(pattern, subject)) {
     return 'no-match';
   }

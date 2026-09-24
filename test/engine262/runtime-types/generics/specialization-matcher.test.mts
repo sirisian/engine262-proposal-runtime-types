@@ -175,3 +175,13 @@ test('declaration errors in a pattern are found without a subject', () => {
   expect(check('Apply.<const W, const T>')).toEqual(['arity']);
   expect(check('Map.<const W<_>, string>')).toEqual(['arity']);
 });
+
+test('a repeated capture in a metadata position compares the metadata', () => {
+  // The second use projected nothing and compared the whole subject against
+  // the bound metadata, so it could never match.
+  const pair = [param('A'), param('B')];
+  const l = list('Tagged.<const D: Dim>, Tagged.<D>');
+  const tagged = (m: number) => app('Tagged', prim('float32', { Dim: val(m) }));
+  expect(bindings(MatchSpecializationList(l, pair, [tagged(3), tagged(3)], host))).toEqual({ D: '3' });
+  expect(bindings(MatchSpecializationList(l, pair, [tagged(3), tagged(4)], host))).toBe('no-match');
+});
