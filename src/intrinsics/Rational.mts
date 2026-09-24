@@ -2,7 +2,8 @@ import {
   Value, ObjectValue, NumberValue, isTypedNumber,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
-import { Q, type ValueEvaluator } from '../completion.mts';
+import { Q, type ValueEvaluator, type ThrowCompletion } from '../completion.mts';
+import { isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { JSStringValue } from '../value.mts';
 import { type Mutable } from '../utils/language.mts';
 import { makePrimitive } from '../type-system/records.mts';
@@ -191,6 +192,68 @@ function exactFractionOf(v: Value): { num: bigint, den: bigint } | null {
   return { num, den };
 }
 
+/**
+ * The single-argument conversion to `rational`, and the ONLY one.
+ *
+ * #sec-conversions: an explicit conversion "is written as a call on the type,
+ * `uint8(v)`, or with the conversion operator after the value, `v := uint8`. The
+ * two are the same operation." They were three: this call form, a `:=` path that
+ * reached no `rational` case at all, and a checked copy at the boundary that
+ * threw a TypeError for NaN and handled only a plain Number. So `rational(NaN)`
+ * was a RangeError while `NaN := rational` was a TypeError, and a `float32` or a
+ * `decimal` converted by one spelling and not the other. Every path now calls
+ * this, so they cannot disagree on a value that reaches the conversion.
+ *
+ * They can still disagree on a CONSTANT, which the checker folds before any
+ * conversion runs - and folds differently for each spelling: `rational(1 / 10)`
+ * is folded to exactly `1/10` while `rational(0.1)` is not, and `0.1 := rational`
+ * is folded while `(1 / 10) := rational` is not. That is static typing of the
+ * operand, not this conversion, and is recorded separately.
+ *
+ * - a `rational` is itself;
+ * - an integer is its value over 1 - EXACTLY, for a wide one too (below);
+ * - a finite Number, typed float or `decimal` is its exact value in lowest
+ *   terms, per #table-numeric-conversions;
+ * - NaN and the infinities are a RangeError. #sec-rational-types: "A rational
+ *   type has no negative zero, no infinity, and no NaN", and a value it cannot
+ *   represent is "an error, not an approximation". Neither has an exact value to
+ *   be the fraction of, so this is a question of RANGE rather than of kind -
+ *   #sec-requiretype's rule for a numeric value at a numeric type;
+ * - anything else is a TypeError.
+ *
+ * The 64-bit bound of `rational.<64>` is not enforced here, as it is not
+ * anywhere yet; adding it belongs in this one place.
+ */
+export function ToRational(a: Value, realmRec: Realm): RationalObject | ThrowCompletion {
+  if (isRationalObject(a)) {
+    return a;
+  }
+  // A typed INTEGER is read exactly. Through a Number (`integerArg`) an `int64`
+  // above 2**53 rounds, which would contradict the integer row's "the source's
+  // value" - and `:=` now reaches this, where before it refused integers.
+  if (isTypedNumber(a)) {
+    const record = a.TypeRecord as { Kind?: string, Name?: string };
+    if (record.Kind === 'primitive' && isIntegerTypeName(record.Name as string)) {
+      return CreateRationalValue(a.bigintValue(), 1n, realmRec); // eslint-disable-line @engine262/mathematical-value -- the exact value of a wide integer; R is reachable only through ToNumber, which rounds an int64 above 2**53
+    }
+  }
+  if (a instanceof NumberValue) {
+    const integer = integerArg(a);
+    if (integer !== null) {
+      return CreateRationalValue(integer, 1n, realmRec);
+    }
+  }
+  const fraction = exactFractionOf(a);
+  if (fraction !== null) {
+    return CreateRationalValue(fraction.num, fraction.den, realmRec);
+  }
+  if ((a instanceof NumberValue || isTypedNumber(a))
+    && !Number.isFinite(a.numberValue())) { // eslint-disable-line @engine262/mathematical-value -- finiteness of the stored Number is the question
+    return Throw.RangeError('$1 is not in the range of $2', a, Value('rational'));
+  }
+  return Throw.TypeError('$1 is not assignable to $2', a, Value('rational'));
+}
+
 function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: FunctionCallContext): ValueEvaluator {
   const realmRec = surroundingAgent.currentRealmRecord;
   // ONE numeric argument is the CONVERSION of #table-numeric-conversions, not
@@ -210,21 +273,9 @@ function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: Functio
   // It matters beyond symmetry. A constant expression at a rational contextual
   // type folds to a rational (`foldRationalConstant`), so `rational(1 / 3)` and
   // `rational(-1)` hand this a rational and were refused for it.
-  if (b === undefined && isRationalObject(a)) {
-    return a;
-  }
-  if (b === undefined && integerArg(a) === null) {
-    const fraction = exactFractionOf(a);
-    if (fraction !== null) {
-      return CreateRationalValue(fraction.num, fraction.den, realmRec);
-    }
-    // The row's own failure: "A *RangeError* ... if the source is NaN or an
-    // infinity." Neither has an exact value to be the fraction of, so this is a
-    // question of range rather than of kind, and the message says which.
-    if ((a instanceof NumberValue || isTypedNumber(a))
-      && !Number.isFinite(a.numberValue())) { // eslint-disable-line @engine262/mathematical-value -- finiteness of the stored Number is the question
-      return Throw.RangeError('$1 is not in the range of $2', a, Value('rational'));
-    }
+  // One argument: the conversion, shared with `:=` and the boundary.
+  if (b === undefined) {
+    return ToRational(a, realmRec);
   }
   const num = integerArg(a);
   if (num === null) {

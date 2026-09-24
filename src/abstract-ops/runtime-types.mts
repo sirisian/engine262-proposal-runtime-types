@@ -25,7 +25,7 @@ import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver }
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName } from '../type-system/numeric-signatures.mts';
-import { CreateRationalValue, isRationalObject } from '../intrinsics/Rational.mts';
+import { CreateRationalValue, isRationalObject, ToRational } from '../intrinsics/Rational.mts';
 import { fitsNumericType, IsOfType, RuntimeTypeOf, TypeNodeToTypeRecord, InferGenericBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from '../type-system/unify.mts';
 import { containsComputedType } from '../type-system/runtime.mts';
@@ -1154,6 +1154,12 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         return Q(yield* ToNumber(value));
       case 'boolean':
         return ToBoolean(value);
+      case 'rational':
+        // `v := rational` is `rational(v)` - #sec-conversions: "The two are the
+        // same operation." This had no case, so it fell to the checked
+        // conversion below, which threw a TypeError for NaN and refused a typed
+        // float or a `decimal` the call form converts.
+        return ToRational(value, surroundingAgent.currentRealmRecord);
       case 'bigint': {
         // An integral Number is exactly a BigInt, so it converts. This is what
         // lets typed code write `65` where a `bigint` is wanted rather than
@@ -2057,20 +2063,17 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       // `NumericValue` builds 1/10 from them. A Number that was never in a
       // rational position is a double by then, so its exact value is right for it.
       case 'rational': {
-        if (!(value instanceof NumberValue) || isTypedNumber(value)) {
+        // The boundary runs the one conversion the call form and `:=` run. The
+        // checked and explicit conversions can share it here because the row
+        // loses nothing: a float, an integer or a `decimal` becomes its exact
+        // value, or it is refused. This was a third copy that handled only a
+        // plain Number and threw a TypeError for NaN - where #sec-requiretype
+        // makes a numeric value that fails a numeric conversion "a question of
+        // range: hence the RangeError", and the row names that error too.
+        if (!(value instanceof NumberValue) && !isTypedNumber(value) && !isDecimalObject(value)) {
           break;
         }
-        const x = R(value) as number;
-        if (!Number.isFinite(x)) {
-          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
-        }
-        let num = x;
-        let den = 1n;
-        while (!Number.isInteger(num)) {
-          num *= 2;
-          den *= 2n;
-        }
-        return CreateRationalValue(BigInt(num), den, surroundingAgent.currentRealmRecord);
+        return ToRational(value, surroundingAgent.currentRealmRecord);
       }
       case 'uint':
       case 'int':
