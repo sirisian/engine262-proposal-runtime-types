@@ -42,3 +42,18 @@ test('a computed metadata argument is the metadata of the type, in any annotatio
   expect(evaluated(`${M} type T = float32.<mul({ m: 2 }, { m: 3 })>; String(T);`)).toBe('float32.<{ m: 5 }>');
   expect(evaluated(`${M} const v: float32.<mul({ m: 2 }, { m: 3 })> = 7; String(Reflect.typeOf(v));`)).toBe('float32.<{ m: 5 }>');
 });
+
+test("an operator parameter binds its own meta type's portion of an operand carrying others", () => {
+  // `Y: Dim` over a value that also carries bounds binds its Dim portion, as a
+  // block capture does; it bound the whole metadata, and the operand - judged
+  // only by Dim - was then refused at the body's parameter boundary.
+  const two = `${M} type B = { lo: int32 };
+    meta B { default = { lo: 0 }; subtype(a: B, b: B): boolean { return a.lo === b.lo; } }
+    primitive float32<const Z: B> { operator float32.<Z>() { return this; } }
+    function keys(o: object): string { return Object.keys(o).join(','); }
+    const c1: float32.<{ m: 2, lo: 5 }> = 4;`;
+  expect(evaluated(`${two} primitive float32<const X: Dim> { operator *.<Y: Dim>(rhs: float32.<Y>): float32.<mul(X, Y)>; }
+    String(Reflect.typeOf(a * c1));`)).toBe('float32.<{ m: 3 }>');
+  expect(evaluated(`${two} primitive float32<const X: Dim> { operator *.<Y: Dim>(rhs: float32.<Y>): string { return keys(Y) + '=' + String(Y.m); } }
+    const s: string = a * c1; s;`)).toBe('m=2');
+});

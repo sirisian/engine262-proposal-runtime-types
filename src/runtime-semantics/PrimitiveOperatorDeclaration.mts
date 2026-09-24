@@ -167,7 +167,13 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       }
     }
     const declaration = node as ParseNode.PrimitiveOperatorDeclaration;
-    const captureDeclarations = [...(declaration.ComponentParameters?.Captures ?? []), ...(declaration.MetadataParameters?.Captures ?? [])];
+    // The operator's own type parameters - `Y` of `operator *.<Y: Dim>` - are
+    // captures of its operand too, bound on first use there by the matcher.
+    const captureDeclarations = [
+      ...(declaration.ComponentParameters?.Captures ?? []),
+      ...(declaration.MetadataParameters?.Captures ?? []),
+      ...((e.TypeParameters?.TypeParameterList ?? []) as unknown as ParseNode.CaptureBinding[]),
+    ];
     let operandResolved: Map<object, TypeRecord> | undefined;
     const operandNode = first?.TypeAnnotation?.Type as unknown as ParseNode | undefined;
     if (operandNode && captureDeclarations.length > 0) {
@@ -188,6 +194,9 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
         operandResolved,
         parameterNames: blockParameterNames,
         operatorParameterNames,
+        operatorParameterConstraints: ((e.TypeParameters?.TypeParameterList ?? []) as readonly {
+          TypeParameterDomain?: unknown, TypeParameterConstraint?: unknown,
+        }[]).map((p) => p.TypeParameterDomain ?? p.TypeParameterConstraint ?? null),
         parameterConstraints: blockParameterConstraints,
         componentNames: components.map((c) => c.BindingIdentifier.name),
         componentIndices: components.map((c) => c.Index),

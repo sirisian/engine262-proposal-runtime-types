@@ -59,3 +59,16 @@ test('the checker types a bodyless vector result as dispatch stamps it', () => {
     operator +(rhs: vector.<float32.<D>, N>): vector.<float32.<D>, N>; }`;
   expect(evaluated(`${D} ${preserving} const c: V = a + a; String(Reflect.typeOf(c));`)).toBe('vector.<float32.<{ m: 1 }>, 4>');
 });
+
+test("the design's dimensioned-vector form: a vector times a scalar of another dimension", () => {
+  // `operator*.<D2: Dimensions>(rhs: float32.<D2>): vector.<float32.<multiplyDimensions(D, D2)>, N>;`
+  // D is a nested metadata capture and D2 the operator's own parameter, both
+  // read by the builder as metadata objects; the lane-wise broadcast runs on
+  // the values and the result carries the computed dimension in every lane.
+  expect(evaluated(`${D} function mul(a: Dim, b: Dim): Dim { return { m: a.m + b.m }; }
+    primitive vector<float32.<const D: Dim>, const N: uint32> {
+      operator *.<D2: Dim>(rhs: float32.<D2>): vector.<float32.<mul(D, D2)>, N>; }
+    const s: float32.<{ m: 2 }> = 10;
+    const c = a * s; String(c) + ' ' + String(Reflect.typeOf(c)) + ' ' + String(Reflect.typeOf(c.x));`))
+    .toBe('(10, 20, 30, 40) vector.<float32.<{ m: 3 }>, 4> float32.<{ m: 3 }>');
+});

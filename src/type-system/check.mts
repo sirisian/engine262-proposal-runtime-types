@@ -15266,8 +15266,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return declared;
             }
             // A bodyless definition for the pair - a Dimensions `*` over two
-            // dimensions - is its meaning too.
-            const contributed = bodylessResult(token, lv, rv);
+            // dimensions - is its meaning too, as is a definition with a body
+            // whose operand names the operator's own parameter.
+            const contributed = bodylessResult(token, lv, rv, true);
             if (contributed !== undefined) {
               return contributed;
             }

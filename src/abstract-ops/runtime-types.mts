@@ -2578,6 +2578,8 @@ export interface DeferredOperatorTypes {
   readonly parameterNames: readonly string[];
   /** The OPERATOR's own type parameters, which name the argument's metadata. */
   readonly operatorParameterNames?: readonly string[];
+  /** Each operator parameter's written domain or constraint, the meta type whose portion it binds. */
+  readonly operatorParameterConstraints?: readonly (unknown | null)[];
   readonly parameterConstraints?: readonly unknown[];
   /**
    * #sec-primitive-operator-blocks: the block's COMPONENT captures, `E` of
@@ -4397,6 +4399,15 @@ function annotationMentionsName(node: unknown, name: string): boolean {
 
 /** Converts each annotated parameter's bound value in place at entry. */
 export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(n: Value): PlainEvaluator<import('../value.mts').BooleanValue>, GetBindingValue(n: Value, s: import('../value.mts').BooleanValue): ValueEvaluator, SetMutableBinding(n: Value, v: Value, s: import('../value.mts').BooleanValue): PlainEvaluator }): PlainEvaluator {
+  // #sec-primitive-operator-blocks: a primitive block operator's operand was
+  // admitted by dispatch, judging only the portions its captures speak for -
+  // `rhs: float32.<Y>` of a Dimensions operator admits a value that also
+  // carries bounds. Re-checking the parameter's whole type here would refuse
+  // what dispatch admitted, as enforcing its return would re-stamp what
+  // dispatch stamps (EnforceReturnType stands down for the same reason).
+  if ((fn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator === true) {
+    return undefined;
+  }
   for (const p of (fn.FormalParameters as readonly ParseNode[] | undefined) ?? []) {
     // A rest element binds the collected trailing arguments as an array. Its
     // annotation is an array type describing the element type; checking each

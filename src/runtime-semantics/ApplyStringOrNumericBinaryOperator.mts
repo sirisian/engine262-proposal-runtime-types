@@ -540,7 +540,12 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
               : null;
             if (matched) {
               for (const [name, value] of matched) {
-                frame.set(name, value);
+                // A nested metadata capture - `D` of `float32.<const D:
+                // Dimensions>` - is a value parameter: an expression, and a
+                // builder such as `multiplyDimensions(D, D2)`, reads it as the
+                // metadata object. Component bindings of object kind are only
+                // such portions; lanes and components are numeric types.
+                frame.set(name, value.Kind === 'object' ? markValueParameterBinding(value) : value);
               }
             } else {
               componentMismatch = true;
@@ -608,7 +613,18 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
           if (operatorNames.length > 0 && isTypedNumber(rval)
               && (rval.TypeRecord as TypeRecord).Kind === 'parameterized') {
             const argCarried = rval.TypeRecord as TypeRecord & { Kind: 'parameterized' };
-            frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argCarried.Metadata)));
+            // The portion of the operand's metadata the parameter's meta type
+            // claims, as a block capture binds - `Y: Dim` over a value that also
+            // carries bounds binds its Dim portion.
+            let argPortion = argCarried.Metadata;
+            const argConstraint = entry.deferred.operatorParameterConstraints?.[0];
+            if (argConstraint) {
+              const metaType = MetaTypeForConstraint(Q(yield* ResolveTypeNode(argConstraint as never)));
+              if (metaType !== undefined) {
+                argPortion = MetadataPortion(argCarried.Metadata, metaType);
+              }
+            }
+            frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argPortion)));
           }
           pushTypeParameterFrame(frame);
           framePushed = true;
