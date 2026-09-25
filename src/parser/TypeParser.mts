@@ -947,7 +947,7 @@ export abstract class TypeParser extends ExpressionParser {
     // overload, or a standalone case - is a declaration in its own right. The
     // checker's group analysis judges it. An operator's cases, and every
     // family's (classes, aliases, interfaces, partials), are not supported yet.
-    if (context === 'function' || context === 'method') {
+    if (context === 'function' || context === 'method' || (context === 'operator' && this.parsingClassOperator)) {
       return;
     }
     const first = (list.SpecializationEntryList ?? [])[0]?.Pattern;

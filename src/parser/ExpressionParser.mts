@@ -274,6 +274,8 @@ function firstWriteIn(node: object, depth = 0): string | undefined {
 }
 
 export abstract class ExpressionParser extends FunctionParser {
+  /** Set while a class element's operator definition is parsed (phase 4, step 1). */
+  protected parsingClassOperator = false;
   private readonly matchBoundNames = new WeakMap<ParseNode.MatchPattern, ReadonlySet<string>>();
 
   /** #sec-match-patterns: alternatives bind alike; simultaneous patterns bind each name once. */
@@ -3511,7 +3513,14 @@ export abstract class ExpressionParser extends FunctionParser {
       node.ClassStaticBlockBody = this.finishNode(ClassStaticBlockBody, 'ClassStaticBlockBody');
       element = this.finishNode(node, 'ClassStaticBlock');
     } else if (surroundingAgent.feature('runtime-types') && this.classElementStartsOperatorDefinition()) {
-      element = this.parseOperatorDefinition();
+      // A CLASS operator's list may hold cases (phase 4, step 1); an
+      // interface's or a primitive block's operator list may not.
+      this.parsingClassOperator = true;
+      try {
+        element = this.parseOperatorDefinition();
+      } finally {
+        this.parsingClassOperator = false;
+      }
     } else if (surroundingAgent.feature('runtime-types') && this.classElementStartsAbstractMethod()) {
       element = this.parseAbstractMethodDefinition();
     } else {

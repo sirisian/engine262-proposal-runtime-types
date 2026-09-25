@@ -31,7 +31,7 @@ import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed 
 import { containsComputedType } from '../type-system/runtime.mts';
 import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
-import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature } from '../type-system/overloads.mts';
+import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
   wellKnownSymbols,
   Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
@@ -5117,6 +5117,18 @@ export function SpecializedCaseDeferral(fn: unknown): string | undefined {
   const kind = declaration.TypeParameters?.ListKind;
   if (kind === 'specialization' || kind === 'mixed') {
     return `${name} belongs to a group with a specialized case, and selecting a specialized case is not supported yet`;
+  }
+  // A class operator is dispatched from the class's operator table, not an
+  // overload set, so an owner beside a case is refused by its siblings.
+  const operator = declaration as unknown as ParseNode.OperatorDefinition & { parent?: object };
+  if (operator.type === 'OperatorDefinition' && operator.OperatorName && operator.parent) {
+    const key = operatorTableKey(operator);
+    const siblings = Object.values(operator.parent).find((v) => Array.isArray(v) && v.includes(operator)) as ParseNode[] | undefined;
+    if (siblings?.some((s) => s !== operator && s.type === 'OperatorDefinition' && (s as ParseNode.OperatorDefinition).OperatorName
+        && operatorTableKey(s as ParseNode.OperatorDefinition) === key && !!(s as { static?: boolean }).static === !!(operator as { static?: boolean }).static
+        && ((s as ParseNode.OperatorDefinition).TypeParameters?.ListKind === 'specialization' || (s as ParseNode.OperatorDefinition).TypeParameters?.ListKind === 'mixed'))) {
+      return `operator ${key} belongs to a group with a specialized case, and selecting a specialized case is not supported yet`;
+    }
   }
   return undefined;
 }

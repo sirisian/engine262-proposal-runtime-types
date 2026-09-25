@@ -152,3 +152,26 @@ test('only a class method or a function declaration may be a bodyless owner', ()
   // likewise refuses overload signatures in an object literal).
   expectThrown('const o = { m<T: type>(): T; };', 'An abstract method requires an abstract class');
 });
+
+test('class operators: cases are declarations; a use is deferred statically and at run time', () => {
+  const V = `class V { x: float64; constructor(x: float64) { this.x = x; }
+    operator +.<T: type>(rhs: T): string { return 'g'; }
+    operator +.<uint8>(rhs: uint8): string { return 'u'; } }`;
+  expect(evaluated(`${V} 'declared';`)).toBe('declared');
+  expectEarlyError(`${V} new V(1) + (3 := uint8);`, 'StaticTypeError');
+  expectThrown(`${V} new V(1) + (3 := uint8);`, 'selecting a specialized case of `operator +` is not supported yet');
+  // A use the checker cannot see runs neither the owner's body nor the case's:
+  // the operator table dispatches by operand, so the owner refuses too.
+  expectThrown(`${V} const v: any = new V(1); v + (3 := uint8);`, 'operator + belongs to a group with a specialized case');
+  // The group is analyzed as a function's is (Q4 here).
+  expectThrown(`class U { operator +.<T: type>(rhs: T): string { return 'g'; }
+    operator +.<uint8>(rhs: uint8): number { return 1; } }`, 'number is not a subtype of it');
+  // Operators without cases are untouched.
+  expect(evaluated(`class W { x: float64; constructor(x: float64) { this.x = x; }
+    operator +(rhs: W): string { return 'plain'; } } String(new W(1) + new W(2));`)).toBe('plain');
+});
+
+test("a primitive block's or an interface's operator list holds binders only", () => {
+  expectThrown('primitive float64 { operator *.<uint8>(rhs: uint8): string { return "x"; } }', 'specialization is not supported yet');
+  expectThrown('interface I { operator +.<uint8>(rhs: uint8): string; }', 'specialization is not supported yet');
+});

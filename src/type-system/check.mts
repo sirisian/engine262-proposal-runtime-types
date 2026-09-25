@@ -1668,8 +1668,10 @@ function CaseGroupDeclarations(root: object): WeakSet<object> {
       if (Array.isArray(child)) {
         const groups = new Map<string, object[]>();
         for (const c of child as { type?: string }[]) {
-          if (c?.type !== 'FunctionDeclaration' && c?.type !== 'MethodDefinition' && c?.type !== 'AbstractMethodDefinition') continue;
-          const name = nameOf(c as never);
+          if (c?.type !== 'FunctionDeclaration' && c?.type !== 'MethodDefinition' && c?.type !== 'AbstractMethodDefinition' && c?.type !== 'OperatorDefinition') continue;
+          const name = c.type === 'OperatorDefinition'
+            ? ((c as unknown as ParseNode.OperatorDefinition).OperatorName ? `${(c as { static?: boolean }).static ? 'static ' : ''}operator ${operatorTableKey(c as unknown as ParseNode.OperatorDefinition)}` : undefined)
+            : nameOf(c as never);
           if (name) groups.set(name, [...(groups.get(name) ?? []), c]);
         }
         for (const members of groups.values()) {
@@ -5727,6 +5729,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type DeclaredOverload = SignatureRecord & { Untyped?: boolean };
   /** Calls already refused for reaching a group with a specialized case (phase 4, step 1). */
   const deferredCaseCalls = new WeakSet<object>();
+  /** Operator groups already refused, per class, for holding a specialized case. */
+  const deferredCaseOperators = new WeakMap<object, Set<string>>();
   /** An object literal's type to the literal, whose methods a call may reach. */
   const objectLiteralOfType = new WeakMap<object, ParseNode>();
   const overloadDeclarations = new WeakMap<object, {
@@ -12964,6 +12968,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const body = (declaration as ParseNode.ClassDeclaration | undefined)?.ClassTail?.ClassBody ?? [];
       let definitions = body.filter((member): member is ParseNode.OperatorDefinition =>
         member.type === 'OperatorDefinition' && !member.static && operatorTableKey(member) === key);
+      // Plan section 3.8, phase 4 step 1: a use of an operator whose group
+      // holds a specialized case is refused until selection is implemented.
+      if (definitions.some((d) => d.TypeParameters?.ListKind === 'specialization' || d.TypeParameters?.ListKind === 'mixed')
+          && declaration && !deferredCaseOperators.get(declaration)?.has(key)) {
+        deferredCaseOperators.set(declaration, new Set([...(deferredCaseOperators.get(declaration) ?? []), key]));
+        const completion = Throw.StaticTypeError('$1', Value(`selecting a specialized case of \`operator ${key}\` is not supported yet`)) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+      }
       if (definitions.every((operator) => !operator.TypeAnnotation && !(operator.FormalParameters ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation))) {
         definitions = definitions.slice(-1);
       }
@@ -25779,7 +25791,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const isCase = (d: Decl) => listOf(d)?.ListKind === 'specialization' || listOf(d)?.ListKind === 'mixed';
     const nameOf = (d: Decl): string | undefined => (d.type === 'FunctionDeclaration'
       ? d.BindingIdentifier?.name
-      : d.ClassElementName?.type === 'IdentifierName' ? `${d.static ? 'static ' : ''}${d.ClassElementName.name}` : undefined);
+      : d.type === 'OperatorDefinition'
+        ? ((d as unknown as ParseNode.OperatorDefinition).OperatorName ? `${d.static ? 'static ' : ''}operator ${operatorTableKey(d as unknown as ParseNode.OperatorDefinition)}` : undefined)
+        : d.ClassElementName?.type === 'IdentifierName' ? `${d.static ? 'static ' : ''}${d.ClassElementName.name}` : undefined);
     // Each owner binder as a pattern slot, a value binder carrying its resolved
     // domain, which D9 compares a case's written capture domain against.
     const binderParameters = (list: ParseNode.TypeParameters) => (list.TypeParameterList ?? []).map((tp) => {
@@ -25935,7 +25949,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (key === 'parent' || key === 'location') continue;
         if (Array.isArray(child)) {
           const callables = child.filter((c) => (c as ParseNode | null)?.type === 'FunctionDeclaration'
-            || (c as ParseNode | null)?.type === 'MethodDefinition' || (c as ParseNode | null)?.type === 'AbstractMethodDefinition') as Decl[];
+            || (c as ParseNode | null)?.type === 'MethodDefinition' || (c as ParseNode | null)?.type === 'AbstractMethodDefinition'
+            || (c as ParseNode | null)?.type === 'OperatorDefinition') as Decl[];
           if (callables.length > 0) analyze(value, callables);
         }
         findGroups(child);

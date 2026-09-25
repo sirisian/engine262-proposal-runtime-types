@@ -118,7 +118,9 @@ test('a valid specialization still reports that selection is not supported', () 
   expectThrown('class Box<T: type> {} class Box<uint32> {}', 'specialization is not supported yet');
   expectThrown('class Store<T: type> {} class Store<Map.<K: string, V: const E>> {}', 'specialization is not supported yet');
   expectThrown('class Box<> {}', '`<>` specializes a declared family at its defaults');
-  expectThrown('class M { operator+.<uint32>(rhs: uint32) { return this; } }', 'specialization is not supported yet');
+  // A class operator's case is a declaration (phase 4, step 1); a USE of its
+  // group is what is deferred (generics/callable-groups.test.mts).
+  expect(evaluated('class M { operator+.<uint32>(rhs: uint32) { return this; } } "ok";')).toBe('ok');
   // A second PRIMARY of one name is still a duplicate declaration.
   expectThrown('class Box<T: type> {} class Box<U: type> {}', 'already declared');
 });
