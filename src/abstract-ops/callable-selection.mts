@@ -295,7 +295,7 @@ export function SelectCase(
       return { Kind: 'error', Message: `${result.Cases.map((c) => c.Label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other; declare a case for their intersection` };
     }
   }
-  const matching: { d: ParseNode, bindings: readonly { Name: string, Value: TypeRecord }[], label: string }[] = [];
+  const matching: { d: ParseNode, list: ParseNode.TypeParameters, ordered: readonly (TypeRecord | undefined)[], bindings: readonly { Name: string, Value: TypeRecord }[], label: string }[] = [];
   for (const d of analysis.Standalone) {
     if (!d.List || d.List.ListKind === 'parameters' || !ValueArityAdmits(d.Node, valueCount)) continue;
     const kinds = (d.List as { EntryKinds?: readonly string[] }).EntryKinds ?? SpecializationPatternsOf(d.List).map(() => 'argument');
@@ -309,10 +309,22 @@ export function SelectCase(
     labelsTaken = true;
     const result = MatchStandaloneCase(d.List, order.ordered, resolve, isSubtype, describe);
     if (result.Kind === 'bound') return { Kind: 'error', Message: `${d.Label} applies to ${tuple}, but ${result.Message}` };
-    if (result.Kind === 'match') matching.push({ d: d.Node, bindings: result.Bindings, label: d.Label });
+    if (result.Kind === 'match') matching.push({ d: d.Node, list: d.List, ordered: order.ordered, bindings: result.Bindings, label: d.Label });
   }
   if (matching.length === 1) return { Kind: 'case', Declaration: matching[0]!.d, Bindings: matching[0]!.bindings };
   if (matching.length > 1) {
+    // Pattern-only standalone cases of one arity rank by specificity, as an
+    // owner's attached cases do (section 6.1; rule 8): `write<uint8>` is more
+    // specific than `write<uint.<const N>>` at `uint8`.
+    const arity = SpecializationPatternsOf(matching[0]!.list).length;
+    if (matching.every((m) => m.list.ListKind === 'specialization' && SpecializationPatternsOf(m.list).length === arity)
+        && matching[0]!.ordered.every((a) => a !== undefined)) {
+      const positions = Array.from({ length: arity }, (_e, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
+      const ranked = SelectSpecialization(matching.map((m) => ({ List: m.list, Declaration: m.d, Label: m.label })), positions as never, matching[0]!.ordered as TypeRecord[], host as never);
+      if (ranked.Kind === 'selected') {
+        return { Kind: 'case', Declaration: ranked.Case.Declaration!, Bindings: (ranked.Bindings as readonly { Capture: { Name: string }, Value: TypeRecord | number }[]).map((b) => ({ Name: b.Capture.Name, Value: b.Value })) };
+      }
+    }
     return { Kind: 'error', Message: `${matching.map((m) => m.label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other` };
   }
   const owner = analysis.Owners.find((o) => !(o.Node as { BodylessOwner?: boolean }).BodylessOwner && OrderByLabels(ownerLabels(o), args, names).ok);

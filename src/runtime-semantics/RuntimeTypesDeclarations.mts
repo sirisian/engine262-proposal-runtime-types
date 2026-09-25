@@ -2667,6 +2667,9 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     // would (the value count unknown): a case becomes a callable bound to its
     // captures, identical for an identical selection; the owner's fallback is
     // any generic function's specialization.
+    // A call's callee passes through: the call path selects (steps 2 to 4),
+    // for a group with no owner as for one with an owner.
+    if (asCallee && CaseGroupMembers(value)) return ref;
     const caseMembers = asCallee ? undefined : CaseGroupMembers(value);
     if (caseMembers) {
       const inner = (node as unknown as { Expression?: { type?: string, name?: string } }).Expression;

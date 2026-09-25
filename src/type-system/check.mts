@@ -2,7 +2,7 @@ import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, 
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
 import { SelectCase, ValueArityAdmits } from '../abstract-ops/callable-selection.mts';
-import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters } from './component-patterns.mts';
+import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -28,7 +28,7 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
-  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord } from './records.mts';
+  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord, IsFamilyRecord } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
@@ -13489,6 +13489,102 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { type: returnOf(owner.Node as D, (owner.Parameters ?? []).map((p, q) => ({ Capture: { Name: p.Name }, Value: inferred[q]! }))) };
       }
       return undefined;
+    }
+    // Plan section 3.8, rule 7 and D8 (step 6): an argument OPEN in a generic
+    // body - `read.<T>()` - is selected per specialization at run time, and
+    // checked here once for every binding: through an owner that takes it,
+    // against the owner's contract; or through a case the argument's bound
+    // proves applicable to every binding, when each more specific case a
+    // binding could reach keeps that case's signature. Otherwise it is refused.
+    if (args.some((a) => mentionsTypeParameter(a))) {
+      const named = argNodes.some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined);
+      const ownerTakes = analysis.Owners.some((o) => {
+        const labels = (o.Parameters ?? []).map((p) => p.Name);
+        return named
+          ? argNodes.every((a) => {
+            const l = (a as { ArgumentName?: string }).ArgumentName;
+            return l === undefined || labels.includes(l);
+          })
+          : labels.length >= args.length;
+      });
+      if (ownerTakes) return undefined;
+      const isWildcard = (e: ParseNode) => e.type === 'TypeReference' && !(e as ParseNode.TypeReference).TypeArguments
+        && (e as ParseNode.TypeReference).TypeName.MemberNames.length === 0 && (e as ParseNode.TypeReference).TypeName.IdentifierReference.name === '_';
+      const isOpen = (e: ParseNode) => e.type === 'CaptureBinding' || isWildcard(e);
+      // Whether an entry admits every binding of the argument.
+      const covers = (entry: ParseNode, arg: TypeRecord): boolean => {
+        if (isOpen(entry)) return true;
+        if (!mentionsTypeParameter(arg)) {
+          const fixed = resolveType(entry as ParseNode.Type);
+          return !!fixed && SameType(fixed, arg);
+        }
+        const bound = (arg as { Kind?: string, Constraint?: TypeRecord }).Kind === 'parameter' ? (arg as { Constraint?: TypeRecord }).Constraint : undefined;
+        const reference = entry as ParseNode.TypeReference;
+        const entryArgs = (reference.TypeArguments as { TypeArgumentList?: readonly ParseNode[] } | null | undefined)?.TypeArgumentList ?? [];
+        return entry.type === 'TypeReference' && entryArgs.length > 0 && entryArgs.every((x) => isOpen(x))
+          && IsFamilyRecord(bound) && (bound as { Name: string }).Name === reference.TypeName.IdentifierReference.name;
+      };
+      const patternCases = [...analysis.Attached.map((a) => a.Case), ...analysis.Standalone]
+        .filter((d) => d.List && d.List.ListKind === 'specialization' && ValueArityAdmits(d.Node, valueCount));
+      const proven = patternCases.filter((d) => {
+        const entries = SpecializationPatternsOf(d.List!);
+        return entries.length === args.length && entries.every((e, i) => covers(e, args[i]!));
+      });
+      const label = `\`${name}.<${argNodes.map((a) => (a as { sourceText?: string }).sourceText ?? '').join(', ')}>\``;
+      if (proven.length !== 1) {
+        report(proven.length === 0
+          ? `${label} forwards an open argument, and no contract covers every binding: ${analysis.Owners.length > 0 ? 'its owner does not take these arguments' : 'the group has no owner'}, and no case's pattern admits every binding the argument's bound allows`
+          : `${label} forwards an open argument, and ${proven.map((d) => d.Label).join(' and ')} each admit every binding; neither is the contract`);
+        return { type: null };
+      }
+      const chosen = proven[0]!;
+      // D8: each other case that some binding could select instead must keep
+      // the proven case's signature at that binding.
+      // A declaration's parameters at _bindings_: a capture-parameterized type
+      // (`uint.<N>`) instantiated at the binding, as a component type is.
+      const signatureAt = (d: D, bindings: ReadonlyMap<string, TypeRecord>) => {
+        const raw = new Map<string, TypeRecord | number>();
+        for (const [k, v] of bindings) {
+          const literal = v as { Kind?: string, Value?: unknown };
+          raw.set(k, literal.Kind === 'literal' && typeof R(literal.Value as never) === 'number' ? R(literal.Value as never) as number : v);
+        }
+        const pushed = pushTypeParameterScopeOf(d as never);
+        try {
+          return ((d as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []).map((f) => {
+            const annotation = (f as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+            let t: TypeRecord | null = null;
+            if (annotation) {
+              const instantiated = raw.size > 0 ? InstantiateComponentType(annotation.Type as unknown as ParseNode, raw as never, (n) => resolveType(n as ParseNode.Type)) : null;
+              t = instantiated && typeof instantiated === 'object' ? instantiated as TypeRecord : resolveType(annotation.Type);
+            }
+            return { shape: `${f.type}:${!!(f as { Initializer?: unknown }).Initializer}`, annotated: !!annotation, type: t };
+          });
+        } finally {
+          if (pushed) typeParameterScopes.pop();
+        }
+      };
+      for (const other of patternCases) {
+        if (other === chosen) continue;
+        const entries = SpecializationPatternsOf(other.List!);
+        if (entries.length !== args.length || entries.some((e) => (e as { type?: string }).type === 'CaptureBinding' || CollectCapturesIn(e))) continue;
+        const fixed = entries.map((e) => (isWildcard(e) ? null : resolveType(e as ParseNode.Type)));
+        if (fixed.some((f) => !f)) continue;
+        // Reachable: the proven case's pattern takes this case's arguments.
+        const matched = MatchStandaloneCase(chosen.List!, fixed as TypeRecord[], (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType);
+        if (matched.Kind !== 'match') continue;
+        const bindings = new Map(matched.Bindings.map((b) => [b.Name, b.Value] as const));
+        const mine = signatureAt(chosen.Node as D, bindings);
+        const theirs = signatureAt(other.Node as D, new Map());
+        // Unproven is not the same: forwarding through a case needs the proof.
+        const same = mine.length === theirs.length && mine.every((p, i) => p.shape === theirs[i]!.shape
+          && p.annotated === theirs[i]!.annotated
+          && (!p.annotated || (!!p.type && !!theirs[i]!.type && !mentionsTypeParameter(p.type) && SameType(p.type, theirs[i]!.type!))));
+        if (!same) {
+          report(`${label} forwards through ${chosen.Label}, but ${other.Label}, which a binding of the argument would select, has another signature; a forwarded call must mean one signature for every binding`);
+          return { type: null };
+        }
+      }
+      return { type: returnOf(chosen.Node as D, []) };
     }
     // The shared rule (`SelectCase`), labels and all, as the run time applies it.
     const names = argNodes.map((a) => (a as { ArgumentName?: string }).ArgumentName);

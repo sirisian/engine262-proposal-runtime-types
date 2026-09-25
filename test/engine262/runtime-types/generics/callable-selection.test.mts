@@ -251,3 +251,45 @@ test('E6: a group of standalone cases alone has no generic function value; it is
   expect(evaluated(`function s<uint8>(x: uint8): string { return 'a'; } function s(x: string): string { return 'b'; }
     function use(fn: (x: string) => string): string { return fn('z'); } use(s);`)).toBe('b');
 });
+
+// Step 6: forwarding an open argument from a generic body (plan section 3.8,
+// rule 7; D8).
+const READ = `function read<T: type>(): T; function read<boolean>(): boolean { return true; }
+  function read<uint8>(): uint8 { return (7 := uint8); }`;
+const WRITE = `function write<uint.<const N>>(v: uint.<N>): string { return 'uint ' + String(N); }`;
+
+test('F1 and B4: through an owner, checked once, selected per specialization', () => {
+  expect(evaluated(`${READ} function fwd<T: type>(): T { return read.<T>(); }
+    String(fwd.<boolean>()) + '|' + String(fwd.<uint8>());`)).toBe('true|7');
+  // A binding no case matches, beside a bodyless owner, fails where it is applied.
+  expectThrown(`${READ} function fwd<T: type>(): T { return read.<T>(); } fwd.<float16>();`,
+    'no overload of `read` applies to (float16)');
+});
+
+test('F2: through a case the argument\'s bound proves applicable to every binding (D8)', () => {
+  expect(evaluated(`${WRITE} function g<L: type extends uint>(v: L): string { return write.<L>(v); }
+    g.<uint8>((3 := uint8)) + '|' + g.<uint.<12>>((5 := uint.<12>));`)).toBe('uint 8|uint 12');
+  // A more specific case keeping the proven signature is reached by its bindings.
+  expect(evaluated(`${WRITE} function write<uint8>(v: uint8): string { return 'eight'; }
+    function g<L: type extends uint>(v: L): string { return write.<L>(v); }
+    g.<uint8>((3 := uint8)) + '|' + g.<uint16>((3 := uint16));`)).toBe('eight|uint 16');
+  // A case its parameters exclude (rule 4) is never reached, so it does not count.
+  expect(evaluated(`${WRITE} function write<uint8>(v: uint8, extra: string): string { return 'x'; }
+    function g<L: type extends uint>(v: L): string { return write.<L>(v); } g.<uint8>((3 := uint8));`)).toBe('uint 8');
+});
+
+test('F3: a more specific case a binding would reach with another signature is refused (D8)', () => {
+  expectThrown(`${WRITE} function write<uint8>(v: string): string { return 'x'; }
+    function g<L: type extends uint>(v: L): string { return write.<L>(v); }`,
+  '`write.<L>` forwards through `write<uint.<const N>>`, but `write<uint8>`, which a binding of the argument would select, has another signature');
+});
+
+test('F4: no owner and no proving bound is refused', () => {
+  expectThrown(`${WRITE} function g<T: type>(v: T): string { return write.<T>(v); }`,
+    '`write.<T>` forwards an open argument, and no contract covers every binding');
+});
+
+test('standalone cases rank by specificity (section 6.1; rule 8)', () => {
+  expect(evaluated(`${WRITE} function write<uint8>(v: uint8): string { return 'eight'; }
+    write.<uint8>((3 := uint8)) + '|' + write.<uint16>((3 := uint16));`)).toBe('eight|uint 16');
+});
