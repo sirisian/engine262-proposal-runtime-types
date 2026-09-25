@@ -22617,6 +22617,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && isNumericValueTypeName((t as { Name?: string }).Name);
           const wanted: TypeRecord[] = [];
           let blocked = false;
+          const guardLiterals: (number | bigint | undefined)[] = [];
+          // Whether a comparison literal is a value of the inferred type. Only an
+          // integer literal against a sized integer type, within its bounds - the
+          // loop-index-against-a-bound case. Anything else is not decided here, and
+          // keeps blocking, as it did.
+          const fitsIntegerType = (v: number | bigint | undefined, t: Known): boolean => {
+            if (typeof v !== 'number' || !Number.isInteger(v) || !t || t.Kind !== 'primitive') {
+              return false;
+            }
+            const typeName = (t as { Name?: string }).Name;
+            const width = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments?.[0];
+            if ((typeName !== 'uint' && typeName !== 'int') || typeof width !== 'number') {
+              return false;
+            }
+            const bits = BigInt(width);
+            const lo = typeName === 'int' ? -(1n << (bits - 1n)) : 0n;
+            const hi = typeName === 'int' ? (1n << (bits - 1n)) - 1n : (1n << bits) - 1n;
+            const value = BigInt(v);
+            return value >= lo && value <= hi;
+          };
           for (const reference of loopReferences) {
             const parent = reference.parent;
             if (!parent) {
@@ -22665,7 +22685,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             } else if (parent.type && binaryKinds.has(parent.type)) {
               const other = children(parent).find((c) => c !== reference);
-              if (!other || other.type === 'NumericLiteral' || mentionsBinding(other)) {
+              const operator = (parent as { operator?: string }).operator;
+              const comparison = parent.type === 'EqualityExpression' || (parent.type === 'RelationalExpression'
+                && (operator === '<' || operator === '>' || operator === '<=' || operator === '>='));
+              if (other && other.type === 'NumericLiteral' && comparison) {
+                // A COMPARISON WITH AN UNTYPED LITERAL does not block on its own. Its
+                // result is a boolean, so a narrower binding cannot change what it
+                // says - provided the literal is a value of that narrower type. That
+                // is checked once the type is decided, below: `i > 5` lets `i` be a
+                // `uint8`; `i < 300` does not, because 300 is not a `uint8`, and
+                // there `i` stays a `number`, exactly as it was. Arithmetic is not
+                // like this - `i * 200` changes with the type - and still blocks.
+                guardLiterals.push((other as { value?: number | bigint }).value);
+              } else if (!other || other.type === 'NumericLiteral' || mentionsBinding(other)) {
                 blocked = true;
               } else {
                 const otherType = staticType(other as unknown as ParseNode);
@@ -22692,7 +22724,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               wanted.push(asked as TypeRecord);
             }
           }
-          if (!blocked && wanted.length > 0 && wanted.every((t) => SameType(t, wanted[0]!))) {
+          if (!blocked && wanted.length > 0 && wanted.every((t) => SameType(t, wanted[0]!))
+              && guardLiterals.every((v) => fitsIntegerType(v, wanted[0]! as Known))) {
             inferredLoopType = wanted[0]! as Known;
             const forBinding = (f.ForDeclaration as { ForBinding?: object } | undefined)?.ForBinding ?? f.ForBinding;
             if (forBinding) {

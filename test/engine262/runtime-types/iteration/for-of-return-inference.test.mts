@@ -96,10 +96,21 @@ test('a return that disagrees with another use asks for nothing', () => {
     + 'for (const i of 0..<3) { s.add(i); t = String(Reflect.typeOf(i)); return i; } return 0; } h(); t;')).toBe('number');
 });
 
-test('untyped arithmetic, and a literal guard, still block', () => {
+test('untyped arithmetic still blocks', () => {
   expect(evaluated(`${T} function h(): uint8 { for (const i of 0..<3) { t = String(Reflect.typeOf(i)); return i * 2; } `
     + 'return 0; } h(); t;')).toBe('number');
+});
+
+test('a guard whose literal fits the return type does not block', () => {
+  // `5` is a `uint8`, so comparing `i` with it says the same thing at either type.
+  // This asserted `number` before comparisons with a fitting literal stopped
+  // blocking; see `for-of-comparison-literals.test.mts`.
   expect(evaluated(`${T} function h(): uint8 { for (const i of 0..<3) { t = String(Reflect.typeOf(i)); if (i > 5) return i; } `
+    + 'return 0; } h(); t;')).toBe('uint.<8>');
+});
+
+test('a guard whose literal does not fit still blocks', () => {
+  expect(evaluated(`${T} function h(): uint8 { for (const i of 0..<3) { t = String(Reflect.typeOf(i)); if (i < 300) return i; } `
     + 'return 0; } h(); t;')).toBe('number');
 });
 
