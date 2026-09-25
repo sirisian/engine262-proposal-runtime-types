@@ -14897,6 +14897,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // it in place the adoption here turns a wrong static type into a wrong
         // run-time answer.
         const operandTypes = operandNodes.map((x) => staticType(x));
+        // ...EXCEPT where the other operand is a `decimal`, a `rational` or a
+        // `complex`. The blocker above is a builtin the checker types as a typed
+        // INTEGER that the run time returns as a Number; no builtin is typed as
+        // one of these three families, which only explicit construction makes,
+        // so the adoption cannot turn a Number into a mistyped literal here. And
+        // without it these comparisons were wrong at run time: `c == 3` threw,
+        // `decimal64('1.5') === 1.5` was *false*, `rational(1, 2) < 0.5` threw -
+        // while the same values compared correctly against a value of their own
+        // type. The eight comparison operators only: `in` and `instanceof` share
+        // this node and read a literal as a key, not a number.
+        const comparison = (node as unknown as { operator?: string }).operator;
+        if (operandNodes.length === 2 && ['==', '!=', '===', '!==', '<', '<=', '>', '>='].includes(comparison ?? '')) {
+          const pairs: [ParseNode, Known][] = [[operandNodes[1], operandTypes[0]], [operandNodes[0], operandTypes[1]]];
+          for (const [candidate, otherType] of pairs) {
+            const lit = literalOperand(candidate);
+            if (!lit || !otherType) continue;
+            const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
+            const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
+            if (name === 'rational' || name === 'complex' || (name !== undefined && name.startsWith('decimal'))) {
+              staticTypeIn(innermostLiteral(lit), otherType);
+            }
+          }
+        }
         // A STRICT comparison between DISJOINT types can never be true, and the
         // design's position on a test that cannot succeed is stated: the
         // disjoint-intersection rule refuses one because "reduction alone would
@@ -15309,13 +15332,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (lv && rightLit) {
           const base = lv.Kind === 'parameterized' ? lv.Base : lv;
           if (isNumericValueTypeName((base as { Name?: string }).Name)
-            || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(leftNode))) adopt(rightLit, lv);
+            || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(leftNode))
+            // A RATIONAL operand adopts a literal too - rational.md, "a literal
+            // propagates" - so `r + 0.5` is `r + 1/2`; it was left a Number,
+            // and a rational with a Number operand is a TypeError. Not as an
+            // exponent: `**` takes an integer exponent, not a rational.
+            || (base.Kind === 'primitive' && base.Name === 'rational' && token !== '**')) adopt(rightLit, lv);
           return lv;
         }
         if (rv && leftLit) {
           const base = rv.Kind === 'parameterized' ? rv.Base : rv;
           if (isNumericValueTypeName((base as { Name?: string }).Name)
-            || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(rightNode))) adopt(leftLit, rv);
+            || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(rightNode))
+            // A RATIONAL operand adopts a literal too - rational.md, "a literal
+            // propagates" - so `r + 0.5` is `r + 1/2`; it was left a Number,
+            // and a rational with a Number operand is a TypeError. Not as an
+            // exponent: `**` takes an integer exponent, not a rational.
+            || (base.Kind === 'primitive' && base.Name === 'rational' && token !== '**')) adopt(leftLit, rv);
           return rv;
         }
         // Rational exponentiation takes an integer exponent, not a rational.
