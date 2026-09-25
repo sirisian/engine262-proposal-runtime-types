@@ -212,3 +212,42 @@ test('D4 and D5: standalone and additive cases take part by their own value sign
     function f<uint8>(x: uint8, extra: string): string { return 'additive'; } const g: any = f;
     g((3 := uint8)) + '|' + g((3 := uint8), 'e');`)).toBe('generic|additive');
 });
+
+// Step 5: first-class values (plan section 3.8, rules 4 and 5; C14).
+const G = `function f<T: type>(x: T): string { return 'generic'; }
+  function f<uint8>(x: uint8): 'u' { return 'u'; }`;
+
+test('E1 and E4: a stored application selects its case, as a value and as a callback', () => {
+  expect(evaluated(`${G} const g = f.<uint8>; const h = f.<uint16>; g(3) + '|' + h(3);`)).toBe('u|generic');
+  expect(evaluated(`${G} [(3 := uint8)].map(f.<uint8>).join(',');`)).toBe('u');
+  // A capture binds in the stored value.
+  expect(evaluated(`function w<T: type>(v: T): string { return 'g'; }
+    function w<uint.<const N>>(v: uint.<N>): string { return 'n=' + String(N); } const k = w.<uint.<12>>; k(1);`)).toBe('n=12');
+});
+
+test('E1, statically: a stored application has the chosen case\'s type', () => {
+  expect(evaluated(`${G} const g = f.<uint8>; const c: 'u' = g(3); c;`)).toBe('u');
+  expectEarlyError(`${G} const g = f.<uint8>; const n: number = g(3);`, 'StaticTypeError');
+  expectEarlyError(`${G} const g = f.<uint8>; g('x');`, 'StaticTypeError');
+  expectEarlyError(`function read<T: type>(): T; function read<boolean>(): boolean { return true; } const r = read.<float16>;`, 'StaticTypeError');
+});
+
+test('E2 and E3: one selection is one value; another closure\'s declaration is another', () => {
+  expect(evaluated(`${G} String(f.<uint8> === f.<uint8>) + String(f.<T: uint8> === f.<uint8>) + String(f.<uint16> === f.<uint16>);`)).toBe('truetruetrue');
+  expect(evaluated(`function mk() { function f<T: type>(x: T): string { return 'g'; } function f<uint8>(x: uint8): string { return 'u'; } return f.<uint8>; }
+    const a = mk(); const b = mk(); String(a === b) + '|' + String(a === a);`)).toBe('false|true');
+});
+
+test('E5 and E7: a group\'s generic function value is its owner\'s: it reaches a replacement, never an additive case', () => {
+  const APPLY = `function apply(fn: <U: type>(x: U) => string): string { return fn.<uint8>(3); }`;
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint8>(x: uint8): string { return 'uint8'; } ${APPLY} apply(f);`)).toBe('uint8');
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint8>(x: uint8, extra: string): string { return 'additive'; } ${APPLY} apply(f);`)).toBe('generic');
+});
+
+test('E6: a group of standalone cases alone has no generic function value; it is an ordinary overload set', () => {
+  expectEarlyError(`function s<uint8>(x: uint8): string { return 'a'; } const h: <U: type>(x: U) => string = s;`, 'StaticTypeError');
+  expect(evaluated(`function s<uint8>(x: uint8): string { return 'a'; } function s(x: string): string { return 'b'; }
+    function use(fn: (x: string) => string): string { return fn('z'); } use(s);`)).toBe('b');
+});

@@ -3,6 +3,7 @@ import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.mts';
+import { CaseGroupMembers, SelectExplicitCase, StoredCaseValue } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters } from '../abstract-ops/runtime-types.mts';
 import {
@@ -2661,6 +2662,21 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   // every body in it read the parameters as this application bound them, and
   // two applications with the same arguments are one specialization.
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
+    // Plan section 3.8, phase 4 step 5: a STORED application, `f.<A>` as a
+    // value, of a group holding a specialized case selects as a direct call
+    // would (the value count unknown): a case becomes a callable bound to its
+    // captures, identical for an identical selection; the owner's fallback is
+    // any generic function's specialization.
+    const caseMembers = asCallee ? undefined : CaseGroupMembers(value);
+    if (caseMembers) {
+      const inner = (node as unknown as { Expression?: { type?: string, name?: string } }).Expression;
+      const groupName = inner?.type === 'IdentifierReference' && inner.name ? inner.name : 'this function';
+      const choice = Q(yield* SelectExplicitCase(caseMembers, node.TypeArguments.TypeArgumentList as unknown as ParseNode[], groupName, undefined));
+      if (choice.frame) {
+        return StoredCaseValue(choice.fn, choice.frame, groupName);
+      }
+      return Q(yield* SpecializeGenericFunction(choice.fn as ObjectValue, inspected.Value, node, functionTypeParameters(choice.fn as never) ?? []));
+    }
     // A GENERIC FUNCTION (a declaration or a method with its own type
     // parameters) applied in expression position is its specialization value.
     // Read through `functionTypeParameters` rather than the declaration alone,

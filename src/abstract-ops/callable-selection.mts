@@ -25,7 +25,7 @@ import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/speci
 import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
 import { SignaturesOf, InferGenericCallBindings } from './runtime-types.mts';
 import {
-  Throw, Value, Q, Call, EnsureCompletion, type PlainEvaluator, type ValueEvaluator,
+  Throw, Value, Q, Call, CreateBuiltinFunction, EnsureCompletion, type PlainEvaluator, type ValueEvaluator,
 } from '#self';
 
 type Argument = TypeRecord | number;
@@ -327,6 +327,40 @@ export function SelectCase(
     : analysis.Owners.every((o) => (o.Node as { BodylessOwner?: boolean }).BodylessOwner) ? 'its owner has no body'
       : 'its owner does not take these arguments';
   return { Kind: 'error', Message: `no overload of \`${name}\` applies to ${tuple}: no case matches, and ${why}` };
+}
+
+/**
+ * Plan section 3.8, phase 4 step 5: a stored application's case as a callable:
+ * each call runs the case in its captures' frame, as a selected invocation.
+ * One value per case function and binding, so `f.<T: uint8> === f.<uint8>`
+ * (C14), while a case function of another closure's evaluation is another.
+ */
+const storedCaseValues = new WeakMap<object, Map<string, Value>>();
+export function StoredCaseValue(fn: Value, frame: Map<string, TypeRecord>, name: string): Value {
+  const key = [...frame.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${k}=${displayType(v)}`).join(';');
+  let byBinding = storedCaseValues.get(fn as object);
+  if (!byBinding) {
+    byBinding = new Map();
+    storedCaseValues.set(fn as object, byBinding);
+  }
+  const known = byBinding.get(key);
+  if (known) {
+    return known;
+  }
+  const behaviour = function* storedCase(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
+    pushTypeParameterFrame(frame);
+    try {
+      return Q(yield* WithSelectedInvocation(fn, function* callStored() {
+        return yield* Call(fn, context.thisValue, args as Value[]);
+      }));
+    } finally {
+      popTypeParameterFrame();
+    }
+  };
+  const length = ((fn as { FormalParameters?: readonly unknown[] }).FormalParameters ?? []).length;
+  const stored = CreateBuiltinFunction(behaviour as never, length, Value(name), []);
+  byBinding.set(key, stored);
+  return stored;
 }
 
 /** Functions a selection chose, whose case body may run (the step-1 guard stands down for them). */

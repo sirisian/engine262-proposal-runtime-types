@@ -2728,8 +2728,17 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
   }
   let declared: readonly OverloadSignature[] | null = null;
   try {
+    // A group holding cases and an owner has its OWNER's generic function
+    // value (plan section 3.8, rule 4): a replacement is reached through that
+    // contract, and an additive case never is, so neither is listed beside it
+    // (a replacement's signature may even name its captures). A group of
+    // standalone cases alone stays an ordinary overload set (rule 5).
+    const listOf = (fn: unknown) => (fn as { ECMAScriptCode?: { parent?: { TypeParameters?: { ListKind?: string } | null } } }).ECMAScriptCode?.parent?.TypeParameters?.ListKind;
+    const isCase = (fn: unknown) => listOf(fn) === 'specialization' || listOf(fn) === 'mixed';
+    const members = (F.OverloadFunctions ?? []) as readonly unknown[];
+    const ownerContract = members.some(isCase) && members.some((fn) => listOf(fn) === 'parameters');
     const outcome = overloaded
-      ? skipDebugger(SignaturesOf(value))
+      ? skipDebugger(SignaturesOf(value, ownerContract ? (fn) => !isCase(fn) : undefined))
       : skipDebugger((function* one(): PlainEvaluator<readonly OverloadSignature[]> {
         return [Q(yield* OverloadSignatureOf(value, hasCode, { computedAsAny: true }))];
       }()));

@@ -13336,6 +13336,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** The chosen case's own signature per call, for the callee's type (step 2b). */
   const selectedCaseSignatures = new WeakMap<object, SignatureRecord>();
   const caseSelections = new WeakMap<object, { type: Known } | undefined>();
+  /** A stored application's own call, for its selection (step 5). */
+  const storedApplicationCalls = new WeakMap<object, ParseNode>();
   const staticCaseSelection = (node: ParseNode): { type: Known } | undefined => {
     if (caseSelections.has(node)) return caseSelections.get(node);
     const result = staticCaseSelectionUncached(node);
@@ -13384,7 +13386,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
     };
     const valueArguments = ((node as { Arguments?: readonly { type?: string }[] }).Arguments ?? []);
-    const valueCount = valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement') ? undefined : valueArguments.length;
+    // A stored application (step 5) has no call, so no count to filter by.
+    const stored = (node as { StoredApplication?: boolean }).StoredApplication === true;
+    const valueCount = stored || valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement') ? undefined : valueArguments.length;
     const returnOf = (kase: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[]): Known => {
       const annotation = kase.TypeAnnotation?.Type;
       if (!annotation) return null;
@@ -13903,6 +13907,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             staticCaseSelection(call);
             const chosen = selectedCaseSignatures.get(call);
             if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
+          } else {
+            // Step 5: a STORED application, `f.<A>` as a value, selects as the
+            // run time's does, through a call of its own with no arguments.
+            let synthetic = storedApplicationCalls.get(node);
+            if (!synthetic) {
+              synthetic = { type: 'CallExpression', CallExpression: node, parent: (node as { parent?: ParseNode }).parent, StoredApplication: true } as unknown as ParseNode;
+              storedApplicationCalls.set(node, synthetic);
+            }
+            if (IsDirectExplicitFunctionCall(synthetic)) {
+              staticCaseSelection(synthetic);
+              const chosen = selectedCaseSignatures.get(synthetic);
+              if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
+            }
           }
         }
         const specialization = node as ParseNode.TypeArgumentsExpression;
