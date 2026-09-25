@@ -57,3 +57,12 @@ test("an operator parameter binds its own meta type's portion of an operand carr
   expect(evaluated(`${two} primitive float32<const X: Dim> { operator *.<Y: Dim>(rhs: float32.<Y>): string { return keys(Y) + '=' + String(Y.m); } }
     const s: string = a * c1; s;`)).toBe('m=2');
 });
+
+test('the checker types a computed result exactly, through the pass before evaluation', () => {
+  // The builder runs in the check pass with the captures bound to the
+  // operands' static metadata, and the recheck types the expression with the
+  // result: a wrong annotation is static, where it was caught only at run time.
+  const block = 'primitive float32<const X: Dim> { operator *.<Y: Dim>(rhs: float32.<Y>): float32.<mul(X, Y)>; }';
+  expect(evaluated(`${M} ${block} const c: float32.<{ m: 3 }> = a * b; String(c);`)).toBe('12');
+  expectEarlyError(`${M} ${block} const c: float32.<{ m: 1 }> = a * b;`, 'StaticTypeError');
+});

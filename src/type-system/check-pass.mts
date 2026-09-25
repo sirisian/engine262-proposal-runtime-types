@@ -5,8 +5,7 @@ import { EnsureCompletion, Q, X } from '../completion.mts';
 import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
 import {
   DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
-  EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments,
-} from './runtime.mts';
+  EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
 import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
@@ -672,6 +671,18 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     const outer = context.LexicalEnvironment;
     const scope = new DeclarativeEnvironmentRecord(outer);
     const bindings = new Map(obligation.constants);
+    // A computed operator result's captures are bound in a type-parameter
+    // frame around its evaluation, as dispatch binds them: a count as a
+    // literal value parameter, which a type position - `vector.<..., N>` -
+    // reads as the count and an expression as the number; a metadata portion
+    // as an object value parameter, which a builder reads as its metadata
+    // object. Bound lexically instead, a count was "not a type".
+    const computedFrame = new Map<string, TypeRecord>();
+    for (const [name, bound] of obligation.computedAt?.bindings ?? []) {
+      computedFrame.set(name, typeof bound === 'number'
+        ? markValueParameterBinding({ Kind: 'literal', Value: Value(bound), Base: builtinTypeRecord('number', []) } as unknown as TypeRecord)
+        : bound.Kind === 'object' ? markValueParameterBinding(bound) : bound);
+    }
     const dependencies = new Set<string>();
     const seenDependencies = new Set<object>();
     const visitDependencies = (value: unknown): void => {
@@ -768,15 +779,21 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         continue;
       }
       let result;
+      if (computedFrame.size > 0) {
+        pushTypeParameterFrame(computedFrame);
+      }
       try {
         result = EnsureCompletion(yield* TypeNodeToTypeRecord((MetadataApplicationOf(obligation.node) ?? obligation.node) as typeof obligation.node));
       } finally {
+        if (computedFrame.size > 0) {
+          popTypeParameterFrame();
+        }
         EndFragmentEvaluation();
       }
       if (result.Type !== 'normal') {
         return Throw.StaticTypeError('a closed type annotation could not be evaluated to a type: $1', Value(inspect(result.Value)));
       }
-      SetEvaluatedTypeNode(obligation.node, result.Value);
+      SetEvaluatedTypeNode(obligation.computedAt?.site ?? obligation.node, result.Value);
     } finally {
       context.LexicalEnvironment = outer;
     }

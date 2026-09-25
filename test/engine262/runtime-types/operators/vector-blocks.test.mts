@@ -86,3 +86,15 @@ test('a computed lane type is the lane type written the same way', () => {
   expectThrown(`${D} ${block} const c: V = a * s;`, 'is not assignable to');
   expectThrown(`${D} ${block} const c: vector.<float32.<{ m: 3 }>, 2> = a * s;`, 'is not assignable to');
 });
+
+test("the checker types the design's vector result exactly", () => {
+  // The builder runs in the pass before evaluation, with the nested capture D,
+  // the operator's D2, and the count N bound in a type-parameter frame as
+  // dispatch binds them; the recheck types `a * s` with the result.
+  const block = `function mul(a: Dim, b: Dim): Dim { return { m: a.m + b.m }; }
+    primitive vector<float32.<const D: Dim>, const N: uint32> {
+      operator *.<D2: Dim>(rhs: float32.<D2>): vector.<float32.<mul(D, D2)>, N>; }
+    const s: float32.<{ m: 2 }> = 10;`;
+  expect(evaluated(`${D} ${block} const c = a * s; String(Reflect.typeOf(c));`)).toBe('vector.<float32.<{ m: 3 }>, 4>');
+  expectEarlyError(`${D} ${block} const c: V = a * s;`, 'StaticTypeError');
+});

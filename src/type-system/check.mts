@@ -2153,6 +2153,13 @@ export interface DeferredTypeCheck {
    * the trial will need in scope.
    */
   trial?: { declaration: ParseNode, argumentTypes: readonly TypeRecord[] };
+  /**
+   * A block operator's result whose metadata a builder computes -
+   * `float32.<mul(X, Y)>` - at the expression _site_: the pass evaluates
+   * _node_ with the captures bound as _bindings_ (metadata objects, or
+   * numbers), as dispatch would, and the recheck types the site with it.
+   */
+  computedAt?: { site: object, bindings: ReadonlyMap<string, number | TypeRecord> };
 }
 const deferredTypeChecks = new WeakMap<object, Map<object, DeferredTypeCheck>>();
 const evaluatedTypeNodes = new WeakMap<object, TypeRecord>();
@@ -15185,8 +15192,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A vector block's bodyless definition gives the lane-wise result its
           // type, as dispatch stamps it; with none, vector arithmetic keeps the
           // typing it had.
-          if (token && isVector(leftT) && isVector(rightT) && SameType(leftT as TypeRecord, rightT as TypeRecord)) {
-            const contributed = bodylessResult(token, leftT as TypeRecord, rightT as TypeRecord);
+          // The right operand may be a scalar - the design's `vector * float32.<D2>` -
+          // since the definition's operand annotation judges it.
+          if (token && isVector(leftT) && rightT) {
+            const contributed = bodylessResult(token, leftT as TypeRecord, rightT as TypeRecord, false, node);
             if (contributed !== undefined) return contributed;
           }
         }
@@ -15237,7 +15246,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (lv && rv) {
           if (SameType(lv, rv)) {
             if (token) {
-              const contributed = bodylessResult(token, lv, rv);
+              const contributed = bodylessResult(token, lv, rv, false, node);
               if (contributed !== undefined) return contributed;
             }
             // A LITERAL-DERIVED LOOP BINDING IN ARITHMETIC. This returned the LEFT
@@ -15273,7 +15282,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A bodyless definition for the pair - a Dimensions `*` over two
             // dimensions - is its meaning too, as is a definition with a body
             // whose operand names the operator's own parameter.
-            const contributed = bodylessResult(token, lv, rv, true);
+            const contributed = bodylessResult(token, lv, rv, true, node);
             if (contributed !== undefined) {
               return contributed;
             }
@@ -22260,7 +22269,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * captures are bound as dispatch binds them, the receiver's components and
    * metadata, and one contributing definition's return type is the result.
    */
-  const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord, withBodies = false): TypeRecord | null | undefined => {
+  const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord, withBodies = false, site?: ParseNode): TypeRecord | null | undefined => {
     // A vector's metadata is its lanes', so a vector is judged by its own type.
     const isVector = left.Kind === 'primitive' && left.Name === 'vector';
     if (!isVector && (left.Kind !== 'parameterized' || left.Base.Kind !== 'primitive')) return undefined;
@@ -22306,6 +22315,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // left unknown rather than guessed.
         if (!def.FunctionBody && def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)
             && !(returns && typeof returns === 'object' && returns.Kind === 'parameterized')) {
+          // The builder runs in the pass before evaluation, with the captures
+          // bound to the operands' static metadata; the recheck then types
+          // the site with the result. A copy detached from the block resolves
+          // as a closed annotation - the captures are bound by the pass, not
+          // open parameters - and carries every function and alias in view.
+          const evaluatedHere = site ? evaluatedTypeNodes.get(site) : undefined;
+          if (evaluatedHere) {
+            found.push(evaluatedHere);
+            continue;
+          }
+          if (site) {
+            const detached = { ...(def.TypeAnnotation.Type as object), parent: undefined } as unknown as ParseNode.Type;
+            resolveType(detached);
+            const obligation = unresolvedTypes.get(detached);
+            if (obligation) {
+              unresolvedTypes.delete(detached);
+              unresolvedTypes.set(site, { ...obligation, computedAt: { site, bindings: admitted } });
+            }
+          }
           unknownContribution = true;
           continue;
         }
