@@ -4251,6 +4251,7 @@ export abstract class ExpressionParser extends FunctionParser {
     // gap, was mistaken for a limitation of the call syntax.
     /** Set where the member has no body. */
     let isAbstractMember = false;
+    let bodylessOwner = false;
     const isSpecialMethod = isGenerator
       || ((isSetter || isGetter || isAsync) && !this.test(Token.LPAREN) && !isAsyncShorthandProperty);
 
@@ -4431,7 +4432,20 @@ export abstract class ExpressionParser extends FunctionParser {
           && !isAsync
           && !isGenerator
           && !this.classElementNameIsConstructor(node.ClassElementName)) {
-        this.requireAbstractClass();
+        // Plan section 3.8, rule 2: a method whose generic list declares
+        // binders only is an OWNER, and may omit its body without being
+        // abstract - `read<T: type>(): T;` in a concrete class - since it has
+        // no subclass obligation; its cases, not a subclass, implement it.
+        const ownerList = (node as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters;
+        // In an abstract class, an unmarked bodyless member keeps its abstract
+        // reading (simd.md writes them so); the owner reading is a concrete
+        // class's. An owner WITH cases in an abstract class is not yet told
+        // apart from an abstract member (recorded in the step-1 note).
+        if (ownerList && ownerList.ListKind === 'parameters' && !this.currentClassModifiers?.includes('abstract')) {
+          bodylessOwner = true;
+        } else {
+          this.requireAbstractClass();
+        }
         this.semicolon();
         isAbstractMember = true;
       } else if (surroundingAgent.feature('runtime-types') && this.test(Token.SEMICOLON)) {
@@ -4488,6 +4502,9 @@ export abstract class ExpressionParser extends FunctionParser {
 
     if (isAbstractMember) {
       const abstractNode = node as unknown as ParseNode.Unfinished<ParseNode.AbstractMethodDefinition>;
+      if (bodylessOwner) {
+        (abstractNode as { BodylessOwner?: boolean }).BodylessOwner = true;
+      }
       abstractNode.static = false;
       // Which accessor form, where it
       // is one. Both finish as this node type by design; the member registry is

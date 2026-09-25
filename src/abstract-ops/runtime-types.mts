@@ -4399,6 +4399,14 @@ function annotationMentionsName(node: unknown, name: string): boolean {
 
 /** Converts each annotated parameter's bound value in place at entry. */
 export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(n: Value): PlainEvaluator<import('../value.mts').BooleanValue>, GetBindingValue(n: Value, s: import('../value.mts').BooleanValue): ValueEvaluator, SetMutableBinding(n: Value, v: Value, s: import('../value.mts').BooleanValue): PlainEvaluator }): PlainEvaluator {
+  // Plan section 3.8, until selection is implemented (phase 4, step 2): a
+  // specialized case's body, and a bodyless owner, run only through a
+  // selection this engine does not yet make, so reaching one is refused rather
+  // than run as an ordinary overload. The checker refuses the calls statically.
+  const deferral = SpecializedCaseDeferral(fn);
+  if (deferral !== undefined) {
+    return Throw.TypeError('$1', Value(deferral));
+  }
   // #sec-primitive-operator-blocks: a primitive block operator's operand was
   // admitted by dispatch, judging only the portions its captures speak for -
   // `rhs: float32.<Y>` of a Dimensions operator admits a value that also
@@ -5089,6 +5097,26 @@ export function* SignaturesOf(overloaded: Value): PlainEvaluator<readonly Overlo
   }
 }
 
+/**
+ * The refusal for a specialized case's function, or a bodyless owner's, until
+ * selection is implemented; *undefined* for any other function.
+ */
+export function SpecializedCaseDeferral(fn: unknown): string | undefined {
+  const declaration = (fn as { ECMAScriptCode?: { parent?: { TypeParameters?: { ListKind?: string } | null, BodylessOwner?: boolean, BindingIdentifier?: { name?: string } } } })?.ECMAScriptCode?.parent;
+  if (!declaration) {
+    return undefined;
+  }
+  const name = declaration.BindingIdentifier?.name ?? 'this function';
+  if (declaration.BodylessOwner) {
+    return `${name} is a bodyless owner, which only its specialized cases implement, and selecting a specialized case is not supported yet`;
+  }
+  const kind = declaration.TypeParameters?.ListKind;
+  if (kind === 'specialization' || kind === 'mixed') {
+    return `${name} belongs to a group with a specialized case, and selecting a specialized case is not supported yet`;
+  }
+  return undefined;
+}
+
 export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly Value[]): ValueEvaluator {
   // Only the parameter NODES are read here: `length` is the smallest arity among
   // the signatures, and arity, rest, and optional are syntactic. The types wait
@@ -5109,7 +5137,14 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
   if (!Number.isFinite(length)) {
     length = 0;
   }
+  const caseMember = functions.find((fn) => SpecializedCaseDeferral(fn) !== undefined);
   const behaviour = function* overloadDispatch(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
+    // A group holding a specialized case selects by its cases' patterns (plan
+    // section 3.8), which value dispatch alone cannot; until that is
+    // implemented, the call is refused rather than dispatched by value.
+    if (caseMember !== undefined) {
+      return Throw.TypeError('$1', Value(SpecializedCaseDeferral(caseMember)!));
+    }
     // #sec-overloading-on-return-type: the contextual type filters what ranking
     // left tied. It is read here rather than passed down from the binding,
     // because a binding boundary sees the RESULT - by then the overload has

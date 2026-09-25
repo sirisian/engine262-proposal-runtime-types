@@ -1,6 +1,7 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters } from './specialization-patterns.mts';
-import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures } from './component-patterns.mts';
+import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf } from './specialization-patterns.mts';
+import { AnalyzeCallableGroup } from './specialization-selection.mts';
+import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -1623,6 +1624,14 @@ function containsComputedType(node: unknown): boolean {
   if (Array.isArray(node)) return node.some(containsComputedType);
   if ((node as { type?: string }).type === 'ComputedType') return true;
   return Object.entries(node).some(([k, v]) => k !== 'parent' && k !== 'location' && containsComputedType(v));
+}
+
+/** Whether a pattern node holds a capture anywhere within it. */
+function CollectCapturesIn(node: unknown): boolean {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(CollectCapturesIn);
+  if ((node as { type?: string }).type === 'CaptureBinding') return true;
+  return Object.entries(node).some(([k, v]) => k !== 'parent' && k !== 'location' && CollectCapturesIn(v));
 }
 
 function isIntegerValueType(t: TypeRecord | null | undefined): boolean {
@@ -20753,7 +20762,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // sec-check-elision applies to the effective body result: ordinary T,
     // Promise resolve T, or Generator R. Resumability does not excuse undefined.
-    if (checkReturns && hasDeclaredReturn && declaredReturn
+    // A bodyless owner (plan section 3.8, rule 2) has no body to complete: its
+    // cases implement it, and an application none matches is no viable overload.
+    const bodylessOwner = !!((body as { parent?: { BodylessOwner?: boolean } } | null)?.parent?.BodylessOwner);
+    if (checkReturns && hasDeclaredReturn && declaredReturn && !bodylessOwner
       && canCompleteNormally(body as ParseNode, switchCoversDiscriminant)
       // `void` is the annotation for a function that returns nothing, and
       // `IsAssignable(undefined, void)` is false - the two are different types.
@@ -25469,6 +25481,209 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ? Throw.StaticTypeError('no declared operator signature accepts these operands')
       : Throw.StaticTypeError('the operator is ambiguous between two declared signatures');
     errors.push(completion.Value as ObjectValue);
+  }
+  // Plan section 3.8, phase 4 step 1: the callable group analysis. Each
+  // statement list's functions and each class body's methods are grouped by
+  // name; a group holding a specialized case or a bodyless owner is analyzed
+  // (owners, attachment, duplicates, D4 and D9), and each attached case is
+  // classified (Q4). A direct call into a function group with a case is
+  // refused statically until selection is implemented (step 2).
+  {
+    type Decl = ParseNode & {
+      TypeParameters?: ParseNode.TypeParameters | null, BodylessOwner?: boolean, parent?: object,
+      BindingIdentifier?: { name?: string }, ClassElementName?: { type?: string, name?: string }, static?: boolean,
+      FormalParameters?: readonly ParseNode[], UniqueFormalParameters?: readonly ParseNode[], TypeAnnotation?: ParseNode.TypeAnnotation | null,
+    };
+    const callableHost = CallableGroupHostFor((n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []));
+    const report = (message: string) => {
+      errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
+    };
+    const listOf = (d: Decl) => d.TypeParameters ?? null;
+    const isCase = (d: Decl) => listOf(d)?.ListKind === 'specialization' || listOf(d)?.ListKind === 'mixed';
+    const nameOf = (d: Decl): string | undefined => (d.type === 'FunctionDeclaration'
+      ? d.BindingIdentifier?.name
+      : d.ClassElementName?.type === 'IdentifierName' ? `${d.static ? 'static ' : ''}${d.ClassElementName.name}` : undefined);
+    const labelOf = (d: Decl) => {
+      const text = ((d as { sourceText?: string }).sourceText ?? '').split('(')[0]!.replace(/^(async\s+)?function\s*\*?\s*/, '').trim();
+      return `\`${text || nameOf(d) || 'this declaration'}\``;
+    };
+    const binderParameters = (list: ParseNode.TypeParameters) => (list.TypeParameterList ?? []).map((tp) => ({
+      Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
+      Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp,
+    }));
+    const byName = (t: TypeRecord | null, bindings: ReadonlyMap<string, TypeRecord>): TypeRecord | null => {
+      if (!t) return null;
+      const seen = new Map<object, unknown>();
+      const walk = (v: unknown): unknown => {
+        if (!v || typeof v !== 'object') return v;
+        if (seen.has(v)) return seen.get(v);
+        if (Array.isArray(v)) {
+          const out: unknown[] = [];
+          seen.set(v, out);
+          v.forEach((x) => out.push(walk(x)));
+          return out;
+        }
+        const r = v as { Kind?: string, Name?: string };
+        if (r.Kind === 'parameter' && typeof r.Name === 'string' && bindings.has(r.Name)) return bindings.get(r.Name);
+        if (Object.getPrototypeOf(v) !== Object.prototype) return v;
+        const out: Record<string, unknown> = {};
+        seen.set(v, out);
+        for (const [k, x] of Object.entries(v)) out[k] = walk(x);
+        return out;
+      };
+      return walk(t) as TypeRecord;
+    };
+    const parametersOf = (d: Decl) => (d.FormalParameters ?? d.UniqueFormalParameters ?? []) as readonly (ParseNode & {
+      TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: unknown, Optional?: boolean, Ref?: boolean,
+    })[];
+    // Q4: an attached case whose parameter list is the owner's instantiated at
+    // its pattern is a REPLACEMENT, whose return must be a subtype of the
+    // owner's; any other parameter list makes it ADDITIVE.
+    const classifyAttached = (kase: Decl, owner: Decl) => {
+      const entries = SpecializationPatternsOf(listOf(kase)!);
+      const binders = listOf(owner)?.TypeParameterList ?? [];
+      const bindings = new Map<string, TypeRecord>();
+      let fixed = entries.length === binders.length;
+      entries.forEach((entry, q) => {
+        const binder = binders[q];
+        if (!binder || entry.type === 'CaptureBinding' || CollectCapturesIn(entry)) {
+          fixed = false;
+          return;
+        }
+        const record = resolveType(entry as ParseNode.Type);
+        if (record) bindings.set(binder.BindingIdentifier.name, record); else fixed = false;
+      });
+      const mine = parametersOf(kase);
+      const theirs = parametersOf(owner);
+      const shape = (p: (typeof mine)[number]) => `${p.type}:${!!p.Initializer || !!p.Optional}:${!!p.Ref}`;
+      let sameList = mine.length === theirs.length && mine.every((p, i) => shape(p) === shape(theirs[i]!));
+      const resolveIn = (d: Decl, node: ParseNode.Type | undefined) => {
+        if (!node) return null;
+        const pushed = pushTypeParameterScopeOf(d as never);
+        try {
+          return resolveType(node);
+        } finally {
+          if (pushed) typeParameterScopes.pop();
+        }
+      };
+      if (sameList && fixed) {
+        sameList = mine.every((p, i) => {
+          const a = resolveIn(kase, p.TypeAnnotation?.Type);
+          const b = byName(resolveIn(owner, theirs[i]!.TypeAnnotation?.Type), bindings);
+          return !a || !b || SameType(a, b);
+        });
+      }
+      if (!sameList) return; // additive: borrows the owner's labels, never substituted through its generic value
+      if (fixed && kase.TypeAnnotation && owner.TypeAnnotation) {
+        const mineReturn = resolveIn(kase, kase.TypeAnnotation.Type);
+        const theirReturn = byName(resolveIn(owner, owner.TypeAnnotation.Type), bindings);
+        if (mineReturn && theirReturn && !IsSubtype(mineReturn, theirReturn, [])) {
+          report(`${labelOf(kase)} replaces ${labelOf(owner)}, whose return at this pattern is ${displayType(theirReturn)}, and ${displayType(mineReturn)} is not a subtype of it; return a subtype, or change its parameters to declare an additive overload`);
+        }
+      }
+    };
+    const groupsWithCases = new Map<object, Set<string>>();
+    const analyze = (holder: object, declarations: readonly Decl[]) => {
+      const groups = new Map<string, Decl[]>();
+      for (const d of declarations) {
+        const name = nameOf(d);
+        if (name) groups.set(name, [...(groups.get(name) ?? []), d]);
+      }
+      for (const [name, group] of groups) {
+        if (!group.some((d) => isCase(d) || d.BodylessOwner)) continue;
+        if (group.some(isCase)) groupsWithCases.set(holder, new Set([...(groupsWithCases.get(holder) ?? []), name]));
+        const members = group.map((d) => ({
+          Node: d, List: listOf(d), Label: labelOf(d),
+          Parameters: listOf(d)?.ListKind === 'parameters' ? binderParameters(listOf(d)!) : undefined,
+        }));
+        let analysis;
+        try {
+          analysis = AnalyzeCallableGroup(members as never, callableHost);
+        } catch (e) {
+          report(`${labelOf(group[0]!)}: ${(e as Error).message}`);
+          continue;
+        }
+        for (const diagnostic of analysis.Diagnostics) report(diagnostic.message);
+        // C22: a bare name in a standalone case that names no type is almost
+        // always a type parameter written without its domain.
+        for (const d of analysis.Standalone) {
+          for (const entry of listOf(d.Node as Decl)?.ListKind === 'specialization' ? SpecializationPatternsOf(listOf(d.Node as Decl)!) : []) {
+            const bare = entry.type === 'TypeReference' && !(entry as ParseNode.TypeReference).TypeArguments
+              && (entry as ParseNode.TypeReference).TypeName.MemberNames.length === 0 ? (entry as ParseNode.TypeReference).TypeName.IdentifierReference.name : undefined;
+            if (bare && bare !== '_' && !resolveType(entry as ParseNode.Type)) {
+              report(`\`${bare}\` has no domain, so it is an argument, and no type named \`${bare}\` is in scope; a type parameter is declared as \`${bare}: type\``);
+            }
+          }
+        }
+        for (const owner of analysis.Owners) {
+          if ((owner.Node as Decl).BodylessOwner && !analysis.Attached.some((a) => a.Owner === owner)) {
+            report(`${owner.Label} is a bodyless owner with no attached case in its group, so every application of it would fail; give it a body, or declare it abstract`);
+          }
+        }
+        // Duplicate standalone cases, which the analysis compares only under an owner.
+        const standalone = analysis.Standalone.filter((d) => listOf(d.Node as Decl)?.ListKind === 'specialization');
+        for (let i = 0; i < standalone.length; i += 1) {
+          for (let j = i + 1; j < standalone.length; j += 1) {
+            const a = standalone[i]!;
+            const b = standalone[j]!;
+            if ((a.List as { sourceText?: string }).sourceText === (b.List as { sourceText?: string }).sourceText
+                && parametersOf(a.Node as Decl).length === parametersOf(b.Node as Decl).length) {
+              report(`${a.Label} and ${b.Label} are declared twice for the same applications`);
+            }
+          }
+        }
+        for (const { Case, Owner } of analysis.Attached) classifyAttached(Case.Node as Decl, Owner.Node as Decl);
+      }
+    };
+    const seenNodes = new Set<object>();
+    const findGroups = (value: unknown): void => {
+      if (!value || typeof value !== 'object' || seenNodes.has(value)) return;
+      seenNodes.add(value);
+      if (Array.isArray(value)) {
+        value.forEach(findGroups);
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (key === 'parent' || key === 'location') continue;
+        if (Array.isArray(child)) {
+          const callables = child.filter((c) => (c as ParseNode | null)?.type === 'FunctionDeclaration'
+            || (c as ParseNode | null)?.type === 'MethodDefinition' || (c as ParseNode | null)?.type === 'AbstractMethodDefinition') as Decl[];
+          if (callables.length > 0) analyze(value, callables);
+        }
+        findGroups(child);
+      }
+    };
+    findGroups(root);
+    // Step 1's static deferral: a direct call into a function group with a case.
+    if (groupsWithCases.size > 0) {
+      const seenCalls = new Set<object>();
+      const findCalls = (value: unknown): void => {
+        if (!value || typeof value !== 'object' || seenCalls.has(value)) return;
+        seenCalls.add(value);
+        if (Array.isArray(value)) {
+          value.forEach(findCalls);
+          return;
+        }
+        const n = value as { type?: string, CallExpression?: unknown, MemberExpression?: unknown, parent?: object };
+        if (n.type === 'CallExpression') {
+          let callee = n.CallExpression as { type?: string, name?: string, MemberExpression?: unknown, CallExpression?: unknown, Expression?: unknown } | undefined;
+          if (callee?.type === 'TypeArgumentsExpression') callee = (callee.MemberExpression ?? callee.CallExpression ?? callee.Expression) as typeof callee;
+          const name = callee?.type === 'IdentifierReference' ? callee.name : undefined;
+          if (name) {
+            for (let p: { parent?: object } | undefined = n; p; p = p.parent as { parent?: object } | undefined) {
+              if (groupsWithCases.get(p)?.has(name)) {
+                report(`selecting a specialized case of \`${name}\` is not supported yet`);
+                break;
+              }
+            }
+          }
+        }
+        for (const [key, child] of Object.entries(value)) {
+          if (key !== 'parent' && key !== 'location') findCalls(child);
+        }
+      };
+      findCalls(root);
+    }
   }
   deferredMetadataChecks.set(root, deferred);
   deferredCrossingChecks.set(root, crossingChecks);

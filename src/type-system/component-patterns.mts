@@ -27,6 +27,7 @@ import {
   MatchSpecializationList, MatchSpecializationPattern, PrimitiveDeclaresParameters, PrimitiveParameterKinds, PrimitiveParameterDefault,
   type PatternSlotParameter, type SpecializationMatchHost,
 } from './specialization-patterns.mts';
+import type { CallableGroupHost } from './specialization-selection.mts';
 import { MetadataObjectFromType } from './runtime.mts';
 
 type Argument = TypeRecord | number;
@@ -325,4 +326,46 @@ export function FixedTypeSubtrees(node: ParseNode, names: ReadonlySet<string>): 
   };
   visit(node);
   return out;
+}
+
+/**
+ * Plan section 3.8: the host the checker's callable group analysis
+ * (`AnalyzeCallableGroup`) runs over. It matches and orders patterns as the
+ * component host does, and judges whether an owner's slot admits a case's
+ * entry: a type slot admits a type (within its `extends` bound), and a value
+ * slot a literal of its domain.
+ */
+export function CallableGroupHostFor(
+  resolve: (node: ParseNode) => TypeRecord | null,
+  isSubtype: (sub: TypeRecord, sup: TypeRecord) => boolean,
+): CallableGroupHost<Argument> {
+  const base = componentHost(resolve);
+  const slotOf = (parameter: unknown) => parameter as { Kind?: 'type' | 'value', Binder?: ParseNode.TypeParameter };
+  return {
+    ...base,
+    boundIncludes: (wide, narrow) => {
+      const w = resolve(wide as unknown as ParseNode);
+      const n = resolve(narrow as unknown as ParseNode);
+      return !!w && !!n && isSubtype(n, w);
+    },
+    admits: (entry, parameter) => {
+      const slot = slotOf(parameter);
+      const resolved = resolve(entry);
+      if (!resolved) {
+        return false;
+      }
+      if (slot.Kind === 'value') {
+        const domain = slot.Binder?.TypeParameterDomain ?? slot.Binder?.TypeParameterConstraint;
+        const domainRecord = domain ? resolve(domain as unknown as ParseNode) : null;
+        return resolved.Kind === 'literal' && (!domainRecord || isSubtype(resolved, domainRecord));
+      }
+      const bound = slot.Binder?.TypeParameterConstraint;
+      if (bound && slot.Binder?.TypeParameterDomain) {
+        const boundRecord = resolve(bound as unknown as ParseNode);
+        return !boundRecord || isSubtype(resolved, boundRecord);
+      }
+      return true;
+    },
+    admitsStructure: (_entry, parameter) => slotOf(parameter).Kind !== 'value',
+  };
 }

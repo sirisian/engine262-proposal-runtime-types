@@ -942,6 +942,14 @@ export abstract class TypeParser extends ExpressionParser {
     // #sec-specialization-lists: "Until they are [specified], an
     // implementation reports a specialization it cannot select as an error
     // rather than accepting it and ignoring it."
+    // Plan section 3.8: a function's or method's list declares an overload
+    // contract, so a case - an owner's attached replacement or additive
+    // overload, or a standalone case - is a declaration in its own right. The
+    // checker's group analysis judges it. An operator's cases, and every
+    // family's (classes, aliases, interfaces, partials), are not supported yet.
+    if (context === 'function' || context === 'method') {
+      return;
+    }
     const first = (list.SpecializationEntryList ?? [])[0]?.Pattern;
     let message = hint ?? 'an argument in a declaration\'s list specializes a declared family, and specialization is not supported yet';
     if (first?.type === 'CaptureBinding') {

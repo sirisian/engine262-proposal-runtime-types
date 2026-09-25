@@ -48,7 +48,9 @@ test('a generic signature displays its domains', () => {
 });
 
 test('C22: an entry without a domain is an argument, not a parameter', () => {
-  expectEarlyError('function f<T>(x: T) {}', 'SyntaxError');
+  // A callable's list may now hold cases (phase 4, step 1), so a bare name there
+  // is a selector the checker resolves: statically refused, with the same hint.
+  expectEarlyError('function f<T>(x: T) {}', 'StaticTypeError');
   expectEarlyError('class Box<T> {}', 'SyntaxError');
   expectEarlyError('function f<T extends uint>(x: T) {}', 'SyntaxError');
   expectEarlyError('class A<T = uint8> {}', 'SyntaxError');

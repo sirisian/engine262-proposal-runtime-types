@@ -93,9 +93,10 @@ test('a mixed list is a selector-prefixed overload, which only a callable declar
   expectThrown('class Box<uint32, N: 8> {}', 'which only a function, method, or operator may');
   // A capture at the top of a mixed list observes nothing a caller could not name.
   expectThrown('function f<const T, N: uint32>() {}', 'declare `T: type`, or a value domain, as a parameter');
-  // A callable's mixed list is grammatical, and not yet selectable.
-  expectThrown('function write<float32, maximum: float32>(v: float32) {}', 'specialization is not supported yet');
-  expectThrown('class W { write<float32, maximum: float32>(v: float32) {} }', 'specialization is not supported yet');
+  // A callable's mixed list declares a standalone case (plan section 3.8, A3);
+  // selecting it is refused until phase 4, step 2.
+  expect(evaluated('function write<float32, maximum: float32>(v: float32) {} "ok";')).toBe('ok');
+  expect(evaluated('class W { write<float32, maximum: float32>(v: float32) {} } "ok";')).toBe('ok');
 });
 
 test('a list that describes or introduces a generic declares parameters only', () => {

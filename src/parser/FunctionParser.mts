@@ -154,7 +154,25 @@ export abstract class FunctionParser extends IdentifierParser {
         (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
       }
 
-      const body = this.parseFunctionBody(isAsync, isGenerator, false);
+      // Plan section 3.8, rule 2: an OWNER - a declaration whose list holds
+      // binders only - may omit its body: `function read<T: type>(): T;`
+      // declares the labels and generic contract its cases keep, and an
+      // application no case matches is then no viable overload. Nothing else
+      // may omit a body.
+      let body: ParseNode.FunctionBodyLike;
+      if (surroundingAgent.feature('runtime-types') && !isExpression && this.test(Token.SEMICOLON)) {
+        const list = (node as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters;
+        if (!list || list.ListKind !== 'parameters' || isAsync || isGenerator) {
+          this.raise(Throw.SyntaxError('$1', 'only an owner, whose generic list declares parameters only, may omit its body; give this function a body'));
+        }
+        const empty = this.startNode<ParseNode.FunctionBody>();
+        this.expect(Token.SEMICOLON);
+        (empty as unknown as { FunctionStatementList: ParseNode[] }).FunctionStatementList = [];
+        body = this.finishNode(empty, 'FunctionBody') as ParseNode.FunctionBodyLike;
+        (node as { BodylessOwner?: boolean }).BodylessOwner = true;
+      } else {
+        body = this.parseFunctionBody(isAsync, isGenerator, false);
+      }
       this.setFunctionBodyGeneric(node, body.type, body);
 
       if (node.BindingIdentifier) {
