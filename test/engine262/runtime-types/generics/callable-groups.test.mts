@@ -93,3 +93,33 @@ test('two owners with one list are told apart by their parameters in the diagnos
     function f<T: type>(x: T, y: string): string { return 'b'; }
     function f<uint8>(x: uint8): string { return 'c'; }`, '`f<T: type>(x: T)` and `f<T: type>(x: T, y: string)`');
 });
+
+test('A7 and A8: a written capture domain must match its slot (D9)', () => {
+  const owner = `function f<T: type>(x: T): string { return 'g'; }`;
+  // `uint`'s width slot has the domain uint32; restating it is accepted, and
+  // the case's own parameters see its capture.
+  expect(evaluated(`${owner} function f<uint.<const N: uint32>>(x: uint.<N>): string { return 'c'; } 'ok';`)).toBe('ok');
+  expect(evaluated(`${owner} function f<uint.<const N>>(x: uint.<N>): string { return 'c'; } 'ok';`)).toBe('ok');
+  expectThrown(`${owner} function f<uint.<const N: uint16>>(x: uint.<N>): string { return 'c'; }`,
+    'whose domain is `uint.<32>`, and `const N: uint16` restates it as `uint.<16>`');
+  // Against an owner's value binder too.
+  expectEarlyError(`function f<N: uint32>(): string { return 'g'; } function f<const N: uint16>(): string { return 'c'; }`, 'StaticTypeError');
+});
+
+test("A7b: a primitive block's own component captures are checked against their slots (D9)", () => {
+  // Accepted before: a written domain was never compared.
+  expectThrown('primitive vector<const T, const N: string> {}', '`const N: string` restates it as `string`');
+  expectThrown('primitive uint<const W: string> {}', '`const W: string` restates it as `string`');
+  expect(evaluated(`primitive vector<const T, const N: uint32> {} primitive uint<const W> {} 'ok';`)).toBe('ok');
+  // A metadata position is exempt: `float32.<const D: Dim>` selects the meta type.
+  expect(evaluated(`type Dim = { m: int32 };
+    meta Dim { default = { m: 0 }; subtype(a: Dim, b: Dim): boolean { return a.m === b.m; } }
+    primitive vector<float32.<const D: Dim>, const N: uint32> {} 'ok';`)).toBe('ok');
+});
+
+test('A24 through inheritance: a case group declared in a base class is deferred through a subclass', () => {
+  const W = `class W { write<T: type>(v: T): string { return 'g'; } write<boolean>(v: boolean): string { return 'b'; } }`;
+  expectEarlyError(`${W} class X extends W {} new X().write(true);`, 'StaticTypeError');
+  expectThrown(`${W} class X extends W {} class Y extends X {} new Y().write.<boolean>(true);`, 'selecting a specialized case of `write` is not supported yet');
+  expect(evaluated(`class V { m(v: string): string { return 's'; } } class U extends V {} new U().m('a');`)).toBe('s');
+});

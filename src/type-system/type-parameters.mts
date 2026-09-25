@@ -48,10 +48,17 @@ export const typeParameterNamesOf = (declaration: ParseNode | null | undefined):
     : (declaration as unknown as {
       TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] },
     } | null | undefined)?.TypeParameters?.TypeParameterList;
-  if (!list || list.length === 0) {
+  // A callable's specialized case (plan section 3.8) binds its list's captures
+  // too - `n` of `write<uint.<const n>>(value: uint.<n>)` - as a primitive
+  // block's header does, so its signature and body see them.
+  const captures = declaration?.type === 'PrimitiveOperatorDeclaration' ? [] : ((declaration as unknown as {
+    TypeParameters?: { Captures?: readonly { BindingIdentifier?: { name?: string } }[] },
+  } | null | undefined)?.TypeParameters?.Captures ?? []);
+  const all = [...(list ?? []), ...captures];
+  if (all.length === 0) {
     return null;
   }
-  const names = list.map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
+  const names = all.map((tp) => tp.BindingIdentifier?.name ?? '').filter((n) => n !== '');
   return names.length > 0 ? names : null;
 };
 

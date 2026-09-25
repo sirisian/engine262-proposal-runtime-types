@@ -1,7 +1,7 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf } from './specialization-patterns.mts';
+import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup } from './specialization-selection.mts';
-import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor } from './component-patterns.mts';
+import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -21247,7 +21247,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (property && member?.MemberExpression) {
           const receiver = staticType(member.MemberExpression);
           const classDeclaration = receiver && receiver.Kind === 'nominal' ? receiver.Declaration : undefined;
-          if (classDeclaration) declared = CaseGroupMemberOf(classDeclaration, property, caseGroups) as ParseNode | undefined;
+          // The receiver's class first, then each superclass: a case group
+          // declared in a base class is reached through a subclass receiver.
+          const visited = new Set<ParseNode>();
+          for (let cls = classDeclaration as ParseNode | undefined; cls && !declared && !visited.has(cls); cls = heritageClassOf(cls)) {
+            visited.add(cls);
+            declared = CaseGroupMemberOf(cls, property, caseGroups) as ParseNode | undefined;
+          }
         }
       }
       if (declared && !deferredCaseCalls.has(n)) {
@@ -25653,10 +25659,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const nameOf = (d: Decl): string | undefined => (d.type === 'FunctionDeclaration'
       ? d.BindingIdentifier?.name
       : d.ClassElementName?.type === 'IdentifierName' ? `${d.static ? 'static ' : ''}${d.ClassElementName.name}` : undefined);
-    const binderParameters = (list: ParseNode.TypeParameters) => (list.TypeParameterList ?? []).map((tp) => ({
-      Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
-      Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp,
-    }));
+    // Each owner binder as a pattern slot, a value binder carrying its resolved
+    // domain, which D9 compares a case's written capture domain against.
+    const binderParameters = (list: ParseNode.TypeParameters) => (list.TypeParameterList ?? []).map((tp) => {
+      const written = tp.IsValueParameter ? (tp.TypeParameterDomain ?? tp.TypeParameterConstraint) : undefined;
+      const domain = written ? resolveType(written as ParseNode.Type) : null;
+      return {
+        Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
+        Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp,
+        ...(domain ? { Domain: domain } : {}),
+      };
+    });
     const byName = (t: TypeRecord | null, bindings: ReadonlyMap<string, TypeRecord>): TypeRecord | null => {
       if (!t) return null;
       const seen = new Map<object, unknown>();
@@ -25752,7 +25765,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }));
         let analysis;
         try {
-          analysis = AnalyzeCallableGroup(members as never, callableHost);
+          analysis = AnalyzeCallableGroup(members as never, callableHost, (r) => displayType(r as TypeRecord));
         } catch (e) {
           report(`${labelOf(group[0]!)}: ${(e as Error).message}`);
           continue;
@@ -25808,6 +25821,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     };
     findGroups(root);
+    // D9 for a primitive block's own component list (A7b): each capture's
+    // written domain against its primitive's slot, `uint32` for a value slot.
+    // A metadata position is exempt, as D9 states.
+    {
+      const seenBlocks = new Set<object>();
+      const findBlocks = (value: unknown): void => {
+        if (!value || typeof value !== 'object' || seenBlocks.has(value)) return;
+        seenBlocks.add(value);
+        if (Array.isArray(value)) {
+          value.forEach(findBlocks);
+          return;
+        }
+        const n = value as ParseNode.PrimitiveOperatorDeclaration;
+        if (n.type === 'PrimitiveOperatorDeclaration') {
+          const list = n.ComponentParameters;
+          const name = (n.TypeName as unknown as { IdentifierReference?: { name?: string } } | null)?.IdentifierReference?.name;
+          if (list && list.ListKind === 'specialization' && name) {
+            for (const diagnostic of ValidateSpecializationList(list, callableHost, PrimitiveSlotParameters(name), (r) => displayType(r as TypeRecord))) {
+              report(diagnostic.message);
+            }
+          }
+        }
+        for (const [key, child] of Object.entries(value)) {
+          if (key !== 'parent' && key !== 'location') findBlocks(child);
+        }
+      };
+      findBlocks(root);
+    }
     // Step 1's static deferral: a direct call into a function group with a case.
     if (groupsWithCases.size > 0) {
       const seenCalls = new Set<object>();

@@ -200,6 +200,22 @@ export function BindMetadataCaptures(
   return out;
 }
 
+/**
+ * A primitive's own parameters as pattern slots. A VALUE slot - a width of
+ * `int`, `uint`, or `rational`, or `vector`'s lane count - has the domain
+ * `uint32`: the spec states each as a positive integer, its range (1 to 2**16
+ * for a width) being a bound apart from its type, as a const generic's type is
+ * one integer type in Rust. D9 compares a written capture domain against it.
+ */
+export function PrimitiveSlotParameters(name: string): PatternSlotParameter<Argument>[] {
+  // The spec's own parameter names: `vector.<T, N>`, `int.<N>`, `complex.<E>`.
+  const names = name === 'vector' ? ['T', 'N'] : name === 'complex' ? ['E'] : ['N'];
+  return PrimitiveParameterKinds(name).map((kind, i) => ({
+    Name: names[i] ?? `#${i}`, Variadic: false, HasDefault: false,
+    ...(kind === 'value' ? { Domain: builtinTypeRecord('uint32', []) as TypeRecord } : {}),
+  }));
+}
+
 function componentHost(resolve: (node: ParseNode) => TypeRecord | null): SpecializationMatchHost<Argument> {
   const same = (a: Argument, b: Argument) => (typeof a === 'number' || typeof b === 'number' ? a === b : SameType(a, b));
   return {
@@ -223,7 +239,7 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       if (PrimitiveDeclaresParameters(inner)) {
         return {
           Name: inner,
-          Parameters: PrimitiveParameterKinds(inner).map((_kind, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false })),
+          Parameters: PrimitiveSlotParameters(inner),
           argumentsOf: (subject) => (typeof subject === 'object' && subject.Kind === 'primitive' && subject.Name === inner ? subject.Arguments ?? [] : null),
           defaultOf: (q) => PrimitiveParameterDefault(inner, q),
         };
