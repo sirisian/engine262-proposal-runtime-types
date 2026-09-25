@@ -23824,6 +23824,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const referent = locationType(newInit);
             if (referent) {
               declare(n.BindingIdentifier.name, referent, bindingFrame);
+              // AND RECORD WHETHER IT CARRIES A CONTRACT, as every other binding form
+              // does where it is declared. A binding's static type alone is no longer
+              // taken as a contract - #sec-unary-operators-for-typed-values: "an
+              // ordinary unannotated mutable binding does not acquire a permanent
+              // contract from its initializer" - so a binding with no recorded
+              // participation and no origin reads as having none. This path returned
+              // before recording it, and a `ref` binding has no origin, so
+              // `let ref p = g()` for a `g` returning `ref number | ref boolean` read
+              // as contract-free, and `p++` - which writes a number back through a
+              // location that may hold a boolean - was no longer refused before the
+              // program ran. It carries exactly the contract its initializer does:
+              // a declared return is "an operand contract".
+              let participation = unaryBindingParticipation.get(bindingFrame);
+              if (!participation) {
+                participation = new Map();
+                unaryBindingParticipation.set(bindingFrame, participation);
+              }
+              participation.set(n.BindingIdentifier.name, operandParticipates(newInit));
               return;
             }
           }
