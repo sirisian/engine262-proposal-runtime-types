@@ -155,7 +155,12 @@ export function* DispatchCaseGroup(
     .filter((a) => (a.Case.Node as { CaseRole?: string }).CaseRole !== 'additive')
     .map((a) => a.Case.Node as object));
   const signatures = Q(yield* SignaturesOf(overloaded, (fn) => !replacements.has(declarationOf(fn) as object))) as readonly OverloadSignature[];
-  const resolution = resolveOverload(signatures, args, callContext);
+  // Overloading on return type (the contextual type) must not filter out an
+  // owner that routes to replacements: its own return is not the call's when a
+  // replacement is chosen (`const c: 'u' = f(x)` with `f<uint8>(x: uint8): 'u'`).
+  // The chosen declaration's return is checked where the result is bound.
+  const routes = analysis.Owners.some((o) => analysis.Attached.some((a) => a.Owner === o && replacements.has(a.Case.Node as object)));
+  const resolution = resolveOverload(signatures, args, routes ? undefined : callContext);
   if (resolution.Kind === 'none') {
     return Throw.TypeError('no overload of $1 matches these arguments', Value(name));
   }

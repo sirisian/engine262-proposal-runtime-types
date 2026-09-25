@@ -1,7 +1,7 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
-import { AnalyzeCallableGroup } from './specialization-selection.mts';
-import { SelectCase } from '../abstract-ops/callable-selection.mts';
+import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
+import { SelectCase, ValueArityAdmits } from '../abstract-ops/callable-selection.mts';
 import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -1724,6 +1724,15 @@ function IsDirectExplicitFunctionCall(n: unknown): boolean {
   const callee = (n as { CallExpression?: { type?: string, Expression?: { type?: string }, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
   return callee?.type === 'TypeArgumentsExpression' && callee.Expression?.type === 'IdentifierReference'
     && !(callee.TypeArguments?.TypeArgumentList ?? []).some((a) => (a as { IsSpread?: boolean }).IsSpread);
+}
+
+/**
+ * Whether _n_ calls a name directly, `f(x)` or `f.<A>(x)`: the forms steps 2 to
+ * 4 select, statically and at run time. A method's call (step 7) is not one.
+ */
+function IsDirectFunctionCall(n: unknown): boolean {
+  const callee = (n as { CallExpression?: { type?: string } } | null)?.CallExpression;
+  return callee?.type === 'IdentifierReference' || IsDirectExplicitFunctionCall(n);
 }
 
 /**
@@ -13245,10 +13254,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return result;
   };
   const staticCaseSelectionUncached = (node: ParseNode): { type: Known } | undefined => {
-    const callee = (node as { CallExpression?: { type?: string, Expression?: { type?: string, name?: string }, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression;
-    if (callee?.type !== 'TypeArgumentsExpression' || callee.Expression?.type !== 'IdentifierReference' || !callee.Expression.name) return undefined;
-    const name = callee.Expression.name;
-    const argNodes = callee.TypeArguments?.TypeArgumentList ?? [];
+    const callee = (node as { CallExpression?: { type?: string, name?: string, Expression?: { type?: string, name?: string }, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression;
+    // Step 4b: an implicit call, `f(x)`, of a name selects too.
+    const implicit = callee?.type === 'IdentifierReference' && !!callee.name;
+    if (!implicit && (callee?.type !== 'TypeArgumentsExpression' || callee.Expression?.type !== 'IdentifierReference' || !callee.Expression.name)) return undefined;
+    const name = implicit ? callee!.name! : callee!.Expression!.name!;
+    const argNodes = implicit ? [] : callee!.TypeArguments?.TypeArgumentList ?? [];
     if (argNodes.some((a) => (a as { IsSpread?: boolean }).IsSpread)) return undefined;
     const group = FunctionCaseGroupFor(node, name);
     if (!group) return undefined;
@@ -13322,6 +13333,70 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return returned;
     };
+    if (implicit) {
+      // Plan section 3.8, rules 4 and 5 (step 4b), as `DispatchCaseGroup`
+      // applies them: an additive or standalone case by its own signature,
+      // ranking above the owner as a concrete signature ranks above a generic
+      // one; otherwise the owner, its binding inferred, reaching a replacement
+      // through that binding or else its own body.
+      if (valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement')) return undefined;
+      const argTypes = valueArguments.map((a) => staticType(a as ParseNode));
+      if (argTypes.some((t) => !t)) return undefined;
+      // A literal argument binds its base, as the run time's inference sees it.
+      const widened = argTypes.map((t) => ((t as { Kind?: string, Base?: TypeRecord }).Kind === 'literal' && (t as { Base?: TypeRecord }).Base ? (t as { Base: TypeRecord }).Base : t as TypeRecord));
+      const formalsOf = (d: D) => ((d as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []) as readonly (ParseNode & { TypeAnnotation?: ParseNode.TypeAnnotation | null })[];
+      const accepts = (d: D): boolean => {
+        if (!ValueArityAdmits(d, widened.length)) return false;
+        const pushed = pushTypeParameterScopeOf(d as never);
+        try {
+          return formalsOf(d).every((p, i) => {
+            if (i >= widened.length || !p.TypeAnnotation) return true;
+            const pt = resolveType(p.TypeAnnotation.Type);
+            if (!pt || mentionsTypeParameter(pt)) return false;
+            return IsAssignable(widened[i]!, pt) || literalFitsNumericType(argTypes[i] as TypeRecord, pt);
+          });
+        } finally {
+          if (pushed) typeParameterScopes.pop();
+        }
+      };
+      const concrete = [
+        ...analysis.Attached.filter((a) => (a.Case.Node as { CaseRole?: string }).CaseRole === 'additive').map((a) => a.Case.Node as D),
+        ...analysis.Standalone.filter((m) => m.List && m.List.ListKind !== 'parameters').map((m) => m.Node as D),
+      ].filter(accepts);
+      if (concrete.length > 1) return undefined;
+      if (concrete.length === 1) return { type: returnOf(concrete[0]!, []) };
+      for (const owner of analysis.Owners) {
+        if (!ValueArityAdmits(owner.Node, widened.length)) continue;
+        // Each binder from the value parameter written as that binder.
+        const inferred: TypeRecord[] = [];
+        for (const p of owner.Parameters ?? []) {
+          const at = formalsOf(owner.Node as D).findIndex((f) => {
+            const t = f.TypeAnnotation?.Type as ParseNode.TypeReference | undefined;
+            return t?.type === 'TypeReference' && !t.TypeArguments && t.TypeName.MemberNames.length === 0 && t.TypeName.IdentifierReference.name === p.Name;
+          });
+          if (at === -1 || at >= widened.length) return undefined;
+          inferred.push(widened[at]!);
+        }
+        const replacements = analysis.Attached
+          .filter((a) => a.Owner === owner && (a.Case.Node as { CaseRole?: string }).CaseRole !== 'additive' && ValueArityAdmits(a.Case.Node, widened.length))
+          .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+        if (replacements.length > 0) {
+          const result = SelectSpecialization(replacements, owner.Parameters as never, inferred, host as never);
+          if (result.Kind === 'ambiguous') {
+            report(`${result.Cases.map((c) => c.Label).join(' and ')} both apply to this call, and neither is more specific than the other`);
+            return { type: null };
+          }
+          if (result.Kind === 'selected') return { type: returnOf(result.Case.Declaration as D, result.Bindings as never) };
+        }
+        if ((owner.Node as D).BodylessOwner) {
+          report(`no overload of \`${name}\` applies to (${widened.map((t) => displayType(t)).join(', ')}): no case matches, and its owner has no body`);
+          return { type: null };
+        }
+        // The owner's body, instantiated at the inferred binding.
+        return { type: returnOf(owner.Node as D, (owner.Parameters ?? []).map((p, q) => ({ Capture: { Name: p.Name }, Value: inferred[q]! }))) };
+      }
+      return undefined;
+    }
     // The shared rule (`SelectCase`), labels and all, as the run time applies it.
     const names = argNodes.map((a) => (a as { ArgumentName?: string }).ArgumentName);
     const choice = SelectCase(analysis, args, names, valueCount, host, (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType, name);
@@ -13654,6 +13729,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `let n: uint8 = null` goes unchecked.
         return makePrimitive('null') as Known;
       case 'IdentifierReference': {
+        // Step 4b: the callee of an implicit call whose declaration was chosen
+        // is that declaration's own signature, instantiated - as an explicit
+        // call's is (the `TypeArgumentsExpression` arm).
+        {
+          const call = (node as { parent?: ParseNode }).parent;
+          if (call?.type === 'CallExpression' && (call as { CallExpression?: unknown }).CallExpression === node) {
+            staticCaseSelection(call);
+            const chosen = selectedCaseSignatures.get(call);
+            if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
+          }
+        }
         // `undefined` is a VALUE with a type, not an absent one. `lookup` finds
         // no binding for it and answers null, and `requireAssignable` returns
         // early on a null source, so without this arm `let n: uint8 =
@@ -21492,7 +21578,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Plan section 3.8, phase 4 step 1: a call into a group holding a
     // specialized case - a method's as well as a function's - is refused until
     // selection is implemented, whichever signature it would reach.
-    if (!IsDirectExplicitFunctionCall(n)) {
+    if (!IsDirectFunctionCall(n)) {
       const caseGroups = CaseGroupDeclarations(root);
       let declared = callee.Signatures.map((s2) => overloadDeclarations.get(s2)?.node).find((d) => d !== undefined && caseGroups.has(d));
       // A method call names its member on a receiver whose class declares it:
@@ -26170,7 +26256,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return;
         }
         const n = value as { type?: string, CallExpression?: unknown, MemberExpression?: unknown, parent?: object };
-        if (n.type === 'CallExpression' && !IsDirectExplicitFunctionCall(n)) {
+        if (n.type === 'CallExpression' && !IsDirectFunctionCall(n)) {
           let callee = n.CallExpression as { type?: string, name?: string, MemberExpression?: unknown, CallExpression?: unknown, Expression?: unknown } | undefined;
           if (callee?.type === 'TypeArgumentsExpression') callee = (callee.MemberExpression ?? callee.CallExpression ?? callee.Expression) as typeof callee;
           const name = callee?.type === 'IdentifierReference' ? callee.name : undefined;

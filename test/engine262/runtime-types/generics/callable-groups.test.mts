@@ -17,9 +17,11 @@ test('A1: an owner and its attached case are accepted as declarations', () => {
 });
 
 test('A24: a call into a group with a case is deferred, statically and at run time', () => {
-  // An implicit call (step 4); a direct explicit call selects since step 2.
-  expectEarlyError(`${P} f((3 := uint8));`, 'StaticTypeError');
-  expectThrown(`${P} f((3 := uint8));`, 'selecting a specialized case of `f` is not supported yet');
+  // Direct calls select since steps 2 (explicit) and 4 (implicit); a method's
+  // call into its group stays deferred until step 7.
+  expect(evaluated(`${P} f((3 := uint8));`)).toBe('uint8');
+  expectEarlyError(`class W { m<T: type>(v: T): string { return 'g'; } m<boolean>(v: boolean): string { return 'b'; } }
+    new W().m(true);`, 'StaticTypeError');
   // A call the checker cannot see is dispatched at run time (step 4): the
   // owner's inferred binding (number) matches no case, so the owner's body runs.
   expect(evaluated(`${P} const g: any = f; g(3);`)).toBe('generic');

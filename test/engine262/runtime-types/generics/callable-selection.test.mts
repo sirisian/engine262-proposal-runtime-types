@@ -60,8 +60,34 @@ test('B9: a standalone case the arguments match beats the owner', () => {
     function s<string>(): string { return 'standalone'; } const t: any = s; t.<string>();`)).toBe('standalone');
 });
 
-test('an implicit call the checker sees still defers (step 4b)', () => {
-  expectThrown(`${F} f((3 := uint8));`, 'selecting a specialized case of `f` is not supported yet');
+test('step 4b: an implicit call the checker sees selects statically, as the run time does', () => {
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic ' + String(T); }
+    function f<uint8>(x: uint8): string { return 'uint8'; }
+    f((3 := uint8)) + '|' + f((3 := uint16)) + '|' + f('a');`)).toBe('uint8|generic uint.<16>|generic string');
+  // D3 with a static argument is a static error.
+  const R = `function read<T: type>(x: T): string; function read<boolean>(x: boolean): string { return 'b'; }`;
+  expect(evaluated(`${R} read(true);`)).toBe('b');
+  expectEarlyError(`${R} read(3.5);`, 'StaticTypeError');
+  expectThrown(`${R} read(3.5);`, 'no overload of `read` applies to (number): no case matches, and its owner has no body');
+  // D4 and D5.
+  expect(evaluated(`function s<uint8>(x: uint8): string { return 'standalone'; }
+    function s(x: string): string { return 'str'; } s((3 := uint8)) + '|' + s('a');`)).toBe('standalone|str');
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint8>(x: uint8, extra: string): string { return 'additive'; }
+    f((3 := uint8)) + '|' + f((3 := uint8), 'e');`)).toBe('generic|additive');
+});
+
+test('step 4b: the call is typed as the chosen declaration returns, and binds as it returns', () => {
+  // A replacement's narrower return, and a capture in it; a contextual type
+  // does not filter out the owner that routes to the replacement.
+  expect(evaluated(`function f<T: type>(x: T): string { return 'g'; }
+    function f<uint8>(x: uint8): 'u' { return 'u'; } const c: 'u' = f((3 := uint8)); c;`)).toBe('u');
+  expect(evaluated(`function w<T: type>(v: T): string { return 'g'; }
+    function w<uint.<const N>>(v: uint.<N>): uint.<N> { return v; } const r: uint.<12> = w((5 := uint.<12>)); String(r);`)).toBe('5');
+  expect(evaluated(`function f<T: type>(x: T): string { return 'g'; }
+    function f<uint8>(x: uint8): 'u' { return 'u'; } const c: string = f((3 := uint16)); c;`)).toBe('g');
+  expectEarlyError(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint8>(x: uint8): string { return 'uint8'; } const n: number = f((3 := uint8));`, 'StaticTypeError');
 });
 
 // Step 2b: the checker selects too.
