@@ -76,9 +76,12 @@ test('an unannotated function, or a `number` return type, asks for nothing', () 
 
 test('a return inside a function nested in the loop does not take the outer type', () => {
   // THE NESTED GUARD. The nested arrow is not entered when the pre-pass runs, so the
-  // stack holds the OUTER `uint16`; reading it would type `i` wrongly.
+  // stack holds the OUTER `uint16`; reading it would type `i` wrongly. A plain
+  // annotated nested function now contributes its OWN return type instead - `uint8`
+  // - which is still not the outer one (see `for-of-nested-return-inference`). This
+  // asserted `number` while nested functions contributed nothing.
   expect(evaluated(`${T} function h(): uint16 { for (const i of 0..<3) { const f = (): uint8 => { return i; }; `
-    + 't = String(Reflect.typeOf(i)); } return 0; } h(); t;')).toBe('number');
+    + 't = String(Reflect.typeOf(i)); } return 0; } h(); t;')).toBe('uint.<8>');
   // A getter nested in the loop is a function too.
   expect(evaluated(`${T} function h(): uint16 { for (const i of 0..<3) { const o = { get x(): uint8 { return i; } }; `
     + 't = String(Reflect.typeOf(i)); } return 0; } h(); t;')).toBe('number');

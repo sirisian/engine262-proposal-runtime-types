@@ -22901,6 +22901,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             'FunctionExpression', 'AsyncFunctionDeclaration', 'AsyncFunctionExpression',
             'GeneratorDeclaration', 'GeneratorExpression', 'AsyncGeneratorDeclaration',
             'AsyncGeneratorExpression', 'MethodDefinition']);
+          // The return type of a PLAIN function nested in the loop, where it is simply
+          // its annotation. The pre-pass cannot read the stack for a nested function -
+          // it is not entered yet - and the checker computes a function's return
+          // context inline, with unwrapping for `async` (the promise's resolution),
+          // generators (the `R` of `Generator.<Y, R, N>`), predicates (`boolean`) and
+          // contextual types. For a non-async, non-generator function whose return
+          // annotation is written and is not a predicate, that context is exactly the
+          // annotation, so it is read here and nothing is recomputed. Every other
+          // nested function asks for nothing, as before; the run time still converts
+          // at its return. A nested function with type parameters is left out too, as
+          // a precaution: its annotation may name them, and they are not in scope here.
+          // Today that resolves to a type parameter, which is not a numeric value type
+          // and asks for nothing anyway - measured identical with and without this
+          // check - so it guards a future change to that resolution, not a current bug.
+          const plainFunctionKinds = new Set(['ArrowFunction', 'FunctionExpression', 'FunctionDeclaration']);
+          const plainAnnotatedReturn = (fn: Node | undefined): Known => {
+            if (!fn?.type || !plainFunctionKinds.has(fn.type)) {
+              return null;
+            }
+            const withParams = fn as { TypeParameters?: unknown, TypeParameterList?: unknown, TypeParameterDeclaration?: unknown };
+            if (withParams.TypeParameters || withParams.TypeParameterList || withParams.TypeParameterDeclaration) {
+              return null;
+            }
+            const annotation = fn.TypeAnnotation as { Type?: ParseNode, NarrowsTarget?: string } | undefined;
+            if (!annotation?.Type || annotation.NarrowsTarget) {
+              return null;
+            }
+            return resolveType(annotation.Type);
+          };
           const binaryKinds = new Set(['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression',
             'ShiftExpression', 'RelationalExpression', 'EqualityExpression',
             'BitwiseANDExpression', 'BitwiseXORExpression', 'BitwiseORExpression']);
@@ -23098,16 +23127,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // nested in the loop belongs to the nested function, which is not
               // entered yet: the stack still holds the outer type, and reading it would
               // give the wrong one. Such a return asks for nothing.
-              let nestedFunction = false;
+              let nestedFunction: Node | undefined;
               for (let p: Node | undefined = parent.parent; p && p !== body; p = p.parent) {
                 if (p.type && functionKinds.has(p.type)) {
-                  nestedFunction = true;
+                  nestedFunction = p;
                   break;
                 }
               }
-              if (!nestedFunction) {
-                asked = returnTypes[returnTypes.length - 1] ?? null;
-              }
+              asked = nestedFunction ? plainAnnotatedReturn(nestedFunction) : returnTypes[returnTypes.length - 1] ?? null;
+            } else if (parent.type === 'ExpressionBody' && parent.parent?.type === 'ConciseBody'
+                && parent.parent.parent?.type === 'ArrowFunction') {
+              // `(): uint8 => i` - a concise arrow's body is its return. The arrow holds a
+              // reference to the binding, so it sits inside the loop body: nested.
+              asked = plainAnnotatedReturn(parent.parent.parent);
             } else if (parent.type && binaryKinds.has(parent.type)) {
               const other = children(parent).find((c) => c !== reference);
               const operator = (parent as { operator?: string }).operator;
