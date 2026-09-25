@@ -1626,6 +1626,78 @@ function containsComputedType(node: unknown): boolean {
   return Object.entries(node).some(([k, v]) => k !== 'parent' && k !== 'location' && containsComputedType(v));
 }
 
+/**
+ * Plan section 3.8: every function and method declaration that shares its
+ * group - its statement list's or class body's same-named declarations - with
+ * a specialized case. Purely syntactic, so it is known before the walk.
+ */
+const caseGroupDeclarationsByRoot = new WeakMap<object, WeakSet<object>>();
+function CaseGroupDeclarations(root: object): WeakSet<object> {
+  const known = caseGroupDeclarationsByRoot.get(root);
+  if (known) return known;
+  const found = new WeakSet<object>();
+  const seen = new Set<object>();
+  const nameOf = (d: { type?: string, BindingIdentifier?: { name?: string }, ClassElementName?: { type?: string, name?: string }, static?: boolean }) => (d.type === 'FunctionDeclaration'
+    ? d.BindingIdentifier?.name
+    : d.ClassElementName?.type === 'IdentifierName' ? `${d.static ? 'static ' : ''}${d.ClassElementName.name}` : undefined);
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'parent' || key === 'location') continue;
+      if (Array.isArray(child)) {
+        const groups = new Map<string, object[]>();
+        for (const c of child as { type?: string }[]) {
+          if (c?.type !== 'FunctionDeclaration' && c?.type !== 'MethodDefinition' && c?.type !== 'AbstractMethodDefinition') continue;
+          const name = nameOf(c as never);
+          if (name) groups.set(name, [...(groups.get(name) ?? []), c]);
+        }
+        for (const members of groups.values()) {
+          const kinds = members.map((m) => (m as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind);
+          if (kinds.includes('specialization') || kinds.includes('mixed')) members.forEach((m) => found.add(m));
+        }
+      }
+      visit(child);
+    }
+  };
+  visit(root);
+  caseGroupDeclarationsByRoot.set(root, found);
+  return found;
+}
+
+/**
+ * The member named _name_ of the class declared by _classDeclaration_'s own
+ * body that belongs to a group with a specialized case, or *undefined*. Nested
+ * functions and classes are not searched.
+ */
+function CaseGroupMemberOf(classDeclaration: object, name: string, caseGroups: WeakSet<object>): object | undefined {
+  const seen = new Set<object>();
+  let found: object | undefined;
+  const visit = (value: unknown, depth: number): void => {
+    if (found || !value || typeof value !== 'object' || seen.has(value) || depth > 6) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach((v) => visit(v, depth));
+      return;
+    }
+    const n = value as { type?: string, ClassElementName?: { name?: string } };
+    if ((n.type === 'MethodDefinition' || n.type === 'AbstractMethodDefinition') && n.ClassElementName?.name === name && caseGroups.has(n)) {
+      found = n;
+      return;
+    }
+    if (n.type === 'FunctionBody' || n.type === 'ClassExpression' || (n.type === 'ClassDeclaration' && value !== classDeclaration)) return;
+    for (const [key, child] of Object.entries(n)) {
+      if (key !== 'parent' && key !== 'location') visit(child, depth + 1);
+    }
+  };
+  visit(classDeclaration, 0);
+  return found;
+}
+
 /** Whether a pattern node holds a capture anywhere within it. */
 function CollectCapturesIn(node: unknown): boolean {
   if (!node || typeof node !== 'object') return false;
@@ -5578,6 +5650,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * would break both - silently, by giving the tail nothing to merge into.
    */
   type DeclaredOverload = SignatureRecord & { Untyped?: boolean };
+  /** Calls already refused for reaching a group with a specialized case (phase 4, step 1). */
+  const deferredCaseCalls = new WeakSet<object>();
   const overloadDeclarations = new WeakMap<object, {
     parameters: readonly Known[], writtenReturn: boolean, returnType: Known,
     constraints: readonly Known[], defaults: readonly Known[], node: ParseNode,
@@ -21146,6 +21220,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     checkedCallSignatures.delete(c);
     const sig = selectCallSignature(c, supplied, callee, n, true);
+    // Plan section 3.8, phase 4 step 1: a call into a group holding a
+    // specialized case - a method's as well as a function's - is refused until
+    // selection is implemented, whichever signature it would reach.
+    {
+      const caseGroups = CaseGroupDeclarations(root);
+      let declared = callee.Signatures.map((s2) => overloadDeclarations.get(s2)?.node).find((d) => d !== undefined && caseGroups.has(d));
+      // A method call names its member on a receiver whose class declares it:
+      // the member's group is found through the receiver's class declaration.
+      if (!declared) {
+        let calleeNode = (n as { CallExpression?: { type?: string, MemberExpression?: unknown, Expression?: unknown } }).CallExpression;
+        if (calleeNode?.type === 'TypeArgumentsExpression') calleeNode = (calleeNode.MemberExpression ?? calleeNode.Expression) as typeof calleeNode;
+        const member = calleeNode as { type?: string, MemberExpression?: ParseNode, IdentifierName?: { name?: string } } | undefined;
+        const property = member?.type === 'MemberExpression' ? member.IdentifierName?.name : undefined;
+        if (property && member?.MemberExpression) {
+          const receiver = staticType(member.MemberExpression);
+          const classDeclaration = receiver && receiver.Kind === 'nominal' ? receiver.Declaration : undefined;
+          if (classDeclaration) declared = CaseGroupMemberOf(classDeclaration, property, caseGroups) as ParseNode | undefined;
+        }
+      }
+      if (declared && !deferredCaseCalls.has(n)) {
+        deferredCaseCalls.add(n);
+        const named = declared as { BindingIdentifier?: { name?: string }, ClassElementName?: { name?: string } };
+        const name = named.BindingIdentifier?.name ?? named.ClassElementName?.name ?? 'this function';
+        const completion = Throw.StaticTypeError('$1', Value(`selecting a specialized case of \`${name}\` is not supported yet`)) as ThrowCompletion;
+        errors.push(completion.Value as ObjectValue);
+      }
+    }
     if (sig) {
       checkedCallSignatures.set(c, sig as SignatureRecord);
       const chosen = sig;
@@ -25503,10 +25604,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const nameOf = (d: Decl): string | undefined => (d.type === 'FunctionDeclaration'
       ? d.BindingIdentifier?.name
       : d.ClassElementName?.type === 'IdentifierName' ? `${d.static ? 'static ' : ''}${d.ClassElementName.name}` : undefined);
-    const labelOf = (d: Decl) => {
-      const text = ((d as { sourceText?: string }).sourceText ?? '').split('(')[0]!.replace(/^(async\s+)?function\s*\*?\s*/, '').trim();
-      return `\`${text || nameOf(d) || 'this declaration'}\``;
-    };
     const binderParameters = (list: ParseNode.TypeParameters) => (list.TypeParameterList ?? []).map((tp) => ({
       Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
       Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp,
@@ -25536,6 +25633,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const parametersOf = (d: Decl) => (d.FormalParameters ?? d.UniqueFormalParameters ?? []) as readonly (ParseNode & {
       TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: unknown, Optional?: boolean, Ref?: boolean,
     })[];
+    // A declaration's label is its name, list, and parameters, so two owners
+    // with the same list - distinguished only by their parameters - read
+    // apart in a diagnostic.
+    const labelOf = (d: Decl) => {
+      const list = (listOf(d) as { sourceText?: string } | null)?.sourceText ?? '';
+      const parameters = parametersOf(d).map((p) => (p as { sourceText?: string }).sourceText ?? '').join(', ');
+      return `\`${nameOf(d) ?? 'this declaration'}${list}(${parameters})\``;
+    };
     // Q4: an attached case whose parameter list is the owner's instantiated at
     // its pattern is a REPLACEMENT, whose return must be a subtype of the
     // owner's; any other parameter list makes it ADDITIVE.
@@ -25672,7 +25777,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (name) {
             for (let p: { parent?: object } | undefined = n; p; p = p.parent as { parent?: object } | undefined) {
               if (groupsWithCases.get(p)?.has(name)) {
-                report(`selecting a specialized case of \`${name}\` is not supported yet`);
+                if (!deferredCaseCalls.has(n)) {
+                  deferredCaseCalls.add(n);
+                  report(`selecting a specialized case of \`${name}\` is not supported yet`);
+                }
                 break;
               }
             }

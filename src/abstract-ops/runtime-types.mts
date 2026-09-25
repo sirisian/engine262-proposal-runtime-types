@@ -5102,11 +5102,15 @@ export function* SignaturesOf(overloaded: Value): PlainEvaluator<readonly Overlo
  * selection is implemented; *undefined* for any other function.
  */
 export function SpecializedCaseDeferral(fn: unknown): string | undefined {
-  const declaration = (fn as { ECMAScriptCode?: { parent?: { TypeParameters?: { ListKind?: string } | null, BodylessOwner?: boolean, BindingIdentifier?: { name?: string } } } })?.ECMAScriptCode?.parent;
+  const declaration = (fn as { ECMAScriptCode?: { parent?: {
+    TypeParameters?: { ListKind?: string } | null, BodylessOwner?: boolean,
+    BindingIdentifier?: { name?: string }, ClassElementName?: { name?: string },
+  } } })?.ECMAScriptCode?.parent;
   if (!declaration) {
     return undefined;
   }
-  const name = declaration.BindingIdentifier?.name ?? 'this function';
+  // A function's name, or a method's.
+  const name = declaration.BindingIdentifier?.name ?? declaration.ClassElementName?.name ?? 'this function';
   if (declaration.BodylessOwner) {
     return `${name} is a bodyless owner, which only its specialized cases implement, and selecting a specialized case is not supported yet`;
   }
