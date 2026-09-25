@@ -22829,6 +22829,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             } else if (parent.type === 'AssignmentExpression' && parent.AssignmentExpression === reference
                 && parent.AssignmentOperator === '=') {
               asked = staticType(parent.LeftHandSideExpression as ParseNode);
+            } else if (parent.type === 'YieldExpression' && parent.AssignmentExpression === reference
+                && !(parent as { hasStar?: boolean }).hasStar) {
+              // `yield i` asks for the generator's YIELD type, as `return i` asks for its
+              // return type: the checker gives a plain `yield` operand
+              // `generatorParameters(...).Yield` as its context. Read from the same
+              // stack it uses, and - as for `return` - only for a `yield` of the
+              // generator CONTAINING the loop; a `yield` in a function nested in the
+              // loop belongs to that function, not entered yet. `yield*` delegates an
+              // iterable, not a value, and asks for nothing.
+              let nestedFunction = false;
+              for (let p: Node | undefined = parent.parent; p && p !== body; p = p.parent) {
+                if (p.type && functionKinds.has(p.type)) {
+                  nestedFunction = true;
+                  break;
+                }
+              }
+              if (!nestedFunction) {
+                asked = generatorParameters(generatorTypes[generatorTypes.length - 1])?.Yield ?? null;
+              }
             } else if (parent.type === 'ReturnStatement' && parent.Expression === reference) {
               // `return i` asks for the return type - #sec-contextual-types: "the operand
               // of a `return` in a function with a return annotation". The checker has
