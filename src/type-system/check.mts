@@ -13128,7 +13128,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (inner && ['+', '-', '~'].includes(unary.operator ?? '')
           && checkPrimitiveConversion(inner, 'number', (result) => result.Kind === 'primitive'
-            && (result.Name === 'symbol' || (unary.operator === '+' && result.Name === 'bigint')))) return neverType;
+            && (result.Name === 'symbol' || (unary.operator === '+' && result.Name === 'bigint')),
+          // Name the operator and the type, as TypeScript's "Operator '+' cannot
+          // be applied to type 'bigint'" and mypy's "Unsupported operand type
+          // for unary +" do; the shared message named neither.
+          () => Throw.StaticTypeError('unary $1 cannot be applied to a value of type $2',
+            Value(unary.operator as string), Value(displayType(operand as TypeRecord))) as ThrowCompletion)) return neverType;
         if (unary.operator === '!') return operand && operand.Kind !== 'any' && operand.Kind !== 'union'
           && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
         if (unary.operator && reportNumericUnion(unary.operator, operand)) return neverType;
@@ -19711,7 +19716,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           seen.add(origin);
           return operandParticipates(origin.node, i, seen);
         }
-        if (frame.bindings.has(node.name)) return frame.bindings.get(node.name)?.Kind !== 'any';
+        // A binding DECLARED here that reached this point has no origin and no
+        // recorded participation - at least not yet. Its static type alone is no
+        // contract: #sec-unary-operators-for-typed-values makes participation "an
+        // operand contract: an annotation, a declared member, a declared or
+        // published return, or an inferred contribution carrying such a
+        // contract", and "an ordinary unannotated mutable binding does not
+        // acquire a permanent contract from its initializer".
+        //
+        // This answered from the type, and the type is known early: an earlier
+        // pass declares `const k = 5n` as a `bigint` before the body's origins
+        // are recorded, so `+k` in untyped code was refused before the program
+        // ran - with `let v = 5n`, `let [a] = [5n]` and `let s = Symbol()` - while
+        // plain JavaScript runs it and throws at run time. A contract is never
+        // lost by answering false here: an annotated binding, a parameter, and a
+        // `const` carrying a contract are each found by the origin or the
+        // recorded participation on a later lookup, and a refusal needs only one
+        // lookup to say so.
+        if (frame.bindings.has(node.name)) return false;
         if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name) || frame.dynamicBindings) return false;
       }
       return false;
@@ -19765,12 +19787,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
+  // `describe` names the failure where the caller knows more than this check
+  // does - the unary operators name the operator and the operand's type.
   const checkPrimitiveConversion = (expression: ParseNode, hint: 'string' | 'number' | 'default',
-    resultFails?: (result: TypeRecord) => boolean): boolean => {
+    resultFails?: (result: TypeRecord) => boolean, describe?: () => ThrowCompletion): boolean => {
     if (!operandParticipates(expression) || !primitiveConversionFails(staticType(expression), hint, resultFails)) return false;
     if (!primitiveConversionFailures.has(expression)) {
       primitiveConversionFailures.add(expression);
-      errors.push(Throw.StaticTypeError('the selected primitive conversion contract cannot satisfy this operation').Value as ObjectValue);
+      errors.push((describe ? describe()
+        : Throw.StaticTypeError('the selected primitive conversion contract cannot satisfy this operation')).Value as ObjectValue);
     }
     return true;
   };
@@ -20363,6 +20388,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       declare(b.BindingIdentifier.name, optional && declared
         ? (CanonicalizeType({ Kind: 'union', Members: [declared, makePrimitive('undefined')] }) as Known)
         : declared);
+      // A simple parameter is declared here directly rather than through
+      // checkPattern, so it records its unary-operand participation here: an
+      // annotation is an operand contract, and an unannotated parameter has
+      // none. Every other binding form records this where it is declared; a
+      // parameter relied on the binding-type fallback, which no longer treats a
+      // bare type as a contract.
+      let participation = unaryBindingParticipation.get(frames[frames.length - 1]);
+      if (!participation) {
+        participation = new Map();
+        unaryBindingParticipation.set(frames[frames.length - 1], participation);
+      }
+      participation.set(b.BindingIdentifier.name, !!b.TypeAnnotation);
     } else {
       checkPattern(b, { type: b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null }, true, !!b.TypeAnnotation);
     }
