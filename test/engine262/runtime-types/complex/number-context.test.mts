@@ -92,8 +92,15 @@ test('valueOf rejects a receiver that is not a complex', () => {
   expectThrownKind('Object.getPrototypeOf(complex(1)).valueOf.call(5);', 'TypeError');
 });
 
-test('decimal and rational are unchanged', () => {
-  expectThrownKind("Number(decimal64('1.5'));", 'TypeError');
+test('decimal and rational: Number(x) converts explicitly, and implicit use still refuses', () => {
+  // Number(x) is the explicit conversion to the Number type - the same operation
+  // as `x := number` - and #table-numeric-conversions has a row to the Number
+  // type from a decimal and from a rational, so each converts, rounding. A complex
+  // has no such row and refuses (above). The IMPLICIT path, ToNumber through
+  // valueOf, still refuses all three.
+  expect(evaluated("String(Number(decimal64('1.5')));")).toBe('1.5');
+  expect(evaluated('String(Number(rational(1, 2)));')).toBe('0.5');
   expect(evaluated("String(isNaN(decimal64('1.5')));")).toBe('false');
-  expectThrownKind('Number(rational(1, 2));', 'TypeError');
+  expectThrownKind("decimal64('1.5').valueOf();", 'TypeError');
+  expectThrownKind('rational(1, 2).valueOf();', 'TypeError');
 });

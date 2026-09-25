@@ -10,8 +10,8 @@ import { Q, X, EnsureCompletion, isEvaluator, Await, type ThrowCompletion } from
 import { CopyValueClassInstance } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
-import { CanonicalizeType, GetTypeObject } from '../type-system/intern.mts';
 import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
+import { CanonicalizeType, GetTypeObject, ConvertToDecimal } from '../type-system/intern.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -39,7 +39,14 @@ import {
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
-import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts';
+import {
+  Float128FromNumber, isFloat128Object, Float128ToBinary128, Binary128ToFloat128,
+} from '../intrinsics/Float128.mts';
+import {
+  finite as float128Finite, fromDecimal as float128FromDecimal, fromRational as float128FromRational,
+  truncate as float128Truncate, toBinaryFloat as float128ToBinaryFloat,
+} from '../intrinsics/Float128Arithmetic.mts';
+import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mts';
 import { IsSelectedInvocation, DispatchCaseGroup } from './callable-selection.mts';
 
 /**
@@ -841,6 +848,61 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     }
   }
 
+  // proposal-runtime-types: a DECIMAL TARGET converts through ConvertToDecimal,
+  // the function calling the type uses - so `x := decimal128` and
+  // `decimal128(x)` are one operation, as #sec-conversions says the two spellings
+  // are. The operator refused every value that was not a literal.
+  if (surroundingAgent.feature('runtime-types') && t.Kind === 'primitive'
+      && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128')) {
+    const converted = ConvertToDecimal(value, t.Name === 'decimal32' ? 32 : t.Name === 'decimal64' ? 64 : 128, t.Name);
+    if (converted !== undefined) {
+      return converted;
+    }
+  }
+  // proposal-runtime-types: a RATIONAL or a BIGINT out to a binary float or a Number
+  // is its EXACT value rounded once - the table's rows: *"the exact quotient rounded
+  // to the nearest value of the target"*, and a BigInt *"rounded to the nearest
+  // value of the target"*, an infinity outside its range. `rational := number` and
+  // `bigint := number` were refused though both rows exist.
+  if (surroundingAgent.feature('runtime-types') && t.Kind === 'primitive'
+      && (isRationalObject(value) || value instanceof BigIntValue)
+      && (t.Name === 'number' || t.Name === 'float64' || t.Name === 'float32' || t.Name === 'float16')) {
+    const width = t.Name === 'float32' ? 32 : t.Name === 'float16' ? 16 : 64;
+    const n = value instanceof BigIntValue
+      ? roundRationalToBinaryFloat(R(value), 1n, width)
+      : roundRationalToBinaryFloat(
+        (value as unknown as { RationalNumerator: bigint }).RationalNumerator,
+        (value as unknown as { RationalDenominator: bigint }).RationalDenominator, width);
+    if (t.Name === 'number') {
+      return Value(n);
+    }
+    // `n` is already a value of `t`, so this conversion is exact.
+    return Q(yield* ConvertValue(Value(n), t));
+  }
+  // proposal-runtime-types: a FLOAT128 out to a narrower binary float or a Number
+  // rounds ONCE, from the exact value, to the target's precision - #sec-conversions,
+  // the binary-float row. Through a double and then to a float32 would round
+  // twice. Out to an integer or a BigInt, the EXACT value is truncated and then
+  // takes the target's own rule: a float128 holds integers past 2**53 exactly,
+  // which a Number would round. NaN and the infinities take a Number's path, and
+  // its rule for them. These conversions were refused: nothing handled a float128
+  // source.
+  if (surroundingAgent.feature('runtime-types') && isFloat128Object(value) && t.Kind === 'primitive') {
+    const v = Float128ToBinary128(value);
+    if (t.Name === 'number' || t.Name === 'float64' || t.Name === 'float32' || t.Name === 'float16') {
+      const n = float128ToBinaryFloat(v, t.Name === 'float32' ? 32 : t.Name === 'float16' ? 16 : 64);
+      if (t.Name === 'number') {
+        return Value(n);
+      }
+      // `n` is already a value of `t`, so this conversion is exact.
+      return Q(yield* ConvertValue(Value(n), t));
+    }
+    if (t.Name === 'int' || t.Name === 'uint' || t.Name === 'bigint') {
+      const whole = float128Truncate(v);
+      const source = whole === undefined ? Value(float128ToBinaryFloat(v, 64)) : Value(whole);
+      return Q(yield* ConvertValue(source, t));
+    }
+  }
   // proposal-runtime-types: a DECIMAL out to a binary
   // float or a Number is the ordinary direction of loss - the nearest double to
   // the decimal's value - and needs no rule of its own, unlike the direction in.
@@ -1096,7 +1158,19 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
       }
       if (isTypedNumber(value)) {
-        return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+        return Float128FromTypedNumber(value);
+      }
+      // A BigInt, a decimal and a rational are exact values, rounded ONCE to 113
+      // bits. They went through a Number, so each was rounded to 53 bits first.
+      if (value instanceof BigIntValue) {
+        return Binary128ToFloat128(float128Finite(R(value), 0), surroundingAgent.currentRealmRecord);
+      }
+      if (isDecimalObject(value)) {
+        return Binary128ToFloat128(float128FromDecimal(value.DecimalSignificand, value.DecimalExponent), surroundingAgent.currentRealmRecord);
+      }
+      if (isRationalObject(value)) {
+        const rv = value as unknown as { RationalNumerator: bigint, RationalDenominator: bigint };
+        return Binary128ToFloat128(float128FromRational(rv.RationalNumerator, rv.RationalDenominator), surroundingAgent.currentRealmRecord);
       }
     }
     // proposal-runtime-types #sec-complex-numbers: "`complex64` and
@@ -1960,7 +2034,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
           return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
         }
         if (isTypedNumber(value)) {
-          return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+          return Float128FromTypedNumber(value);
         }
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
@@ -5544,4 +5618,18 @@ export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null
   }
   const record = attempted.Value as TypeRecord;
   return record.Kind === 'parameter' ? null : record;
+}
+
+/**
+ * A typed number into float128. An INTEGER arrives exactly: int64 and uint64 hold
+ * values past 2**53, which numberValue() rounds - `(2**60 + 1 as uint64) :=
+ * float128` lost its last digit. A float16, float32 or float64 is exactly a Number,
+ * and every Number is exactly a binary128 value.
+ */
+function Float128FromTypedNumber(value: TypedNumberValue): Value {
+  const name = (value.TypeRecord as { Name?: string }).Name;
+  if (name === 'int' || name === 'uint') {
+    return Binary128ToFloat128(float128Finite(value.bigintValue(), 0), surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the exact integer, which a Number would round past 2**53
+  }
+  return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
 }

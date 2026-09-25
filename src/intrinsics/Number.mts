@@ -10,7 +10,12 @@ import {
 import { Q, X, type ValueEvaluator } from '../completion.mts';
 import type { Mutable } from '../utils/language.mts';
 import { numericPredicate } from '../type-system/predicates.mts';
+import { ConvertValue } from '../abstract-ops/runtime-types.mts';
+import { makePrimitive } from '../type-system/records.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
+import { isDecimalObject } from './Decimal.mts';
+import { isRationalObject } from './Rational.mts';
+import { isFloat128Object } from './Float128.mts';
 import {
   IsIntegralNumber,
   OrdinaryCreateFromConstructor,
@@ -31,7 +36,16 @@ export function isNumberObject(o: Value): o is NumberObject {
 /** https://tc39.es/ecma262/#sec-number-constructor-number-value */
 function* NumberConstructor([value]: Arguments, { NewTarget }: FunctionCallContext): ValueEvaluator {
   let n;
-  if (value !== undefined) {
+  if (value !== undefined && surroundingAgent.feature('runtime-types')
+      && (isDecimalObject(value) || isRationalObject(value) || isFloat128Object(value))) {
+    // proposal-runtime-types: `Number(v)` is the explicit conversion to the Number
+    // type - the same operation as `v := number`, which #sec-conversions calls a
+    // conversion's other spelling. The table has a row to the Number type from a
+    // decimal, a rational and a binary float, so each converts, rounding; a
+    // complex has none, and refuses below through its valueOf.
+    // A conversion to the Number type yields a Number.
+    n = Q(yield* ConvertValue(value, makePrimitive('number'))) as NumberValue;
+  } else if (value !== undefined) {
     const prim = Q(yield* ToNumeric(value));
     if (prim instanceof BigIntValue) {
       n = F(Number(R(prim)));

@@ -34,6 +34,11 @@ import {
   DecimalPartsInRange,
   CreateDecimalValue,
 } from '../intrinsics/Decimal.mts';
+import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
+import {
+  add as float128Add, subtract as float128Subtract, multiply as float128Multiply, divide as float128Divide,
+  remainder as float128Remainder, exponentiate as float128Exponentiate, type Binary128,
+} from '../intrinsics/Float128Arithmetic.mts';
 import {
   Assert, R, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
 
@@ -266,6 +271,38 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         return complexPow(left, right, realmRec);
       default:
         return Throw.TypeError('this operator is not defined for a complex');
+    }
+  }
+  // proposal-runtime-types #sec-which-operations-each-family-defines: a float128
+  // is a binary float, so it defines add, subtract, multiply, divide, remainder
+  // and exponentiate - each computed exactly and rounded once, in
+  // Float128Arithmetic. Without this branch every operator fell through to
+  // ToNumeric, whose valueOf rounded each operand to a double, and answered a
+  // plain Number: double arithmetic that looked like float128 arithmetic.
+  if (surroundingAgent.feature('runtime-types') && (isFloat128Object(lval) || isFloat128Object(rval))) {
+    if (!isFloat128Object(lval) || !isFloat128Object(rval)) {
+      // No implicit conversion: a literal operand is read at float128 by the
+      // checker, so what reaches here is a value of another type.
+      return Throw.TypeError('a float128 operand requires a float128 on both sides');
+    }
+    const a = Float128ToBinary128(lval);
+    const b = Float128ToBinary128(rval);
+    const done = (v: Binary128) => Binary128ToFloat128(v, surroundingAgent.currentRealmRecord);
+    switch (opText) {
+      case '+': return done(float128Add(a, b));
+      case '-': return done(float128Subtract(a, b));
+      case '*': return done(float128Multiply(a, b));
+      case '/': return done(float128Divide(a, b));
+      case '%': return done(float128Remainder(a, b));
+      case '**': {
+        const p = float128Exponentiate(a, b);
+        // A non-integer exponent needs a transcendental function, correctly
+        // rounded under the plan's B4; until that lands it is refused by name,
+        // never answered at a lower precision.
+        return p === undefined ? Throw.RangeError('float128 exponentiation by this exponent is not yet supported') : done(p);
+      }
+      default:
+        return Throw.TypeError('this operator is not defined for a float128');
     }
   }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(lval) || isDecimalObject(rval))) {

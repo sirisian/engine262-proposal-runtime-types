@@ -4,6 +4,9 @@ import { IsBigIntContextLiteral, FloatContextLiteralWidth, DecimalContextLiteral
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
+import { Binary128ToFloat128 } from '../intrinsics/Float128.mts';
+import { fromDecimal as Float128FromDecimal } from '../intrinsics/Float128Arithmetic.mts';
+import { roundRationalToBinaryFloat } from '../intrinsics/BinaryFloatRounding.mts';
 import { surroundingAgent } from '#self';
 
 /**
@@ -82,7 +85,12 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
   const floatWidth = FloatContextLiteralWidth(node);
   if (floatWidth !== undefined && typeof node.SourceText === 'string') {
     const digits = ParseDecimalDigits(node.SourceText.replace(/_/g, ''));
-    if (digits !== undefined) {
+    // A float128 is wider than a Number, so its literal is a float128 object:
+    // the digits' exact value rounded once to binary128's 113 bits.
+    if (digits !== undefined && floatWidth === 128) {
+      return Binary128ToFloat128(Float128FromDecimal(digits.significand, digits.exponent), surroundingAgent.currentRealmRecord);
+    }
+    if (digits !== undefined && floatWidth !== 128) {
       return Value(RoundDecimalToBinaryFloat(digits.significand, digits.exponent, floatWidth));
     }
   }
@@ -98,40 +106,7 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
  * largest finite one is infinite.
  */
 function RoundDecimalToBinaryFloat(significand: bigint, exponent: number, width: 16 | 32): number {
-  if (significand === 0n) {
-    return 0;
-  }
-  const [precision, emin, emax] = width === 32 ? [24, -126, 127] : [11, -14, 15];
-  let num = significand;
-  let den = 1n;
-  if (exponent >= 0) {
-    num *= 10n ** BigInt(exponent);
-  } else {
-    den = 10n ** BigInt(-exponent);
-  }
-  // `atLeast(k)` is num/den >= 2**k.
-  const atLeast = (k: number) => (k >= 0 ? num >= den << BigInt(k) : num << BigInt(-k) >= den);
-  let e = num.toString(2).length - den.toString(2).length;
-  while (!atLeast(e)) e -= 1;
-  while (atLeast(e + 1)) e += 1;
-  if (e > emax) {
-    return Infinity;
-  }
-  // The exponent of the last significand bit; below the least normal it is fixed.
-  const ulp = Math.max(e, emin) - (precision - 1);
-  let n = num;
-  let d = den;
-  if (ulp >= 0) {
-    d <<= BigInt(ulp);
-  } else {
-    n <<= BigInt(-ulp);
-  }
-  let m = n / d;
-  const twice = (n - m * d) * 2n;
-  if (twice > d || (twice === d && (m & 1n) === 1n)) {
-    m += 1n;
-  }
-  const value = Number(m) * 2 ** ulp;
-  const largest = (2 - 2 ** (1 - precision)) * 2 ** emax;
-  return value > largest ? Infinity : value;
+  return exponent >= 0
+    ? roundRationalToBinaryFloat(significand * 10n ** BigInt(exponent), 1n, width)
+    : roundRationalToBinaryFloat(significand, 10n ** BigInt(-exponent), width);
 }

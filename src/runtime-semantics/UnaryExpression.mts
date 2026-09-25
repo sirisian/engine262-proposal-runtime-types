@@ -14,9 +14,13 @@ import { typedUnary } from '../type-system/arithmetic.mts';
 import { isClassTypeObject, isTypeObject } from '../type-system/intern.mts';
 import { __ts_cast__, OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { surroundingAgent, EnvironmentRecord } from '#self';
+import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
+import { negate as float128Negate } from '../intrinsics/Float128Arithmetic.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { rangeNegate } from '../type-system/range-ops.mts';
+import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
+import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
+import { isRationalObject, rationalNegate } from '../intrinsics/Rational.mts';
 import {
   Assert,
   Call,
@@ -38,10 +42,7 @@ import {
   isArrayIndex,
   EnterOperatorBody, LeaveOperatorBody, DispatchPrimitiveBlockOperator, isBodylessContributions, StampBodylessContributions,
 } from '#self';
-import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
-import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
-import { isRationalObject, rationalNegate } from '../intrinsics/Rational.mts';
-import { isFloat128Object } from '../intrinsics/Float128.mts';
+import { surroundingAgent, EnvironmentRecord } from '#self';
 
 /** https://tc39.es/ecma262/#sec-delete-operator-runtime-semantics-evaluation */
 //   UnaryExpression : `delete` UnaryExpression
@@ -253,6 +254,7 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
  */
 function isProposalNumericValue(value: Value): boolean {
   return value instanceof TypedNumberValue // integer, and binary floating-point
+    || isFloat128Object(value) // binary floating-point wider than a Number
     || isDecimalObject(value) // decimal floating-point
     || isRationalObject(value) // rational
     || isComplexObject(value) // complex
@@ -331,6 +333,11 @@ function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExp
 
 /** The primitive negation of an evaluated operand. */
 function* ApplyUnaryMinus(rawValue: Value): ValueEvaluator {
+  // proposal-runtime-types: unaryMinus for a float128 flips the sign, NaN and the
+  // zeroes included - exactly, since a negated binary128 value is one.
+  if (surroundingAgent.feature('runtime-types') && isFloat128Object(rawValue)) {
+    return Binary128ToFloat128(float128Negate(Float128ToBinary128(rawValue)), surroundingAgent.currentRealmRecord);
+  }
   if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {
     return typedUnary('-', rawValue as TypedNumberValue);
   }

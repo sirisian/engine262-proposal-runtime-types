@@ -915,9 +915,9 @@ export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: 
  * `16777217.0000000001` at a `float32` is 16777218, but its double is exactly the
  * midpoint 16777217, which then rounds to even, 16777216.
  */
-const floatLiterals = new WeakMap<object, 16 | 32>();
+const floatLiterals = new WeakMap<object, 16 | 32 | 128>();
 
-export function FloatContextLiteralWidth(node: object): 16 | 32 | undefined {
+export function FloatContextLiteralWidth(node: object): 16 | 32 | 128 | undefined {
   return floatLiterals.get(node);
 }
 
@@ -11576,6 +11576,63 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `2 * 3.14` qualifies and `f()` does not - widening it would put the checker
    * in the business of evaluating arbitrary code.
    */
+  // The member values of a typed creation's source, marked as conversion operands:
+  // an object literal's property values and an array literal's elements, through
+  // nested literals, since the creation converts each at its member's type.
+  // A typed creation's source, each member VALUE typed at its member's type - an
+  // object literal's properties through the shape's structure, an array literal's
+  // elements at its element type - and nothing more. The source is NOT checked
+  // against S as an annotation's literal is: a required absence, an undeclared
+  // property and a tuple's length are the creation's own errors, raised at run
+  // time by CompositeFromShape as the specification makes them. (A tuple shape is
+  // not descended: a literal in a tuple position is typed as the argument is.)
+  const typeCreationMembers = (node: ParseNode, memberType: Known): void => {
+    let inner: ParseNode | undefined = node;
+    while (inner?.type === 'ParenthesizedExpression') inner = (inner as unknown as { Expression?: ParseNode }).Expression;
+    if (!inner || !memberType) return;
+    if (inner.type === 'ObjectLiteral') {
+      const structure = structureOf(memberType);
+      if (structure && structure.Kind === 'object') {
+        for (const def of (inner as unknown as { PropertyDefinitionList?: readonly { PropertyName?: ParseNode, AssignmentExpression?: ParseNode }[] }).PropertyDefinitionList ?? []) {
+          if (!def?.PropertyName || !def.AssignmentExpression) continue;
+          const key = memberKeyOf(def.PropertyName as never);
+          const declared = key === undefined ? undefined : structure.Properties.find((prop) => prop.key === key);
+          if (declared) typeCreationMembers(def.AssignmentExpression, declared.type);
+        }
+      }
+      return;
+    }
+    if (inner.type === 'ArrayLiteral') {
+      if (memberType.Kind === 'array') {
+        for (const el of (inner as unknown as { ElementList?: readonly (ParseNode | null)[] }).ElementList ?? []) {
+          if (el && el.type !== 'Elision' && el.type !== 'SpreadElement') typeCreationMembers(el, memberType.Element);
+        }
+      }
+      return;
+    }
+    staticTypeIn(node, memberType);
+  };
+
+  const markCreationMembers = (node: ParseNode): void => {
+    let inner: ParseNode | undefined = node;
+    while (inner?.type === 'ParenthesizedExpression') inner = (inner as unknown as { Expression?: ParseNode }).Expression;
+    if (!inner) return;
+    const values: ParseNode[] = [];
+    if (inner.type === 'ObjectLiteral') {
+      for (const pd of (inner as unknown as { PropertyDefinitionList?: readonly { AssignmentExpression?: ParseNode }[] }).PropertyDefinitionList ?? []) {
+        if (pd?.AssignmentExpression) values.push(pd.AssignmentExpression);
+      }
+    } else if (inner.type === 'ArrayLiteral') {
+      for (const el of (inner as unknown as { ElementList?: readonly (ParseNode | null)[] }).ElementList ?? []) {
+        if (el && el.type !== 'Elision' && el.type !== 'SpreadElement') values.push(el);
+      }
+    }
+    for (const value of values) {
+      markConversionOperand(value);
+      markCreationMembers(value);
+    }
+  };
+
   const isNumericConstantExpression = (expr: ParseNode | null | undefined): boolean => {
     if (!expr) {
       return false;
@@ -12809,9 +12866,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // source digits. Its type is decided exactly as before - the mark changes
     // only the value it denotes, so nothing returns here.
     if (node.type === 'NumericLiteral' && contextual && contextual.Kind === 'primitive'
-        && (contextual.Name === 'float16' || contextual.Name === 'float32')
+        && (contextual.Name === 'float16' || contextual.Name === 'float32' || contextual.Name === 'float128')
         && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
-      floatLiterals.set(node, contextual.Name === 'float16' ? 16 : 32);
+      floatLiterals.set(node, contextual.Name === 'float16' ? 16 : contextual.Name === 'float32' ? 32 : 128);
     }
     // A SIGNED literal is its literal with a sign applied, and rounding to
     // nearest-even is symmetric in sign, so the literal inside is marked the same
@@ -12819,7 +12876,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // to -16777216, while the unsigned literal gave 16777218: a sign changed the
     // rule, in every spelling.
     if (contextual && contextual.Kind === 'primitive'
-        && (contextual.Name === 'float16' || contextual.Name === 'float32')
+        && (contextual.Name === 'float16' || contextual.Name === 'float32' || contextual.Name === 'float128')
         && (node.type === 'UnaryExpression' || node.type === 'ParenthesizedExpression')) {
       let inner: ParseNode | undefined = node;
       while (inner && (inner.type === 'ParenthesizedExpression'
@@ -12829,7 +12886,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : (inner as unknown as { UnaryExpression?: ParseNode }).UnaryExpression;
       }
       if (inner && inner.type === 'NumericLiteral' && typeof (inner as ParseNode.NumericLiteral).SourceText === 'string') {
-        floatLiterals.set(inner, contextual.Name === 'float16' ? 16 : 32);
+        floatLiterals.set(inner, contextual.Name === 'float16' ? 16 : contextual.Name === 'float32' ? 32 : 128);
       }
     }
     // #sec-requiretype, #table-numeric-conversions: `bigint` is an ordinary
@@ -23014,7 +23071,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!lit || !otherType) continue;
       const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
       const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
-      if (name === 'rational' || name === 'complex' || (name !== undefined && name.startsWith('decimal'))) {
+      if (name === 'rational' || name === 'complex' || name === 'float128' || (name !== undefined && name.startsWith('decimal'))) {
         staticTypeIn(innermostLiteral(lit), otherType);
       }
     }
@@ -24774,6 +24831,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               staticType(argNodes[0]!);
             } else {
               markConversionOperand(argNodes[0]!);
+              // A TYPED CREATION, `Composite.<S>(source)`, types each member VALUE of
+              // its source at that member's type in S, so a member's literal is
+              // read there. At `Composite<S>` an object literal found no member
+              // types, so `Composite.<D>({ v: 0.1 })` read 0.1 as a double first: a
+              // decimal member carried the binary value, a rational member the
+              // dyadic one, a float32 member rounded twice and a uint64 member lost
+              // its last digit, where `let d: D = { v: 0.1 }` gets each one right.
+              const creationShape = conversionTarget.Kind === 'primitive' && conversionTarget.Name === 'Composite'
+                && conversionTarget.Arguments.length === 1 && typeof conversionTarget.Arguments[0] === 'object'
+                ? conversionTarget.Arguments[0] as TypeRecord
+                : undefined;
+              // Each member value is what the creation CONVERTS, so it is a
+              // conversion operand as the argument itself is: a member literal
+              // wraps as `uint8(300)` does rather than being refused as an
+              // annotation's would.
+              if (creationShape) {
+                markCreationMembers(argNodes[0]!);
+                typeCreationMembers(argNodes[0]!, creationShape);
+              }
               staticTypeIn(argNodes[0]!, conversionTarget as Known);
             }
           }

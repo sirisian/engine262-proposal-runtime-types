@@ -4,6 +4,7 @@ import {
 import { type ValueEvaluator } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
+import { roundToFormat, toBinaryFloat, toShortestString, type Binary128 } from './Float128Arithmetic.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
   CreateBuiltinFunction, Descriptor, OrdinaryObjectCreate, R, ToNumber, X, Q,
@@ -42,63 +43,6 @@ export function isFloat128Object(value: Value): value is Float128Object {
   return value instanceof ObjectValue && 'Float128Significand' in value;
 }
 
-/** binary128: 113 bits of significand, and an exponent range from the format. */
-const SIGNIFICAND_BITS = 113;
-const MAX_EXPONENT = 16383;
-const MIN_EXPONENT = -16382;
-
-/**
- * Round an exact pair to the format: at most 113 significant bits, ties to
- * even, with overflow to an infinity and underflow to a subnormal or a zero.
- *
- * The rounding is the only place this file is not exact, and it is where the
- * format is actually imposed - a pair that fits is returned unchanged.
- */
-function roundToFormat(significand: bigint, exponent: number): { significand: bigint, exponent: number, overflow: boolean } {
-  if (significand === 0n) {
-    return { significand: 0n, exponent: 0, overflow: false };
-  }
-  const negative = significand < 0n;
-  let s = negative ? -significand : significand;
-  let e = exponent;
-  // Trim to the format's precision, rounding to nearest with ties to even.
-  let bits = s.toString(2).length;
-  if (bits > SIGNIFICAND_BITS) {
-    const drop = bits - SIGNIFICAND_BITS;
-    const keep = s >> BigInt(drop);
-    const rest = s - (keep << BigInt(drop));
-    const half = 1n << BigInt(drop - 1);
-    s = keep;
-    e += drop;
-    if (rest > half || (rest === half && (keep & 1n) === 1n)) {
-      s += 1n;
-      // The increment may carry into a new bit, which costs one more.
-      if (s.toString(2).length > SIGNIFICAND_BITS) {
-        s >>= 1n;
-        e += 1;
-      }
-    }
-    bits = SIGNIFICAND_BITS;
-  }
-  // Normalize away trailing zeros so one value has one representation, which is
-  // what lets equality be a comparison of the pair.
-  while (s !== 0n && (s & 1n) === 0n) {
-    s >>= 1n;
-    e += 1;
-  }
-  if (s === 0n) {
-    return { significand: 0n, exponent: 0, overflow: false };
-  }
-  const magnitude = e + s.toString(2).length - 1;
-  if (magnitude > MAX_EXPONENT) {
-    return { significand: 0n, exponent: 0, overflow: true };
-  }
-  if (magnitude < MIN_EXPONENT - SIGNIFICAND_BITS) {
-    // Below the smallest subnormal: the value rounds to a zero of its sign.
-    return { significand: 0n, exponent: 0, overflow: false };
-  }
-  return { significand: negative ? -s : s, exponent: e, overflow: false };
-}
 
 export function CreateFloat128Value(significand: bigint, exponent: number, realmRec: Realm, cls: 'finite' | 'infinity' | 'nan' = 'finite', sign: -1 | 1 = 1): Float128Object {
   const proto = realmRec.Intrinsics['%float128.prototype%'];
@@ -152,66 +96,24 @@ export function Float128FromNumber(x: number, realmRec: Realm): Float128Object {
   return CreateFloat128Value(sign === -1 ? -significand : significand, exponent, realmRec);
 }
 
-/** The nearest Number, which ROUNDS: binary64 is the narrower format. */
+/**
+ * The nearest Number, which ROUNDS: binary64 is the narrower format. Rounded
+ * once from the exact value. This converted the significand to a double and then
+ * scaled it, which is exact while the result is normal but ROUNDS AGAIN into the
+ * double subnormal range - so a value below 2**-1022 could come out wrong.
+ */
 export function Float128ToNumber(v: Float128Object): number {
-  if (v.Float128Class === 'nan') {
-    return NaN;
-  }
-  if (v.Float128Class === 'infinity') {
-    return v.Float128Sign === -1 ? -Infinity : Infinity;
-  }
-  if (v.Float128Significand === 0n) {
-    return v.Float128Sign === -1 ? -0 : 0;
-  }
-  // Scaling by 2**exponent in steps keeps an intermediate from overflowing
-  // where the result itself does not.
-  let result = Number(v.Float128Significand);
-  let e = v.Float128Exponent;
-  while (e > 0 && Number.isFinite(result)) {
-    const step = Math.min(e, 1000);
-    result *= 2 ** step;
-    e -= step;
-  }
-  while (e < 0 && result !== 0) {
-    const step = Math.max(e, -1000);
-    result *= 2 ** step;
-    e -= step;
-  }
-  return result;
+  return toBinaryFloat(Float128ToBinary128(v), 64);
 }
 
 /**
- * The exact decimal text of a float128.
- *
- * SIGNIFICAND x 2**EXPONENT is always exactly representable in decimal: for a
- * non-negative exponent it is an integer, and for a negative one it is
- * SIGNIFICAND x 5**|EXPONENT| scaled by 10**-|EXPONENT|. So the text below is
- * the value rather than an approximation of it, which is the point of having
- * the format at all.
+ * The text of a float128: the shortest decimal that reads back as the same value,
+ * laid out as Number::toString lays out a Number - toString is one of the
+ * operations a binary float defines. It printed the exact binary expansion,
+ * truncated, so 0.1 showed 58 digits.
  */
 export function Float128ToString(v: Float128Object): string {
-  if (v.Float128Class === 'nan') {
-    return 'NaN';
-  }
-  if (v.Float128Class === 'infinity') {
-    return v.Float128Sign === -1 ? '-Infinity' : 'Infinity';
-  }
-  if (v.Float128Significand === 0n) {
-    return v.Float128Sign === -1 ? '-0' : '0';
-  }
-  const negative = v.Float128Significand < 0n;
-  const magnitude = negative ? -v.Float128Significand : v.Float128Significand;
-  let text;
-  if (v.Float128Exponent >= 0) {
-    text = (magnitude << BigInt(v.Float128Exponent)).toString(10);
-  } else {
-    const places = -v.Float128Exponent;
-    const scaled = (magnitude * 5n ** BigInt(places)).toString(10).padStart(places + 1, '0');
-    const whole = scaled.slice(0, scaled.length - places);
-    const fraction = scaled.slice(scaled.length - places).replace(/0+$/, '');
-    text = fraction === '' ? whole : `${whole}.${fraction}`;
-  }
-  return negative ? `-${text}` : text;
+  return toShortestString(Float128ToBinary128(v));
 }
 
 /** Two float128 values are the same value when their pairs agree. */
@@ -257,7 +159,12 @@ function* Float128Proto_valueOf(_args: Arguments, { thisValue }: FunctionCallCon
   if (!isFloat128Object(thisValue)) {
     return Throw.TypeError('$1 is not a $2', thisValue, Value('float128'));
   }
-  return Value(Float128ToNumber(thisValue));
+  // REFUSES, as `decimal`'s, `rational`'s and `complex`'s do: ToNumber reaches an
+  // object through valueOf, so answering here converted a float128 to a double
+  // SILENTLY in every implicit Number context - which is how every operator came
+  // to do double arithmetic on it. The explicit conversion is `Number(x)`,
+  // `x := number` or `float64(x)`, each the same operation.
+  return Throw.TypeError('a float128 has no Number value; this operation is not defined for float128');
 }
 
 function* Float128Constructor([value = Value(0)]: Arguments): ValueEvaluator {
@@ -288,4 +195,16 @@ export function bootstrapFloat128(realmRec: Realm): void {
     Configurable: Value.false,
   })));
   realmRec.Intrinsics['%float128%'] = cons;
+}
+
+/** A float128 object as plain binary128 data, for Float128Arithmetic. */
+export function Float128ToBinary128(x: Float128Object): Binary128 {
+  return { cls: x.Float128Class, sign: x.Float128Sign, sig: x.Float128Significand, exp: x.Float128Exponent };
+}
+
+/** Plain binary128 data as a float128 object. Already in the format: no rounding here. */
+export function Binary128ToFloat128(v: Binary128, realmRec: Realm): Float128Object {
+  return v.cls === 'finite' && v.sig !== 0n
+    ? CreateFloat128Value(v.sig, v.exp, realmRec)
+    : CreateFloat128Value(0n, 0, realmRec, v.cls, v.sign);
 }

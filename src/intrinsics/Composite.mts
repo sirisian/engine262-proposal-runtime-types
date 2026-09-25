@@ -11,12 +11,13 @@ import { ConvertValue } from '../abstract-ops/runtime-types.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import { R } from "../abstract-ops/all.mjs";
+import { isFloat128Object } from './Float128.mts';
+import { isDecimalObject, ReduceDecimal, CreateDecimalValue } from './Decimal.mts';
 import {
   OrdinaryObjectCreate, DefinePropertyOrThrow, Get,
   IsArray, Throw, surroundingAgent, CreateBuiltinFunction, ArrayCreate,
   LengthOfArrayLike, skipDebugger,
 } from '#self';
-import { isDecimalObject, ReduceDecimal, CreateDecimalValue } from './Decimal.mts';
 
 
 /**
@@ -175,6 +176,13 @@ function valueKeyFor(value: Value): string {
     const record = (value as unknown as { TypeRecord?: TypeRecord }).TypeRecord;
     const typeKey = record ? orderKey(record) : '?';
     return `t:${typeKey}:${R(unwrapToNumber(value as TypedNumberValue))}`;
+  }
+  // A FLOAT128 keys on its value as SameValueZero sees it: both zeroes one key,
+  // NaN one key, and a finite value its stored pair, which is already canonical.
+  if (isFloat128Object(value)) {
+    if (value.Float128Class === 'nan') return 'q:NaN';
+    if (value.Float128Class === 'infinity') return `q:${value.Float128Sign === -1 ? '-' : ''}Infinity`;
+    return value.Float128Significand === 0n ? 'q:0' : `q:${value.Float128Significand}e${value.Float128Exponent}`;
   }
   // A DECIMAL keys on its REDUCED member and its WIDTH. The value reaching here
   // has already been canonicalized, so the reduction is a second application of

@@ -4,6 +4,7 @@ import { isBooleanObject } from '../intrinsics/Boolean.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { isComplexObject, complexToString } from '../intrinsics/Complex.mts';
 import { isDecimalObject, DecimalToString } from '../intrinsics/Decimal.mts';
+import { isFloat128Object, Float128ToString } from '../intrinsics/Float128.mts';
 import { isRationalObject } from '../intrinsics/Rational.mts';
 import { isNumberObject } from '../intrinsics/Number.mts';
 import { isBigIntObject } from '../intrinsics/BigInt.mts';
@@ -155,6 +156,9 @@ export function format(arg: Formattable): string {
       }
       if (isRationalObject(arg)) {
         return `${arg.RationalNumerator}/${arg.RationalDenominator}`;
+      }
+      if (isFloat128Object(arg)) {
+        return Float128ToString(arg);
       }
       if (isDecimalObject(arg)) {
         return `${DecimalToString(arg)} (decimal)`;
@@ -461,6 +465,13 @@ export interface Throw {
   | 'a computed member name must be a literal or a `const` bound to a Symbol'
   | 'a count above the maximum array length is specified but not implemented in this engine'
   | 'a decimal operand requires a decimal on both sides'
+  | 'a float128 operand requires a float128 on both sides'
+  | 'Math.$1 requires every argument to be a float128'
+  | 'Math.$1 is not defined for a float128'
+  | 'Math.$1 is not yet supported for float128'
+  | 'a float128 has no Number value; this operation is not defined for float128'
+  | 'this operator is not defined for a float128'
+  | 'float128 exponentiation by this exponent is not yet supported'
   | 'a decorator in a match arm must be followed by a block'
   | 'a default could not be evaluated: $1'
   | 'a field of this type cannot be placed in a buffer'

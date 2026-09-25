@@ -3,6 +3,7 @@ import {
 } from '../value.mts';
 import { isDecimalObject } from '../intrinsics/Decimal.mts';
 import { isComplexObject } from '../intrinsics/Complex.mts';
+import { isFloat128Object } from '../intrinsics/Float128.mts';
 import type { TypeRecord } from './records.mts';
 
 /**
@@ -83,6 +84,23 @@ export function numericPredicate(value: Value, which: NumericPredicate, surface:
   // the significand divides evenly by that power of ten - which is what makes
   // `1.00` (100 x 10**-2) integral and `1.5` (15 x 10**-1) not, without reading
   // the cohort member the value was written as.
+  // A FLOAT128 answers from its class and its exact value: the table's binary
+  // float column. It reached none of the arms, so each predicate asked a Number
+  // question of an object.
+  if (isFloat128Object(value)) {
+    const cls = value.Float128Class;
+    const sig = value.Float128Significand;
+    const exp = value.Float128Exponent;
+    const integral = cls === 'finite' && (sig === 0n || exp >= 0);
+    const magnitude = integral ? (sig < 0n ? -sig : sig) << BigInt(Math.max(exp, 0)) : 0n;
+    switch (which) {
+      case 'isNaN': return cls === 'nan';
+      case 'isFinite': return cls === 'finite';
+      case 'isInteger': return integral;
+      case 'isSafeInteger': return integral && magnitude <= 2n ** 53n - 1n;
+      default: break;
+    }
+  }
   if (isDecimalObject(value)) {
     const significand = (value as unknown as { DecimalSignificand: bigint }).DecimalSignificand;
     const exponent = (value as unknown as { DecimalExponent: number }).DecimalExponent;

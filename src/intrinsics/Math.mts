@@ -27,6 +27,13 @@ import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import { isDecimalObject, CreateDecimalValue, decimalCompare } from './Decimal.mts';
 import { isRationalObject, CreateRationalValue, rationalCompare } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
+import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128, type Float128Object } from './Float128.mts';
+import {
+  finite as Float128Finite, zero as Float128Zero, infinity as Float128Infinity, NAN as Float128Nan,
+  negate as Float128Negate, compare as Float128Compare, exponentiate as Float128Exponentiate,
+  roundToInteger as Float128RoundToInteger, sqrt as Float128Sqrt, cbrt as Float128Cbrt, hypot as Float128Hypot,
+  toBinaryFloat as Float128ToBinaryFloat, type Binary128,
+} from './Float128Arithmetic.mts';
 import {
   surroundingAgent,
   ToNumber,
@@ -1284,6 +1291,11 @@ function withNumericLibrarySignatures(steps: NativeSteps, functionName: string):
       }
       return plain;
     }
+    // proposal-runtime-types: a float128 argument is answered at binary128 by
+    // Float128Math, before any Number coercion could reach it.
+    if (args.some((a) => a !== undefined && isFloat128Object(a))) {
+      return Q(Float128Math(functionName, args));
+    }
     // proposal-runtime-types #sec-vector-lane-wise-math: a Math function applies
     // LANE-WISE to a vector argument, returning a vector of the argument's
     // shape. Arguments of one shape apply at each lane, and a scalar beside a
@@ -1968,4 +1980,62 @@ export function bootstrapMath(realmRec: Realm) {
   ], realmRec.Intrinsics['%Object.prototype%'], 'Math');
 
   realmRec.Intrinsics['%Math%'] = mathObj;
+}
+
+/**
+ * Math on float128. The EXACT functions - abs, sign, floor, ceil, round, trunc,
+ * min, max - need no rounding; sqrt, cbrt and hypot are correctly rounded, through
+ * exact integer roots; pow shares `**`'s core; fround and f16round are the
+ * conversions to float32 and float16, rounded once. clz32 and imul convert to an
+ * integer and are not defined for a float, as the bitwise operators are not.
+ *
+ * The transcendental functions are refused BY NAME until they can be answered
+ * correctly rounded - never at a double's precision, which would present 16
+ * correct digits as 34. Every argument must be a float128: a Number beside one
+ * would be an implicit conversion.
+ */
+function Float128Math(name: string, args: readonly (Value | undefined)[]): Value | ThrowCompletion {
+  const values = args.filter((a): a is Value => a !== undefined);
+  if (!values.every((a) => isFloat128Object(a))) {
+    return Throw.TypeError('Math.$1 requires every argument to be a float128', Value(name));
+  }
+  const xs = values.map((a) => Float128ToBinary128(a as Float128Object));
+  const x = xs[0];
+  const done = (v: Binary128) => Binary128ToFloat128(v, surroundingAgent.currentRealmRecord);
+  const isZeroOf = (v: Binary128) => v.cls === 'finite' && v.sig === 0n;
+  switch (name) {
+    case 'abs':
+      if (x.cls === 'nan') return done(x);
+      if (x.cls === 'infinity') return done(Float128Infinity(1));
+      return done(isZeroOf(x) ? Float128Zero(1) : (x.sig < 0n ? Float128Negate(x) : x));
+    case 'sign':
+      if (x.cls === 'nan' || isZeroOf(x)) return done(x);
+      return done(Float128Finite(BigInt(x.cls === 'infinity' ? x.sign : (x.sig < 0n ? -1 : 1)), 0));
+    case 'floor': case 'ceil': case 'trunc': case 'round':
+      return done(Float128RoundToInteger(x, name));
+    case 'sqrt': return done(Float128Sqrt(x));
+    case 'cbrt': return done(Float128Cbrt(x));
+    case 'hypot': return done(Float128Hypot(xs));
+    case 'max': case 'min': {
+      let best = x;
+      for (const v of xs) {
+        if (v.cls === 'nan') return done(v);
+        const c = Float128Compare(v, best)!;
+        const zeroTie = c === 0 && isZeroOf(v) && (name === 'max' ? v.sign === 1 : v.sign === -1);
+        if ((name === 'max' ? c > 0 : c < 0) || zeroTie) best = v;
+      }
+      return done(best);
+    }
+    case 'pow': {
+      const p = Float128Exponentiate(x, xs[1] ?? Float128Nan);
+      return p === undefined ? Throw.RangeError('float128 exponentiation by this exponent is not yet supported') : done(p);
+    }
+    case 'fround': return Value(Float128ToBinaryFloat(x, 32));
+    case 'f16round': return Value(Float128ToBinaryFloat(x, 16));
+    case 'conj': return done(x); // a real number is its own conjugate
+    case 'clz32': case 'imul':
+      return Throw.TypeError('Math.$1 is not defined for a float128', Value(name));
+    default:
+      return Throw.RangeError('Math.$1 is not yet supported for float128', Value(name));
+  }
 }

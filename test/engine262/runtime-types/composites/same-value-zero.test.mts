@@ -81,8 +81,10 @@ test('the DECIMAL cohorts now HAVE a value level, and split as specified', () =>
   // A decimal belongs to the decimal type of its own WIDTH.
   expect(evaluated('let d: decimal128 = 1.0; String(d is decimal128);')).toBe('true');
   expect(evaluated('let d: decimal128 = 1.0; String(d is decimal32);')).toBe('false');
-  // STILL OPEN: the composite's own reduction rule - "where the type declares
-  // no scale, the REDUCED member is stored".
-  expect(evaluated('try { interface D { v: decimal128 } '
-    + 'String(Composite.<D>({ v: 1.0 }).v.toString()); } catch (e) { e.constructor.name; }')).not.toBe('1');
+  // The composite's own reduction rule - "where the type declares no scale, the
+  // REDUCED member is stored" - holds: canonicalization reduces a decimal member.
+  // (This was pinned as still open while a typed creation could not convert to a
+  // decimal member at all; it can now, reading the literal at the member's type.)
+  expect(evaluated('interface D { v: decimal128 } String(Composite.<D>({ v: 1.0 }).v.toString());')).toBe('1');
+  expect(evaluated("interface D { v: decimal128 } String(Composite.<D>({ v: decimal128('1.00') }).v.toString());")).toBe('1');
 });

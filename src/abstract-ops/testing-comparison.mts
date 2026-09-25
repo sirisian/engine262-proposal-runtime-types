@@ -20,6 +20,8 @@ import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { isRationalObject, rationalEquals, rationalCompare } from '../intrinsics/Rational.mts';
 import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/Complex.mts';
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
+import { isFloat128Object, float128SameValue, Float128ToBinary128 } from '../intrinsics/Float128.mts';
+import { compare as float128Compare } from '../intrinsics/Float128Arithmetic.mts';
 import {
   Assert,
   surroundingAgent,
@@ -239,6 +241,11 @@ export function SameValue(x: Value, y: Value): boolean {
   // IEEE 754 draws the same distinction with `totalOrder` against
   // `compareQuietEqual`, so the two predicates here are the standard's two
   // rather than an invention of this proposal.
+  // A float128 is the same value as another exactly when the stored pairs agree,
+  // signed zeroes and NaN included - float128SameValue.
+  if (surroundingAgent.feature('runtime-types') && (isFloat128Object(x) || isFloat128Object(y))) {
+    return isFloat128Object(x) && isFloat128Object(y) && float128SameValue(x, y);
+  }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
     return isDecimalObject(x) && isDecimalObject(y) && decimalSameValue(x, y);
   }
@@ -516,6 +523,12 @@ export function SameValueZero(x: Value, y: Value): boolean {
   // make - its `equals` compares scale while `compareTo` does not, so a HashSet
   // and a TreeSet disagree about how many elements it holds - and avoiding that
   // is the reason the two predicates differ here.
+  // SameValueZero for a float128: the zeroes are one value, and so is NaN.
+  if (surroundingAgent.feature('runtime-types') && (isFloat128Object(x) || isFloat128Object(y))) {
+    if (!isFloat128Object(x) || !isFloat128Object(y)) return false;
+    if (x.Float128Class === 'nan' || y.Float128Class === 'nan') return x.Float128Class === y.Float128Class;
+    return float128Compare(Float128ToBinary128(x), Float128ToBinary128(y)) === 0;
+  }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
     return isDecimalObject(x) && isDecimalObject(y) && decimalEquals(x, y);
   }
@@ -587,6 +600,11 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
   // VALUE, so `1.0 < 1.00` is false as `1.0 == 1.00` is true - the cohort is
   // invisible to the order, which is IEEE's `compareQuietLess` against its
   // `totalOrder`.
+  // lessThan for two float128 values; undefined where either is NaN, as for Numbers.
+  if (surroundingAgent.feature('runtime-types') && isFloat128Object(x) && isFloat128Object(y)) {
+    const c = float128Compare(Float128ToBinary128(x), Float128ToBinary128(y));
+    return c === undefined ? Value.undefined : (c < 0 ? Value.true : Value.false);
+  }
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(x) && isDecimalObject(y)) {
     return decimalCompare(x, y) < 0 ? Value.true : Value.false;
   }
@@ -905,6 +923,11 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
   // proposal-runtime-types (decimal.md): "`==` compares numerical value, so
   // `1.0 == 1.00` is `true`". This is the half of the split that SameValue does
   // NOT make, and the pair is IEEE's `compareQuietEqual` against `totalOrder`.
+  // === for a float128: numeric equality - the zeroes equal, NaN equal to nothing.
+  if (surroundingAgent.feature('runtime-types') && (isFloat128Object(x) || isFloat128Object(y))) {
+    return isFloat128Object(x) && isFloat128Object(y)
+      && float128Compare(Float128ToBinary128(x), Float128ToBinary128(y)) === 0;
+  }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
     return isDecimalObject(x) && isDecimalObject(y) && decimalEquals(x, y);
   }

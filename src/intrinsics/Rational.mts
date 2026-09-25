@@ -9,6 +9,7 @@ import { type Mutable } from '../utils/language.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { isDecimalObject, exactExpansionOfDouble } from './Decimal.mts';
+import { isFloat128Object } from './Float128.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
   OrdinaryObjectCreate,
@@ -213,6 +214,14 @@ function integerArg(v: Value): bigint | null {
  * both sources.
  */
 function exactFractionOf(v: Value): { num: bigint, den: bigint } | null {
+  // A float128 is exactly significand x 2**exponent; NaN and the infinities are
+  // not rationals.
+  if (isFloat128Object(v)) {
+    if (v.Float128Class !== 'finite') return null;
+    return v.Float128Exponent >= 0
+      ? { num: v.Float128Significand << BigInt(v.Float128Exponent), den: 1n }
+      : { num: v.Float128Significand, den: 1n << BigInt(-v.Float128Exponent) };
+  }
   let significand: bigint;
   let exponent: number;
   if (isDecimalObject(v)) {

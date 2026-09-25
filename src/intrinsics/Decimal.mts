@@ -379,6 +379,47 @@ export function DecimalFromDouble(value: number, width: 32 | 64 | 128): DecimalP
 }
 
 /**
+ * A rational as a decimal of the given width. Its exact value where the
+ * denominator has no prime factors but 2 and 5 - a finite decimal expansion -
+ * reduced where it fits and rounded where it does not, as DecimalFromDouble
+ * treats a double. Otherwise the quotient does not terminate, so it is rounded
+ * ONCE: the precision's digits plus two, and a sticky digit for the remainder,
+ * which is never zero here - enough for the rounding to be correct.
+ */
+export function DecimalFromRational(numerator: bigint, denominator: bigint, width: 32 | 64 | 128): DecimalParts {
+  if (numerator === 0n) {
+    return { significand: 0n, exponent: 0 };
+  }
+  const precision = DecimalPrecision(width);
+  let rest = denominator;
+  let twos = 0;
+  let fives = 0;
+  while (rest % 2n === 0n) {
+    rest /= 2n;
+    twos += 1;
+  }
+  while (rest % 5n === 0n) {
+    rest /= 5n;
+    fives += 1;
+  }
+  if (rest === 1n) {
+    const k = Math.max(twos, fives);
+    const exact = { significand: numerator * 2n ** BigInt(k - twos) * 5n ** BigInt(k - fives), exponent: -k };
+    const reduced = ReduceDecimal(exact.significand, exact.exponent);
+    return digitCount(reduced.significand) <= precision
+      ? reduced
+      : roundToPrecision(exact.significand, exact.exponent, precision);
+  }
+  const magnitude = numerator < 0n ? -numerator : numerator;
+  const shift = precision + 3 - (magnitude.toString().length - denominator.toString().length);
+  const n = shift >= 0 ? magnitude * 10n ** BigInt(shift) : magnitude;
+  const den = shift >= 0 ? denominator : denominator * 10n ** BigInt(-shift);
+  const sticky = n % den === 0n ? 0n : 1n;
+  const significand = (n / den) * 10n + sticky;
+  return roundToPrecision(numerator < 0n ? -significand : significand, -shift - 1, precision);
+}
+
+/**
  * A decimal as a `float64` - the nearest double to the decimal's value.
  *
  * Exact where the value has an exact binary form and rounded where it does not,

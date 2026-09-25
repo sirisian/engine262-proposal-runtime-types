@@ -11,6 +11,8 @@ import {
 } from '../intrinsics/Decimal.mts';
 import { isComplexObject } from '../intrinsics/Complex.mts';
 import type { ThrowCompletion } from '../completion.mts';
+import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
+import { add as float128Add, subtract as float128Subtract, finite as float128Finite } from '../intrinsics/Float128Arithmetic.mts';
 import { surroundingAgent,
   Assert,
   Call,
@@ -43,6 +45,12 @@ function stepExactNumeric(value: Value, operator: '++' | '--'): Value | ThrowCom
       return Throw.RangeError('a decimal result is outside the range of $1', Value(`decimal${r.width}`));
     }
     return CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
+  }
+  // A float128 steps by an exact 1, rounded once, as `x + 1` does.
+  if (isFloat128Object(value)) {
+    const x = Float128ToBinary128(value);
+    const one = float128Finite(1n, 0);
+    return Binary128ToFloat128(operator === '++' ? float128Add(x, one) : float128Subtract(x, one), realmRec);
   }
   if (isComplexObject(value)) {
     return Throw.TypeError('$1 is not defined for $2', Value(operator), Value('complex'));
