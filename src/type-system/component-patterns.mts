@@ -25,7 +25,7 @@ import { builtinTypeRecord, makePrimitive, type TypeRecord, type MetadataRecord 
 import { SameType } from './relations.mts';
 import {
   MatchSpecializationList, MatchSpecializationPattern, PrimitiveDeclaresParameters, PrimitiveParameterKinds, PrimitiveParameterDefault,
-  type PatternSlotParameter, type SpecializationMatchHost,
+  SpecializationPatternsOf, type PatternSlotParameter, type SpecializationMatchHost,
 } from './specialization-patterns.mts';
 import type { CallableGroupHost } from './specialization-selection.mts';
 import { MetadataObjectFromType } from './runtime.mts';
@@ -384,4 +384,98 @@ export function CallableGroupHostFor(
     },
     admitsStructure: (_entry, parameter) => slotOf(parameter).Kind !== 'value',
   };
+}
+
+/** The outcome of matching a standalone case's list against explicit arguments. */
+export type StandaloneMatch =
+  | { readonly Kind: 'match', readonly Bindings: readonly { readonly Name: string, readonly Value: TypeRecord }[] }
+  | { readonly Kind: 'no-match' }
+  | { readonly Kind: 'bound', readonly Message: string };
+
+/**
+ * Plan section 3.8, rules 5 and 8: a STANDALONE case's list against a direct
+ * explicit application's arguments, position by position, for the checker and
+ * the run time alike.
+ *
+ * A pattern-only list matches as any specialization list does. A MIXED list -
+ * `write<string, LengthType: type extends uint = uint16>` - declares an
+ * overload of its own (the phase-3 matcher refuses it by contract): its
+ * selectors match through the matcher, over a view of just their entries, so
+ * a nested capture still binds; its binders bind their positions as a generic
+ * function's parameters do, a missing argument taking the binder's default.
+ * An argument outside a binder's bound or value domain is an error at that
+ * application, not a fallback.
+ */
+export function MatchStandaloneCase(
+  list: ParseNode.TypeParameters,
+  args: readonly TypeRecord[],
+  resolve: (node: ParseNode) => TypeRecord | null,
+  isSubtype: (sub: TypeRecord, sup: TypeRecord) => boolean,
+  describe: (t: TypeRecord) => string,
+): StandaloneMatch {
+  const host = componentHost(resolve);
+  const toBindings = (matched: readonly { Capture: { Name: string }, Value: Argument }[]) => matched.map((b) => ({
+    Name: b.Capture.Name,
+    Value: typeof b.Value === 'number'
+      ? { Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as unknown as TypeRecord
+      : b.Value,
+  }));
+  if (list.ListKind === 'specialization') {
+    const positions = SpecializationPatternsOf(list).map((_e, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
+    const matched = MatchSpecializationList(list, positions, args as Argument[], host);
+    return matched === 'no-match' ? { Kind: 'no-match' } : { Kind: 'match', Bindings: toBindings(matched as never) };
+  }
+  const kinds = (list as { EntryKinds?: readonly ('argument' | 'parameter')[] }).EntryKinds ?? [];
+  if (args.length > kinds.length) return { Kind: 'no-match' };
+  const selectorArgs: TypeRecord[] = [];
+  const bindings: { Name: string, Value: TypeRecord }[] = [];
+  let binderIndex = 0;
+  for (let i = 0; i < kinds.length; i += 1) {
+    if (kinds[i] === 'argument') {
+      if (i >= args.length) return { Kind: 'no-match' };
+      selectorArgs.push(args[i]!);
+      continue;
+    }
+    const binder = (list.TypeParameterList ?? [])[binderIndex];
+    binderIndex += 1;
+    if (!binder) return { Kind: 'no-match' };
+    // A written domain, bound, or default this host cannot resolve - a bare
+    // family such as `uint` - is refused, never skipped.
+    for (const node of [binder.TypeParameterDomain, binder.TypeParameterConstraint, binder.TypeParameterDefault]) {
+      const text = (node as { sourceText?: string } | null | undefined)?.sourceText;
+      if (node && text !== 'type' && !resolve(node as unknown as ParseNode)) {
+        return { Kind: 'bound', Message: `\`${text}\` in \`${binder.BindingIdentifier.name}\` is not supported yet` };
+      }
+    }
+    const written = binder.TypeParameterDefault ? resolve(binder.TypeParameterDefault as unknown as ParseNode) : null;
+    const arg = i < args.length ? args[i]! : written;
+    if (!arg) return { Kind: 'no-match' };
+    const name = binder.BindingIdentifier.name;
+    if (binder.IsValueParameter) {
+      const domainNode = binder.TypeParameterDomain ?? binder.TypeParameterConstraint;
+      const domain = domainNode ? resolve(domainNode as unknown as ParseNode) : null;
+      if (domain && !isSubtype(arg, domain)) {
+        return { Kind: 'bound', Message: `${describe(arg)} is not in the domain \`${(domainNode as { sourceText?: string }).sourceText}\` of \`${name}\`` };
+      }
+    } else if (binder.TypeParameterDomain && binder.TypeParameterConstraint) {
+      const bound = resolve(binder.TypeParameterConstraint as unknown as ParseNode);
+      if (bound && !isSubtype(arg, bound)) {
+        return { Kind: 'bound', Message: `${describe(arg)} does not satisfy the bound \`${(binder.TypeParameterConstraint as { sourceText?: string }).sourceText}\` of \`${name}\`` };
+      }
+    }
+    bindings.push({ Name: name, Value: arg });
+  }
+  const selectorView = {
+    ...list, ListKind: 'specialization', TypeParameterList: [],
+    EntryKinds: kinds.filter((k) => k === 'argument'),
+  } as unknown as ParseNode.TypeParameters;
+  const positions = selectorArgs.map((_a, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
+  let matched;
+  try {
+    matched = MatchSpecializationList(selectorView, positions, selectorArgs as Argument[], host);
+  } catch {
+    return { Kind: 'no-match' };
+  }
+  if (matched === 'no-match') return { Kind: 'no-match' };
+  return { Kind: 'match', Bindings: [...toBindings(matched as never), ...bindings] };
 }

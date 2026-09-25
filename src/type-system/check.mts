@@ -1,7 +1,7 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
-import { AnalyzeCallableGroup } from './specialization-selection.mts';
-import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters } from './component-patterns.mts';
+import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
+import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -1714,6 +1714,35 @@ function CaseGroupMemberOf(classDeclaration: object, name: string, caseGroups: W
   };
   visit(classDeclaration, 0);
   return found;
+}
+
+/**
+ * Whether _n_ is a direct explicit call `f.<A>(x)` of a name with positional
+ * arguments only: the form step 2 selects, statically and at run time.
+ */
+function IsDirectExplicitFunctionCall(n: unknown): boolean {
+  const callee = (n as { CallExpression?: { type?: string, Expression?: { type?: string }, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
+  return callee?.type === 'TypeArgumentsExpression' && callee.Expression?.type === 'IdentifierReference'
+    && !(callee.TypeArguments?.TypeArgumentList ?? []).some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined || (a as { IsSpread?: boolean }).IsSpread);
+}
+
+/**
+ * The function declarations named _name_ in the nearest statement list, around
+ * _node_, that declares that name - when they hold a specialized case - or
+ * *undefined*. Function declarations group within their statement list.
+ */
+function FunctionCaseGroupFor(node: unknown, name: string): ParseNode[] | undefined {
+  for (let p = (node as { parent?: object } | null)?.parent as Record<string, unknown> | undefined; p; p = p.parent as Record<string, unknown> | undefined) {
+    for (const [key, child] of Object.entries(p)) {
+      if (key === 'parent' || key === 'location' || !Array.isArray(child)) continue;
+      const declared = (child as { type?: string, BindingIdentifier?: { name?: string } }[])
+        .filter((c) => c?.type === 'FunctionDeclaration' && c.BindingIdentifier?.name === name);
+      if (declared.length === 0) continue;
+      const kinds = declared.map((d) => (d as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind);
+      return kinds.includes('specialization') || kinds.includes('mixed') ? declared as unknown as ParseNode[] : undefined;
+    }
+  }
+  return undefined;
 }
 
 /** Whether a pattern node holds a capture anywhere within it. */
@@ -13192,6 +13221,108 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   // A call decays in value positions. Location consumers explicitly request
   // its undegraded return contract, including unions of reference returns.
+  /**
+   * Plan section 3.8 and section 6.1, phase 4 step 2b: the static selection
+   * for a DIRECT EXPLICIT call, `f.<A>(x)`, of a function group holding a
+   * specialized case - the rule the run time applies (`SelectExplicitCase`):
+   * the most specific attached case, then a matching standalone case, then the
+   * owner's body, then no viable overload. *undefined* leaves the call to the
+   * ordinary typing: another callee, a named or spread application (step 3),
+   * an argument not known statically (the run time selects), or the owner's
+   * fallback, which the ordinary path types as any generic call.
+   */
+  const reportedSelections = new WeakSet<object>();
+  const staticCaseSelection = (node: ParseNode): { type: Known } | undefined => {
+    const callee = (node as { CallExpression?: { type?: string, Expression?: { type?: string, name?: string }, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression;
+    if (callee?.type !== 'TypeArgumentsExpression' || callee.Expression?.type !== 'IdentifierReference' || !callee.Expression.name) return undefined;
+    const name = callee.Expression.name;
+    const argNodes = callee.TypeArguments?.TypeArgumentList ?? [];
+    if (argNodes.some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined || (a as { IsSpread?: boolean }).IsSpread)) return undefined;
+    const group = FunctionCaseGroupFor(node, name);
+    if (!group) return undefined;
+    const args: TypeRecord[] = [];
+    for (const a of argNodes) {
+      const r = resolveType(a as ParseNode.Type);
+      if (!r) return undefined;
+      args.push(r);
+    }
+    type D = ParseNode & { TypeParameters?: ParseNode.TypeParameters | null, BodylessOwner?: boolean, TypeAnnotation?: ParseNode.TypeAnnotation | null };
+    const host = CallableGroupHostFor((n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []));
+    const labelOf = (d: D) => `\`${name}${(d.TypeParameters as { sourceText?: string } | null | undefined)?.sourceText ?? ''}\``;
+    const members = (group as D[]).map((d) => ({
+      Node: d, List: d.TypeParameters ?? null, Label: labelOf(d),
+      Parameters: d.TypeParameters?.ListKind === 'parameters' ? (d.TypeParameters.TypeParameterList ?? []).map((tp) => {
+        const written = tp.IsValueParameter ? (tp.TypeParameterDomain ?? tp.TypeParameterConstraint) : undefined;
+        const domain = written ? resolveType(written as ParseNode.Type) : null;
+        return {
+          Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
+          Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp, ...(domain ? { Domain: domain } : {}),
+        };
+      }) : undefined,
+    }));
+    let analysis;
+    try {
+      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord));
+    } catch {
+      return undefined;
+    }
+    const report = (message: string) => {
+      if (reportedSelections.has(node)) return;
+      reportedSelections.add(node);
+      errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
+    };
+    const tuple = `(${args.map((a) => displayType(a)).join(', ')})`;
+    const returnOf = (kase: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[]): Known => {
+      const annotation = kase.TypeAnnotation?.Type;
+      if (!annotation) return null;
+      const pushed = pushTypeParameterScopeOf(kase as never);
+      let written: Known;
+      try {
+        written = resolveType(annotation);
+      } finally {
+        if (pushed) typeParameterScopes.pop();
+      }
+      const byName = new Map<string, TypeRecord>();
+      for (const b of bindings) {
+        byName.set(b.Capture.Name, typeof b.Value === 'number'
+          ? { Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as TypeRecord
+          : b.Value as TypeRecord);
+      }
+      return written ? substituteTypeParameters(written, byName) : null;
+    };
+    for (const owner of analysis.Owners) {
+      const attached = analysis.Attached.filter((a) => a.Owner === owner).map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+      if (attached.length === 0 || args.length > (owner.Parameters?.length ?? 0)) continue;
+      const result = SelectSpecialization(attached, owner.Parameters as never, args, host as never);
+      if (result.Kind === 'selected') return { type: returnOf(result.Case.Declaration as D, result.Bindings as never) };
+      if (result.Kind === 'ambiguous') {
+        report(`${result.Cases.map((c) => c.Label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other; declare a case for their intersection`);
+        return { type: null };
+      }
+    }
+    const matching: { d: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[], label: string }[] = [];
+    for (const d of analysis.Standalone.filter((m) => m.List && m.List.ListKind !== 'parameters')) {
+      const result = MatchStandaloneCase(d.List!, args, (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType);
+      if (result.Kind === 'bound') {
+        report(`${d.Label} applies to ${tuple}, but ${result.Message}`);
+        return { type: null };
+      }
+      if (result.Kind === 'match') {
+        matching.push({ d: d.Node as D, bindings: result.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value })), label: d.Label });
+      }
+    }
+    // A standalone case's own signature does not yet replace the group's in
+    // the ordinary call checks (its arity and value overloads), so selecting one
+    // statically is deferred; the run time selects it.
+    if (matching.length > 0) {
+      report(`selecting the standalone case ${matching.map((m) => m.label).join(' or ')} statically is not supported yet`);
+      return { type: null };
+    }
+    if (analysis.Owners.some((o) => !(o.Node as D).BodylessOwner && (o.Parameters?.length ?? 0) >= args.length)) return undefined;
+    report(`no overload of \`${name}\` applies to ${tuple}: no case matches, and ${analysis.Owners.length > 0 ? 'its owner has no body' : 'it has no owner'}`);
+    return { type: null };
+  };
+
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
     const type = inferStaticType(node);
     return node.type === 'CallExpression' ? callValueType(type) : type;
@@ -13758,6 +13889,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'CallExpression': {
         const vectorResult = vectorCallType(node, false);
         if (vectorResult) return vectorResult;
+        const caseSelection = staticCaseSelection(node);
+        if (caseSelection) return caseSelection.type;
         // Read HERE, inside `staticType`'s own arm for the node, which is where
         // `contextualReturnTypes` is read for a function literal; the
         // builtin-static call site records it, and this arm is the one that
@@ -21337,7 +21470,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Plan section 3.8, phase 4 step 1: a call into a group holding a
     // specialized case - a method's as well as a function's - is refused until
     // selection is implemented, whichever signature it would reach.
-    {
+    if (!IsDirectExplicitFunctionCall(n)) {
       const caseGroups = CaseGroupDeclarations(root);
       let declared = callee.Signatures.map((s2) => overloadDeclarations.get(s2)?.node).find((d) => d !== undefined && caseGroups.has(d));
       // A method call names its member on a receiver whose class declares it:
@@ -24393,6 +24526,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'CallExpression': {
         recordTrialObligation(n as ParseNode.CallExpression);
+        // Step 2b: select a direct explicit call's case even where its type is
+        // never asked for (a call statement), so its errors are reported.
+        if (IsDirectExplicitFunctionCall(n)) staticCaseSelection(n);
         checkProxyTarget(n.CallExpression, n.Arguments ?? [], true);
         // A CALL may reassign a binding some function body assigns to, and the
         // walk cannot see into the callee, so every such name loses its
@@ -26009,7 +26145,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return;
         }
         const n = value as { type?: string, CallExpression?: unknown, MemberExpression?: unknown, parent?: object };
-        if (n.type === 'CallExpression') {
+        if (n.type === 'CallExpression' && !IsDirectExplicitFunctionCall(n)) {
           let callee = n.CallExpression as { type?: string, name?: string, MemberExpression?: unknown, CallExpression?: unknown, Expression?: unknown } | undefined;
           if (callee?.type === 'TypeArgumentsExpression') callee = (callee.MemberExpression ?? callee.CallExpression ?? callee.Expression) as typeof callee;
           const name = callee?.type === 'IdentifierReference' ? callee.name : undefined;

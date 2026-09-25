@@ -17,8 +17,9 @@ test('A1: an owner and its attached case are accepted as declarations', () => {
 });
 
 test('A24: a call into a group with a case is deferred, statically and at run time', () => {
-  expectEarlyError(`${P} f.<uint8>(3);`, 'StaticTypeError');
-  expectThrown(`${P} f.<uint8>(3);`, 'selecting a specialized case of `f` is not supported yet');
+  // An implicit call (step 4); a direct explicit call selects since step 2.
+  expectEarlyError(`${P} f((3 := uint8));`, 'StaticTypeError');
+  expectThrown(`${P} f((3 := uint8));`, 'selecting a specialized case of `f` is not supported yet');
   // A call the checker cannot see is refused at run time, not dispatched by value.
   expectThrown(`${P} const g: any = f; g(3);`, 'selecting a specialized case is not supported yet');
 });

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
  * Plan section 3.8 and section 6.1, phase 4 step 2a: the run-time selection
@@ -60,9 +60,46 @@ test('B9: a standalone case the arguments match beats the owner', () => {
     function s<string>(): string { return 'standalone'; } const t: any = s; t.<string>();`)).toBe('standalone');
 });
 
-test('implicit calls, named applications and the checker still defer (steps 2b, 3, 4)', () => {
+test('implicit calls and named applications still defer (steps 3 and 4)', () => {
   expectThrown(`${P} g(3);`, 'selecting a specialized case is not supported yet');
   expectThrown(`${P} g.<T: uint8>(3);`, 'is not supported yet');
-  expectThrown(`function f<T: type>(x: T): string { return 'generic'; }
-    function f<uint8>(x: uint8): string { return 'uint8'; } f.<uint8>(3);`, 'selecting a specialized case of `f` is not supported yet');
+});
+
+// Step 2b: the checker selects too.
+const F = `function f<T: type>(x: T): string { return 'generic'; }
+function f<uint8>(x: uint8): string { return 'uint8'; }`;
+
+test('step 2b: a direct explicit call selects statically, and runs', () => {
+  expect(evaluated(`${F} f.<uint8>(3);`)).toBe('uint8');
+  expect(evaluated(`${F} f.<uint16>(3);`)).toBe('generic');
+  expect(evaluated(`${PAIR} function p<uint32, uint32>(): string { return 'both'; }
+    [p.<uint8, uint8>(), p.<uint32, string>(), p.<uint32, uint32>(), p.<string, uint8>()].join(',');`)).toBe('equal,u32-first,both,owner');
+});
+
+test('step 2b: the call is typed as the chosen case returns, captures instantiated', () => {
+  // A replacement's narrower return is the call's type.
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint8>(x: uint8): 'u' { return 'u'; } const c: 'u' = f.<uint8>(3); c;`)).toBe('u');
+  expect(evaluated(`function w<T: type>(v: T): T { return v; }
+    function w<uint.<const N>>(v: uint.<N>): uint.<N> { return v; } const r: uint.<12> = w.<uint.<12>>(5); String(r);`)).toBe('5');
+  expectEarlyError(`${F} const n: number = f.<uint8>(3);`, 'StaticTypeError');
+});
+
+test('step 2b: no viable overload and an ambiguity are static errors, even in a call statement', () => {
+  const R = `function read<T: type>(): T; function read<boolean>(): boolean { return true; }`;
+  expectEarlyError(`${R} read.<float16>();`, 'StaticTypeError');
+  expectThrown(`${R} read.<float16>();`, 'no overload of `read` applies to (float16)');
+  expectThrown(`${PAIR} p.<uint32, uint32>();`, '`p<const T, T>` and `p<uint32, _>` both apply');
+});
+
+test('a mixed standalone case: selectors match, binders bind with defaults and bounds (B13, B14)', () => {
+  const W = `function write<T: type>(v: T): string { return 'g'; }
+    function write<string, LengthType: type extends uint8 = uint8>(v: string): string { return 'len ' + String(LengthType); }
+    const k: any = write;`;
+  expect(evaluated(`${W} k.<string>('s');`)).toBe('len uint.<8>');
+  expectThrown(`${W} k.<string, int8>('s');`, 'does not satisfy the bound `uint8` of `LengthType`');
+  expect(evaluated(`${W} k.<boolean>(true);`)).toBe('g');
+  // Selected statically, a standalone case is deferred for now; the run time selects it.
+  expectThrown(`function s<A: type, B: type>(): string { return 'owner'; }
+    function s<string>(): string { return 'standalone'; } s.<string>();`, 'selecting the standalone case `s<string>` statically is not supported yet');
 });

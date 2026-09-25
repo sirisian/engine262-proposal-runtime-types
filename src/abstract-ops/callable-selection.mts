@@ -21,7 +21,7 @@ import { displayType, builtinTypeRecord, makePrimitive, type TypeRecord } from '
 import { IsSubtype } from '../type-system/relations.mts';
 import { SpecializationPatternsOf, type PatternSlotParameter } from '../type-system/specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/specialization-selection.mts';
-import { CallableGroupHostFor, FixedTypeSubtrees } from '../type-system/component-patterns.mts';
+import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
 import {
   Throw, Value, Q, EnsureCompletion, type PlainEvaluator, type ValueEvaluator,
 } from '#self';
@@ -101,6 +101,8 @@ export function* SelectExplicitCase(
       for (const entry of SpecializationPatternsOf(list)) {
         Q(yield* resolveAll(FixedTypeSubtrees(entry, captureNames)));
       }
+      // A mixed list's binders: their domains, bounds, and defaults.
+      Q(yield* resolveAll((list.TypeParameterList ?? []).flatMap((tp) => [tp.TypeParameterDomain, tp.TypeParameterConstraint, tp.TypeParameterDefault].filter(Boolean) as unknown as ParseNode[])));
       Q(yield* resolveAll((list.Captures ?? []).map((c) => c.TypeParameterDomain).filter(Boolean) as unknown as ParseNode[]));
     }
   }
@@ -149,9 +151,13 @@ export function* SelectExplicitCase(
   const standalone = analysis.Standalone.filter((d) => d.List && d.List.ListKind !== 'parameters');
   const matching: { fn: Value, frame: Map<string, TypeRecord>, label: string }[] = [];
   for (const d of standalone) {
-    const positions = SpecializationPatternsOf(d.List!).map((_e, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
-    const result = SelectSpecialization([{ List: d.List!, Declaration: d.Node, Label: d.Label }], positions, args, host);
-    if (result.Kind === 'selected') matching.push({ fn: fnOf(d.Node), frame: frameOf(result.Bindings as never), label: d.Label });
+    const result = MatchStandaloneCase(d.List!, args as TypeRecord[], resolve, (a, b) => IsSubtype(a, b, []), displayType);
+    if (result.Kind === 'bound') {
+      return Throw.TypeError('$1', Value(`${d.Label} applies to ${tuple()}, but ${result.Message}`));
+    }
+    if (result.Kind === 'match') {
+      matching.push({ fn: fnOf(d.Node), frame: frameOf(result.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))), label: d.Label });
+    }
   }
   if (matching.length === 1) {
     return { fn: matching[0]!.fn, frame: matching[0]!.frame };
