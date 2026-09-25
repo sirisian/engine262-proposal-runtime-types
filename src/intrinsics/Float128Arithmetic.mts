@@ -378,7 +378,7 @@ export function hypot(xs: readonly Binary128[]): Binary128 {
 // ---------------------------------------------------------------------------
 // toString: the SHORTEST decimal that reads back as the same binary128 value,
 // laid out by Number::toString's rules - as a Number prints. Printing the exact
-// binary expansion instead showed 0.1 as 0.1000000000000000000000000000000000048…
+// binary expansion instead showed 0.1 as 0.1000000000000000000000000000000000048...
 // ---------------------------------------------------------------------------
 
 /** The exact value of a finite nonzero x as numerator / denominator, denominator > 0. */
