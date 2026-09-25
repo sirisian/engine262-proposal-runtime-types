@@ -39,10 +39,11 @@ test('a member is converted, not assigned', () => {
 });
 
 test('an array member converts as any array conversion does', () => {
-  // An array's element conversion refuses an out-of-range element in every
-  // spelling - `[300] := [].<uint8>` too - and a typed creation agrees with it.
-  expectThrownKind('([300] := [].<uint8>);', 'RangeError');
-  expectThrownKind('interface A { v: [].<uint8> } Composite.<A>({ v: [300] });', 'RangeError');
+  // An explicit conversion of an array converts each element explicitly -
+  // `[300] := [].<uint8>` wraps, as `uint8(300)` does - and a typed creation's
+  // array member is converted the same way, as its object member is.
+  expect(evaluated('String(([300] := [].<uint8>)[0]);')).toBe('44');
+  expect(evaluated('interface A { v: [].<uint8> } String(Composite.<A>({ v: [300] }).v[0]);')).toBe('44');
   expect(evaluated('interface A { v: [].<uint8> } String(Composite.<A>({ v: [3] }).v[0]);')).toBe('3');
 });
 

@@ -23939,6 +23939,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (operand.type === 'NumericLiteral' || isNumericConstantExpression(operand)) {
           markConversionOperand(operand);
           staticTypeIn(operand, target);
+        } else if (target && (target.Kind === 'array' || target.Kind === 'tuple')) {
+          // An ARRAY or TUPLE literal operand: each element is the operand of its
+          // own element's conversion - `[x] := [].<T>` holds what `[x := T]`
+          // holds - so a literal element is read from its digits, and a constant
+          // element folds and wraps, as the scalar operand does. The walk is
+          // typed creation's, which does the same for a member's literals; the
+          // whole literal is NOT typed at the target, which would bring in an
+          // annotation's assignment checks and refuse the 300 a conversion wraps.
+          let inner: ParseNode | undefined = operand;
+          while (inner?.type === 'ParenthesizedExpression') inner = (inner as unknown as { Expression?: ParseNode }).Expression;
+          if (inner?.type === 'ArrayLiteral') {
+            markCreationMembers(operand);
+            typeCreationMembers(operand, target);
+          }
         }
         requireExplicitConversion(staticType(tc.Expression as ParseNode), target);
         walk(tc.Expression as ParseNode);

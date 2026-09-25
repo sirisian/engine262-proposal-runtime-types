@@ -1405,6 +1405,25 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         break;
     }
   }
+  // proposal-runtime-types: an EXPLICIT conversion of an array or tuple converts
+  // each element EXPLICITLY. #sec-explicit-conversion: a conversion "truncates,
+  // wraps, or rounds as the target requires, and does not fail merely because
+  // information is lost"; and typed creation converts an array member
+  // "element-wise: each element is converted to the type of the position it
+  // occupies". This conversion had no array case, so an array fell through to
+  // the implicit one below and each element was converted implicitly: `[300] :=
+  // [].<uint8>` refused the 300 that `uint8(300)` wraps, every decimal element
+  // was refused, and a typed array of another element type was refused
+  // outright where an explicit conversion copies. An array already of the type
+  // returned above as itself; an SoA is left to the refusal below.
+  if (surroundingAgent.feature('runtime-types') && (t.Kind === 'array' || t.Kind === 'tuple')
+      && value instanceof ObjectValue && Q(IsArray(value)) === Value.true
+      && SoAStorageOf(value as unknown as object) === undefined) {
+    if (t.Kind === 'array') {
+      return Q(yield* ConvertArrayElementwise(value, t, ExplicitElementConversion));
+    }
+    return Q(yield* ConvertTupleElementwise(value, t, ExplicitElementConversion));
+  }
   return Q(yield* RequireType(value, t));
 }
 
@@ -2419,64 +2438,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // the caller's storage. A tuple literal builds a NEW array, so there is no
   // aliased storage to protect and the array rule applies unchanged.
   if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-    const lenValue = Q(yield* Get(value, Value('length')));
-    const len = R(Q(yield* ToNumber(lenValue))) as number;
-    const elements = t.Elements;
-    const rest = elements.find((e) => e.Rest);
-    const fixedCount = elements.filter((e) => !e.Rest).length;
-    // #sec-array-and-tuple-types: a trailing position with a default may be
-    // omitted, which is what lets a shorter array satisfy a longer tuple. The
-    // floor is therefore the count of positions carrying NEITHER a rest nor a
-    // default, and the supplied length may fall anywhere from there to the
-    // position count.
-    const requiredCount = elements.filter((e) => !e.Rest && e.Initial === 'none').length;
-    if (len < requiredCount || (rest === undefined && len > fixedCount)) {
-      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
-    }
-    // An unsupplied position takes its default, converted to that position's
-    // type as a supplied value would be.
-    const filled = Math.max(len, rest === undefined ? fixedCount : len);
-    const out = X(ArrayCreate(filled));
-    for (let i = 0; i < filled; i += 1) {
-      if (i >= len) {
-        const declaredDefault = elements[i]!.Initial;
-        if (declaredDefault === 'none') {
-          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
-        }
-        const convertedDefault = Q(yield* CheckedConvertValue(declaredDefault, elements[i]!.Type));
-        X(CreateDataPropertyOrThrow(out, Value(String(i)), convertedDefault));
-        continue;
-      }
-      // A position past the declared ones belongs to the rest, whose [[Type]]
-      // is the type of what it collects.
-      const declared = i < elements.length && !elements[i]!.Rest
-        ? elements[i]!.Type
-        : (rest !== undefined ? restElementType(rest.Type) : undefined);
-      const el = Q(yield* Get(value, Value(String(i))));
-      const converted = declared === undefined ? el : Q(yield* CheckedConvertValue(el, declared));
-      X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
-    }
-    // #sec-array-defaults-and-stores: "A store to an element of an array of
-    // element type _t_ checks the value against _t_." A tuple has a type PER
-    // POSITION rather than one element type, and nothing recorded them, so a
-    // tuple's positions were checked when it was built and never again:
-    // `let t: [uint8, string] = [1, 's']; t[0] = 'wrong';` was accepted.
-    //
-    // The record travels with the ARRAY, as an array's [[TypedElement]] does,
-    // which is what makes the store check independent of the view a write
-    // arrives through. That matters because #sec-issubtype makes a tuple
-    // covariant position-wise, so a narrow tuple may be seen as a wider one and
-    // the boundary between them may be ELIDED (#sec-check-elision) - the two
-    // views are then the same object, and only a mark on the object itself can
-    // refuse a store that the narrow view forbids.
-    // The positions are resolved here rather than at the store: value.mts holds
-    // the store check and has no business unwrapping a rest element's collected
-    // type, and resolving once per boundary is cheaper than once per write.
-    (out as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple = {
-      Positions: elements.filter((e) => !e.Rest).map((e) => e.Type),
-      Rest: rest !== undefined ? restElementType(rest.Type) : undefined,
-    };
-    return out;
+    return Q(yield* ConvertTupleElementwise(value, t, CheckedConvertValue));
   }
   if (t.Kind === 'array') {
     // proposal-runtime-types soa.md: "`SoA.<T>` and `[].<T>` are DISTINCT TYPES
@@ -2514,35 +2476,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
       }
       if (isArr === Value.true) {
-        const lenValue = Q(yield* Get(value, Value('length')));
-        const len = R(Q(yield* ToNumber(lenValue))) as number;
-        if (t.Extent !== 'dynamic' && t.Extent !== len) {
-          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
-        }
-        const out = X(ArrayCreate(len));
-        for (let i = 0; i < len; i += 1) {
-          const el = Q(yield* Get(value, Value(String(i))));
-          const converted = Q(yield* CheckedConvertValue(el, t.Element));
-          X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
-        }
-        // #table-check-sites, row "a value stored to an element of an array of
-        // element type t": the store check reads the element type off the
-        // array, so the array must carry it. Without this the elements were
-        // converted once at the boundary and every later store went unchecked,
-        // so a `[].<uint8>` accepted a string and degraded to plain Numbers as
-        // it was written to.
-        // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
-        // part of the type, so the array carries it as it carries the element
-        // type. Without it the extent was dropped at the boundary and nothing
-        // enforced it afterwards: a `[4].<float32>` accepted `push`, a `length`
-        // assignment, and a store past the end, growing a type whose extent the
-        // layout rules and the array views both treat as a compile-time
-        // constant.
-        StampTypedArray(out as ObjectValue, t.Element);
-        if (t.Extent !== 'dynamic') {
-          (out as { TypedExtent?: number }).TypedExtent = t.Extent as number;
-        }
-        return out;
+        return Q(yield* ConvertArrayElementwise(value, t, CheckedConvertValue));
       }
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
@@ -5632,4 +5566,138 @@ function Float128FromTypedNumber(value: TypedNumberValue): Value {
     return Binary128ToFloat128(float128Finite(value.bigintValue(), 0), surroundingAgent.currentRealmRecord); // eslint-disable-line @engine262/mathematical-value -- the exact integer, which a Number would round past 2**53
   }
   return Float128FromNumber(value.numberValue(), surroundingAgent.currentRealmRecord);
+}
+
+/** A conversion of one element to its element or position type - the implicit or the explicit one. */
+type ElementConversion = (v: Value, t: TypeRecord) => ValueEvaluator;
+
+/**
+ * An array converted to an array type, element by element, by `convertElement`:
+ * the implicit conversion passes CheckedConvertValue, the explicit one passes
+ * ExplicitElementConversion. One array-building path for both, so an explicit
+ * conversion of an array is by construction the explicit conversion of each
+ * element - `[x] := [].<T>` holds what `[x := T]` holds. The fixed extent is a
+ * matter of shape, checked in both modes.
+ */
+function* ConvertArrayElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'array' }, convertElement: ElementConversion): ValueEvaluator {
+  const lenValue = Q(yield* Get(value, Value('length')));
+  const len = R(Q(yield* ToNumber(lenValue))) as number;
+  if (t.Extent !== 'dynamic' && t.Extent !== len) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  const out = X(ArrayCreate(len));
+  for (let i = 0; i < len; i += 1) {
+    const el = Q(yield* Get(value, Value(String(i))));
+    const converted = Q(yield* convertElement(el, t.Element));
+    X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
+  }
+  // #table-check-sites, row "a value stored to an element of an array of
+  // element type t": the store check reads the element type off the
+  // array, so the array must carry it. Without this the elements were
+  // converted once at the boundary and every later store went unchecked,
+  // so a `[].<uint8>` accepted a string and degraded to plain Numbers as
+  // it was written to.
+  // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
+  // part of the type, so the array carries it as it carries the element
+  // type. Without it the extent was dropped at the boundary and nothing
+  // enforced it afterwards: a `[4].<float32>` accepted `push`, a `length`
+  // assignment, and a store past the end, growing a type whose extent the
+  // layout rules and the array views both treat as a compile-time
+  // constant.
+  StampTypedArray(out as ObjectValue, t.Element);
+  if (t.Extent !== 'dynamic') {
+    (out as { TypedExtent?: number }).TypedExtent = t.Extent as number;
+  }
+  return out;
+}
+
+/**
+ * A tuple converted position by position, by `convertElement` - as for an array,
+ * the implicit and the explicit conversion share this one path. The arity - the
+ * required positions, and no more than the declared ones without a rest - is a
+ * matter of shape, checked in both modes; an unsupplied position takes its
+ * default, converted as a supplied value would be.
+ */
+function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'tuple' }, convertElement: ElementConversion): ValueEvaluator {
+  const lenValue = Q(yield* Get(value, Value('length')));
+  const len = R(Q(yield* ToNumber(lenValue))) as number;
+  const elements = t.Elements;
+  const rest = elements.find((e) => e.Rest);
+  const fixedCount = elements.filter((e) => !e.Rest).length;
+  // #sec-array-and-tuple-types: a trailing position with a default may be
+  // omitted, which is what lets a shorter array satisfy a longer tuple. The
+  // floor is therefore the count of positions carrying NEITHER a rest nor a
+  // default, and the supplied length may fall anywhere from there to the
+  // position count.
+  const requiredCount = elements.filter((e) => !e.Rest && e.Initial === 'none').length;
+  if (len < requiredCount || (rest === undefined && len > fixedCount)) {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  // An unsupplied position takes its default, converted to that position's
+  // type as a supplied value would be.
+  const filled = Math.max(len, rest === undefined ? fixedCount : len);
+  const out = X(ArrayCreate(filled));
+  for (let i = 0; i < filled; i += 1) {
+    if (i >= len) {
+      const declaredDefault = elements[i]!.Initial;
+      if (declaredDefault === 'none') {
+        return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+      }
+      const convertedDefault = Q(yield* convertElement(declaredDefault, elements[i]!.Type));
+      X(CreateDataPropertyOrThrow(out, Value(String(i)), convertedDefault));
+      continue;
+    }
+    // A position past the declared ones belongs to the rest, whose [[Type]]
+    // is the type of what it collects.
+    const declared = i < elements.length && !elements[i]!.Rest
+      ? elements[i]!.Type
+      : (rest !== undefined ? restElementType(rest.Type) : undefined);
+    const el = Q(yield* Get(value, Value(String(i))));
+    const converted = declared === undefined ? el : Q(yield* convertElement(el, declared));
+    X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
+  }
+  // #sec-array-defaults-and-stores: "A store to an element of an array of
+  // element type _t_ checks the value against _t_." A tuple has a type PER
+  // POSITION rather than one element type, and nothing recorded them, so a
+  // tuple's positions were checked when it was built and never again:
+  // `let t: [uint8, string] = [1, 's']; t[0] = 'wrong';` was accepted.
+  //
+  // The record travels with the ARRAY, as an array's [[TypedElement]] does,
+  // which is what makes the store check independent of the view a write
+  // arrives through. That matters because #sec-issubtype makes a tuple
+  // covariant position-wise, so a narrow tuple may be seen as a wider one and
+  // the boundary between them may be ELIDED (#sec-check-elision) - the two
+  // views are then the same object, and only a mark on the object itself can
+  // refuse a store that the narrow view forbids.
+  // The positions are resolved here rather than at the store: value.mts holds
+  // the store check and has no business unwrapping a rest element's collected
+  // type, and resolving once per boundary is cheaper than once per write.
+  (out as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple = {
+    Positions: elements.filter((e) => !e.Rest).map((e) => e.Type),
+    Rest: rest !== undefined ? restElementType(rest.Type) : undefined,
+  };
+  return out;
+}
+
+/** Whether a type is one of the numeric types, the targets a string is not a conversion source for. */
+function isNumericTarget(t: TypeRecord): boolean {
+  if (t.Kind !== 'primitive') return false;
+  const name = t.Name;
+  return name === 'number' || name === 'bigint' || name === 'rational' || name === 'int' || name === 'uint'
+    || name.startsWith('float') || name.startsWith('decimal') || name.startsWith('complex');
+}
+
+/**
+ * The EXPLICIT conversion of one element of an array or tuple: ConvertValue, the
+ * scalar's own conversion. One exception, the Parsing clause's: "a string is
+ * deliberately not a conversion source for a numeric type ... enforced at the
+ * explicit conversion too", so a string element at a numeric type is refused -
+ * even where today's scalar conversion, at `number` and at the decimal types,
+ * converts one, which is an open question of its own.
+ */
+function* ExplicitElementConversion(v: Value, t: TypeRecord): ValueEvaluator {
+  if ((v instanceof JSStringValue || v instanceof TypedStringValue) && isNumericTarget(t)) {
+    return Throw.TypeError('a string is not a conversion source for $1; use its parse or tryParse', Value(displayType(t)));
+  }
+  return Q(yield* ConvertValue(v, t));
 }
