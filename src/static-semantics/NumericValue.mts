@@ -1,6 +1,6 @@
 import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral, FloatContextLiteralWidth, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextLiteralComponent } from '../type-system/check.mts';
+import { IsBigIntContextLiteral, FloatContextLiteralWidth, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextRealLiteralComponent, ComplexContextLiteralComponent } from '../type-system/check.mts';
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
@@ -25,6 +25,13 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
     // that the store would then refuse.
     const component = ComplexContextLiteralComponent(node);
     return CreateComplexValue(0, Number(node.value), component, surroundingAgent.currentRealmRecord);
+  }
+  // A REAL literal the checker read at a complex type is born as that complex,
+  // real part the literal and imaginary part zero, at the context's component -
+  // the real-axis counterpart of the branch above.
+  const realComponent = ComplexContextRealLiteralComponent(node);
+  if (realComponent !== undefined && typeof node.value === 'number') {
+    return CreateComplexValue(Number(node.value), 0, realComponent, surroundingAgent.currentRealmRecord);
   }
   if (typeof node.value === 'number' && typeof node.SourceText === 'string' && IsBigIntContextLiteral(node)) {
     return Value(BigInt(node.SourceText.replace(/_/g, '')));

@@ -19,7 +19,12 @@ const Z = 'const z = (1 := complex64) + (2i := complex64); ';
 test('every Number context refuses a complex', () => {
   for (const src of [
     `${C}Number(c);`, `${Z}Number(z);`, `${C}Math.floor(c);`,
-    `${C}Math.max(c, 1);`, `${C}c == 3;`,
+    `${C}Math.max(c, 1);`,
+    // `==` against a Number VALUE is a Number context and refuses. Against a
+    // LITERAL it is not: the literal takes the complex's type - "an operand of a
+    // binary operator whose other operand has a known value type" - so `c == 3`
+    // compares two complex values and is *true*.
+    `${C}let n = 3; c == n;`,
   ]) {
     expectThrownKind(src, 'TypeError');
   }

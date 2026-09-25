@@ -872,6 +872,20 @@ export function ComplexContextLiteralComponent(node: object): TypeRecord | undef
 }
 
 /**
+ * A REAL numeric literal read at a complex type, and the component that type
+ * names - the real-axis counterpart of the imaginary mark above. The literal is
+ * BORN as the complex with that real part and a zero imaginary one, where it was
+ * a Number that only a store or an arithmetic operator knew to convert. A
+ * comparison converts neither, so `c === 3` compared a complex with a Number and
+ * was *false*, and `c == 3` threw.
+ */
+const complexRealLiteralComponents = new WeakMap<object, TypeRecord>();
+
+export function ComplexContextRealLiteralComponent(node: object): TypeRecord | undefined {
+  return complexRealLiteralComponents.get(node);
+}
+
+/**
  * Numeric literals the checker read at a RATIONAL type, with the exact digits to
  * build them from - consulted by NumericValue, exactly as the decimal and wide
  * integer marks are.
@@ -12645,6 +12659,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return contextual;
       }
     }
+    // A REAL literal at a complex type is recorded too, and keeps its typing:
+    // the mark changes only the value it denotes.
+    if (node.type === 'NumericLiteral' && contextual
+      && !(node as { Imaginary?: boolean }).Imaginary) {
+      const base = contextual.Kind === 'parameterized' ? contextual.Base : contextual;
+      if (base.Kind === 'primitive' && base.Name === 'complex' && base.Arguments.length === 1) {
+        complexRealLiteralComponents.set(node, base.Arguments[0] as TypeRecord);
+      }
+    }
     if (node.type === 'NumericLiteral' && contextual) {
       const width = decimalWidthOf(contextual);
       if (width !== undefined && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
@@ -14990,19 +15013,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // while the same values compared correctly against a value of their own
         // type. The eight comparison operators only: `in` and `instanceof` share
         // this node and read a literal as a key, not a number.
-        const comparison = (node as unknown as { operator?: string }).operator;
-        if (operandNodes.length === 2 && ['==', '!=', '===', '!==', '<', '<=', '>', '>='].includes(comparison ?? '')) {
-          const pairs: [ParseNode, Known][] = [[operandNodes[1], operandTypes[0]], [operandNodes[0], operandTypes[1]]];
-          for (const [candidate, otherType] of pairs) {
-            const lit = literalOperand(candidate);
-            if (!lit || !otherType) continue;
-            const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
-            const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
-            if (name === 'rational' || name === 'complex' || (name !== undefined && name.startsWith('decimal'))) {
-              staticTypeIn(innermostLiteral(lit), otherType);
-            }
-          }
-        }
+        adoptComparisonLiteral(node);
         // A STRICT comparison between DISJOINT types can never be true, and the
         // design's position on a test that cannot succeed is stated: the
         // disjoint-intersection rule refuses one because "reduction alone would
@@ -22624,6 +22635,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  /**
+   * A literal operand of a comparison takes the type of the other operand where
+   * that operand is a `decimal`, a `rational` or a `complex` - see the
+   * RelationalExpression and EqualityExpression arm of inferStaticType for why
+   * only these families. Called from the walk, which visits every comparison,
+   * as well as from that arm: the arm runs only when some consumer asks for the
+   * comparison's type, and nothing asks inside `String(d === 1.5)`, so there the
+   * literal kept its Number value and the comparison was *false*.
+   */
+  const adoptComparisonLiteral = (node: ParseNode): void => {
+    const comparison = (node as unknown as { operator?: string }).operator;
+    if (!['==', '!=', '===', '!==', '<', '<=', '>', '>='].includes(comparison ?? '')) return;
+    const operandNodes = ['RelationalExpression', 'ShiftExpression', 'EqualityExpression']
+      .map((k) => (node as unknown as Record<string, ParseNode | undefined>)[k])
+      .filter((x): x is ParseNode => !!x && typeof x === 'object' && 'type' in x);
+    if (operandNodes.length !== 2) return;
+    const operandTypes = operandNodes.map((x) => staticType(x));
+    const pairs: [ParseNode, Known][] = [[operandNodes[1], operandTypes[0]], [operandNodes[0], operandTypes[1]]];
+    for (const [candidate, otherType] of pairs) {
+      const lit = literalOperand(candidate);
+      if (!lit || !otherType) continue;
+      const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
+      const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
+      if (name === 'rational' || name === 'complex' || (name !== undefined && name.startsWith('decimal'))) {
+        staticTypeIn(innermostLiteral(lit), otherType);
+      }
+    }
+  };
+
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
@@ -23411,6 +23451,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'RelationalExpression': {
+        adoptComparisonLiteral(n);
         const rel = n as ParseNode.RelationalExpression;
         if (rel.RelationalExpression) {
           if (['<', '<=', '>', '>='].includes(rel.operator)) {
@@ -25526,6 +25567,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         return;
+      case 'EqualityExpression': {
+        adoptComparisonLiteral(n);
+        // Its operands are walked as the default would walk them.
+        const eq = n as ParseNode.EqualityExpression;
+        walk(eq.EqualityExpression);
+        walk(eq.RelationalExpression);
+        break;
+      }
       default: {
         for (const key of Object.keys(n)) {
           if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
