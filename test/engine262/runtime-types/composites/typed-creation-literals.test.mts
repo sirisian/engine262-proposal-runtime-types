@@ -45,3 +45,9 @@ test('an array member converts as any array conversion does', () => {
   expectThrownKind('interface A { v: [].<uint8> } Composite.<A>({ v: [300] });', 'RangeError');
   expect(evaluated('interface A { v: [].<uint8> } String(Composite.<A>({ v: [3] }).v[0]);')).toBe('3');
 });
+
+test('a tuple member is read position by position, and past them at the rest', () => {
+  expect(evaluated('interface T { v: [decimal128, uint64] } String(Composite.<T>({ v: [0.1, 9007199254740993] }).v[0]);')).toBe('0.1');
+  expect(evaluated('interface T { v: [decimal128, uint64] } String(Composite.<T>({ v: [0.1, 9007199254740993] }).v[1]);')).toBe('9007199254740993');
+  expect(evaluated('interface T { v: [uint8, ...[].<rational>] } String(Composite.<T>({ v: [1, 0.1, 0.1] }).v[2]);')).toBe('1/10');
+});

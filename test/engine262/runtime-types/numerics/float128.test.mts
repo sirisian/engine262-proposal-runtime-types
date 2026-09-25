@@ -90,7 +90,11 @@ test('Math: exact, correctly rounded, or refused by name', () => {
   expect(evaluated(`String([Math.floor(${Q(-2.5)}), Math.round(${Q(2.5)}), Math.round(${Q(-2.5)}), Math.trunc(${Q(-2.7)}), Math.abs(${Q(-3)}), Math.sign(${Q(-2)}), Math.max(${Q(1)}, ${Q(3)})]);`))
     .toBe('-3,3,-2,-2,3,-1,3');
   expect(evaluated(`String([Object.is(Math.ceil(${Q(-0.5)}), -${Q(0)}), Object.is(Math.min(${Q(0)}, -${Q(0)}), -${Q(0)})]);`)).toBe('true,true');
-  expect(show(`Math.fround(${Q(1)} / ${Q(3)})`)).toBe('0.3333333432674408');
+  // "The value rounded through binary32 or binary16, a value of T": a float128
+  // holding binary32's value exactly, printed at binary128's precision.
+  expect(show(`Math.fround(${Q(1)} / ${Q(3)})`)).toBe('0.3333333432674407958984375');
+  expect(typed(`Math.fround(${Q(1)} / ${Q(3)})`)).toBe('float128');
+  expect(show(`Math.f16round(${Q(1)} / ${Q(3)})`)).toBe('0.333251953125');
   expectThrownKind(`Math.sin(${Q(1)});`, 'RangeError');
   expectStaticTypeError(`Math.clz32(${Q(1)});`);
   expectThrownKind(`let n = 1; Math.max(${Q(1)}, n);`, 'TypeError');
@@ -108,4 +112,36 @@ test('toString is the shortest decimal that reads back, laid out as a Number is'
 test('the numeric predicates answer from the value', () => {
   expect(evaluated(`String([isNaN(${Q(0)} / ${Q(0)}), isFinite(${Q(1)} / ${Q(3)}), Number.isInteger(${Q(3)}), Number.isInteger(${Q(1)} / ${Q(3)}), Number.isSafeInteger((2n ** 60n + 1n) := float128)]);`))
     .toBe('true,true,true,false,false');
+});
+
+test('a literal beside a float128 in a Math call takes its type, as beside an operator', () => {
+  // #sec-literal-overload-ranking: the literal takes the chosen parameter's type.
+  expect(show(`Math.pow(${Q(3)}, 2)`)).toBe('9');
+  expect(typed(`Math.pow(${Q(3)}, 2)`)).toBe('float128');
+  expect(show(`Math.hypot(${Q(3)}, 4)`)).toBe('5');
+  expect(show(`Math.max(${Q(0.5)}, 1)`)).toBe('1');
+  // The other object-represented types take it the same way.
+  expect(evaluated("String(Math.max(decimal64('0.5'), 1));")).toBe('1');
+  expect(evaluated('String(Math.max(rational(1, 2), 1));')).toBe('1');
+  // A Number VALUE is still refused - only a literal is adopted.
+  expectThrownKind(`let n = 1; Math.max(${Q(0.5)}, n);`, 'TypeError');
+});
+
+test('an enum over float128 counts in the type', () => {
+  // #sec-enums: a later enumerator takes the prefix increment of the one before;
+  // a float128 declares one, so it counts - and in the type, not in doubles.
+  expect(evaluated('enum E: float128 { A = 1, B, C } String([E.B, E.C]);')).toBe('2,3');
+  expect(evaluated('enum E: float128 { A = 0.5, B } String(E.B);')).toBe('1.5');
+  expect(evaluated('enum E: float128 { A = 1, B } String(E.B + (1 := float128));')).toBe('3');
+});
+
+test('Math.sumPrecise: the exact sum, rounded once to float128', () => {
+  expect(show(`Math.sumPrecise([${Q('1e30')}, ${Q(1)}, -${Q('1e30')}])`)).toBe('1');
+  expect(typed(`Math.sumPrecise([${Q(1)}, ${Q(2)}])`)).toBe('float128');
+  expect(evaluated(`String(Object.is(Math.sumPrecise([-${Q(0)}, -${Q(0)}]), -${Q(0)}));`)).toBe('true');
+  expect(evaluated(`String(Object.is(Math.sumPrecise([${Q(1)}, -${Q(1)}]), ${Q(0)}));`)).toBe('true');
+  expect(evaluated(`String(isNaN(Math.sumPrecise([${Q(1)} / ${Q(0)}, -${Q(1)} / ${Q(0)}])));`)).toBe('true');
+  expectThrownKind(`Math.sumPrecise([${Q(1)}, 1]);`, 'TypeError');
+  expectThrownKind(`Math.sumPrecise([1, ${Q(1)}]);`, 'TypeError');
+  expect(evaluated('String(Math.sumPrecise([1e20, 0.1, -1e20]));')).toBe('0.1');
 });

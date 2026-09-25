@@ -8,6 +8,8 @@ import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, function
 import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
+import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
+import { add as float128Add, finite as float128Finite } from '../intrinsics/Float128Arithmetic.mts';
 import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
 import type { Arguments, ReferenceRecord } from '../value.mts';
 import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
@@ -345,6 +347,12 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         } else {
           v = previous;
         }
+      } else if (isFloat128Object(previous)) {
+        // A float128 declares a prefix increment - `++` steps it by an exact 1,
+        // rounded once - and, like a decimal, its value cannot be reached through
+        // a Number: the Number counter below would count in doubles and produce a
+        // Number, not a float128. So the step is taken IN the type.
+        v = Binary128ToFloat128(float128Add(Float128ToBinary128(previous), float128Finite(1n, 0)), surroundingAgent.currentRealmRecord);
       } else if (isDecimalObject(previous)) {
         // A decimal declares a prefix increment like any other numeric type, but
         // the value it produces cannot be reached through a Number: a decimal

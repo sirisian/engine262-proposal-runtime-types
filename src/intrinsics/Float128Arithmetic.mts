@@ -445,3 +445,21 @@ export function toShortestString(x: Binary128): string {
   const mantissa = k === 1 ? s : `${s[0]}.${s.slice(1)}`;
   return `${sign}${mantissa}e${e < 0 ? '-' : '+'}${Math.abs(e)}`;
 }
+
+/**
+ * Math.sumPrecise over float128 values: the EXACT sum, rounded once. NaN, or
+ * infinities of both signs, make NaN; an infinity otherwise wins; a sum of zeroes
+ * alone is -0 when every one is -0, as for Numbers; an exact cancellation is +0.
+ */
+export function sumExact(xs: readonly Binary128[]): Binary128 {
+  if (xs.some((x) => x.cls === 'nan')) return NAN;
+  const plus = xs.some((x) => x.cls === 'infinity' && x.sign === 1);
+  const minus = xs.some((x) => x.cls === 'infinity' && x.sign === -1);
+  if (plus && minus) return NAN;
+  if (plus || minus) return infinity(plus ? 1 : -1);
+  const nonzero = xs.filter((x) => x.sig !== 0n);
+  if (nonzero.length === 0) return zero(xs.every((x) => x.sign === -1) ? -1 : 1);
+  const e = Math.min(...nonzero.map((x) => x.exp));
+  const total = nonzero.reduce((acc, x) => acc + (x.sig << BigInt(x.exp - e)), 0n);
+  return total === 0n ? zero(1) : finite(total, e);
+}

@@ -27,12 +27,14 @@ import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import { isDecimalObject, CreateDecimalValue, decimalCompare } from './Decimal.mts';
 import { isRationalObject, CreateRationalValue, rationalCompare } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128, type Float128Object } from './Float128.mts';
+import {
+  isFloat128Object, Float128ToBinary128, Binary128ToFloat128, Float128FromNumber, type Float128Object,
+} from './Float128.mts';
 import {
   finite as Float128Finite, zero as Float128Zero, infinity as Float128Infinity, NAN as Float128Nan,
   negate as Float128Negate, compare as Float128Compare, exponentiate as Float128Exponentiate,
   roundToInteger as Float128RoundToInteger, sqrt as Float128Sqrt, cbrt as Float128Cbrt, hypot as Float128Hypot,
-  toBinaryFloat as Float128ToBinaryFloat, type Binary128,
+  toBinaryFloat as Float128ToBinaryFloat, sumExact as Float128SumExact, type Binary128,
 } from './Float128Arithmetic.mts';
 import {
   surroundingAgent,
@@ -1023,6 +1025,8 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
   const sums: number[] = [];
   let count = 0;
   let next: 'not-started' | 'done' | Value = 'not-started';
+  const float128Terms: Binary128[] = [];
+  let sawNonFloat128 = false;
   while (next !== 'done') {
     next = Q(yield* IteratorStepValue(iteratorRecord));
     if (next !== 'done') {
@@ -1031,6 +1035,23 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
         return Q(yield* IteratorClose(iteratorRecord, error));
       }
       let element = next;
+      // proposal-runtime-types: float128 elements are summed EXACTLY and the
+      // total rounded once - #sec-overloading-of-the-existing-functions, "the
+      // exact sum, rounded once to T". An iterable mixing a float128 with a
+      // Number or another numeric type is the mixing error.
+      if (surroundingAgent.feature('runtime-types') && isFloat128Object(element)) {
+        if (sawNonFloat128) {
+          const error = Throw.TypeError('$1 has no signature taking values of two numeric types', Value('Math.sumPrecise'));
+          return Q(yield* IteratorClose(iteratorRecord, error));
+        }
+        float128Terms.push(Float128ToBinary128(element));
+        continue;
+      }
+      if (float128Terms.length > 0) {
+        const error = Throw.TypeError('$1 has no signature taking values of two numeric types', Value('Math.sumPrecise'));
+        return Q(yield* IteratorClose(iteratorRecord, error));
+      }
+      sawNonFloat128 = true;
       if (surroundingAgent.feature('runtime-types') && isTypedNumber(element)) {
         const record = element.TypeRecord as TypeRecord;
         if (record.Kind !== 'primitive' || !isFloatTypeName(record.Name)) {
@@ -1076,6 +1097,9 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
       }
       count += 1;
     }
+  }
+  if (float128Terms.length > 0) {
+    return Binary128ToFloat128(Float128SumExact(float128Terms), surroundingAgent.currentRealmRecord);
   }
   // The exact sum is formed over every element and rounded ONCE, here, which is
   // the property the row promises and what distinguishes it from adding at T.
@@ -2030,8 +2054,10 @@ function Float128Math(name: string, args: readonly (Value | undefined)[]): Value
       const p = Float128Exponentiate(x, xs[1] ?? Float128Nan);
       return p === undefined ? Throw.RangeError('float128 exponentiation by this exponent is not yet supported') : done(p);
     }
-    case 'fround': return Value(Float128ToBinaryFloat(x, 32));
-    case 'f16round': return Value(Float128ToBinaryFloat(x, 16));
+    // #sec-overloading-of-the-existing-functions: "the value rounded through
+    // binary32 or binary16, a value of T" - a float128, holding that value.
+    case 'fround': return Float128FromNumber(Float128ToBinaryFloat(x, 32), surroundingAgent.currentRealmRecord);
+    case 'f16round': return Float128FromNumber(Float128ToBinaryFloat(x, 16), surroundingAgent.currentRealmRecord);
     case 'conj': return done(x); // a real number is its own conjugate
     case 'clz32': case 'imul':
       return Throw.TypeError('Math.$1 is not defined for a float128', Value(name));

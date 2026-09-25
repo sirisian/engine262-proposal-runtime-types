@@ -10988,14 +10988,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let family: (TypeRecord & { Kind: 'primitive' }) | null = null;
     let sawBigint = false;
     let mixed = false;
-    const literals: { value: number, record: TypeRecord }[] = [];
+    const literals: { value: number, record: TypeRecord, node: ParseNode }[] = [];
     let everyArgProven = allArgs.length === argNodes.length;
     for (const a of argNodes) {
       const t = staticType(a);
       if (t && t.Kind === 'literal') {
         const base = t.Base;
         if (base.Kind === 'primitive' && base.Name === 'number' && t.Value instanceof NumberValue) {
-          literals.push({ value: R(t.Value) as number, record: t });
+          literals.push({ value: R(t.Value) as number, record: t, node: a });
         } else if (base.Kind === 'primitive' && base.Name === 'bigint') {
           sawBigint = true;
         } else {
@@ -11027,6 +11027,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // "Every signature takes its numeric parameters at one type."
       pushCallError('$1 has no signature taking values of two numeric types', Value(`Math.${name}`));
       return null;
+    }
+    // The object-represented numeric types - float128, the decimals and rational -
+    // are not numericFamilyOf's, so the rule below never reached them; a literal
+    // beside one takes its type all the same (#sec-literal-overload-ranking), and
+    // each of their Math functions refuses a Number beside it.
+    const objectFamily = argNodes.map((a) => staticType(a)).find((t) => t?.Kind === 'primitive'
+      && (t.Name === 'float128' || t.Name === 'rational' || t.Name.startsWith('decimal')));
+    if (objectFamily) {
+      for (const lit of literals) staticTypeIn(lit.node, objectFamily as Known);
     }
     const ctxCandidate = numericFamilyOf(contextual);
     const ctxFamily = ctxCandidate === 'bigint' ? null : ctxCandidate;
@@ -11064,6 +11073,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         report(lit.record, chosen);
         literalsFit = false;
       }
+    }
+    // #sec-literal-overload-ranking: a literal argument TAKES the chosen
+    // parameter's type - it is read at that type, as a literal at any typed
+    // position is, and not only checked against it. Checked only, a literal beside
+    // a decimal, a rational or a float128 stayed a Number, and each of those
+    // types' Math refuses a Number beside it: `Math.pow(x, 2)` was a TypeError
+    // for a float128 `x` where `x ** 2` was not.
+    if (family && literalsFit) {
+      for (const lit of literals) staticTypeIn(lit.node, chosen);
     }
     if (!family && everyArgProven && literalsFit && argNodes.length > 0 && literals.length === argNodes.length) {
       staticCallResolutions.set(call, chosen);
@@ -11584,8 +11602,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // elements at its element type - and nothing more. The source is NOT checked
   // against S as an annotation's literal is: a required absence, an undeclared
   // property and a tuple's length are the creation's own errors, raised at run
-  // time by CompositeFromShape as the specification makes them. (A tuple shape is
-  // not descended: a literal in a tuple position is typed as the argument is.)
+  // time by CompositeFromShape as the specification makes them.
   const typeCreationMembers = (node: ParseNode, memberType: Known): void => {
     let inner: ParseNode | undefined = node;
     while (inner?.type === 'ParenthesizedExpression') inner = (inner as unknown as { Expression?: ParseNode }).Expression;
@@ -11603,9 +11620,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (inner.type === 'ArrayLiteral') {
+      const elements = (inner as unknown as { ElementList?: readonly (ParseNode | null)[] }).ElementList ?? [];
       if (memberType.Kind === 'array') {
-        for (const el of (inner as unknown as { ElementList?: readonly (ParseNode | null)[] }).ElementList ?? []) {
+        for (const el of elements) {
           if (el && el.type !== 'Elision' && el.type !== 'SpreadElement') typeCreationMembers(el, memberType.Element);
+        }
+      } else if (memberType.Kind === 'tuple') {
+        // Position by position: a fixed position's own type, and past the fixed
+        // positions the rest's element type. After a spread the positions are not
+        // known, so the walk stops there.
+        const positions = memberType.Elements;
+        const rest = positions.find((position) => position.Rest);
+        let index = 0;
+        for (const el of elements) {
+          if (el?.type === 'SpreadElement') break;
+          const position = positions[index];
+          const type = position && !position.Rest ? position.Type : (rest ? restElementType(rest.Type) : undefined);
+          if (el && el.type !== 'Elision' && type) typeCreationMembers(el, type);
+          index += 1;
         }
       }
       return;
