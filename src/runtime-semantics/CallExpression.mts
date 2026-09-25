@@ -15,6 +15,7 @@ import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argu
 import { IsAssignable } from '../type-system/relations.mts';
 import { displayType } from '../type-system/records.mts';
 import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression } from './RuntimeTypesDeclarations.mts';
+import { CaseGroupMembers, SelectExplicitCase, WithSelectedInvocation } from '../abstract-ops/callable-selection.mts';
 import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { EvaluatePropertyAccessWithExpressionKey, EvaluatePropertyAccessWithIdentifierKey } from './EvaluatePropertyAccess.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
@@ -255,7 +256,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     ClearTypeArgumentsCallee();
   }
   // 5. Let func be ? GetValue(ref).
-  const func = Q(yield* GetValue(ref));
+  let func = Q(yield* GetValue(ref));
   // proposal-runtime-types #sec-higher-kinded-parameters: "A higher-kinded
   // parameter is bound only by explicit application. It is never inferred from
   // an argument's type."
@@ -1107,6 +1108,29 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // they take precedence over inference, which is filtered against the frames
   // in scope.
   let explicitFrame: Map<string, TypeRecord> | undefined;
+  // Plan section 3.8, phase 4 step 2: a direct explicit call into a group
+  // holding a specialized case selects its case - or falls back to the owner,
+  // which the ordinary explicit path below then binds as any generic call.
+  if (surroundingAgent.feature('runtime-types') && memberExpr.type === 'TypeArgumentsExpression') {
+    const members = CaseGroupMembers(func);
+    if (members) {
+      const inner = (memberExpr as unknown as { Expression?: { type?: string, name?: string } }).Expression;
+      const calleeName = inner?.type === 'IdentifierReference' && inner.name ? inner.name : 'this function';
+      const choice = Q(yield* SelectExplicitCase(members, memberExpr.TypeArguments.TypeArgumentList as unknown as ParseNode[], calleeName));
+      if (choice.frame) {
+        const chosen = choice.fn;
+        pushTypeParameterFrame(choice.frame);
+        try {
+          return Q(yield* WithSelectedInvocation(chosen, function* callSelected() {
+            return yield* EvaluateCall(chosen, ref, args, tailCall, CallExpression);
+          }));
+        } finally {
+          popTypeParameterFrame();
+        }
+      }
+      func = choice.fn;
+    }
+  }
   if (surroundingAgent.feature('runtime-types') && memberExpr.type === 'TypeArgumentsExpression') {
     const params = functionTypeParameters(func as never);
     // A HIGHER-KINDED parameter binds here too. Its argument is a generic

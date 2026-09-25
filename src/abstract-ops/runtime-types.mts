@@ -40,6 +40,7 @@ import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts';
+import { IsSelectedInvocation } from './callable-selection.mts';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -5102,6 +5103,10 @@ export function* SignaturesOf(overloaded: Value): PlainEvaluator<readonly Overlo
  * selection is implemented; *undefined* for any other function.
  */
 export function SpecializedCaseDeferral(fn: unknown): string | undefined {
+  // A case a direct explicit call selected (phase 4, step 2) runs.
+  if (IsSelectedInvocation(fn)) {
+    return undefined;
+  }
   const declaration = (fn as { ECMAScriptCode?: { parent?: {
     TypeParameters?: { ListKind?: string } | null, BodylessOwner?: boolean,
     BindingIdentifier?: { name?: string }, ClassElementName?: { name?: string },

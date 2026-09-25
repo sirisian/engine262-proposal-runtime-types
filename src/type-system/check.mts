@@ -5763,6 +5763,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const prior of existing) {
       const a = overloadDeclarations.get(prior);
       if (!a || prior.Untyped || a.node === b.node) continue;
+      // Plan section 3.8: a specialized case shares its owner's value
+      // signature by design (that makes it a replacement), and is told apart by
+      // its list; the group analysis judges duplicates among cases by coverage.
+      {
+        const kindOf = (d: unknown) => (d as { TypeParameters?: { ListKind?: string } | null } | undefined)?.TypeParameters?.ListKind;
+        const specialized = (d: unknown) => kindOf(d) === 'specialization' || kindOf(d) === 'mixed';
+        if (specialized(a.node) || specialized(b.node)) continue;
+      }
       const ap = prior.TypeParameters ?? [];
       const bp = signature.TypeParameters ?? [];
       if (ap.length !== bp.length || ap.some((p, i) => p.Kind !== bp[i].Kind
@@ -25848,7 +25856,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let fixed = entries.length === binders.length;
       entries.forEach((entry, q) => {
         const binder = binders[q];
-        if (!binder || entry.type === 'CaptureBinding' || CollectCapturesIn(entry)) {
+        // A capture, or the wildcard `_`, is not a fixed argument: the case's
+        // signature at that position is compared as the owner's, unresolved.
+        const wildcard = entry.type === 'TypeReference' && !(entry as ParseNode.TypeReference).TypeArguments
+          && (entry as ParseNode.TypeReference).TypeName.MemberNames.length === 0
+          && (entry as ParseNode.TypeReference).TypeName.IdentifierReference.name === '_';
+        if (!binder || wildcard || entry.type === 'CaptureBinding' || CollectCapturesIn(entry)) {
           fixed = false;
           return;
         }
