@@ -3669,7 +3669,28 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     return isTypeObject(value);
   }
   if (t.Kind === 'primitive' && t.Name === 'vector') {
-    return value.type === 'Vector' && SameType((value as VectorValue).TypeRecord as TypeRecord, t);
+    if (value.type !== 'Vector') {
+      return false;
+    }
+    const own = (value as VectorValue).TypeRecord as TypeRecord;
+    if (SameType(own, t)) {
+      return true;
+    }
+    // #sec-vector-types: lanes carrying metadata are judged as lanes, by their
+    // meta types, as a scalar of the lane type is - a lane whose metadata a
+    // builder computed, `float32.<mulDim(D, D2)>`, is the same lane type as
+    // one written `float32.<{ m: 3 }>`, though the two records need not be
+    // identical. The count must agree, and every lane must belong.
+    const targetLane = t.Arguments?.[0] as TypeRecord | undefined;
+    if (own.Kind !== 'primitive' || own.Arguments?.[1] !== t.Arguments?.[1] || targetLane?.Kind !== 'parameterized') {
+      return false;
+    }
+    for (const lane of (value as VectorValue).lanes) {
+      if (!Q(yield* IsOfType(lane as Value, targetLane))) {
+        return false;
+      }
+    }
+    return true;
   }
   // proposal-runtime-types #sec-enums: "membership in `int32` follows from
   // `Count` being a subtype of it, not from a second runtime type". An
@@ -4578,6 +4599,14 @@ function* MetadataRecordFromObjectValue(value: ObjectValue): PlainEvaluator<Meta
     const v = Q(yield* Get(value, key));
     if (v instanceof ObjectValue && !isTypeObject(v)) {
       out[key.stringValue()] = Q(yield* MetadataRecordFromObjectValue(v));
+    } else if (isTypedNumber(v)) {
+      // Metadata leaves are plain values, as a written `{ m: 3 }` gives them:
+      // a builder declared to return its meta type's shape, `{ m: int32 }`,
+      // hands back typed fields, and a typed 3 is not the leaf 3 to a
+      // structural comparison - so a computed `float32.<{ m: 3 }>` failed to
+      // relate to the written one (vector membership compares that way).
+      const n = (v as TypedNumberValue).value as unknown;
+      out[key.stringValue()] = typeof n === 'bigint' ? Value(n) : Value(Number(n));
     } else {
       out[key.stringValue()] = v;
     }

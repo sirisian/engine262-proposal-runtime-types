@@ -72,3 +72,17 @@ test("the design's dimensioned-vector form: a vector times a scalar of another d
     const c = a * s; String(c) + ' ' + String(Reflect.typeOf(c)) + ' ' + String(Reflect.typeOf(c.x));`))
     .toBe('(10, 20, 30, 40) vector.<float32.<{ m: 3 }>, 4> float32.<{ m: 3 }>');
 });
+
+test('a computed lane type is the lane type written the same way', () => {
+  // A builder declared to return its meta type's shape, `{ m: int32 }`, hands
+  // back typed fields; metadata leaves are plain values, as a written
+  // `{ m: 3 }` gives them, so the computed lanes belong to the written type.
+  const block = `function mul(a: Dim, b: Dim): Dim { return { m: a.m + b.m }; }
+    primitive vector<float32.<const D: Dim>, const N: uint32> {
+      operator *.<D2: Dim>(rhs: float32.<D2>): vector.<float32.<mul(D, D2)>, N>; }
+    const s: float32.<{ m: 2 }> = 10;`;
+  expect(evaluated(`${D} ${block} const c: vector.<float32.<{ m: 3 }>, 4> = a * s; String(c);`)).toBe('(10, 20, 30, 40)');
+  // The dimension and the count still decide.
+  expectThrown(`${D} ${block} const c: V = a * s;`, 'is not assignable to');
+  expectThrown(`${D} ${block} const c: vector.<float32.<{ m: 3 }>, 2> = a * s;`, 'is not assignable to');
+});
