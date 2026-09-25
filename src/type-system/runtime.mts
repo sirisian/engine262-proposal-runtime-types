@@ -37,7 +37,7 @@ import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
-import { orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
+import { FamilyBoundRecord, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -4729,6 +4729,11 @@ export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type): PlainEvalua
 }
 
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
+  // A bare family name in a bound (`T: type extends uint`) names the family.
+  const family = FamilyBoundRecord(node);
+  if (family) {
+    return family;
+  }
   switch (node.type) {
     case 'TypeReference': {
       // proposal-runtime-types #sec-higher-kinded-parameters: "Within the

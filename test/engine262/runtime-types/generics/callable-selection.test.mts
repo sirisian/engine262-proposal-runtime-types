@@ -99,7 +99,37 @@ test('a mixed standalone case: selectors match, binders bind with defaults and b
   expect(evaluated(`${W} k.<string>('s');`)).toBe('len uint.<8>');
   expectThrown(`${W} k.<string, int8>('s');`, 'does not satisfy the bound `uint8` of `LengthType`');
   expect(evaluated(`${W} k.<boolean>(true);`)).toBe('g');
-  // Selected statically, a standalone case is deferred for now; the run time selects it.
-  expectThrown(`function s<A: type, B: type>(): string { return 'owner'; }
-    function s<string>(): string { return 'standalone'; } s.<string>();`, 'selecting the standalone case `s<string>` statically is not supported yet');
+});
+
+test('a standalone case selects statically too, typed by its own signature (B9, B13, B14)', () => {
+  expect(evaluated(`function s<A: type, B: type>(): string { return 'owner'; }
+    function s<string>(): string { return 'standalone'; } s.<string>();`)).toBe('standalone');
+  const W = `function write<T: type>(v: T): string { return 'g'; }
+    function write<string, LengthType: type extends uint = uint16>(v: string): string { return 'len ' + String(LengthType); }`;
+  expect(evaluated(`${W} write.<string>('s') + '|' + write.<string, uint8>('s');`)).toBe('len uint.<16>|len uint.<8>');
+  expectEarlyError(`${W} write.<string, int8>('s');`, 'StaticTypeError');
+  expectThrown(`${W} write.<string, int8>('s');`, 'int.<8> does not satisfy the bound `uint` of `LengthType`');
+  // Value arguments are checked against the chosen case's own parameters.
+  expectEarlyError(`${W} write.<string>(3);`, 'StaticTypeError');
+  // Rule 8 beside a bodyless owner.
+  expect(evaluated(`function read<T: type>(): T; function read<boolean>(): boolean { return true; }
+    function read<string, LengthType: type extends uint = uint16>(): string { return 'str'; }
+    read.<string>() + '|' + String(read.<boolean>());`)).toBe('str|true');
+});
+
+test('rule 4: a case whose value parameters cannot take the arguments does not apply', () => {
+  const A = `function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint8>(x: uint8, extra: string): string { return 'additive'; }`;
+  expect(evaluated(`${A} f.<uint8>(3);`)).toBe('generic');
+  expect(evaluated(`${A} f.<uint8>(3, 'e');`)).toBe('additive');
+  expect(evaluated(`${A} const g: any = f; g.<uint8>(3) + '|' + g.<uint8>(3, 'e');`)).toBe('generic|additive');
+});
+
+test('a bare family name is a bound, and only a bound', () => {
+  const G = `function g<L: type extends uint>(): string { return 'ok'; }`;
+  expect(evaluated(`${G} g.<uint8>() + g.<uint.<12>>();`)).toBe('okok');
+  expectThrown(`${G} g.<int8>();`, 'is not assignable to "uint"');
+  expectThrown(`${G} g.<string>();`, 'is not assignable to "uint"');
+  // Not a type elsewhere: a value of unknown width has no layout.
+  expectEarlyError('let x: uint = 3;', 'StaticTypeError');
 });

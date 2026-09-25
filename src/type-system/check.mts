@@ -1,6 +1,7 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
+import { ValueArityAdmits } from '../abstract-ops/callable-selection.mts';
 import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -27,8 +28,7 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
-  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType,
-} from './records.mts';
+  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
@@ -8717,6 +8717,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const resolveType = (node: ParseNode.Type): Known => {
+    // A bare family name in a bound (`T: type extends uint`) names the family.
+    const family = FamilyBoundRecord(node);
+    if (family) return family;
     const evaluated = evaluatedTypeNodes.get(node);
     if (evaluated) {
       return evaluated;
@@ -13232,7 +13235,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * fallback, which the ordinary path types as any generic call.
    */
   const reportedSelections = new WeakSet<object>();
+  /** The chosen case's own signature per call, for the callee's type (step 2b). */
+  const selectedCaseSignatures = new WeakMap<object, SignatureRecord>();
+  const caseSelections = new WeakMap<object, { type: Known } | undefined>();
   const staticCaseSelection = (node: ParseNode): { type: Known } | undefined => {
+    if (caseSelections.has(node)) return caseSelections.get(node);
+    const result = staticCaseSelectionUncached(node);
+    caseSelections.set(node, result);
+    return result;
+  };
+  const staticCaseSelectionUncached = (node: ParseNode): { type: Known } | undefined => {
     const callee = (node as { CallExpression?: { type?: string, Expression?: { type?: string, name?: string }, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression;
     if (callee?.type !== 'TypeArgumentsExpression' || callee.Expression?.type !== 'IdentifierReference' || !callee.Expression.name) return undefined;
     const name = callee.Expression.name;
@@ -13272,6 +13284,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
     };
     const tuple = `(${args.map((a) => displayType(a)).join(', ')})`;
+    const valueArguments = ((node as { Arguments?: readonly { type?: string }[] }).Arguments ?? []);
+    const valueCount = valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement') ? undefined : valueArguments.length;
     const returnOf = (kase: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[]): Known => {
       const annotation = kase.TypeAnnotation?.Type;
       if (!annotation) return null;
@@ -13288,10 +13302,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ? { Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as TypeRecord
           : b.Value as TypeRecord);
       }
-      return written ? substituteTypeParameters(written, byName) : null;
+      const returned = written ? substituteTypeParameters(written, byName) : null;
+      // The case's own signature, instantiated: the callee's type at this call.
+      const pushedForParameters = pushTypeParameterScopeOf(kase as never);
+      try {
+        const formals = ((kase as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []) as readonly (ParseNode & {
+          BindingIdentifier?: { name?: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: unknown,
+        })[];
+        const parameters = formals.map((p) => {
+          const annotated = p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : null;
+          return {
+            Name: p.BindingIdentifier?.name ?? '',
+            Type: (annotated ? substituteTypeParameters(annotated, byName) : anyTypeRecord) as TypeRecord,
+            Optional: !!p.Initializer, Rest: (p.type as string) === 'FunctionRestParameter' || (p.type as string) === 'BindingRestElement',
+          };
+        });
+        selectedCaseSignatures.set(node, { Parameters: parameters, Return: returned as TypeRecord | null } as unknown as SignatureRecord);
+      } finally {
+        if (pushedForParameters) typeParameterScopes.pop();
+      }
+      return returned;
     };
     for (const owner of analysis.Owners) {
-      const attached = analysis.Attached.filter((a) => a.Owner === owner).map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+      const attached = analysis.Attached.filter((a) => a.Owner === owner && ValueArityAdmits(a.Case.Node, valueCount))
+        .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
       if (attached.length === 0 || args.length > (owner.Parameters?.length ?? 0)) continue;
       const result = SelectSpecialization(attached, owner.Parameters as never, args, host as never);
       if (result.Kind === 'selected') return { type: returnOf(result.Case.Declaration as D, result.Bindings as never) };
@@ -13301,7 +13335,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     const matching: { d: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[], label: string }[] = [];
-    for (const d of analysis.Standalone.filter((m) => m.List && m.List.ListKind !== 'parameters')) {
+    for (const d of analysis.Standalone.filter((m) => m.List && m.List.ListKind !== 'parameters' && ValueArityAdmits(m.Node, valueCount))) {
       const result = MatchStandaloneCase(d.List!, args, (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType);
       if (result.Kind === 'bound') {
         report(`${d.Label} applies to ${tuple}, but ${result.Message}`);
@@ -13311,11 +13345,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         matching.push({ d: d.Node as D, bindings: result.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value })), label: d.Label });
       }
     }
-    // A standalone case's own signature does not yet replace the group's in
-    // the ordinary call checks (its arity and value overloads), so selecting one
-    // statically is deferred; the run time selects it.
-    if (matching.length > 0) {
-      report(`selecting the standalone case ${matching.map((m) => m.label).join(' or ')} statically is not supported yet`);
+    if (matching.length === 1) return { type: returnOf(matching[0]!.d, matching[0]!.bindings) };
+    if (matching.length > 1) {
+      report(`${matching.map((m) => m.label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other`);
       return { type: null };
     }
     if (analysis.Owners.some((o) => !(o.Node as D).BodylessOwner && (o.Parameters?.length ?? 0) >= args.length)) return undefined;
@@ -13708,6 +13740,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-generic-specialization: application binds explicit arguments and
       // defaults before a specialization publishes its instantiated signature.
       case 'TypeArgumentsExpression': {
+        // Step 2b: the callee of a direct explicit call whose case is chosen
+        // is that case's own signature - not the group's - so the ordinary
+        // call checks bind no type arguments against the owner, and resolve
+        // no value overloads across the group.
+        {
+          const call = (node as { parent?: ParseNode }).parent;
+          if (call?.type === 'CallExpression' && (call as { CallExpression?: unknown }).CallExpression === node && IsDirectExplicitFunctionCall(call)) {
+            staticCaseSelection(call);
+            const chosen = selectedCaseSignatures.get(call);
+            if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
+          }
+        }
         const specialization = node as ParseNode.TypeArgumentsExpression;
         const base = staticType(specialization.Expression);
         const bare = patternExpression(specialization.Expression);

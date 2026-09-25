@@ -2,6 +2,7 @@ import { SameValue, R } from '../abstract-ops/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
+import { IsFamilyRecord } from './records.mts';
 import { IsPlainData, IsValueType } from './layout.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
@@ -930,6 +931,10 @@ function returnRequiredOfNothing(r: TypeRecord | null | undefined): boolean {
 }
 
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {
+  // A family bound (`extends uint`) admits every member of its family.
+  if (IsFamilyRecord(t)) {
+    return !!s && s.Kind === 'primitive' && s.Name === (t as { Name: string }).Name && !IsFamilyRecord(s);
+  }
   // A record that is ABSENT relates to nothing. The recursions in
   // SameTypeWithAssumptions follow `s.Base` for a literal and `s.Constraint`
   // for a type parameter, and either can be missing - an unconstrained

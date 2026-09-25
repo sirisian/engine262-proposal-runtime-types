@@ -1116,7 +1116,8 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     if (members) {
       const inner = (memberExpr as unknown as { Expression?: { type?: string, name?: string } }).Expression;
       const calleeName = inner?.type === 'IdentifierReference' && inner.name ? inner.name : 'this function';
-      const choice = Q(yield* SelectExplicitCase(members, memberExpr.TypeArguments.TypeArgumentList as unknown as ParseNode[], calleeName));
+      const spread = (args ?? []).some((a) => (a as { type?: string }).type === 'AssignmentRestElement' || (a as { type?: string }).type === 'SpreadElement');
+      const choice = Q(yield* SelectExplicitCase(members, memberExpr.TypeArguments.TypeArgumentList as unknown as ParseNode[], calleeName, spread ? undefined : (args ?? []).length));
       if (choice.frame) {
         const chosen = choice.fn;
         pushTypeParameterFrame(choice.frame);

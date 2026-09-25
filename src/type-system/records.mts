@@ -2152,3 +2152,26 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
   }
   return t;
 };
+
+/**
+ * A bare family name in a BOUND - `T: type extends uint` - names every width
+ * of that family: `T extends uint` holds exactly when _T_ is some `uint.<N>`.
+ * Only a bound: elsewhere a bare family name names no type, since a value of
+ * unknown width has no fixed layout (Rust bounds integer families by trait,
+ * C++ by concept, Swift by protocol, none by a storage type). The record is
+ * marked, since `rational` with no arguments already means `rational.<64>`.
+ * *undefined* for any node that is not a bare family name in a bound.
+ */
+export function FamilyBoundRecord(node: unknown): TypeRecord | undefined {
+  const n = node as { type?: string, TypeArguments?: unknown, TypeName?: { MemberNames?: readonly unknown[], IdentifierReference?: { name?: string } }, parent?: { type?: string, TypeParameterConstraint?: unknown } } | null;
+  if (n?.type !== 'TypeReference' || n.TypeArguments || (n.TypeName?.MemberNames?.length ?? 0) > 0) return undefined;
+  const name = n.TypeName?.IdentifierReference?.name;
+  if (name !== 'int' && name !== 'uint' && name !== 'rational' && name !== 'complex' && name !== 'vector') return undefined;
+  if (n.parent?.type !== 'TypeParameter' || n.parent.TypeParameterConstraint !== node) return undefined;
+  return { Kind: 'primitive', Name: name, Arguments: [], Family: true } as unknown as TypeRecord;
+}
+
+/** Whether _t_ is a family bound's record. */
+export function IsFamilyRecord(t: unknown): boolean {
+  return !!t && (t as { Family?: boolean }).Family === true;
+}

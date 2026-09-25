@@ -50,6 +50,21 @@ export function CaseGroupMembers(func: Value): readonly { fn: Value, declaration
   return members.some((m) => isCase(m.declaration)) ? members : undefined;
 }
 
+/**
+ * Rule 4: a case takes part in ordinary overload resolution too, so one whose
+ * value parameters cannot receive _count_ arguments does not apply - an
+ * additive `f<uint8>(x: uint8, extra: string)` is not `f.<uint8>(3)`'s case,
+ * and the owner's body runs. An unknown count (a spread) filters nothing.
+ */
+export function ValueArityAdmits(declaration: unknown, count: number | undefined): boolean {
+  if (count === undefined) return true;
+  const formals = ((declaration as { FormalParameters?: readonly { type?: string, Initializer?: unknown }[] } | null)?.FormalParameters ?? []);
+  const rest = formals.some((p) => p.type === 'FunctionRestParameter' || p.type === 'BindingRestElement');
+  const fixed = formals.filter((p) => p.type !== 'FunctionRestParameter' && p.type !== 'BindingRestElement');
+  const required = fixed.filter((p) => !p.Initializer).length;
+  return count >= required && (rest || count <= fixed.length);
+}
+
 /** Functions a selection chose, whose case body may run (the step-1 guard stands down for them). */
 const selectedInvocations = new WeakSet<object>();
 export function IsSelectedInvocation(fn: unknown): boolean {
@@ -74,6 +89,7 @@ export function* SelectExplicitCase(
   members: readonly { fn: Value, declaration: Declaration }[],
   typeArguments: readonly ParseNode[],
   name: string,
+  valueArgumentCount?: number,
 ): PlainEvaluator<CaseChoice> {
   if (typeArguments.some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined || (a as { IsSpread?: boolean }).IsSpread)) {
     return Throw.TypeError('$1', Value(`a named or spread application of \`${name}\`, whose group has a specialized case, is not supported yet`));
@@ -137,7 +153,8 @@ export function* SelectExplicitCase(
   const tuple = () => `(${args.map((a) => (typeof a === 'number' ? String(a) : displayType(a))).join(', ')})`;
   // 1. The attached cases of the owner the arguments reach.
   for (const owner of analysis.Owners) {
-    const attached = analysis.Attached.filter((a) => a.Owner === owner).map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+    const attached = analysis.Attached.filter((a) => a.Owner === owner && ValueArityAdmits(a.Case.Node, valueArgumentCount))
+      .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
     if (attached.length === 0 || args.length > (owner.Parameters?.length ?? 0)) continue;
     const result = SelectSpecialization(attached, owner.Parameters as readonly PatternSlotParameter<Argument>[], args, host);
     if (result.Kind === 'selected') {
@@ -151,6 +168,7 @@ export function* SelectExplicitCase(
   const standalone = analysis.Standalone.filter((d) => d.List && d.List.ListKind !== 'parameters');
   const matching: { fn: Value, frame: Map<string, TypeRecord>, label: string }[] = [];
   for (const d of standalone) {
+    if (!ValueArityAdmits(d.Node, valueArgumentCount)) continue;
     const result = MatchStandaloneCase(d.List!, args as TypeRecord[], resolve, (a, b) => IsSubtype(a, b, []), displayType);
     if (result.Kind === 'bound') {
       return Throw.TypeError('$1', Value(`${d.Label} applies to ${tuple()}, but ${result.Message}`));
