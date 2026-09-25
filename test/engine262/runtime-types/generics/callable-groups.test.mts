@@ -123,3 +123,32 @@ test('A24 through inheritance: a case group declared in a base class is deferred
   expectThrown(`${W} class X extends W {} class Y extends X {} new Y().write.<boolean>(true);`, 'selecting a specialized case of `write` is not supported yet');
   expect(evaluated(`class V { m(v: string): string { return 's'; } } class U extends V {} new U().m('a');`)).toBe('s');
 });
+
+test('C6, C7 and C8: nested named patterns, outer binders, and mixed lists (C03)', () => {
+  // C6: a nested named application is the same pattern as its positional form.
+  expectEarlyError(`function f<T: type>(x: T): string { return 'g'; }
+    function f<Map.<K: string, V: uint32>>(x: Map.<string, uint32>): string { return 'a'; }
+    function f<Map.<string, uint32>>(x: Map.<string, uint32>): string { return 'b'; }`, 'StaticTypeError');
+  // C7: an outer `N: 10` DECLARES N with the domain 10; it does not select.
+  expect(evaluated(`function s<N: 10>(): string { return 'a'; } s.<10>();`)).toBe('a');
+  // C8: an outer binder beside a positional selector is a mixed standalone case.
+  expect(evaluated(`function f<T: uint8, 10>(): string { return 'a'; } 'ok';`)).toBe('ok');
+});
+
+test('object-literal methods: the group analysis, and the static deferral of their calls', () => {
+  const O = `const o = { m<T: type>(x: T): string { return 'g'; }, m<uint8>(x: uint8): string { return 'u'; } };`;
+  expect(evaluated(`${O} 'declared';`)).toBe('declared');
+  expectEarlyError(`${O} o.m.<uint8>(3);`, 'StaticTypeError');
+  expectThrown(`${O} o.m((3 := uint8));`, 'selecting a specialized case of `m` is not supported yet');
+  // The group is analyzed as a class body's is (Q4 here).
+  expectThrown(`const p = { m<T: type>(x: T): string { return 'g'; }, m<uint8>(x: uint8): number { return 1; } };`,
+    'number is not a subtype of it');
+  // Methods without cases are untouched.
+  expect(evaluated(`const q = { m<T: type>(x: T): string { return 'g'; } }; q.m.<uint8>(3);`)).toBe('g');
+});
+
+test('only a class method or a function declaration may be a bodyless owner', () => {
+  // An object literal's bodyless method is refused as before (TypeScript
+  // likewise refuses overload signatures in an object literal).
+  expectThrown('const o = { m<T: type>(): T; };', 'An abstract method requires an abstract class');
+});

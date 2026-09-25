@@ -4441,7 +4441,10 @@ export abstract class ExpressionParser extends FunctionParser {
         // reading (simd.md writes them so); the owner reading is a concrete
         // class's. An owner WITH cases in an abstract class is not yet told
         // apart from an abstract member (recorded in the step-1 note).
-        if (ownerList && ownerList.ListKind === 'parameters' && !this.currentClassModifiers?.includes('abstract')) {
+        // Only a class method may be a bodyless owner: an object literal's
+        // methods keep bodies, as TypeScript refuses overload signatures in an
+        // object literal, and its bodyless method is refused as before.
+        if (type === 'class element' && ownerList && ownerList.ListKind === 'parameters' && !this.currentClassModifiers?.includes('abstract')) {
           bodylessOwner = true;
         } else {
           this.requireAbstractClass();

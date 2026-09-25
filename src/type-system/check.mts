@@ -5727,6 +5727,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type DeclaredOverload = SignatureRecord & { Untyped?: boolean };
   /** Calls already refused for reaching a group with a specialized case (phase 4, step 1). */
   const deferredCaseCalls = new WeakSet<object>();
+  /** An object literal's type to the literal, whose methods a call may reach. */
+  const objectLiteralOfType = new WeakMap<object, ParseNode>();
   const overloadDeclarations = new WeakMap<object, {
     parameters: readonly Known[], writtenReturn: boolean, returnType: Known,
     constraints: readonly Known[], defaults: readonly Known[], node: ParseNode,
@@ -13652,7 +13654,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // fall back to it by hand (`?? objectLiteralShape(...)`), which is the
         // sign it belonged here: a type computed in the callers is a type
         // `staticType` should have been returning.
-        return objectLiteralShape(node);
+        {
+          // The literal behind its type, for the step-1 deferral of a method
+          // call into a group of the literal's own methods with a case.
+          const shape = objectLiteralShape(node);
+          if (shape && typeof shape === 'object') objectLiteralOfType.set(shape, node);
+          return shape;
+        }
       case 'ArrayLiteral': {
         const elements = (node as unknown as { ElementList?: readonly ParseNode[] }).ElementList ?? [];
         if (elements.length === 0) {
@@ -21322,6 +21330,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (property && member?.MemberExpression) {
           const receiver = staticType(member.MemberExpression);
           const classDeclaration = receiver && receiver.Kind === 'nominal' ? receiver.Declaration : undefined;
+          // An object literal's methods group as a class body's do.
+          const literal = receiver && !classDeclaration ? objectLiteralOfType.get(receiver) : undefined;
+          if (literal) declared = CaseGroupMemberOf(literal, property, caseGroups) as ParseNode | undefined;
           // The receiver's class first, then each superclass: a case group
           // declared in a base class is reached through a subclass receiver.
           const visited = new Set<ParseNode>();
