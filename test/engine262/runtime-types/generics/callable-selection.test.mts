@@ -60,8 +60,8 @@ test('B9: a standalone case the arguments match beats the owner', () => {
     function s<string>(): string { return 'standalone'; } const t: any = s; t.<string>();`)).toBe('standalone');
 });
 
-test('implicit calls still defer (step 4)', () => {
-  expectThrown(`${P} g(3);`, 'selecting a specialized case is not supported yet');
+test('an implicit call the checker sees still defers (step 4b)', () => {
+  expectThrown(`${F} f((3 := uint8));`, 'selecting a specialized case of `f` is not supported yet');
 });
 
 // Step 2b: the checker selects too.
@@ -159,4 +159,30 @@ test('C3 and C4: a pattern-only case takes no labels, and a capture\'s name is n
     '`A` names no type parameter of `g`');
   expectThrown(`function h<uint.<const N>>(): string { return 'a'; } h.<N: 12>();`, '`N` names no type parameter of `h`');
   expectThrown(`${F} f.<U: uint8>(3);`, '`U` names no type parameter of `f`');
+});
+
+// Step 4a: implicit calls, dispatched at run time (reached through `any`
+// until the checker's half, step 4b, lifts the static deferral).
+test('D1 and D2: the owner\'s inferred binding selects its replacement, else its body', () => {
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic ' + String(T); }
+    function f<uint8>(x: uint8): string { return 'uint8'; } const g: any = f;
+    g((3 := uint8)) + '|' + g((3 := uint16)) + '|' + g('a');`)).toBe('uint8|generic uint.<16>|generic string');
+  // A capture binds from the inferred binding.
+  expect(evaluated(`function w<T: type>(v: T): string { return 'g'; }
+    function w<uint.<const N>>(v: uint.<N>): string { return 'uint ' + String(N); } const k: any = w;
+    k((5 := uint.<12>)) + '|' + k('s');`)).toBe('uint 12|g');
+});
+
+test('D3: a bodyless owner no replacement matches is no viable overload', () => {
+  const R = `function read<T: type>(x: T): string; function read<boolean>(x: boolean): string { return 'b'; } const r: any = read;`;
+  expect(evaluated(`${R} r(true);`)).toBe('b');
+  expectThrown(`${R} r(3.5);`, 'no case matches, and its owner has no body');
+});
+
+test('D4 and D5: standalone and additive cases take part by their own value signatures', () => {
+  expect(evaluated(`function s<uint8>(x: uint8): string { return 'standalone'; }
+    function s(x: string): string { return 'str'; } const t: any = s; t((3 := uint8)) + '|' + t('a');`)).toBe('standalone|str');
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint8>(x: uint8, extra: string): string { return 'additive'; } const g: any = f;
+    g((3 := uint8)) + '|' + g((3 := uint8), 'e');`)).toBe('generic|additive');
 });

@@ -40,7 +40,7 @@ import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
 import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import { Float128FromNumber, isFloat128Object } from '../intrinsics/Float128.mts';
-import { IsSelectedInvocation } from './callable-selection.mts';
+import { IsSelectedInvocation, DispatchCaseGroup } from './callable-selection.mts';
 
 /**
  * proposal-runtime-types: the run-time enforcement operations. RequireType is
@@ -5072,9 +5072,12 @@ interface OverloadSlots {
  * written, only later. The result is cached: the types a signature names do not
  * change.
  */
-export function* SignaturesOf(overloaded: Value): PlainEvaluator<readonly OverloadSignature[]> {
+export function* SignaturesOf(overloaded: Value, only?: (fn: Value) => boolean): PlainEvaluator<readonly OverloadSignature[]> {
   const slots = overloaded as unknown as OverloadSlots;
-  if (slots.OverloadSignatures) {
+  // _only_ selects members (phase 4 step 4: a replacement, whose signature
+  // names captures bound only by a selection, is left out); such a subset is
+  // not the group's cached list.
+  if (slots.OverloadSignatures && !only) {
     return slots.OverloadSignatures;
   }
   const declaring = slots.OverloadContext;
@@ -5089,9 +5092,14 @@ export function* SignaturesOf(overloaded: Value): PlainEvaluator<readonly Overlo
   try {
     const built: OverloadSignature[] = [];
     for (const fn of slots.OverloadFunctions ?? []) {
+      if (only && !only(fn)) {
+        continue;
+      }
       built.push(Q(yield* OverloadSignatureOf(fn)));
     }
-    slots.OverloadSignatures = built;
+    if (!only) {
+      slots.OverloadSignatures = built;
+    }
     return built;
   } finally {
     surroundingAgent.executionContextStack.pop(context);
@@ -5160,11 +5168,11 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
   }
   const caseMember = functions.find((fn) => SpecializedCaseDeferral(fn) !== undefined);
   const behaviour = function* overloadDispatch(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
-    // A group holding a specialized case selects by its cases' patterns (plan
-    // section 3.8), which value dispatch alone cannot; until that is
-    // implemented, the call is refused rather than dispatched by value.
+    // Step 4: an implicit call into a group holding a specialized case selects
+    // through value resolution and its owner's inferred binding (plan section
+    // 3.8, rules 4 and 5).
     if (caseMember !== undefined) {
-      return Throw.TypeError('$1', Value(SpecializedCaseDeferral(caseMember)!));
+      return Q(yield* DispatchCaseGroup(overloaded, args, context.thisValue, name.stringValue(), TakeBodyContext() ?? undefined));
     }
     // #sec-overloading-on-return-type: the contextual type filters what ranking
     // left tied. It is read here rather than passed down from the binding,

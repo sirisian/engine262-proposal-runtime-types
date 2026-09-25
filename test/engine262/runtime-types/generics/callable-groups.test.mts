@@ -20,8 +20,9 @@ test('A24: a call into a group with a case is deferred, statically and at run ti
   // An implicit call (step 4); a direct explicit call selects since step 2.
   expectEarlyError(`${P} f((3 := uint8));`, 'StaticTypeError');
   expectThrown(`${P} f((3 := uint8));`, 'selecting a specialized case of `f` is not supported yet');
-  // A call the checker cannot see is refused at run time, not dispatched by value.
-  expectThrown(`${P} const g: any = f; g(3);`, 'selecting a specialized case is not supported yet');
+  // A call the checker cannot see is dispatched at run time (step 4): the
+  // owner's inferred binding (number) matches no case, so the owner's body runs.
+  expect(evaluated(`${P} const g: any = f; g(3);`)).toBe('generic');
 });
 
 test('A5: a standalone capture has no slot domain (D4)', () => {
@@ -161,9 +162,9 @@ test('class operators: cases are declarations; a use is deferred statically and 
   expect(evaluated(`${V} 'declared';`)).toBe('declared');
   expectEarlyError(`${V} new V(1) + (3 := uint8);`, 'StaticTypeError');
   expectThrown(`${V} new V(1) + (3 := uint8);`, 'selecting a specialized case of `operator +` is not supported yet');
-  // A use the checker cannot see runs neither the owner's body nor the case's:
-  // the operator table dispatches by operand, so the owner refuses too.
-  expectThrown(`${V} const v: any = new V(1); v + (3 := uint8);`, 'operator + belongs to a group with a specialized case');
+  // A use the checker cannot see selects at run time (step 4): the owner's
+  // inferred binding reaches the case, and otherwise the owner's body runs.
+  expect(evaluated(`${V} const v: any = new V(1); String(v + (3 := uint8)) + '|' + String(v + 'a');`)).toBe('u|g');
   // The group is analyzed as a function's is (Q4 here).
   expectThrown(`class U { operator +.<T: type>(rhs: T): string { return 'g'; }
     operator +.<uint8>(rhs: uint8): number { return 1; } }`, 'number is not a subtype of it');

@@ -26046,6 +26046,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return !a || !b || SameType(a, b);
         });
       }
+      // Recorded for the run time's implicit selection (step 4), which reaches
+      // a replacement through its owner and an additive case by its signature.
+      (kase as { CaseRole?: string }).CaseRole = sameList ? 'replacement' : 'additive';
       if (!sameList) return; // additive: borrows the owner's labels, never substituted through its generic value
       if (fixed && kase.TypeAnnotation && owner.TypeAnnotation) {
         const mineReturn = resolveIn(kase, kase.TypeAnnotation.Type);

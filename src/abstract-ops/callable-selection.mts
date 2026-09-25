@@ -16,14 +16,16 @@
  */
 
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { TypeNodeToTypeRecord, markValueParameterBinding } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import { displayType, builtinTypeRecord, makePrimitive, type TypeRecord } from '../type-system/records.mts';
 import { IsSubtype } from '../type-system/relations.mts';
 import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/specialization-selection.mts';
 import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
+import { SignaturesOf, InferGenericCallBindings } from './runtime-types.mts';
 import {
-  Throw, Value, Q, EnsureCompletion, type PlainEvaluator, type ValueEvaluator,
+  Throw, Value, Q, Call, EnsureCompletion, type PlainEvaluator, type ValueEvaluator,
 } from '#self';
 
 type Argument = TypeRecord | number;
@@ -63,6 +65,144 @@ export function ValueArityAdmits(declaration: unknown, count: number | undefined
   const fixed = formals.filter((p) => p.type !== 'FunctionRestParameter' && p.type !== 'BindingRestElement');
   const required = fixed.filter((p) => !p.Initializer).length;
   return count >= required && (rest || count <= fixed.length);
+}
+
+/**
+ * The group's roles at run time: every written type its lists name resolved
+ * first (the matcher is synchronous), then the checker's `AnalyzeCallableGroup`
+ * over the resolved host, so both agree on owners, attachment, and standalone
+ * cases.
+ */
+function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Declaration }[], name: string): PlainEvaluator<{
+  analysis: ReturnType<typeof AnalyzeCallableGroup>, host: ReturnType<typeof CallableGroupHostFor>, resolve: (node: ParseNode) => TypeRecord | null,
+}> {
+  const resolved = new Map<object, TypeRecord>();
+  const resolveAll = function* resolveAll(nodes: readonly ParseNode[]): PlainEvaluator<void> {
+    for (const node of nodes) {
+      if (resolved.has(node)) continue;
+      const completion = EnsureCompletion(yield* TypeNodeToTypeRecord(node as never));
+      if (completion.Type === 'normal') resolved.set(node, completion.Value as unknown as TypeRecord);
+    }
+  };
+  for (const { declaration } of members) {
+    const list = declaration.TypeParameters;
+    if (!list) continue;
+    const captureNames = new Set((list.Captures ?? []).map((c) => c.BindingIdentifier.name));
+    if (list.ListKind === 'parameters') {
+      Q(yield* resolveAll((list.TypeParameterList ?? []).flatMap((tp) => [tp.TypeParameterDomain, tp.TypeParameterConstraint].filter(Boolean) as unknown as ParseNode[])));
+    } else {
+      for (const entry of SpecializationPatternsOf(list)) {
+        Q(yield* resolveAll(FixedTypeSubtrees(entry, captureNames)));
+      }
+      // A mixed list's binders: their domains, bounds, and defaults.
+      Q(yield* resolveAll((list.TypeParameterList ?? []).flatMap((tp) => [tp.TypeParameterDomain, tp.TypeParameterConstraint, tp.TypeParameterDefault].filter(Boolean) as unknown as ParseNode[])));
+      Q(yield* resolveAll((list.Captures ?? []).map((c) => c.TypeParameterDomain).filter(Boolean) as unknown as ParseNode[]));
+    }
+  }
+  const resolve = (node: ParseNode) => resolved.get(node) ?? null;
+  const host = CallableGroupHostFor(resolve, (a, b) => IsSubtype(a, b, []));
+  // A case is labelled by its declared name, whatever the callee was called.
+  const labelOf = (d: Declaration) => `\`${d.BindingIdentifier?.name ?? name}${(d.TypeParameters as { sourceText?: string } | null)?.sourceText ?? ''}\``;
+  const ownerParameters = (d: Declaration) => (d.TypeParameters?.TypeParameterList ?? []).map((tp) => {
+    const written = tp.IsValueParameter ? (tp.TypeParameterDomain ?? tp.TypeParameterConstraint) : undefined;
+    const domain = written ? resolve(written as unknown as ParseNode) : null;
+    return {
+      Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
+      Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp, ...(domain ? { Domain: domain } : {}),
+    };
+  });
+  const declarations = members.map((m) => ({
+    Node: m.declaration, List: m.declaration.TypeParameters ?? null, Label: labelOf(m.declaration),
+    Parameters: m.declaration.TypeParameters?.ListKind === 'parameters' ? ownerParameters(m.declaration) : undefined,
+  }));
+  const analysis = AnalyzeCallableGroup(declarations as never, host);
+  return { analysis, host, resolve };
+}
+
+/** A case's capture bindings as a type-parameter frame, values marked as value parameters. */
+function FrameOfBindings(bindings: readonly { Capture: { Name: string }, Value: Argument }[]): Map<string, TypeRecord> {
+  const frame = new Map<string, TypeRecord>();
+  for (const b of bindings) {
+    const record = typeof b.Value === 'number'
+      ? markValueParameterBinding({ Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as unknown as TypeRecord)
+      : b.Value.Kind === 'object' || b.Value.Kind === 'literal' ? markValueParameterBinding(b.Value) : b.Value;
+    frame.set(b.Capture.Name, record);
+  }
+  return frame;
+}
+
+/**
+ * Plan section 3.8, rules 4 and 5 (step 4): an IMPLICIT call, `f(x)`, into a
+ * group holding a case. Ordinary value resolution chooses among the owner (its
+ * binding inferred, as any generic call's), the additive cases, and the
+ * standalone cases - a replacement is reached only through its owner. When the
+ * owner wins, its inferred binding selects among its attached replacements
+ * (as an explicit call's arguments would), else its body runs; a bodyless
+ * owner no replacement matches is no viable overload.
+ */
+export function* DispatchCaseGroup(
+  overloaded: Value,
+  args: readonly Value[],
+  thisValue: Value,
+  name: string,
+  callContext: TypeRecord | undefined,
+): ValueEvaluator {
+  const members = CaseGroupMembers(overloaded) ?? [];
+  const { analysis, host } = Q(yield* AnalyzeGroupAtRuntime(members, name));
+  const declarationOf = (fn: Value) => members.find((m) => m.fn === fn)?.declaration;
+  // The checker records each attached case's role (Q4); unrecorded is a replacement.
+  const replacements = new Set<object>(analysis.Attached
+    .filter((a) => (a.Case.Node as { CaseRole?: string }).CaseRole !== 'additive')
+    .map((a) => a.Case.Node as object));
+  const signatures = Q(yield* SignaturesOf(overloaded, (fn) => !replacements.has(declarationOf(fn) as object))) as readonly OverloadSignature[];
+  const resolution = resolveOverload(signatures, args, callContext);
+  if (resolution.Kind === 'none') {
+    return Throw.TypeError('no overload of $1 matches these arguments', Value(name));
+  }
+  if (resolution.Kind === 'ambiguous') {
+    return Throw.TypeError('the call to $1 is ambiguous between overloads', Value(name));
+  }
+  const chosen = resolution.Signature.Function;
+  const chosenDeclaration = declarationOf(chosen);
+  const owner = analysis.Owners.find((o) => o.Node === chosenDeclaration);
+  if (owner) {
+    const attached = analysis.Attached
+      .filter((a) => a.Owner === owner && replacements.has(a.Case.Node as object) && ValueArityAdmits(a.Case.Node, args.length))
+      .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+    if (attached.length > 0) {
+      const inferred = Q(yield* InferGenericCallBindings(chosen as never, args));
+      const ownerArgs = (owner.Parameters ?? []).map((p) => inferred?.get(p.Name));
+      if (ownerArgs.every((a) => a !== undefined)) {
+        const result = SelectSpecialization(attached, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
+        if (result.Kind === 'ambiguous') {
+          return Throw.TypeError('$1', Value(`${result.Cases.map((c) => c.Label).join(' and ')} both apply to this call, and neither is more specific than the other`));
+        }
+        if (result.Kind === 'selected') {
+          const fn = members.find((m) => m.declaration === result.Case.Declaration)!.fn;
+          pushTypeParameterFrame(FrameOfBindings(result.Bindings as never));
+          try {
+            return Q(yield* WithSelectedInvocation(fn, function* callCase() {
+              return yield* Call(fn, thisValue, args as Value[]);
+            }));
+          } finally {
+            popTypeParameterFrame();
+          }
+        }
+      }
+    }
+    if ((owner.Node as Declaration).BodylessOwner) {
+      return Throw.TypeError('$1', Value(`no overload of \`${name}\` applies to this call: no case matches, and its owner has no body`));
+    }
+    // The owner's body, chosen by this selection: a class operator's owner is
+    // otherwise refused beside its cases (the step-1 sibling guard).
+    return Q(yield* WithSelectedInvocation(chosen, function* callOwner() {
+      return yield* Call(chosen, thisValue, args as Value[]);
+    }));
+  }
+  // An additive or standalone case, chosen by its own value signature.
+  return Q(yield* WithSelectedInvocation(chosen, function* callChosen() {
+    return yield* Call(chosen, thisValue, args as Value[]);
+  }));
 }
 
 /** The outcome of `SelectCase`. */
@@ -220,57 +360,9 @@ export function* SelectExplicitCase(
   for (const node of typeArguments) {
     args.push(Q(yield* TypeNodeToTypeRecord(node as never)) as TypeRecord);
   }
-  const resolved = new Map<object, TypeRecord>();
-  const resolveAll = function* resolveAll(nodes: readonly ParseNode[]): PlainEvaluator<void> {
-    for (const node of nodes) {
-      if (resolved.has(node)) continue;
-      const completion = EnsureCompletion(yield* TypeNodeToTypeRecord(node as never));
-      if (completion.Type === 'normal') resolved.set(node, completion.Value as unknown as TypeRecord);
-    }
-  };
-  for (const { declaration } of members) {
-    const list = declaration.TypeParameters;
-    if (!list) continue;
-    const captureNames = new Set((list.Captures ?? []).map((c) => c.BindingIdentifier.name));
-    if (list.ListKind === 'parameters') {
-      Q(yield* resolveAll((list.TypeParameterList ?? []).flatMap((tp) => [tp.TypeParameterDomain, tp.TypeParameterConstraint].filter(Boolean) as unknown as ParseNode[])));
-    } else {
-      for (const entry of SpecializationPatternsOf(list)) {
-        Q(yield* resolveAll(FixedTypeSubtrees(entry, captureNames)));
-      }
-      // A mixed list's binders: their domains, bounds, and defaults.
-      Q(yield* resolveAll((list.TypeParameterList ?? []).flatMap((tp) => [tp.TypeParameterDomain, tp.TypeParameterConstraint, tp.TypeParameterDefault].filter(Boolean) as unknown as ParseNode[])));
-      Q(yield* resolveAll((list.Captures ?? []).map((c) => c.TypeParameterDomain).filter(Boolean) as unknown as ParseNode[]));
-    }
-  }
-  const resolve = (node: ParseNode) => resolved.get(node) ?? null;
-  const host = CallableGroupHostFor(resolve, (a, b) => IsSubtype(a, b, []));
-  // A case is labelled by its declared name, whatever the callee was called.
-  const labelOf = (d: Declaration) => `\`${d.BindingIdentifier?.name ?? name}${(d.TypeParameters as { sourceText?: string } | null)?.sourceText ?? ''}\``;
-  const ownerParameters = (d: Declaration) => (d.TypeParameters?.TypeParameterList ?? []).map((tp) => {
-    const written = tp.IsValueParameter ? (tp.TypeParameterDomain ?? tp.TypeParameterConstraint) : undefined;
-    const domain = written ? resolve(written as unknown as ParseNode) : null;
-    return {
-      Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
-      Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp, ...(domain ? { Domain: domain } : {}),
-    };
-  });
-  const declarations = members.map((m) => ({
-    Node: m.declaration, List: m.declaration.TypeParameters ?? null, Label: labelOf(m.declaration),
-    Parameters: m.declaration.TypeParameters?.ListKind === 'parameters' ? ownerParameters(m.declaration) : undefined,
-  }));
-  const analysis = AnalyzeCallableGroup(declarations as never, host);
+  const { analysis, host, resolve } = Q(yield* AnalyzeGroupAtRuntime(members, name));
   const fnOf = (node: ParseNode) => members.find((m) => m.declaration === node)!.fn;
-  const frameOf = (bindings: readonly { Capture: { Name: string }, Value: Argument }[]) => {
-    const frame = new Map<string, TypeRecord>();
-    for (const b of bindings) {
-      const record = typeof b.Value === 'number'
-        ? markValueParameterBinding({ Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as unknown as TypeRecord)
-        : b.Value.Kind === 'object' || b.Value.Kind === 'literal' ? markValueParameterBinding(b.Value) : b.Value;
-      frame.set(b.Capture.Name, record);
-    }
-    return frame;
-  };
+  const frameOf = FrameOfBindings;
   const choice = SelectCase(analysis as never, args as TypeRecord[], names, valueArgumentCount, host, resolve, (a, b) => IsSubtype(a, b, []), displayType, name);
   if (choice.Kind === 'error') {
     return Throw.TypeError('$1', Value(choice.Message));
