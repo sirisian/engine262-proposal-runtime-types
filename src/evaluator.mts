@@ -2,7 +2,7 @@ import { Throw } from './host-defined/error-messages.mts';
 import { PatternEnvironmentFor } from './runtime-semantics/PatternEnvironment.mts';
 import { InMetaHookEvaluation, CurrentMetaHookSubject, ConsumeEvaluationSteps, IsBudgetExhausted } from './type-system/budget.mts';
 import { CurrentContractReturn } from './abstract-ops/runtime-types.mts';
-import { FoldedConstantOf, FoldedDecimalOf, FoldedRationalOf } from './type-system/check.mts';
+import { FoldedConstantOf, FoldedDecimalOf, FoldedRationalOf, NamedConstantUseCopy } from './type-system/check.mts';
 import { TypedNumberValue } from './value.mts';
 import { CreateDecimalValue } from './intrinsics/Decimal.mts';
 import { CreateRationalValue } from './intrinsics/Rational.mts';
@@ -256,23 +256,16 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
     case 'ThisExpression':
       return Evaluate_This(node);
     case 'IdentifierReference': {
-      // A use of a `const` bound to a constant expression, folded by the
-      // checker at an integer contextual type: "behaves as if inlined", so the
-      // exact value is returned as a value of the type rather than the
-      // binding's Number. See `FoldedConstantOf`.
-      const foldedUse = FoldedConstantOf(node);
-      if (foldedUse !== undefined) {
-        if (foldedUse.type.Kind === 'primitive' && foldedUse.type.Name === 'bigint') return Value(foldedUse.value);
-        return new TypedNumberValue(foldedUse.value, foldedUse.type as never);
+      // A use of a named numeric constant at a numeric position is its
+      // initializer, typed there by the checker: evaluate that copy in place of
+      // the binding, as if the initializer were written here.
+      const useCopy = NamedConstantUseCopy(node);
+      if (useCopy !== undefined) {
+        return yield* Evaluate(useCopy);
       }
-      const foldedDecUse = FoldedDecimalOf(node);
-      if (foldedDecUse !== undefined) {
-        return CreateDecimalValue(foldedDecUse.sig, foldedDecUse.exp, foldedDecUse.width, surroundingAgent.currentRealmRecord, foldedDecUse.type);
-      }
-      const foldedRatUse = FoldedRationalOf(node);
-      if (foldedRatUse !== undefined) {
-        return CreateRationalValue(foldedRatUse.num, foldedRatUse.den, surroundingAgent.currentRealmRecord);
-      }
+      // (A use folded per family - FoldedConstantOf, FoldedDecimalOf and
+      // FoldedRationalOf on the reference - is no longer recorded: the use is its
+      // copy above, and the copy's own nodes carry any fold.)
       return yield* Evaluate_IdentifierReference(node);
     }
     case 'NullLiteral':

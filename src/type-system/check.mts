@@ -147,6 +147,7 @@ interface Frame {
   readonly constLiteralValues: Map<string, bigint>;
   /** The EXACT decimal value of a `const` whose initializer is a constant expression. */
   readonly constDecimalValues: Map<string, Dec>;
+  readonly constClosedInitializers: Map<string, ParseNode>;
 
   /** Names bound by a `let` to a numeric constant; see `letConstantUses`. */
   readonly letConstants: Set<string>;
@@ -185,7 +186,7 @@ function emptyFrame(): Frame {
     bindingKinds: new Map(),
     constLiterals: new Set<string>(),
     constLiteralTypes: new Map<string, TypeRecord>(), constPropertyKeys: new Map<string, string | SymbolValue>(),
-    constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(),
+    constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), constClosedInitializers: new Map<string, ParseNode>(),
     letConstants: new Set<string>(),
     immutableNames: new Set<string>(),
     declaredNames: new Set<string>(),
@@ -217,6 +218,7 @@ function cloneFrame(frame: Frame): Frame {
     constPropertyKeys: new Map(frame.constPropertyKeys),
     constLiteralValues: new Map(frame.constLiteralValues),
     constDecimalValues: new Map(frame.constDecimalValues),
+    constClosedInitializers: new Map(frame.constClosedInitializers),
     immutableNames: new Set(frame.immutableNames),
     letConstants: new Set(frame.letConstants),
     declaredNames: new Set(frame.declaredNames),
@@ -1837,6 +1839,65 @@ function foldIntegerConstant(node: ParseNode, resolveConst?: (name: string) => b
  * decimal with exponent 0.
  */
 interface Rat { num: bigint, den: bigint }
+
+/**
+ * A copy of a numeric constant expression - exactly the shapes
+ * `isNumericConstantExpression` accepts - with each reference to another numeric
+ * constant replaced by a copy of that constant's closed initializer, found by
+ * `resolveName`. Fresh nodes throughout: no mark, fold or cached type set on one
+ * copy is shared with the declaration or with another copy. `parent` is left
+ * unset, so a copy is not wired into any tree. Null where a node is not one of
+ * those shapes, or a reference cannot be resolved.
+ */
+const CONSTANT_EXPRESSION_TYPES = new Set([
+  'NumericLiteral', 'ParenthesizedExpression', 'UnaryExpression',
+  'AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression',
+]);
+const CONSTANT_EXPRESSION_CHILDREN = new Set([
+  'Expression', 'UnaryExpression', 'AdditiveExpression', 'MultiplicativeExpression',
+  'ExponentiationExpression', 'UpdateExpression',
+]);
+function copyConstantExpression(node: ParseNode, resolveName?: (name: string) => ParseNode | null): ParseNode | null {
+  const e = node as unknown as Record<string, unknown> & { type: string, name?: string };
+  if (e.type === 'IdentifierReference') {
+    const template = resolveName && typeof e.name === 'string' ? resolveName(e.name) : null;
+    return template ? copyConstantExpression(template) : null;
+  }
+  if (!CONSTANT_EXPRESSION_TYPES.has(e.type)) {
+    return null;
+  }
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(e)) {
+    if (key === 'parent') {
+      continue;
+    }
+    const child = e[key];
+    if (CONSTANT_EXPRESSION_CHILDREN.has(key) && child && typeof child === 'object') {
+      const copied = copyConstantExpression(child as ParseNode, resolveName);
+      if (!copied) {
+        return null;
+      }
+      out[key] = copied;
+    } else {
+      out[key] = child;
+    }
+  }
+  return out as unknown as ParseNode;
+}
+
+/**
+ * A use of a named numeric constant, and the copy of its closed initializer the
+ * checker typed at the use's position. #sec-static-type-of-an-expression: such a
+ * use "produces the value the initializer would have produced had it been
+ * written at that position" - so it is evaluated as exactly that: its
+ * initializer, typed there. The evaluator evaluates the copy in place of the
+ * binding.
+ */
+const namedConstantUseCopies = new WeakMap<object, ParseNode>();
+
+export function NamedConstantUseCopy(node: object): ParseNode | undefined {
+  return namedConstantUseCopies.get(node);
+}
 
 /** Reduce to canonical form: lowest terms, denominator strictly positive. */
 function canonicalRational(num: bigint, den: bigint): Rat | null {
@@ -11218,6 +11279,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const foldDecimal = (node: ParseNode): Dec | null => foldDecimalConstant(node, constDecimalValue);
 
+  // A named constant's CLOSED initializer, through the same shadowing walk the
+  // other lookups use: the first frame that declares the name decides.
+  const constClosedInitializer = (name: string): ParseNode | null => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      if (frames[i].declaredNames.has(name) || frames[i].bindingKinds.has(name)
+          || frames[i].bindings.has(name) || frames[i].constLiterals.has(name) || frames[i].dynamicBindings) {
+        return frames[i].constClosedInitializers.get(name) ?? null;
+      }
+    }
+    return null;
+  };
+
   /**
    * Type the ARITHMETIC nodes inside an expression, and nothing else: the
    * outermost arithmetic node on each path is handed to `staticType`, whose
@@ -11279,6 +11352,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (exact !== null) frame.constLiteralValues.set(name, exact);
     const decimal = foldDecimal(initializer);
     if (decimal !== null) frame.constDecimalValues.set(name, decimal);
+    // The initializer, CLOSED where it is declared: each name inside it that
+    // refers to another numeric constant is replaced by that constant's closed
+    // initializer, resolved here - so a use elsewhere cannot capture a
+    // different binding of the same name.
+    const closed = copyConstantExpression(initializer, constClosedInitializer);
+    if (closed) frame.constClosedInitializers.set(name, closed);
   };
 
   // Validate maximal expression roots whose value supplies no destination type.
@@ -12173,31 +12252,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // still reads the value and nothing else about the binding changes. A `let`
     // is excluded by the clause, and is excluded here: its frame records it
     // separately.
+    //
+    // It is implemented as exactly that: the use types a COPY of the constant's
+    // closed initializer at this position, and the evaluator evaluates the copy.
+    // Every family's literal and constant-expression rules then apply to the copy
+    // as they apply to the same expression written here, so a named constant
+    // cannot differ from its initializer. This replaces a return of the recorded
+    // literal type - built from the binding's Number - that each family escaped
+    // only through an exemption and a fold of its own, which integers, `bigint`
+    // and decimals had and rationals and binary floats did not.
     if (contextual && node.type === 'IdentifierReference') {
       const useName = (node as unknown as { name?: string }).name;
       if (typeof useName === 'string') {
-        // At an INTEGER value type, the exact fold below decides: the literal
-        // type recorded for the `const` was built from the binding's Number,
-        // and for `const K = 9007199254740993` that is `...992`. Returning it
-        // here made a use of a wide constant lose its digits while a use of
-        // `const K = 9007199254740992 + 9007199254740993`, whose initializer is
-        // not a literal, was exact - the same rule reaching one spelling of a
-        // constant and not the other.
-        // ...and only where the exact value FITS. A constant that does not fit
-        // is refused by the literal-type path below, with the message that names
-        // the type, which is the contract the transparency tests hold it to.
-        const bigintWanted = bigintTarget(contextual);
-        const exactUse = isIntegerValueType(contextual as TypeRecord) || bigintWanted ? constExactValue(useName) : null;
-        const cprim = contextual as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
-        const decimalWanted = decimalWidthOf(contextual as TypeRecord) !== undefined && constDecimalValue(useName) !== null;
-        const integerWanted = decimalWanted || (exactUse !== null && (bigintWanted || fitsNumericType(exactUse, cprim.Name, cprim.Arguments)));
-        for (let i = frames.length - 1; i >= 0 && !integerWanted; i -= 1) {
-          const literal = frames[i].constLiteralTypes.get(useName);
-          if (literal) {
-            return literal;
+        const template = constClosedInitializer(useName);
+        if (template) {
+          let copy = namedConstantUseCopies.get(node);
+          if (!copy) {
+            copy = copyConstantExpression(template) ?? undefined;
+            if (copy) namedConstantUseCopies.set(node, copy);
           }
-          if (frames[i].declaredNames.has(useName) || frames[i].letConstants.has(useName)) {
-            break;
+          if (copy) {
+            return staticTypeIn(copy, contextual);
           }
         }
       }
@@ -22660,7 +22735,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const operandTypes = operandNodes.map((x) => staticType(x));
     const pairs: [ParseNode, Known][] = [[operandNodes[1], operandTypes[0]], [operandNodes[0], operandTypes[1]]];
     for (const [candidate, otherType] of pairs) {
-      const lit = literalOperand(candidate);
+      // A named numeric constant too: at this position it produces the value its
+      // initializer would produce written here, which typing it here arranges.
+      const lit = literalOperand(candidate)
+        ?? (candidate.type === 'IdentifierReference' && isNumericConstantExpression(candidate) ? candidate : null);
       if (!lit || !otherType) continue;
       const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
       const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;

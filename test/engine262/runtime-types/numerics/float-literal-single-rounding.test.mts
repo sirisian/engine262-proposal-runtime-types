@@ -26,7 +26,10 @@ test('a literal rounds once, in every spelling and with either sign', () => {
 });
 
 test('a float value keeps its earlier rounding, as a C cast does', () => {
-  expect(evaluated('const x = 16777217.0000000001; String(float32(x));')).toBe('16777216');
+  // A `let`: a value. (A `const` bound to the literal would be a named literal,
+  // which #sec-static-type-of-an-expression makes the literal itself, rounded
+  // once - see named-constant-as-inlined.test.mts.)
+  expect(evaluated('let x = 16777217.0000000001; String(float32(x));')).toBe('16777216');
 });
 
 test('ordinary literals, the boundaries, and the formats around them', () => {
