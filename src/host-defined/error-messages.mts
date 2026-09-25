@@ -2,6 +2,9 @@ import { isArray, OutOfRange } from '../utils/language.mts';
 import { R } from '../abstract-ops/all.mjs';
 import { isBooleanObject } from '../intrinsics/Boolean.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
+import { isComplexObject, complexToString } from '../intrinsics/Complex.mts';
+import { isDecimalObject, DecimalToString } from '../intrinsics/Decimal.mts';
+import { isRationalObject } from '../intrinsics/Rational.mts';
 import { isNumberObject } from '../intrinsics/Number.mts';
 import { isBigIntObject } from '../intrinsics/BigInt.mts';
 import { isStringObject } from '../intrinsics/String.mts';
@@ -139,6 +142,22 @@ export function format(arg: Formattable): string {
         const P = EscapeRegExpPattern(arg.OriginalSource, arg.OriginalFlags).stringValue();
         const F = arg.OriginalFlags.stringValue();
         return `/${P}/${F}`;
+      }
+      // proposal-runtime-types: a complex, decimal or rational value is an
+      // object, so it fell to the generic branch and printed as
+      // [object Object] - `float64(c)` reported "[object Object] is not
+      // assignable to float64". Each prints as its own value, as a vector
+      // prints as its lanes. A rational is always numerator/denominator, so `5/1`
+      // cannot be read as the Number 5; a decimal's digits read like a Number, so
+      // it carries a marker, as a typed number's does.
+      if (isComplexObject(arg)) {
+        return complexToString(arg);
+      }
+      if (isRationalObject(arg)) {
+        return `${arg.RationalNumerator}/${arg.RationalDenominator}`;
+      }
+      if (isDecimalObject(arg)) {
+        return `${DecimalToString(arg)} (decimal)`;
       }
       if (isDateObject(arg)) {
         const d = new Date(arg.DateValue);

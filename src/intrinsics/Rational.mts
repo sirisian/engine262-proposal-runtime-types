@@ -1,5 +1,5 @@
 import {
-  Value, ObjectValue, NumberValue, isTypedNumber, TypedNumberValue,
+  Value, ObjectValue, NumberValue, BigIntValue, isTypedNumber, TypedNumberValue,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { Q, type ValueEvaluator, type ThrowCompletion } from '../completion.mts';
@@ -331,14 +331,25 @@ function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: Functio
   if (b === undefined) {
     return ToRational(a, realmRec);
   }
+  // A BigInt IS an integer, so "must be an integer" misstated why it is
+  // refused. It is refused because the parts are `int.<N>`, and rational.md
+  // has "a value of another integer type ... converted explicitly" - so it is
+  // named as not assignable to `int.<64>`, the wording the one-argument form
+  // uses for `rational(5n)`. A non-integral Number keeps the integer message.
   const num = integerArg(a);
   if (num === null) {
+    if (a instanceof BigIntValue) {
+      return Throw.TypeError('$1 is not assignable to $2', a, Value('int.<64>'));
+    }
     return Throw.TypeError('a rational numerator must be an integer');
   }
   let den = 1n;
   if (b !== undefined) {
     const d = integerArg(b);
     if (d === null) {
+      if (b instanceof BigIntValue) {
+        return Throw.TypeError('$1 is not assignable to $2', b, Value('int.<64>'));
+      }
       return Throw.TypeError('a rational denominator must be an integer');
     }
     den = d;

@@ -109,10 +109,18 @@ export function complexIsFinite(z: ComplexObject): boolean {
  */
 export function complexToString(z: ComplexObject): string {
   const { ComplexReal: re, ComplexImaginary: im } = z;
+  // A negative zero is written `-0`. Both branches below already treat -0 as
+  // a sign worth keeping - the shorthand is declined for a -0 real part, and a
+  // -0 imaginary part takes the negative branch, which writes no `+` and relies
+  // on the number's own text to begin with `-` - but `String(-0)` is "0", so the
+  // sign was dropped and the text malformed: `-(3 + 0i)` printed `-30i` and
+  // `complex(1, -0)` printed `10i`. This is Python's repr exactly: `(-3-0j)`,
+  // `(1-0j)`, `-0j`, `(-0+0j)`.
+  const text = (x: number) => (Object.is(x, -0) ? '-0' : `${x}`);
   if (re === 0 && !Object.is(re, -0)) {
-    return `${im}i`;
+    return `${text(im)}i`;
   }
-  return `${re}${im < 0 || Object.is(im, -0) ? '' : '+'}${im}i`;
+  return `${text(re)}${im < 0 || Object.is(im, -0) ? '' : '+'}${text(im)}i`;
 }
 
 /**
