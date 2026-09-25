@@ -952,6 +952,26 @@ const foldedDecimals = new WeakMap<object, { sig: bigint, exp: number, width: 32
  */
 const foldedRationals = new WeakMap<object, { num: bigint, den: bigint, type: TypeRecord }>();
 
+/**
+ * The operand nodes of explicit conversions - `T(x)` and `x := T`. A constant
+ * expression folded as one is converted, not declared: the explicit-conversion
+ * clause has "a literal operand, whether a numeric literal or an expression
+ * built only of literals, is converted from its exact value", after which "the
+ * conversion then wraps as it always does". A declaration of the same
+ * expression is refused when it does not fit; a conversion wraps it.
+ */
+const conversionOperands = new WeakSet<object>();
+
+/** Marks a conversion's operand, and each expression inside its parentheses,
+ * since the fold reaches the parenthesized expression, not the parentheses. */
+function markConversionOperand(node: object): void {
+  let n: { type?: string, Expression?: object } | undefined = node as { type?: string, Expression?: object };
+  while (n) {
+    conversionOperands.add(n);
+    n = n.type === 'ParenthesizedExpression' ? n.Expression as { type?: string, Expression?: object } : undefined;
+  }
+}
+
 export function FoldedRationalOf(node: object): { num: bigint, den: bigint, type: TypeRecord } | undefined {
   return foldedRationals.get(node);
 }
@@ -12637,9 +12657,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const foldedBigint = contextual !== null && bigintTarget(contextual);
     if (contextual && (isIntegerValueType(contextual as TypeRecord) || foldedBigint) && isNumericConstantExpression(node)
         && node.type !== 'NumericLiteral') {
-      const folded = foldConstant(node);
-      if (folded !== null) {
+      const foldedRaw = foldConstant(node);
+      if (foldedRaw !== null) {
+        let folded: bigint = foldedRaw;
         const prim = contextual as TypeRecord & { Kind: 'primitive', Name: string, Arguments: readonly (TypeRecord | number)[] };
+        // The operand of a conversion WRAPS where a declaration refuses: the
+        // exact value, folded once, is reduced modulo 2**N as the conversion
+        // reduces any integer. So `uint8(200 + 100)` is 44, as `uint8(300)` and
+        // `(200 + 100) := uint8` are - it was refused, while the operator wrapped.
+        if (!foldedBigint && !fitsNumericType(folded, prim.Name, prim.Arguments) && conversionOperands.has(node)) {
+          folded = BigInt(wrapToType(folded, prim));
+        }
         if (!foldedBigint && !fitsNumericType(folded, prim.Name, prim.Arguments)) {
           const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(String(folded)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
@@ -13188,10 +13216,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
         if (unary.operator && reportNumericUnion(unary.operator, operand)) return neverType;
         checkNumericOperation(unary.operator, operand);
+        // A SIGNED literal, seen through its parentheses: `-(0.5)` is `-0.5`, and
+        // parentheses change nothing about a value. Reading only the direct
+        // operand typed `-(0.5)` as a Number, so `let v: float32 = -(0.5)` was
+        // refused where `-0.5`, `(-0.5)` and `-(0.5 + 0.25)` were all accepted.
+        let signedOperand: ParseNode | undefined = inner;
+        while (signedOperand && signedOperand.type === 'ParenthesizedExpression') {
+          signedOperand = (signedOperand as unknown as { Expression?: ParseNode }).Expression;
+        }
         if ((unary.operator === '-' || unary.operator === '+')
-          && inner && (inner as { type?: string }).type === 'NumericLiteral'
-          && !(inner as { Imaginary?: boolean }).Imaginary) {
-          const magnitude = (inner as unknown as { value: number | bigint }).value;
+          && signedOperand && signedOperand.type === 'NumericLiteral'
+          && !(signedOperand as { Imaginary?: boolean }).Imaginary) {
+          const magnitude = (signedOperand as unknown as { value: number | bigint }).value;
           const signed = unary.operator === '-' ? -magnitude : magnitude;
           return typeof signed === 'bigint'
             ? { Kind: 'literal', Value: Value(signed), Base: makePrimitive('bigint') }
@@ -23196,15 +23232,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // dyadic value while `0.1 := rational` was 1/10, and made the operator
         // disagree with the call, which the specification calls "the same
         // operation".
-        //
-        // At an INTEGER target only a bare literal is offered it, as before: the
-        // integer fold refuses a constant that does not fit - the declaration's
-        // range check - where a conversion must wrap, so `(200 + 100) := uint8`
-        // would become an error instead of 44. The call form already refuses
-        // `uint8(200 + 100)` that way; that divergence is recorded, not fixed here.
+        // The operand is marked as a conversion's, so a folded integer constant
+        // that does not fit WRAPS rather than being refused, at every integer
+        // target - `(200 + 100) := uint8` is 44, and `(9007199254740992 + 1) :=
+        // uint64` is folded exactly rather than through a Number.
         const operand = tc.Expression as ParseNode;
-        if (operand.type === 'NumericLiteral'
-            || (isNumericConstantExpression(operand) && !(target && isIntegerValueType(target as TypeRecord)))) {
+        if (operand.type === 'NumericLiteral' || isNumericConstantExpression(operand)) {
+          markConversionOperand(operand);
           staticTypeIn(operand, target);
         }
         requireExplicitConversion(staticType(tc.Expression as ParseNode), target);
@@ -24142,6 +24176,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (numericLiteralArgument && rationalNumerator) {
               staticType(argNodes[0]!);
             } else {
+              markConversionOperand(argNodes[0]!);
               staticTypeIn(argNodes[0]!, conversionTarget as Known);
             }
           }
