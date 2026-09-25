@@ -19,7 +19,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { TypeNodeToTypeRecord, markValueParameterBinding } from '../type-system/runtime.mts';
 import { displayType, builtinTypeRecord, makePrimitive, type TypeRecord } from '../type-system/records.mts';
 import { IsSubtype } from '../type-system/relations.mts';
-import { SpecializationPatternsOf, type PatternSlotParameter } from '../type-system/specialization-patterns.mts';
+import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/specialization-selection.mts';
 import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
 import {
@@ -65,6 +65,125 @@ export function ValueArityAdmits(declaration: unknown, count: number | undefined
   return count >= required && (rest || count <= fixed.length);
 }
 
+/** The outcome of `SelectCase`. */
+export type CaseSelection =
+  | { readonly Kind: 'case', readonly Declaration: ParseNode, readonly Bindings: readonly { readonly Name: string, readonly Value: TypeRecord | number }[] }
+  | { readonly Kind: 'owner', readonly Declaration: ParseNode }
+  | { readonly Kind: 'error', readonly Message: string };
+
+type Ordered = { ok: true, ordered: (TypeRecord | undefined)[] } | { ok: false, unknown?: string };
+
+/**
+ * Plan section 3.8, rules 3 to 5 (step 3): the arguments in a candidate's own
+ * positions. A positional argument fills the next position; a named one the
+ * position its label names. An unlabeled position (a selector, a pattern-only
+ * case's entry) takes no name, and a capture's name is never a label.
+ */
+function OrderByLabels(labels: readonly (string | undefined)[], args: readonly TypeRecord[], names: readonly (string | undefined)[]): Ordered {
+  const ordered: (TypeRecord | undefined)[] = [];
+  let seenNamed = false;
+  for (let i = 0; i < args.length; i += 1) {
+    const label = names[i];
+    if (label === undefined) {
+      if (seenNamed || ordered.length >= labels.length) return { ok: false };
+      ordered.push(args[i]);
+      continue;
+    }
+    seenNamed = true;
+    const at = labels.indexOf(label);
+    if (at === -1) return { ok: false, unknown: label };
+    if (ordered[at] !== undefined) return { ok: false };
+    while (ordered.length <= at) ordered.push(undefined);
+    ordered[at] = args[i];
+  }
+  return { ok: true, ordered };
+}
+
+/**
+ * Plan section 3.8 and section 6.1: the choice for a direct explicit call, for
+ * the checker and the run time alike. Each candidate orders the arguments by
+ * its own labels - an attached case by its owner's, a mixed case by its
+ * binders', a pattern-only case by none - and then: the most specific attached
+ * case; otherwise a matching standalone case (rule 8); otherwise the owner's
+ * body; otherwise no viable overload. A label no candidate knows is named.
+ */
+export function SelectCase(
+  analysis: ReturnType<typeof AnalyzeCallableGroup>,
+  args: readonly TypeRecord[],
+  names: readonly (string | undefined)[],
+  valueCount: number | undefined,
+  host: ReturnType<typeof CallableGroupHostFor>,
+  resolve: (node: ParseNode) => TypeRecord | null,
+  isSubtype: (sub: TypeRecord, sup: TypeRecord) => boolean,
+  describe: (t: TypeRecord) => string,
+  name: string,
+): CaseSelection {
+  const tuple = `(${args.map((a, i) => `${names[i] !== undefined ? `${names[i]}: ` : ''}${describe(a)}`).join(', ')})`;
+  const unknown = new Set<string>();
+  // Whether some candidate took the labels: then a label is not what failed.
+  let labelsTaken = false;
+  const ownerLabels = (o: { Parameters?: readonly { Name: string }[] }) => (o.Parameters ?? []).map((p) => p.Name);
+  for (const owner of analysis.Owners) {
+    const order = OrderByLabels(ownerLabels(owner), args, names);
+    if (!order.ok) {
+      if (order.unknown) unknown.add(order.unknown);
+      continue;
+    }
+    labelsTaken = true;
+    // A hole a named call leaves takes the owner's default, as the owner's own binding would.
+    const filled: TypeRecord[] = [];
+    let complete = true;
+    order.ordered.forEach((a, q) => {
+      const binder = (owner.Parameters?.[q] as { Binder?: ParseNode.TypeParameter } | undefined)?.Binder;
+      const value = a ?? (binder?.TypeParameterDefault ? resolve(binder.TypeParameterDefault as unknown as ParseNode) : null);
+      if (value) filled.push(value); else complete = false;
+    });
+    if (!complete) continue;
+    const attached = analysis.Attached.filter((a) => a.Owner === owner && ValueArityAdmits(a.Case.Node, valueCount))
+      .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+    if (attached.length === 0) continue;
+    const result = SelectSpecialization(attached, owner.Parameters as never, filled, host as never);
+    if (result.Kind === 'selected') {
+      return { Kind: 'case', Declaration: result.Case.Declaration!, Bindings: (result.Bindings as readonly { Capture: { Name: string }, Value: TypeRecord | number }[]).map((b) => ({ Name: b.Capture.Name, Value: b.Value })) };
+    }
+    if (result.Kind === 'ambiguous') {
+      return { Kind: 'error', Message: `${result.Cases.map((c) => c.Label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other; declare a case for their intersection` };
+    }
+  }
+  const matching: { d: ParseNode, bindings: readonly { Name: string, Value: TypeRecord }[], label: string }[] = [];
+  for (const d of analysis.Standalone) {
+    if (!d.List || d.List.ListKind === 'parameters' || !ValueArityAdmits(d.Node, valueCount)) continue;
+    const kinds = (d.List as { EntryKinds?: readonly string[] }).EntryKinds ?? SpecializationPatternsOf(d.List).map(() => 'argument');
+    let binder = 0;
+    const labels = kinds.map((k) => (k === 'parameter' ? (d.List!.TypeParameterList ?? [])[binder++]?.BindingIdentifier.name : undefined));
+    const order = OrderByLabels(labels, args, names);
+    if (!order.ok) {
+      if (order.unknown) unknown.add(order.unknown);
+      continue;
+    }
+    labelsTaken = true;
+    const result = MatchStandaloneCase(d.List, order.ordered, resolve, isSubtype, describe);
+    if (result.Kind === 'bound') return { Kind: 'error', Message: `${d.Label} applies to ${tuple}, but ${result.Message}` };
+    if (result.Kind === 'match') matching.push({ d: d.Node, bindings: result.Bindings, label: d.Label });
+  }
+  if (matching.length === 1) return { Kind: 'case', Declaration: matching[0]!.d, Bindings: matching[0]!.bindings };
+  if (matching.length > 1) {
+    return { Kind: 'error', Message: `${matching.map((m) => m.label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other` };
+  }
+  const owner = analysis.Owners.find((o) => !(o.Node as { BodylessOwner?: boolean }).BodylessOwner && OrderByLabels(ownerLabels(o), args, names).ok);
+  if (owner) return { Kind: 'owner', Declaration: owner.Node };
+  if (unknown.size > 0 && !labelsTaken) {
+    const label = [...unknown][0];
+    return { Kind: 'error', Message: `\`${label}\` names no type parameter of \`${name}\` that the arguments reach; a capture's name is not a label, and a pattern-only case's positions take none` };
+  }
+  // Why the owner's body is not the fallback: there is none, it has no body,
+  // or it does not take these arguments (their count or labels).
+  const why = analysis.Owners.length === 0 ? 'it has no owner'
+    : analysis.Owners.every((o) => (o.Node as { BodylessOwner?: boolean }).BodylessOwner) ? 'its owner has no body'
+      : 'its owner does not take these arguments';
+  return { Kind: 'error', Message: `no overload of \`${name}\` applies to ${tuple}: no case matches, and ${why}` };
+}
+
 /** Functions a selection chose, whose case body may run (the step-1 guard stands down for them). */
 const selectedInvocations = new WeakSet<object>();
 export function IsSelectedInvocation(fn: unknown): boolean {
@@ -91,9 +210,11 @@ export function* SelectExplicitCase(
   name: string,
   valueArgumentCount?: number,
 ): PlainEvaluator<CaseChoice> {
-  if (typeArguments.some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined || (a as { IsSpread?: boolean }).IsSpread)) {
-    return Throw.TypeError('$1', Value(`a named or spread application of \`${name}\`, whose group has a specialized case, is not supported yet`));
+  if (typeArguments.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
+    return Throw.TypeError('$1', Value(`a spread application of \`${name}\`, whose group has a specialized case, is not supported yet`));
   }
+  // Step 3: a named argument's label, ordered per candidate by SelectCase.
+  const names = typeArguments.map((a) => (a as { ArgumentName?: string }).ArgumentName);
   // The arguments, and every written type the group's lists name, resolved now.
   const args: Argument[] = [];
   for (const node of typeArguments) {
@@ -150,45 +271,14 @@ export function* SelectExplicitCase(
     }
     return frame;
   };
-  const tuple = () => `(${args.map((a) => (typeof a === 'number' ? String(a) : displayType(a))).join(', ')})`;
-  // 1. The attached cases of the owner the arguments reach.
-  for (const owner of analysis.Owners) {
-    const attached = analysis.Attached.filter((a) => a.Owner === owner && ValueArityAdmits(a.Case.Node, valueArgumentCount))
-      .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
-    if (attached.length === 0 || args.length > (owner.Parameters?.length ?? 0)) continue;
-    const result = SelectSpecialization(attached, owner.Parameters as readonly PatternSlotParameter<Argument>[], args, host);
-    if (result.Kind === 'selected') {
-      return { fn: fnOf(result.Case.Declaration!), frame: frameOf(result.Bindings as never) };
-    }
-    if (result.Kind === 'ambiguous') {
-      return Throw.TypeError('$1', Value(`${result.Cases.map((c) => c.Label).join(' and ')} both apply to ${tuple()}, and neither is more specific than the other; declare a case for their intersection`));
-    }
+  const choice = SelectCase(analysis as never, args as TypeRecord[], names, valueArgumentCount, host, resolve, (a, b) => IsSubtype(a, b, []), displayType, name);
+  if (choice.Kind === 'error') {
+    return Throw.TypeError('$1', Value(choice.Message));
   }
-  // 2. A standalone case the arguments match, position by position.
-  const standalone = analysis.Standalone.filter((d) => d.List && d.List.ListKind !== 'parameters');
-  const matching: { fn: Value, frame: Map<string, TypeRecord>, label: string }[] = [];
-  for (const d of standalone) {
-    if (!ValueArityAdmits(d.Node, valueArgumentCount)) continue;
-    const result = MatchStandaloneCase(d.List!, args as TypeRecord[], resolve, (a, b) => IsSubtype(a, b, []), displayType);
-    if (result.Kind === 'bound') {
-      return Throw.TypeError('$1', Value(`${d.Label} applies to ${tuple()}, but ${result.Message}`));
-    }
-    if (result.Kind === 'match') {
-      matching.push({ fn: fnOf(d.Node), frame: frameOf(result.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))), label: d.Label });
-    }
+  if (choice.Kind === 'owner') {
+    return { fn: fnOf(choice.Declaration), frame: undefined };
   }
-  if (matching.length === 1) {
-    return { fn: matching[0]!.fn, frame: matching[0]!.frame };
-  }
-  if (matching.length > 1) {
-    return Throw.TypeError('$1', Value(`${matching.map((m) => m.label).join(' and ')} both apply to ${tuple()}, and neither is more specific than the other`));
-  }
-  // 3. The owner's body; 4. no viable overload.
-  const owner = analysis.Owners.find((o) => !(o.Node as Declaration).BodylessOwner && (o.Parameters?.length ?? 0) >= args.length);
-  if (owner) {
-    return { fn: fnOf(owner.Node), frame: undefined };
-  }
-  return Throw.TypeError('$1', Value(`no overload of \`${name}\` applies to ${tuple()}: no case matches, and ${analysis.Owners.length > 0 ? 'its owner has no body' : 'it has no owner'}`));
+  return { fn: fnOf(choice.Declaration), frame: frameOf(choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))) };
 }
 
 void builtinTypeRecord;

@@ -22,7 +22,8 @@ import { MetadataPortion, MetaTypeForConstraint } from '../abstract-ops/runtime-
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { Value } from '../value.mts';
 import { builtinTypeRecord, makePrimitive, type TypeRecord, type MetadataRecord } from './records.mts';
-import { SameType } from './relations.mts';
+import { SameType, IsAssignable } from './relations.mts';
+import { literalFitsNumericType } from './literal-fit.mts';
 import {
   MatchSpecializationList, MatchSpecializationPattern, PrimitiveDeclaresParameters, PrimitiveParameterKinds, PrimitiveParameterDefault,
   SpecializationPatternsOf, type PatternSlotParameter, type SpecializationMatchHost,
@@ -408,7 +409,8 @@ export type StandaloneMatch =
  */
 export function MatchStandaloneCase(
   list: ParseNode.TypeParameters,
-  args: readonly TypeRecord[],
+  // A hole is a position a named call left open (step 3).
+  args: readonly (TypeRecord | undefined)[],
   resolve: (node: ParseNode) => TypeRecord | null,
   isSubtype: (sub: TypeRecord, sup: TypeRecord) => boolean,
   describe: (t: TypeRecord) => string,
@@ -422,6 +424,7 @@ export function MatchStandaloneCase(
   }));
   if (list.ListKind === 'specialization') {
     const positions = SpecializationPatternsOf(list).map((_e, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
+    if (args.some((a) => a === undefined)) return { Kind: 'no-match' };
     const matched = MatchSpecializationList(list, positions, args as Argument[], host);
     return matched === 'no-match' ? { Kind: 'no-match' } : { Kind: 'match', Bindings: toBindings(matched as never) };
   }
@@ -432,7 +435,8 @@ export function MatchStandaloneCase(
   let binderIndex = 0;
   for (let i = 0; i < kinds.length; i += 1) {
     if (kinds[i] === 'argument') {
-      if (i >= args.length) return { Kind: 'no-match' };
+      // A selector is positional: a hole there does not match.
+      if (i >= args.length || args[i] === undefined) return { Kind: 'no-match' };
       selectorArgs.push(args[i]!);
       continue;
     }
@@ -448,13 +452,16 @@ export function MatchStandaloneCase(
       }
     }
     const written = binder.TypeParameterDefault ? resolve(binder.TypeParameterDefault as unknown as ParseNode) : null;
-    const arg = i < args.length ? args[i]! : written;
+    const arg = args[i] ?? written;
     if (!arg) return { Kind: 'no-match' };
     const name = binder.BindingIdentifier.name;
     if (binder.IsValueParameter) {
       const domainNode = binder.TypeParameterDomain ?? binder.TypeParameterConstraint;
       const domain = domainNode ? resolve(domainNode as unknown as ParseNode) : null;
-      if (domain && !isSubtype(arg, domain)) {
+      // A value binder's domain admits a literal that FITS it, as the ordinary
+      // binding of `f<N: uint32>` admits `f.<1024>` and refuses `f.<-1>`: a
+      // numeric literal is not a subtype of `uint32`.
+      if (domain && !IsAssignable(arg, domain) && !literalFitsNumericType(arg, domain)) {
         return { Kind: 'bound', Message: `${describe(arg)} is not in the domain \`${(domainNode as { sourceText?: string }).sourceText}\` of \`${name}\`` };
       }
     } else if (binder.TypeParameterDomain && binder.TypeParameterConstraint) {

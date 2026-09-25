@@ -60,9 +60,8 @@ test('B9: a standalone case the arguments match beats the owner', () => {
     function s<string>(): string { return 'standalone'; } const t: any = s; t.<string>();`)).toBe('standalone');
 });
 
-test('implicit calls and named applications still defer (steps 3 and 4)', () => {
+test('implicit calls still defer (step 4)', () => {
   expectThrown(`${P} g(3);`, 'selecting a specialized case is not supported yet');
-  expectThrown(`${P} g.<T: uint8>(3);`, 'is not supported yet');
 });
 
 // Step 2b: the checker selects too.
@@ -132,4 +131,32 @@ test('a bare family name is a bound, and only a bound', () => {
   expectThrown(`${G} g.<string>();`, 'is not assignable to "uint"');
   // Not a type elsewhere: a value of unknown width has no layout.
   expectEarlyError('let x: uint = 3;', 'StaticTypeError');
+});
+
+// Step 3: named calls (plan section 3.8, rules 3 to 5; C03).
+test('C1 and C5: an attached case borrows its owner\'s labels; named and positional select alike', () => {
+  expect(evaluated(`${F} f.<T: uint8>(3) + '|' + f.<T: uint16>(3);`)).toBe('uint8|generic');
+  expect(evaluated(`${F} const k: any = f; k.<T: uint8>(3) + '|' + k.<T: uint16>(3);`)).toBe('uint8|generic');
+});
+
+const MIXED = `function write<T: type>(v: T): string { return 'g'; }
+  function write<float32, maximum: uint32, bits: uint32 = 16>(v: float32): string {
+    return 'max=' + String(maximum) + ' bits=' + String(bits); }`;
+
+test('C2: a mixed case\'s binders take their own labels; its selectors are positional', () => {
+  expect(evaluated(`${MIXED} [write.<float32, maximum: 1024, bits: 18>(1.5), write.<float32, 1024, 18>(1.5),
+    write.<float32, bits: 18, maximum: 1024>(1.5), write.<float32, maximum: 1024>(1.5)].join('|');`))
+    .toBe('max=1024 bits=18|max=1024 bits=18|max=1024 bits=18|max=1024 bits=16');
+  expect(evaluated(`${MIXED} const k: any = write; k.<float32, maximum: 1024, bits: 18>(1.5);`)).toBe('max=1024 bits=18');
+  // A value binder admits a literal that fits its domain, and no other.
+  expectThrown(`${MIXED} write.<float32, maximum: -1>(1.5);`, '-1 is not in the domain `uint32` of `maximum`');
+  // A required binder left out: no case matches, and the owner does not take the label.
+  expectThrown(`${MIXED} write.<float32, bits: 18>(1.5);`, 'no case matches, and its owner does not take these arguments');
+});
+
+test('C3 and C4: a pattern-only case takes no labels, and a capture\'s name is not a label', () => {
+  expectThrown(`function g<uint8, string>(): string { return 'a'; } g.<A: uint8, B: string>();`,
+    '`A` names no type parameter of `g`');
+  expectThrown(`function h<uint.<const N>>(): string { return 'a'; } h.<N: 12>();`, '`N` names no type parameter of `h`');
+  expectThrown(`${F} f.<U: uint8>(3);`, '`U` names no type parameter of `f`');
 });

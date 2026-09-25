@@ -1,8 +1,8 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
-import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
-import { ValueArityAdmits } from '../abstract-ops/callable-selection.mts';
-import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
+import { AnalyzeCallableGroup } from './specialization-selection.mts';
+import { SelectCase } from '../abstract-ops/callable-selection.mts';
+import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -1723,7 +1723,7 @@ function CaseGroupMemberOf(classDeclaration: object, name: string, caseGroups: W
 function IsDirectExplicitFunctionCall(n: unknown): boolean {
   const callee = (n as { CallExpression?: { type?: string, Expression?: { type?: string }, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
   return callee?.type === 'TypeArgumentsExpression' && callee.Expression?.type === 'IdentifierReference'
-    && !(callee.TypeArguments?.TypeArgumentList ?? []).some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined || (a as { IsSpread?: boolean }).IsSpread);
+    && !(callee.TypeArguments?.TypeArgumentList ?? []).some((a) => (a as { IsSpread?: boolean }).IsSpread);
 }
 
 /**
@@ -13249,7 +13249,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (callee?.type !== 'TypeArgumentsExpression' || callee.Expression?.type !== 'IdentifierReference' || !callee.Expression.name) return undefined;
     const name = callee.Expression.name;
     const argNodes = callee.TypeArguments?.TypeArgumentList ?? [];
-    if (argNodes.some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined || (a as { IsSpread?: boolean }).IsSpread)) return undefined;
+    if (argNodes.some((a) => (a as { IsSpread?: boolean }).IsSpread)) return undefined;
     const group = FunctionCaseGroupFor(node, name);
     if (!group) return undefined;
     const args: TypeRecord[] = [];
@@ -13283,7 +13283,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       reportedSelections.add(node);
       errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
     };
-    const tuple = `(${args.map((a) => displayType(a)).join(', ')})`;
     const valueArguments = ((node as { Arguments?: readonly { type?: string }[] }).Arguments ?? []);
     const valueCount = valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement') ? undefined : valueArguments.length;
     const returnOf = (kase: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[]): Known => {
@@ -13323,36 +13322,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return returned;
     };
-    for (const owner of analysis.Owners) {
-      const attached = analysis.Attached.filter((a) => a.Owner === owner && ValueArityAdmits(a.Case.Node, valueCount))
-        .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
-      if (attached.length === 0 || args.length > (owner.Parameters?.length ?? 0)) continue;
-      const result = SelectSpecialization(attached, owner.Parameters as never, args, host as never);
-      if (result.Kind === 'selected') return { type: returnOf(result.Case.Declaration as D, result.Bindings as never) };
-      if (result.Kind === 'ambiguous') {
-        report(`${result.Cases.map((c) => c.Label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other; declare a case for their intersection`);
-        return { type: null };
-      }
-    }
-    const matching: { d: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[], label: string }[] = [];
-    for (const d of analysis.Standalone.filter((m) => m.List && m.List.ListKind !== 'parameters' && ValueArityAdmits(m.Node, valueCount))) {
-      const result = MatchStandaloneCase(d.List!, args, (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType);
-      if (result.Kind === 'bound') {
-        report(`${d.Label} applies to ${tuple}, but ${result.Message}`);
-        return { type: null };
-      }
-      if (result.Kind === 'match') {
-        matching.push({ d: d.Node as D, bindings: result.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value })), label: d.Label });
-      }
-    }
-    if (matching.length === 1) return { type: returnOf(matching[0]!.d, matching[0]!.bindings) };
-    if (matching.length > 1) {
-      report(`${matching.map((m) => m.label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other`);
+    // The shared rule (`SelectCase`), labels and all, as the run time applies it.
+    const names = argNodes.map((a) => (a as { ArgumentName?: string }).ArgumentName);
+    const choice = SelectCase(analysis, args, names, valueCount, host, (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType, name);
+    if (choice.Kind === 'owner') return undefined;
+    if (choice.Kind === 'error') {
+      report(choice.Message);
       return { type: null };
     }
-    if (analysis.Owners.some((o) => !(o.Node as D).BodylessOwner && (o.Parameters?.length ?? 0) >= args.length)) return undefined;
-    report(`no overload of \`${name}\` applies to ${tuple}: no case matches, and ${analysis.Owners.length > 0 ? 'its owner has no body' : 'it has no owner'}`);
-    return { type: null };
+    return { type: returnOf(choice.Declaration as D, choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))) };
   };
 
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
