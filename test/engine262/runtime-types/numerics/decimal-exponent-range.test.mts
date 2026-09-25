@@ -78,11 +78,22 @@ test('the exact spellings are the annotation and the cast', () => {
   expect(evaluated('let p: decimal128 = 19.99; String(p);')).toBe('19.99');
 });
 
-test('the call carries the bits, literal argument or not', () => {
-  expect(evaluated('String(decimal128(0.1));')).toBe('0.1000000000000000055511151231257827');
-  expect(evaluated('String(decimal128(19.99));')).toBe('19.98999999999999843680598132777959');
-  // Which is the assertion that says why.
-  expect(evaluated("String(decimal128(0.1) == decimal128('0.1'));")).toBe('false');
+// The call reads a LITERAL's digits and carries a VALUE's bits. The two
+// spellings of one conversion are "the same operation", and a literal's value is
+// "the mathematical value denoted by the literal ... before any rounding" -
+// #sec-literalvalueintype: `0.1` "denotes one tenth, not the Number nearest to
+// one tenth". So `decimal128(0.1)` is the decimal one tenth, as the annotation
+// and the cast above are. This asserted the bits for a literal argument too.
+//
+// The laundering concern is about a binary APPROXIMATION, and a literal was
+// never one; a float64 VALUE is, and it still carries its bits - so the
+// assertion that says why now holds a value.
+test('the call reads a literal, and carries a value', () => {
+  expect(evaluated('String(decimal128(0.1));')).toBe('0.1');
+  expect(evaluated('String(decimal128(19.99));')).toBe('19.99');
+  // Which is the assertion that says why - for the value it is about.
+  expect(evaluated("let f = 0.1; String(decimal128(f) == decimal128('0.1'));")).toBe('false');
+  expect(evaluated("let f = 19.99; String(decimal128(f));")).toBe('19.98999999999999843680598132777959');
   // A value the double holds exactly converts exactly, and arrives reduced.
   expect(evaluated('String(decimal128(0.5));')).toBe('0.5');
 });
@@ -190,9 +201,13 @@ test('one numeric argument is the conversion, exactly', () => {
   expect(evaluated('String(rational(0.25));')).toBe('1/4');
   expect(evaluated('String(rational(-0.5));')).toBe('-1/2');
   expect(evaluated('let f: float32 = 0.5; String(rational(f));')).toBe('1/2');
-  // The double 0.1 IS a dyadic rational, and this is it - not one tenth, which
-  // is the point of converting exactly rather than prettily.
-  expect(evaluated('String(rational(0.1));')).toBe('3602879701896397/36028797018963968');
+  // A literal is read for its digits: `0.1` denotes one tenth, as it does in
+  // `0.1 := rational` and `let r: rational = 0.1`.
+  expect(evaluated('String(rational(0.1));')).toBe('1/10');
+  // The DOUBLE 0.1 is a dyadic rational, and a double value converts to exactly
+  // that - not one tenth, which is the point of converting exactly rather than
+  // prettily.
+  expect(evaluated('let x = 0.1; String(rational(x));')).toBe('3602879701896397/36028797018963968');
   // A decimal converts to the power-of-ten fraction decimal.md names.
   expect(evaluated("let d = decimal64('0.1'); String(rational(d));")).toBe('1/10');
 });

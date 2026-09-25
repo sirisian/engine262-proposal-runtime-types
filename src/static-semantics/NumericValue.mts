@@ -1,6 +1,6 @@
 import { TypedNumberValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsBigIntContextLiteral, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextLiteralComponent } from '../type-system/check.mts';
+import { IsBigIntContextLiteral, FloatContextLiteralWidth, DecimalContextLiteralWidth, WideIntegerContextLiteral, RationalContextLiteralDigits, ComplexContextLiteralComponent } from '../type-system/check.mts';
 import { CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
@@ -67,5 +67,64 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
       return CreateDecimalValue(digits.significand, digits.exponent, width, surroundingAgent.currentRealmRecord);
     }
   }
+  // A literal the checker read at a `float16` or `float32` is rounded ONCE, from
+  // its source digits, to that format - #sec-literalvalueintype. The result is a
+  // value of the format, and every value of a narrower binary format is exactly a
+  // Number, so the conversion to the type that follows leaves it unchanged
+  // rather than rounding again.
+  const floatWidth = FloatContextLiteralWidth(node);
+  if (floatWidth !== undefined && typeof node.SourceText === 'string') {
+    const digits = ParseDecimalDigits(node.SourceText.replace(/_/g, ''));
+    if (digits !== undefined) {
+      return Value(RoundDecimalToBinaryFloat(digits.significand, digits.exponent, floatWidth));
+    }
+  }
   return Value(node.value);
+}
+
+/**
+ * The value of a binary float format nearest to `significand * 10**exponent`,
+ * ties to even, computed exactly - one rounding, as IEEE 754 requires of a
+ * conversion from a decimal character sequence. `float32` has a 24-bit
+ * significand and exponents -126..127, `float16` 11 bits and -14..15; values
+ * below the least normal are subnormal, and a value that rounds beyond the
+ * largest finite one is infinite.
+ */
+function RoundDecimalToBinaryFloat(significand: bigint, exponent: number, width: 16 | 32): number {
+  if (significand === 0n) {
+    return 0;
+  }
+  const [precision, emin, emax] = width === 32 ? [24, -126, 127] : [11, -14, 15];
+  let num = significand;
+  let den = 1n;
+  if (exponent >= 0) {
+    num *= 10n ** BigInt(exponent);
+  } else {
+    den = 10n ** BigInt(-exponent);
+  }
+  // `atLeast(k)` is num/den >= 2**k.
+  const atLeast = (k: number) => (k >= 0 ? num >= den << BigInt(k) : num << BigInt(-k) >= den);
+  let e = num.toString(2).length - den.toString(2).length;
+  while (!atLeast(e)) e -= 1;
+  while (atLeast(e + 1)) e += 1;
+  if (e > emax) {
+    return Infinity;
+  }
+  // The exponent of the last significand bit; below the least normal it is fixed.
+  const ulp = Math.max(e, emin) - (precision - 1);
+  let n = num;
+  let d = den;
+  if (ulp >= 0) {
+    d <<= BigInt(ulp);
+  } else {
+    n <<= BigInt(-ulp);
+  }
+  let m = n / d;
+  const twice = (n - m * d) * 2n;
+  if (twice > d || (twice === d && (m & 1n) === 1n)) {
+    m += 1n;
+  }
+  const value = Number(m) * 2 ** ulp;
+  const largest = (2 - 2 ** (1 - precision)) * 2 ** emax;
+  return value > largest ? Infinity : value;
 }

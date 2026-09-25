@@ -889,6 +889,22 @@ export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: 
 }
 
 /**
+ * Numeric literals the checker read at a binary float type narrower than a
+ * Number - `float16` or `float32` - consulted by NumericValue, as the marks above
+ * are. #sec-literalvalueintype rounds "the mathematical value denoted by the
+ * literal ... BEFORE ANY ROUNDING" to "the nearest value of _t_, with ties to
+ * even": ONE rounding. Reading the double the lexer made and converting it
+ * rounded twice, and the second rounding can land on the other neighbour -
+ * `16777217.0000000001` at a `float32` is 16777218, but its double is exactly the
+ * midpoint 16777217, which then rounds to even, 16777216.
+ */
+const floatLiterals = new WeakMap<object, 16 | 32>();
+
+export function FloatContextLiteralWidth(node: object): 16 | 32 | undefined {
+  return floatLiterals.get(node);
+}
+
+/**
  * Numeric literals the checker read at a WIDE INTEGER type, with the exact value
  * to build them from - consulted by NumericValue, exactly as the two marks above
  * are.
@@ -12533,6 +12549,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return contextual;
       }
     }
+    // At a narrow binary float the literal is marked to be rounded ONCE, from its
+    // source digits. Its type is decided exactly as before - the mark changes
+    // only the value it denotes, so nothing returns here.
+    if (node.type === 'NumericLiteral' && contextual && contextual.Kind === 'primitive'
+        && (contextual.Name === 'float16' || contextual.Name === 'float32')
+        && typeof (node as ParseNode.NumericLiteral).SourceText === 'string') {
+      floatLiterals.set(node, contextual.Name === 'float16' ? 16 : 32);
+    }
+    // A SIGNED literal is its literal with a sign applied, and rounding to
+    // nearest-even is symmetric in sign, so the literal inside is marked the same
+    // way. Without this `-16777217.0000000001` at a `float32` still rounded twice,
+    // to -16777216, while the unsigned literal gave 16777218: a sign changed the
+    // rule, in every spelling.
+    if (contextual && contextual.Kind === 'primitive'
+        && (contextual.Name === 'float16' || contextual.Name === 'float32')
+        && (node.type === 'UnaryExpression' || node.type === 'ParenthesizedExpression')) {
+      let inner: ParseNode | undefined = node;
+      while (inner && (inner.type === 'ParenthesizedExpression'
+          || (inner.type === 'UnaryExpression' && ['-', '+'].includes((inner as { operator?: string }).operator ?? '')))) {
+        inner = inner.type === 'ParenthesizedExpression'
+          ? (inner as unknown as { Expression?: ParseNode }).Expression
+          : (inner as unknown as { UnaryExpression?: ParseNode }).UnaryExpression;
+      }
+      if (inner && inner.type === 'NumericLiteral' && typeof (inner as ParseNode.NumericLiteral).SourceText === 'string') {
+        floatLiterals.set(inner, contextual.Name === 'float16' ? 16 : 32);
+      }
+    }
     // #sec-requiretype, #table-numeric-conversions: `bigint` is an ordinary
     // numeric type at a boundary, so a BigInt LITERAL is judged by its value
     // as a Number literal is: `const a: int64 = 1n` holds, `300n` into `int8`
@@ -23146,8 +23189,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // keeps the integer row's exact root, where `Math.sqrt((10 := float64))`
         // selects the float row's approximation. Reading the call through the
         // target collapsed the two.
-        if ((tc.Expression as ParseNode).type === 'NumericLiteral') {
-          staticTypeIn(tc.Expression as ParseNode, target);
+        // A CONSTANT expression is offered the target too - `-0.1`, `1 / 3`,
+        // `0.1 + 0.2` - exactly as the same expression is in a declaration of the
+        // target type. It holds no call, so the overload ranking above cannot
+        // arise. Offering it only to a bare literal made `-0.1 := rational` the
+        // dyadic value while `0.1 := rational` was 1/10, and made the operator
+        // disagree with the call, which the specification calls "the same
+        // operation".
+        //
+        // At an INTEGER target only a bare literal is offered it, as before: the
+        // integer fold refuses a constant that does not fit - the declaration's
+        // range check - where a conversion must wrap, so `(200 + 100) := uint8`
+        // would become an error instead of 44. The call form already refuses
+        // `uint8(200 + 100)` that way; that divergence is recorded, not fixed here.
+        const operand = tc.Expression as ParseNode;
+        if (operand.type === 'NumericLiteral'
+            || (isNumericConstantExpression(operand) && !(target && isIntegerValueType(target as TypeRecord)))) {
+          staticTypeIn(operand, target);
         }
         requireExplicitConversion(staticType(tc.Expression as ParseNode), target);
         walk(tc.Expression as ParseNode);
@@ -24067,10 +24125,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             //
             // `rational` keeps the bare reading, for the reason stated below it:
             // `rational(5)` wants the INTEGER 5 its constructor asks for.
+            // #sec-literalvalueintype: a literal's value is "the mathematical value
+            // denoted by the literal ... BEFORE ANY ROUNDING", so a literal operand
+            // of a conversion is read in the target's context like any other -
+            // `rational(0.1)` is 1/10 and `decimal128(0.1)` is the decimal one
+            // tenth, as `0.1 := rational` and `let r: rational = 0.1` already are.
+            // A float VALUE still converts from its bits; only a literal is read.
+            // This typed a bare literal at a rational or decimal target without
+            // its context, so `rational(0.1)` was the dyadic value while
+            // `rational(-0.1)` - a folded constant - was -1/10: a sign changed the
+            // rule. The one exception is the TWO-argument rational constructor,
+            // whose numerator is an `int.<N>`, so its literal stays an integer.
             const numericLiteralArgument = (argNodes[0] as { type?: string }).type === 'NumericLiteral';
-            const carriesTheValue = conversionTarget.Kind === 'primitive'
-              && (conversionTarget.Name === 'rational' || decimalWidthOf(conversionTarget) !== undefined);
-            if (numericLiteralArgument && carriesTheValue) {
+            const rationalNumerator = conversionTarget.Kind === 'primitive'
+              && conversionTarget.Name === 'rational' && argNodes.length >= 2;
+            if (numericLiteralArgument && rationalNumerator) {
               staticType(argNodes[0]!);
             } else {
               staticTypeIn(argNodes[0]!, conversionTarget as Known);
