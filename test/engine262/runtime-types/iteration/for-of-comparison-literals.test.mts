@@ -18,8 +18,10 @@ import { evaluated } from '../harness.mts';
  * as before.
  *
  * Only comparisons. `i * 200` changes with the type - a `uint8` wraps it to 144 - and
- * still blocks. And only an integer literal against a sized integer type; anything
- * else is not decided here and keeps blocking.
+ * still blocks. A literal counts when it is a VALUE of the type: an integer - negative
+ * included - within a sized integer's bounds, or a number exactly representable in a
+ * `float32` or `float64`. A float literal that would round does not count, since the
+ * rounding would change the comparison. Anything else is not decided here.
  */
 
 const T = "let t = '';";
@@ -56,13 +58,39 @@ test('arithmetic with a literal still blocks', () => {
     .toBe('400');
 });
 
-test('what is not decided here keeps blocking', () => {
-  // A negative literal is not a NumericLiteral node, and a float target has no integer
-  // bounds; both stay as they were.
+test('a negative literal that fits does not block', () => {
+  // `-1` is a unary minus on a literal, and a value of `int32`.
   expect(evaluated(`${T} const s = new Set.<int32>(); for (const i of 0..<3) { if (i > -1) s.add(i); `
+    + 't = String(Reflect.typeOf(i)); } t;')).toBe('int.<32>');
+});
+
+test('a negative literal that does not fit still blocks', () => {
+  // `-1` is not a `uint8`.
+  expect(evaluated(`${T} const s = new Set.<uint8>(); for (const i of 0..<3) { if (i > -1) s.add(i); `
     + 't = String(Reflect.typeOf(i)); } t;')).toBe('number');
+});
+
+test('a float literal that is exactly a value of the type does not block', () => {
   expect(evaluated(`${T} function h(): float32 { for (const i of 0..<3) { t = String(Reflect.typeOf(i)); `
-    + 'if (i > 5) return i; } return 0; } h(); t;')).toBe('number');
+    + 'if (i > 5) return i; } return 0; } h(); t;')).toBe('float32');
+  expect(evaluated(`${T} const s = new Set.<float32>(); for (const i of 0..<3) { if (i > 2.5) s.add(i); `
+    + 't = String(Reflect.typeOf(i)); } t;')).toBe('float32');
+});
+
+test('a float literal that would round still blocks', () => {
+  // THE ROUNDING GUARD. `1.9999999` is `2` as a `float32`, and `2 > 1.9999999` is
+  // true where `2 > 2` is false; inferring `float32` would silently change the
+  // comparison. Only an EXACT value of the type lets the binding narrow.
+  expect(evaluated(`${T} const s = new Set.<float32>(); for (const i of 0..<3) { if (i > 1.9999999) s.add(i); `
+    + 't = String(Reflect.typeOf(i)); } t;')).toBe('number');
+  expect(evaluated(`${T} const s = new Set.<float32>(); for (const i of 0..<3) { if (i > 0.1) s.add(i); `
+    + 't = String(Reflect.typeOf(i)); } t;')).toBe('number');
+});
+
+test('what is not decided here keeps blocking', () => {
+  // A decimal target is not decided by this check, and stays as it was.
+  expect(evaluated(`${T} const s = new Set.<decimal64>(); for (const i of 0..<3) { if (i > 5) s.add(i); `
+    + 't = String(Reflect.typeOf(i)); } t;')).toBe('number');
 });
 
 test('a comparison alone asks for no type', () => {
