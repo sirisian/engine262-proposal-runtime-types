@@ -8,7 +8,7 @@ import { Q, X, EnsureCompletion, isEvaluator, Await, type ThrowCompletion } from
 // already decline: moved there it forms a cycle through `array-view.mts` and
 // `CopyValueClassInstance` is undefined at its use. The ordering rule and the
 // module graph disagree, and the graph wins.
-import { CopyValueClassInstance } from './testing-comparison.mts';
+import { CopyValueClassInstance, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
@@ -912,6 +912,18 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // and the choice is visible; decimal to binary has one answer and rounds to
   // it, as every narrowing conversion does.
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(value)) {
+    // #sec-numeric-conversions: "decimal -> integer of width M: The source
+    // truncated toward zero, then modulo 2**M" - and, S3's row, "decimal ->
+    // `bigint`: the source truncated toward zero". The `:=` spelling refused the
+    // first, which the call spelling already ran, and crashed on the second.
+    if (t.Kind === 'primitive' && (t.Name === 'int' || t.Name === 'uint' || t.Name === 'bigint')) {
+      const e = value.DecimalExponent;
+      const truncated = e >= 0 ? value.DecimalSignificand * 10n ** BigInt(e) : value.DecimalSignificand / 10n ** BigInt(-e);
+      if (t.Name === 'bigint') {
+        return Value(truncated);
+      }
+      return Q(yield* ConvertValue(Value(truncated), t));
+    }
     if (t.Kind === 'primitive' && (t.Name === 'float64' || t.Name === 'float32' || t.Name === 'float16' || t.Name === 'number')) {
       const asNumber = Value(DoubleFromDecimal(value));
       if (t.Name === 'number') {
@@ -1194,17 +1206,30 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // A real VALUE still does not convert on its own - that is the same
     // no-implicit-widening rule that holds between any two numeric types - so
     // this reaches only where a literal is being placed.
+    // A real with no Number value - a decimal, a rational, a float128 - has no lift
+    // onto the plane: `complex(x)` refuses it ("a decimal has no Number value"),
+    // and `x := complex` is the same operation. It fell past every branch here
+    // and crashed.
+    if (t.Name === 'complex' && (isDecimalObject(value) || isRationalObject(value) || isFloat128Object(value))) {
+      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+    }
     if (t.Name === 'complex' && !isComplexObject(value)
         && (value instanceof NumberValue || isTypedNumber(value) || value instanceof BigIntValue)) {
       const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
-      const lifted = Q(yield* CheckedConvertValue(value, component));
+      const lifted = Q(yield* ConvertValue(value, component));
       const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue));
       return CreateComplexValue(liftedPart, 0, component, surroundingAgent.currentRealmRecord);
     }
+    // Each part by the EXPLICIT float conversion - "the treatment of a value
+    // outside the component type's range is [the conversion clause]'s as it is
+    // for that component", and an explicit `float64` to `float32` overflow is an
+    // infinity. This ran the boundary's CheckedConvertValue, whose RangeError is
+    // the boundary's rule, not the explicit one; the boundary refuses an
+    // overflowing part itself (BoundaryNumericConvert).
     if (t.Name === 'complex' && isComplexObject(value)) {
       const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
-      const re = Q(yield* CheckedConvertValue(Value(value.ComplexReal), component));
-      const im = Q(yield* CheckedConvertValue(Value(value.ComplexImaginary), component));
+      const re = Q(yield* ConvertValue(Value(value.ComplexReal), component));
+      const im = Q(yield* ConvertValue(Value(value.ComplexImaginary), component));
       // The converted part is a value OF the component type, so a float32
       // component comes back as a typed number rather than a plain one; both
       // read as Numbers here, which is how the pair carries its parts.
@@ -1385,14 +1410,12 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
           if (isFloatTypeName(t.Name)) {
             return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
           }
-          // Truncating toward zero, as BigInt division does and as `/` at an
-          // integer context does.
-          const truncated = rn / rd;
-          const asNumber = Number(truncated);
-          if (!Number.isFinite(asNumber) || BigInt(wrapToType(asNumber, t)) !== truncated) {
-            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
-          }
-          return new TypedNumberValue(wrapToType(asNumber, t), t);
+          // The row #sec-numeric-conversions gained (the plan "how numeric values
+          // of different types meet", S3): "the exact quotient truncated toward
+          // zero, then modulo 2**M" - the bigint row's modulo, exactly, at any
+          // width. It truncated and then REFUSED what did not fit, where every
+          // sibling row to a fixed-width integer wraps.
+          return Q(yield* ConvertValue(Value(rn / rd), t));
         }
         if (isNumericConversionSource(value)) {
           const n = Q(yield* ToNumber(value));
@@ -1667,6 +1690,51 @@ function* ConvertThroughDeclaredOperator(value: Value, t: TypeRecord): PlainEval
   return Q(yield* Call(fn, value, []));
 }
 
+const BOUNDARY_NUMERIC_TARGETS = new Set(['int', 'uint', 'bigint', 'float16', 'float32', 'float64', 'float128', 'number',
+  'decimal32', 'decimal64', 'decimal128', 'rational', 'complex']);
+const isBoundaryNumericTarget = (name: string) => BOUNDARY_NUMERIC_TARGETS.has(name);
+const isBoundaryFamilyTarget = (name: string) => name === 'decimal32' || name === 'decimal64' || name === 'decimal128' || name === 'rational' || name === 'complex';
+const isBoundaryNumericSource = (v: Value) => v instanceof NumberValue || v instanceof BigIntValue || isTypedNumber(v)
+  || isDecimalObject(v) || isRationalObject(v) || isFloat128Object(v) || isComplexObject(v);
+
+/**
+ * The numeric step of #sec-requiretype for a value at a numeric type: the explicit
+ * conversion, refused where it would wrap or truncate an integer, overflow a
+ * float to an infinity, or lose NaN or an infinity - judged on the exact values
+ * of the source and the result, the same exact values `==` compares. A real
+ * lifts into a complex and is judged as the complex it becomes; no conversion
+ * takes a complex to a real.
+ */
+function* BoundaryNumericConvert(value: Value, t: TypeRecord & { Kind: 'primitive' }): ValueEvaluator {
+  if (primitiveMembership(value, t.Name, t.Arguments)) {
+    return value;
+  }
+  if (isComplexObject(value) && t.Name !== 'complex') {
+    return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+  }
+  const converted = Q(yield* ConvertValue(value, t));
+  let source = exactNumericValue(value);
+  if (t.Name === 'complex' && source && source.kind !== 'complex') {
+    source = { kind: 'complex', re: source, im: { kind: 'finite', n: 0n, d: 1n } };
+  }
+  const result = exactNumericValue(converted);
+  if (source && result) {
+    const refuse = () => Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+    if (t.Name === 'int' || t.Name === 'uint' || t.Name === 'bigint') {
+      if (source.kind !== 'finite' || !exactNumericEquals(source, result)) {
+        return refuse();
+      }
+    } else if (source.kind === 'complex' && result.kind === 'complex') {
+      if ((source.re.kind === 'finite' && result.re.kind === 'infinity') || (source.im.kind === 'finite' && result.im.kind === 'infinity')) {
+        return refuse();
+      }
+    } else if (source.kind === 'finite' && result.kind === 'infinity') {
+      return refuse();
+    }
+  }
+  return converted;
+}
+
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // sec-user-defined-conversions form 2, tried FIRST because the paths below
   // fork by target kind: a primitive target reaches its own switch and refuses
@@ -1682,21 +1750,22 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   if (declared !== undefined) {
     return declared;
   }
-  // proposal-runtime-types #sec-literal-propagation: a numeric literal in a
-  // complex position takes the complex type, "with the literal as its real
-  // component and zero as its imaginary one". This is the ASSIGNMENT boundary,
-  // where a declaration's initializer arrives; the explicit `:=` path carries
-  // the same lift of its own.
+  // The plan "how numeric values of different types meet at run time", B1: a
+  // numeric value at a numeric type through the boundary converts by its
+  // conversion row, as #sec-requiretype specifies, refused where the conversion
+  // would wrap, truncate toward zero, round a finite value to an infinity, or lose
+  // NaN or an infinity. Routed here for the families that refused it outright or
+  // lost a value silently - a decimal, a rational or a complex on either side;
+  // the integers and floats already convert so.
   //
-  // The literal's representability is the component type's, delegated below, so
-  // a literal no `float32` holds is no `complex64` either. A real VALUE reaches
-  // an operator rather than this boundary, and is refused there.
-  if (t.Kind === 'primitive' && t.Name === 'complex' && !isComplexObject(value)
-      && (value instanceof NumberValue || isTypedNumber(value) || value instanceof BigIntValue)) {
-    const component = (t.Arguments[0] as TypeRecord | undefined) ?? builtinTypeRecord('number', []) as TypeRecord;
-    const lifted = Q(yield* CheckedConvertValue(value, component));
-    const liftedPart = isTypedNumber(lifted) ? lifted.numberValue() : Number(R(lifted as NumberValue));
-    return CreateComplexValue(liftedPart, 0, component, surroundingAgent.currentRealmRecord);
+  // A real at a complex type lifts, as `complex(x)` does: #sec-complex-numbers
+  // keeps a real VALUE from converting on its own in arithmetic, "which is the
+  // rule that holds between any two numeric types here" - and between any two
+  // numeric types the boundary converts. A complex has no conversion to a real.
+  if (surroundingAgent.feature('runtime-types') && t.Kind === 'primitive' && isBoundaryNumericTarget(t.Name)
+      && isBoundaryNumericSource(value)
+      && (isDecimalObject(value) || isRationalObject(value) || isComplexObject(value) || isBoundaryFamilyTarget(t.Name))) {
+    return Q(yield* BoundaryNumericConvert(value, t));
   }
   // proposal-runtime-types #sec-threading-shared-modifier: "The modifier is
   // therefore not observable in the value; it is observable in where the value is
@@ -2228,14 +2297,12 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
             // calls lossy and visible.
             return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
           }
-          // Truncating toward zero, as BigInt division does and as `/` at an
-          // integer context does.
-          const truncated = rn / rd;
-          const asNumber = Number(truncated);
-          if (!Number.isFinite(asNumber) || BigInt(wrapToType(asNumber, t)) !== truncated) {
-            return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
-          }
-          return new TypedNumberValue(wrapToType(asNumber, t), t);
+          // The row #sec-numeric-conversions gained (the plan "how numeric values
+          // of different types meet", S3): "the exact quotient truncated toward
+          // zero, then modulo 2**M" - the bigint row's modulo, exactly, at any
+          // width. It truncated and then REFUSED what did not fit, where every
+          // sibling row to a fixed-width integer wraps.
+          return Q(yield* ConvertValue(Value(rn / rd), t));
         }
         if (value instanceof BigIntValue && isFloatTypeName(t.Name)) {
           // The checked rule: a conversion that would round throws rather than

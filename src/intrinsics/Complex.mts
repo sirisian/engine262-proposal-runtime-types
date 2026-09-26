@@ -408,7 +408,15 @@ function* ComplexProto_toString(_args: Arguments, { thisValue }: FunctionCallCon
 }
 
 /** `complex(re, im)`, the constructor the clause writes its own example with. */
-function* ComplexConstructor([real = Value(0), imaginary = Value(0)]: Arguments): ValueEvaluator {
+function* ComplexConstructor(args: Arguments): ValueEvaluator {
+  const [real = Value(0), imaginary = Value(0)] = args;
+  // `complex(z)` of one complex is the explicit conversion to `complex`, the
+  // call spelling of `z := complex` (#sec-explicit-conversions: "The two are the
+  // same operation"). It asked the complex for a Number and refused - and so
+  // did `complex(3)`, whose literal takes the complex type in this position.
+  if (args.length === 1 && isComplexObject(real)) {
+    return CreateComplexValue(real.ComplexReal, real.ComplexImaginary, undefined, surroundingAgent.currentRealmRecord);
+  }
   // numberValue() rather than R(): R answers the MATHEMATICAL value, in which
   // negative zero does not exist - it maps -0 to 0 deliberately. A component of
   // an IEEE format has both zeroes, and SameValue reports the difference, so

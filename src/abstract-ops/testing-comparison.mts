@@ -231,7 +231,7 @@ export function SameValue(x: Value, y: Value): boolean {
   // are not ordered". Compared over the PAIR, so two complexes of equal
   // components are one value and can serve as a Map or Set key.
   if (surroundingAgent.feature('runtime-types') && (isComplexObject(x) || isComplexObject(y))) {
-    return isComplexObject(x) && isComplexObject(y) && complexSameValue(x, y);
+    return isComplexObject(x) && isComplexObject(y) && sameComplexComponent(x, y) && complexSameValue(x, y);
   }
   // proposal-runtime-types (decimal.md): a decimal's identity is its COHORT
   // MEMBER. "SameValue distinguishes cohort members, so `Object.is(1.0, 1.00)`
@@ -247,7 +247,7 @@ export function SameValue(x: Value, y: Value): boolean {
     return isFloat128Object(x) && isFloat128Object(y) && float128SameValue(x, y);
   }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
-    return isDecimalObject(x) && isDecimalObject(y) && decimalSameValue(x, y);
+    return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth && decimalSameValue(x, y);
   }
   // proposal-runtime-types R1: typed numbers have value-type identity.
   const typed = typedNumberIdentity(x, y);
@@ -515,7 +515,7 @@ export function SameValueZero(x: Value, y: Value): boolean {
   // are not ordered". Compared over the PAIR, so two complexes of equal
   // components are one value and can serve as a Map or Set key.
   if (surroundingAgent.feature('runtime-types') && (isComplexObject(x) || isComplexObject(y))) {
-    return isComplexObject(x) && isComplexObject(y) && complexSameValue(x, y);
+    return isComplexObject(x) && isComplexObject(y) && sameComplexComponent(x, y) && complexSameValue(x, y);
   }
   // proposal-runtime-types (decimal.md): SameValueZero compares a decimal's
   // NUMERICAL VALUE, so `1.0` and `1.00` are ONE Map key where `Object.is`
@@ -530,7 +530,7 @@ export function SameValueZero(x: Value, y: Value): boolean {
     return float128Compare(Float128ToBinary128(x), Float128ToBinary128(y)) === 0;
   }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
-    return isDecimalObject(x) && isDecimalObject(y) && decimalEquals(x, y);
+    return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth && decimalEquals(x, y);
   }
   // proposal-runtime-types R1: typed numbers have value-type identity, and
   // SameValueZero compares NUMERICAL VALUE within a type where SameValue
@@ -745,6 +745,82 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
  * exactly, so returning the BigInt is the whole fix for `==`, `!=`, and the
  * mixed comparisons against a plain Number or BigInt.
  */
+/** Two complex values of one component type - `complex64`, `complex128`, `complex`. */
+function sameComplexComponent(x: { ComplexComponent: unknown }, y: { ComplexComponent: unknown }): boolean {
+  const name = (c: unknown) => (c && typeof c === 'object' ? (c as { Name?: string }).Name : undefined) ?? 'number';
+  return name(x.ComplexComponent) === name(y.ComplexComponent);
+}
+
+/** A value of one of the proposal's numeric types, beside the host's Number and BigInt. */
+function isProposalNumeric(v: Value): boolean {
+  return v instanceof TypedNumberValue || isDecimalObject(v) || isRationalObject(v) || isFloat128Object(v) || isComplexObject(v);
+}
+
+/** A numeric value's exact mathematical value: a fraction, NaN, an infinity, or a complex pair of them. */
+export type ExactNumeric =
+  | { kind: 'finite', n: bigint, d: bigint }
+  | { kind: 'nan' }
+  | { kind: 'infinity', sign: 1 | -1 }
+  | { kind: 'complex', re: ExactNumeric, im: ExactNumeric };
+
+function exactOfDouble(x: number): ExactNumeric {
+  if (Number.isNaN(x)) return { kind: 'nan' };
+  if (!Number.isFinite(x)) return { kind: 'infinity', sign: x > 0 ? 1 : -1 };
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, x);
+  const bits = view.getBigUint64(0);
+  const biased = Number((bits >> 52n) & 0x7ffn);
+  const m = (biased === 0 ? 0n : 1n << 52n) | (bits & ((1n << 52n) - 1n));
+  const e = (biased === 0 ? 1 : biased) - 1075;
+  const sign = (bits >> 63n) === 1n ? -1n : 1n;
+  return e >= 0 ? { kind: 'finite', n: sign * (m << BigInt(e)), d: 1n } : { kind: 'finite', n: sign * m, d: 1n << BigInt(-e) };
+}
+
+export function exactNumericValue(v: Value): ExactNumeric | undefined {
+  if (v instanceof TypedNumberValue) {
+    return typeof (v as TypedNumberValue).value === 'bigint'
+      ? { kind: 'finite', n: (v as TypedNumberValue).bigintValue(), d: 1n } // eslint-disable-line @engine262/mathematical-value -- a typed integer's exact value
+      : exactOfDouble((v as TypedNumberValue).numberValue()); // eslint-disable-line @engine262/mathematical-value -- the exact binary value is what is compared
+  }
+  if (v instanceof BigIntValue) {
+    return { kind: 'finite', n: R(v as BigIntValue), d: 1n };
+  }
+  if (v instanceof NumberValue) {
+    return exactOfDouble(R(v));
+  }
+  if (isDecimalObject(v)) {
+    const e = v.DecimalExponent;
+    return e >= 0
+      ? { kind: 'finite', n: v.DecimalSignificand * 10n ** BigInt(e), d: 1n }
+      : { kind: 'finite', n: v.DecimalSignificand, d: 10n ** BigInt(-e) };
+  }
+  if (isRationalObject(v)) {
+    return { kind: 'finite', n: v.RationalNumerator, d: v.RationalDenominator };
+  }
+  if (isFloat128Object(v)) {
+    const b = Float128ToBinary128(v);
+    if (b.cls === 'nan') return { kind: 'nan' };
+    if (b.cls === 'infinity') return { kind: 'infinity', sign: b.sign };
+    return b.exp >= 0 ? { kind: 'finite', n: b.sig << BigInt(b.exp), d: 1n } : { kind: 'finite', n: b.sig, d: 1n << BigInt(-b.exp) };
+  }
+  if (isComplexObject(v)) {
+    return { kind: 'complex', re: exactOfDouble(v.ComplexReal), im: exactOfDouble(v.ComplexImaginary) };
+  }
+  return undefined;
+}
+
+const exactZero: ExactNumeric = { kind: 'finite', n: 0n, d: 1n };
+export function exactNumericEquals(a: ExactNumeric, b: ExactNumeric): boolean {
+  if (a.kind === 'complex' || b.kind === 'complex') {
+    const [ar, ai] = a.kind === 'complex' ? [a.re, a.im] : [a, exactZero];
+    const [br, bi] = b.kind === 'complex' ? [b.re, b.im] : [b, exactZero];
+    return exactNumericEquals(ar, br) && exactNumericEquals(ai, bi);
+  }
+  if (a.kind === 'nan' || b.kind === 'nan') return false;
+  if (a.kind === 'infinity' || b.kind === 'infinity') return a.kind === b.kind && (a as { sign: number }).sign === (b as { sign: number }).sign;
+  return a.n * b.d === b.n * a.d;
+}
+
 function mathematicalValueForLooseEquality(v: Value): number | bigint | undefined {
   if (v instanceof TypedNumberValue) {
     if (typeof (v as TypedNumberValue).value === 'bigint') {
@@ -793,24 +869,6 @@ function lessThanMathematical(a: number | bigint, b: number | bigint): boolean |
   return big < whole || (big === whole && frac > 0);
 }
 
-/** Exact mathematical comparison, including across a Number and a BigInt. */
-function sameMathematicalValue(a: number | bigint, b: number | bigint): boolean {
-  if (typeof a === 'bigint' && typeof b === 'bigint') {
-    return a === b;
-  }
-  if (typeof a === 'number' && typeof b === 'number') {
-    return a === b;
-  }
-  // One of each: a NaN or a non-integral Number equals no BigInt, and otherwise
-  // the comparison is exact once the Number is taken to a BigInt.
-  const n = typeof a === 'number' ? a : (b as number);
-  const big = typeof a === 'bigint' ? a : (b as bigint);
-  if (!Number.isFinite(n) || !Number.isInteger(n)) {
-    return false;
-  }
-  return BigInt(n) === big;
-}
-
 export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
   // proposal-runtime-types (spec, the equality operators): `==` and `!=` between
   // typed values, and between a typed value and a plain Number or BigInt, compare
@@ -826,15 +884,17 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
   // values, while `===` sees each width as its own type (#sec-rational-types).
   // Without this they reached the strict comparison below and `==` answered
   // false where `uint8(1) == uint16(1)` answers true.
-  if (surroundingAgent.feature('runtime-types') && isRationalObject(x) && isRationalObject(y)) {
-    return rationalEquals(x, y);
-  }
-  if (surroundingAgent.feature('runtime-types')
-      && (x instanceof TypedNumberValue || y instanceof TypedNumberValue)) {
-    const xm = mathematicalValueForLooseEquality(x);
-    const ym = mathematicalValueForLooseEquality(y);
+  // The same rule for EVERY numeric family (the plan "how numeric values of
+  // different types meet", EQ1): `==` compares exact mathematical values, as
+  // `1 == 1n` does, whenever either side is a value of the proposal's numeric
+  // types. It compared them only among the typed integers and floats, so a
+  // decimal or rational was not `==` to an equal integer, and against a plain
+  // Number or BigInt it reached ToPrimitive, whose refusing valueOf threw.
+  if (surroundingAgent.feature('runtime-types') && (isProposalNumeric(x) || isProposalNumeric(y))) {
+    const xm = exactNumericValue(x);
+    const ym = exactNumericValue(y);
     if (xm !== undefined && ym !== undefined) {
-      return sameMathematicalValue(xm, ym);
+      return exactNumericEquals(xm, ym);
     }
   }
   // 1. If SameType(x, y) is true, then
@@ -925,7 +985,7 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
     // `===` asks NUMERICAL equality, where the two zeroes of a component are
     // equal and a NaN component is equal to nothing - the same split every
     // other numeric type has between this and SameValue above.
-    return isComplexObject(x) && isComplexObject(y) && complexEquals(x, y);
+    return isComplexObject(x) && isComplexObject(y) && sameComplexComponent(x, y) && complexEquals(x, y);
   }
   // proposal-runtime-types (decimal.md): "`==` compares numerical value, so
   // `1.0 == 1.00` is `true`". This is the half of the split that SameValue does
@@ -936,7 +996,7 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
       && float128Compare(Float128ToBinary128(x), Float128ToBinary128(y)) === 0;
   }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
-    return isDecimalObject(x) && isDecimalObject(y) && decimalEquals(x, y);
+    return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth && decimalEquals(x, y);
   }
   // proposal-runtime-types R1: === distinguishes value types. Two typed numbers
   // are strictly equal iff same type and same payload; a typed number is never

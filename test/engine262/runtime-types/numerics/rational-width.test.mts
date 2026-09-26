@@ -114,8 +114,10 @@ test('the widths are distinct types, meeting only through a conversion', () => {
     for (const b of widths) {
       const va = `${T(a)}.parse('1/2')`;
       const vb = `${T(b)}.parse('1/2')`;
-      // through ~any~, an annotation refuses another width
-      expect(outcome(`(() => { let v: any = ${va}; let w: ${T(b)} = v; return w; })()`), `${T(a)} into ${T(b)}`).toBe(a === b ? '1/2' : 'TypeError');
+      // through ~any~, the boundary converts by the between-widths row (the plan
+      // "how numeric values of different types meet", B1) - exact here, since
+      // every width listed holds 1/2; it refused another width outright
+      expect(outcome(`(() => { let v: any = ${va}; let w: ${T(b)} = v; return w; })()`), `${T(a)} into ${T(b)}`).toBe('1/2');
       // strict equality and SameValue see the type; loose equality the value
       expect(outcome(`${va} === ${vb}`)).toBe(String(a === b));
       expect(outcome(`Object.is(${va}, ${vb})`)).toBe(String(a === b));
@@ -265,8 +267,10 @@ test('rational.<bigint>: a type of its own, with bigint parts and no layout', ()
     expect(outcome(`${B}(1, 2) === ${T(n)}.parse('1/2')`)).toBe('false');
     expect(outcome(`Object.is(${B}(1, 2), ${T(n)}.parse('1/2'))`)).toBe('false');
     expect(outcome(`${B}(1, 2) == ${T(n)}.parse('1/2')`)).toBe('true');
-    expect(outcome(`(() => { let v: any = ${B}(1, 2); let w: ${T(n)} = v; return w; })()`)).toBe('TypeError');
+    // through ~any~, the between-widths row converts (B1): exact, or a RangeError
+    expect(outcome(`(() => { let v: any = ${B}(1, 2); let w: ${T(n)} = v; return w; })()`)).toBe('1/2');
   }
+  expect(outcome(`(() => { let v: any = ${B}(2n ** 100n); let w: ${T(8)} = v; return w; })()`)).toBe('RangeError');
   expect(outcome(`${B}(1, 2) === ${B}(1, 2)`)).toBe('true');
   expectStaticTypeError(`${B}(1, 2) + rational(1, 2);`);
   expect(outcome(`Reflect.typeOf(${B}(2n ** 100n).numerator)`)).toBe('bigint');

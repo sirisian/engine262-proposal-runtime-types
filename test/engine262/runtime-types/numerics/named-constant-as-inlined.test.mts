@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
+import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
  * A use of a named numeric constant is its initializer, written at the use.
@@ -64,7 +64,10 @@ test('what the rule excludes, and what it keeps refusing', () => {
   // A `let` is a value; an annotation excludes a `const`.
   expect(evaluated('let L = 0.1; String(rational(L));')).toBe('3602879701896397/36028797018963968');
   expect(evaluated('const A2: number = 0.1; String(rational(A2));')).toBe('3602879701896397/36028797018963968');
-  expectThrownKind('let L = 0.5; rational(1, 2) == L;', 'TypeError');
+  // A `let` is not inlined, so `==` compares the double it holds (EQ1): 0.1 is
+  // not 1/10. The inlined `const` is the literal, and is.
+  expect(evaluated('let L = 0.1; String(rational(1, 10) == L);')).toBe('false');
+  expect(evaluated('const K = 0.1; String(rational(1, 10) == K);')).toBe('true');
   // Judged exactly as the written literal is.
   expectStaticTypeError('const k = 300; let a: uint8 = k;');
   expect(evaluated('const k = 3; let a: uint8 = k; String(a);')).toBe('3');

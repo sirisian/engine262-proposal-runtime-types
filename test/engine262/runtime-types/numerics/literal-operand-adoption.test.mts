@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated } from '../harness.mts';
 
 /**
  * A literal operand takes the type of the other operand.
@@ -41,7 +41,11 @@ test('a decimal or a rational adopts a literal in == and the comparisons', () =>
 
 test('what adoption must not touch', () => {
   // A Number VALUE is not a literal and does not convert on its own.
-  expectThrownKind('let n = 0.5; rational(1, 2) == n;', 'TypeError');
+  // A VALUE is not adopted: `==` compares its exact value (EQ1), so the double
+  // 0.1 is not 1/10, where the LITERAL 0.1 is adopted and is.
+  expect(v('(() => { let n = 0.1; return rational(1, 10) == n; })()')).toBe('false');
+  expect(v('rational(1, 10) == 0.1')).toBe('true');
+  expect(v('(() => { let n = 0.5; return rational(1, 2) == n; })()')).toBe('true');
   // `in` reads a literal as a key.
   expect(v('0 in [1]')).toBe('true');
   // The deferred general case: a builtin typed as an integer is left alone.
