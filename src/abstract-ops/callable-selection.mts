@@ -60,7 +60,9 @@ export function CaseGroupMembers(func: Value): readonly { fn: Value, declaration
  */
 export function ValueArityAdmits(declaration: unknown, count: number | undefined): boolean {
   if (count === undefined) return true;
-  const formals = ((declaration as { FormalParameters?: readonly { type?: string, Initializer?: unknown }[] } | null)?.FormalParameters ?? []);
+  // A function declares `FormalParameters`; a method, `UniqueFormalParameters`.
+  const declared = declaration as { FormalParameters?: readonly { type?: string, Initializer?: unknown }[], UniqueFormalParameters?: readonly { type?: string, Initializer?: unknown }[] } | null;
+  const formals = declared?.FormalParameters ?? declared?.UniqueFormalParameters ?? [];
   const rest = formals.some((p) => p.type === 'FunctionRestParameter' || p.type === 'BindingRestElement');
   const fixed = formals.filter((p) => p.type !== 'FunctionRestParameter' && p.type !== 'BindingRestElement');
   const required = fixed.filter((p) => !p.Initializer).length;

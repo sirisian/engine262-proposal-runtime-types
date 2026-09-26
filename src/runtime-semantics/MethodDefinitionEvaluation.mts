@@ -106,9 +106,15 @@ function* DefineMethodProperty(key: PropertyKeyValue | PrivateName, homeObject: 
         ? functionHasAnnotations(existing as never) || functionHasAnnotations(closure as never)
         : true;
       if (existing !== Value.undefined && existing !== closure && IsCallable(existing) && eitherAnnotated) {
+        // A third same-named method joins the set FLAT - its members and the
+        // new one - rather than nesting the set as a member, so the group is
+        // one list of declarations, as a statement list's functions are
+        // (`collectOverloadGroups`); a group holding a specialized case is
+        // analyzed from that list (phase 4, step 7).
+        const members = (existing as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
         value = Q(yield* MakeOverloadedFunction(
           key instanceof JSStringValue ? key : Value(String(key)),
-          [existing as Value, closure as Value],
+          members ? [...members, closure as Value] : [existing as Value, closure as Value],
         )) as FunctionObject;
       }
     }

@@ -293,3 +293,38 @@ test('standalone cases rank by specificity (section 6.1; rule 8)', () => {
   expect(evaluated(`${WRITE} function write<uint8>(v: uint8): string { return 'eight'; }
     write.<uint8>((3 := uint8)) + '|' + write.<uint16>((3 := uint16));`)).toBe('eight|uint 16');
 });
+
+// Step 7: methods and object literals (the rules of steps 2 to 6).
+const METHODS = `class W { write<T: type>(v: T): string { return 'g'; }
+  write<uint8>(v: uint8): 'u8' { return 'u8'; }
+  write<uint.<const N>>(v: uint.<N>): string { return 'uint ' + String(N); } }`;
+
+test('methods select as functions do: explicit, implicit, captures, statically and at run time', () => {
+  expect(evaluated(`${METHODS} const w = new W(); w.write.<uint8>((3 := uint8)) + '|' + w.write.<uint.<12>>((5 := uint.<12>))
+    + '|' + w.write.<string>('s') + '|' + w.write((3 := uint8)) + '|' + w.write('s');`)).toBe('u8|uint 12|g|u8|g');
+  expect(evaluated(`${METHODS} const w: any = new W(); w.write.<uint8>((3 := uint8)) + '|' + w.write((5 := uint.<12>));`)).toBe('u8|uint 12');
+  // The chosen declaration's type; a stored method application.
+  expect(evaluated(`${METHODS} const w = new W(); const c: 'u8' = w.write((3 := uint8)); c;`)).toBe('u8');
+  expectEarlyError(`${METHODS} const n: number = new W().write.<uint8>((3 := uint8));`, 'StaticTypeError');
+  expect(evaluated(`${METHODS} const w: any = new W(); const g = w.write.<uint8>; g.call(w, (3 := uint8));`)).toBe('u8');
+});
+
+test('a method group reaches through inheritance, this, and super', () => {
+  expect(evaluated(`${METHODS} class X extends W {} new X().write.<uint8>((3 := uint8)) + '|' + new X().write('s');`)).toBe('u8|g');
+  expect(evaluated(`${METHODS} class Y extends W { go(): string {
+    return this.write.<uint8>((3 := uint8)) + '|' + super.write.<uint.<9>>((1 := uint.<9>)); } } new Y().go();`)).toBe('u8|uint 9');
+});
+
+test('a bodyless method owner with no matching case is a static error', () => {
+  expectEarlyError(`class R { read<T: type>(): T; read<boolean>(): boolean { return true; } } new R().read.<float16>();`, 'StaticTypeError');
+});
+
+test('object-literal methods select too', () => {
+  expect(evaluated(`const o = { m<T: type>(x: T): string { return 'g'; }, m<uint8>(x: uint8): string { return 'u'; } };
+    o.m.<uint8>(3) + '|' + o.m((3 := uint8)) + '|' + o.m('s');`)).toBe('u|u|g');
+});
+
+test('three same-named methods form one group, not nested sets', () => {
+  expect(evaluated(`class V { m(a: string): string { return 's'; } m(a: number): string { return 'n'; } m(a: boolean): string { return 'b'; } }
+    const v = new V(); v.m('x') + v.m(1) + v.m(true);`)).toBe('snb');
+});

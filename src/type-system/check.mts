@@ -1727,6 +1727,49 @@ function IsDirectExplicitFunctionCall(n: unknown): boolean {
 }
 
 /**
+ * Whether _n_ is a call whose callee - `f`, `x.m`, or `super.m`, applied or not,
+ * with no spread type argument - names a group steps 2 to 7 select in.
+ */
+function IsSelectableCall(n: unknown): boolean {
+  let callee = (n as { CallExpression?: { type?: string, Expression?: unknown, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
+  if (callee?.type === 'TypeArgumentsExpression') {
+    if ((callee.TypeArguments?.TypeArgumentList ?? []).some((a) => (a as { IsSpread?: boolean }).IsSpread)) return false;
+    callee = callee.Expression as typeof callee;
+  }
+  const t = callee as { type?: string, IdentifierName?: unknown } | undefined;
+  return t?.type === 'IdentifierReference'
+    || ((t?.type === 'MemberExpression' || t?.type === 'SuperProperty') && !!t.IdentifierName);
+}
+
+/**
+ * The instance methods named _name_ declared directly in the class or object
+ * literal _container_ (nested functions and classes are not searched).
+ */
+function ClassMethodsNamed(container: unknown, name: string): ParseNode[] {
+  const found: ParseNode[] = [];
+  const seen = new Set<object>();
+  const visit = (value: unknown, depth: number): void => {
+    if (!value || typeof value !== 'object' || seen.has(value) || depth > 6) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach((v) => visit(v, depth));
+      return;
+    }
+    const n = value as { type?: string, static?: boolean, ClassElementName?: { name?: string } };
+    if ((n.type === 'MethodDefinition' || n.type === 'AbstractMethodDefinition') && !n.static && n.ClassElementName?.name === name) {
+      found.push(n as ParseNode);
+      return;
+    }
+    if (n.type === 'FunctionBody' || n.type === 'ClassExpression' || (n.type === 'ClassDeclaration' && value !== container)) return;
+    for (const [key, child] of Object.entries(n)) {
+      if (key !== 'parent' && key !== 'location') visit(child, depth + 1);
+    }
+  };
+  visit(container, 0);
+  return found;
+}
+
+/**
  * Whether _n_ calls a name directly, `f(x)` or `f.<A>(x)`: the forms steps 2 to
  * 4 select, statically and at run time. A method's call (step 7) is not one.
  */
@@ -13332,6 +13375,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * an argument not known statically (the run time selects), or the owner's
    * fallback, which the ordinary path types as any generic call.
    */
+  /**
+   * Plan section 3.8, step 7: the group a callee names - a function's, by its
+   * nearest declaring statement list; a method's, by its receiver's class (the
+   * nearest class in its chain whose body declares it) or object literal; and
+   * `super`'s, by the enclosing class's superclass - when it holds a case.
+   */
+  const caseGroupOfCallee = (call: ParseNode, target: ParseNode): { name: string, group: ParseNode[] } | undefined => {
+    const holding = (members: ParseNode[]) => members.some((m) => {
+      const k = (m as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind;
+      return k === 'specialization' || k === 'mixed';
+    });
+    const inChain = (start: ParseNode | undefined, property: string) => {
+      const visited = new Set<ParseNode>();
+      for (let cls = start; cls && !visited.has(cls); cls = heritageClassOf(cls)) {
+        visited.add(cls);
+        const members = ClassMethodsNamed(cls, property);
+        if (members.length > 0) return holding(members) ? { name: property, group: members } : undefined;
+      }
+      return undefined;
+    };
+    if (target.type === 'IdentifierReference') {
+      const name = (target as { name: string }).name;
+      const group = FunctionCaseGroupFor(call, name);
+      return group ? { name, group } : undefined;
+    }
+    const property = (target as { IdentifierName?: { name?: string } | null }).IdentifierName?.name;
+    if (!property) return undefined;
+    if (target.type === 'MemberExpression') {
+      const receiver = staticType((target as { MemberExpression: ParseNode }).MemberExpression);
+      if (receiver && receiver.Kind === 'nominal') return inChain(receiver.Declaration as ParseNode, property);
+      const literal = receiver ? objectLiteralOfType.get(receiver) : undefined;
+      if (literal) {
+        const members = ClassMethodsNamed(literal, property);
+        return members.length > 0 && holding(members) ? { name: property, group: members } : undefined;
+      }
+      return undefined;
+    }
+    if (target.type === 'SuperProperty') {
+      let cls = (target as { parent?: ParseNode }).parent;
+      while (cls && cls.type !== 'ClassDeclaration' && cls.type !== 'ClassExpression') cls = (cls as { parent?: ParseNode }).parent;
+      return cls ? inChain(heritageClassOf(cls), property) : undefined;
+    }
+    return undefined;
+  };
   const reportedSelections = new WeakSet<object>();
   /** The chosen case's own signature per call, for the callee's type (step 2b). */
   const selectedCaseSignatures = new WeakMap<object, SignatureRecord>();
@@ -13345,15 +13432,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return result;
   };
   const staticCaseSelectionUncached = (node: ParseNode): { type: Known } | undefined => {
-    const callee = (node as { CallExpression?: { type?: string, name?: string, Expression?: { type?: string, name?: string }, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression;
-    // Step 4b: an implicit call, `f(x)`, of a name selects too.
-    const implicit = callee?.type === 'IdentifierReference' && !!callee.name;
-    if (!implicit && (callee?.type !== 'TypeArgumentsExpression' || callee.Expression?.type !== 'IdentifierReference' || !callee.Expression.name)) return undefined;
-    const name = implicit ? callee!.name! : callee!.Expression!.name!;
-    const argNodes = implicit ? [] : callee!.TypeArguments?.TypeArgumentList ?? [];
-    if (argNodes.some((a) => (a as { IsSpread?: boolean }).IsSpread)) return undefined;
-    const group = FunctionCaseGroupFor(node, name);
-    if (!group) return undefined;
+    if (!IsSelectableCall(node)) return undefined;
+    const callee = (node as { CallExpression?: { type?: string, Expression?: ParseNode, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression!;
+    // Step 4b: an implicit call, `f(x)`, selects too; step 7: a method's.
+    const implicit = callee.type !== 'TypeArgumentsExpression';
+    const target = (implicit ? callee : callee.Expression) as ParseNode;
+    const argNodes = implicit ? [] : callee.TypeArguments?.TypeArgumentList ?? [];
+    const found = caseGroupOfCallee(node, target);
+    if (!found) return undefined;
+    const { name, group } = found;
     const args: TypeRecord[] = [];
     for (const a of argNodes) {
       const r = resolveType(a as ParseNode.Type);
@@ -13409,7 +13496,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // The case's own signature, instantiated: the callee's type at this call.
       const pushedForParameters = pushTypeParameterScopeOf(kase as never);
       try {
-        const formals = ((kase as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []) as readonly (ParseNode & {
+        const formals = ((kase as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (kase as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? []) as readonly (ParseNode & {
           BindingIdentifier?: { name?: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: unknown,
         })[];
         const parameters = formals.map((p) => {
@@ -13437,7 +13524,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (argTypes.some((t) => !t)) return undefined;
       // A literal argument binds its base, as the run time's inference sees it.
       const widened = argTypes.map((t) => ((t as { Kind?: string, Base?: TypeRecord }).Kind === 'literal' && (t as { Base?: TypeRecord }).Base ? (t as { Base: TypeRecord }).Base : t as TypeRecord));
-      const formalsOf = (d: D) => ((d as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []) as readonly (ParseNode & { TypeAnnotation?: ParseNode.TypeAnnotation | null })[];
+      const formalsOf = (d: D) => ((d as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (d as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? []) as readonly (ParseNode & { TypeAnnotation?: ParseNode.TypeAnnotation | null })[];
       const accepts = (d: D): boolean => {
         if (!ValueArityAdmits(d, widened.length)) return false;
         const pushed = pushTypeParameterScopeOf(d as never);
@@ -13550,7 +13637,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const pushed = pushTypeParameterScopeOf(d as never);
         try {
-          return ((d as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []).map((f) => {
+          return ((d as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? (d as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters ?? []).map((f) => {
             const annotation = (f as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
             let t: TypeRecord | null = null;
             if (annotation) {
@@ -13999,7 +14086,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // no value overloads across the group.
         {
           const call = (node as { parent?: ParseNode }).parent;
-          if (call?.type === 'CallExpression' && (call as { CallExpression?: unknown }).CallExpression === node && IsDirectExplicitFunctionCall(call)) {
+          if (call?.type === 'CallExpression' && (call as { CallExpression?: unknown }).CallExpression === node && IsSelectableCall(call)) {
             staticCaseSelection(call);
             const chosen = selectedCaseSignatures.get(call);
             if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
@@ -14011,7 +14098,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               synthetic = { type: 'CallExpression', CallExpression: node, parent: (node as { parent?: ParseNode }).parent, StoredApplication: true } as unknown as ParseNode;
               storedApplicationCalls.set(node, synthetic);
             }
-            if (IsDirectExplicitFunctionCall(synthetic)) {
+            if (IsSelectableCall(synthetic)) {
               staticCaseSelection(synthetic);
               const chosen = selectedCaseSignatures.get(synthetic);
               if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
@@ -14777,6 +14864,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'MemberExpression': {
         if (checkMemberReceiver(node)) return neverType;
+        // Step 7: a method callee whose declaration was chosen is that
+        // declaration's own signature, as a function callee's is.
+        {
+          const call = (node as { parent?: ParseNode }).parent;
+          if (call?.type === 'CallExpression' && (call as { CallExpression?: unknown }).CallExpression === node && IsSelectableCall(call)) {
+            staticCaseSelection(call);
+            const chosen = selectedCaseSignatures.get(call);
+            if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
+          }
+        }
         // A NARROWED PLACE answers before the field is read from its base. A
         // test on `b.a` records a fact keyed by the path, and this is where that
         // fact has to be consulted, since every read of `b.a` comes through
@@ -21780,7 +21877,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Plan section 3.8, phase 4 step 1: a call into a group holding a
     // specialized case - a method's as well as a function's - is refused until
     // selection is implemented, whichever signature it would reach.
-    if (!IsDirectFunctionCall(n)) {
+    if (!IsSelectableCall(n)) {
       const caseGroups = CaseGroupDeclarations(root);
       let declared = callee.Signatures.map((s2) => overloadDeclarations.get(s2)?.node).find((d) => d !== undefined && caseGroups.has(d));
       // A method call names its member on a receiver whose class declares it:
@@ -24852,7 +24949,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         recordTrialObligation(n as ParseNode.CallExpression);
         // Step 2b: select a direct explicit call's case even where its type is
         // never asked for (a call statement), so its errors are reported.
-        if (IsDirectExplicitFunctionCall(n)) staticCaseSelection(n);
+        if (IsSelectableCall(n)) staticCaseSelection(n);
         checkProxyTarget(n.CallExpression, n.Arguments ?? [], true);
         // A CALL may reassign a binding some function body assigns to, and the
         // walk cannot see into the callee, so every such name loses its

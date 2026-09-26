@@ -17,11 +17,11 @@ test('A1: an owner and its attached case are accepted as declarations', () => {
 });
 
 test('A24: a call into a group with a case is deferred, statically and at run time', () => {
-  // Direct calls select since steps 2 (explicit) and 4 (implicit); a method's
-  // call into its group stays deferred until step 7.
+  // Direct calls select since steps 2 (explicit) and 4 (implicit), and a
+  // method's since step 7; a class operator's use stays deferred.
   expect(evaluated(`${P} f((3 := uint8));`)).toBe('uint8');
-  expectEarlyError(`class W { m<T: type>(v: T): string { return 'g'; } m<boolean>(v: boolean): string { return 'b'; } }
-    new W().m(true);`, 'StaticTypeError');
+  expect(evaluated(`class W { m<T: type>(v: T): string { return 'g'; } m<boolean>(v: boolean): string { return 'b'; } }
+    new W().m(true);`)).toBe('b');
   // A call the checker cannot see is dispatched at run time (step 4): the
   // owner's inferred binding (number) matches no case, so the owner's body runs.
   expect(evaluated(`${P} const g: any = f; g(3);`)).toBe('generic');
@@ -73,11 +73,10 @@ test('an unmarked bodyless generic method in an abstract class keeps its abstrac
   expect(evaluated(`abstract class V<N: uint32> { lane<I: uint32>(): uint32 where I < N; } 'ok';`)).toBe('ok');
 });
 
-test('A24 for methods: a method call into a group with a case is deferred statically', () => {
+test('A24 for methods, lifted by step 7: a method call into a group with a case selects', () => {
   const W = `class W { write<T: type>(v: T): string { return 'g'; } write<boolean>(v: boolean): string { return 'b'; } }`;
-  expectThrown(`${W} new W().write(true);`, 'selecting a specialized case of `write` is not supported yet');
-  expectThrown(`${W} const w = new W(); w.write.<boolean>(true);`, 'selecting a specialized case of `write` is not supported yet');
-  expectEarlyError(`${W} new W().write(true);`, 'StaticTypeError');
+  expect(evaluated(`${W} new W().write(true);`)).toBe('b');
+  expect(evaluated(`${W} const w = new W(); w.write.<boolean>(true) + '|' + w.write('s');`)).toBe('b|g');
   // Value overloads and generic methods without cases are untouched.
   expect(evaluated(`class V { m(v: string): string { return 's'; } m(v: number): string { return 'n'; } }
     new V().m('a') + new V().m(1);`)).toBe('sn');
@@ -121,10 +120,10 @@ test("A7b: a primitive block's own component captures are checked against their 
     primitive vector<float32.<const D: Dim>, const N: uint32> {} 'ok';`)).toBe('ok');
 });
 
-test('A24 through inheritance: a case group declared in a base class is deferred through a subclass', () => {
+test('A24 through inheritance, lifted by step 7: a base class\'s case group selects through a subclass', () => {
   const W = `class W { write<T: type>(v: T): string { return 'g'; } write<boolean>(v: boolean): string { return 'b'; } }`;
-  expectEarlyError(`${W} class X extends W {} new X().write(true);`, 'StaticTypeError');
-  expectThrown(`${W} class X extends W {} class Y extends X {} new Y().write.<boolean>(true);`, 'selecting a specialized case of `write` is not supported yet');
+  expect(evaluated(`${W} class X extends W {} new X().write(true);`)).toBe('b');
+  expect(evaluated(`${W} class X extends W {} class Y extends X {} new Y().write.<boolean>(true);`)).toBe('b');
   expect(evaluated(`class V { m(v: string): string { return 's'; } } class U extends V {} new U().m('a');`)).toBe('s');
 });
 
@@ -139,11 +138,10 @@ test('C6, C7 and C8: nested named patterns, outer binders, and mixed lists (C03)
   expect(evaluated(`function f<T: uint8, 10>(): string { return 'a'; } 'ok';`)).toBe('ok');
 });
 
-test('object-literal methods: the group analysis, and the static deferral of their calls', () => {
+test('object-literal methods: the group analysis, and (step 7) their selection', () => {
   const O = `const o = { m<T: type>(x: T): string { return 'g'; }, m<uint8>(x: uint8): string { return 'u'; } };`;
   expect(evaluated(`${O} 'declared';`)).toBe('declared');
-  expectEarlyError(`${O} o.m.<uint8>(3);`, 'StaticTypeError');
-  expectThrown(`${O} o.m((3 := uint8));`, 'selecting a specialized case of `m` is not supported yet');
+  expect(evaluated(`${O} o.m.<uint8>(3) + '|' + o.m((3 := uint8));`)).toBe('u|u');
   // The group is analyzed as a class body's is (Q4 here).
   expectThrown(`const p = { m<T: type>(x: T): string { return 'g'; }, m<uint8>(x: uint8): number { return 1; } };`,
     'number is not a subtype of it');
