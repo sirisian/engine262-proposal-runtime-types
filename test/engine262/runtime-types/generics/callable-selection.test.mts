@@ -535,3 +535,13 @@ test('a byte view over 64-bit elements writes and reads them exactly', () => {
     String(w) + ':' + String(Reflect.typeOf(w)) + ':' + String(w << (1 := uint32));`)).toBe('9223372036854776066:uint.<64>:516');
   expect(evaluated('const a = new [1].<int64>(); a[0] = (-2 := int64); const s = Span.<uint8>(a); String(s[0]) + \',\' + String(s[7]);')).toBe('254,255');
 });
+
+// Step 9l: an explicit construction argument the checker cannot represent is open.
+test('new C.<[...Ts, T]>(...) inside C stays open; its arguments are checked per specialization', () => {
+  // The unresolvable `[...Ts, T]` dropped the application to its defaults: `[]`.
+  expect(evaluated(`class Acc<Ts: type extends [].<any> = []> { #v: Ts; constructor(v: Ts) { this.#v = v; }
+    add<T: type>(x: T): Acc.<[...Ts, T]> { return new Acc.<[...Ts, T]>([...this.#v, x]); } get(): Ts { return this.#v; } }
+    const r = new Acc.<[]>([]).add.<boolean>(true).add.<string>('z').get(); String(r.length) + ':' + String(r[0]) + r[1];`)).toBe('2:truez');
+  // Opaque is not unbounded: a bare parameter is still refused against a constraint.
+  expectEarlyError('class B<T: type extends [].<any> = []> { } function g<U: type>(): string { new B.<U>(); return \'x\'; }', 'StaticTypeError');
+});

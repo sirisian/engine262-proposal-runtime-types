@@ -13615,7 +13615,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && ['int', 'uint', 'rational', 'complex', 'vector'].includes(ref.TypeName.IdentifierReference.name)
       ? { Kind: 'primitive', Name: ref.TypeName.IdentifierReference.name, Arguments: [], Family: true } as unknown as TypeRecord
       : undefined;
-    return { Kind: 'parameter', Name: (argument as { sourceText?: string }).sourceText ?? 'open', ...(family ? { Constraint: family } : {}) } as TypeRecord;
+    // Marked OPAQUE: its structure is not represented, so a check it cannot
+    // decide statically is left to the run time (step 9l).
+    return { Kind: 'parameter', Name: (argument as { sourceText?: string }).sourceText ?? 'open', Opaque: true, ...(family ? { Constraint: family } : {}) } as TypeRecord;
   };
   const enclosingTypeParameter = (from: ParseNode, argument: ParseNode): TypeRecord | null => {
     const ref = argument as ParseNode.TypeReference;
@@ -15735,7 +15737,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                       .TypeName.IdentifierReference.name)
                       ?? lookupAlias((a as unknown as { TypeName: { IdentifierReference: { name: string } } })
                         .TypeName.IdentifierReference.name)
-                    : null))
+                    : null)
+                  // An argument no rule above resolves that names an enclosing
+                  // declaration's parameter - `[...Ts, T]` in `new Acc.<[...Ts, T]>()`
+                  // inside `Acc` - is OPEN: the application stays open, not the
+                  // defaults the dropped argument fell back to (phase 4, step 9l;
+                  // 9c fixed the value-parameter case the same way).
+                  ?? openArgument(node, a as unknown as ParseNode))
                 .filter((a): a is TypeRecord => !!a);
               if (args.length === spec.TypeArguments.TypeArgumentList.length) {
                 // The CONSTRAINTS, as the annotation path checks them.
@@ -15769,7 +15777,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     continue;
                   }
                   const argument = args[at]!;
-                  if (!q.TypeParameterConstraint || argument.Kind === 'literal') {
+                  // An OPAQUE open argument (step 9l) - one whose structure the
+                  // checker cannot represent - is checked per specialization,
+                  // when the run time applies it; a bare unbounded parameter is
+                  // not opaque, and is still refused here.
+                  if (!q.TypeParameterConstraint || argument.Kind === 'literal' || (argument as { Opaque?: boolean }).Opaque) {
                     continue;
                   }
                   const constraint = resolveType(q.TypeParameterConstraint);
