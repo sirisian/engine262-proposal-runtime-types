@@ -417,3 +417,35 @@ test('a case forwards an argument over its own capture through the owner (rule 7
     read<uint.<const N>>(): string { return 'u' + String(N); } }
     const r = new R(); r.read.<int.<12>>() + '|' + r.read.<int.<8>>();`)).toBe('i12>u12|i8>u8');
 });
+
+// Step 9b: a generic class's bare name in its own body (decision B, #sec-generics).
+test('P1, P4, P5, P7: the bare name in a type position is the class over its own parameters', () => {
+  // P1: `return this` under a bare return type, for a non-default specialization.
+  expect(evaluated(`class B<T: type = string> { v: T; constructor(v: T) { this.v = v; } self(): B { return this; } }
+    String(Reflect.typeOf(new B.<uint8>((3 := uint8)).self()));`)).toBe('B.<uint.<8>>');
+  // P4: with no defaults (an error before).
+  expect(evaluated(`class Box<T: type> { v: T; constructor(v: T) { this.v = v; } self(): Box { return this; } }
+    String(Reflect.typeOf(new Box.<uint8>((3 := uint8)).self()));`)).toBe('Box.<uint.<8>>');
+  // P5: a static member, per specialization.
+  expect(evaluated(`class S<T: type = string> { static make(): S { return new S(); } }
+    String(Reflect.typeOf(S.<uint8>.make())) + '|' + String(Reflect.typeOf(S.make()));`)).toBe('S.<uint.<8>>|S.<string>');
+  // P7: a nested function inside a member.
+  expect(evaluated(`class W<T: type = string> { v: T; constructor(v: T) { this.v = v; }
+    get(): string { const f = (): W => this; return String(Reflect.typeOf(f())); } }
+    new W.<uint8>((1 := uint8)).get();`)).toBe('W.<uint.<8>>');
+});
+
+test('P2 and P12: a same-type parameter is this specialization; outside the body, the defaults', () => {
+  expectEarlyError(`class N<T: type = string> { v: T; constructor(v: T) { this.v = v; } link(o: N): string { return 'ok'; } }
+    new N.<uint8>((1 := uint8)).link(new N.<string>('x'));`, 'StaticTypeError');
+  expect(evaluated(`class B<T: type = string> { v: T; constructor(v: T) { this.v = v; } }
+    function outside(x: B): string { return String(Reflect.typeOf(x)); } outside(new B('s'));`)).toBe('B.<string>');
+});
+
+test('an open family application forwards through the case its family proves (D8)', () => {
+  // `uint.<N>` over an enclosing case's capture is some `uint`; an owner-less
+  // group's `uint.<const N>` case admits it.
+  expect(evaluated(`class P { put<uint.<const N>>(v: uint.<N>): string { return 'u' + String(N); }
+    put<int.<const N>>(v: int.<N>): string { return 'i' + String(N) + '>' + this.put.<uint.<N>>((0 := uint.<N>)); } }
+    new P().put.<int.<12>>((1 := int.<12>));`)).toBe('i12>u12');
+});

@@ -2175,3 +2175,32 @@ export function FamilyBoundRecord(node: unknown): TypeRecord | undefined {
 export function IsFamilyRecord(t: unknown): boolean {
   return !!t && (t as { Family?: boolean }).Family === true;
 }
+
+/**
+ * #sec-generics (decided in phase 4, step 9b): within a generic class's BODY -
+ * its instance and static members, not its heritage or its own parameter list
+ * - the class's bare name in a TYPE position denotes the class over its own
+ * parameters, as C++'s injected-class-name and Swift's bare name inside a
+ * generic type do: `begin(): PacketWriter { return this; }`. Value positions
+ * keep their JavaScript meaning. A nearer declaration's type parameter of the
+ * same name shadows it. *undefined* for any other node.
+ */
+export function InjectedClassOf(node: unknown): { classNode: object, name: string, params: readonly string[] } | undefined {
+  const n = node as { type?: string, TypeArguments?: unknown, TypeName?: { MemberNames?: readonly unknown[], IdentifierReference?: { name?: string } }, parent?: object } | null;
+  if (n?.type !== 'TypeReference' || n.TypeArguments || (n.TypeName?.MemberNames?.length ?? 0) > 0) return undefined;
+  const name = n.TypeName?.IdentifierReference?.name;
+  if (!name) return undefined;
+  const visited = new Set<unknown>([node]);
+  for (let p = n.parent as { type?: string, parent?: object, TypeParameters?: { ListKind?: string, TypeParameterList?: readonly { BindingIdentifier: { name: string } }[] } | null, BindingIdentifier?: { name?: string }, ClassTail?: { ClassHeritage?: unknown, ClassBody?: unknown } } | undefined;
+    p; p = p.parent as typeof p) {
+    const own = p.TypeParameters?.TypeParameterList?.map((tp) => tp.BindingIdentifier.name) ?? [];
+    if ((p.type === 'ClassDeclaration' || p.type === 'ClassExpression') && p.BindingIdentifier?.name === name) {
+      const fromOutside = visited.has(p.TypeParameters) || visited.has(p.ClassTail?.ClassHeritage);
+      if (fromOutside || own.length === 0 || p.TypeParameters?.ListKind !== 'parameters') return undefined;
+      return { classNode: p, name, params: own };
+    }
+    if (own.includes(name)) return undefined;
+    visited.add(p);
+  }
+  return undefined;
+}

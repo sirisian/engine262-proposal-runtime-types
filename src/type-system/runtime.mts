@@ -38,7 +38,7 @@ import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
-import { FamilyBoundRecord, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
+import { FamilyBoundRecord, InjectedClassOf, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -4754,6 +4754,17 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
   const family = FamilyBoundRecord(node);
   if (family) {
     return family;
+  }
+  // A generic class's bare name in its own body is the class over its own
+  // parameters (step 9b): here, their bindings in the running frames.
+  const injected = InjectedClassOf(node);
+  if (injected) {
+    const bound = injected.params.map((name) => lookupTypeParameter(name));
+    // Built from the declaration, not the class's binding, which is still
+    // uninitialized while the class is defined (a field's `next: N`).
+    if (bound.every((b) => b !== null)) {
+      return CanonicalizeType({ Kind: 'nominal', Declaration: injected.classNode, Arguments: bound as TypeRecord[] } as unknown as TypeRecord);
+    }
   }
   switch (node.type) {
     case 'TypeReference': {

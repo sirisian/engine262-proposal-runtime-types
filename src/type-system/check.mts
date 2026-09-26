@@ -28,7 +28,7 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
-  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord, IsFamilyRecord } from './records.mts';
+  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord, IsFamilyRecord, InjectedClassOf } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
@@ -6445,6 +6445,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // run because `resolveType` closes over this run's scope.
   setStaticFieldResolver(inlineFieldsOf);
 
+  /**
+   * A class over its own parameters - `A.<T>` - the type of `this` in its body,
+   * and (step 9b) of its bare name in a type position there.
+   */
+  const injectedInProgress = new Set<object>();
+  const classOverOwnParameters = (n: ParseNode): Known => {
+    const declaredInstance = classInstanceType(n);
+    const ownParams = ((n as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null }).TypeParameters?.TypeParameterList ?? []);
+    return declaredInstance && declaredInstance.Kind === 'nominal' && ownParams.length > 0
+      ? CanonicalizeType({
+        ...(declaredInstance as TypeRecord),
+        Arguments: ownParams.map((q) => {
+          const name = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '';
+          return { Kind: 'parameter', Name: name } as unknown as TypeRecord;
+        }),
+      } as TypeRecord) as Known
+      : declaredInstance;
+  };
   const classInstanceType = (n: ParseNode): Known => {
     const acc = classMemberWalk(n, 'instance');
     classMemberFolds(acc);
@@ -8772,6 +8790,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A bare family name in a bound (`T: type extends uint`) names the family.
     const family = FamilyBoundRecord(node);
     if (family) return family;
+    // A generic class's bare name in its own body is the class over its own
+    // parameters (step 9b).
+    const injected = InjectedClassOf(node);
+    if (injected) {
+      // A self-reference met while the class's own type is being built (its
+      // members name it) is the nominal record over its own parameters; a
+      // nominal type relates by declaration and arguments alone.
+      if (injectedInProgress.has(injected.classNode)) {
+        return CanonicalizeType({
+          Kind: 'nominal', Declaration: injected.classNode,
+          Arguments: injected.params.map((name) => ({ Kind: 'parameter', Name: name })),
+        } as unknown as TypeRecord) as Known;
+      }
+      injectedInProgress.add(injected.classNode);
+      try {
+        const own = classOverOwnParameters(injected.classNode as ParseNode);
+        if (own) return own;
+      } finally {
+        injectedInProgress.delete(injected.classNode);
+      }
+    }
     const evaluated = evaluatedTypeNodes.get(node);
     if (evaluated) {
       return evaluated;
@@ -13511,7 +13550,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const [k, c] of Object.entries(v)) if (k !== 'parent' && k !== 'location') visit(c);
     };
     visit(argument);
-    return mentions ? { Kind: 'parameter', Name: (argument as { sourceText?: string }).sourceText ?? 'open' } as TypeRecord : null;
+    if (!mentions) return null;
+    // `F.<...>` over a primitive family `F` is some member of `F`: that is its
+    // bound, which D8's proof reads (`uint.<N>` is some `uint`).
+    const ref = argument as ParseNode.TypeReference;
+    const family = ref.type === 'TypeReference' && ref.TypeArguments && ref.TypeName.MemberNames.length === 0
+      && ['int', 'uint', 'rational', 'complex', 'vector'].includes(ref.TypeName.IdentifierReference.name)
+      ? { Kind: 'primitive', Name: ref.TypeName.IdentifierReference.name, Arguments: [], Family: true } as unknown as TypeRecord
+      : undefined;
+    return { Kind: 'parameter', Name: (argument as { sourceText?: string }).sourceText ?? 'open', ...(family ? { Constraint: family } : {}) } as TypeRecord;
   };
   const enclosingTypeParameter = (from: ParseNode, argument: ParseNode): TypeRecord | null => {
     const ref = argument as ParseNode.TypeReference;
@@ -26157,17 +26204,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // for a bare name in a type position: a constructor's `this.a = a` for
         // `class A<T = uint8> { a: T; constructor(a: T) }` compares a `T` with
         // a `T`, not with a `uint8`.
-        const declaredInstance = classInstanceType(n);
-        const ownParams = ((n as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null }).TypeParameters?.TypeParameterList ?? []);
-        const instanceType: Known = declaredInstance && declaredInstance.Kind === 'nominal' && ownParams.length > 0
-          ? CanonicalizeType({
-            ...(declaredInstance as TypeRecord),
-            Arguments: ownParams.map((q) => {
-              const name = (q as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? '';
-              return { Kind: 'parameter', Name: name } as unknown as TypeRecord;
-            }),
-          } as TypeRecord) as Known
-          : declaredInstance;
+        const instanceType: Known = classOverOwnParameters(n);
         if (instanceType) {
           thisTypeFrames.push(instanceType);
         }
