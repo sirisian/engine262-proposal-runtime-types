@@ -353,12 +353,19 @@ test('numeric types: the `number` target admits numeric values only', () => {
   expect(evaluated('function a() { return 5; } let x: number = a(); String(x);')).toBe('5');
   expect(evaluated('function a(): any { return (5 := uint8); } let x: number = a(); String(x);')).toBe('5');
 
-  // A CAST is not a boundary and is untouched: it is the explicit conversion a
-  // program writes when it wants ToNumber's answer, and it still wraps and
-  // truncates where the annotated binding throws.
-  expect(evaluated('String("5" := number);')).toBe('5');
-  expect(evaluated('String(("s" := number) !== ("s" := number));')).toBe('true');
-  expect(evaluated('String(true := number);')).toBe('1');
+  // A CAST refuses what the binding refuses. #sec-convertvalue has no step for a
+  // non-numeric source at a numeric target, and #sec-parsing: "A `string` is
+  // deliberately not a conversion source for a numeric type" - the Number type
+  // among them, "a value type like the rest". This asserted that a cast was
+  // untouched and gave ToNumber's answer, from before `'5' := number` was refused
+  // as `'5' := uint8` is. ToNumber's answer is `Number(x)`; a string's literal
+  // value is `number.parse`.
+  expectThrown('String("5" := number);', 'a string is not a conversion source for');
+  expectThrown('String("s" := number);', 'a string is not a conversion source for');
+  expectThrown('String(true := number);', 'has no explicit conversion to');
+  expect(evaluated('String(Number("5"));')).toBe('5');
+  expect(evaluated('String(number.parse("5"));')).toBe('5');
+  expect(evaluated('String(Number(true));')).toBe('1');
   // And every other boundary takes the same rule, since they share the
   // operation: an array element and an object member refuse what a binding
   // refuses.
@@ -763,9 +770,18 @@ test('a family base is not bound, and a program may bind the name itself', () =>
 
 test('the neighbouring forms are unchanged', () => {
   // A base WITH a constructor specializes it rather than denoting a type, which
-  // is what `new Map.<string, uint8>()` needs and what `complex` does too.
+  // is what `new Map.<string, uint8>()` needs.
   expect(evaluated('typeof Map.<string, uint8>;')).toBe('function');
-  expect(evaluated('typeof complex.<float32>;')).toBe('function');
+  // A numeric FAMILY's application is a TYPE, as `int.<8>` is, and a type in
+  // expression position is its Type Object (#sec-complex-numbers,
+  // #sec-rational-types) - callable, as every numeric type is, for its
+  // conversion. Only the default application is the bare name, the constructor.
+  // This asserted `complex.<float32>` was the constructor, from before the
+  // application stopped coming back as it, which dropped the width:
+  // `rational.<8>(128, 1)` was 128.
+  expect(evaluated('typeof complex.<float32>;')).toBe('object');
+  expect(evaluated('String(complex.<float32> === (type complex64));')).toBe('true');
+  expect(evaluated('String(complex.<number> === complex);')).toBe('true');
   expect(evaluated('String((type complex.<float32>) === (type complex64));')).toBe('true');
   // Type position is untouched, and an application composes where a type may.
   expect(evaluated('String((type int.<8>) === (type int8));')).toBe('true');

@@ -679,11 +679,11 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     // `Iterator` is a parameterized type by #sec-generator-types, and was
     // absent, which is why `Iterator.<uint8>` threw where `Iterable.<uint8>`
     // (reached as a Type Object rather than as this constructor) did not.
-    // `rational` and `complex` are the numeric families' callable forms - each
-    // is a native function, not a Type Object, so `complex.<float32>` reaches
-    // the callable test - and were absent for the same reason. `typeof
-    // complex.<float32>` is *"function"* exactly as `typeof Map.<string,
-    // uint8>` is; the TYPE is `type complex.<float32>`.
+    // `rational` and `complex` are the numeric families' constructors, and were
+    // absent for the same reason. An application of either denotes a TYPE,
+    // though, as `int.<8>` does: `complex.<float32>` in expression position is
+    // its Type Object (RuntimeTypesDeclarations, #sec-complex-numbers), and only
+    // the default application, `complex.<number>`, is the constructor itself.
     //
     // Typed as `string[]` rather than `as const`, because several of these are
     // installed as intrinsics without appearing in the `Intrinsics` interface -

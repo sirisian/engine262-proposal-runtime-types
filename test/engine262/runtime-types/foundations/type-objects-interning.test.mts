@@ -83,9 +83,14 @@ test('object types are structural', () => {
   expect(evaluated('type P = { x: number }; function f() { return { x: "s" }; } try { let p: P = f(); "no"; } catch (e) { "caught"; }')).toBe('caught');
   expect(evaluated('function s() { return "s"; } try { let x: number = s(); "no"; } catch (e) { "caught"; }')).toBe('caught');
   expect(evaluated('function s() { return ["s"]; } try { let a: [].<number> = s(); "no"; } catch (e) { "caught"; }')).toBe('caught');
-  // A CAST is not a boundary and still converts, which is the split that makes
-  // the gate safe to apply: a program that wants ToNumber's answer writes one.
-  expect(evaluated('String("5" := number);')).toBe('5');
+  // A CAST refuses a string too: #sec-parsing, "A `string` is deliberately not a
+  // conversion source for a numeric type", the Number type among them. This
+  // asserted a cast still converted, giving ToNumber's answer; a program that
+  // wants that answer writes `Number(x)`, and a string's literal value is
+  // `number.parse`. (This file's `expectThrown` asserts the throw only; the
+  // message is asserted in type-universe/extended-numeric-types.)
+  expectThrown('String("5" := number);');
+  expect(evaluated('String(Number("5"));')).toBe('5');
   expect(evaluated('type Q = { x: uint8 }; function f() { return { x: 300 }; } try { let q: Q = f(); "no"; } catch (e) { "caught"; }')).toBe('caught');
   expect(evaluated('type A = { x: number }; type B = { x: number }; A === B ? "same" : "different";')).toBe('same');
 });
