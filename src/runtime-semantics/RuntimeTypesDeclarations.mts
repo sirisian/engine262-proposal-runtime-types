@@ -2654,41 +2654,23 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     return ref;
   }
   const value = peeked.Value;
-  // proposal-runtime-types #sec-rational-types, #sec-complex-numbers: `rational.<8>`
-  // and `complex.<float32>` are TYPES - the application of a parameterized family,
-  // as `int.<8>` is - and a type in expression position is its Type Object. The
-  // names `rational` and `complex` are also bound, to their constructors, so the
-  // application reached the generic-function path below and came back as the
-  // bare constructor: `rational.<8> === rational`, and the width was dropped
-  // before anything ran - `rational.<8>(128, 1)` was 128. Only the realm's OWN
-  // constructor is read this way; a program that binds `rational` to something
-  // else keeps its meaning, as a program binding `int` does.
+  // proposal-runtime-types #sec-type-names: `rational.<8>` and `complex.<float32>`
+  // are applications of a generic family, and a type in expression position is
+  // its Type Object. The bare names are shorthands in the realm's type-name table
+  // - `rational` is `rational.<64>`, `complex` is `complex.<number>` - so where the
+  // name resolves to that table's Type Object, the application is the family's,
+  // recognized by NAME as `int.<8>` is (R3). It was recognized by the identity of
+  // the realm's constructor functions, which the bare names no longer are. A
+  // program that binds `rational` itself keeps its own meaning, scope first. The
+  // default application interns to the bare name's own Type Object, so
+  // `rational.<64> === rational` needs no case of its own.
   if (surroundingAgent.feature('runtime-types') && node.Expression.type === 'IdentifierReference'
-      && (value === surroundingAgent.currentRealmRecord.Intrinsics['%rational%']
-        || value === surroundingAgent.currentRealmRecord.Intrinsics['%complex%'])) {
+      && isFamilyShorthandTypeObject((node.Expression as unknown as { name: string }).name, value)) {
     const familyType = Q(yield* FamilyApplicationFor(node));
-    // The DEFAULT application is the bare name - "`rational` is `rational.<64>`",
-    // "`complex` is `complex.<number>`" - so it is the same value as the name:
-    // `rational.<64> === rational`. Every other application is its Type Object.
-    // Type Objects intern, so the bare name's own - its expansion, as the
-    // checker makes it - is the one this application must be to be the name.
-    if (familyType !== undefined && isTypeObject(familyType)) {
-      const name = (node.Expression as unknown as { name: string }).name;
-      const bareRecord = builtinTypeRecord(name, []);
-      if (bareRecord !== undefined && GetTypeObject(bareRecord as TypeRecord) === familyType) {
-        return value;
-      }
-    }
     if (familyType !== undefined) {
       return familyType;
     }
   }
-  // proposal-runtime-types #sec-generics: applying arguments to a GENERIC CLASS
-  // yields its specialization - "each distinct application is a distinct type
-  // with its own Type Object and its own specialized body". The class is
-  // evaluated again over the application's bindings, so its heritage clause and
-  // every body in it read the parameters as this application bound them, and
-  // two applications with the same arguments are one specialization.
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
     // Plan section 3.8, phase 4 step 5: a STORED application, `f.<A>` as a
     // value, of a group holding a specialized case selects as a direct call
@@ -2949,4 +2931,13 @@ function NumericValueOfEnumerator(v: Value): number | undefined {
     return typeof read === 'number' ? read : undefined;
   }
   return v instanceof NumberValue ? (R(v) as number) : undefined;
+}
+
+/** Whether `value` is the type-name table's Type Object for the bare shorthand `name` - `rational` or `complex`. */
+function isFamilyShorthandTypeObject(name: string, value: Value): boolean {
+  if (name !== 'rational' && name !== 'complex') {
+    return false;
+  }
+  const record = builtinTypeRecord(name, []);
+  return !!record && isTypeObject(value) && GetTypeObject(record as TypeRecord) === value;
 }

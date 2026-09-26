@@ -27,7 +27,11 @@ export function isBuiltinTypeNameString(name: unknown): boolean {
   }
   return name === 'string' || name === 'number' || name === 'boolean'
     || name === 'bigint' || name === 'symbol' || name === 'object'
-    || name === 'any' || name === 'never' || name === 'type';
+    || name === 'any' || name === 'never' || name === 'type'
+    // #sec-type-names' shorthand table: `rational` is `rational.<64>` and `complex`
+    // is `complex.<number>` - shorthands, as `uint8` is (the plan "the bare names
+    // rational and complex as Type Objects", R1).
+    || name === 'rational' || name === 'complex';
 }
 
 export abstract class IdentifierParser extends BaseParser {

@@ -48,9 +48,13 @@ test('a bare parameterized primitive is not a value, and an applied one is', () 
   // Bare `complex` is the exception among the parameterized primitives, and
   // #sec-complex-numbers is why: it has a DEFAULT argument - "the bare name
   // `complex` is `complex.<number>`" - so the bare name is already an
-  // application. The binding is the pair constructor the clause writes its own
-  // example with, `complex(0, 4)`.
-  expect(evaluated('type _ = uint8; String(typeof complex);')).toBe('function');
+  // application, and #sec-type-names' shorthand table lists it, beside
+  // `rational` for `rational.<64>`. So each is a value as `uint8` is: its Type
+  // Object, whose call still constructs from two parts, `complex(0, 4)` (the plan
+  // "the bare names rational and complex as Type Objects").
+  expect(evaluated('type _ = uint8; String(typeof complex);')).toBe('object');
+  expect(evaluated('type _ = uint8; String(typeof rational);')).toBe('object');
+  expect(evaluated('String((type rational) === (type rational.<64>));')).toBe('true');
   expect(evaluated('String((type complex) === (type complex.<number>));')).toBe('true');
 });
 
