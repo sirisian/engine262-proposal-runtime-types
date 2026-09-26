@@ -97,14 +97,16 @@ const DECIMAL = ['decimal32', 'decimal64', 'decimal128'];
 const COMPLEX = ['complex64', 'complex128'];
 
 function expectedParse(type: string, input: string): string {
-  const exact = INTEGER.includes(type) || type === 'bigint' || type === 'rational';
+  // The integers read no fraction or exponent. A rational reads every decimal
+  // literal, since each is a literal of the type: `1.5` is 3/2.
+  const exact = INTEGER.includes(type) || type === 'bigint';
   const complex = COMPLEX.includes(type);
   const value = (v: string) => (complex ? `${v}+0i` : v);
   switch (input) {
     case '5': case ' 5 ': return value('5');
     case '1_000': return type === 'int8' || type === 'uint8' ? 'RangeError' : value('1000');
     case '1e2': return exact ? 'SyntaxError' : value('100');
-    case '1.5': return exact ? 'SyntaxError' : value('1.5');
+    case '1.5': return exact ? 'SyntaxError' : value(type === 'rational' ? '3/2' : '1.5');
     case '12abc': case '': case '0x10': return 'SyntaxError';
     case '1e9999': return exact ? 'SyntaxError' : 'RangeError';
     case '-1': return UNSIGNED.has(type) ? 'RangeError' : (complex ? '-1+0i' : '-1');

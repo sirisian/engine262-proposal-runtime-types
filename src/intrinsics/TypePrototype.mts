@@ -7,7 +7,7 @@ import { IsPlainData, ReportedLayoutOf, SoAColumnsOf } from '../type-system/layo
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { CreateComplexValue } from './Complex.mts';
-import { ParseRationalLiteral, CreateRationalValue, RationalApproximateAt } from './Rational.mts';
+import { ReadRationalLiteral, RationalApproximateAt } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols, CreateBuiltinFunction, X } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue, DecimalPartsInRange } from './Decimal.mts';
@@ -180,11 +180,8 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
     if (!(S instanceof JSStringValue)) {
       return Throw.SyntaxError('$1 is not a valid literal', S);
     }
-    const parsed = ParseRationalLiteral(S.stringValue());
-    if (!parsed) {
-      return Throw.SyntaxError('$1 is not a valid literal', S);
-    }
-    return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord, t);
+    const read = ReadRationalLiteral(S.stringValue(), t);
+    return read === 'syntax' ? Throw.SyntaxError('$1 is not a valid literal', S) : read;
   }
   if (t.Kind === 'primitive' && t.Name === 'complex') {
     if (!(S instanceof JSStringValue)) {

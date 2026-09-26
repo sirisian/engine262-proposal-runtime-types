@@ -323,6 +323,52 @@ test('rational.<bigint>: approximate bounds the denominator only, found by searc
   expect(outcome(`${B}.approximate(1e30, 7)`)).toBe('1000000000000000019884624838656');
 });
 
+// parse: the literals of the type, and a zero denominator as the constructor's RangeError.
+const PARSE_TYPES = [...WIDTHS.map((n) => T(n)), B];
+const PARSED: [string, bigint, bigint][] = [
+  ['0.1', 1n, 10n], ['1.5', 3n, 2n], ['1e2', 100n, 1n], ['1.5e-3', 3n, 2000n], ['.5', 1n, 2n], ['5.', 5n, 1n],
+  ['-0.25', -1n, 4n], ['1e3', 1000n, 1n], ['0.001', 1n, 1000n], ['1.27e2', 127n, 1n], ['1.28e2', 128n, 1n],
+  ['3/4', 3n, 4n], [' 1/3 ', 1n, 3n], ['+1/3', 1n, 3n], ['1_000/3', 1000n, 3n],
+];
+const NOT_LITERALS = ['1 / 3', '1/-3', '1/3/4', '1.5/2', '0x10', 'Infinity', 'NaN', '', '1e', '1/2x'];
+
+test('parse: a zero denominator is the constructor\'s RangeError, at every width', () => {
+  for (const type of PARSE_TYPES) {
+    for (const s of ['1/0', '0/0', '-1/0', '1/00', '1/0_0']) {
+      expect(evaluated(`let m; try { ${type}.parse('${s}'); } catch (e) { m = e.constructor.name + ': ' + e.message; } m;`), `${type}.parse('${s}')`)
+        .toBe('RangeError: a rational cannot have a zero denominator');
+      expect(outcome(`${type}.tryParse('${s}')`), `${type}.tryParse('${s}')`).toBe('RangeError');
+    }
+  }
+});
+
+test('parse reads the literals of the type at every width, and refuses what is not one', () => {
+  for (const n of [1, 8, 16, 64, 128]) {
+    for (const [s, num, den] of PARSED) {
+      expect(outcome(`${T(n)}.parse('${s}')`), `${T(n)}.parse('${s}')`).toBe(expected(num, den, n));
+    }
+  }
+  for (const [s, num, den] of PARSED) {
+    expect(outcome(`${B}.parse('${s}')`), `${B}.parse('${s}')`).toBe(exact(num, den));
+  }
+  for (const type of PARSE_TYPES) {
+    for (const s of NOT_LITERALS) {
+      expect(outcome(`${type}.parse('${s}')`), `${type}.parse('${s}')`).toBe('SyntaxError');
+      expect(outcome(`${type}.tryParse('${s}')`), `${type}.tryParse('${s}')`).toBe('null');
+    }
+  }
+});
+
+test('parse: an exponent too large for a width is refused from the exponent, quickly', () => {
+  const start = Date.now();
+  expect(outcome(`${T(8)}.parse('1e1000000000')`)).toBe('RangeError');
+  expect(outcome(`${T(64)}.parse('1e-1000000000')`)).toBe('RangeError');
+  expect(outcome(`${T(128)}.parse('123e1000000')`)).toBe('RangeError');
+  expect(Date.now() - start).toBeLessThan(5000);
+  expect(outcome(`${B}.parse('1e30')`)).toBe(exact(10n ** 30n, 1n));
+  expect(outcome(`${B}.parse('2.5e-40')`)).toBe(exact(1n, 4n * 10n ** 39n));
+});
+
 test('complex.<T> is its Type Object, as rational.<N> is', () => {
   expect(outcome('complex.<number> === complex')).toBe('true');
   expect(outcome('complex.<float32> === complex')).toBe('false');

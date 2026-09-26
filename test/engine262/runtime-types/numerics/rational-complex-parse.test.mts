@@ -39,10 +39,10 @@ test('a rational round-trips its toString', () => {
 });
 
 test('what a rational refuses', () => {
-  // A denominator of zero names no value, and a SIGNED denominator names none
-  // either: the type holds a denominator greater than zero, so normalizing is
-  // the constructor's job rather than a text reader's.
-  expectThrownKind("rational.parse('1/0');", 'SyntaxError');
+  // A denominator of zero is a literal whose value no rational type can represent:
+  // the Parsing clause's RangeError, the one `rational(1, 0)` throws. A SIGNED
+  // denominator is not a literal of the type at all.
+  expectThrownKind("rational.parse('1/0');", 'RangeError');
   expectThrownKind("rational.parse('1/-2');", 'SyntaxError');
   expectThrownKind("rational.parse('zz');", 'SyntaxError');
   // "The entire string must be a literal of the type: no trailing text."

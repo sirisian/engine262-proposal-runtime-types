@@ -8,7 +8,7 @@ import { JSStringValue } from '../value.mts';
 import { type Mutable } from '../utils/language.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { isDecimalObject, exactExpansionOfDouble } from './Decimal.mts';
+import { isDecimalObject, exactExpansionOfDouble, ParseDecimalDigits } from './Decimal.mts';
 import { isFloat128Object } from './Float128.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
@@ -588,9 +588,10 @@ export function ParseRationalLiteral(source: string): { numerator: bigint, denom
     return null;
   }
   const denominator = BigInt(quotient[2]!.replace(/_/g, ''));
-  if (denominator === 0n) {
-    return null;
-  }
+  // A zero denominator is a literal of the type whose value no rational type can
+  // represent - the Parsing clause's RangeError, which ReadRationalLiteral gives -
+  // not text outside the grammar. Refusing it here made `'1/0'` a SyntaxError,
+  // where `rational(1, 0)` and every division by zero are RangeErrors.
   return { numerator: BigInt(quotient[1]!.replace(/_/g, '')), denominator };
 }
 
@@ -607,23 +608,63 @@ export function ParseRationalLiteral(source: string): { numerator: bigint, denom
  * depends on.
  */
 function* RationalParse([S = Value.undefined]: Arguments): ValueEvaluator {
-  if (!(S instanceof JSStringValue)) {
-    return Throw.SyntaxError('$1 is not a valid literal', S);
-  }
-  const parsed = ParseRationalLiteral(S.stringValue());
-  if (!parsed) {
-    return Throw.SyntaxError('$1 is not a valid literal', S);
-  }
-  return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord);
+  const read = S instanceof JSStringValue ? ReadRationalLiteral(S.stringValue(), undefined) : 'syntax';
+  return read === 'syntax' ? Throw.SyntaxError('$1 is not a valid literal', S) : read;
 }
 
-/** *null* where `parse` would fail to parse, as #sec-parsing gives it. */
+/**
+ * *null* where `parse` would fail to parse, as #sec-parsing gives it - text that
+ * is not a literal - and the RangeError of a literal the type cannot represent,
+ * as every numeric type's `tryParse` throws it.
+ */
 function* RationalTryParse([S = Value.undefined]: Arguments): ValueEvaluator {
-  if (!(S instanceof JSStringValue) || !ParseRationalLiteral(S.stringValue())) {
-    return Value.null;
+  const read = S instanceof JSStringValue ? ReadRationalLiteral(S.stringValue(), undefined) : 'syntax';
+  return read === 'syntax' ? Value.null : read;
+}
+
+/**
+ * A literal of a rational type, read at that type (#sec-parsing): the value; or
+ * 'syntax' where the text is not a literal of the type; or the RangeError of a
+ * literal whose value the type cannot represent.
+ *
+ * The literals of a rational type are the quotient of two integers the design's
+ * parse convention writes, `3/4`, and every decimal numeric literal - digits with
+ * an optional fraction and exponent - since #sec-literal-types makes `0.1` in a
+ * rational position exactly 1/10. `rational.parse('0.1')` was a SyntaxError.
+ *
+ * A zero denominator is a literal with no rational value: the constructor's
+ * RangeError, as `rational(1, 0)` gives - at every width, `rational.<bigint>` too.
+ * At a bounded width an exponent too large to fit is refused FROM THE EXPONENT,
+ * before the number is built, so `'1e1000000000'` is a quick RangeError there.
+ */
+export function ReadRationalLiteral(source: string, typeRecord: unknown): RationalObject | ThrowCompletion | 'syntax' {
+  const realmRec = surroundingAgent.currentRealmRecord;
+  const quotient = ParseRationalLiteral(source);
+  if (quotient) {
+    if (quotient.denominator === 0n) {
+      return Throw.RangeError('a rational cannot have a zero denominator');
+    }
+    return CreateRationalValue(quotient.numerator, quotient.denominator, realmRec, typeRecord);
   }
-  const parsed = ParseRationalLiteral(S.stringValue())!;
-  return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord);
+  const decimal = ParseDecimalDigits(source);
+  if (!decimal) {
+    return 'syntax';
+  }
+  const { significand, exponent } = decimal;
+  const width = rationalWidthOf(typeRecord);
+  if (Number.isFinite(width) && significand !== 0n) {
+    // int.<N>'s largest magnitude, 2**(N-1), has at most this many digits.
+    const capacity = Math.ceil((width - 1) * Math.LOG10E * Math.LN2) + 1;
+    const digits = (significand < 0n ? -significand : significand).toString().length;
+    // A numerator of digits + exponent digits; or a denominator that, reduced by
+    // the significand's factors of 2 and 5, still has more than exponent - digits.
+    if ((exponent >= 0 && digits + exponent > capacity) || (exponent < 0 && -exponent - digits > capacity)) {
+      return Throw.RangeError('$1 is not in the range of $2', Value(source.trim()), Value(rationalDisplay(typeRecord)));
+    }
+  }
+  return exponent >= 0
+    ? CreateRationalValue(significand * 10n ** BigInt(exponent), 1n, realmRec, typeRecord)
+    : CreateRationalValue(significand, 10n ** BigInt(-exponent), realmRec, typeRecord);
 }
 
 function* RationalApproximate(args: Arguments): ValueEvaluator {
