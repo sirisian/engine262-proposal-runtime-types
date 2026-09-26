@@ -369,6 +369,23 @@ test('parse: an exponent too large for a width is refused from the exponent, qui
   expect(outcome(`${B}.parse('2.5e-40')`)).toBe(exact(1n, 4n * 10n ** 39n));
 });
 
+test('a rational.<N> is laid out as a record of its two int.<N> fields', () => {
+  // rational.md: "a value type holding two `int.<N>` fields". The layout was
+  // 2N / 8 bytes - `rational.<7>` 1.75 bytes, `rational.<12>` 3 where two
+  // `int.<12>` take 4. The oracle is the engine's own record layout: a class of
+  // two `int.<N>` fields, packed by the bit where sub-byte and padded to the
+  // part's alignment where not.
+  for (const n of [1, 2, 3, 4, 5, 7, 8, 12, 16, 24, 40, 100, 128, 200, 65536]) {
+    expect(evaluated(`class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([${T(n)}.byteLength, ${T(n)}.alignment]);`), T(n))
+      .toBe(evaluated(`class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([P.byteLength, P.alignment]);`));
+  }
+  expect(outcome(`${T(7)}.byteLength`)).toBe('2');
+  expect(outcome(`${T(12)}.byteLength`)).toBe('4');
+  expect(outcome(`${T(24)}.byteLength`)).toBe('8');
+  expect(outcome(`${T(24)}.bitLength`)).toBe('48');
+  expect(outcome('Reflect.typeOf(rational(1, 2)).byteLength')).toBe('16');
+});
+
 test('complex.<T> is its Type Object, as rational.<N> is', () => {
   expect(outcome('complex.<number> === complex')).toBe('true');
   expect(outcome('complex.<float32> === complex')).toBe('false');

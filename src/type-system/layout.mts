@@ -794,12 +794,29 @@ export function LayoutOf(t: TypeRecord): Layout | null {
       if (typeof argument === 'object' && argument !== null && (argument as { Name?: string }).Name === 'bigint') {
         return null;
       }
+      // Two `int.<N>` fields, each laid out as `int.<N>` is. This computed bytes as
+      // 2N / 8, which is two `int.<N>` only where N is a multiple of 8:
+      // `rational.<7>` was 1.75 bytes, and `rational.<12>` 3 where two `int.<12>`
+      // take 4.
       const width = t.Arguments[0] as number | undefined;
-      const bits = typeof width === 'number' ? width : 64;
+      const inner = LayoutOf({ Kind: 'primitive', Name: 'int', Arguments: [typeof width === 'number' ? width : 64] } as unknown as TypeRecord);
+      if (!inner) {
+        return null;
+      }
+      // Laid out BY the record layout, as a class of two `int.<N>` fields is - one
+      // rule, so the pair can never drift from it: an `int.<24>` pair, 3 bytes
+      // aligned to 4 each, is 8 bytes, and two `int.<2>` share a byte, since the
+      // record cursor places sub-byte fields by the bit. The bit length is the
+      // value's, 2N.
+      const part = { Kind: 'primitive', Name: 'int', Arguments: [typeof width === 'number' ? width : 64] } as unknown as TypeRecord;
+      const record = ComputeClassLayout(null, [{ key: 'numerator', type: part }, { key: 'denominator', type: part }]);
+      if (!record || !('byteLength' in record)) {
+        return null;
+      }
       return {
-        bitLength: bits * 2,
-        byteLength: (bits * 2) / 8,
-        alignment: bits / 8,
+        bitLength: inner.bitLength * 2,
+        byteLength: record.byteLength,
+        alignment: record.alignment,
       };
     }
     case 'boolean': return fromBits(8);
