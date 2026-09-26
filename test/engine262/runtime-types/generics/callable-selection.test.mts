@@ -525,3 +525,13 @@ test('a type parameter converts as its Type Object does, with no this value', ()
   // An ordinary call keeps its this value.
   expect(evaluated('const o = { m() { return this === o; } }; String(o.m());')).toBe('true');
 });
+
+// Step 9j: a byte view over 64-bit elements, both directions.
+test('a byte view over 64-bit elements writes and reads them exactly', () => {
+  // SetValueInBuffer asserted a BigInt for 64-bit kinds; reads came back raw.
+  expect(evaluated(`const a = new [2].<uint64>(); a[0] = (258 := uint64); const s = Span.<uint8>(a);
+    String(s.length) + ':' + String(s[0]) + ',' + String(s[1]);`)).toBe('16:2,1');
+  expect(evaluated(`const a = new [1].<uint64>(); Span.<uint8>(a).set([2, 1, 0, 0, 0, 0, 0, 128]); const w = a[0];
+    String(w) + ':' + String(Reflect.typeOf(w)) + ':' + String(w << (1 := uint32));`)).toBe('9223372036854776066:uint.<64>:516');
+  expect(evaluated('const a = new [1].<int64>(); a[0] = (-2 := int64); const s = Span.<uint8>(a); String(s[0]) + \',\' + String(s[7]);')).toBe('254,255');
+});

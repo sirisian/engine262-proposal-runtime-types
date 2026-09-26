@@ -1,7 +1,7 @@
 import { Q, X } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import {
-  NumberValue, ObjectValue, TypedNumberValue, Value,
+  BigIntValue, NumberValue, ObjectValue, TypedNumberValue, Value,
   type PrivateName,
 } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -152,6 +152,12 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
     return Throw.TypeError('an element of this type cannot be viewed in a buffer');
   }
   const raw = GetValueFromBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, true, 'unordered');
+  // A 64-bit element kind reads back as a BigInt (ECMA-262's representation);
+  // the element's own type carries a wide value exactly, as a bigint, so it is
+  // wrapped as the typed value it was written as, not returned raw (step 9j).
+  if (raw instanceof BigIntValue) {
+    return new TypedNumberValue(R(raw) as unknown as number, backing.Element);
+  }
   return raw instanceof NumberValue ? new TypedNumberValue(R(raw) as number, backing.Element) : raw;
 }
 
@@ -194,8 +200,14 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
     return true;
   }
   const converted = Q(yield* RequireType(value, backing.Element));
-  const numeric = converted instanceof TypedNumberValue
-    ? Value(Number((converted as unknown as { value: number }).value))
+  // A 64-bit element kind is written as a BigInt, as ECMA-262's BigInt64 and
+  // BigUint64 typed arrays are (SetValueInBuffer asserts it): a `uint64` held
+  // as a typed number reached it as a Number (phase 4, step 9j; the packet
+  // writer's `Span.<uint8>` over its `uint.<64>` words).
+  const wide = type === 'BigInt64' || type === 'BigUint64';
+  const raw = converted instanceof TypedNumberValue ? (converted as unknown as { value: number | bigint }).value : undefined;
+  const numeric = raw !== undefined
+    ? (wide ? Value(typeof raw === 'bigint' ? raw : BigInt(Math.trunc(raw))) : Value(Number(raw)))
     : converted;
   Q(yield* SetValueInBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, numeric as NumberValue, true, 'unordered'));
   return true;
