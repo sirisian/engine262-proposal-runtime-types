@@ -60,12 +60,16 @@ test('#sec-type-references: a cast target is read by the rule every type follows
   // `complex` declares a component, so `complex.<T>` fills it: the cast this
   // file used to declare targeted a complex of P-typed parts and covered no
   // crossing. Only the `:=` route made it look as if it worked.
+  //
+  // Such a cast name is now refused where it is written, naming that reading
+  // (primitive-block-cast-names). This asserted the failure it caused later, at
+  // an annotation - "is not assignable to" - which named no cast.
   const old = `type P = { phase: int32 };
 meta P { default = { phase: 0 }; subtype(a: P, b: P): boolean { return true; } }
 primitive complex<_><const T: P> { operator complex.<T>() { return this; } }
 type Ph = complex.<float64>.<{ phase: 1 }>;
 `;
-  expectThrown(`${old}const c: complex128 = 1 + 2i; const p: Ph = c;`, 'is not assignable to');
+  expectThrown(`${old}const c: complex128 = 1 + 2i; const p: Ph = c;`, '`complex.<T>` names a `complex` whose parts are `T`');
 });
 
 test('a component capture: its slot\'s domain, and where it may be named', () => {

@@ -445,6 +445,7 @@ export abstract class StatementParser extends TypeParser {
     }
     this.expect(Token.RBRACE);
     node.OperatorDefinitionList = OperatorDefinitionList;
+    this.checkPrimitiveBlockCasts(node);
     return this.finishNode(node, 'PrimitiveOperatorDeclaration');
   }
 
@@ -458,6 +459,66 @@ export abstract class StatementParser extends TypeParser {
    * metadata list of captures naming their meta types; any other pattern is
    * reported as unsupported rather than accepted and ignored.
    */
+  /**
+   * A CAST'S NAME IS A TYPE, and follows the header's rule. `primitivemetadata.md`:
+   * "A cast's name is a type and follows the same rule, so `complex.<T>` would name a
+   * complex whose parts are `T`; a block that casts into the metadata of every complex
+   * captures the component and names it". The header refuses a metadata capture in a
+   * component position; a cast NAME that does the same was accepted silently, and
+   * named a type no value has - so the cast never applied, and the program failed
+   * later, at an annotation, with no mention of the cast.
+   *
+   * The first `.<...>` of a primitive that declares parameters is its component list;
+   * a chained name `complex.<E>.<T>` holds it in the innermost reference. A bare name
+   * there bound by the block's METADATA list is the mistake. A component capture there
+   * is not (`<const E>` + `complex.<E>`), and a primitive that declares no parameters
+   * has no component list (`float32.<D>` is metadata).
+   */
+  private checkPrimitiveBlockCasts(node: ParseNode.Unfinished<ParseNode.PrimitiveOperatorDeclaration>): void {
+    const name = node.TypeName?.IdentifierReference.name ?? '';
+    if (!PrimitiveDeclaresParameters(name)) {
+      return;
+    }
+    const metadataCaptures = new Map<string, string>();
+    const list = node.MetadataParameters as unknown as {
+      SpecializationEntryList?: readonly { Pattern?: { type: string, BindingIdentifier?: { name: string }, TypeParameterDomain?: { sourceText: string } } }[],
+      TypeParameterList?: readonly { BindingIdentifier?: { name: string }, TypeParameterDomain?: { sourceText: string } }[],
+    } | null | undefined;
+    for (const entry of list?.SpecializationEntryList ?? []) {
+      const pattern = entry.Pattern;
+      if (pattern?.type === 'CaptureBinding' && pattern.BindingIdentifier) {
+        metadataCaptures.set(pattern.BindingIdentifier.name, pattern.TypeParameterDomain?.sourceText ?? 'M');
+      }
+    }
+    for (const parameter of list?.TypeParameterList ?? []) {
+      if (parameter.BindingIdentifier) {
+        metadataCaptures.set(parameter.BindingIdentifier.name, parameter.TypeParameterDomain?.sourceText ?? 'M');
+      }
+    }
+    if (metadataCaptures.size === 0) {
+      return;
+    }
+    type Reference = { type: string, BaseType?: Reference, TypeArguments?: { TypeArgumentList?: readonly Reference[] }, TypeName?: { IdentifierReference: { name: string }, MemberNames: readonly unknown[] } };
+    for (const operator of node.OperatorDefinitionList ?? []) {
+      let t = operator.Type as unknown as Reference | null;
+      while (t && t.type === 'ParameterizedType') {
+        t = t.BaseType ?? null;
+      }
+      if (!t || t.type !== 'TypeReference' || t.TypeName?.IdentifierReference.name !== name) {
+        continue;
+      }
+      for (const argument of t.TypeArguments?.TypeArgumentList ?? []) {
+        const capture = argument.type === 'TypeReference' && !argument.TypeArguments
+          && argument.TypeName && argument.TypeName.MemberNames.length === 0
+          ? argument.TypeName.IdentifierReference.name
+          : undefined;
+        if (capture !== undefined && metadataCaptures.has(capture)) {
+          this.addEarlyError(Throw.SyntaxError('$1', `\`${capture}\` stands in a component of \`${name}\` in this cast's name, which is not a metadata position: a cast's name is a type, so \`${name}.<${capture}>\` names a \`${name}\` whose parts are \`${capture}\`. A cast into the metadata of every \`${name}\` captures the component and names it: \`primitive ${name}<const E><const ${capture}: ${metadataCaptures.get(capture)}> { operator ${name}.<E>.<${capture}>() }\``), argument as unknown as ParseNode);
+        }
+      }
+    }
+  }
+
   private checkPrimitiveBlockLists(
     node: ParseNode.Unfinished<ParseNode.PrimitiveOperatorDeclaration>,
     first: ParseNode.TypeParameters | null,
