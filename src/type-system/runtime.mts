@@ -23,6 +23,7 @@ import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryG
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject } from '../abstract-ops/runtime-types.mts';
+import { SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
@@ -2702,6 +2703,17 @@ function untypedSignatureOf(value: ObjectValue): TypeRecord {
 }
 
 function deriveSignatureType(value: ObjectValue): TypeRecord {
+  // Step 8 (H1, H2): a selected case's value has the case's signature with its
+  // captures bound - `(v: uint.<12>) => string`, never exposing `N`.
+  const selection = SelectionOfValue(value);
+  if (selection?.frame) {
+    pushTypeParameterFrame(selection.frame);
+    try {
+      return deriveSignatureType(selection.fn as ObjectValue);
+    } finally {
+      popTypeParameterFrame();
+    }
+  }
   const F = value as unknown as {
     Environment?: unknown,
     FormalParameters?: readonly ParseNode[],

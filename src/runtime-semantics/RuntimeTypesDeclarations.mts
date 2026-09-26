@@ -3,7 +3,7 @@ import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.mts';
-import { CaseGroupMembers, SelectExplicitCase, StoredCaseValue } from '../abstract-ops/callable-selection.mts';
+import { CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject } from '../abstract-ops/runtime-types.mts';
 import {
@@ -2677,9 +2677,12 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       const choice = Q(yield* SelectExplicitCase(caseMembers, node.TypeArguments.TypeArgumentList as unknown as ParseNode[], groupName, undefined,
         classFrameOfObject((ref as { Base?: unknown } | undefined)?.Base)));
       if (choice.frame) {
-        return StoredCaseValue(choice.fn, choice.frame, groupName);
+        return StoredCaseValue(choice.fn, choice.frame, groupName, value);
       }
-      return Q(yield* SpecializeGenericFunction(choice.fn as ObjectValue, inspected.Value, node, functionTypeParameters(choice.fn as never) ?? []));
+      const specialized = Q(yield* SpecializeGenericFunction(choice.fn as ObjectValue, inspected.Value, node, functionTypeParameters(choice.fn as never) ?? []));
+      // Step 8: the owner's fallback records its group, for reflection.
+      RecordSelection(specialized as Value, value, choice.fn, undefined);
+      return specialized;
     }
     // A GENERIC FUNCTION (a declaration or a method with its own type
     // parameters) applied in expression position is its specialization value.

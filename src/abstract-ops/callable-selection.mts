@@ -411,7 +411,19 @@ export function SelectCase(
  * (C14), while a case function of another closure's evaluation is another.
  */
 const storedCaseValues = new WeakMap<object, Map<string, Value>>();
-export function StoredCaseValue(fn: Value, frame: Map<string, TypeRecord>, name: string): Value {
+/**
+ * Step 8: what a specialization value selected - its group, the chosen
+ * declaration's function, and a case's capture frame - for its reflected type
+ * and its declaration reflection.
+ */
+const selections = new WeakMap<object, { group: Value, fn: Value, frame: Map<string, TypeRecord> | undefined }>();
+export function RecordSelection(value: Value, group: Value, fn: Value, frame: Map<string, TypeRecord> | undefined): void {
+  selections.set(value as object, { group, fn, frame });
+}
+export function SelectionOfValue(value: unknown): { group: Value, fn: Value, frame: Map<string, TypeRecord> | undefined } | undefined {
+  return value && typeof value === 'object' ? selections.get(value) : undefined;
+}
+export function StoredCaseValue(fn: Value, frame: Map<string, TypeRecord>, name: string, group?: Value): Value {
   const key = [...frame.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${k}=${displayType(v)}`).join(';');
   let byBinding = storedCaseValues.get(fn as object);
   if (!byBinding) {
@@ -435,6 +447,7 @@ export function StoredCaseValue(fn: Value, frame: Map<string, TypeRecord>, name:
   const length = ((fn as { FormalParameters?: readonly unknown[] }).FormalParameters ?? []).length;
   const stored = CreateBuiltinFunction(behaviour as never, length, Value(name), []);
   byBinding.set(key, stored);
+  if (group) RecordSelection(stored, group, fn, frame);
   return stored;
 }
 

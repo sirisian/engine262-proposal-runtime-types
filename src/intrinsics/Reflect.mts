@@ -7,6 +7,8 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
 import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
 import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
+import { CaseGroupMembers, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
+import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
 import { SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
 import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';
 import type { DeferredMetadataCheck } from '../type-system/check.mts';
@@ -1010,7 +1012,82 @@ function Reflect_getMetadata() {
   return Throw.TypeError('$1 requires a reflection context as a type argument', Value('Reflect.getMetadata'));
 }
 
+/**
+ * Plan section 3.8, step 8 (C23; decision Q3 as refined): a function value's
+ * DECLARATIONS. A group's type is its owner's contract (step 5), and a type's
+ * reflection must round-trip, so the declarations are reflected from the
+ * value: one entry per declaration with its role and its generic slots (a
+ * label - the owner's, a mixed case's binder's, or none - a kind, and the
+ * pattern's text); a specialization value names the entry it selected.
+ */
+function DeclarationReflection(value: ObjectValue, realm: Realm): ObjectValue | undefined {
+  const selection = SelectionOfValue(value);
+  const group = selection ? selection.group : value;
+  const members = CaseGroupMembers(group);
+  if (!members) return undefined;
+  const make = () => OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  const set = (o: ObjectValue, k: string, v: Value): void => {
+    X(CreateDataProperty(o, Value(k), v));
+  };
+  const owner = members.find((m) => m.declaration.TypeParameters?.ListKind === 'parameters');
+  const ownerLabels = (owner?.declaration.TypeParameters?.TypeParameterList ?? []).map((tp) => tp.BindingIdentifier.name);
+  let selected: Value = Value.undefined;
+  const entries = members.map((m) => {
+    const d = m.declaration as typeof m.declaration & { CaseRole?: string };
+    const list = d.TypeParameters;
+    const entry = make();
+    const role = !list || list.ListKind === 'parameters' ? (list ? 'owner' : 'plain') : (d.CaseRole ?? 'standalone');
+    set(entry, 'role', Value(role));
+    const slots: Value[] = [];
+    if (list?.ListKind === 'parameters') {
+      for (const tp of list.TypeParameterList ?? []) {
+        const slot = make();
+        set(slot, 'name', Value(tp.BindingIdentifier.name));
+        set(slot, 'kind', Value(tp.IsValueParameter ? 'value' : 'type'));
+        slots.push(slot);
+      }
+    } else if (list) {
+      const patterns = SpecializationPatternsOf(list);
+      const kinds = (list as { EntryKinds?: readonly string[] }).EntryKinds ?? patterns.map(() => 'argument');
+      let argument = 0;
+      let binder = 0;
+      kinds.forEach((k, i) => {
+        const slot = make();
+        if (k === 'parameter') {
+          const tp = (list.TypeParameterList ?? [])[binder]!;
+          binder += 1;
+          set(slot, 'name', Value(tp.BindingIdentifier.name));
+          set(slot, 'kind', Value(tp.IsValueParameter ? 'value' : 'type'));
+        } else {
+          const pattern = patterns[argument] as { sourceText?: string } | undefined;
+          argument += 1;
+          // An attached case borrows its owner's label; a standalone case's
+          // selector position has none (positional only). A capture's name is
+          // never a label.
+          set(slot, 'name', role === 'standalone' || ownerLabels[i] === undefined ? Value.undefined : Value(ownerLabels[i]!));
+          set(slot, 'pattern', Value(pattern?.sourceText ?? ''));
+        }
+        slots.push(slot);
+      });
+    }
+    set(entry, 'typeParameters', CreateArrayFromList(slots));
+    if (selection && selection.fn === m.fn) selected = entry;
+    return entry as Value;
+  });
+  const out = make();
+  set(out, 'kind', Value('function'));
+  set(out, 'signatures', CreateArrayFromList(entries));
+  set(out, 'selected', selected);
+  return out;
+}
+
 function Reflect_getReflection([type = Value.undefined]: Arguments) {
+  // A function value holding specialized declarations, or a specialization of
+  // one, reflects its declarations (step 8); a type reflects its structure.
+  if (!isTypeObject(type) && type instanceof ObjectValue && IsCallable(type)) {
+    const declarations = DeclarationReflection(type, surroundingAgent.currentRealmRecord);
+    if (declarations) return declarations;
+  }
   // proposal-runtime-types #sec-reflect-getreflection (the Reflect.Type context).
   //
   // A class DENOTES its type through its constructor - the design's "a class's

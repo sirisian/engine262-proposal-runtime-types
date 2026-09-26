@@ -378,3 +378,32 @@ test('F5: an owner override forwards through super, checked against the owner', 
     class A extends R { read<T: type>(): T { return super.read.<T>(); } }
     const a = new A(); String(a.read.<boolean>()) + '|' + String(a.read.<uint8>());`)).toBe('true|7');
 });
+
+// Step 8: reflection (C23; decision Q3, refined: declarations reflect from the value).
+const RF = `function f<T: type>(x: T): string { return 'generic'; } function f<uint8>(x: uint8): string { return 'uint8'; }
+  function f<uint.<const N>>(x: uint.<N>): string { return 'n'; }`;
+
+test('H1 and H2: a group reflects its owner\'s contract; a selected case, its signature with captures bound', () => {
+  expect(evaluated(`${RF} String(Reflect.typeOf(f)) + ' | ' + String(Reflect.typeOf(f.<uint8>)) + ' | ' + String(Reflect.typeOf(f.<uint.<12>>));`))
+    .toBe('<T: type>(x: T) => string | (x: uint.<8>) => string | (x: uint.<12>) => string');
+});
+
+test('H3: a group value reflects one entry per declaration, with its role and generic slots', () => {
+  expect(evaluated(`${RF} Reflect.getReflection(f).signatures.map((e) => e.role + '['
+    + e.typeParameters.map((t) => String(t.name) + (t.pattern ? '=' + t.pattern : '')).join(',') + ']').join(' ');`))
+    .toBe('owner[T] replacement[T=uint8] replacement[T=uint.<const N>]');
+  // A type's reflection is unchanged: it still round-trips.
+  expect(evaluated('String(Reflect.getReflection(uint8).kind);')).toBe('primitive');
+});
+
+test('H3b: a specialization value names the entry it selected, the owner\'s for a fallback', () => {
+  expect(evaluated(`${RF} const s = Reflect.getReflection(f.<uint8>); s.selected.role + ':' + s.selected.typeParameters[0].pattern;`)).toBe('replacement:uint8');
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; } function f<uint8>(x: uint8): string { return 'u'; }
+    Reflect.getReflection(f.<uint16>).selected.role;`)).toBe('owner');
+});
+
+test('H3c: a standalone case\'s selector positions take no labels; a mixed case\'s binders do', () => {
+  expect(evaluated(`function g<uint8, string>(): string { return 'a'; } function g<float32, bits: uint32>(): string { return 'm'; }
+    Reflect.getReflection(g).signatures.map((e) => e.role + '[' + e.typeParameters.map((t) => String(t.name)).join(',') + ']').join(' ');`))
+    .toBe('standalone[undefined,undefined] standalone[undefined,bits]');
+});
