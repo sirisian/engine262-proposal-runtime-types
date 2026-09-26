@@ -55,7 +55,7 @@ test('the binding itself is untouched', () => {
 
 test('in comparisons and arithmetic too', () => {
   expect(evaluated('const K = 0.1; String(rational(1, 10) == K);')).toBe('true');
-  expect(evaluated("const D = 0.1; String(decimal128('0.1') === D);")).toBe('true');
+  expect(evaluated("const D = 0.1; String(decimal128.parse('0.1') === D);")).toBe('true');
   expect(evaluated('const C = 3; String((3 := complex64) == C);')).toBe('true');
   expect(evaluated('const K2 = 0.5; String(rational(1, 2) + K2);')).toBe('1');
 });

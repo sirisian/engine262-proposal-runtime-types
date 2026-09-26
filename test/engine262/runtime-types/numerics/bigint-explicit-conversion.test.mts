@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-conversions, #table-numeric-conversions.
@@ -71,6 +71,7 @@ test('BigInt(...) and the boundary are unchanged', () => {
   // The boundary is the CHECKED conversion, and refuses both.
   expectThrownKind('let v: any = 5.5; let b: bigint = v;', 'RangeError');
   expectThrownKind('let v: any = NaN; let b: bigint = v;', 'RangeError');
-  // A non-numeric source keeps its path.
-  expectThrownKind("'5' := bigint;", 'TypeError');
+  // A string is not a conversion source for a numeric type, so it is refused
+  // before the program runs.
+  expectStaticTypeError("'5' := bigint;");
 });

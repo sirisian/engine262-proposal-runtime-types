@@ -24,7 +24,7 @@ test('the parameterized numeric extensions resolve in an annotation', () => {
   expect(ok('function f(x: complex64) {}')).toBe(true);
   expect(ok('function f(x: complex128) {}')).toBe(true);
   expect(ok('function f(x: rational.<64>) {}')).toBe(true);
-  expect(ok('const d: decimal64 = decimal64("1.5");')).toBe(true);
+  expect(ok('const d: decimal64 = decimal64.parse("1.5");')).toBe(true);
 });
 
 test('a bare parameterized primitive is not a value, and an applied one is', () => {

@@ -7,7 +7,7 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  * The contextual-type table: "An operand of a binary operator whose other
  * operand has a known value type - The type of the other operand." A rational
  * adopted no literal at all, so `rational(1, 2) + 0.5` and `rational(1, 2) * 2`
- * were TypeErrors; and no comparison adopted one, so `decimal64('1.5') == 1.5`
+ * were TypeErrors; and no comparison adopted one, so `decimal64.parse('1.5') == 1.5`
  * and `rational(1, 2) < 0.75` threw, while the same values compared correctly
  * against a value of their own type.
  *
@@ -30,9 +30,9 @@ test('a rational adopts a literal in arithmetic', () => {
 });
 
 test('a decimal or a rational adopts a literal in == and the comparisons', () => {
-  expect(v("decimal64('1.5') == 1.5")).toBe('true');
-  expect(v("decimal64('1.5') < 2")).toBe('true');
-  expect(v("decimal64('1.5') >= 1.5")).toBe('true');
+  expect(v("decimal64.parse('1.5') == 1.5")).toBe('true');
+  expect(v("decimal64.parse('1.5') < 2")).toBe('true');
+  expect(v("decimal64.parse('1.5') >= 1.5")).toBe('true');
   expect(v('rational(1, 2) == 0.5')).toBe('true');
   expect(v('0.5 == rational(1, 2)')).toBe('true');
   expect(v('rational(1, 2) < 0.75')).toBe('true');
@@ -51,17 +51,17 @@ test('what adoption must not touch', () => {
 
 test('strict equality adopts a literal too, wherever the comparison appears', () => {
   // The adoption ran only when a consumer asked for the comparison's type, and
-  // nothing asks inside `String(...)`, so `decimal64('1.5') === 1.5` was
+  // nothing asks inside `String(...)`, so `decimal64.parse('1.5') === 1.5` was
   // silently *false* there. It now runs as the checker visits the comparison.
-  expect(v("decimal64('1.5') === 1.5")).toBe('true');
-  expect(v("1.5 === decimal64('1.5')")).toBe('true');
-  expect(v("decimal64('1.50') === 1.5")).toBe('true'); // numerically, across cohort members
-  expect(v("decimal128('0.1') === 0.1")).toBe('true'); // the literal's digits, not its double
-  expect(v("decimal64('1.5') !== 1.5")).toBe('false');
+  expect(v("decimal64.parse('1.5') === 1.5")).toBe('true');
+  expect(v("1.5 === decimal64.parse('1.5')")).toBe('true');
+  expect(v("decimal64.parse('1.50') === 1.5")).toBe('true'); // numerically, across cohort members
+  expect(v("decimal128.parse('0.1') === 0.1")).toBe('true'); // the literal's digits, not its double
+  expect(v("decimal64.parse('1.5') !== 1.5")).toBe('false');
   expect(v('rational(1, 2) === 0.5')).toBe('true');
   expect(v('rational(1, 10) === 0.1')).toBe('true');
   expect(v('rational(1, 2) === 0.1')).toBe('false');
-  expect(evaluated("let out = 'no'; if (decimal64('1.5') === 1.5) out = 'yes'; out;")).toBe('yes');
+  expect(evaluated("let out = 'no'; if (decimal64.parse('1.5') === 1.5) out = 'yes'; out;")).toBe('yes');
   // A Number VALUE is still not converted: a different type, strictly unequal.
   expect(evaluated('let n = 0.5; String(rational(1, 2) === n);')).toBe('false');
 });

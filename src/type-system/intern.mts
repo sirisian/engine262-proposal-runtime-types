@@ -1,7 +1,7 @@
 import type { Arguments } from '../value.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
-import { VectorValue, ObjectValue } from '../value.mts';
+import { VectorValue, ObjectValue, TypedStringValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
@@ -761,20 +761,15 @@ export function NoDefaultValueError(record: TypeRecord) {
  * keeps its own answer for the rest.
  */
 export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: string): Value | ThrowCompletion | undefined {
-  if (arg instanceof JSStringValue) {
-    const digits = ParseDecimalDigits(arg.stringValue());
-    if (!digits) {
-      return Throw.SyntaxError('$1 is not a decimal', arg);
-    }
-    // The same range rule the other arms apply, and that `parse` applies to
-    // the same digits. Without it the two spellings of one conversion
-    // disagreed: `decimal32.parse('1e97')` was a *RangeError* while
-    // `decimal32('1e97')` was accepted, building a value no `decimal32`
-    // holds.
-    if (!DecimalPartsInRange(digits, width)) {
-      return Throw.RangeError('$1 is not in the range of $2', arg, Value(typeName));
-    }
-    return CreateDecimalValue(digits.significand, digits.exponent, width, surroundingAgent.currentRealmRecord);
+  // #sec-parsing: "A `string` is deliberately not a conversion source for a
+  // numeric type ... it is enforced at the explicit conversion too", and
+  // #sec-convertvalue agrees - a string source at a decimal target reaches none
+  // of its steps and throws. This parsed the string instead, so `'5' :=
+  // decimal128` and `decimal128('5')` converted where every other numeric type
+  // refuses; `decimal128.parse` and `tryParse` are the way from a string, and
+  // keep the cohort.
+  if (arg instanceof JSStringValue || arg instanceof TypedStringValue) {
+    return Throw.TypeError('a string is not a conversion source for $1; use its parse or tryParse', Value(typeName));
   }
   // A NUMBER converts by CARRYING WHAT THE FLOAT HOLDS, as decimal.md
   // settles it: the exact binary expansion, rounded to

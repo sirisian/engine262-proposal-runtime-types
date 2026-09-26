@@ -45,29 +45,64 @@ function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }:
  * Whitespace around the whole is ignored; a sign between the parts is required,
  * since `3 2i` denotes nothing.
  */
-/** Exported so the bare `complex` constructor reads the same grammar its
- * width-named shorthands do; one reader, one accepted form. */
+/**
+ * A complex literal's parts, or null where the text is not one: an optional real
+ * part and an optional signed imaginary part carrying the `i` suffix. Numeric
+ * separators are accepted between digits - #sec-parsing: "Numeric separators are
+ * accepted" - and refused where the literal grammar refuses them: doubled,
+ * leading, trailing, or beside a point, an exponent or a sign.
+ */
 export function ParseComplexLiteral(text: string): { real: number, imaginary: number } | null {
   const source = text.trim();
-  if (source === '') {
+  if (source === '' || /__|_(?=[.eE+-]|i$|$)|(?<=^|[.eE+-])_/.test(source)) {
     return null;
   }
-  const num = '[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?';
+  const digits = '\\d(?:_?\\d)*';
+  const unsigned = `(?:${digits}(?:\\.(?:${digits})?)?|\\.${digits})(?:[eE][+-]?${digits})?`;
+  const read = (part: string) => Number(part.replace(/_/g, ''));
   // Both parts: a real, then a SIGNED imaginary.
-  const both = new RegExp(`^(${num})([+-](?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?)i$`);
-  const pair = both.exec(source);
+  const pair = new RegExp(`^([+-]?${unsigned})([+-]${unsigned})i$`).exec(source);
   if (pair) {
-    return { real: Number(pair[1]), imaginary: Number(pair[2]) };
+    return { real: read(pair[1]), imaginary: read(pair[2]) };
   }
-  const onlyImaginary = new RegExp(`^(${num})i$`).exec(source);
+  const onlyImaginary = new RegExp(`^([+-]?${unsigned})i$`).exec(source);
   if (onlyImaginary) {
-    return { real: 0, imaginary: Number(onlyImaginary[1]) };
+    return { real: 0, imaginary: read(onlyImaginary[1]) };
   }
-  const onlyReal = new RegExp(`^(${num})$`).exec(source);
+  const onlyReal = new RegExp(`^([+-]?${unsigned})$`).exec(source);
   if (onlyReal) {
-    return { real: Number(onlyReal[1]), imaginary: 0 };
+    return { real: read(onlyReal[1]), imaginary: 0 };
   }
   return null;
+}
+
+/**
+ * A complex literal read at its component type - the one reading every complex
+ * parse shares: the parts, or 'syntax' where the text is not a complex literal,
+ * or 'range' where a part is - #sec-parsing - "a literal whose value the type
+ * cannot represent". A part is a value of the component type, so it is refused
+ * as that type's own parse refuses it: an overflow of the double, or a finite
+ * value past a narrower component's range. The grammar has no `Infinity`, so a
+ * part that is not finite overflowed. Reading each part as a Number and no more
+ * turned an overflowing literal into an infinity.
+ */
+export function ReadComplexLiteral(text: string, component: unknown): { real: number, imaginary: number } | 'syntax' | 'range' {
+  const parsed = ParseComplexLiteral(text);
+  if (!parsed) {
+    return 'syntax';
+  }
+  const record = component && typeof component === 'object' && (component as { Kind?: string }).Kind === 'primitive'
+    ? component as { Name: string, Arguments: readonly (TypeRecord | number)[] }
+    : undefined;
+  // The Number type's range is `float64`'s: the same format.
+  const name = record && record.Name !== 'number' ? record.Name : 'float64';
+  const args = record ? record.Arguments : [];
+  for (const part of [parsed.real, parsed.imaginary]) {
+    if (!Number.isFinite(part) || !fitsNumericType(part, name, args)) {
+      return 'range';
+    }
+  }
+  return parsed;
 }
 
 /** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
@@ -78,7 +113,9 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
   const isBigInt = t.Kind === 'primitive' && t.Name === 'bigint';
-  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128');
+  // The Number type parses as `float64` does - the same format, the same grammar
+  // and failures - and answers a Number rather than a `float64`.
+  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128' || t.Name === 'number');
   // decimal.md names `decimal128.parse('19.99')` as the EXACT construction form,
   // beside a literal: "an exact decimal comes from a literal or a string, never
   // from a round trip through binary". So parse reads the DIGITS and takes the
@@ -122,9 +159,12 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
     if (!(S instanceof JSStringValue)) {
       return Throw.SyntaxError('$1 is not a valid literal', S);
     }
-    const parsed = ParseComplexLiteral(S.stringValue());
-    if (!parsed) {
+    const parsed = ReadComplexLiteral(S.stringValue(), t.Arguments?.[0]);
+    if (parsed === 'syntax') {
       return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    if (parsed === 'range') {
+      return Throw.RangeError('$1 is out of range for the type', S);
     }
     return CreateComplexValue(parsed.real, parsed.imaginary, t.Arguments?.[0], surroundingAgent.currentRealmRecord);
   }
@@ -216,8 +256,13 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   if (typeof value === 'number' && Number.isNaN(value)) {
     return Throw.SyntaxError('$1 is not a valid literal', S);
   }
-  if (!fitsNumericType(value, t.Name, t.Arguments)) {
+  // The Number type's range is `float64`'s: the same format.
+  if (!fitsNumericType(value, t.Name === 'number' ? 'float64' : t.Name, t.Arguments)) {
     return Throw.RangeError('$1 is out of range for the type', S);
+  }
+  // The Number type: a plain Number, the value `float64.parse` would carry.
+  if (t.Kind === 'primitive' && t.Name === 'number') {
+    return Value(value as number);
   }
   // proposal-runtime-types #sec-binary-floating-point-types: a float128's values
   // are software pairs rather than Numbers, so a parse builds one of those - a
@@ -387,7 +432,9 @@ function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arg
   const t = thisValue.TypeRecord;
   const isInteger = t.Kind === 'primitive' && (t.Name === 'uint' || t.Name === 'int');
   const isBigInt = t.Kind === 'primitive' && t.Name === 'bigint';
-  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128');
+  // The Number type parses as `float64` does - the same format, the same grammar
+  // and failures - and answers a Number rather than a `float64`.
+  const isFloat = t.Kind === 'primitive' && (t.Name === 'float16' || t.Name === 'float32' || t.Name === 'float64' || t.Name === 'float128' || t.Name === 'number');
   // #sec-parsing: "EACH TYPE also has a `tryParse` function with the same
   // parameters, returning a value of the type where `parse` would return one and
   // *null* where `parse` would fail to parse its argument."

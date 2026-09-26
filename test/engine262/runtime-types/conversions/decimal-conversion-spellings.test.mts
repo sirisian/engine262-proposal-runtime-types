@@ -18,7 +18,6 @@ const sources: [string, string, string][] = [
   ['a float128', 'let x = (1 := float128) / (3 := float128);', '0.3333333333333333333333333333333333'],
   ['a terminating rational', 'let x = rational(-7, 8);', '-0.875'],
   ['a non-terminating rational', 'let x = rational(1, 3);', '0.3333333333333333333333333333333333'],
-  ['a string, keeping its cohort member', "let x = '1.50';", '1.50'],
 ];
 
 test('the call and the operator agree for every source', () => {
@@ -39,6 +38,15 @@ test('what does not change', () => {
   expect(evaluated('String(0.1 := decimal128);')).toBe('0.1');
   // A double still carries its binary value (decimal.md).
   expect(evaluated('let f = 0.1; String(f := decimal128);')).toBe('0.1000000000000000055511151231257827');
-  expect(evaluated("String(decimal64('1.23456789012345678') := decimal32);")).toBe('1.234568');
+  expect(evaluated("String(decimal64.parse('1.23456789012345678') := decimal32);")).toBe('1.234568');
   expectThrownKind('(3 := complex64) := decimal128;', 'TypeError');
+});
+
+test('a string is refused in both spellings, and parse keeps the cohort member', () => {
+  // #sec-parsing: "A `string` is deliberately not a conversion source for a
+  // numeric type ... enforced at the explicit conversion too".
+  expectThrownKind("let x = '1.50'; decimal128(x);", 'TypeError');
+  expectThrownKind("let x = '1.50'; x := decimal128;", 'TypeError');
+  expect(evaluated("String(decimal128.parse('1.50'));")).toBe('1.50');
+  expect(evaluated("String(decimal128.tryParse('x'));")).toBe('null');
 });

@@ -56,7 +56,7 @@ test('conversions in and out, each rounded once from the exact value', () => {
   expect(show('(2n ** 60n + 1n) := float128')).toBe(big);
   expect(show(`((2n ** 60n + 1n) := float128) := uint64`)).toBe(big);
   expect(show(`(rational(1, 3) := float128) == ${Q(1)} / ${Q(3)}`)).toBe('true');
-  expect(show(`(decimal128('0.1') := float128) == (0.1 := float128)`)).toBe('true');
+  expect(show(`(decimal128.parse('0.1') := float128) == (0.1 := float128)`)).toBe('true');
   expect(show(`(${Q(1)} / ${Q(3)}) := float32`)).toBe('0.3333333432674408');
   expect(show(`${Q(300)} := int8`)).toBe('44');
   expect(show(`(${Q(7)} / ${Q(2)}) := bigint`)).toBe('3');
@@ -68,7 +68,7 @@ test('conversions in and out, each rounded once from the exact value', () => {
 
 test('C2: implicit use as a Number refuses; the explicit conversion agrees in every spelling', () => {
   for (const [label, x, want] of [
-    ['decimal', "decimal64('1.5')", '1.5'],
+    ['decimal', "decimal64.parse('1.5')", '1.5'],
     ['rational', 'rational(1, 3)', '0.3333333333333333'],
     ['float128', `(${Q(1)} / ${Q(3)})`, '0.3333333333333333'],
   ]) {
@@ -121,7 +121,7 @@ test('a literal beside a float128 in a Math call takes its type, as beside an op
   expect(show(`Math.hypot(${Q(3)}, 4)`)).toBe('5');
   expect(show(`Math.max(${Q(0.5)}, 1)`)).toBe('1');
   // The other object-represented types take it the same way.
-  expect(evaluated("String(Math.max(decimal64('0.5'), 1));")).toBe('1');
+  expect(evaluated("String(Math.max(decimal64.parse('0.5'), 1));")).toBe('1');
   expect(evaluated('String(Math.max(rational(1, 2), 1));')).toBe('1');
   // A Number VALUE is still refused - only a literal is adopted.
   expectThrownKind(`let n = 1; Math.max(${Q(0.5)}, n);`, 'TypeError');

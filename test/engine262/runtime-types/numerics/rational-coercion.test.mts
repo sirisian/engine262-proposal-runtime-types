@@ -20,13 +20,13 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  */
 
 test('the exact rows answer for a decimal, at the decimal type', () => {
-  expect(evaluated("let d = decimal64('-2.50'); String(Math.abs(d));")).toBe('2.50');
-  expect(evaluated("let d = decimal64('-2.50'); String(Reflect.typeOf(Math.abs(d)));")).toBe('decimal64');
+  expect(evaluated("let d = decimal64.parse('-2.50'); String(Math.abs(d));")).toBe('2.50');
+  expect(evaluated("let d = decimal64.parse('-2.50'); String(Reflect.typeOf(Math.abs(d)));")).toBe('decimal64');
   // The sign is A VALUE OF T, which is what the clause's table row says.
-  expect(evaluated("let d = decimal64('-2.5'); String(Math.sign(d));")).toBe('-1');
-  expect(evaluated("let d = decimal64('0'); String(Math.sign(d));")).toBe('0');
-  expect(evaluated("let a = decimal64('2.5'); let b = decimal64('3.5'); String(Math.max(a, b));")).toBe('3.5');
-  expect(evaluated("let a = decimal64('2.5'); let b = decimal64('3.5'); String(Math.min(a, b));")).toBe('2.5');
+  expect(evaluated("let d = decimal64.parse('-2.5'); String(Math.sign(d));")).toBe('-1');
+  expect(evaluated("let d = decimal64.parse('0'); String(Math.sign(d));")).toBe('0');
+  expect(evaluated("let a = decimal64.parse('2.5'); let b = decimal64.parse('3.5'); String(Math.max(a, b));")).toBe('3.5');
+  expect(evaluated("let a = decimal64.parse('2.5'); let b = decimal64.parse('3.5'); String(Math.min(a, b));")).toBe('2.5');
 });
 
 test('and for a rational, exactly', () => {
@@ -46,9 +46,9 @@ test('a row that rounds is refused, and says why', () => {
   // `Math.floor`, `ceil`, `round` and `trunc` "return the `int.<N>` nearest in
   // their direction" - and it is implemented; see
   // `rational-rounding.test.mts`. A decimal still has no such rule stated.
-  expectThrownKind("let d = decimal64('2.5'); Math.trunc(d);", 'TypeError');
+  expectThrownKind("let d = decimal64.parse('2.5'); Math.trunc(d);", 'TypeError');
   // A mixed pair is not one family, so it is not an exact row either.
-  expectThrownKind("let d = decimal64('2.5'); let r = rational(1, 2); Math.max(d, r);", 'TypeError');
+  expectThrownKind("let d = decimal64.parse('2.5'); let r = rational(1, 2); Math.max(d, r);", 'TypeError');
 });
 
 test('the other families are untouched', () => {

@@ -98,9 +98,9 @@ test('decimal and rational: Number(x) converts explicitly, and implicit use stil
   // type from a decimal and from a rational, so each converts, rounding. A complex
   // has no such row and refuses (above). The IMPLICIT path, ToNumber through
   // valueOf, still refuses all three.
-  expect(evaluated("String(Number(decimal64('1.5')));")).toBe('1.5');
+  expect(evaluated("String(Number(decimal64.parse('1.5')));")).toBe('1.5');
   expect(evaluated('String(Number(rational(1, 2)));')).toBe('0.5');
-  expect(evaluated("String(isNaN(decimal64('1.5')));")).toBe('false');
-  expectThrownKind("decimal64('1.5').valueOf();", 'TypeError');
+  expect(evaluated("String(isNaN(decimal64.parse('1.5')));")).toBe('false');
+  expectThrownKind("decimal64.parse('1.5').valueOf();", 'TypeError');
   expectThrownKind('rational(1, 2).valueOf();', 'TypeError');
 });

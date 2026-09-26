@@ -44,9 +44,11 @@ test('is evaluates to the membership test', () => {
 });
 
 test(':= applies the conversion rule', () => {
-  // `number` is the type ToNumber produces, so a cast to it IS that conversion
-  // written out, and it still converts a string.
-  expect(evaluated('("5" := number) === 5 ? "ok" : "no";')).toBe('ok');
+  // A string has no conversion to a numeric type, `number` included
+  // (#sec-parsing, #sec-convertvalue): a value with no conversion to the target
+  // at all is a TypeError. `number.parse` is the way from a string.
+  expectThrownKind('let s = "5"; s := number;', 'TypeError');
+  expect(evaluated('number.parse("5") === 5 ? "ok" : "no";')).toBe('ok');
   // a Number, a BigInt, and a Boolean each have one canonical text
   expect(evaluated('(5 := string) === "5" ? "ok" : "no";')).toBe('ok');
   expect(evaluated('(0 := boolean) === false ? "ok" : "no";')).toBe('ok');

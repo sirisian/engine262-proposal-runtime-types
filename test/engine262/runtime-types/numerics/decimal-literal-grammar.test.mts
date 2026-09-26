@@ -17,7 +17,7 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  * `uint32.parse('1_000')` read the whole of it: one clause, one sentence, and one
  * family behaving differently.
  *
- * The same digits are read by the string conversion, so `decimal128('1e200')`
+ * The same digits are read by the string conversion, so `decimal128.parse('1e200')`
  * moves with `parse`.
  */
 
@@ -29,7 +29,7 @@ test('an exponent part is part of the literal', () => {
   // compose: `1.5e3` is 15 at exponent -1, shifted by 3.
   expect(evaluated("String(decimal64.parse('1.5e3'));")).toBe('1500');
   // And the conversion reads the same digits.
-  expect(evaluated("String(decimal128('1e5'));")).toBe('100000');
+  expect(evaluated("String(decimal128.parse('1e5'));")).toBe('100000');
 });
 
 test('numeric separators are accepted where the grammar allows them', () => {

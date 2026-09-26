@@ -54,7 +54,7 @@ test('conversions in range are unchanged', () => {
   expect(evaluated('let f = 1.5; String(decimal32(f));')).toBe('1.5');
   expect(evaluated('let f = 0; String(decimal32(f));')).toBe('0');
   // A written decimal is exact and is not a conversion at all.
-  expect(evaluated("String(decimal64('0.1'));")).toBe('0.1');
+  expect(evaluated("String(decimal64.parse('0.1'));")).toBe('0.1');
 });
 
 /**
@@ -69,7 +69,7 @@ test('conversions in range are unchanged', () => {
  * `float64` *value* is involved" as excluding a literal argument and made
  * `decimal128(0.1)` exact - which `type-universe/decimal.test.mts` pins against
  * with the comment "THE ASSERTION THAT SAYS WHY": making it equal
- * `decimal128("0.1")` "would launder a binary approximation into an
+ * `decimal128.parse("0.1")` "would launder a binary approximation into an
  * exact-looking decimal and hide the whole reason these types exist".
  */
 test('the exact spellings are the annotation and the cast', () => {
@@ -92,7 +92,7 @@ test('the call reads a literal, and carries a value', () => {
   expect(evaluated('String(decimal128(0.1));')).toBe('0.1');
   expect(evaluated('String(decimal128(19.99));')).toBe('19.99');
   // Which is the assertion that says why - for the value it is about.
-  expect(evaluated("let f = 0.1; String(decimal128(f) == decimal128('0.1'));")).toBe('false');
+  expect(evaluated("let f = 0.1; String(decimal128(f) == decimal128.parse('0.1'));")).toBe('false');
   expect(evaluated("let f = 19.99; String(decimal128(f));")).toBe('19.98999999999999843680598132777959');
   // A value the double holds exactly converts exactly, and arrives reduced.
   expect(evaluated('String(decimal128(0.5));')).toBe('0.5');
@@ -131,20 +131,20 @@ test('any numeric type is a source, and exact digits are kept', () => {
  * did not have: `int64(d)` and `uint8(d)` were refused as not assignable.
  */
 test('a decimal converts to an integer by truncating toward zero', () => {
-  expect(evaluated("let d = decimal64('7.9'); String(int64(d));")).toBe('7');
-  expect(evaluated("let d = decimal64('-7.9'); String(int64(d));")).toBe('-7');
-  expect(evaluated("let d = decimal64('7.9'); String(uint8(d));")).toBe('7');
-  expect(evaluated("let d = decimal64('42'); String(int64(d));")).toBe('42');
+  expect(evaluated("let d = decimal64.parse('7.9'); String(int64(d));")).toBe('7');
+  expect(evaluated("let d = decimal64.parse('-7.9'); String(int64(d));")).toBe('-7');
+  expect(evaluated("let d = decimal64.parse('7.9'); String(uint8(d));")).toBe('7');
+  expect(evaluated("let d = decimal64.parse('42'); String(int64(d));")).toBe('42');
   // Truncated on the DIGITS, not through a double, so a decimal carrying more
   // significant digits than a double holds keeps them.
-  expect(evaluated("let d = decimal128('9007199254740993'); String(int64(d));")).toBe('9007199254740993');
+  expect(evaluated("let d = decimal128.parse('9007199254740993'); String(int64(d));")).toBe('9007199254740993');
 });
 
 test('the outgoing directions the engine already had are unchanged', () => {
-  expect(evaluated("let d = decimal64('7.9'); String(float64(d));")).toBe('7.9');
-  expect(evaluated("let d = decimal64('7.9'); String(number(d));")).toBe('7.9');
-  expect(evaluated("let a = decimal32('1.5'); String(decimal128(a));")).toBe('1.5');
-  expect(evaluated("let a = decimal128('1.5'); String(decimal32(a));")).toBe('1.5');
+  expect(evaluated("let d = decimal64.parse('7.9'); String(float64(d));")).toBe('7.9');
+  expect(evaluated("let d = decimal64.parse('7.9'); String(number(d));")).toBe('7.9');
+  expect(evaluated("let a = decimal32.parse('1.5'); String(decimal128(a));")).toBe('1.5');
+  expect(evaluated("let a = decimal128.parse('1.5'); String(decimal32(a));")).toBe('1.5');
 });
 
 test('a boundary is not a conversion', () => {
@@ -152,7 +152,7 @@ test('a boundary is not a conversion', () => {
   // written explicitly rather than performed silently" - so an annotation
   // refuses where the call converts. This holds for every numeric pair, not
   // just for decimals: `let b: uint8 = someUint16` is refused too.
-  expectThrownKind("let d = decimal64('7.9'); let i: int64 = d;", 'TypeError');
+  expectThrownKind("let d = decimal64.parse('7.9'); let i: int64 = d;", 'TypeError');
 });
 
 /**
@@ -171,12 +171,12 @@ test('every numeric source wraps the same way at an explicit conversion', () => 
   expect(evaluated('String(uint8(300n));')).toBe('44');
   expect(evaluated('let a: uint16 = 300; String(uint8(a));')).toBe('44');
   expect(evaluated('let f: float64 = 300; String(uint8(f));')).toBe('44');
-  expect(evaluated("let d = decimal64('300'); String(uint8(d));")).toBe('44');
+  expect(evaluated("let d = decimal64.parse('300'); String(uint8(d));")).toBe('44');
   expect(evaluated('String(int8(200n));')).toBe('-56');
   expect(evaluated('let n = 200; String(int8(n));')).toBe('-56');
   // A width wider than 53 bits still carries its value exactly.
   expect(evaluated('String(uint64(9007199254740993n));')).toBe('9007199254740993');
-  expect(evaluated("let d = decimal64('7.9'); String(int64(d));")).toBe('7');
+  expect(evaluated("let d = decimal64.parse('7.9'); String(int64(d));")).toBe('7');
 });
 
 test('a boundary still refuses what a conversion wraps', () => {
@@ -209,7 +209,7 @@ test('one numeric argument is the conversion, exactly', () => {
   // prettily.
   expect(evaluated('let x = 0.1; String(rational(x));')).toBe('3602879701896397/36028797018963968');
   // A decimal converts to the power-of-ten fraction decimal.md names.
-  expect(evaluated("let d = decimal64('0.1'); String(rational(d));")).toBe('1/10');
+  expect(evaluated("let d = decimal64.parse('0.1'); String(rational(d));")).toBe('1/10');
 });
 
 test('the constructor and its failures are unchanged', () => {

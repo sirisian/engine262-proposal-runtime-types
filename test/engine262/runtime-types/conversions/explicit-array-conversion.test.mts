@@ -22,11 +22,6 @@ const VALUES: readonly [string, string][] = [['300', '300'], ['-1', '-1'], ['1.5
   ['NaN', 'NaN'], ['Infinity', 'Infinity'], ['-Infinity', '-Infinity'], ['-0', '-0'], ['1e300', '1e300'],
   ['2n**53n+1n', '2n ** 53n + 1n'], ["'5'", "'5'"], ['true', 'true'], ['undefined', 'undefined'], ['null', 'null'],
   ['{}', '({})']];
-// The Parsing clause: "a string is deliberately not a conversion source for a
-// numeric type ... enforced at the explicit conversion too". Today's SCALAR
-// conversion converts a string at `number` and at the decimal types - an open
-// question of its own - so an element does not follow it there; it is refused.
-const STRING_REFUSED = new Set(['number', 'decimal32', 'decimal64', 'decimal128']);
 
 const outcome = (declaration: string, expression: string) => evaluated(
   `${declaration} let r; try { r = String(${expression}); } catch (e) { r = 'throws ' + e.constructor.name; } r;`,
@@ -36,12 +31,7 @@ test('element for element, an explicit array conversion holds what the scalar co
   for (const type of TYPES) {
     for (const [name, source] of VALUES) {
       const declaration = `let x = ${source};`;
-      const array = outcome(declaration, `([x] := [].<${type}>)[0]`);
-      if (name === "'5'" && STRING_REFUSED.has(type)) {
-        expect(array, `${name} at ${type}`).toBe('throws TypeError');
-      } else {
-        expect(array, `${name} at ${type}`).toBe(outcome(declaration, `x := ${type}`));
-      }
+      expect(outcome(declaration, `([x] := [].<${type}>)[0]`), `${name} at ${type}`).toBe(outcome(declaration, `x := ${type}`));
     }
   }
 });

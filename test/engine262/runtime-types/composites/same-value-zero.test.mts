@@ -86,5 +86,5 @@ test('the DECIMAL cohorts now HAVE a value level, and split as specified', () =>
   // (This was pinned as still open while a typed creation could not convert to a
   // decimal member at all; it can now, reading the literal at the member's type.)
   expect(evaluated('interface D { v: decimal128 } String(Composite.<D>({ v: 1.0 }).v.toString());')).toBe('1');
-  expect(evaluated("interface D { v: decimal128 } String(Composite.<D>({ v: decimal128('1.00') }).v.toString());")).toBe('1');
+  expect(evaluated("interface D { v: decimal128 } String(Composite.<D>({ v: decimal128.parse('1.00') }).v.toString());")).toBe('1');
 });

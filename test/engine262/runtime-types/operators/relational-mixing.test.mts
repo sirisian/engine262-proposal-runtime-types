@@ -20,7 +20,7 @@ import { expectThrown, ok } from '../harness.mts';
 const dead = (source: string) => `function __never() { ${source} }`;
 const D = 'let n: uint8 = uint8(1); let i: int32 = int32(1);'
   + ' let f: float64 = float64(1); let g: float32 = float32(1);'
-  + ' let d: decimal64 = decimal64("1"); let s: string = "x"; ';
+  + ' let d: decimal64 = decimal64.parse("1"); let s: string = "x"; ';
 
 test('two different numeric types do not compare', () => {
   for (const e of ['n < i', 'n <= i', 'n > i', 'n >= i']) {

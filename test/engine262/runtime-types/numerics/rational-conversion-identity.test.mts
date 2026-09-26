@@ -44,8 +44,8 @@ test('the other single-argument sources are unchanged', () => {
   // #sec-conversions makes the one-argument call and `:=` "the same operation".
   // It said "numerator must be an integer" here, the two-argument form's rule,
   // though a lone argument is the value converted and not a numerator.
-  expectThrown('rational("s");', 'is not assignable to');
-  expectThrown('"s" := rational;', 'is not assignable to');
+  expectThrown('rational("s");', 'a string is not a conversion source for');
+  expectThrown('"s" := rational;', 'a string is not a conversion source for');
   // The numerator rule still applies where there IS a numerator.
   expectThrown('rational("s", 1);', 'numerator must be an integer');
 });

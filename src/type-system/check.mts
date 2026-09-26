@@ -11289,6 +11289,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // narrowing numeric cast may wrap, while an unknown source, metadata hook,
   // class conversion or structural boundary cannot be ruled out here.
   type ConversionAvailability = 'possible' | 'impossible' | 'unresolved';
+  /** Every numeric type's name: the targets a non-numeric source is never a conversion source for. */
+  const isNumericTargetName = (name: string): boolean => isIntegerTypeName(name) || isFloatTypeName(name)
+    || name === 'number' || name === 'bigint' || name === 'float128' || name === 'rational'
+    || name.startsWith('decimal') || name.startsWith('complex');
+
   const explicitConversionAvailability = (source: Known, target: Known): ConversionAvailability => {
     if (!source || !target || source.Kind === 'any' || target.Kind === 'any'
       || mentionsTypeParameter(source) || mentionsTypeParameter(target)) return 'unresolved';
@@ -11312,8 +11317,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!numericSource && !simpleSource) return 'unresolved';
     if (numericSource && isNumericOperandName(target.Name)) return 'possible';
     if (target.Name === 'boolean') return 'possible';
-    // The legacy Number conversion deliberately retains ToNumber semantics.
-    if (target.Name === 'number') return source.Name === 'symbol' ? 'impossible' : 'possible';
+    // A non-numeric source at ANY numeric type has no conversion.
+    // #sec-convertvalue has no step for one - a string, a boolean, *null*,
+    // *undefined* or a symbol at a numeric target reaches none and throws - and
+    // #sec-parsing: "A `string` is deliberately not a conversion source for a
+    // numeric type". The Number type is one of them - "a value type like the
+    // rest" - so `'5' := number` is refused here as `'5' := uint8` is; this kept
+    // ToNumber for `number` and deferred the decimals, `rational` and complex, so
+    // those were refused only when the conversion ran, or not at all.
+    if (isNumericTargetName(target.Name)) return 'impossible';
     if (target.Name === 'string') {
       return numericSource || source.Name === 'boolean' ? 'possible' : 'impossible';
     }
@@ -11328,7 +11340,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!source || !target || explicitConversionAvailability(source, target) !== 'impossible') return;
     const base = source.Kind === 'literal' ? source.Base : source;
     if (base.Kind === 'primitive' && base.Name === 'string' && target.Kind === 'primitive'
-      && (isIntegerTypeName(target.Name) || isFloatTypeName(target.Name))) {
+      && isNumericTargetName(target.Name)) {
       errors.push(Throw.StaticTypeError(
         'a string is not a conversion source for $1; use its parse form', Value(displayType(target)),
       ).Value as ObjectValue);

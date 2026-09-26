@@ -499,7 +499,7 @@ test('carrying the enum leaves the value usable as its underlying type', () => {
   // and serializes as what it is.
   expect(evaluated('enum S: string { A = "x" } String(S.A === "x");')).toBe('true');
   expect(evaluated('enum B: bigint { A = 1n } String(B.A === 1n);')).toBe('true');
-  expect(evaluated('enum D: decimal64 { A = 1.0 } String(D.A === decimal64("1.0"));')).toBe('true');
+  expect(evaluated('enum D: decimal64 { A = 1.0 } String(D.A === decimal64.parse("1.0"));')).toBe('true');
   expect(evaluated('enum S: string { A = "k" } const o = {}; o[S.A] = 1; String(o.k);')).toBe('1');
   expect(evaluated('enum S: string { A = "x" } S.toString(S.A);')).toBe('A');
   expect(evaluated('enum S: string { A = "x" } type T = { s: S }; '
@@ -571,7 +571,7 @@ test('the reverse conversion is by value, for every underlying type', () => {
   expect(evaluated('enum N { Zero, One } String(N(1) === N.One);')).toBe('true');
   expect(evaluated('enum S: string { A = "x" } String(S("x") === S.A);')).toBe('true');
   expect(evaluated('enum B: bigint { A = 1n } String(B(1n) === B.A);')).toBe('true');
-  expect(evaluated('enum D: decimal64 { A = 1.0 } String(D(decimal64("1.0")) === D.A);')).toBe('true');
+  expect(evaluated('enum D: decimal64 { A = 1.0 } String(D(decimal64.parse("1.0")) === D.A);')).toBe('true');
   expect(evaluated('const s = Symbol("s"); enum Y: symbol { A = s } String(Y(s) === Y.A);')).toBe('true');
   expect(evaluated('class K {} const k = new K(); enum A: K { X = k } String(A(k) === A.X);')).toBe('true');
   expect(evaluated('type F = (uint8) => uint8; const g = (x) => x; enum A: F { X = g } '

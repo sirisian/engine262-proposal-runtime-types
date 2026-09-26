@@ -22,7 +22,13 @@ test('aliases and wholly impossible unions retain the conversion check', () => {
 
 test('explicit numeric narrowing remains a conversion rather than assignment', () => {
   expect(evaluated('let x: uint16 = 300; String(x := uint8) + "," + String(uint8(x));')).toBe('44,44');
-  expect(evaluated('String(number("5")) + "," + String(true := number) + "," + string(true);')).toBe('5,1,true');
+  // A non-numeric source is no numeric conversion's - #sec-convertvalue has no
+  // step for one, and #sec-parsing refuses a string at every numeric type, the
+  // Number type included - so each is refused before the program runs; the
+  // `string` target keeps its conversion.
+  expectStaticTypeError('number("5");');
+  expectStaticTypeError('true := number;');
+  expect(evaluated('String(string(true));')).toBe('true');
 });
 
 test('unknown types, generic bodies and partially convertible unions defer', () => {

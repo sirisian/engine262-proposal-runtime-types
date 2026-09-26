@@ -44,7 +44,7 @@ test('operators the table does not list for rationals stay refused', () => {
 
 test('the other families are unchanged', () => {
   // A decimal keeps its cohort member through negation.
-  expect(evaluated("String(-decimal64('1.50'));")).toBe('-1.50');
+  expect(evaluated("String(-decimal64.parse('1.50'));")).toBe('-1.50');
   expect(evaluated('String(-(5 := int64));')).toBe('-5');
   // Unsigned negation wraps, per #sec-unary-operators.
   expect(evaluated('String(-(5 := uint8));')).toBe('251');

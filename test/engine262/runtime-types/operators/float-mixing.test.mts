@@ -16,7 +16,7 @@ import { expectThrown, ok } from '../harness.mts';
 
 const dead = (source: string) => `function __never() { ${source} }`;
 const D = 'let f: float64 = float64(1); let g: float32 = float32(1);'
-  + ' let n: uint8 = uint8(1); let d: decimal64 = decimal64("1"); ';
+  + ' let n: uint8 = uint8(1); let d: decimal64 = decimal64.parse("1"); ';
 
 test('two binary floats of different widths do not mix', () => {
   for (const e of ['f * g', 'f + g', 'f - g', 'f / g']) {

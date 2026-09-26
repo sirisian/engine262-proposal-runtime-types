@@ -18,7 +18,7 @@ function thrownMessage(source: string): string {
 test('a complex, rational or decimal in a message is written as its value', () => {
   // These are objects, and printed as [object Object].
   expect(thrownMessage('float64(3 := complex64);')).toBe('3+0i is not assignable to "float64"');
-  expect(thrownMessage("decimal64('1.5') := uint8;")).toBe('1.5 (decimal) is not assignable to "uint.<8>"');
+  expect(thrownMessage("decimal64.parse('1.5') := uint8;")).toBe('1.5 (decimal) is not assignable to "uint.<8>"');
 });
 
 test('the two-argument rational constructor names why a bigint is refused', () => {

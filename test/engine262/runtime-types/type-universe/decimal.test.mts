@@ -16,20 +16,20 @@ import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 test('SameValue DISTINGUISHES cohort members', () => {
   // spec: "SameValue distinguishes cohort members, so `Object.is(1.0, 1.00)` is
   // *false* for two `decimal128` values of different exponents".
-  expect(evaluated('String(Object.is(decimal128("1.0"), decimal128("1.00")));')).toBe('false');
+  expect(evaluated('String(Object.is(decimal128.parse("1.0"), decimal128.parse("1.00")));')).toBe('false');
   // The same member twice IS the same value, which is what says the answer
   // above is about the EXPONENT and not about two objects being two objects.
-  expect(evaluated('String(Object.is(decimal128("1.00"), decimal128("1.00")));')).toBe('true');
-  expect(evaluated('String(Object.is(decimal128("19.99"), decimal128("19.99")));')).toBe('true');
+  expect(evaluated('String(Object.is(decimal128.parse("1.00"), decimal128.parse("1.00")));')).toBe('true');
+  expect(evaluated('String(Object.is(decimal128.parse("19.99"), decimal128.parse("19.99")));')).toBe('true');
 });
 
 test('SameValueZero compares NUMERICAL VALUE, so a cohort is one key', () => {
   // "while SameValueZero and `==` compare numerical value and find them equal."
-  expect(evaluated('const m = new Map(); m.set(decimal128("1.0"), "a"); String(m.get(decimal128("1.00")));')).toBe('a');
-  expect(evaluated('String(new Set([decimal128("1.0"), decimal128("1.00"), decimal128("1.000")]).size);')).toBe('1');
+  expect(evaluated('const m = new Map(); m.set(decimal128.parse("1.0"), "a"); String(m.get(decimal128.parse("1.00")));')).toBe('a');
+  expect(evaluated('String(new Set([decimal128.parse("1.0"), decimal128.parse("1.00"), decimal128.parse("1.000")]).size);')).toBe('1');
   // Different VALUES remain different keys - the guarantee is about
   // significance, not about collapsing everything.
-  expect(evaluated('String(new Set([decimal128("1.0"), decimal128("2.0")]).size);')).toBe('2');
+  expect(evaluated('String(new Set([decimal128.parse("1.0"), decimal128.parse("2.0")]).size);')).toBe('2');
 });
 
 test('THE JAVA DEFECT, as an explicit negative test', () => {
@@ -38,12 +38,12 @@ test('THE JAVA DEFECT, as an explicit negative test', () => {
   // treats them as one - the class violating its own documented consistency
   // recommendation. **Every structure that keys by SameValueZero must agree
   // here**, and that is the assertion Java fails.
-  expect(evaluated('const s = new Set([decimal128("1.0"), decimal128("1.00")]); '
-    + 'const m = new Map([[decimal128("1.0"), 1], [decimal128("1.00"), 2]]); '
+  expect(evaluated('const s = new Set([decimal128.parse("1.0"), decimal128.parse("1.00")]); '
+    + 'const m = new Map([[decimal128.parse("1.0"), 1], [decimal128.parse("1.00"), 2]]); '
     + 'String(s.size) + "," + String(m.size);')).toBe('1,1');
   // And the later write wins on one key, rather than adding a second.
-  expect(evaluated('const m = new Map(); m.set(decimal128("1.0"), 1); m.set(decimal128("1.00"), 2); '
-    + 'String(m.get(decimal128("1.000")));')).toBe('2');
+  expect(evaluated('const m = new Map(); m.set(decimal128.parse("1.0"), 1); m.set(decimal128.parse("1.00"), 2); '
+    + 'String(m.get(decimal128.parse("1.000")));')).toBe('2');
 });
 
 test('a decimal reads its cohort member from the DIGITS', () => {
@@ -51,18 +51,18 @@ test('a decimal reads its cohort member from the DIGITS', () => {
   // from the mathematical value, since `1.0` and `1.00` have the same
   // mathematical value" - so the places written are the places kept, which is
   // what a printed price wants.
-  expect(evaluated('decimal128("1.0").toString();')).toBe('1.0');
-  expect(evaluated('decimal128("1.00").toString();')).toBe('1.00');
-  expect(evaluated('decimal128("19.99").toString();')).toBe('19.99');
-  expect(evaluated('decimal128("-0.50").toString();')).toBe('-0.50');
-  expect(evaluated('decimal128("100").toString();')).toBe('100');
+  expect(evaluated('decimal128.parse("1.0").toString();')).toBe('1.0');
+  expect(evaluated('decimal128.parse("1.00").toString();')).toBe('1.00');
+  expect(evaluated('decimal128.parse("19.99").toString();')).toBe('19.99');
+  expect(evaluated('decimal128.parse("-0.50").toString();')).toBe('-0.50');
+  expect(evaluated('decimal128.parse("100").toString();')).toBe('100');
   // 34 significant digits, exactly - the width `decimal128` carries, and the
   // value a double cannot hold at all.
-  expect(evaluated('decimal128("9.999999999999999999999999999999999").toString();'))
+  expect(evaluated('decimal128.parse("9.999999999999999999999999999999999").toString();'))
     .toBe('9.999999999999999999999999999999999');
   // The three widths are distinct types over one representation.
-  expect(evaluated('decimal32("1.0").toString();')).toBe('1.0');
-  expect(evaluated('decimal64("1.0").toString();')).toBe('1.0');
+  expect(evaluated('decimal32.parse("1.0").toString();')).toBe('1.0');
+  expect(evaluated('decimal64.parse("1.0").toString();')).toBe('1.0');
 });
 
 test('a NUMBER converts by CARRYING WHAT THE FLOAT HOLDS', () => {
@@ -80,7 +80,7 @@ test('a NUMBER converts by CARRYING WHAT THE FLOAT HOLDS', () => {
   // **THE ASSERTION THAT SAYS WHY**: the converted float is NOT one tenth.
   // Making these equal would launder a binary approximation into an
   // exact-looking decimal and hide the whole reason these types exist.
-  expect(evaluated('String(decimal128(0.1) == decimal128("0.1"));')).toBe('false');
+  expect(evaluated('String(decimal128(0.1) == decimal128.parse("0.1"));')).toBe('false');
   // A value the double holds EXACTLY converts exactly, and arrives REDUCED
   // rather than padded to the width - `0.5` is `0.5`, not `0.5000...0`.
   expect(evaluated('decimal128(0.5).toString();')).toBe('0.5');
@@ -89,7 +89,7 @@ test('a NUMBER converts by CARRYING WHAT THE FLOAT HOLDS', () => {
   expect(evaluated('decimal128(100).toString();')).toBe('100');
   expect(evaluated('decimal128(-2.5).toString();')).toBe('-2.5');
   expect(evaluated('decimal128(0).toString();')).toBe('0');
-  expect(evaluated('String(decimal128(0.5) == decimal128("0.5"));')).toBe('true');
+  expect(evaluated('String(decimal128(0.5) == decimal128.parse("0.5"));')).toBe('true');
   // A narrower width rounds to its own precision.
   expect(evaluated('decimal32(0.1).toString();')).toBe('0.1000000');
 });
@@ -98,22 +98,22 @@ test('a decimal OUT to a float is the ordinary direction of loss', () => {
   // The asymmetry is the point. Binary to decimal had to CHOOSE a cohort member
   // and the choice is visible; decimal to binary has ONE answer and rounds to
   // it, as every narrowing conversion does.
-  expect(evaluated('String(float64(decimal128("1.5")));')).toBe('1.5');
-  expect(evaluated('String(float32(decimal128("1.5")));')).toBe('1.5');
+  expect(evaluated('String(float64(decimal128.parse("1.5")));')).toBe('1.5');
+  expect(evaluated('String(float32(decimal128.parse("1.5")));')).toBe('1.5');
   // Both round trips land where they should: a float through a decimal and back
   // is the same float, and one tenth through a float is the nearest double.
   expect(evaluated('String(float64(decimal128(0.1)) === 0.1);')).toBe('true');
-  expect(evaluated('String(float64(decimal128("0.1")) === 0.1);')).toBe('true');
+  expect(evaluated('String(float64(decimal128.parse("0.1")) === 0.1);')).toBe('true');
 });
 
 test('a decimal converts across WIDTHS', () => {
   // Re-rounding to the target's precision, keeping the cohort member where it
   // fits.
-  expect(evaluated('decimal32(decimal128("1.2345678901234")).toString();')).toBe('1.234568');
-  expect(evaluated('decimal128(decimal32("1.25")).toString();')).toBe('1.25');
+  expect(evaluated('decimal32(decimal128.parse("1.2345678901234")).toString();')).toBe('1.234568');
+  expect(evaluated('decimal128(decimal32.parse("1.25")).toString();')).toBe('1.25');
 });
 test('IEEE 754 clause 5.1 decides WHICH COHORT MEMBER results', () => {
-  const D = (x: string) => `decimal128("${x}")`;
+  const D = (x: string) => `decimal128.parse("${x}")`;
   // ADDITION's preferred exponent is min(Q(x), Q(y)) - so `1.5 + 1.50` is
   // `3.00`, not `3.0`. **The rule is the standard's**, and taking it from there
   // is what stops a result's significance being invented per operation.
@@ -127,7 +127,7 @@ test('IEEE 754 clause 5.1 decides WHICH COHORT MEMBER results', () => {
 });
 
 test('the arithmetic is EXACT where binary floats are not', () => {
-  const D = (x: string) => `decimal128("${x}")`;
+  const D = (x: string) => `decimal128.parse("${x}")`;
   // The reason the type exists. `0.1 + 0.2` is `0.30000000000000004` in binary
   // and `0.3` here.
   expect(evaluated(`(${D('0.1')} + ${D('0.2')}).toString();`)).toBe('0.3');
@@ -138,7 +138,7 @@ test('the arithmetic is EXACT where binary floats are not', () => {
 });
 
 test('DIVISION is where exactness runs out, and rounds half-even', () => {
-  const D = (x: string) => `decimal128("${x}")`;
+  const D = (x: string) => `decimal128.parse("${x}")`;
   // An exact quotient stays exact.
   expect(evaluated(`(${D('1')} / ${D('8')}).toString();`)).toBe('0.125');
   // `1/3` has no finite decimal expansion, so it is computed to the type's
@@ -153,7 +153,7 @@ test('DIVISION is where exactness runs out, and rounds half-even', () => {
 });
 
 test('`==` and `<` compare NUMERICAL VALUE, Object.is does not', () => {
-  const D = (x: string) => `decimal128("${x}")`;
+  const D = (x: string) => `decimal128.parse("${x}")`;
   // The split, now complete across all three predicates: "`==` compares
   // numerical value, so `1.0 == 1.00` is `true`", while SameValue distinguishes
   // the cohort members. IEEE provides both as `compareQuietEqual` and
@@ -167,7 +167,7 @@ test('`==` and `<` compare NUMERICAL VALUE, Object.is does not', () => {
 });
 
 test('a decimal mixes with no other TYPE, but a literal is not another type', () => {
-  const D = (x: string) => `decimal128("${x}")`;
+  const D = (x: string) => `decimal128.parse("${x}")`;
   // A LITERAL operand adapts, because it needs no conversion to begin with:
   // #sec-literal-types makes a literal's mathematical value exact, and the
   // contextual-type rule reads an operand at the type its partner carries, so
@@ -222,7 +222,7 @@ test('every other literal is UNAFFECTED', () => {
 });
 
 test('a composite stores the REDUCED cohort member', () => {
-  const D = (x: string) => `decimal128("${x}")`;
+  const D = (x: string) => `decimal128.parse("${x}")`;
   // composites.md: "Where the type declares no scale, the REDUCED member is
   // stored: trailing zeros are stripped, THE ONE MEMBER COMPUTABLE FROM THE
   // NUMERICAL VALUE ALONE, independent of the width."
@@ -234,7 +234,7 @@ test('a composite stores the REDUCED cohort member', () => {
 });
 
 test('the reduction is what makes the composite ORDER-FREE', () => {
-  const D = (x: string) => `decimal128("${x}")`;
+  const D = (x: string) => `decimal128.parse("${x}")`;
   // The argument for reducing rather than keeping what arrived. A composite is
   // interned by structure, so its contents are OBSERVABLE - and any other rule
   // makes them depend on which member reached the creation FIRST.
@@ -251,7 +251,7 @@ test('the reduction is what makes the composite ORDER-FREE', () => {
   // Distinct VALUES stay distinct, and so do distinct WIDTHS - `decimal64` and
   // `decimal128` are different types, and SameValueZero tells them apart.
   expect(evaluated(`String(Object.is(Composite({ v: ${D('1.0')} }), Composite({ v: ${D('2.0')} })));`)).toBe('false');
-  expect(evaluated(`String(Object.is(Composite({ v: ${D('1.0')} }), Composite({ v: decimal64("1.0") })));`)).toBe('false');
+  expect(evaluated(`String(Object.is(Composite({ v: ${D('1.0')} }), Composite({ v: decimal64.parse("1.0") })));`)).toBe('false');
 });
 
 test('the SCALE half of the rule has no metadata to read', () => {
@@ -287,14 +287,14 @@ test('a decimal field stores and reads, cohort intact', () => {
   // The property that matters for a field: the significance survives storage,
   // which a double-backed field could not have given.
   expect(evaluated('class C { d: decimal128 = 1.50; } new C().d.toString();')).toBe('1.50');
-  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128("2.50"); c.d.toString();')).toBe('2.50');
-  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128("2.50"); '
-    + 'String(Object.is(c.d, decimal128("2.50")));')).toBe('true');
+  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128.parse("2.50"); c.d.toString();')).toBe('2.50');
+  expect(evaluated('class C { d: decimal128 = 1.0; } const c = new C(); c.d = decimal128.parse("2.50"); '
+    + 'String(Object.is(c.d, decimal128.parse("2.50")));')).toBe('true');
   // A wrong-width value is refused, as any typed field refuses one - and
   // refused EARLY, since #sec-type-errors makes a determinable type error an
   // Early Error and both the field's type and the value's are written down.
   // The script does not run, so there is nothing for a `try` to catch.
-  expectThrown('class C { d: decimal32 = 1.0; } const c = new C(); c.d = decimal128("2.5"); "ok";',
+  expectThrown('class C { d: decimal32 = 1.0; } const c = new C(); c.d = decimal128.parse("2.5"); "ok";',
     'is not assignable to');
 });
 
@@ -334,8 +334,8 @@ test('`parse` reads the DIGITS, like the constructor call', () => {
   expect(evaluated('decimal32.parse("1.0").toString();')).toBe('1.0');
   // It agrees with the constructor about the COHORT MEMBER, which is what says
   // the two forms are one facility rather than two that happen to coincide.
-  expect(evaluated('String(Object.is(decimal128.parse("1.00"), decimal128("1.00")));')).toBe('true');
-  expect(evaluated('String(Object.is(decimal128.parse("1.00"), decimal128("1.0")));')).toBe('false');
+  expect(evaluated('String(Object.is(decimal128.parse("1.00"), decimal128.parse("1.00")));')).toBe('true');
+  expect(evaluated('String(Object.is(decimal128.parse("1.00"), decimal128.parse("1.0")));')).toBe('false');
   // A malformed string is a SyntaxError, "like a malformed literal" - the same
   // answer the integer and float paths give.
   expect(evaluated('try { decimal128.parse("abc"); "OK"; } catch (e) { e.constructor.name; }')).toBe('SyntaxError');

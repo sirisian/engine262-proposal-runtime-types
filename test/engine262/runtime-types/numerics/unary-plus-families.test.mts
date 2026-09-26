@@ -28,7 +28,7 @@ test('every other family of the proposal returns itself, with its type', () => {
   expect(evaluated(plus("(BigInt('9007199254740993') := int64)"))).toBe('9007199254740993 [int.<64>]');
   expect(evaluated(plus('(1.5 := float32)'))).toBe('1.5 [float32]');
   // A decimal keeps its cohort member.
-  expect(evaluated(plus("decimal64('1.50')"))).toBe('1.50 [decimal64]');
+  expect(evaluated(plus("decimal64.parse('1.50')"))).toBe('1.50 [decimal64]');
   expect(evaluated('const v = float32x4(1, 2, 3, 4); String(Reflect.typeOf(+v));')).toBe('vector.<float32, 4>');
 });
 

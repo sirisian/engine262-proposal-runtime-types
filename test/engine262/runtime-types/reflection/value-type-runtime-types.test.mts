@@ -8,20 +8,20 @@ import { evaluated } from '../harness.mts';
  * `Reflect.typeOf` must answer the type and not the shape of the object that
  * carries it. Both fell through to the shape branches and answered the literal
  * type of an object with no own properties, so every decimal - whatever its
- * width - reported the same `{}`, while `decimal32("1") is decimal64` answered
+ * width - reported the same `{}`, while `decimal32.parse("1") is decimal64` answered
  * *false* and a `decimal32` annotation refused a `decimal64`. Two answers
  * disagreeing is what #sec-instanceof-for-type-objects exists to prevent.
  */
 
 test('each decimal width reports its own type', () => {
-  expect(evaluated('`${Reflect.typeOf(decimal32("1"))}`;')).toBe('decimal32');
-  expect(evaluated('`${Reflect.typeOf(decimal64("1"))}`;')).toBe('decimal64');
-  expect(evaluated('`${Reflect.typeOf(decimal128("1"))}`;')).toBe('decimal128');
+  expect(evaluated('`${Reflect.typeOf(decimal32.parse("1"))}`;')).toBe('decimal32');
+  expect(evaluated('`${Reflect.typeOf(decimal64.parse("1"))}`;')).toBe('decimal64');
+  expect(evaluated('`${Reflect.typeOf(decimal128.parse("1"))}`;')).toBe('decimal128');
   // Distinct from one another, which is the property that failed: all three
   // were `{}`, so all three compared equal.
-  expect(evaluated('`${Reflect.typeOf(decimal32("1")) === Reflect.typeOf(decimal64("1"))}`;')).toBe('false');
+  expect(evaluated('`${Reflect.typeOf(decimal32.parse("1")) === Reflect.typeOf(decimal64.parse("1"))}`;')).toBe('false');
   // And INTERNED with the written type rather than merely printing like it.
-  expect(evaluated('`${Reflect.typeOf(decimal64("1")) === (type decimal64)}`;')).toBe('true');
+  expect(evaluated('`${Reflect.typeOf(decimal64.parse("1")) === (type decimal64)}`;')).toBe('true');
 });
 
 test('a complex reports its component width', () => {

@@ -1221,11 +1221,23 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         }
         return Q(yield* ToString(value));
       case 'number':
-        // NOT gated here, deliberately. A cast is not a boundary: `v := number`
-        // is an explicit conversion the program wrote and asked for, and it
-        // wraps and truncates where the annotated binding throws. The gate
-        // below is the BOUNDARY's, which is what #table-implicit-conversions'
-        // `any`-in-a-typed-position row governs.
+        // A cast is not a boundary: `v := number` is an explicit conversion the
+        // program wrote, so a NUMERIC source converts and discards what it must,
+        // where the annotated binding would throw. A non-numeric source is not a
+        // conversion's at all. #sec-convertvalue has no step for one - a string,
+        // a boolean, *null*, *undefined*, a symbol or an object reaches none and
+        // throws - and #sec-parsing: "A `string` is deliberately not a conversion
+        // source for a numeric type". This was ToNumber for every source, so
+        // `'' := number` was 0, `'12abc' := number` NaN and `[5] := number` 5,
+        // where `float64` refuses all three; `number.parse` is the way from a
+        // string, and JavaScript's own `Number(x)` is untouched.
+        if (value instanceof JSStringValue || value instanceof TypedStringValue) {
+          return Throw.TypeError('a string is not a conversion source for $1; use its parse or tryParse', Value(displayType(t)));
+        }
+        if (!(value instanceof NumberValue || isTypedNumber(value) || value instanceof BigIntValue
+            || isDecimalObject(value) || isRationalObject(value) || isFloat128Object(value) || isComplexObject(value))) {
+          return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
+        }
         return Q(yield* ToNumber(value));
       case 'boolean':
         return ToBoolean(value);
@@ -1420,9 +1432,9 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.true
       && SoAStorageOf(value as unknown as object) === undefined) {
     if (t.Kind === 'array') {
-      return Q(yield* ConvertArrayElementwise(value, t, ExplicitElementConversion));
+      return Q(yield* ConvertArrayElementwise(value, t, ConvertValue));
     }
-    return Q(yield* ConvertTupleElementwise(value, t, ExplicitElementConversion));
+    return Q(yield* ConvertTupleElementwise(value, t, ConvertValue));
   }
   return Q(yield* RequireType(value, t));
 }
@@ -5574,7 +5586,7 @@ type ElementConversion = (v: Value, t: TypeRecord) => ValueEvaluator;
 /**
  * An array converted to an array type, element by element, by `convertElement`:
  * the implicit conversion passes CheckedConvertValue, the explicit one passes
- * ExplicitElementConversion. One array-building path for both, so an explicit
+ * ConvertValue. One array-building path for both, so an explicit
  * conversion of an array is by construction the explicit conversion of each
  * element - `[x] := [].<T>` holds what `[x := T]` holds. The fixed extent is a
  * matter of shape, checked in both modes.
@@ -5677,27 +5689,4 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
     Rest: rest !== undefined ? restElementType(rest.Type) : undefined,
   };
   return out;
-}
-
-/** Whether a type is one of the numeric types, the targets a string is not a conversion source for. */
-function isNumericTarget(t: TypeRecord): boolean {
-  if (t.Kind !== 'primitive') return false;
-  const name = t.Name;
-  return name === 'number' || name === 'bigint' || name === 'rational' || name === 'int' || name === 'uint'
-    || name.startsWith('float') || name.startsWith('decimal') || name.startsWith('complex');
-}
-
-/**
- * The EXPLICIT conversion of one element of an array or tuple: ConvertValue, the
- * scalar's own conversion. One exception, the Parsing clause's: "a string is
- * deliberately not a conversion source for a numeric type ... enforced at the
- * explicit conversion too", so a string element at a numeric type is refused -
- * even where today's scalar conversion, at `number` and at the decimal types,
- * converts one, which is an open question of its own.
- */
-function* ExplicitElementConversion(v: Value, t: TypeRecord): ValueEvaluator {
-  if ((v instanceof JSStringValue || v instanceof TypedStringValue) && isNumericTarget(t)) {
-    return Throw.TypeError('a string is not a conversion source for $1; use its parse or tryParse', Value(displayType(t)));
-  }
-  return Q(yield* ConvertValue(v, t));
 }

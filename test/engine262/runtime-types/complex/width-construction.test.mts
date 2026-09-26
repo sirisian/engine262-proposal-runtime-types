@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 /**
  * A COMPLEX AT A NAMED WIDTH IS CONSTRUCTED FROM ITS PAIR, as the bare name is.
  *
- * `sec-type-names` lists `complex64(1, 2)` beside `decimal128("1.0")` and
+ * `sec-type-names` lists `complex64(1, 2)` beside `decimal128.parse("1.0")` and
  * `float32x4(1, 2, 3, 4)` as "how those values are CREATED".
  *
  * Only the bare `complex` was bound to the pair constructor. A width name is

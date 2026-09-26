@@ -111,8 +111,9 @@ test('Explicit Casting: := wraps a numeric value to the target width', () => {
 });
 
 test('Explicit Casting: := also performs the ordinary primitive conversions', () => {
-  // `number` is the type ToNumber produces, so this cast IS that conversion
-  expect(bool('String(("5" := number) === 5);')).toBe(true);
+  // a string is not a conversion source for a numeric type, `number` included
+  // (#sec-parsing): the parse is written
+  expect(bool('String(number.parse("5") === 5);')).toBe(true);
   // to `string`, the sources that have one canonical text convert
   expect(bool('String((5 := string) === "5");')).toBe(true);
   expect(bool('String((5n := string) === "5");')).toBe(true);

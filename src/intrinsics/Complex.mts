@@ -5,7 +5,7 @@ import { type ValueEvaluator } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
 import { JSStringValue } from '../value.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { ParseComplexLiteral } from './TypePrototype.mts';
+import { ReadComplexLiteral } from './TypePrototype.mts';
 import { surroundingAgent, Throw } from '#self';
 import {
   CreateBuiltinFunction, Descriptor, OrdinaryObjectCreate, ToNumber, X, Q,
@@ -476,9 +476,12 @@ function* ComplexParse([S = Value.undefined]: Arguments): ValueEvaluator {
   if (!(S instanceof JSStringValue)) {
     return Throw.SyntaxError('$1 is not a valid literal', S);
   }
-  const parsed = ParseComplexLiteral(S.stringValue());
-  if (!parsed) {
+  const parsed = ReadComplexLiteral(S.stringValue(), undefined);
+  if (parsed === 'syntax') {
     return Throw.SyntaxError('$1 is not a valid literal', S);
+  }
+  if (parsed === 'range') {
+    return Throw.RangeError('$1 is out of range for the type', S);
   }
   return CreateComplexValue(parsed.real, parsed.imaginary, undefined, surroundingAgent.currentRealmRecord);
 }
@@ -488,9 +491,14 @@ function* ComplexTryParse([S = Value.undefined]: Arguments): ValueEvaluator {
   if (!(S instanceof JSStringValue)) {
     return Value.null;
   }
-  const parsed = ParseComplexLiteral(S.stringValue());
-  if (!parsed) {
+  const parsed = ReadComplexLiteral(S.stringValue(), undefined);
+  if (parsed === 'syntax') {
     return Value.null;
+  }
+  // As every tryParse: *null* for a string that is not a literal, and the
+  // *RangeError* for a literal the type cannot represent.
+  if (parsed === 'range') {
+    return Throw.RangeError('$1 is out of range for the type', S);
   }
   return CreateComplexValue(parsed.real, parsed.imaginary, undefined, surroundingAgent.currentRealmRecord);
 }

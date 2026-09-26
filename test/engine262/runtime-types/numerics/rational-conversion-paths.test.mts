@@ -30,7 +30,7 @@ const VALUES: Record<string, string> = {
   tenth: 'Number("0.1")',
   f32half: '(Number("0.5") := float32)',
   f64: '(Number("-2.25") := float64)',
-  dec: '(decimal64("1.5"))',
+  dec: '(decimal64.parse("1.5"))',
   u8: '(Number("5") := uint8)',
   i64: '(Number("-7") := int64)',
   wide: '(BigInt("9007199254740993") := int64)',

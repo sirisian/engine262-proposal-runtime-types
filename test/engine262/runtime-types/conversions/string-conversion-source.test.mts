@@ -43,15 +43,17 @@ test('the parse forms are what the clause says to write', () => {
   expect(evaluated("let x = uint8.tryParse('1'); String(x !== null);")).toBe('true');
 });
 
-test('the rule reaches the sized value types and stops there', () => {
-  // #sec-convertvalue reaches the string refusal only for `int`, `uint` and the
-  // binary floats. `number`, `bigint` and `boolean` are earlier cases of that
-  // operation and perform "the ordinary primitive conversions".
-  expectStaticTypeError("let x = ('5' := int32);");
-  expectStaticTypeError("let x = ('5' := float128);");
-  expect(evaluated("String(('5' := number) === 5);")).toBe('true');
-  expect(evaluated("let x = number('5'); String(x);")).toBe('5');
+test('the rule reaches every numeric type', () => {
+  // #sec-convertvalue: a string source reaches none of its steps at a numeric
+  // target - only `string` and `boolean` targets have a PrimitiveConvert step -
+  // and throws. So `number`, `bigint`, the decimals, `rational` and complex refuse
+  // a string as the sized types do; `boolean` keeps its truth-value conversion.
+  for (const target of ['int32', 'float128', 'number', 'bigint', 'decimal128', 'rational', 'complex64']) {
+    expectStaticTypeError(`let x = ('5' := ${target});`);
+    expectStaticTypeError(`let x = ${target}('5');`);
+  }
   expect(evaluated("let x = ('5' := boolean); String(x);")).toBe('true');
+  expect(evaluated("let x = number.parse('5'); String(x);")).toBe('5');
 });
 
 test('conversions that are not from a string are untouched', () => {

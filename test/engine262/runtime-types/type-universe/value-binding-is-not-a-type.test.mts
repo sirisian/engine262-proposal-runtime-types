@@ -26,7 +26,7 @@ const VALUE_BINDINGS: readonly (readonly [string, string])[] = [
   ['uint16', 'const q: uint16 = 1; let v: q = 2;'],
   ['float32', 'const q: float32 = 1.5; let v: q = 2.5;'],
   ['float64', 'const q: float64 = 1.5; let v: q = 2.5;'],
-  ['decimal128', 'const q: decimal128 = decimal128("1.0"); let v: q = decimal128("2.0");'],
+  ['decimal128', 'const q: decimal128 = decimal128.parse("1.0"); let v: q = decimal128.parse("2.0");'],
   ['an enum member', 'enum E { A } const q: E = E.A; let v: q = E.A;'],
   ['string', 'const q: string = "a"; let v: q = "b";'],
   ['boolean', 'const q: boolean = true; let v: q = false;'],
@@ -55,9 +55,9 @@ test('decimal no longer crashes the host', () => {
   // `'TypeRecord' in value` is true of a slot that exists and holds nothing, so
   // a decimal reached a walk that read `record.Kind` off undefined and took the
   // process down. A JavaScript error is the whole of what is wanted here.
-  expectThrownKind('const q: decimal128 = decimal128("1.0"); let v: q = decimal128("2.0");', 'TypeError');
+  expectThrownKind('const q: decimal128 = decimal128.parse("1.0"); let v: q = decimal128.parse("2.0");', 'TypeError');
   // and the value itself is untouched
-  expect(evaluated('const q: decimal128 = decimal128("1.0"); String(q.toString());')).toBe('1.0');
+  expect(evaluated('const q: decimal128 = decimal128.parse("1.0"); String(q.toString());')).toBe('1.0');
 });
 
 test('the two spellings that DO name a type still work', () => {
