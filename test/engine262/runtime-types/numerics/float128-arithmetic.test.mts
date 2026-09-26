@@ -357,7 +357,7 @@ test('the special cases of Number::exponentiate', () => {
     ['-1 ** Infinity', f(-1), infinity(1), 'nan'],
     ['0.5 ** Infinity', f(1, -1), infinity(1), '+0'],
     ['-2 ** 0.5', f(-1, 1), f(1, -1), 'nan'],
-    ['2 ** 0.5 waits for stage 2', f(1, 1), f(1, -1), 'undefined'],
+    ['2 ** 0.5 has no exact route; pow takes exp(y ln x)', f(1, 1), f(1, -1), 'undefined'],
     ['-0 ** -3', zero(-1), f(-3), '-inf'],
     ['-0 ** 2', zero(-1), f(2), '+0'],
     ['-Infinity ** 3', infinity(-1), f(3), '-inf'],

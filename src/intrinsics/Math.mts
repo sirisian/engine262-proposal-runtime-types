@@ -32,10 +32,15 @@ import {
 } from './Float128.mts';
 import {
   finite as Float128Finite, zero as Float128Zero, infinity as Float128Infinity, NAN as Float128Nan,
-  negate as Float128Negate, compare as Float128Compare, exponentiate as Float128Exponentiate,
+  negate as Float128Negate, compare as Float128Compare,
   roundToInteger as Float128RoundToInteger, sqrt as Float128Sqrt, cbrt as Float128Cbrt, hypot as Float128Hypot,
   toBinaryFloat as Float128ToBinaryFloat, sumExact as Float128SumExact, type Binary128,
 } from './Float128Arithmetic.mts';
+import {
+  exp as Float128Exp, expm1 as Float128Expm1, log as Float128Log, log1p as Float128Log1p,
+  log2 as Float128Log2, log10 as Float128Log10,
+} from './Float128Transcendental.mts';
+import * as T128 from './Float128Transcendental.mts';
 import {
   surroundingAgent,
   ToNumber,
@@ -2050,15 +2055,33 @@ function Float128Math(name: string, args: readonly (Value | undefined)[]): Value
       }
       return done(best);
     }
-    case 'pow': {
-      const p = Float128Exponentiate(x, xs[1] ?? Float128Nan);
-      return p === undefined ? Throw.RangeError('float128 exponentiation by this exponent is not yet supported') : done(p);
-    }
+    // The exact route where there is one, exp(y ln x) correctly rounded where not.
+    case 'pow': return done(T128.pow(x, xs[1] ?? Float128Nan));
     // #sec-overloading-of-the-existing-functions: "the value rounded through
     // binary32 or binary16, a value of T" - a float128, holding that value.
     case 'fround': return Float128FromNumber(Float128ToBinaryFloat(x, 32), surroundingAgent.currentRealmRecord);
     case 'f16round': return Float128FromNumber(Float128ToBinaryFloat(x, 16), surroundingAgent.currentRealmRecord);
     case 'conj': return done(x); // a real number is its own conjugate
+    // Correctly rounded - the float128 plan's B4 - by Float128Transcendental.
+    case 'exp': return done(Float128Exp(x));
+    case 'expm1': return done(Float128Expm1(x));
+    case 'log': return done(Float128Log(x));
+    case 'log1p': return done(Float128Log1p(x));
+    case 'log2': return done(Float128Log2(x));
+    case 'log10': return done(Float128Log10(x));
+    case 'sin': return done(T128.sin(x));
+    case 'cos': return done(T128.cos(x));
+    case 'tan': return done(T128.tan(x));
+    case 'asin': return done(T128.asin(x));
+    case 'acos': return done(T128.acos(x));
+    case 'atan': return done(T128.atan(x));
+    case 'atan2': return done(T128.atan2(x, xs[1] ?? Float128Nan));
+    case 'sinh': return done(T128.sinh(x));
+    case 'cosh': return done(T128.cosh(x));
+    case 'tanh': return done(T128.tanh(x));
+    case 'asinh': return done(T128.asinh(x));
+    case 'acosh': return done(T128.acosh(x));
+    case 'atanh': return done(T128.atanh(x));
     case 'clz32': case 'imul':
       return Throw.TypeError('Math.$1 is not defined for a float128', Value(name));
     default:

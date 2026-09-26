@@ -43,8 +43,10 @@ function expectRefused(source: string): void {
   expectThrownKind(source, 'TypeError');
 }
 
-test('a non-numeric source is refused at every numeric type, in every spelling', () => {
-  for (const type of NUMERIC) {
+// One test per type: the grid is 660 evaluations, and a single test holding
+// them all ran close enough to the timeout to fail on a loaded machine.
+for (const type of NUMERIC) {
+  test(`a non-numeric source is refused at ${type}, in every spelling`, () => {
     for (const [name, declaration, expression] of STATIC_SOURCES) {
       expectStaticTypeError(`${declaration} ${type}(${expression});`);
       expectStaticTypeError(`${declaration} ${expression} := ${type};`);
@@ -57,8 +59,8 @@ test('a non-numeric source is refused at every numeric type, in every spelling',
       expectRefused(`${declaration} let x: ${type} = v;`);
       void name;
     }
-  }
-});
+  });
+}
 
 test('the other paths refuse a string too', () => {
   for (const type of NUMERIC) {
@@ -111,14 +113,17 @@ function expectedParse(type: string, input: string): string {
 }
 const run = (expression: string) => evaluated(`let r; try { r = String(${expression}); } catch (e) { r = e.constructor.name; } r;`);
 
-test('parse and tryParse keep one contract at every numeric type, number included', () => {
-  for (const type of [...INTEGER, 'bigint', ...BINARY, ...DECIMAL, 'rational', ...COMPLEX]) {
+for (const type of [...INTEGER, 'bigint', ...BINARY, ...DECIMAL, 'rational', ...COMPLEX]) {
+  test(`parse and tryParse keep the one contract at ${type}`, () => {
     for (const input of ['5', ' 5 ', '1_000', '1e2', '1.5', '12abc', '', '0x10', '1e9999', '-1']) {
       const want = expectedParse(type, input);
       expect(run(`${type}.parse('${input}')`), `${type}.parse('${input}')`).toBe(want);
       expect(run(`${type}.tryParse('${input}')`), `${type}.tryParse('${input}')`).toBe(want === 'SyntaxError' ? 'null' : want);
     }
-  }
+  });
+}
+
+test('the parse contract: number answers a Number, and a complex part is its component', () => {
   expect(evaluated("String(Reflect.typeOf(number.parse('5')));")).toBe('number');
   // A complex part is a value of its component: a float32 part overflows first.
   expect(run("complex64.parse('1e300')")).toBe('RangeError');

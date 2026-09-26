@@ -37,8 +37,9 @@ import {
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
 import {
   add as float128Add, subtract as float128Subtract, multiply as float128Multiply, divide as float128Divide,
-  remainder as float128Remainder, exponentiate as float128Exponentiate, type Binary128,
+  remainder as float128Remainder, type Binary128,
 } from '../intrinsics/Float128Arithmetic.mts';
+import { pow as float128Pow } from '../intrinsics/Float128Transcendental.mts';
 import {
   Assert, R, Throw, ToNumeric, ToPrimitive, ToString, surroundingAgent, Call, LookupClassOperator, EnterOperatorBody, LeaveOperatorBody, RightOperandDeclaresOperator } from '#self';
 
@@ -294,13 +295,9 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       case '*': return done(float128Multiply(a, b));
       case '/': return done(float128Divide(a, b));
       case '%': return done(float128Remainder(a, b));
-      case '**': {
-        const p = float128Exponentiate(a, b);
-        // A non-integer exponent needs a transcendental function, correctly
-        // rounded under the plan's B4; until that lands it is refused by name,
-        // never answered at a lower precision.
-        return p === undefined ? Throw.RangeError('float128 exponentiation by this exponent is not yet supported') : done(p);
-      }
+      // The exact route where there is one, and exp(y ln x) correctly rounded -
+      // the float128 plan's B4 - where there is not.
+      case '**': return done(float128Pow(a, b));
       default:
         return Throw.TypeError('this operator is not defined for a float128');
     }
