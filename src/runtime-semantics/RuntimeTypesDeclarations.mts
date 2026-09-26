@@ -32,7 +32,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
-import { bindTypeParameter, toNumericArgument,
+import { BindTypeParameterTyped, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
@@ -2053,7 +2053,7 @@ export function* MaterializeSpecialization(
     const name = (param as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
     const record = argRecords[i];
     if (name) {
-      bindTypeParameter(frame, name, record as never, param as never);
+      Q(yield* BindTypeParameterTyped(frame, name, record as TypeRecord, param));
     }
     key.push(specializationKeyOf(record as never));
   }
@@ -2467,7 +2467,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     // CanonicalizeType, so canonicalizing after binding split them.
     record = CanonicalizeType(record);
     if (name) {
-      bindTypeParameter(frame, name, record, param);
+      Q(yield* BindTypeParameterTyped(frame, name, record, param));
     }
     key.push(specializationKeyOf(record));
     argRecords.push(record);

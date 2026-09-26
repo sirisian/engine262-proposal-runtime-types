@@ -287,7 +287,7 @@ export function* AllDefaultsFrame(declaration: unknown): PlainEvaluator<Map<stri
       popTypeParameterFrame();
     }
     if (name) {
-      bindTypeParameter(frame, name, record, p);
+      Q(yield* BindTypeParameterTyped(frame, name, record, p));
     }
   }
   return frame;
@@ -364,6 +364,45 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
 const valueParameterBindings = new WeakSet<object>();
 
 /** Binds _record_ to _name_ in _frame_, marking it if _param_ was declared with `:`. */
+/**
+ * #sec-generics (decided in phase 4, step 9g): a VALUE parameter keeps its
+ * declared type wherever it is read - in a type-level expression as in a body
+ * - so `[(S + B / 8 - 1) / (B / 8)]` divides as `uint32` does (Rust's const
+ * parameters, C++'s non-type template parameters). A written literal binds as
+ * a value of the parameter's DOMAIN (`S: uint32`), as a function's explicit
+ * binding already did. Only the FRAME binding changes: a class record keeps its
+ * canonical argument, so type identity is unchanged.
+ */
+export function* BindTypeParameterTyped(
+  frame: Map<string, TypeRecord>,
+  name: string,
+  record: TypeRecord,
+  param: unknown,
+): PlainEvaluator<void> {
+  const p = param as { IsValueParameter?: boolean, TypeParameterDomain?: ParseNode.Type | null, TypeParameterConstraint?: ParseNode.Type | null } | undefined;
+  let bound = record;
+  // The declared type is the domain (`S: uint32`) or, as some forms record
+  // it, the constraint; a value already of a typed kind is not converted twice.
+  const declaredNode = p?.TypeParameterDomain ?? p?.TypeParameterConstraint ?? undefined;
+  if (p?.IsValueParameter && declaredNode && record.Kind === 'literal'
+    && !((record as { Value?: unknown }).Value instanceof TypedNumberValue)) {
+    pushTypeParameterFrame(frame);
+    let domain;
+    try {
+      domain = EnsureCompletion(yield* TypeNodeToTypeRecord(declaredNode));
+    } finally {
+      popTypeParameterFrame();
+    }
+    if (domain.Type === 'normal') {
+      const converted = EnsureCompletion(yield* CheckedConvertValue((record as { Value: Value }).Value, domain.Value as never));
+      if (converted.Type === 'normal') {
+        bound = { ...record, Value: converted.Value as Value, Base: domain.Value as TypeRecord } as TypeRecord;
+      }
+    }
+  }
+  bindTypeParameter(frame, name, bound, param);
+}
+
 export function bindTypeParameter(
   frame: Map<string, TypeRecord>,
   name: string,
@@ -5701,6 +5740,17 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           }
           // A computed extent evaluates; #sec-compile-time-evaluability's
           // budget joins later.
+          // An extent that names an OPEN parameter - `[S * 2]` where `S` is not
+          // yet bound, as a generic declaration's own evaluation has it - is
+          // itself open until specialization, as a bare `[S]` is above; it is
+          // not computed from the placeholder (which read as NaN, or as the
+          // name: `[S + 1]` was "S1") (phase 4, step 9g).
+          if (ExtentNamesOpenParameter(node.ArrayExtent)) {
+            return {
+              Kind: 'array', Element,
+              Extent: { Kind: 'parameter', Name: (node.ArrayExtent as { sourceText?: string }).sourceText ?? 'extent' } as unknown as TypeRecord,
+            } as unknown as TypeRecord;
+          }
           const ref = Q(yield* Evaluate(node.ArrayExtent));
           const v = Q(yield* GetValue(ref));
           // A TYPED number counts. A value generic binds the value its
@@ -6376,7 +6426,8 @@ export function fitsNumericType(v: number | bigint, name: string, args: readonly
   // A width may reach here as a numeric literal record (a value parameter's
   // binding, typed or not) from a record no constructor canonicalized: read it
   // as its number, or every value falls outside the range (phase 4, step 9e).
-  args = args.map(CanonicalWidthArgument);
+  // Some callers pass a record's absent Arguments (a float's); they read none.
+  args = (args ?? []).map(CanonicalWidthArgument);
   if (name === 'uint' || name === 'int') {
     const bits = typeof args[0] === 'number' ? args[0] : 0;
     // #sec-integer-types: the values are "the integers from -2**(N-1) through
@@ -6675,3 +6726,28 @@ setLayoutSubstituter((structure, declaration, args) => CanonicalizeType(Substitu
 setDeferredOperatorImpl((operator, operands) => (operator === 'keyof'
   ? KeyTypesOf(operands[0]!)
   : IndexedAccessTypeRecord(operands[0]!, operands[1]!)));
+
+/** Whether _expression_ names a type parameter bound, where it is evaluated, to an OPEN parameter. */
+function ExtentNamesOpenParameter(expression: unknown): boolean {
+  let open = false;
+  const visit = (v: unknown): void => {
+    if (open || !v || typeof v !== 'object') return;
+    if (Array.isArray(v)) {
+      v.forEach(visit);
+      return;
+    }
+    const n = v as { type?: string, name?: string };
+    if (n.type === 'IdentifierReference' && n.name) {
+      const bound = lookupTypeParameter(n.name);
+      if (bound !== null && bound.Kind === 'parameter') {
+        open = true;
+        return;
+      }
+    }
+    for (const [k, c] of Object.entries(v)) {
+      if (k !== 'parent' && k !== 'location') visit(c);
+    }
+  };
+  visit(expression);
+  return open;
+}

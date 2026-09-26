@@ -485,3 +485,17 @@ test('a conversion reading a class parameter, in a method, is open (not closed)'
     g(): uint.<B> { return uint.<B>(1); } }
     new P.<16>().f(3) + '|' + String(new P.<16>().g());`)).toBe('3|1');
 });
+
+// Step 9g: a value parameter keeps its declared type in a type-level expression.
+test('a computed extent divides as its parameters\' uint32 does, and defaults zero-filled', () => {
+  // Was 2.875 ("not a type"): the frame bound the written literal untyped.
+  expect(evaluated(`class P<S: uint32 = 16, B: uint32 = 64> { #b: [(S + B / 8 - 1) / (B / 8)].<uint.<B>>;
+    n(): string { return String(this.#b.length) + ',' + String(this.#b[0]); } }
+    new P().n() + '|' + new P.<1400, 64>().n() + '|' + new P.<16, 32>().n();`)).toBe('2,0|175,0|4,0');
+});
+
+test('an extent over an open parameter stays open until specialization', () => {
+  // `[S + 1]` was evaluated with `S` open, which read as its name: "S1".
+  expect(evaluated(`class P<S: uint32 = 16> { #b: [S + 1].<uint8>; n(): string { return String(this.#b.length); } }
+    new P().n() + '|' + new P.<4>().n();`)).toBe('17|5');
+});
