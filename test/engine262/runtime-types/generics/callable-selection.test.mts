@@ -514,3 +514,14 @@ test('a selected case\'s value binder keeps its declared type', () => {
     w<float32, maximum: float32>(v: float32): string { return String(Reflect.typeOf(maximum)) + ':' + String(v / maximum); } }
     new A().w.<float32, 4>((2 := float32));`)).toBe('float32:0.5');
 });
+
+// Step 9i: a type parameter applied as a conversion, `T(v)`.
+test('a type parameter converts as its Type Object does, with no this value', () => {
+  // #sec-type-objects: "a type may be applied to an argument as `T(v)`"; the
+  // reference names no Environment Record, and EvaluateCall asserted one.
+  expect(evaluated(`function f<T: type extends uint = uint16>(v: uint32): string { return String(Reflect.typeOf(T(v))); }
+    f.<uint16>(3) + '|' + f(3);`)).toBe('uint.<16>|uint.<16>');
+  expect(evaluated('function f<T: type>(v: uint32): string { const x = T(v); return String(x); } f.<uint8>(300);')).toBe('44');
+  // An ordinary call keeps its this value.
+  expect(evaluated('const o = { m() { return this === o; } }; String(o.m());')).toBe('true');
+});
