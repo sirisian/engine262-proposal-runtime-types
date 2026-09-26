@@ -37,6 +37,7 @@ import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
+import { ArgumentListEvaluationItems } from './ArgumentListEvaluation.mts';
 import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate } from '#self';
 import { Throw as ThrowError } from '#self';
 import {
@@ -1109,21 +1110,21 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // in scope.
   let explicitFrame: Map<string, TypeRecord> | undefined;
   // Plan section 3.8, phase 4 step 2: a direct explicit call into a group
-  // holding a specialized case selects its case - or falls back to the owner,
-  // which the ordinary explicit path below then binds as any generic call.
+  // holding a specialized case binds its owner, evaluates the arguments once,
+  // and selects an applicable case or the owner's fallback body.
   if (surroundingAgent.feature('runtime-types') && memberExpr.type === 'TypeArgumentsExpression') {
     const members = CaseGroupMembers(func);
     if (members) {
       const inner = (memberExpr as unknown as { Expression?: { type?: string, name?: string } }).Expression;
       const calleeName = inner?.type === 'IdentifierReference' && inner.name ? inner.name : 'this function';
-      const spread = (args ?? []).some((a) => (a as { type?: string }).type === 'AssignmentRestElement' || (a as { type?: string }).type === 'SpreadElement');
-      const choice = Q(yield* SelectExplicitCase(members, memberExpr.TypeArguments.TypeArgumentList as unknown as ParseNode[], calleeName, spread ? undefined : (args ?? []).length, classTypeParameterFrame(ref)));
+      const choice = Q(yield* SelectExplicitCase(members, memberExpr.TypeArguments.TypeArgumentList as unknown as ParseNode[], calleeName,
+        function* evaluateArguments() { return yield* ArgumentListEvaluationItems(args); }, classTypeParameterFrame(ref)));
       if (choice.frame) {
         const chosen = choice.fn;
         pushTypeParameterFrame(choice.frame);
         try {
           return Q(yield* WithSelectedInvocation(chosen, function* callSelected() {
-            return yield* EvaluateCall(chosen, ref, args, tailCall, CallExpression);
+            return yield* EvaluateCall(chosen, ref, args, tailCall, CallExpression, choice.arguments);
           }));
         } finally {
           popTypeParameterFrame();

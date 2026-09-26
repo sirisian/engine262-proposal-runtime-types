@@ -611,6 +611,18 @@ export function* BindTypeArgumentsInto(
       entries.push({ record: t, name: typeArgumentNameOf(a) });
     }
   }
+  return yield* BindTypeArgumentRecordsInto(params, entries.map((e) => e.record), entries.map((e) => e.name), frame, applied);
+}
+
+/** Bind already evaluated arguments with the same defaults, constraints and packs as a written application. */
+export function* BindTypeArgumentRecordsInto(
+  params: readonly ParseNode.TypeParameter[],
+  records: readonly TypeRecord[],
+  names: readonly (string | undefined)[],
+  frame: Map<string, TypeRecord>,
+  applied: string,
+): PlainEvaluator<TypeRecord[]> {
+  const entries = records.map((record, i) => ({ record, name: names[i] }));
   const elementBounds: (TypeRecord | null)[] = [];
   for (const q of params) {
     let bound: TypeRecord | null = null;

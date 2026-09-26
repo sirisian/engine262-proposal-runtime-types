@@ -16,17 +16,21 @@
  */
 
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { CanonicalizeType } from '../type-system/intern.mts';
-import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped } from '../type-system/runtime.mts';
-import { resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
-import { displayType, builtinTypeRecord, makePrimitive, type TypeRecord } from '../type-system/records.mts';
-import { IsSubtype } from '../type-system/relations.mts';
-import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
+import { GetTypeObject } from '../type-system/intern.mts';
+import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped, BindTypeArgumentRecordsInto, RuntimeTypeOf, valueArguments as argumentTypeOracle } from '../type-system/runtime.mts';
+import { resolveOverload, resolveOverloadByTypes, describeParameters, assignArguments, type OverloadSignature } from '../type-system/overloads.mts';
+import { displayType, builtinTypeRecord, makePrimitive, anyType, restElementType, type ParameterRecord, type TypeRecord } from '../type-system/records.mts';
+import { IsSubtype, SameType } from '../type-system/relations.mts';
+import { MatchSpecializationList, SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/specialization-selection.mts';
 import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
+import { BindNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
+import { slotReceiving } from '../type-system/sequence-assignment.mts';
+import { ReferenceValue } from '../value.mts';
+import { assignTypeArguments } from '../type-system/type-argument-order.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
 import { Evaluate } from '../evaluator.mts';
-import { SignaturesOf, InferGenericCallBindings, functionWhereClauses, classFrameOfObject } from './runtime-types.mts';
+import { SignaturesOf, InferGenericCallBindings, functionWhereClauses, classFrameOfObject, CheckedConvertValue } from './runtime-types.mts';
 import {
   Throw, Value, Q, Call, CreateBuiltinFunction, EnsureCompletion, GetValue, ExecutionContext, surroundingAgent, type PlainEvaluator, type ValueEvaluator,
 } from '#self';
@@ -40,8 +44,10 @@ type Declaration = ParseNode & {
 export interface CaseChoice {
   /** The function to call: a case's, or the owner's for the fallback. */
   readonly fn: Value;
-  /** The case's capture bindings; *undefined* for the owner, whose parameters the call binds itself. */
+  /** The case's capture bindings, or the owner's completed parameter bindings. */
   readonly frame: Map<string, TypeRecord> | undefined;
+  readonly owner?: boolean;
+  readonly arguments?: readonly Value[];
 }
 
 const isCase = (d: Declaration | undefined) => d?.TypeParameters?.ListKind === 'specialization' || d?.TypeParameters?.ListKind === 'mixed';
@@ -121,6 +127,25 @@ function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Decl
     Parameters: m.declaration.TypeParameters?.ListKind === 'parameters' ? ownerParameters(m.declaration) : undefined,
   }));
   const analysis = AnalyzeCallableGroup(declarations as never, host);
+  // Fixed value patterns take their owner's domain just as explicit values and
+  // defaults do. Otherwise the bound uint32 4 would not match the written 4.
+  for (const { Owner, Case } of analysis.Attached) {
+    const parameters = Owner.Parameters ?? [];
+    const patterns = SpecializationPatternsOf(Case.List!);
+    const assigned = assignTypeArguments(parameters, patterns, patterns.map(() => undefined), () => true);
+    if (!assigned.ok) continue;
+    for (let i = 0; i < parameters.length; i += 1) {
+      const parameter = parameters[i] as { Kind?: string, Domain?: TypeRecord, Variadic?: boolean };
+      if (parameter.Kind !== 'value' || !parameter.Domain) continue;
+      const domain = parameter.Variadic ? restElementType(parameter.Domain) : parameter.Domain;
+      for (const pattern of assigned.runs[i]!) {
+        const record = resolve(pattern);
+        if (record?.Kind !== 'literal') continue;
+        const value = Q(yield* CheckedConvertValue(record.Value, domain));
+        resolved.set(pattern, { Kind: 'literal', Value: value, Base: domain });
+      }
+    }
+  }
   return { analysis, host, resolve };
 }
 
@@ -205,22 +230,15 @@ export function* DispatchCaseGroup(
       const inferred = Q(yield* InferGenericCallBindings(chosen as never, args));
       const ownerArgs = (owner.Parameters ?? []).map((p) => inferred?.get(p.Name));
       if (ownerArgs.every((a) => a !== undefined)) {
-        let result: ReturnType<typeof SelectSpecialization<TypeRecord>> = SelectSpecialization(attached, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
-        // A replacement whose filter does not hold is excluded (B12).
-        const remaining = [...attached];
-        for (;;) {
-          if (result.Kind !== 'selected') break;
-          const selectedCase = result.Case;
-          const candidate = members.find((m) => m.declaration === selectedCase.Declaration)!.fn;
-          const filterFrame = Q(yield* TypedFrameOfBindings(selectedCase.Declaration, result.Bindings as never));
-          if (Q(yield* CaseFilterHolds(candidate, filterFrame, classFrameOfObject(thisValue)))) break;
-          remaining.splice(remaining.findIndex((c) => c.Declaration === selectedCase.Declaration), 1);
-          if (remaining.length === 0) {
-            result = { Kind: 'none' } as unknown as typeof result;
-            break;
-          }
-          result = SelectSpecialization(remaining, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
+        const remaining = [];
+        for (const candidate of attached) {
+          const matched = MatchSpecializationList(candidate.List, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
+          if (matched === 'no-match') continue;
+          const fn = members.find((m) => m.declaration === candidate.Declaration)!.fn;
+          const frame = Q(yield* TypedFrameOfBindings(candidate.Declaration, matched as never));
+          if (Q(yield* CaseFilterHolds(fn, frame, classFrameOfObject(thisValue)))) remaining.push(candidate);
         }
+        const result = SelectSpecialization(remaining, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
         if (result.Kind === 'ambiguous') {
           return Throw.TypeError('$1', Value(`${result.Cases.map((c) => c.Label).join(' and ')} both apply to this call, and neither is more specific than the other`));
         }
@@ -296,6 +314,74 @@ export function* CaseFilterHolds(fn: Value, frame: Map<string, TypeRecord>, clas
   }
 }
 
+export interface CaseCandidate {
+  readonly Declaration: ParseNode;
+  readonly Bindings: readonly { readonly Name: string, readonly Value: Argument }[];
+}
+
+export function CaseFormals(declaration: unknown): readonly ParseNode[] {
+  const d = declaration as { FormalParameters?: readonly ParseNode[], UniqueFormalParameters?: readonly ParseNode[] };
+  return d.FormalParameters ?? d.UniqueFormalParameters ?? [];
+}
+
+export function CaseParameters(declaration: unknown, resolve: (annotation: ParseNode.TypeAnnotation) => TypeRecord): ParameterRecord[] {
+  const formals = CaseFormals(declaration);
+  return describeParameters(formals, resolve).map((p, i) => ({ ...p, Ref: !!(formals[i] as { Ref?: boolean }).Ref }));
+}
+
+/** Use ordinary named-argument binding for each instantiated candidate. */
+export function PlaceCaseArguments<T>(parameters: readonly ParameterRecord[], items: readonly ArgumentItem<T>[],
+  typeOf: (value: T) => TypeRecord, omitted: T): T[] | null {
+  const placed = BindNamedArguments(parameters, items, (slots, values) => assignArguments(slots, values.map(typeOf)));
+  if (placed.error) return null;
+  return placed.groups.flatMap((group, i) => group.length === 0 && !parameters[i]!.Rest ? [omitted] : group);
+}
+
+export function CaseArgumentsAdmit(parameters: readonly ParameterRecord[], types: readonly TypeRecord[], refs: readonly boolean[]): boolean {
+  const counts = assignArguments(parameters, types);
+  if (!counts) return false;
+  for (let i = 0; i < types.length; i += 1) {
+    const p = parameters[slotReceiving(counts, i)];
+    if (!p || (p.Ref && !refs[i])) return false;
+    const target = p.Rest ? restElementType(p.Type) : p.Type;
+    // A borrowed location cannot be converted or widened. A ref argument to
+    // an ordinary parameter may still decay, as at every call boundary.
+    if (p.Ref && types[i]!.Kind !== 'any' && target.Kind !== 'any' && !SameType(types[i]!, target)) return false;
+  }
+  const admitted = types.map((t, i) => {
+    const p = parameters[slotReceiving(counts, i)]!;
+    // Supplying undefined triggers the initializer of an optional parameter.
+    return p.Optional && ((t.Kind === 'literal' && t.Value === Value.undefined) || (t.Kind === 'primitive' && t.Name === 'undefined'))
+      ? p.Type : t;
+  });
+  return resolveOverloadByTypes([{ Parameters: parameters, Function: Value.undefined }], admitted).Kind === 'resolved';
+}
+
+/** Resolve a declaration's types in its lexical environment, under this binding. */
+function* InCaseContext<T>(fn: Value, frame: Map<string, TypeRecord>, classFrame: Map<string, TypeRecord> | null,
+  body: () => PlainEvaluator<T>): PlainEvaluator<T> {
+  const declared = fn as unknown as { Environment?: unknown, PrivateEnvironment?: unknown, Realm?: unknown, ScriptOrModule?: unknown, TypeParameterFrame?: Map<string, TypeRecord> };
+  const context = new ExecutionContext();
+  context.Function = Value.null;
+  context.Realm = declared.Realm as never;
+  context.ScriptOrModule = declared.ScriptOrModule as never;
+  context.LexicalEnvironment = declared.Environment as never;
+  context.VariableEnvironment = declared.Environment as never;
+  context.PrivateEnvironment = declared.PrivateEnvironment as never;
+  surroundingAgent.executionContextStack.push(context);
+  if (declared.TypeParameterFrame) pushTypeParameterFrame(declared.TypeParameterFrame);
+  if (classFrame) pushTypeParameterFrame(classFrame);
+  pushTypeParameterFrame(frame);
+  try {
+    return yield* body();
+  } finally {
+    popTypeParameterFrame();
+    if (classFrame) popTypeParameterFrame();
+    if (declared.TypeParameterFrame) popTypeParameterFrame();
+    surroundingAgent.executionContextStack.pop(context);
+  }
+}
+
 /** The outcome of `SelectCase`. */
 export type CaseSelection =
   | { readonly Kind: 'case', readonly Declaration: ParseNode, readonly Bindings: readonly { readonly Name: string, readonly Value: TypeRecord | number }[] }
@@ -310,22 +396,6 @@ type Ordered = { ok: true, ordered: (TypeRecord | undefined)[] } | { ok: false, 
  * position its label names. An unlabeled position (a selector, a pattern-only
  * case's entry) takes no name, and a capture's name is never a label.
  */
-/**
- * A variadic owner's positional arguments, one per parameter: leading
- * parameters one each, the pack the tuple of its run, trailing ones from the
- * end. A missing leading argument is a hole the owner's default fills.
- */
-function PackByVariadicOwner(params: readonly { Variadic?: boolean }[], args: readonly TypeRecord[]): Ordered {
-  const at = params.findIndex((p) => p.Variadic === true);
-  const after = params.length - at - 1;
-  const ordered: (TypeRecord | undefined)[] = [];
-  for (let q = 0; q < at; q += 1) ordered.push(args[q]);
-  const run = args.slice(at, Math.max(at, args.length - after));
-  ordered.push(CanonicalizeType({ Kind: 'tuple', Elements: run.map((t) => ({ Type: t, Rest: false, Initial: 'none' as const })) } as TypeRecord));
-  for (let q = 0; q < after; q += 1) ordered.push(args[args.length - after + q]);
-  return { ok: true, ordered };
-}
-
 function OrderByLabels(labels: readonly (string | undefined)[], args: readonly TypeRecord[], names: readonly (string | undefined)[]): Ordered {
   const ordered: (TypeRecord | undefined)[] = [];
   let seenNamed = false;
@@ -353,8 +423,11 @@ function OrderByLabels(labels: readonly (string | undefined)[], args: readonly T
  * binders', a pattern-only case by none - and then: the most specific attached
  * case; otherwise a matching standalone case (rule 8); otherwise the owner's
  * body; otherwise no viable overload. A label no candidate knows is named.
+ * Each structural match yields its bindings for signature/filter admission
+ * before ranking. The checker answers synchronously; runtime may evaluate a
+ * filter. Both use the same ordering without selecting an inapplicable winner.
  */
-export function SelectCase(
+export function* SelectCase(
   analysis: ReturnType<typeof AnalyzeCallableGroup>,
   args: readonly TypeRecord[],
   names: readonly (string | undefined)[],
@@ -364,41 +437,31 @@ export function SelectCase(
   isSubtype: (sub: TypeRecord, sup: TypeRecord) => boolean,
   describe: (t: TypeRecord) => string,
   name: string,
-  // Cases whose filters did not hold (B12): not applicable, so not candidates.
-  excluded: ReadonlySet<object> = new Set(),
-): CaseSelection {
+  boundOwners: ReadonlyMap<ParseNode, readonly TypeRecord[]>,
+): Generator<CaseCandidate, CaseSelection, boolean> {
   const tuple = `(${args.map((a, i) => `${names[i] !== undefined ? `${names[i]}: ` : ''}${describe(a)}`).join(', ')})`;
   const unknown = new Set<string>();
   // Whether some candidate took the labels: then a label is not what failed.
   let labelsTaken = false;
   const ownerLabels = (o: { Parameters?: readonly { Name: string }[] }) => (o.Parameters ?? []).map((p) => p.Name);
   for (const owner of analysis.Owners) {
-    // A VARIADIC owner (`readAll<...Ts: type>`) called positionally binds as
-    // BindTypeArguments binds a class's parameters: one binding per parameter,
-    // the pack bound to the TUPLE of its run, which MatchSpecializationList
-    // matches a case's pattern sequence against (#sec-specialization; phase 4,
-    // step 9n). Ordering by one label per parameter refused any run longer
-    // than one, so a variadic owner's attached cases were never tried.
-    const variadicOwner = (owner.Parameters ?? []).some((p) => (p as { Variadic?: boolean }).Variadic === true)
-      && names.every((n) => n === undefined);
-    const order = variadicOwner ? PackByVariadicOwner(owner.Parameters ?? [], args) : OrderByLabels(ownerLabels(owner), args, names);
-    if (!order.ok) {
-      if (order.unknown) unknown.add(order.unknown);
+    const filled = boundOwners.get(owner.Node);
+    if (!filled) {
+      for (const label of names) if (label !== undefined && !ownerLabels(owner).includes(label)) unknown.add(label);
       continue;
     }
     labelsTaken = true;
-    // A hole a named call leaves takes the owner's default, as the owner's own binding would.
-    const filled: TypeRecord[] = [];
-    let complete = true;
-    order.ordered.forEach((a, q) => {
-      const binder = (owner.Parameters?.[q] as { Binder?: ParseNode.TypeParameter } | undefined)?.Binder;
-      const value = a ?? (binder?.TypeParameterDefault ? resolve(binder.TypeParameterDefault as unknown as ParseNode) : null);
-      if (value) filled.push(value); else complete = false;
-    });
-    if (!complete) continue;
-    const attached = analysis.Attached.filter((a) => a.Owner === owner && !excluded.has(a.Case.Node as object) && ValueArityAdmits(a.Case.Node, valueCount))
-      .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
-    if (attached.length === 0) continue;
+    const attached = [];
+    for (const a of analysis.Attached) {
+      if (a.Owner !== owner || !ValueArityAdmits(a.Case.Node, valueCount)) continue;
+      const matched = MatchSpecializationList(a.Case.List!, owner.Parameters as never, filled, host as never);
+      if (matched === 'no-match') continue;
+      const bindings = (matched as readonly { Capture: { Name: string }, Value: Argument }[])
+        .map((b) => ({ Name: b.Capture.Name, Value: b.Value }));
+      if (yield { Declaration: a.Case.Node, Bindings: bindings }) {
+        attached.push({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label });
+      }
+    }
     const result = SelectSpecialization(attached, owner.Parameters as never, filled, host as never);
     if (result.Kind === 'selected') {
       return { Kind: 'case', Declaration: result.Case.Declaration!, Bindings: (result.Bindings as readonly { Capture: { Name: string }, Value: TypeRecord | number }[]).map((b) => ({ Name: b.Capture.Name, Value: b.Value })) };
@@ -409,7 +472,7 @@ export function SelectCase(
   }
   const matching: { d: ParseNode, list: ParseNode.TypeParameters, ordered: readonly (TypeRecord | undefined)[], bindings: readonly { Name: string, Value: TypeRecord }[], label: string }[] = [];
   for (const d of analysis.Standalone) {
-    if (!d.List || d.List.ListKind === 'parameters' || excluded.has(d.Node as object) || !ValueArityAdmits(d.Node, valueCount)) continue;
+    if (!d.List || d.List.ListKind === 'parameters' || !ValueArityAdmits(d.Node, valueCount)) continue;
     const kinds = (d.List as { EntryKinds?: readonly string[] }).EntryKinds ?? SpecializationPatternsOf(d.List).map(() => 'argument');
     let binder = 0;
     const labels = kinds.map((k) => (k === 'parameter' ? (d.List!.TypeParameterList ?? [])[binder++]?.BindingIdentifier.name : undefined));
@@ -427,7 +490,9 @@ export function SelectCase(
     labelsTaken = true;
     const result = MatchStandaloneCase(d.List, order.ordered, resolve, isSubtype, describe);
     if (result.Kind === 'bound') return { Kind: 'error', Message: `${d.Label} applies to ${tuple}, but ${result.Message}` };
-    if (result.Kind === 'match') matching.push({ d: d.Node, list: d.List, ordered: order.ordered, bindings: result.Bindings, label: d.Label });
+    if (result.Kind === 'match' && (yield { Declaration: d.Node, Bindings: result.Bindings })) {
+      matching.push({ d: d.Node, list: d.List, ordered: order.ordered, bindings: result.Bindings, label: d.Label });
+    }
   }
   if (matching.length === 1) return { Kind: 'case', Declaration: matching[0]!.d, Bindings: matching[0]!.bindings };
   if (matching.length > 1) {
@@ -445,8 +510,12 @@ export function SelectCase(
     }
     return { Kind: 'error', Message: `${matching.map((m) => m.label).join(' and ')} both apply to ${tuple}, and neither is more specific than the other` };
   }
-  const owner = analysis.Owners.find((o) => !(o.Node as { BodylessOwner?: boolean }).BodylessOwner && OrderByLabels(ownerLabels(o), args, names).ok);
-  if (owner) return { Kind: 'owner', Declaration: owner.Node };
+  for (const owner of analysis.Owners) {
+    const bound = boundOwners.get(owner.Node);
+    if (!bound || (owner.Node as Declaration).BodylessOwner || !ValueArityAdmits(owner.Node, valueCount)) continue;
+    const bindings = (owner.Parameters ?? []).map((p, i) => ({ Name: p.Name, Value: bound[i]! }));
+    if (yield { Declaration: owner.Node, Bindings: bindings }) return { Kind: 'owner', Declaration: owner.Node };
+  }
   if (unknown.size > 0 && !labelsTaken) {
     const label = [...unknown][0];
     return { Kind: 'error', Message: `\`${label}\` names no type parameter of \`${name}\` that the arguments reach; a capture's name is not a label, and a pattern-only case's positions take none` };
@@ -465,7 +534,11 @@ export function SelectCase(
  * One value per case function and binding, so `f.<T: uint8> === f.<uint8>`
  * (C14), while a case function of another closure's evaluation is another.
  */
-const storedCaseValues = new WeakMap<object, Map<string, Value>>();
+interface StoredCaseNode {
+  readonly next: Map<string | object, StoredCaseNode>;
+  value?: Value;
+}
+const storedCaseValues = new WeakMap<object, StoredCaseNode>();
 /**
  * Step 8: what a specialization value selected - its group, the chosen
  * declaration's function, and a case's capture frame - for its reflected type
@@ -479,16 +552,21 @@ export function SelectionOfValue(value: unknown): { group: Value, fn: Value, fra
   return value && typeof value === 'object' ? selections.get(value) : undefined;
 }
 export function StoredCaseValue(fn: Value, frame: Map<string, TypeRecord>, name: string, group?: Value): Value {
-  const key = [...frame.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${k}=${displayType(v)}`).join(';');
-  let byBinding = storedCaseValues.get(fn as object);
-  if (!byBinding) {
-    byBinding = new Map();
-    storedCaseValues.set(fn as object, byBinding);
+  let cache: StoredCaseNode = storedCaseValues.get(fn as object) ?? { next: new Map() };
+  storedCaseValues.set(fn as object, cache);
+  // Interned Type Objects preserve SameType/SameValue, including signed zero
+  // and nominal declarations that happen to have the same display name.
+  for (const [name, record] of [...frame].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    for (const key of [name, GetTypeObject(record)]) {
+      let next: StoredCaseNode | undefined = cache.next.get(key);
+      if (!next) {
+        next = { next: new Map() };
+        cache.next.set(key, next);
+      }
+      cache = next;
+    }
   }
-  const known = byBinding.get(key);
-  if (known) {
-    return known;
-  }
+  if (cache.value) return cache.value;
   const behaviour = function* storedCase(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
     pushTypeParameterFrame(frame);
     try {
@@ -501,7 +579,7 @@ export function StoredCaseValue(fn: Value, frame: Map<string, TypeRecord>, name:
   };
   const length = ((fn as { FormalParameters?: readonly unknown[] }).FormalParameters ?? []).length;
   const stored = CreateBuiltinFunction(behaviour as never, length, Value(name), []);
-  byBinding.set(key, stored);
+  cache.value = stored;
   if (group) RecordSelection(stored, group, fn, frame);
   return stored;
 }
@@ -523,14 +601,13 @@ export function* WithSelectedInvocation(fn: Value, body: () => ValueEvaluator): 
 
 /**
  * The choice for `f.<typeArguments>(...)` over the group _members_, or a throw
- * completion: no viable overload, an ambiguity, or a form a later step
- * implements (named or spread arguments).
+ * completion when no overload applies or the applicable cases are ambiguous.
  */
 export function* SelectExplicitCase(
   members: readonly { fn: Value, declaration: Declaration }[],
   typeArguments: readonly ParseNode[],
   name: string,
-  valueArgumentCount?: number,
+  evaluateArguments?: () => PlainEvaluator<readonly ArgumentItem<Value>[]>,
   classFrame: Map<string, TypeRecord> | null = null,
 ): PlainEvaluator<CaseChoice> {
   // Step 3: a named argument's label, ordered per candidate by SelectCase.
@@ -558,24 +635,60 @@ export function* SelectExplicitCase(
   }
   const { analysis, host, resolve } = Q(yield* AnalyzeGroupAtRuntime(members, name));
   const fnOf = (node: ParseNode) => members.find((m) => m.declaration === node)!.fn;
-  // A chosen case whose filter does not hold is excluded, and selection runs
-  // again among the rest (B12).
-  const excluded = new Set<object>();
-  for (;;) {
-    const choice = SelectCase(analysis as never, args as TypeRecord[], names, valueArgumentCount, host, resolve, (a, b) => IsSubtype(a, b, []), displayType, name, excluded);
-    if (choice.Kind === 'error') {
-      return Throw.TypeError('$1', Value(choice.Message));
-    }
-    if (choice.Kind === 'owner') {
-      return { fn: fnOf(choice.Declaration), frame: undefined };
-    }
-    const fn = fnOf(choice.Declaration);
-    const frame = Q(yield* TypedFrameOfBindings(choice.Declaration, choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))));
-    if (Q(yield* CaseFilterHolds(fn, frame, classFrame))) {
-      return { fn, frame };
-    }
-    excluded.add(choice.Declaration as object);
+  const boundOwners = new Map<ParseNode, readonly TypeRecord[]>();
+  for (const owner of analysis.Owners) {
+    const fn = fnOf(owner.Node);
+    const bound = EnsureCompletion(yield* InCaseContext(fn, new Map(), classFrame, function* bindOwner() {
+      return yield* BindTypeArgumentRecordsInto((owner.Node as Declaration).TypeParameters?.TypeParameterList ?? [], args as TypeRecord[], names, new Map(), name);
+    }));
+    if (bound.Type === 'normal') boundOwners.set(owner.Node, bound.Value as readonly TypeRecord[]);
   }
+  const items = evaluateArguments ? Q(yield* evaluateArguments()) : undefined;
+  const values = items?.map((a) => a.value);
+  const namedArguments = items?.some((a) => a.name !== undefined) ? items : undefined;
+  const selection = SelectCase(analysis as never, args as TypeRecord[], names, namedArguments ? undefined : values?.length, host, resolve,
+    (a, b) => IsSubtype(a, b, []), displayType, name, boundOwners);
+  const types = new Map<Value, TypeRecord>();
+  if (values) {
+    const oracle = argumentTypeOracle(values);
+    for (let i = 0; i < values.length; i += 1) {
+      const type = Q(yield* oracle.typeOf(i));
+      types.set(values[i]!, type);
+    }
+  }
+  const typeOf = (v: Value) => types.get(v) ?? RuntimeTypeOf(v);
+  const placedArguments = new Map<ParseNode, readonly Value[]>();
+  let step = selection.next();
+  while (!step.done) {
+    const candidate = step.value;
+    const fn = fnOf(candidate.Declaration);
+    const frame = Q(yield* TypedFrameOfBindings(candidate.Declaration, candidate.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))));
+    const accepted = Q(yield* InCaseContext(fn, frame, classFrame, function* admitCase() {
+      if (values) {
+        const resolved = new Map<ParseNode.TypeAnnotation, TypeRecord>();
+        for (const formal of CaseFormals(candidate.Declaration)) {
+          const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          if (annotation) resolved.set(annotation, Q(yield* TypeNodeToTypeRecord(annotation.Type)));
+        }
+        const parameters = CaseParameters(candidate.Declaration, (annotation) => resolved.get(annotation) ?? anyType);
+        const args = namedArguments ? PlaceCaseArguments(parameters, namedArguments, typeOf, Value.undefined) : values;
+        if (!args || !CaseArgumentsAdmit(parameters, args.map(typeOf), args.map((v) => v instanceof ReferenceValue))) return false;
+        placedArguments.set(candidate.Declaration, args);
+      }
+      return yield* CaseFilterHolds(fn, frame, classFrame);
+    }));
+    step = selection.next(accepted);
+  }
+  const choice = step.value;
+  if (choice.Kind === 'error') return Throw.TypeError('$1', Value(choice.Message));
+  if (choice.Kind === 'owner') {
+    const bound = boundOwners.get(choice.Declaration)!;
+    const params = (choice.Declaration as Declaration).TypeParameters?.TypeParameterList ?? [];
+    const frame = Q(yield* TypedFrameOfBindings(choice.Declaration, params.map((p, i) => ({ Capture: { Name: p.BindingIdentifier.name }, Value: bound[i]! }))));
+    return { fn: fnOf(choice.Declaration), frame, owner: true, arguments: placedArguments.get(choice.Declaration) };
+  }
+  const frame = Q(yield* TypedFrameOfBindings(choice.Declaration, choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))));
+  return { fn: fnOf(choice.Declaration), frame, arguments: placedArguments.get(choice.Declaration) };
 }
 
 void builtinTypeRecord;

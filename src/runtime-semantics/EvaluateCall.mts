@@ -26,7 +26,7 @@ import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCal
 import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
-export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: ParseNode.TemplateLiteral | ParseNode.Arguments, tailPosition: boolean, callExpression?: ParseNode.CallExpression | ParseNode.OptionalExpression) {
+export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: ParseNode.TemplateLiteral | ParseNode.Arguments, tailPosition: boolean, callExpression?: ParseNode.CallExpression | ParseNode.OptionalExpression, evaluatedArguments?: readonly Value[]) {
   // The call expression's own position, read before its arguments push theirs.
   const callContext = surroundingAgent.feature('runtime-types') ? contextualTypeFor(callExpression) : undefined;
   // 1. If Type(ref) is Reference, then
@@ -90,7 +90,9 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     ? (func as { TypeRecord?: TypeRecord }).TypeRecord
     : undefined;
   let argList;
-  if (conversionContext !== undefined && Array.isArray(args)) {
+  if (evaluatedArguments) {
+    argList = [...evaluatedArguments];
+  } else if (conversionContext !== undefined && Array.isArray(args)) {
     // Keyed on the ARGUMENT EXPRESSION, because `contextualTypeFor` is asked for
     // a call node: the inner `f()` in `uint32(f())` looks itself up, not the
     // argument list that holds it.
@@ -149,7 +151,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     }
     return Throw.TypeError('$1 is not a function', func);
   }
-  if (argsIsNamed) {
+  if (argsIsNamed && !evaluatedArguments) {
     // #sec-call-argument-binding: a named call binds against the SIGNATURE IN
     // VIEW. Where the callee was reached through a reference to a binding whose
     // declared type is a function type or a callable interface, that type's

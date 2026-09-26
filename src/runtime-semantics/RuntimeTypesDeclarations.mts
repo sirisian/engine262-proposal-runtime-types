@@ -2534,10 +2534,12 @@ export function ClearTypeArgumentsCallee(): void {
  * Before this the expression evaluated to the bare function and the bindings
  * were lost.
  */
-function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNode.TypeArgumentsExpression, params: readonly ParseNode.TypeParameter[]): ValueEvaluator {
-  const frame = new Map<string, TypeRecord>();
+function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNode.TypeArgumentsExpression, params: readonly ParseNode.TypeParameter[], preBound?: Map<string, TypeRecord>): ValueEvaluator {
+  const frame = preBound ?? new Map<string, TypeRecord>();
   const fnName = ((fn as unknown as { ECMAScriptCode?: { parent?: { BindingIdentifier?: { name?: string } } } }).ECMAScriptCode?.parent?.BindingIdentifier?.name) ?? 'the function';
-  const bound = Q(yield* BindTypeArgumentsInto(params, node.TypeArguments.TypeArgumentList, frame, fnName));
+  let bound: TypeRecord[];
+  if (preBound) bound = params.map((p) => preBound.get(p.BindingIdentifier.name)!);
+  else bound = Q(yield* BindTypeArgumentsInto(params, node.TypeArguments.TypeArgumentList, frame, fnName));
   const key = bound.map(specializationKeyOf).join('|');
   let table = genericFunctionSpecializations.get(fn as unknown as object);
   if (!table) {
@@ -2702,10 +2704,10 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       const groupName = inner?.type === 'IdentifierReference' && inner.name ? inner.name : 'this function';
       const choice = Q(yield* SelectExplicitCase(caseMembers, node.TypeArguments.TypeArgumentList as unknown as ParseNode[], groupName, undefined,
         classFrameOfObject((ref as { Base?: unknown } | undefined)?.Base)));
-      if (choice.frame) {
+      if (!choice.owner && choice.frame) {
         return StoredCaseValue(choice.fn, choice.frame, groupName, value);
       }
-      const specialized = Q(yield* SpecializeGenericFunction(choice.fn as ObjectValue, inspected.Value, node, functionTypeParameters(choice.fn as never) ?? []));
+      const specialized = Q(yield* SpecializeGenericFunction(choice.fn as ObjectValue, inspected.Value, node, functionTypeParameters(choice.fn as never) ?? [], choice.frame));
       // Step 8: the owner's fallback records its group, for reflection.
       RecordSelection(specialized as Value, value, choice.fn, undefined);
       return specialized;

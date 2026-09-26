@@ -19,8 +19,8 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
  * function body. `f.<4>(x)` evaluated a `where probe(N)` twice and three calls
  * six times.
  *
- * Keyed on the canonical form's TEXT instead, which is the equality the memo
- * wanted all along.
+ * Interned Type Objects provide stable keys while preserving SameValue
+ * distinctions that diagnostic text cannot express (such as signed zero).
  */
 
 const P = 'let n = 0; function probe(x) { n++; return true; } ';

@@ -383,7 +383,7 @@ export function CallableGroupHostFor(
       if (slot.Kind === 'value') {
         const domain = slot.Binder?.TypeParameterDomain ?? slot.Binder?.TypeParameterConstraint;
         const domainRecord = domain ? resolve(domain as unknown as ParseNode) : null;
-        return resolved.Kind === 'literal' && (!domainRecord || isSubtype(resolved, domainRecord));
+        return resolved.Kind === 'literal' && (!domainRecord || isSubtype(resolved, domainRecord) || literalFitsNumericType(resolved, domainRecord));
       }
       const bound = slot.Binder?.TypeParameterConstraint;
       if (bound && slot.Binder?.TypeParameterDomain) {

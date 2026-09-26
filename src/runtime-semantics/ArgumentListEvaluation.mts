@@ -307,21 +307,11 @@ export function signatureInView(declaredType: unknown, namedArguments: readonly 
   return t.Signatures.find((s) => namedArguments.every((n) => s.Parameters.some((p) => p.Name === n))) ?? t.Signatures[0];
 }
 
-/**
- * Evaluates an argument list that uses by-name forms and returns the positional
- * argument list to pass to the call, using the called function's parameter names.
- * A positional argument fills the next position. A named argument `name: expr`
- * fills the position of the parameter with that name, or the rest position onward
- * where the name is the rest parameter's. A spread of a plain object binds each
- * own enumerable property by parameter name; a spread of an iterable fills the
- * next positions in order, as an ordinary spread does. A position with no argument
- * is left absent for the callee's own default to fill; a named argument that
- * matches no parameter is a TypeError.
- */
-export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signature?: SignatureInView): PlainEvaluator<Arguments> {
-  const info = signature ? parameterInfoOfSignature(signature) : { ...parameterInfo(func), initials: [] as (Value | undefined)[], types: [] as unknown[] };
-  const { names, omittable, rests, initials } = info;
-  const types = signature ? info.types : (Q(yield* soleSignatureParameterTypes(func)) ?? []);
+/** Evaluate source-order argument items once, before an overload binds their names. */
+export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEvaluator<ArgumentItem<Value>[]> {
+  if (!hasNamedArguments(args)) {
+    return Q(yield* ArgumentListEvaluation_Arguments(args)).map((value) => ({ value }));
+  }
   const items: ArgumentItem<Value>[] = [];
   const placePositional = (value: Value): void => {
     items.push({ value });
@@ -368,6 +358,26 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
       placePositional(value);
     }
   }
+
+  return items;
+}
+
+/**
+ * Evaluates an argument list that uses by-name forms and returns the positional
+ * argument list to pass to the call, using the called function's parameter names.
+ * A positional argument fills the next position. A named argument `name: expr`
+ * fills the position of the parameter with that name, or the rest position onward
+ * where the name is the rest parameter's. A spread of a plain object binds each
+ * own enumerable property by parameter name; a spread of an iterable fills the
+ * next positions in order, as an ordinary spread does. A position with no argument
+ * is left absent for the callee's own default to fill; a named argument that
+ * matches no parameter is a TypeError.
+ */
+export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signature?: SignatureInView): PlainEvaluator<Arguments> {
+  const info = signature ? parameterInfoOfSignature(signature) : { ...parameterInfo(func), initials: [] as (Value | undefined)[], types: [] as unknown[] };
+  const { names, omittable, rests, initials } = info;
+  const types = signature ? info.types : (Q(yield* soleSignatureParameterTypes(func)) ?? []);
+  const items = Q(yield* ArgumentListEvaluationItems(args));
 
   const parameters = names.map((Name, i) => ({
     Name, Rest: rests[i], Optional: omittable[i], Type: (types[i] ?? anyType) as TypeRecord,

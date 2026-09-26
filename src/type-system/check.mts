@@ -1,7 +1,7 @@
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
-import { SelectCase, ValueArityAdmits } from '../abstract-ops/callable-selection.mts';
+import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
@@ -13760,7 +13760,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return {
             Name: p.BindingIdentifier?.name ?? '',
             Type: (annotated ? substituteTypeParameters(annotated, byName) : anyTypeRecord) as TypeRecord,
-            Optional: !!p.Initializer, Rest: (p.type as string) === 'FunctionRestParameter' || (p.type as string) === 'BindingRestElement',
+            Optional: !!p.Initializer, Ref: (p as { Ref?: boolean }).Ref === true, Rest: (p.type as string) === 'FunctionRestParameter' || (p.type as string) === 'BindingRestElement',
           };
         });
         selectedCaseSignatures.set(node, { Parameters: parameters, Return: returned as TypeRecord | null } as unknown as SignatureRecord);
@@ -13963,15 +13963,104 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return { type: returnOf(chosen.Node as D, []) };
     }
-    // The shared rule (`SelectCase`), labels and all, as the run time applies it.
+    // Complete the owner's ordinary binding before matching attached cases.
+    // The shared argument assignment includes named pack continuations; defaults
+    // resolve over the earlier bindings, just as at a normal application.
     const names = argNodes.map((a) => (a as { ArgumentName?: string }).ArgumentName);
-    const choice = SelectCase(analysis, args, names, valueCount, host, (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType, name);
-    if (choice.Kind === 'owner') return undefined;
+    const boundOwners = new Map<ParseNode, readonly TypeRecord[]>();
+    let pendingOwnerDefault = false;
+    for (const owner of analysis.Owners) {
+      const params = (owner.Node as D).TypeParameters?.TypeParameterList ?? [];
+      const pushed = pushTypeParameterScopeOf(owner.Node as never);
+      try {
+        const assigned = assignTypeArgumentsShared(owner.Parameters ?? [], args, names, (j, argument) => {
+          const constraint = params[j]?.TypeParameterConstraint;
+          const bound = constraint ? resolveType(constraint) : null;
+          return !bound || mentionsTypeParameter(bound) || packElementAdmits(argument, restElementType(bound));
+        });
+        if (!assigned.ok) continue;
+        const frame = new Map<string, TypeRecord>();
+        let complete = true;
+        for (let j = 0; j < params.length; j += 1) {
+          const param = params[j]!;
+          const run = assigned.runs[j]!;
+          let record: TypeRecord | null = null;
+          if (run.length === 0 && param.TypeParameterDefault) {
+            const application = callee as ParseNode.TypeArgumentsExpression;
+            const resolved = evaluatedGenericDefaults.get(application)?.get(param.TypeParameterDefault)
+              ?? resolveType(param.TypeParameterDefault);
+            record = resolved ? substituteTypeParameters(resolved, frame) : null;
+            if (!record && [...frame.values()].every((t) => !mentionsTypeParameter(t))) {
+              genericDefaults.push({ application, node: param.TypeParameterDefault,
+                parameters: typeParameterRecordsOf(params), bindings: new Map(frame) });
+              pendingOwnerDefault = true;
+            }
+          } else if (param.IsVariadic) {
+            record = { Kind: 'tuple', Elements: run.map((Type) => ({ Type, Rest: false, Initial: 'none' })) } as TypeRecord;
+          } else record = run[0] ?? null;
+          const written = param.TypeParameterConstraint;
+          const resolvedBound = written ? resolveType(written) : null;
+          const bound = resolvedBound ? substituteTypeParameters(resolvedBound, frame) : null;
+          if (!record || (bound && !mentionsTypeParameter(bound) && (param.IsVariadic && record.Kind === 'tuple'
+            ? packConstraintRefuses(record.Elements.map((e) => e.Type), bound)
+            : !IsAssignable(record, bound) && !literalFitsNumericType(record, bound)))) {
+            complete = false;
+            break;
+          }
+          frame.set(param.BindingIdentifier.name, record);
+        }
+        if (complete) boundOwners.set(owner.Node, params.map((p) => frame.get(p.BindingIdentifier.name)!));
+      } finally {
+        if (pushed) typeParameterScopes.pop();
+      }
+    }
+    // The ordinary default-evaluation pass will recheck with the completed
+    // binding. Do not choose a fallback or report a missing case prematurely.
+    if (pendingOwnerDefault) return { type: null };
+    const namedValues = valueArguments.some((a) => a.type === 'NamedArgument');
+    const selection = SelectCase(analysis, args, names, namedValues ? undefined : valueCount, host,
+      (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType, name, boundOwners);
+    let step = selection.next();
+    while (!step.done) {
+      const candidate = step.value;
+      let admitted = true;
+      if (!stored && valueCount !== undefined) {
+        const byName = new Map(candidate.Bindings.map((b) => [b.Name, typeof b.Value === 'number'
+          ? { Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as TypeRecord : b.Value]));
+        const pushed = pushTypeParameterScopeOf(candidate.Declaration as never);
+        let parameters: ParameterRecord[];
+        try {
+          parameters = CaseParameters(candidate.Declaration, (annotation) => {
+            const resolved = resolveType(annotation.Type);
+            return resolved ? substituteTypeParameters(resolved, byName) ?? anyTypeRecord : anyTypeRecord;
+          });
+        } finally {
+          if (pushed) typeParameterScopes.pop();
+        }
+        const items = (valueArguments as readonly ParseNode[]).map((arg) => arg.type === 'NamedArgument'
+          ? { name: arg.Name, value: arg.AssignmentExpression as ParseNode } : { value: arg });
+        const typeOf = (arg: ParseNode | undefined) => {
+          if (!arg) return undefinedType;
+          if (arg.type === 'RefExpression') return locationType(arg.Expression) ?? anyTypeRecord;
+          return staticType(arg) ?? anyTypeRecord;
+        };
+        const placed = namedValues ? PlaceCaseArguments<ParseNode | undefined>(parameters, items, typeOf, undefined) : items.map((item) => item.value);
+        admitted = !!placed && CaseArgumentsAdmit(parameters, placed.map(typeOf), placed.map((a) => a?.type === 'RefExpression'));
+      }
+      step = selection.next(admitted);
+    }
+    const choice = step.value;
+    if (choice.Kind === 'owner') {
+      const bound = boundOwners.get(choice.Declaration)!;
+      const params = (choice.Declaration as D).TypeParameters?.TypeParameterList ?? [];
+      return { type: returnOf(choice.Declaration as D, params.map((p, i) => ({ Capture: { Name: p.BindingIdentifier.name }, Value: bound[i]! }))) };
+    }
     if (choice.Kind === 'error') {
       report(choice.Message);
       return { type: null };
     }
     return { type: returnOf(choice.Declaration as D, choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))) };
+
   };
 
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
