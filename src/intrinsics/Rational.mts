@@ -74,6 +74,9 @@ function canonicalize(num: bigint, den: bigint): { num: bigint, den: bigint } {
 /** The type's name as a diagnostic shows it: `rational` for width 64. */
 export function rationalDisplay(typeRecord: unknown): string {
   const width = rationalWidthOf(typeRecord);
+  if (width === Number.POSITIVE_INFINITY) {
+    return 'rational.<bigint>';
+  }
   return width === 64 ? 'rational' : `rational.<${width}>`;
 }
 
@@ -90,7 +93,18 @@ export function rationalWidthOf(typeRecord: unknown): number {
   // The widths are those of `int.<N>`: "N is bounded: it lies in the inclusive
   // interval from 1 to 2 16, and a width outside it is a type error."
   const width = args[0];
+  // `rational.<bigint>`: the quotient of two `bigint` values - every rational, with
+  // no bound, as `bigint` is the integer with no width. Its width is infinite.
+  if (isBigintTypeArgument(width)) {
+    return Number.POSITIVE_INFINITY;
+  }
   return typeof width === 'number' && Number.isInteger(width) && width >= 1 && width <= 65536 ? width : Number.NaN;
+}
+
+/** Whether a rational type argument is the type `bigint` - the unbounded rational's. */
+export function isBigintTypeArgument(argument: unknown): boolean {
+  return typeof argument === 'object' && argument !== null
+    && (argument as { Kind?: string }).Kind === 'primitive' && (argument as { Name?: string }).Name === 'bigint';
 }
 
 /** Refusal of a rational type whose width is not a positive integer: it names no type. */
@@ -122,12 +136,21 @@ export function CreateRationalValue(numerator: bigint, denominator: bigint, real
   if (Number.isNaN(rationalWidthOf(typeRecord))) {
     return refuseRationalWidth(typeRecord);
   }
+  // The unbounded rational has no bound to check.
+  if (rationalWidthOf(typeRecord) === Number.POSITIVE_INFINITY) {
+    return makeRationalObject(num, den, realmRec, typeRecord);
+  }
   const width = BigInt(rationalWidthOf(typeRecord));
   const max = (1n << (width - 1n)) - 1n;
   if (num < -max - 1n || num > max || den > max) {
     return Throw.RangeError('$1 is not in the range of $2', Value(`${num}/${den}`),
       Value(width === 64n ? 'rational' : `rational.<${width}>`));
   }
+  return makeRationalObject(num, den, realmRec, typeRecord);
+}
+
+/** The rational object itself, for a canonical num/den already checked against its type. */
+function makeRationalObject(num: bigint, den: bigint, realmRec: Realm, typeRecord: unknown): RationalObject {
   const proto = realmRec.Intrinsics['%rational.prototype%'];
   const obj = OrdinaryObjectCreate(proto, ['RationalNumerator', 'RationalDenominator']) as Mutable<RationalObject>;
   obj.RationalNumerator = num;
@@ -361,7 +384,7 @@ export function ToRational(a: Value, realmRec: Realm, typeRecord?: unknown): Rat
   }
   if ((a instanceof NumberValue || isTypedNumber(a))
     && !Number.isFinite(a.numberValue())) { // eslint-disable-line @engine262/mathematical-value -- finiteness of the stored Number is the question
-    return Throw.RangeError('$1 is not in the range of $2', a, Value('rational'));
+    return Throw.RangeError('$1 is not in the range of $2', a, Value(rationalDisplay(typeRecord)));
   }
   // A `bigint` is the source's value over 1, a RangeError where it does not fit -
   // the integer row's own terms. The table had no row from `bigint`, though
@@ -408,7 +431,12 @@ export function* RationalConstructAt([a = Value.undefined, b]: Arguments, typeRe
   // has "a value of another integer type ... converted explicitly" - so it is
   // named as not assignable to `int.<64>`, the wording the one-argument form
   // uses for `rational(5n)`. A non-integral Number keeps the integer message.
-  const num = integerArg(a);
+  // The parts are values of the type's part type: `int.<N>` at a width, and
+  // `bigint` for `rational.<bigint>`, whose part type IS the unbounded integer.
+  const unbounded = rationalWidthOf(typeRecord) === Number.POSITIVE_INFINITY;
+  // Null where the argument is no part, as `integerArg` answers, so the checks below still refuse it.
+  const partOf = (v: Value): bigint | null => integerArg(v) ?? (unbounded && v instanceof BigIntValue ? v.bigintValue() : null); // eslint-disable-line @engine262/mathematical-value -- the exact value of an unbounded integer
+  const num = partOf(a);
   if (num === null) {
     if (a instanceof BigIntValue) {
       return Throw.TypeError('$1 is not assignable to $2', a, Value(`int.<${rationalWidthOf(typeRecord)}>`));
@@ -417,7 +445,7 @@ export function* RationalConstructAt([a = Value.undefined, b]: Arguments, typeRe
   }
   let den = 1n;
   if (b !== undefined) {
-    const d = integerArg(b);
+    const d = partOf(b);
     if (d === null) {
       if (b instanceof BigIntValue) {
         return Throw.TypeError('$1 is not assignable to $2', b, Value(`int.<${rationalWidthOf(typeRecord)}>`));
@@ -448,6 +476,10 @@ function* RationalProto_numerator(_args: Arguments, { thisValue }: FunctionCallC
   // bound guarantees the field fits `int.<N>`, and `Math.floor` already returns
   // an `int.<N>` this way.
   const fieldType = { Kind: 'primitive', Name: 'int', Arguments: [rationalWidthOf((self as { TypeRecord?: unknown }).TypeRecord)] };
+  // The unbounded rational's parts are `bigint`s, the integer with no width.
+  if (rationalWidthOf((self as { TypeRecord?: unknown }).TypeRecord) === Number.POSITIVE_INFINITY) {
+    return Value(self.RationalNumerator);
+  }
   return new TypedNumberValue(self.RationalNumerator, fieldType as never);
 }
 /** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
@@ -462,6 +494,10 @@ function* RationalProto_denominator(_args: Arguments, { thisValue }: FunctionCal
   // bound guarantees the field fits `int.<N>`, and `Math.floor` already returns
   // an `int.<N>` this way.
   const fieldType = { Kind: 'primitive', Name: 'int', Arguments: [rationalWidthOf((self as { TypeRecord?: unknown }).TypeRecord)] };
+  // The unbounded rational's parts are `bigint`s, the integer with no width.
+  if (rationalWidthOf((self as { TypeRecord?: unknown }).TypeRecord) === Number.POSITIVE_INFINITY) {
+    return Value(self.RationalDenominator);
+  }
   return new TypedNumberValue(self.RationalDenominator, fieldType as never);
 }
 /** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
@@ -621,23 +657,26 @@ function exactOfDouble(v: number): { n: bigint, d: bigint } {
  * approximation, and is refused: saturating would answer 127 for 1000 at width 8.
  */
 function approximateInWidth(x: number, bound: bigint, typeRecord: unknown): { num: bigint, den: bigint } | 'range' {
-  const width = BigInt(rationalWidthOf(typeRecord));
+  // The unbounded rational bounds only the denominator, by the argument; nothing
+  // is out of its range.
+  const unbounded = rationalWidthOf(typeRecord) === Number.POSITIVE_INFINITY;
+  const width = unbounded ? 64n : BigInt(rationalWidthOf(typeRecord));
   const max = (1n << (width - 1n)) - 1n;
   const { n: xn, d: xd } = exactOfDouble(x);
-  if (xn > max * xd || xn < (-max - 1n) * xd) {
+  if (!unbounded && (xn > max * xd || xn < (-max - 1n) * xd)) {
     return 'range';
   }
   const negative = xn < 0n;
   const an = negative ? -xn : xn;
-  const denominatorBound = bound < max ? bound : max;
-  const numeratorBound = negative ? max + 1n : max;
+  const denominatorBound = unbounded || bound < max ? bound : max;
+  const numeratorBound: bigint | undefined = unbounded ? undefined : (negative ? max + 1n : max);
   let [p0, q0, p1, q1] = [0n, 1n, 1n, 0n];
   let [n, d] = [an, xd];
   while (d !== 0n) {
     const a = n / d;
     const p2 = p0 + a * p1;
     const q2 = q0 + a * q1;
-    if (q2 > denominatorBound || p2 > numeratorBound) {
+    if (q2 > denominatorBound || (numeratorBound !== undefined && p2 > numeratorBound)) {
       break;
     }
     [p0, q0, p1, q1] = [p1, q1, p2, q2];
@@ -647,7 +686,7 @@ function approximateInWidth(x: number, bound: bigint, typeRecord: unknown): { nu
   let q = q1;
   if (d !== 0n) {
     const kq = (denominatorBound - q0) / q1;
-    const kp = p1 === 0n ? kq : (numeratorBound - p0) / p1;
+    const kp = p1 === 0n || numeratorBound === undefined ? kq : (numeratorBound - p0) / p1;
     const k = kq < kp ? kq : kp;
     const sp = p0 + k * p1;
     const sq = q0 + k * q1;

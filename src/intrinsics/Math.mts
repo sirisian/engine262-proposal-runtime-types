@@ -144,6 +144,10 @@ function rationalRounded(x: Value, functionName: string): Value | undefined {
   // rational.md: `Math.floor`, `ceil`, `round` and `trunc` "return the `int.<N>`
   // nearest in their direction" - the operand's own width, which this fixed at 64.
   const intType = { Kind: 'primitive', Name: 'int', Arguments: [rationalWidthOf((x as { TypeRecord?: unknown }).TypeRecord)] } as unknown as TypeRecord;
+  // The unbounded rational's nearest integer is a `bigint`, the integer with no width.
+  if (rationalWidthOf((x as { TypeRecord?: unknown }).TypeRecord) === Number.POSITIVE_INFINITY) {
+    return Value(BigInt(result as bigint));
+  }
   return new TypedNumberValue(result, intType as never);
 }
 

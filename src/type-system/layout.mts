@@ -788,6 +788,12 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // layout at all, though the document gives its width and says it "lives
     // inline in a `[].<rational>`".
     case 'rational': {
+      // `rational.<bigint>` has no layout, as `bigint` has none: its size is a
+      // property of the value, not of the type.
+      const argument = t.Arguments[0] as unknown;
+      if (typeof argument === 'object' && argument !== null && (argument as { Name?: string }).Name === 'bigint') {
+        return null;
+      }
       const width = t.Arguments[0] as number | undefined;
       const bits = typeof width === 'number' ? width : 64;
       return {
