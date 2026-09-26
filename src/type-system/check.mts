@@ -13468,6 +13468,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return undefined;
   };
+  // An argument naming an enclosing declaration's type parameters or captures
+  // - `this.read.<uint.<N>>()` inside `read<int.<const N>>()` - resolved in
+  // that declaration's scope, which is not active where a callee is typed.
+  const resolveInEnclosingScopes = (from: ParseNode, argument: ParseNode): TypeRecord | null => {
+    for (let p = (from as { parent?: ParseNode }).parent; p; p = (p as { parent?: ParseNode }).parent) {
+      if (!(p as { TypeParameters?: unknown }).TypeParameters) continue;
+      const pushed = pushTypeParameterScopeOf(p as never);
+      if (!pushed) continue;
+      try {
+        const r = resolveType(argument as ParseNode.Type);
+        if (r) return r;
+      } finally {
+        typeParameterScopes.pop();
+      }
+    }
+    return null;
+  };
+  // An argument the checker cannot represent - an open width, `uint.<N>` over
+  // an enclosing case's capture - that names an enclosing declaration's type
+  // parameter or capture is OPEN: rule 7 checks it once, against a contract,
+  // and the run time selects per specialization.
+  const openArgument = (from: ParseNode, argument: ParseNode): TypeRecord | null => {
+    const names = new Set<string>();
+    for (let p = (from as { parent?: ParseNode }).parent; p; p = (p as { parent?: ParseNode }).parent) {
+      const list = (p as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters;
+      for (const tp of list?.TypeParameterList ?? []) names.add(tp.BindingIdentifier.name);
+      for (const c of list?.Captures ?? []) names.add(c.BindingIdentifier.name);
+    }
+    let mentions = false;
+    const visit = (v: unknown): void => {
+      if (mentions || !v || typeof v !== 'object') return;
+      if (Array.isArray(v)) {
+        v.forEach(visit);
+        return;
+      }
+      const n = v as { type?: string, name?: string };
+      if (n.type === 'IdentifierReference' && n.name && names.has(n.name)) {
+        mentions = true;
+        return;
+      }
+      for (const [k, c] of Object.entries(v)) if (k !== 'parent' && k !== 'location') visit(c);
+    };
+    visit(argument);
+    return mentions ? { Kind: 'parameter', Name: (argument as { sourceText?: string }).sourceText ?? 'open' } as TypeRecord : null;
+  };
   const enclosingTypeParameter = (from: ParseNode, argument: ParseNode): TypeRecord | null => {
     const ref = argument as ParseNode.TypeReference;
     if (ref.type !== 'TypeReference' || ref.TypeArguments || ref.TypeName.MemberNames.length > 0) return null;
@@ -13514,7 +13559,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // A bare name the checker cannot resolve here that an enclosing
       // declaration declares as a type parameter - a method's own, whose scope
       // is not active where its callee is typed - is that open parameter (F5).
-      const r = resolveType(a as ParseNode.Type) ?? enclosingTypeParameter(node, a);
+      const r = resolveType(a as ParseNode.Type) ?? enclosingTypeParameter(node, a) ?? resolveInEnclosingScopes(node, a)
+        ?? openArgument(node, a);
       if (!r) return undefined;
       args.push(r);
     }

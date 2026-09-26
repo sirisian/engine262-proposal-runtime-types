@@ -407,3 +407,13 @@ test('H3c: a standalone case\'s selector positions take no labels; a mixed case\
     Reflect.getReflection(g).signatures.map((e) => e.role + '[' + e.typeParameters.map((t) => String(t.name)).join(',') + ']').join(' ');`))
     .toBe('standalone[undefined,undefined] standalone[undefined,bits]');
 });
+
+// Step 9 (C24) groundwork: a case forwarding with its own capture.
+test('a case forwards an argument over its own capture through the owner (rule 7)', () => {
+  // `uint.<N>` over the enclosing case's `N` cannot be represented statically
+  // (an open width); it is open, checked against the owner, selected per call.
+  expect(evaluated(`class R { read<T: type>(): string; read<uint8>(): string { return 'u8'; }
+    read<int.<const N>>(): string { return 'i' + String(N) + '>' + this.read.<uint.<N>>(); }
+    read<uint.<const N>>(): string { return 'u' + String(N); } }
+    const r = new R(); r.read.<int.<12>>() + '|' + r.read.<int.<8>>();`)).toBe('i12>u12|i8>u8');
+});
