@@ -1751,18 +1751,20 @@ function CaseGroupMemberOf(classDeclaration: object, name: string, caseGroups: W
  */
 function IsDirectExplicitFunctionCall(n: unknown): boolean {
   const callee = (n as { CallExpression?: { type?: string, Expression?: { type?: string }, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
-  return callee?.type === 'TypeArgumentsExpression' && callee.Expression?.type === 'IdentifierReference'
-    && !(callee.TypeArguments?.TypeArgumentList ?? []).some((a) => (a as { IsSpread?: boolean }).IsSpread);
+  // A spread type argument is admitted since phase 4, step 9o (see IsSelectableCall).
+  return callee?.type === 'TypeArgumentsExpression' && callee.Expression?.type === 'IdentifierReference';
 }
 
 /**
  * Whether _n_ is a call whose callee - `f`, `x.m`, or `super.m`, applied or not,
- * with no spread type argument - names a group steps 2 to 7 select in.
+ * spread type arguments included (step 9o) - names a group steps 2 to 7 select in.
  */
 function IsSelectableCall(n: unknown): boolean {
   let callee = (n as { CallExpression?: { type?: string, Expression?: unknown, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
   if (callee?.type === 'TypeArgumentsExpression') {
-    if ((callee.TypeArguments?.TypeArgumentList ?? []).some((a) => (a as { IsSpread?: boolean }).IsSpread)) return false;
+    // A spread type argument is selectable since phase 4, step 9o: the run time
+    // expands the tuple it is bound to, and the checker routes an open run
+    // through a variadic owner's contract (rule 7).
     callee = callee.Expression as typeof callee;
   }
   const t = callee as { type?: string, IdentifierName?: unknown } | undefined;
@@ -13666,7 +13668,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // declaration declares as a type parameter - a method's own, whose scope
       // is not active where its callee is typed - is that open parameter (F5).
       const r = resolveType(a as ParseNode.Type) ?? enclosingTypeParameter(node, a) ?? resolveInEnclosingScopes(node, a)
-        ?? openArgument(node, a);
+        ?? openArgument(node, a)
+        // A spread no rule resolves is an open run of unknown length; the
+        // spread branch below routes the call through a variadic owner.
+        ?? ((a as { IsSpread?: boolean }).IsSpread ? { Kind: 'parameter', Name: '...', Opaque: true } as unknown as TypeRecord : null);
       if (!r) return undefined;
       args.push(r);
     }
@@ -13814,6 +13819,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // against the owner's contract; or through a case the argument's bound
     // proves applicable to every binding, when each more specific case a
     // binding could reach keeps that case's signature. Otherwise it is refused.
+    // A spread type argument - `f.<...Rest>()` from a case that captured
+    // `...const Rest`, `f.<...Us>()` from a variadic generic - has a length the
+    // checker cannot know: the call is OPEN (rule 7). An owner with a variadic
+    // parameter takes any run, so its contract covers the call: its leading
+    // parameters bind the leading written arguments, its pack an opaque open
+    // record; the run time selects per binding (phase 4, step 9o).
+    if (argNodes.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
+      const owner = analysis.Owners.find((o) => (o.Parameters ?? []).some((p) => (p as { Variadic?: boolean }).Variadic));
+      if (!owner) {
+        // Rule 7 and D8: an open run no contract covers is a static error.
+        report(`\`${name}\` is applied to a spread of unknown length, and no variadic owner's contract covers every length`);
+        return { type: null };
+      }
+      const params = owner.Parameters ?? [];
+      const at = params.findIndex((p) => (p as { Variadic?: boolean }).Variadic);
+      const bindings = params.map((p, q) => ({
+        Capture: { Name: p.Name },
+        Value: q < at && q < args.length && !(argNodes[q] as { IsSpread?: boolean }).IsSpread
+          ? args[q]!
+          : { Kind: 'parameter', Name: `...${p.Name}`, Opaque: true } as unknown as TypeRecord,
+      }));
+      return { type: returnOf(owner.Node as D, bindings) };
+    }
     if (args.some((a) => mentionsTypeParameter(a))) {
       const named = argNodes.some((a) => (a as { ArgumentName?: string }).ArgumentName !== undefined);
       const ownerTakes = analysis.Owners.some((o) => {

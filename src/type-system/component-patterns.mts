@@ -257,10 +257,19 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       };
     },
     arrayOf: () => null,
-    sequenceOf: () => null,
-    makeSequence: () => {
-      throw new Error('a component pattern has no sequence');
+    // A pack's binding - the tuple of its run (phase 4, step 9n) - is the
+    // sequence of its element types; any other subject has none.
+    sequenceOf: (subject: Argument) => {
+      const t = subject as { Kind?: string, Elements?: readonly { Type: TypeRecord, Rest?: boolean }[] } | number;
+      return typeof t === 'object' && t?.Kind === 'tuple' && t.Elements && !t.Elements.some((e) => e.Rest)
+        ? t.Elements.map((e) => e.Type as Argument)
+        : null;
     },
+    // What a `...` capture binds: the tuple of the elements its run covers.
+    makeSequence: (elements: readonly Argument[]) => ({
+      Kind: 'tuple',
+      Elements: elements.map((e) => ({ Type: e as TypeRecord, Rest: false, Initial: 'none' as const })),
+    } as unknown as Argument),
     metadataOf: (subject, meta) => {
       if (typeof subject !== 'object' || subject.Kind !== 'parameterized') {
         return null;
@@ -423,9 +432,22 @@ export function MatchStandaloneCase(
       : b.Value,
   }));
   if (list.ListKind === 'specialization') {
-    const positions = SpecializationPatternsOf(list).map((_e, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
+    // A standalone list with a spread entry - `<const T, ...const Rest>` with
+    // no owner in reach, as a method group's bodyless owner is at run time -
+    // takes the call's arguments as ONE variadic run: its patterns matched as a
+    // sequence, the spread binding the tuple of the elements it covers, as a
+    // class's variadic parameter is matched (#sec-specialization; step 9p).
+    const patterns = SpecializationPatternsOf(list);
+    const spread = patterns.some((e) => (e as { IsSpread?: boolean }).IsSpread === true
+      || ((e as { type?: string }).type === 'CaptureBinding' && (e as { IsVariadic?: boolean }).IsVariadic === true));
     if (args.some((a) => a === undefined)) return { Kind: 'no-match' };
-    const matched = MatchSpecializationList(list, positions, args as Argument[], host);
+    const positions = spread
+      ? [{ Name: '#pack', Variadic: true, HasDefault: false }]
+      : patterns.map((_e, i) => ({ Name: `#${i}`, Variadic: false, HasDefault: false }));
+    const subjects = spread
+      ? [{ Kind: 'tuple', Elements: (args as TypeRecord[]).map((t) => ({ Type: t, Rest: false, Initial: 'none' as const })) } as unknown as Argument]
+      : args as Argument[];
+    const matched = MatchSpecializationList(list, positions, subjects, host);
     return matched === 'no-match' ? { Kind: 'no-match' } : { Kind: 'match', Bindings: toBindings(matched as never) };
   }
   const kinds = (list as { EntryKinds?: readonly ('argument' | 'parameter')[] }).EntryKinds ?? [];

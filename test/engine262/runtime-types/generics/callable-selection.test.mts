@@ -545,3 +545,49 @@ test('new C.<[...Ts, T]>(...) inside C stays open; its arguments are checked per
   // Opaque is not unbounded: a bare parameter is still refused against a constraint.
   expectEarlyError('class B<T: type extends [].<any> = []> { } function g<U: type>(): string { new B.<U>(); return \'x\'; }', 'StaticTypeError');
 });
+
+// Step 9n: cases of a variadic owner (#sec-specialization, spec line 1579).
+test('a variadic owner\'s cases match its pack: fixed patterns, a peeling capture, and the empty case', () => {
+  // The run was refused by one-label-per-parameter ordering, and the matcher's
+  // host had no sequence for a pack's tuple or a `...` capture's result.
+  expect(evaluated(`function h<...Ts: type>(): string; function h<uint8, uint16>(): string { return 'fixed'; }
+    h.<uint8, uint16>();`)).toBe('fixed');
+  expect(evaluated(`function f<...Ts: type>(): string;
+    function f<const T, ...const Rest>(): string { return String(T) + ':' + String(Rest); }
+    f.<uint8, uint16, string>();`)).toBe('uint.<8>:[uint.<16>, string]');
+  expect(evaluated(`function f<...Ts: type>(): string; function f<>(): string { return 'end'; }
+    function f<const T, ...const Rest>(): string { return 'peel'; }
+    f.<>() + '|' + f.<uint8>() + '|' + f.<uint8, string>();`)).toBe('end|peel|peel');
+});
+
+// Step 9o (run time): a spread type argument contributes its tuple's elements.
+test('f.<...Rest>() forwards a captured pack at run time, peeling to the empty case', () => {
+  // SelectExplicitCase refused every spread application. Through `any` the
+  // call reaches the run time; static forwarding of a spread is a later step.
+  expect(evaluated(`function f<...Ts: type>(): string; function f<>(): string { return 'end'; }
+    function f<const T, ...const Rest>(): string { const h: any = f; return String(T) + '+' + h.<...Rest>(); }
+    f.<uint8, uint16>();`)).toBe('uint.<8>+uint.<16>+end');
+});
+
+// Step 9o (static): forwarding a spread pack is open, covered by a variadic owner.
+test('f.<...Rest>() and f.<...Us>() type through a variadic owner\'s contract; an uncovered spread is refused', () => {
+  expect(evaluated(`function f<...Ts: type>(): string; function f<>(): string { return 'end'; }
+    function f<const T, ...const Rest>(): string { return String(T) + '+' + f.<...Rest>(); }
+    f.<uint8, uint16>();`)).toBe('uint.<8>+uint.<16>+end');
+  expect(evaluated(`function f<...Ts: type>(): string; function f<>(): string { return 'end'; }
+    function f<const T, ...const Rest>(): string { return 'peel'; }
+    function g<...Us: type>(): string { return f.<...Us>(); } g.<uint8>() + '|' + g.<>();`)).toBe('peel|end');
+  expectEarlyError(`function f<A: type>(): string; function f<uint8>(): string { return 'u'; }
+    function g<...Us: type>(): string { return f.<...Us>(); }`, 'StaticTypeError');
+});
+
+// Step 9p: a method group's variadic cases, whose bodyless owner has no function at run time.
+test('readAll as method cases: a standalone spread list takes the whole run', () => {
+  // Matched standalone at run time; ordered by one label per entry, and
+  // matched a position per entry, the run was refused on both counts.
+  expect(evaluated(`class R { k: uint32 = 0; read<T: type>(): T { this.k += 1; return T(this.k); }
+    readAll<...Ts: type>(): Ts; readAll<>(): [] { return []; }
+    readAll<const T, ...const Rest>(): [T, ...Rest] { const first = this.read.<T>(); return [first, ...this.readAll.<...Rest>()]; } }
+    const [a, b, c] = new R().readAll.<uint8, uint16, uint32>();
+    String(a) + String(b) + String(c) + ':' + String(Reflect.typeOf(a)) + ',' + String(Reflect.typeOf(c));`)).toBe('123:uint.<8>,uint.<32>');
+});

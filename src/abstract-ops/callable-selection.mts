@@ -16,6 +16,7 @@
  */
 
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { CanonicalizeType } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped } from '../type-system/runtime.mts';
 import { resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import { displayType, builtinTypeRecord, makePrimitive, type TypeRecord } from '../type-system/records.mts';
@@ -309,6 +310,22 @@ type Ordered = { ok: true, ordered: (TypeRecord | undefined)[] } | { ok: false, 
  * position its label names. An unlabeled position (a selector, a pattern-only
  * case's entry) takes no name, and a capture's name is never a label.
  */
+/**
+ * A variadic owner's positional arguments, one per parameter: leading
+ * parameters one each, the pack the tuple of its run, trailing ones from the
+ * end. A missing leading argument is a hole the owner's default fills.
+ */
+function PackByVariadicOwner(params: readonly { Variadic?: boolean }[], args: readonly TypeRecord[]): Ordered {
+  const at = params.findIndex((p) => p.Variadic === true);
+  const after = params.length - at - 1;
+  const ordered: (TypeRecord | undefined)[] = [];
+  for (let q = 0; q < at; q += 1) ordered.push(args[q]);
+  const run = args.slice(at, Math.max(at, args.length - after));
+  ordered.push(CanonicalizeType({ Kind: 'tuple', Elements: run.map((t) => ({ Type: t, Rest: false, Initial: 'none' as const })) } as TypeRecord));
+  for (let q = 0; q < after; q += 1) ordered.push(args[args.length - after + q]);
+  return { ok: true, ordered };
+}
+
 function OrderByLabels(labels: readonly (string | undefined)[], args: readonly TypeRecord[], names: readonly (string | undefined)[]): Ordered {
   const ordered: (TypeRecord | undefined)[] = [];
   let seenNamed = false;
@@ -356,7 +373,15 @@ export function SelectCase(
   let labelsTaken = false;
   const ownerLabels = (o: { Parameters?: readonly { Name: string }[] }) => (o.Parameters ?? []).map((p) => p.Name);
   for (const owner of analysis.Owners) {
-    const order = OrderByLabels(ownerLabels(owner), args, names);
+    // A VARIADIC owner (`readAll<...Ts: type>`) called positionally binds as
+    // BindTypeArguments binds a class's parameters: one binding per parameter,
+    // the pack bound to the TUPLE of its run, which MatchSpecializationList
+    // matches a case's pattern sequence against (#sec-specialization; phase 4,
+    // step 9n). Ordering by one label per parameter refused any run longer
+    // than one, so a variadic owner's attached cases were never tried.
+    const variadicOwner = (owner.Parameters ?? []).some((p) => (p as { Variadic?: boolean }).Variadic === true)
+      && names.every((n) => n === undefined);
+    const order = variadicOwner ? PackByVariadicOwner(owner.Parameters ?? [], args) : OrderByLabels(ownerLabels(owner), args, names);
     if (!order.ok) {
       if (order.unknown) unknown.add(order.unknown);
       continue;
@@ -388,7 +413,13 @@ export function SelectCase(
     const kinds = (d.List as { EntryKinds?: readonly string[] }).EntryKinds ?? SpecializationPatternsOf(d.List).map(() => 'argument');
     let binder = 0;
     const labels = kinds.map((k) => (k === 'parameter' ? (d.List!.TypeParameterList ?? [])[binder++]?.BindingIdentifier.name : undefined));
-    const order = OrderByLabels(labels, args, names);
+    // A pattern list with a spread entry (`<const T, ...const Rest>`) called
+    // positionally takes its arguments as given - the spread covers a run
+    // longer than one - as a variadic owner does (steps 9n and 9p).
+    const spreadList = d.List.ListKind === 'specialization' && names.every((n) => n === undefined)
+      && SpecializationPatternsOf(d.List).some((e) => (e as { IsSpread?: boolean }).IsSpread === true
+        || ((e as { type?: string }).type === 'CaptureBinding' && (e as { IsVariadic?: boolean }).IsVariadic === true));
+    const order = spreadList ? { ok: true as const, ordered: [...args] } : OrderByLabels(labels, args, names);
     if (!order.ok) {
       if (order.unknown) unknown.add(order.unknown);
       continue;
@@ -502,15 +533,28 @@ export function* SelectExplicitCase(
   valueArgumentCount?: number,
   classFrame: Map<string, TypeRecord> | null = null,
 ): PlainEvaluator<CaseChoice> {
-  if (typeArguments.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
-    return Throw.TypeError('$1', Value(`a spread application of \`${name}\`, whose group has a specialized case, is not supported yet`));
-  }
   // Step 3: a named argument's label, ordered per candidate by SelectCase.
-  const names = typeArguments.map((a) => (a as { ArgumentName?: string }).ArgumentName);
   // The arguments, and every written type the group's lists name, resolved now.
+  // A spread argument - `f.<...Rest>()` from a case that captured `...const
+  // Rest` - contributes the elements of the tuple it is bound to, each
+  // positional: the pack a `...` capture binds is that tuple (phase 4, step 9o).
+  const names: (string | undefined)[] = [];
   const args: Argument[] = [];
   for (const node of typeArguments) {
-    args.push(Q(yield* TypeNodeToTypeRecord(node as never)) as TypeRecord);
+    const record = Q(yield* TypeNodeToTypeRecord(node as never)) as TypeRecord;
+    if ((node as { IsSpread?: boolean }).IsSpread) {
+      const tuple = record as { Kind?: string, Elements?: readonly { Type: TypeRecord, Rest?: boolean }[] };
+      if (tuple.Kind !== 'tuple' || !tuple.Elements || tuple.Elements.some((e) => e.Rest)) {
+        return Throw.TypeError('$1', Value(`a spread application of \`${name}\` spreads ${displayType(record)}, which is not a tuple of known length`));
+      }
+      for (const e of tuple.Elements) {
+        args.push(e.Type);
+        names.push(undefined);
+      }
+      continue;
+    }
+    args.push(record);
+    names.push((node as { ArgumentName?: string }).ArgumentName);
   }
   const { analysis, host, resolve } = Q(yield* AnalyzeGroupAtRuntime(members, name));
   const fnOf = (node: ParseNode) => members.find((m) => m.declaration === node)!.fn;
