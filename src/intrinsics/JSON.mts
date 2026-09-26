@@ -665,7 +665,7 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
       //
       // #sec-null-and-undefined-types: "`null` is the type whose one value is
       // *null*. It is described by the Type Record { [[Kind]]: ~primitive~,
-      // [[Name]]: *"null"*, [[Arguments]]: « » }". A JSON `null` and that type
+      // [[Name]]: *"null"*, [[Arguments]]: Â« Â» }". A JSON `null` and that type
       // mean the same thing, so nothing has to be decided here - the case was
       // simply missing, and its absence reached much further than the bare
       // target suggests.

@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * A TYPED OWN PROPERTY GIVES ITS VALUE A CONTEXTUAL TYPE. `{ (v: T): … }`
+ * A TYPED OWN PROPERTY GIVES ITS VALUE A CONTEXTUAL TYPE. `{ (v: T): â€¦ }`
  * declares the property's type at creation, and that type is the context the
  * value is read at - exactly as a binding, a class field and an array element
  * give theirs.

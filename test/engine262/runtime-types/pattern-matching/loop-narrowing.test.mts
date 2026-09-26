@@ -6,7 +6,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * invalidated it, so the second iteration was typed with a fact that had stopped
  * being true. The minimal case typechecked and failed at RUN TIME:
  *
- *   if (v !== null) { for (…) { n = v.x; v = null; } }   // Cannot convert null to object
+ *   if (v !== null) { for (â€¦) { n = v.x; v = null; } }   // Cannot convert null to object
  *
  * Ordinary invalidation always worked - the same two statements outside a loop
  * are refused - so what was missing is a rule at the back-edge, not a rule about
@@ -76,7 +76,7 @@ test('straight-line invalidation outside a loop is unchanged', () => {
  * keeps an ordinary call from widening anything.
  *
  * Inside a loop the call-site widening is not enough on its own: it fires when
- * the walk REACHES the call, and `for (…) { n = v.x; clob(); }` reads first. So
+ * the walk REACHES the call, and `for (â€¦) { n = v.x; clob(); }` reads first. So
  * a loop body containing a call widens those names up front, for the same
  * single-pass reason the assigned set does.
  */

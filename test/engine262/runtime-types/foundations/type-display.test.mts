@@ -254,7 +254,7 @@ test('the four refusals an intersection target gives are distinct', () => {
 test('two symbol keys are told apart by their descriptions', () => {
   // The minted symbol is the checker's own - it has no access to the one the
   // program creates at run time - but its DESCRIPTION comes from the source.
-  // Every symbol-keyed member rendered as `{ [symbol key]: … }` before, naming
+  // Every symbol-keyed member rendered as `{ [symbol key]: â€¦ }` before, naming
   // the mechanism rather than the key, so two different keys were
   // indistinguishable in a message.
   expect(message('const a = Symbol("alpha"); type O = { [a]: uint8 }; let o: O = 5;'))

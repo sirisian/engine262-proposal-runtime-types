@@ -6,7 +6,7 @@ import { evaluated, expectThrown } from './harness.mts';
  * types.
  *
  * > `null` is the type whose one value is *null*. It is described by the Type
- * > Record { [[Kind]]: ~primitive~, [[Name]]: *"null"*, [[Arguments]]: « » }.
+ * > Record { [[Kind]]: ~primitive~, [[Name]]: *"null"*, [[Arguments]]: Â« Â» }.
  *
  * The operation's primitive case handled a numeric type, `string` and
  * `boolean`, and not this one. A JSON `null` and the `null` type mean the same

@@ -6,9 +6,9 @@ import { evaluated } from '../harness.mts';
  *
  * `complex.md` writes `(0 + 1i) ** 2; // -1 + 0i` with no rounding caveat -
  * unlike its Euler line, which says "within rounding" - and squaring `i` is
- * exact in the algebraic form: (a+bi)² is (a²-b²) + 2abi.
+ * exact in the algebraic form: (a+bi)Â² is (aÂ²-bÂ²) + 2abi.
  *
- * Through `exp(y·log x)` it was not. Before this, `i ** 2` gave
+ * Through `exp(yÂ·log x)` it was not. Before this, `i ** 2` gave
  * `-1 + 1.2246467991473532e-16i`, `i ** 3` gave `-1.8369701987210297e-16 - 1i`,
  * and `(2 + 0i) ** 3` - a purely real value at an integer power - gave
  * `7.999999999999998`.
