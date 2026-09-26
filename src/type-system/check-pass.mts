@@ -15,7 +15,7 @@ import {
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { JSStringValue, ObjectValue, Value } from '../value.mts';
-import { SetMetResolution } from './intern.mts';
+import { SetMetResolution, CanonicalizeType } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './records.mts';
 import { isIntegerTypeName, isFloatTypeName } from './numeric-signatures.mts';
@@ -880,6 +880,15 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // types judge what it carries. Where the source is a literal the value is
   // known, so the crossing is run here rather than left to the binding.
   for (const crossing of TakeDeferredCrossingChecks(root)) {
+    // An INTERSECTION target is decided against what it reduces to: after the
+    // meets above, `CanonicalizeType` gives the meet, one parameterization, and the
+    // rule below applies to it as to any other. Where a meta type declined to give
+    // a meet the intersection stands - and a value carries ONE metadata record, so
+    // it is not one of two different parameterizations at once. That is the run
+    // time's answer, and the boundary check below gives it here too: splitting the
+    // intersection into its members would admit before running what the binding
+    // then refuses.
+    const target = crossing.target.Kind === 'intersection' ? CanonicalizeType(crossing.target) : crossing.target;
     // #sec-literal-propagation draws a line inside this rule that the crossing
     // alone does not: "Nor does it reach a PARAMETERIZED numeric, which is
     // unreachable by a bare literal and reachable through an implicit cast the
@@ -896,8 +905,8 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     //
     // Every OTHER parameterization is value-decided - `suffixed("Id")` admits
     // "userId" and refuses "user" - and falls through to the crossing below.
-    const parameterizedBase = crossing.target.Base;
-    if (parameterizedBase.Kind === 'primitive' && isNumericTypeName(parameterizedBase.Name)) {
+    const parameterizedBase = (target as { Base?: TypeRecord }).Base;
+    if (target.Kind === 'parameterized' && parameterizedBase && parameterizedBase.Kind === 'primitive' && isNumericTypeName(parameterizedBase.Name)) {
       const name = parameterizedBase.Arguments && parameterizedBase.Arguments.length > 0
         ? `${parameterizedBase.Name}${parameterizedBase.Arguments[0]}`
         : parameterizedBase.Name;
@@ -908,10 +917,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // parameterization of it, so an exact-type test matched nothing and
       // declaring the cast changed nothing.
       const declared = ['number', name].some((key) => PrimitiveCastsFor(key)
-        .some((cast) => CastCoversTarget(cast.target, crossing.target)));
+        .some((cast) => CastCoversTarget(cast.target, target)));
       if (!declared) {
         return Throw.StaticTypeError('$1 is not assignable to $2',
-          Value(inspect(crossing.value)), Value(displayType(crossing.target)));
+          Value(inspect(crossing.value)), Value(displayType(target)));
       }
       continue;
     }
@@ -935,7 +944,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     BeginFragmentEvaluation();
     let attempt;
     try {
-      attempt = EnsureCompletion(yield* RequireType(crossing.value, crossing.target));
+      attempt = EnsureCompletion(yield* RequireType(crossing.value, target));
     } finally {
       EndFragmentEvaluation();
     }
@@ -945,7 +954,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // that does not admit it, a `validate` that refused the value - rather
       // than a summary that names only the two types.
       return Throw.StaticTypeError('$1 is not assignable to $2: $3',
-        Value(inspect(crossing.value)), Value(displayType(crossing.target)), Value(inspect(attempt.Value)));
+        Value(inspect(crossing.value)), Value(displayType(target)), Value(inspect(attempt.Value)));
     }
   }
   for (const pair of TakeDeferredMetadataChecks(root)) {

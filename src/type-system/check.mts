@@ -512,7 +512,9 @@ export interface DeferredMetadataCheck {
  */
 export interface DeferredCrossingCheck {
   readonly value: Value;
-  readonly target: TypeRecord & { readonly Kind: 'parameterized' };
+  // A parameterization, or an intersection of parameterizations of one base -
+  // which the pass decides against what it reduces to.
+  readonly target: TypeRecord & { readonly Kind: 'parameterized' | 'intersection' };
 }
 
 const deferredCrossingChecks = new WeakMap<object, readonly DeferredCrossingCheck[]>();
@@ -4154,6 +4156,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && !mentionsTypeParameter(target)) {
       crossingChecks.push({ value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
       return;
+    }
+    // A LITERAL crossing into an INTERSECTION of parameterizations of one base.
+    // #table-meta-hooks `meet`: such an intersection IS its meet - the two
+    // spellings intern to one Type Object - and the meet is user code that the
+    // checking pass runs, after this walk. So the crossing is deferred like the one
+    // above, and the pass decides it against the reduced type once the meet is
+    // known, which is what `:=` and a typed value are already decided against.
+    // Decided here instead, the literal met the intersection UNREDUCED and was
+    // refused: the specification's own `uint8.<{ bounds: 1..=10 }> &
+    // uint8.<{ bounds: 5..=20 }>` refused `7`.
+    if (target.Kind === 'intersection' && source.Kind === 'literal'
+      && !mentionsTypeParameter(target)) {
+      const members = (target as { Members?: readonly TypeRecord[] }).Members ?? [];
+      if (members.length >= 2 && members.every((m) => m.Kind === 'parameterized')
+        && new Set(members.map((m) => displayType((m as { Base: TypeRecord }).Base))).size === 1) {
+        crossingChecks.push({ value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
+        return;
+      }
     }
     if (source.Kind === 'parameterized' && target.Kind === 'parameterized'
         && displayType(source.Base) === displayType(target.Base)) {
