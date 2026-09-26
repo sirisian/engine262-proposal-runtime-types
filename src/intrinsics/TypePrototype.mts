@@ -11,7 +11,8 @@ import { ReadRationalLiteral, RationalApproximateAt } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols, CreateBuiltinFunction, X } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue, DecimalPartsInRange } from './Decimal.mts';
-import { Float128FromNumber } from './Float128.mts';
+import { Float128FromNumber, Binary128ToFloat128 } from './Float128.mts';
+import { fromDecimal as Float128FromDecimal } from './Float128Arithmetic.mts';
 import { surroundingAgent } from '#self';
 import { canonicalTypeText } from '../type-system/records.mts';
 
@@ -229,6 +230,30 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
     return Throw.SyntaxError('$1 is not a valid literal', S);
   }
   const cleaned = text.replace(/_/g, '');
+  // proposal-runtime-types #sec-parsing: `parse` reads a LITERAL of the type, and
+  // #sec-literalvalueintype rounds a literal ONCE, from its exact value, to the
+  // type. For a float128 that is binary128's 113 bits - the value the literal
+  // `float128(0.1)` has. This read the text as a DOUBLE first and widened that, so
+  // `float128.parse("0.1")` was the double nearest one tenth rather than the
+  // float128 nearest, and `float128.parse("1e400")` was refused as out of range:
+  // the double's range, not the type's.
+  //
+  // A zero is left to the reader below, which keeps its sign - the digits'
+  // significand is a bigint, and a bigint has no negative zero. So are the forms
+  // that are not decimal digits (`Infinity`, `NaN`), and every other radix, whose
+  // digits `ParseDecimalDigits` would misread as decimal ones.
+  if (t.Kind === 'primitive' && t.Name === 'float128' && base === 10) {
+    const digits = ParseDecimalDigits(cleaned);
+    if (digits !== undefined && digits.significand !== 0n) {
+      const exact = Float128FromDecimal(digits.significand, digits.exponent);
+      // "a *RangeError* when it is a literal whose value the type cannot
+      // represent": a finite literal that rounds to an infinity of binary128.
+      if (exact.cls === 'infinity') {
+        return Throw.RangeError('$1 is out of range for the type', S);
+      }
+      return Binary128ToFloat128(exact, surroundingAgent.currentRealmRecord);
+    }
+  }
   let value: number | bigint;
   if (isBigInt) {
     // Read as an EXACT integer, never through a Number. A bigint has no width,

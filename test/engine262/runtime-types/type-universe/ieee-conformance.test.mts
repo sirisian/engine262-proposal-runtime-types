@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
  * IEEE 754 CONFORMANCE.
@@ -103,16 +103,22 @@ function roundToBinary16(x: number): number {
 // -- float128 against derived hardware truth -----------------------------------
 
 test('float128 holds a double EXACTLY, digit for digit', () => {
-  // Not a round trip and not an approximation: the engine's text is compared
-  // against the double's exact value computed here from its bit pattern. A
-  // hardware binary128 must produce the same, because the conversion is exact.
+  // A double VALUE is converted: a literal operand is read in the target's context
+  // (#sec-literalvalueintype), so `float128(0.1)` is the float128 nearest one tenth,
+  // not the double. And `toString` is the shortest text that reads back, as
+  // Number::toString is, not the full expansion - so exactness is asserted by
+  // VALUE: the float128 equals the one parsed from the double's exact decimal
+  // expansion, which binary128 holds exactly. The text still reads back to it.
   for (const v of [0.1, 1.5, 1 / 3, 2 / 3, 1e300, 1e-300, 12345.6789, Math.PI, Math.E]) {
-    expect(evaluated(`float128(${v}).toString();`), `float128(${v})`).toBe(exactDecimalOfDouble(v));
+    expect(evaluated(`const f: number = ${v}; String(float128(f) == float128.parse('${exactDecimalOfDouble(v)}'));`),
+      `float128(${v})`).toBe('true');
+    expect(evaluated(`const f: number = ${v}; String(float128.parse(float128(f).toString()) == float128(f));`),
+      `float128(${v}) text`).toBe('true');
   }
 });
 
 test('float128 holds the extremes of binary64 exactly', () => {
-  // The boundaries are where a wrong exponent or a lost implicit bit shows.
+  // As above: a double value, compared by value with its exact expansion.
   for (const [name, v] of [
     ['MAX_VALUE', Number.MAX_VALUE],
     ['MIN_VALUE', Number.MIN_VALUE],
@@ -120,7 +126,8 @@ test('float128 holds the extremes of binary64 exactly', () => {
     ['largest subnormal', 2 ** -1022 - 2 ** -1074],
     ['EPSILON', Number.EPSILON],
   ] as const) {
-    expect(evaluated(`float128(${v}).toString();`), name).toBe(exactDecimalOfDouble(v));
+    expect(evaluated(`const f: number = ${v}; String(float128(f) == float128.parse('${exactDecimalOfDouble(v)}'));`), name)
+      .toBe('true');
   }
 });
 
@@ -128,14 +135,15 @@ test('float128 carries the specials as the format defines them', () => {
   expect(evaluated('float128(Infinity).toString();')).toBe('Infinity');
   expect(evaluated('float128(-Infinity).toString();')).toBe('-Infinity');
   expect(evaluated('float128(NaN).toString();')).toBe('NaN');
-  expect(evaluated('String(1 / float128(Infinity).valueOf());')).toBe('0');
+  // `Number(x)`, the explicit conversion: a float128 has no Number value to give
+  // implicitly, so `valueOf` refuses (#sec-binary-floating-point-types).
+  expect(evaluated('String(1 / Number(float128(Infinity)));')).toBe('0');
 });
 
 test('float128 narrows back to a double by rounding, and the double is unchanged', () => {
-  // The other direction ROUNDS, which is what makes float128 the wider format
-  // rather than a relabelling. Every double survives the round trip exactly.
+  // A double value, widened and narrowed by the explicit conversion `Number(x)`.
   for (const v of [0.1, 1 / 3, Math.PI, Number.MAX_VALUE, Number.MIN_VALUE]) {
-    expect(evaluated(`String(float128(${v}).valueOf() === ${v});`), String(v)).toBe('true');
+    expect(evaluated(`const f: number = ${v}; String(Number(float128(f)) === f);`), String(v)).toBe('true');
   }
 });
 
@@ -209,26 +217,36 @@ test('the two zeroes are distinct in every float width', () => {
 });
 
 test('float128 distinguishes the two zeroes', () => {
-  // The sign was being lost by reading the incoming payload through `R`, which
-  // answers the MATHEMATICAL value - and negative zero does not exist there, so
-  // R maps it to 0 deliberately. A format whose values include both zeroes
-  // cannot read its input that way; the payload is read directly instead, which
-  // is what the other float widths already did.
-  expect(evaluated('String(1 / float128(-0).valueOf());')).toBe('-Infinity');
-  expect(evaluated('String(1 / float128(0).valueOf());')).toBe('Infinity');
-  expect(evaluated('float128(-0).toString();')).toBe('-0');
-  // And through a computed negative zero, which no constant folding can reach.
-  expect(evaluated('String(1 / float128(-1 / Infinity).valueOf());')).toBe('-Infinity');
+  expect(evaluated('String(1 / Number(float128(-0)));')).toBe('-Infinity');
+  expect(evaluated('String(1 / Number(float128(0)));')).toBe('Infinity');
+  expect(evaluated('String(1 / Number(float128(-1 / Infinity)));')).toBe('-Infinity');
+  // The sign is carried; the TEXT is Number::toString's, which writes both zeroes
+  // as "0".
+  expect(evaluated('float128(-0).toString();')).toBe('0');
 });
 
 test('float128.parse builds a value of the format, not a double wearing its name', () => {
-  // A parse that answered a TypedNumberValue carrying a double would print the
-  // double's SHORTEST text - '0.1' - rather than the exact value a binary128
-  // holds. The distinction is the whole point of the type.
   expect(evaluated('String(float128.parse("0.1") is float128);')).toBe('true');
-  expect(evaluated('float128.parse("0.1").toString();')).toBe(exactDecimalOfDouble(0.1));
+  // #sec-parsing: `parse` reads a LITERAL of the type, rounded once from its exact
+  // value (#sec-literalvalueintype) - the float128 nearest one tenth, which is the
+  // literal's value. It read the text as a double first and widened that, so it
+  // was the double nearest one tenth; this asserted that double's expansion.
+  expect(evaluated('String(float128.parse("0.1") == float128(0.1));')).toBe('true');
+  expect(evaluated('const f: number = 0.1; String(float128.parse("0.1") == float128(f));')).toBe('false');
+  expect(evaluated('float128.parse("0.1").toString();')).toBe('0.1');
   expect(evaluated('float128.parse("1.5").toString();')).toBe('1.5');
   expect(evaluated('String(float128.tryParse("nope"));')).toBe('null');
+});
+
+test('float128.parse reads the range of the type, not of a double', () => {
+  // A value the type holds and a double does not: refused as out of range while the
+  // text went through a double.
+  expect(evaluated('String(float128.parse("1e400") == float128(1e400));')).toBe('true');
+  // Beyond binary128 itself: "a literal whose value the type cannot represent".
+  expectThrownKind('float128.parse("1e5000");', 'RangeError');
+  // A zero keeps its sign.
+  expect(evaluated('String(1 / Number(float128.parse("-0")));')).toBe('-Infinity');
+  expect(evaluated('String(1 / Number(float128.parse("0")));')).toBe('Infinity');
 });
 
 // -- The complex family's operators (C99 Annex G over IEEE 754 components) ----
