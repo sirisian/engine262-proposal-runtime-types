@@ -23,9 +23,11 @@ import { IsSubtype } from '../type-system/relations.mts';
 import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/specialization-selection.mts';
 import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
-import { SignaturesOf, InferGenericCallBindings } from './runtime-types.mts';
+import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
+import { Evaluate } from '../evaluator.mts';
+import { SignaturesOf, InferGenericCallBindings, functionWhereClauses, classFrameOfObject } from './runtime-types.mts';
 import {
-  Throw, Value, Q, Call, CreateBuiltinFunction, EnsureCompletion, type PlainEvaluator, type ValueEvaluator,
+  Throw, Value, Q, Call, CreateBuiltinFunction, EnsureCompletion, GetValue, ExecutionContext, surroundingAgent, type PlainEvaluator, type ValueEvaluator,
 } from '#self';
 
 type Argument = TypeRecord | number;
@@ -180,7 +182,21 @@ export function* DispatchCaseGroup(
       const inferred = Q(yield* InferGenericCallBindings(chosen as never, args));
       const ownerArgs = (owner.Parameters ?? []).map((p) => inferred?.get(p.Name));
       if (ownerArgs.every((a) => a !== undefined)) {
-        const result = SelectSpecialization(attached, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
+        let result: ReturnType<typeof SelectSpecialization<TypeRecord>> = SelectSpecialization(attached, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
+        // A replacement whose filter does not hold is excluded (B12).
+        const remaining = [...attached];
+        for (;;) {
+          if (result.Kind !== 'selected') break;
+          const selectedCase = result.Case;
+          const candidate = members.find((m) => m.declaration === selectedCase.Declaration)!.fn;
+          if (Q(yield* CaseFilterHolds(candidate, FrameOfBindings(result.Bindings as never), classFrameOfObject(thisValue)))) break;
+          remaining.splice(remaining.findIndex((c) => c.Declaration === selectedCase.Declaration), 1);
+          if (remaining.length === 0) {
+            result = { Kind: 'none' } as unknown as typeof result;
+            break;
+          }
+          result = SelectSpecialization(remaining, owner.Parameters as never, ownerArgs as TypeRecord[], host as never);
+        }
         if (result.Kind === 'ambiguous') {
           return Throw.TypeError('$1', Value(`${result.Cases.map((c) => c.Label).join(' and ')} both apply to this call, and neither is more specific than the other`));
         }
@@ -210,6 +226,49 @@ export function* DispatchCaseGroup(
   return Q(yield* WithSelectedInvocation(chosen, function* callChosen() {
     return yield* Call(chosen, thisValue, args as Value[]);
   }));
+}
+
+/**
+ * Plan section 3.8 (B12), step 7c: whether a case's `where` filters hold for
+ * its bindings, evaluated before any call as a generic application's clauses
+ * are (#sec-generic-where), with the receiver's class bindings - a method's
+ * filter reads its class's parameters. A case whose filter does not hold is
+ * not applicable. Verdicts are memoized by class and case bindings together,
+ * so one class specialization's verdict never answers for another's.
+ */
+export function* CaseFilterHolds(fn: Value, frame: Map<string, TypeRecord>, classFrame: Map<string, TypeRecord> | null): PlainEvaluator<boolean> {
+  const clauses = functionWhereClauses(fn as never);
+  if (!clauses) return true;
+  const key = new Map<string, TypeRecord>([...(classFrame ?? new Map()), ...frame]);
+  // Evaluated in the case's own declaring context, where its names were
+  // written: a call may reach here from a built-in (the overload dispatch),
+  // whose context has no environment.
+  const declared = fn as unknown as { Environment?: unknown, PrivateEnvironment?: unknown, Realm?: unknown, ScriptOrModule?: unknown };
+  const context = new ExecutionContext();
+  context.Function = Value.null;
+  context.Realm = declared.Realm as never;
+  context.ScriptOrModule = declared.ScriptOrModule as never;
+  context.LexicalEnvironment = declared.Environment as never;
+  context.VariableEnvironment = declared.Environment as never;
+  context.PrivateEnvironment = declared.PrivateEnvironment as never;
+  surroundingAgent.executionContextStack.push(context);
+  if (classFrame) pushTypeParameterFrame(classFrame);
+  pushTypeParameterFrame(frame);
+  try {
+    for (const clause of clauses) {
+      if (GenericWhereVerified(clause, key)) continue;
+      const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
+      if (!predicate) continue;
+      const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+      if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) return false;
+      MarkGenericWhereVerified(clause, key);
+    }
+    return true;
+  } finally {
+    popTypeParameterFrame();
+    if (classFrame) popTypeParameterFrame();
+    surroundingAgent.executionContextStack.pop(context);
+  }
 }
 
 /** The outcome of `SelectCase`. */
@@ -264,6 +323,8 @@ export function SelectCase(
   isSubtype: (sub: TypeRecord, sup: TypeRecord) => boolean,
   describe: (t: TypeRecord) => string,
   name: string,
+  // Cases whose filters did not hold (B12): not applicable, so not candidates.
+  excluded: ReadonlySet<object> = new Set(),
 ): CaseSelection {
   const tuple = `(${args.map((a, i) => `${names[i] !== undefined ? `${names[i]}: ` : ''}${describe(a)}`).join(', ')})`;
   const unknown = new Set<string>();
@@ -286,7 +347,7 @@ export function SelectCase(
       if (value) filled.push(value); else complete = false;
     });
     if (!complete) continue;
-    const attached = analysis.Attached.filter((a) => a.Owner === owner && ValueArityAdmits(a.Case.Node, valueCount))
+    const attached = analysis.Attached.filter((a) => a.Owner === owner && !excluded.has(a.Case.Node as object) && ValueArityAdmits(a.Case.Node, valueCount))
       .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
     if (attached.length === 0) continue;
     const result = SelectSpecialization(attached, owner.Parameters as never, filled, host as never);
@@ -299,7 +360,7 @@ export function SelectCase(
   }
   const matching: { d: ParseNode, list: ParseNode.TypeParameters, ordered: readonly (TypeRecord | undefined)[], bindings: readonly { Name: string, Value: TypeRecord }[], label: string }[] = [];
   for (const d of analysis.Standalone) {
-    if (!d.List || d.List.ListKind === 'parameters' || !ValueArityAdmits(d.Node, valueCount)) continue;
+    if (!d.List || d.List.ListKind === 'parameters' || excluded.has(d.Node as object) || !ValueArityAdmits(d.Node, valueCount)) continue;
     const kinds = (d.List as { EntryKinds?: readonly string[] }).EntryKinds ?? SpecializationPatternsOf(d.List).map(() => 'argument');
     let binder = 0;
     const labels = kinds.map((k) => (k === 'parameter' ? (d.List!.TypeParameterList ?? [])[binder++]?.BindingIdentifier.name : undefined));
@@ -402,6 +463,7 @@ export function* SelectExplicitCase(
   typeArguments: readonly ParseNode[],
   name: string,
   valueArgumentCount?: number,
+  classFrame: Map<string, TypeRecord> | null = null,
 ): PlainEvaluator<CaseChoice> {
   if (typeArguments.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
     return Throw.TypeError('$1', Value(`a spread application of \`${name}\`, whose group has a specialized case, is not supported yet`));
@@ -416,14 +478,24 @@ export function* SelectExplicitCase(
   const { analysis, host, resolve } = Q(yield* AnalyzeGroupAtRuntime(members, name));
   const fnOf = (node: ParseNode) => members.find((m) => m.declaration === node)!.fn;
   const frameOf = FrameOfBindings;
-  const choice = SelectCase(analysis as never, args as TypeRecord[], names, valueArgumentCount, host, resolve, (a, b) => IsSubtype(a, b, []), displayType, name);
-  if (choice.Kind === 'error') {
-    return Throw.TypeError('$1', Value(choice.Message));
+  // A chosen case whose filter does not hold is excluded, and selection runs
+  // again among the rest (B12).
+  const excluded = new Set<object>();
+  for (;;) {
+    const choice = SelectCase(analysis as never, args as TypeRecord[], names, valueArgumentCount, host, resolve, (a, b) => IsSubtype(a, b, []), displayType, name, excluded);
+    if (choice.Kind === 'error') {
+      return Throw.TypeError('$1', Value(choice.Message));
+    }
+    if (choice.Kind === 'owner') {
+      return { fn: fnOf(choice.Declaration), frame: undefined };
+    }
+    const fn = fnOf(choice.Declaration);
+    const frame = frameOf(choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value })));
+    if (Q(yield* CaseFilterHolds(fn, frame, classFrame))) {
+      return { fn, frame };
+    }
+    excluded.add(choice.Declaration as object);
   }
-  if (choice.Kind === 'owner') {
-    return { fn: fnOf(choice.Declaration), frame: undefined };
-  }
-  return { fn: fnOf(choice.Declaration), frame: frameOf(choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))) };
 }
 
 void builtinTypeRecord;

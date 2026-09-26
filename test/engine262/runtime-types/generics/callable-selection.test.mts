@@ -349,3 +349,32 @@ test('an operator without a right operand to select by is deferred; a bodyless o
   expectThrown(`class R { operator +.<T: type>(rhs: T): string; operator +.<boolean>(rhs: boolean): string { return 'b'; } }`,
     "is a class operator's owner without a body");
 });
+
+// Step 7c: `where` filters (B12), receiverless extraction (E8), `super` forwarding (F5).
+test('B12: a case whose where filter does not hold is not applicable; selection moves on', () => {
+  const F = `function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint.<const N>>(x: uint.<N>): string where N > 8 { return 'wide ' + String(N); } const g: any = f;`;
+  expect(evaluated(`${F} g.<uint.<12>>((1 := uint.<12>)) + '|' + g.<uint.<4>>((1 := uint.<4>))
+    + '|' + g((1 := uint.<12>)) + '|' + g((1 := uint.<4>));`)).toBe('wide 12|generic|wide 12|generic');
+  // A method's filter reads its class's parameters.
+  expect(evaluated(`class P<Bits: uint32 = 64> { write<T: type>(v: T): string { return 'g'; }
+    write<float64>(v: float64): string where Bits >= 64 { return 'f64'; } }
+    const a: any = new P.<64>(); const b: any = new P.<32>(); a.write.<float64>(1.5) + '|' + b.write.<float64>(1.5);`)).toBe('f64|g');
+  // The checker does not yet evaluate filters while it selects: it refuses.
+  expectThrown(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint.<const N>>(x: uint.<N>): string where N > 8 { return 'wide'; } f.<uint.<12>>((1 := uint.<12>));`,
+  'whose `where` filter is evaluated at run time, statically is not supported yet');
+});
+
+test('E8: an extracted method application binds no receiver', () => {
+  expect(evaluated(`class W { tag: string = 'w'; write<T: type>(v: T): string { return 'g'; }
+    write<boolean>(v: boolean): string { return this.tag; } }
+    const w = new W(); const m = w.write.<boolean>;
+    m.call(w, true) + '|' + String((() => { try { return m(true); } catch (e) { return 'no receiver'; } })());`)).toBe('w|no receiver');
+});
+
+test('F5: an owner override forwards through super, checked against the owner', () => {
+  expect(evaluated(`class R { read<T: type>(): T; read<boolean>(): boolean { return true; } read<uint8>(): uint8 { return (7 := uint8); } }
+    class A extends R { read<T: type>(): T { return super.read.<T>(); } }
+    const a = new A(); String(a.read.<boolean>()) + '|' + String(a.read.<uint8>());`)).toBe('true|7');
+});

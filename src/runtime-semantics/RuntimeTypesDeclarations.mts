@@ -5,7 +5,7 @@ import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumbe
 import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.mts';
 import { CaseGroupMembers, SelectExplicitCase, StoredCaseValue } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
-import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters } from '../abstract-ops/runtime-types.mts';
+import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject } from '../abstract-ops/runtime-types.mts';
 import {
   CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
 } from '../intrinsics/Decimal.mts';
@@ -2674,7 +2674,8 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     if (caseMembers) {
       const inner = (node as unknown as { Expression?: { type?: string, name?: string } }).Expression;
       const groupName = inner?.type === 'IdentifierReference' && inner.name ? inner.name : 'this function';
-      const choice = Q(yield* SelectExplicitCase(caseMembers, node.TypeArguments.TypeArgumentList as unknown as ParseNode[], groupName, undefined));
+      const choice = Q(yield* SelectExplicitCase(caseMembers, node.TypeArguments.TypeArgumentList as unknown as ParseNode[], groupName, undefined,
+        classFrameOfObject((ref as { Base?: unknown } | undefined)?.Base)));
       if (choice.frame) {
         return StoredCaseValue(choice.fn, choice.frame, groupName);
       }

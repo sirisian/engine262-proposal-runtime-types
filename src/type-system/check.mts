@@ -13456,6 +13456,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return undefined;
   };
+  const enclosingTypeParameter = (from: ParseNode, argument: ParseNode): TypeRecord | null => {
+    const ref = argument as ParseNode.TypeReference;
+    if (ref.type !== 'TypeReference' || ref.TypeArguments || ref.TypeName.MemberNames.length > 0) return null;
+    const name = ref.TypeName.IdentifierReference.name;
+    for (let p = (from as { parent?: ParseNode }).parent; p; p = (p as { parent?: ParseNode }).parent) {
+      const binder = (p as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList
+        ?.find((tp) => tp.BindingIdentifier.name === name);
+      if (binder) {
+        const bound = binder.TypeParameterConstraint ? resolveType(binder.TypeParameterConstraint as unknown as ParseNode.Type) : null;
+        return { Kind: 'parameter', Name: name, ...(bound ? { Constraint: bound } : {}) } as TypeRecord;
+      }
+    }
+    return null;
+  };
   const reportedSelections = new WeakSet<object>();
   /** The chosen case's own signature per call, for the callee's type (step 2b). */
   const selectedCaseSignatures = new WeakMap<object, SignatureRecord>();
@@ -13485,7 +13499,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const { name, group } = found;
     const args: TypeRecord[] = [];
     for (const a of argNodes) {
-      const r = resolveType(a as ParseNode.Type);
+      // A bare name the checker cannot resolve here that an enclosing
+      // declaration declares as a type parameter - a method's own, whose scope
+      // is not active where its callee is typed - is that open parameter (F5).
+      const r = resolveType(a as ParseNode.Type) ?? enclosingTypeParameter(node, a);
       if (!r) return undefined;
       args.push(r);
     }
@@ -13519,6 +13536,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const stored = (node as { StoredApplication?: boolean }).StoredApplication === true;
     const valueCount = stored || valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement') ? undefined : valueArguments.length;
     const returnOf = (kase: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[]): Known => {
+      // A case with a `where` filter is chosen at run time only if the filter
+      // holds (B12); the checker does not yet evaluate filters while it selects,
+      // so it refuses rather than type a choice the run time may not make.
+      const kind = kase.TypeParameters?.ListKind;
+      if ((kind === 'specialization' || kind === 'mixed') && ((kase as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0) {
+        report(`selecting \`${name}${(kase.TypeParameters as { sourceText?: string }).sourceText ?? ''}\`, whose \`where\` filter is evaluated at run time, statically is not supported yet`);
+        return null;
+      }
       const annotation = kase.TypeAnnotation?.Type;
       if (!annotation) return null;
       const pushed = pushTypeParameterScopeOf(kase as never);
@@ -13636,7 +13661,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           })
           : labels.length >= args.length;
       });
-      if (ownerTakes) return undefined;
+      if (ownerTakes) {
+        // Checked against the owner's contract: the callee is the owner's own
+        // signature at the (open) arguments (F5: `super.read.<T>()`).
+        const owner = analysis.Owners.find((o) => (o.Parameters ?? []).length >= args.length)!;
+        return { type: returnOf(owner.Node as D, (owner.Parameters ?? []).slice(0, args.length).map((p, i) => ({ Capture: { Name: p.Name }, Value: args[i]! }))) };
+      }
       const isWildcard = (e: ParseNode) => e.type === 'TypeReference' && !(e as ParseNode.TypeReference).TypeArguments
         && (e as ParseNode.TypeReference).TypeName.MemberNames.length === 0 && (e as ParseNode.TypeReference).TypeName.IdentifierReference.name === '_';
       const isOpen = (e: ParseNode) => e.type === 'CaptureBinding' || isWildcard(e);
