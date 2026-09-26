@@ -87,8 +87,10 @@ export function rationalWidthOf(typeRecord: unknown): number {
   // no width equals. It answered 64 for anything that was not a number, so
   // `rational.<bigint>` was silently a 64-bit rational, and a non-integer width
   // reached `BigInt` and crashed the host.
+  // The widths are those of `int.<N>`: "N is bounded: it lies in the inclusive
+  // interval from 1 to 2 16, and a width outside it is a type error."
   const width = args[0];
-  return typeof width === 'number' && Number.isInteger(width) && width >= 1 ? width : Number.NaN;
+  return typeof width === 'number' && Number.isInteger(width) && width >= 1 && width <= 65536 ? width : Number.NaN;
 }
 
 /** Refusal of a rational type whose width is not a positive integer: it names no type. */

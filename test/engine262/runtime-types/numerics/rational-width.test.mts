@@ -201,7 +201,9 @@ test('approximate: the design example at each width, and overflow refused', () =
 test('a width that is not a positive integer names no type', () => {
   // "For each positive integer N": `rational.<1.5>` reached BigInt with a fraction
   // and crashed the host, and `rational.<bigint>` was silently a 64-bit rational.
-  for (const w of ['1.5', '0', '-1', 'bigint', 'string']) {
+  // The widths are those of `int.<N>`, 1 to 2**16: `rational.<65537>` names no type.
+  expect(outcome('rational.<65536>.byteLength')).toBe('16384');
+  for (const w of ['1.5', '0', '-1', '65537', 'bigint', 'string']) {
     expect(outcome(`rational.<${w}>(1, 1)`), `rational.<${w}>(1, 1)`).toBe('TypeError');
     expect(outcome(`rational.<${w}>.parse('1')`), `rational.<${w}>.parse`).toBe('TypeError');
     expect(outcome(`rational.<${w}>.approximate(1, 2)`), `rational.<${w}>.approximate`).toBe('TypeError');

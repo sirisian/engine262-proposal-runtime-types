@@ -914,7 +914,7 @@ function rationalFitsType(num: bigint, den: bigint, t: TypeRecord): boolean {
   // A width that is not a positive integer names no type (#sec-rational-types:
   // "For each positive integer N"), so no value fits it; reading it as a width
   // reached `BigInt` with a fraction and crashed the checker.
-  if (arg !== undefined && !(typeof arg === 'number' && Number.isInteger(arg) && arg >= 1)) {
+  if (arg !== undefined && !(typeof arg === 'number' && Number.isInteger(arg) && arg >= 1 && arg <= 65536)) {
     return false;
   }
   const width = typeof arg === 'number' ? arg : 64;
