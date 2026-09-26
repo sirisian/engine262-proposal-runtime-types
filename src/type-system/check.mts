@@ -13140,6 +13140,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // #sec-user-defined-operators: the first operator table in the prototype
   // chain declaring this key supplies the overload set, as LookupClassOperator does.
+  /**
+   * Plan section 3.8, step 7b: the class operators keyed _key_ in the nearest
+   * class of _receiver_'s chain whose body declares any, when one is a case.
+   */
+  const operatorGroupOf = (receiver: Known, key: string): ParseNode[] | undefined => {
+    if (receiver?.Kind === 'reference') receiver = receiver.Target;
+    if (receiver?.Kind !== 'nominal') return undefined;
+    const visited = new Set<ParseNode>();
+    for (let cls = receiver.Declaration as ParseNode | undefined; cls && !visited.has(cls); cls = heritageClassOf(cls)) {
+      visited.add(cls);
+      const body = (cls as ParseNode.ClassDeclaration).ClassTail?.ClassBody ?? [];
+      const definitions = body.filter((member): member is ParseNode.OperatorDefinition =>
+        member.type === 'OperatorDefinition' && !member.static && operatorTableKey(member) === key);
+      if (definitions.length > 0) {
+        return definitions.some((d) => d.TypeParameters?.ListKind === 'specialization' || d.TypeParameters?.ListKind === 'mixed')
+          ? definitions as unknown as ParseNode[] : undefined;
+      }
+    }
+    return undefined;
+  };
+  // Where no right operand selects - a unary, compound, or index operator - a
+  // group holding a case is refused, not typed as if it had none.
+  const deferOperatorCases = (receiver: Known, key: string): void => {
+    const group = operatorGroupOf(receiver, key);
+    const holder = group ? (group[0] as { parent?: object }).parent : undefined;
+    if (!group || !holder || deferredCaseOperators.get(holder)?.has(key)) return;
+    deferredCaseOperators.set(holder, new Set([...(deferredCaseOperators.get(holder) ?? []), key]));
+    const completion = Throw.StaticTypeError('$1', Value(`selecting a specialized case of \`operator ${key}\` is not supported yet; only a binary operator's right operand selects`)) as ThrowCompletion;
+    errors.push(completion.Value as ObjectValue);
+  };
+  const operatorCalls = new WeakMap<object, ParseNode>();
+  /** A binary operator's chosen declaration's signature, 'error', or *undefined* (no case group). */
+  const operatorCaseSignature = (node: ParseNode, left: Known, token: string, right: ParseNode): SignatureRecord | 'error' | undefined => {
+    const group = operatorGroupOf(left, token);
+    if (!group) return undefined;
+    let synthetic = operatorCalls.get(node);
+    if (!synthetic) {
+      synthetic = { type: 'CallExpression', OperatorGroup: group, OperatorName: `operator ${token}`, Arguments: [right], parent: (node as { parent?: ParseNode }).parent } as unknown as ParseNode;
+      operatorCalls.set(node, synthetic);
+    }
+    const result = staticCaseSelection(synthetic);
+    if (result && result.type === null && reportedSelections.has(synthetic)) return 'error';
+    return selectedCaseSignatures.get(synthetic);
+  };
   const declaredOperator = (receiver: Known, key: string): Known => {
     if (receiver?.Kind === 'reference') receiver = receiver.Target;
     const seen = new Set<object>();
@@ -13149,14 +13193,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const body = (declaration as ParseNode.ClassDeclaration | undefined)?.ClassTail?.ClassBody ?? [];
       let definitions = body.filter((member): member is ParseNode.OperatorDefinition =>
         member.type === 'OperatorDefinition' && !member.static && operatorTableKey(member) === key);
-      // Plan section 3.8, phase 4 step 1: a use of an operator whose group
-      // holds a specialized case is refused until selection is implemented.
-      if (definitions.some((d) => d.TypeParameters?.ListKind === 'specialization' || d.TypeParameters?.ListKind === 'mixed')
-          && declaration && !deferredCaseOperators.get(declaration)?.has(key)) {
-        deferredCaseOperators.set(declaration, new Set([...(deferredCaseOperators.get(declaration) ?? []), key]));
-        const completion = Throw.StaticTypeError('$1', Value(`selecting a specialized case of \`operator ${key}\` is not supported yet`)) as ThrowCompletion;
-        errors.push(completion.Value as ObjectValue);
-      }
       if (definitions.every((operator) => !operator.TypeAnnotation && !(operator.FormalParameters ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation))) {
         definitions = definitions.slice(-1);
       }
@@ -13344,6 +13380,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const types = indices.map((index) => staticType(index));
     if (!types.every((type) => type && IsNumericIndexType(type))) return null;
     const receiver = staticType(node.MemberExpression);
+    deferOperatorCases(receiver, `[]#${indices.length}`);
     const get = declaredOperator(receiver, `[]#${indices.length}`);
     const set = declaredOperator(receiver, `[]=#${indices.length}`);
     return get || set ? { get, set, arguments: indices.map((index, i) => literalOperand(index) ? index : typedExpressionView(index, types[i])) } : null;
@@ -13432,13 +13469,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return result;
   };
   const staticCaseSelectionUncached = (node: ParseNode): { type: Known } | undefined => {
-    if (!IsSelectableCall(node)) return undefined;
-    const callee = (node as { CallExpression?: { type?: string, Expression?: ParseNode, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression!;
+    // Step 7b: a binary operator's use arrives as a call of its group, its
+    // right operand the one value argument.
+    const operatorGroup = (node as { OperatorGroup?: ParseNode[], OperatorName?: string }).OperatorGroup;
+    if (!operatorGroup && !IsSelectableCall(node)) return undefined;
+    const callee = (node as { CallExpression?: { type?: string, Expression?: ParseNode, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression;
     // Step 4b: an implicit call, `f(x)`, selects too; step 7: a method's.
-    const implicit = callee.type !== 'TypeArgumentsExpression';
-    const target = (implicit ? callee : callee.Expression) as ParseNode;
-    const argNodes = implicit ? [] : callee.TypeArguments?.TypeArgumentList ?? [];
-    const found = caseGroupOfCallee(node, target);
+    const implicit = operatorGroup !== undefined || callee!.type !== 'TypeArgumentsExpression';
+    const target = (operatorGroup ? undefined : implicit ? callee : callee!.Expression) as ParseNode;
+    const argNodes = implicit ? [] : callee!.TypeArguments?.TypeArgumentList ?? [];
+    const found = operatorGroup
+      ? { name: (node as { OperatorName: string }).OperatorName, group: operatorGroup }
+      : caseGroupOfCallee(node, target);
     if (!found) return undefined;
     const { name, group } = found;
     const args: TypeRecord[] = [];
@@ -13891,6 +13933,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (unary.operator === 'void') return undefinedType;
         if (unary.operator === 'delete') return makePrimitive('boolean');
         const operand = inner ? staticType(inner) : null;
+        if (unary.operator) deferOperatorCases(operand, `unary ${unary.operator}`);
         const declared = unary.operator ? declaredOperator(operand, `unary ${unary.operator}`) : null;
         if (declared) return operatorResult(declared, [], node);
         // #sec-primitive-operator-blocks: a block's unary `-` gives the result
@@ -13945,6 +13988,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!target) return null;
         const type = staticType(target);
         const operand = type?.Kind === 'reference' ? type.Target : type;
+        deferOperatorCases(operand, `unary ${node.operator}`);
         const declared = declaredOperator(operand, `unary ${node.operator}`);
         if (declared) {
           const result = operatorResult(declared, [], node);
@@ -14272,6 +14316,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TypedConversionExpression':
         return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
       case 'AssignmentExpression': {
+        deferOperatorCases(staticType(node.LeftHandSideExpression), node.AssignmentOperator);
         const declared = declaredOperator(staticType(node.LeftHandSideExpression), node.AssignmentOperator);
         if (declared) return operatorResult(declared, [node.AssignmentExpression], node);
         if (!['=', '||=', '&&=', '??='].includes(node.AssignmentOperator)) return compoundBinaryType(node);
@@ -15940,6 +15985,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ShiftExpression: (node as ParseNode.ShiftExpression).operator,
           BitwiseANDExpression: '&', BitwiseXORExpression: '^', BitwiseORExpression: '|',
         } as Record<string, string | undefined>)[node.type];
+        // Step 7b: a class operator group holding a case selects by the right
+        // operand, as an implicit call does, and the operation is typed by the
+        // chosen declaration's own signature.
+        if (token && rightNode) {
+          const chosen = operatorCaseSignature(node, leftT, token, rightNode);
+          if (chosen === 'error') return neverType;
+          if (chosen) {
+            const argument = rightLit ? rightNode : typedExpressionView(rightNode, rightT);
+            return operatorResult({ Kind: 'function', Signatures: [chosen] } as Known, [argument], node);
+          }
+        }
         const declared = token ? declaredOperator(leftT, token) : null;
         if (declared && rightNode) {
           const argument = rightLit ? rightNode : typedExpressionView(rightNode, rightT);
@@ -26510,6 +26566,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         for (const owner of analysis.Owners) {
+          // A bodyless owner is a function's or a method's (rule 2); a class
+          // operator's owner, which its class registers only with a body, has one.
+          if ((owner.Node as ParseNode).type === 'OperatorDefinition' && !(owner.Node as { FunctionBody?: unknown }).FunctionBody) {
+            report(`${owner.Label} is a class operator's owner without a body; an owner may omit its body only as a function or a method does`);
+          }
           if ((owner.Node as Decl).BodylessOwner && !analysis.Attached.some((a) => a.Owner === owner)) {
             report(`${owner.Label} is a bodyless owner with no attached case in its group, so every application of it would fail; give it a body, or declare it abstract`);
           }

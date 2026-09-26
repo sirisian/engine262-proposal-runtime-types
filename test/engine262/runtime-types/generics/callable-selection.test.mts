@@ -328,3 +328,24 @@ test('three same-named methods form one group, not nested sets', () => {
   expect(evaluated(`class V { m(a: string): string { return 's'; } m(a: number): string { return 'n'; } m(a: boolean): string { return 'b'; } }
     const v = new V(); v.m('x') + v.m(1) + v.m(true);`)).toBe('snb');
 });
+
+// Step 7b: class operators, selected by the right operand.
+const OPS = `class V { x: float64; constructor(x: float64) { this.x = x; }
+  operator +.<T: type>(rhs: T): string { return 'g'; }
+  operator +.<uint8>(rhs: uint8): 'u' { return 'u'; }
+  operator +.<uint.<const N>>(rhs: uint.<N>): string { return 'n' + String(N); } }`;
+
+test('a binary operator selects by its right operand, statically and at run time', () => {
+  expect(evaluated(`${OPS} const v = new V(1); String(v + (3 := uint8)) + '|' + String(v + (3 := uint16)) + '|' + String(v + 'a');`)).toBe('u|n16|g');
+  expect(evaluated(`${OPS} const v: any = new V(1); String(v + (3 := uint8)) + '|' + String(v + 'a');`)).toBe('u|g');
+  // The operation has the chosen declaration's type.
+  expect(evaluated(`${OPS} const v = new V(1); const c: 'u' = v + (3 := uint8); c;`)).toBe('u');
+  expectEarlyError(`${OPS} const n: number = new V(1) + (3 := uint8);`, 'StaticTypeError');
+});
+
+test('an operator without a right operand to select by is deferred; a bodyless operator owner is refused', () => {
+  expectThrown(`class U { operator -.<T: type>(): string { return 'g'; } operator -.<uint8>(): string { return 'u'; } } -new U();`,
+    "only a binary operator's right operand selects");
+  expectThrown(`class R { operator +.<T: type>(rhs: T): string; operator +.<boolean>(rhs: boolean): string { return 'b'; } }`,
+    "is a class operator's owner without a body");
+});
