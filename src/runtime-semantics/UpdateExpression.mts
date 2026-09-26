@@ -6,9 +6,7 @@ import { Q, X } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import { CreateRationalValue, isRationalObject, rationalAdd, rationalSub } from '../intrinsics/Rational.mts';
-import {
-  CreateDecimalValue, DecimalPartsInRange, decimalAdd, decimalSubtract, isDecimalObject, type DecimalObject,
-} from '../intrinsics/Decimal.mts';
+import { CreateDecimalValue, decimalAdd, decimalSubtract, isDecimalObject, type DecimalObject, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { isComplexObject } from '../intrinsics/Complex.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
@@ -41,10 +39,7 @@ function stepExactNumeric(value: Value, operator: '++' | '--'): Value | ThrowCom
   if (isDecimalObject(value)) {
     const one = CreateDecimalValue(1n, 0, value.DecimalWidth, realmRec) as DecimalObject;
     const r = operator === '++' ? decimalAdd(value, one) : decimalSubtract(value, one);
-    if (!DecimalPartsInRange(r.parts, r.width)) {
-      return Throw.RangeError('a decimal result is outside the range of $1', Value(`decimal${r.width}`));
-    }
-    return CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
+    return DecimalFromResult(r, realmRec);
   }
   // A float128 steps by an exact 1, rounded once, as `x + 1` does.
   if (isFloat128Object(value)) {

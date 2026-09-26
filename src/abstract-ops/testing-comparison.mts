@@ -530,7 +530,9 @@ export function SameValueZero(x: Value, y: Value): boolean {
     return float128Compare(Float128ToBinary128(x), Float128ToBinary128(y)) === 0;
   }
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
-    return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth && decimalEquals(x, y);
+    // SameValueZero keeps a NaN as one key, as it does a Number's.
+    return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth
+      && (decimalEquals(x, y) || (x.DecimalSpecial === 'NaN' && y.DecimalSpecial === 'NaN'));
   }
   // proposal-runtime-types R1: typed numbers have value-type identity, and
   // SameValueZero compares NUMERICAL VALUE within a type where SameValue
@@ -606,7 +608,12 @@ export function* IsLessThan(x: Value, y: Value, LeftFirst = true): ValueEvaluato
     return c === undefined ? Value.undefined : (c < 0 ? Value.true : Value.false);
   }
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(x) && isDecimalObject(y)) {
-    return decimalCompare(x, y) < 0 ? Value.true : Value.false;
+    const order = decimalCompare(x, y);
+    // A decimal NaN is unordered, as a Number's is.
+    if (order === undefined) {
+      return Value.undefined;
+    }
+    return order < 0 ? Value.true : Value.false;
   }
   let px;
   let py;
@@ -789,6 +796,9 @@ export function exactNumericValue(v: Value): ExactNumeric | undefined {
     return exactOfDouble(R(v));
   }
   if (isDecimalObject(v)) {
+    if (v.DecimalSpecial !== undefined) {
+      return v.DecimalSpecial === 'NaN' ? { kind: 'nan' } : { kind: 'infinity', sign: v.DecimalSpecial === 'Infinity' ? 1 : -1 };
+    }
     const e = v.DecimalExponent;
     return e >= 0
       ? { kind: 'finite', n: v.DecimalSignificand * 10n ** BigInt(e), d: 1n }

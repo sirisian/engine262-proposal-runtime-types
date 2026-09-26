@@ -131,9 +131,11 @@ test('the any boundary, from a complex', () => {
   }
 });
 
-// Not asserted: an any float64 NaN at a decimal. The specification makes NaN a
-// value of every decimal type; the engine's decimal has no NaN - its own open
-// question, planned separately.
+// An any float64 NaN at a decimal is the decimal NaN - the case this test once
+// left pending, settled by the plan "NaN and the infinities in the decimal types".
+test('the any boundary, a float NaN at a decimal', () => {
+  expect(at('(NaN := float64)', 'decimal64')).toBe('NaN');
+});
 
 test('the explicit conversions the boundary runs, in both spellings', () => {
   const cases: [string, string][] = [["decimal64.parse('1.5') := int32", "1"], ["int32(decimal64.parse('-1.5'))", "-1"], ["decimal64.parse('300') := uint8", "44"], ["uint8(decimal64.parse('300'))", "44"], ["decimal64.parse('-1.5') := bigint", "-1"], ["rational(300, 1) := uint8", "44"], ["uint8(rational(300, 1))", "44"], ["rational(-3, 2) := int32", "-1"], ["rational.<bigint>(2n ** 70n + 5n, 1n) := int64", "5"], ["complex128.parse('1e300') := complex64", "Infinity+0i"], ["complex64(complex128.parse('1e300'))", "Infinity+0i"], ["complex(complex64.parse('1.5+2i'))", "1.5+2i"], ["complex(3)", "3+0i"], ["complex(1, 2)", "1+2i"]];

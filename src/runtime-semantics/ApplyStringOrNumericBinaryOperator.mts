@@ -29,11 +29,7 @@ import {
 } from '../intrinsics/Rational.mts';
 import { Q, type ThrowCompletion } from '../completion.mts';
 import { IsOfType } from '../type-system/runtime.mts';
-import {
-  isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder,
-  DecimalPartsInRange,
-  CreateDecimalValue,
-} from '../intrinsics/Decimal.mts';
+import { isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
 import {
   add as float128Add, subtract as float128Subtract, multiply as float128Multiply, divide as float128Divide,
@@ -321,12 +317,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     // answered 1.8e97 the same way - silently, and typed `decimal32`. Every
     // operator builds its result here, so the check belongs here rather than in
     // each arm.
-    const make = (r: { parts: { significand: bigint, exponent: number }, width: 32 | 64 | 128 }) => {
-      if (!DecimalPartsInRange(r.parts, r.width)) {
-        return Throw.RangeError('a decimal result is outside the range of $1', Value(`decimal${r.width}`));
-      }
-      return CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
-    };
+    const make = (r: Parameters<typeof DecimalFromResult>[0]) => DecimalFromResult(r, realmRec);
     switch (opText) {
       case '+':
         return make(decimalAdd(lval, rval));

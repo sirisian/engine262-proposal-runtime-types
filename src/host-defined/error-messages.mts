@@ -644,6 +644,7 @@ export interface Throw {
   | '$1 has no custom matcher'
   | 'a juxtaposed head must denote a type'
   | '$1 has no decimal value'
+  | 'an invalid operation on a decimal'
   | '$1 has no default value, so a declaration of it needs an initializer'
   | '$1 has no signature taking values of two numeric types'
   | '$1 has no values, so no declaration of it can be initialized'

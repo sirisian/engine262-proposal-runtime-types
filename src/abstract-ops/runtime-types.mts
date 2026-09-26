@@ -917,6 +917,10 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // `bigint`: the source truncated toward zero". The `:=` spelling refused the
     // first, which the call spelling already ran, and crashed on the second.
     if (t.Kind === 'primitive' && (t.Name === 'int' || t.Name === 'uint' || t.Name === 'bigint')) {
+      // A decimal NaN or infinity has no integer value.
+      if (value.DecimalSpecial !== undefined) {
+        return Throw.RangeError('$1 is not in the range of $2', value, Value(displayType(t)));
+      }
       const e = value.DecimalExponent;
       const truncated = e >= 0 ? value.DecimalSignificand * 10n ** BigInt(e) : value.DecimalSignificand / 10n ** BigInt(-e);
       if (t.Name === 'bigint') {
@@ -1179,6 +1183,13 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         return Binary128ToFloat128(float128Finite(R(value), 0), surroundingAgent.currentRealmRecord);
       }
       if (isDecimalObject(value)) {
+        // A decimal NaN or infinity is the float128's.
+        if (value.DecimalSpecial !== undefined) {
+          const special = value.DecimalSpecial === 'NaN'
+            ? { cls: 'nan', sign: 1, sig: 0n, exp: 0 }
+            : { cls: 'infinity', sign: value.DecimalSpecial === 'Infinity' ? 1 : -1, sig: 0n, exp: 0 };
+          return Binary128ToFloat128(special as Parameters<typeof Binary128ToFloat128>[0], surroundingAgent.currentRealmRecord);
+        }
         return Binary128ToFloat128(float128FromDecimal(value.DecimalSignificand, value.DecimalExponent), surroundingAgent.currentRealmRecord);
       }
       if (isRationalObject(value)) {

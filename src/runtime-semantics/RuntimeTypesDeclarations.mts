@@ -6,9 +6,7 @@ import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.m
 import { CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject } from '../abstract-ops/runtime-types.mts';
-import {
-  CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject,
-} from '../intrinsics/Decimal.mts';
+import { CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject, DecimalFromResult, CreateDecimalSpecial } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
 import { add as float128Add, finite as float128Finite } from '../intrinsics/Float128Arithmetic.mts';
 import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
@@ -362,8 +360,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // that reason. So the step is taken IN the type, by adding the decimal
         // one at the previous enumerator's own width.
         const one = CreateDecimalValue(1n, 0, previous.DecimalWidth, surroundingAgent.currentRealmRecord);
-        const sum = decimalAdd(previous, one as DecimalObject);
-        v = CreateDecimalValue(sum.parts.significand, sum.parts.exponent, sum.width, surroundingAgent.currentRealmRecord);
+        v = Q(DecimalFromResult(decimalAdd(previous, one as DecimalObject), surroundingAgent.currentRealmRecord));
       } else {
         // "A later enumerator with no initializer takes the result of applying
         // the underlying type's prefix increment operator to the one before."
@@ -403,7 +400,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
           // enumerator may be written from a shared binding, and tagging that
           // would claim someone else's object. A decimal is compared by content,
           // so the copy is SameValue-equal to the original.
-          v = CreateDecimalValue(
+          v = v.DecimalSpecial !== undefined ? CreateDecimalSpecial(v.DecimalSpecial, v.DecimalWidth, surroundingAgent.currentRealmRecord, enumRecord) : CreateDecimalValue(
             v.DecimalSignificand,
             v.DecimalExponent,
             v.DecimalWidth,

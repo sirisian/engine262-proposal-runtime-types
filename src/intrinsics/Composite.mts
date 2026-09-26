@@ -116,7 +116,7 @@ export function CanonicalizeCompositeValue(value: Value): Value {
   // alone. Where the field's type declares a SCALE, quantization has already
   // happened at the assignment boundary and the cohort collapsed before
   // interning saw it, so this step finds nothing left to do.
-  if (isDecimalObject(value)) {
+  if (isDecimalObject(value) && value.DecimalSpecial === undefined) {
     const reduced = ReduceDecimal(value.DecimalSignificand, value.DecimalExponent);
     if (reduced.significand !== value.DecimalSignificand || reduced.exponent !== value.DecimalExponent) {
       return CreateDecimalValue(reduced.significand, reduced.exponent, value.DecimalWidth, surroundingAgent.currentRealmRecord);
@@ -191,6 +191,10 @@ function valueKeyFor(value: Value): string {
   // This is the same agreement the typed-number case above records: SameValueZero
   // tells values apart and the registry must not disagree.
   if (isDecimalObject(value)) {
+    // A NaN or an infinity is keyed by its kind - one key for the NaN, as SameValueZero has it.
+    if (value.DecimalSpecial !== undefined) {
+      return `d:${value.DecimalWidth}:${value.DecimalSpecial}`;
+    }
     const reduced = ReduceDecimal(value.DecimalSignificand, value.DecimalExponent);
     return `d:${value.DecimalWidth}:${reduced.significand}e${reduced.exponent}`;
   }

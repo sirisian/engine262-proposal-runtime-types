@@ -18,7 +18,7 @@ import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../i
 import { negate as float128Negate } from '../intrinsics/Float128Arithmetic.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { rangeNegate } from '../type-system/range-ops.mts';
-import { isDecimalObject, decimalNegate, CreateDecimalValue } from '../intrinsics/Decimal.mts';
+import { isDecimalObject, decimalNegate, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
 import { isRationalObject, rationalNegate } from '../intrinsics/Rational.mts';
 import {
@@ -372,8 +372,7 @@ function* ApplyUnaryMinus(rawValue: Value): ValueEvaluator {
   // COHORT MEMBER - `-1.50` is `-1.50`, not `-1.5` - since negation changes the
   // sign and nothing about the significance.
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(rawValue)) {
-    const negated = decimalNegate(rawValue);
-    return CreateDecimalValue(negated.parts.significand, negated.parts.exponent, negated.width, surroundingAgent.currentRealmRecord);
+    return DecimalFromResult(decimalNegate(rawValue), surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types #sec-which-operations-each-family-defines gives the
   // rational family unaryMinus too (rational.md: "unary `-` negates the

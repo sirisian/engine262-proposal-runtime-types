@@ -289,6 +289,10 @@ function exactFractionOf(v: Value): { num: bigint, den: bigint } | null {
   let significand: bigint;
   let exponent: number;
   if (isDecimalObject(v)) {
+    // A decimal NaN or infinity has no fraction: a rational holds neither.
+    if ((v as { DecimalSpecial?: string }).DecimalSpecial !== undefined) {
+      return null;
+    }
     significand = (v as { DecimalSignificand: bigint }).DecimalSignificand;
     exponent = (v as { DecimalExponent: number }).DecimalExponent;
   } else {
@@ -384,6 +388,10 @@ export function ToRational(a: Value, realmRec: Realm, typeRecord?: unknown): Rat
   }
   if ((a instanceof NumberValue || isTypedNumber(a))
     && !Number.isFinite(a.numberValue())) { // eslint-disable-line @engine262/mathematical-value -- finiteness of the stored Number is the question
+    return Throw.RangeError('$1 is not in the range of $2', a, Value(rationalDisplay(typeRecord)));
+  }
+  // A decimal NaN or infinity, likewise: a rational holds neither.
+  if (isDecimalObject(a) && (a as { DecimalSpecial?: string }).DecimalSpecial !== undefined) {
     return Throw.RangeError('$1 is not in the range of $2', a, Value(rationalDisplay(typeRecord)));
   }
   // A `bigint` is the source's value over 1, a RangeError where it does not fit -

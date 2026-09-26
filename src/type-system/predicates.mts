@@ -102,6 +102,15 @@ export function numericPredicate(value: Value, which: NumericPredicate, surface:
     }
   }
   if (isDecimalObject(value)) {
+    // A decimal NaN or infinity (N1): the value tests the table names.
+    const special = (value as unknown as { DecimalSpecial?: string }).DecimalSpecial;
+    if (special !== undefined) {
+      switch (which) {
+        case 'isNaN': return special === 'NaN';
+        case 'isFinite': case 'isInteger': case 'isSafeInteger': return false;
+        default: break;
+      }
+    }
     const significand = (value as unknown as { DecimalSignificand: bigint }).DecimalSignificand;
     const exponent = (value as unknown as { DecimalExponent: number }).DecimalExponent;
     const finite = Number.isFinite(exponent);

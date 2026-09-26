@@ -24,7 +24,7 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { isFloatTypeName, isIntegerTypeName, numericLibraryRows, type IntegerRow } from '../type-system/numeric-signatures.mts';
 import { Decimal } from '../host-defined/decimal.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
-import { isDecimalObject, CreateDecimalValue, decimalCompare } from './Decimal.mts';
+import { isDecimalObject, CreateDecimalValue, decimalCompare, CreateDecimalSpecial } from './Decimal.mts';
 import { isRationalObject, CreateRationalValue, rationalCompare, rationalWidthOf } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import {
@@ -76,6 +76,11 @@ import {
 function decimalOrRationalAbs(x: Value): Value | ThrowCompletion | undefined {
   const realmRec = surroundingAgent.currentRealmRecord;
   if (isDecimalObject(x)) {
+    // |NaN| is the NaN; |+-inf| is +inf.
+    const special = (x as { DecimalSpecial?: string }).DecimalSpecial;
+    if (special !== undefined) {
+      return special === 'NaN' ? x : CreateDecimalSpecial('Infinity', (x as { DecimalWidth: 32 | 64 | 128 }).DecimalWidth, realmRec);
+    }
     const sig = (x as { DecimalSignificand: bigint }).DecimalSignificand;
     return sig < 0n
       ? CreateDecimalValue(-sig, (x as { DecimalExponent: number }).DecimalExponent,
@@ -155,8 +160,13 @@ function rationalRounded(x: Value, functionName: string): Value | undefined {
 function decimalOrRationalSign(x: Value): Value | undefined {
   const realmRec = surroundingAgent.currentRealmRecord;
   if (isDecimalObject(x)) {
-    const sig = (x as { DecimalSignificand: bigint }).DecimalSignificand;
     const width = (x as { DecimalWidth: 32 | 64 | 128 }).DecimalWidth;
+    // The sign of NaN is the NaN; of +-inf, +-1.
+    const special = (x as { DecimalSpecial?: string }).DecimalSpecial;
+    if (special !== undefined) {
+      return special === 'NaN' ? x : CreateDecimalValue(special === 'Infinity' ? 1n : -1n, 0, width, realmRec);
+    }
+    const sig = (x as { DecimalSignificand: bigint }).DecimalSignificand;
     return CreateDecimalValue(sig === 0n ? 0n : (sig < 0n ? -1n : 1n), 0, width, realmRec);
   }
   if (isRationalObject(x)) {
@@ -180,12 +190,17 @@ function decimalOrRationalExtreme(args: readonly (Value | undefined)[], wantHigh
   if (!allDecimal && !allRational) {
     return undefined;
   }
+  // A NaN among them is the result, as for Numbers.
+  const nan = allDecimal ? values.find((v) => (v as { DecimalSpecial?: string }).DecimalSpecial === 'NaN') : undefined;
+  if (nan !== undefined) {
+    return nan;
+  }
   let best = values[0]!;
   for (const candidate of values.slice(1)) {
     const order = allDecimal
       ? decimalCompare(candidate as never, best as never)
       : rationalCompare(candidate as never, best as never);
-    if (wantHighest ? order > 0 : order < 0) {
+    if (order !== undefined && (wantHighest ? order > 0 : order < 0)) {
       best = candidate;
     }
   }

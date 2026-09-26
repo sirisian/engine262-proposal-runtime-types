@@ -2,7 +2,7 @@ import {
   Value, ObjectValue, JSStringValue,
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
-import { type ValueEvaluator } from '../completion.mts';
+import { type ValueEvaluator, type ThrowCompletion } from '../completion.mts';
 import { type Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw } from '#self';
@@ -48,7 +48,18 @@ export interface DecimalObject extends OrdinaryObject {
   DecimalExponent: number;
   /** Which of `decimal32`, `decimal64`, `decimal128` this value belongs to. */
   DecimalWidth: 32 | 64 | 128;
+  /**
+   * The NaN or an infinity, where the value is one; undefined for a finite value.
+   * #sec-decimal-floating-point-types: the values are "those of the corresponding
+   * IEEE 754-2019 decimal interchange formats", and "NaN and the infinities are
+   * values of ... every decimal type" - arriving by conversion and by bytes, never
+   * made by the arithmetic from finite operands (the plan "NaN and the infinities
+   * in the decimal types", N1 and O1).
+   */
+  DecimalSpecial?: DecimalSpecialKind;
 }
+
+export type DecimalSpecialKind = 'NaN' | 'Infinity' | '-Infinity';
 
 export function isDecimalObject(value: Value): value is DecimalObject {
   return value instanceof ObjectValue && 'DecimalSignificand' in value;
@@ -87,6 +98,9 @@ export function ReduceDecimal(significand: bigint, exponent: number): { signific
  * `totalOrder`, alongside `compareQuietEqual` for numerical value.
  */
 export function decimalSameValue(x: DecimalObject, y: DecimalObject): boolean {
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    return x.DecimalSpecial === y.DecimalSpecial;
+  }
   return x.DecimalSignificand === y.DecimalSignificand
     && x.DecimalExponent === y.DecimalExponent;
 }
@@ -100,6 +114,9 @@ export function decimalSameValue(x: DecimalObject, y: DecimalObject): boolean {
  * and can only widen.
  */
 export function decimalEquals(x: DecimalObject, y: DecimalObject): boolean {
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    return x.DecimalSpecial !== 'NaN' && x.DecimalSpecial === y.DecimalSpecial;
+  }
   const a = ReduceDecimal(x.DecimalSignificand, x.DecimalExponent);
   const b = ReduceDecimal(y.DecimalSignificand, y.DecimalExponent);
   return a.significand === b.significand && a.exponent === b.exponent;
@@ -144,7 +161,7 @@ export function DecimalExponentRange(width: 32 | 64 | 128): { min: number, max: 
  * more digit, which is one higher adjusted exponent.
  */
 export function DecimalPartsInRange(parts: DecimalParts, width: 32 | 64 | 128): boolean {
-  if (parts.significand === 0n) {
+  if (parts.special !== undefined || parts.significand === 0n) {
     return true;
   }
   const adjusted = parts.exponent + digitCount(parts.significand) - 1;
@@ -208,7 +225,10 @@ function atPreferredExponent(significand: bigint, exponent: number, preferred: n
   return roundToPrecision(s, e, DecimalPrecision(width));
 }
 
-export interface DecimalParts { significand: bigint, exponent: number }
+export interface DecimalParts { significand: bigint, exponent: number, special?: DecimalSpecialKind }
+
+/** An operation IEEE signals as INVALID - `inf - inf`, `0 * inf`, `inf / inf`, `inf % y` - which raises, by O1. */
+export type DecimalInvalid = 'invalid';
 
 /** Both operands at one exponent, which is the lower of the two - always exact. */
 function align(x: DecimalObject, y: DecimalObject): { xs: bigint, ys: bigint, exponent: number } {
@@ -223,7 +243,29 @@ function widerOf(x: DecimalObject, y: DecimalObject): 32 | 64 | 128 {
   return (Math.max(x.DecimalWidth, y.DecimalWidth) as 32 | 64 | 128);
 }
 
-export function decimalAdd(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+const infinitySign = (k: DecimalSpecialKind | undefined): number => (k === 'Infinity' ? 1 : k === '-Infinity' ? -1 : 0);
+const flipped = (k: DecimalSpecialKind | undefined) => (k === 'Infinity' ? '-Infinity' : k === '-Infinity' ? 'Infinity' : k);
+const finiteSign = (x: DecimalObject): number => (x.DecimalSignificand < 0n ? -1 : x.DecimalSignificand > 0n ? 1 : 0);
+const nonFinite = (k: DecimalSpecialKind, width: 32 | 64 | 128) => ({ parts: { significand: 0n, exponent: 0, special: k }, width });
+const infinityOfSign = (sign: number): DecimalSpecialKind => (sign < 0 ? '-Infinity' : 'Infinity');
+
+/** O1 for a sum: a NaN operand gives the NaN; infinities of one sign give it; of both signs, IEEE's invalid `inf - inf`. */
+function nonFiniteSum(a: DecimalSpecialKind | undefined, b: DecimalSpecialKind | undefined, width: 32 | 64 | 128) {
+  if (a === 'NaN' || b === 'NaN') {
+    return nonFinite('NaN', width);
+  }
+  const ia = infinitySign(a);
+  const ib = infinitySign(b);
+  if (ia !== 0 && ib !== 0 && ia !== ib) {
+    return 'invalid' as const;
+  }
+  return nonFinite((a ?? b)!, width);
+}
+
+export function decimalAdd(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | DecimalInvalid {
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    return nonFiniteSum(x.DecimalSpecial, y.DecimalSpecial, widerOf(x, y));
+  }
   const { xs, ys, exponent } = align(x, y);
   const width = widerOf(x, y);
   // Addition's preferred exponent is min(Q(x), Q(y)), which is what `align`
@@ -231,13 +273,25 @@ export function decimalAdd(x: DecimalObject, y: DecimalObject): { parts: Decimal
   return { parts: atPreferredExponent(xs + ys, exponent, exponent, width), width };
 }
 
-export function decimalSubtract(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+export function decimalSubtract(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | DecimalInvalid {
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    return nonFiniteSum(x.DecimalSpecial, flipped(y.DecimalSpecial), widerOf(x, y));
+  }
   const { xs, ys, exponent } = align(x, y);
   const width = widerOf(x, y);
   return { parts: atPreferredExponent(xs - ys, exponent, exponent, width), width };
 }
 
-export function decimalMultiply(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+export function decimalMultiply(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | DecimalInvalid {
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    if (x.DecimalSpecial === 'NaN' || y.DecimalSpecial === 'NaN') {
+      return nonFinite('NaN', widerOf(x, y));
+    }
+    const sx = x.DecimalSpecial !== undefined ? infinitySign(x.DecimalSpecial) : finiteSign(x);
+    const sy = y.DecimalSpecial !== undefined ? infinitySign(y.DecimalSpecial) : finiteSign(y);
+    // IEEE's invalid `0 * inf`.
+    return sx === 0 || sy === 0 ? 'invalid' : nonFinite(infinityOfSign(sx * sy), widerOf(x, y));
+  }
   // Multiplication's preferred exponent is Q(x) + Q(y).
   const exponent = x.DecimalExponent + y.DecimalExponent;
   const width = widerOf(x, y);
@@ -253,7 +307,22 @@ export function decimalMultiply(x: DecimalObject, y: DecimalObject): { parts: De
  * half-even. Where the division IS exact, the preferred exponent Q(x) - Q(y)
  * applies as the other operations' do.
  */
-export function decimalDivide(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | 'divide-by-zero' {
+export function decimalDivide(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | 'divide-by-zero' | DecimalInvalid {
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    const width = widerOf(x, y);
+    if (x.DecimalSpecial === 'NaN' || y.DecimalSpecial === 'NaN') {
+      return nonFinite('NaN', width);
+    }
+    if (x.DecimalSpecial !== undefined && y.DecimalSpecial !== undefined) {
+      return 'invalid';
+    }
+    if (x.DecimalSpecial !== undefined) {
+      // An infinity over a finite divisor keeps its infinity, signed by the divisor.
+      return nonFinite(infinityOfSign(infinitySign(x.DecimalSpecial) * (finiteSign(y) < 0 ? -1 : 1)), width);
+    }
+    // A finite value over an infinity is zero.
+    return { parts: { significand: 0n, exponent: 0 }, width };
+  }
   if (y.DecimalSignificand === 0n) {
     return 'divide-by-zero';
   }
@@ -274,7 +343,16 @@ export function decimalDivide(x: DecimalObject, y: DecimalObject): { parts: Deci
 }
 
 /** IEEE's remainder: x - y * n, where n is x/y rounded to nearest-even. */
-export function decimalRemainder(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | 'divide-by-zero' {
+export function decimalRemainder(x: DecimalObject, y: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } | 'divide-by-zero' | DecimalInvalid {
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    if (x.DecimalSpecial === 'NaN' || y.DecimalSpecial === 'NaN') {
+      return nonFinite('NaN', widerOf(x, y));
+    }
+    // `inf % y` is IEEE's invalid; `x % inf` is x.
+    return x.DecimalSpecial !== undefined
+      ? 'invalid'
+      : { parts: { significand: x.DecimalSignificand, exponent: x.DecimalExponent }, width: widerOf(x, y) };
+  }
   if (y.DecimalSignificand === 0n) {
     return 'divide-by-zero';
   }
@@ -286,11 +364,23 @@ export function decimalRemainder(x: DecimalObject, y: DecimalObject): { parts: D
 }
 
 export function decimalNegate(x: DecimalObject): { parts: DecimalParts, width: 32 | 64 | 128 } {
+  if (x.DecimalSpecial !== undefined) {
+    return nonFinite(flipped(x.DecimalSpecial)!, x.DecimalWidth);
+  }
   return { parts: { significand: -x.DecimalSignificand, exponent: x.DecimalExponent }, width: x.DecimalWidth };
 }
 
 /** -1, 0 or 1, comparing NUMERICAL VALUE - IEEE's `compareQuietLess` and friends. */
-export function decimalCompare(x: DecimalObject, y: DecimalObject): number {
+export function decimalCompare(x: DecimalObject, y: DecimalObject): number | undefined {
+  // A NaN is unordered; the infinities order at the ends.
+  if (x.DecimalSpecial === 'NaN' || y.DecimalSpecial === 'NaN') {
+    return undefined;
+  }
+  if (x.DecimalSpecial !== undefined || y.DecimalSpecial !== undefined) {
+    const a = x.DecimalSpecial !== undefined ? infinitySign(x.DecimalSpecial) * 2 : finiteSign(x);
+    const b = y.DecimalSpecial !== undefined ? infinitySign(y.DecimalSpecial) * 2 : finiteSign(y);
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
   const { xs, ys } = align(x, y);
   return xs < ys ? -1 : xs > ys ? 1 : 0;
 }
@@ -441,20 +531,30 @@ export function RoundPartsToWidth(parts: DecimalParts, width: 32 | 64 | 128): De
 
 /** A decimal re-rounded to another width's precision. */
 export function RoundDecimalToWidth(d: DecimalObject, width: 32 | 64 | 128): DecimalParts {
+  if (d.DecimalSpecial !== undefined) {
+    return { significand: 0n, exponent: 0, special: d.DecimalSpecial };
+  }
   return roundToPrecision(d.DecimalSignificand, d.DecimalExponent, DecimalPrecision(width));
 }
 
 export function DoubleFromDecimal(d: DecimalObject): number {
+  if (d.DecimalSpecial !== undefined) {
+    return d.DecimalSpecial === 'NaN' ? NaN : d.DecimalSpecial === 'Infinity' ? Infinity : -Infinity;
+  }
   return Number(`${d.DecimalSignificand}e${d.DecimalExponent}`);
 }
 
 /** The decimal `significand x 10^exponent`, as an object of the given width. */
 export function CreateDecimalValue(significand: bigint, exponent: number, width: 32 | 64 | 128, realmRec: Realm, typeRecord?: unknown): DecimalObject {
   const proto = realmRec.Intrinsics['%decimal.prototype%'];
-  const obj = OrdinaryObjectCreate(proto, ['DecimalSignificand', 'DecimalExponent', 'DecimalWidth', 'TypeRecord']) as Mutable<DecimalObject>;
+  const obj = OrdinaryObjectCreate(proto, ['DecimalSignificand', 'DecimalExponent', 'DecimalWidth', 'DecimalSpecial', 'TypeRecord']) as Mutable<DecimalObject>;
   obj.DecimalSignificand = significand;
   obj.DecimalExponent = exponent;
   obj.DecimalWidth = width;
+  // Set, not left to OrdinaryObjectCreate: an internal slot starts as the
+  // engine's Value.undefined, which is not JavaScript's `undefined` - so every
+  // decimal read as non-finite. A finite value has no special kind.
+  obj.DecimalSpecial = undefined;
   // proposal-runtime-types #sec-enums: an enumerator of a decimal-underlying
   // enum carries that enum here, so `Reflect.typeOf` reports it and membership
   // can tell one declaration's `1.0` from another's. The tag is set on a fresh
@@ -466,6 +566,33 @@ export function CreateDecimalValue(significand: bigint, exponent: number, width:
   return obj;
 }
 
+
+/** A decimal NaN or infinity of a width - arriving by conversion or by bytes (N1). */
+export function CreateDecimalSpecial(kind: DecimalSpecialKind, width: 32 | 64 | 128, realmRec: Realm, typeRecord?: unknown): DecimalObject {
+  const obj = CreateDecimalValue(0n, 0, width, realmRec, typeRecord) as Mutable<DecimalObject>;
+  obj.DecimalSpecial = kind;
+  return obj;
+}
+
+/**
+ * A decimal operation's result as a value - the one place results are made, so
+ * the rules hold at every operator: an operation IEEE signals as invalid raises
+ * (O1); a NaN or an infinity from a non-finite operand is that value; and a
+ * finite result outside the width's range raises, since "a decimal's range is a
+ * property of its type".
+ */
+export function DecimalFromResult(r: { parts: DecimalParts, width: 32 | 64 | 128 } | DecimalInvalid, realmRec: Realm): DecimalObject | ThrowCompletion {
+  if (r === 'invalid') {
+    return Throw.RangeError('an invalid operation on a decimal');
+  }
+  if (r.parts.special !== undefined) {
+    return CreateDecimalSpecial(r.parts.special, r.width, realmRec);
+  }
+  if (!DecimalPartsInRange(r.parts, r.width)) {
+    return Throw.RangeError('a decimal result is outside the range of $1', Value(`decimal${r.width}`));
+  }
+  return CreateDecimalValue(r.parts.significand, r.parts.exponent, r.width, realmRec);
+}
 /**
  * Read a decimal from its digits, which is where a cohort member comes from:
  * "a decimal type reads its cohort member from the SOURCE TEXT rather than from
@@ -519,6 +646,9 @@ export function ParseDecimalDigits(text: string): { significand: bigint, exponen
 
 /** The decimal's digits, at its own exponent - so a cohort member prints as written. */
 export function DecimalToString(d: DecimalObject): string {
+  if (d.DecimalSpecial !== undefined) {
+    return d.DecimalSpecial;
+  }
   const negative = d.DecimalSignificand < 0n;
   const digits = (negative ? -d.DecimalSignificand : d.DecimalSignificand).toString();
   let out;

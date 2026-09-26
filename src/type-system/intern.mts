@@ -9,10 +9,7 @@ import type { ValueEvaluator } from '../evaluator.mts';
 import { Q, type ThrowCompletion } from '../completion.mts';
 import { isFloat128Object } from '../intrinsics/Float128.mts';
 import { isRationalObject } from '../intrinsics/Rational.mts';
-import {
-  CreateDecimalValue, ParseDecimalDigits, DecimalFromDouble, RoundDecimalToWidth, isDecimalObject,
-  DecimalPartsInRange, RoundPartsToWidth, ReduceDecimal, DecimalFromRational,
-} from '../intrinsics/Decimal.mts';
+import { CreateDecimalValue, ParseDecimalDigits, DecimalFromDouble, RoundDecimalToWidth, isDecimalObject, DecimalPartsInRange, RoundPartsToWidth, ReduceDecimal, DecimalFromRational, CreateDecimalSpecial } from '../intrinsics/Decimal.mts';
 import { NumberValue, BigIntValue, isTypedNumber } from '../value.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey, propertiesInKeyOrder, displayType, CanonicalWidthArgument } from './records.mts';
@@ -764,6 +761,10 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     // with the truncated value buys.
     if (isDecimalObject(arg) && record.Kind === 'primitive'
       && (record.Name === 'int' || record.Name === 'uint')) {
+      // A decimal NaN or infinity has no integer value: the conversion refuses it.
+      if ((arg as { DecimalSpecial?: string }).DecimalSpecial !== undefined) {
+        return Q(yield* ConvertValue(arg, record));
+      }
       const significand = (arg as { DecimalSignificand: bigint }).DecimalSignificand;
       const exponent = (arg as { DecimalExponent: number }).DecimalExponent;
       const truncated = exponent >= 0
@@ -853,8 +854,14 @@ export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: str
   // reduced where it fits and rounded to the width's digits where it does not,
   // DecimalFromDouble's rule applied to 113 bits instead of 53.
   if (isFloat128Object(arg)) {
-    if (arg.Float128Class !== 'finite') {
-      return Throw.RangeError('$1 has no decimal value', arg);
+    // A float128 NaN or infinity is the decimal's (N1): #sec-numeric-conversions,
+    // "The source's exact value if it is representable" - and NaN and the
+    // infinities are values of every decimal type.
+    if (arg.Float128Class === 'nan') {
+      return CreateDecimalSpecial('NaN', width, surroundingAgent.currentRealmRecord);
+    }
+    if (arg.Float128Class === 'infinity') {
+      return CreateDecimalSpecial(arg.Float128Sign < 0 ? '-Infinity' : 'Infinity', width, surroundingAgent.currentRealmRecord);
     }
     const q = arg.Float128Significand;
     const qe = arg.Float128Exponent;
@@ -889,6 +896,11 @@ export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: str
     }
   }
   if (typeof numericSource === 'number') {
+    // A Number or float NaN or infinity is the decimal's (N1).
+    if (!Number.isFinite(numericSource)) {
+      const kind = Number.isNaN(numericSource) ? 'NaN' : numericSource > 0 ? 'Infinity' : '-Infinity';
+      return CreateDecimalSpecial(kind, width, surroundingAgent.currentRealmRecord);
+    }
     const parts = DecimalFromDouble(numericSource, width);
     if (!parts) {
       return Throw.RangeError('$1 has no decimal value', arg);
@@ -909,6 +921,10 @@ export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: str
   if (isDecimalObject(arg)) {
     // A decimal to a decimal of another WIDTH re-rounds to that width's
     // precision and keeps its cohort member where it fits.
+    // A decimal NaN or infinity keeps its kind across widths (N1).
+    if (arg.DecimalSpecial !== undefined) {
+      return CreateDecimalSpecial(arg.DecimalSpecial, width, surroundingAgent.currentRealmRecord);
+    }
     const parts = RoundDecimalToWidth(arg, width);
     // The same range rule: a `decimal128` at an exponent no `decimal32`
     // holds is out of range however its digits round.
