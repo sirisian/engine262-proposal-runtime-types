@@ -326,7 +326,7 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       // NON-DYADIC one showed it, since `6 / 12` round-trips through `0.5`.
       const foldedRat = FoldedRationalOf(node);
       if (foldedRat !== undefined) {
-        return CreateRationalValue(foldedRat.num, foldedRat.den, surroundingAgent.currentRealmRecord);
+        return CreateRationalValue(foldedRat.num, foldedRat.den, surroundingAgent.currentRealmRecord, foldedRat.type);
       }
       const foldedDec = FoldedDecimalOf(node);
       if (foldedDec !== undefined) {
@@ -426,7 +426,7 @@ function* EvaluateNode(node: ParseNode): Evaluator<unknown> {
       // negation of the float.
       const foldedRatUnary = FoldedRationalOf(node);
       if (foldedRatUnary !== undefined) {
-        return CreateRationalValue(foldedRatUnary.num, foldedRatUnary.den, surroundingAgent.currentRealmRecord);
+        return CreateRationalValue(foldedRatUnary.num, foldedRatUnary.den, surroundingAgent.currentRealmRecord, (foldedRatUnary as { type?: unknown }).type);
       }
       return yield* Evaluate_UnaryExpression(node);
     }

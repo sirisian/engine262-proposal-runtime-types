@@ -1,4 +1,5 @@
 import type { Arguments } from '../value.mts';
+import { RationalConstructAt } from '../intrinsics/Rational.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { VectorValue, ObjectValue, TypedStringValue } from '../value.mts';
@@ -624,6 +625,12 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     //
     // One argument still converts, which is what `complex128(someComplex)` and
     // `complex128(5)` mean.
+    // A RATIONAL TYPE OBJECT constructs at its width, as the bare constructor does
+    // at 64: `rational.<8>(1, 3)` is one third of `rational.<8>`, and
+    // `rational.<8>(128, 1)` a RangeError, since 128 is not an `int.<8>`.
+    if (record.Kind === 'primitive' && record.Name === 'rational') {
+      return Q(yield* RationalConstructAt(argumentsList as Arguments, record));
+    }
     if (record.Kind === 'primitive' && record.Name === 'complex'
       && record.Arguments.length === 1 && argumentsList.length >= 2) {
       const componentType = record.Arguments[0] as TypeRecord;

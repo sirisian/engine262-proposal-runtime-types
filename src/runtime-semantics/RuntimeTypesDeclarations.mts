@@ -2486,7 +2486,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
  */
 function* FamilyApplicationFor(node: ParseNode.TypeArgumentsExpression): PlainEvaluator<unknown> {
   const name = (node.Expression as unknown as { name?: string }).name;
-  if (name !== 'int' && name !== 'uint' && name !== 'vector') {
+  if (name !== 'int' && name !== 'uint' && name !== 'vector' && name !== 'rational' && name !== 'complex') {
     return undefined;
   }
   const args: (TypeRecord | number)[] = [];
@@ -2655,6 +2655,35 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     return ref;
   }
   const value = peeked.Value;
+  // proposal-runtime-types #sec-rational-types, #sec-complex-numbers: `rational.<8>`
+  // and `complex.<float32>` are TYPES - the application of a parameterized family,
+  // as `int.<8>` is - and a type in expression position is its Type Object. The
+  // names `rational` and `complex` are also bound, to their constructors, so the
+  // application reached the generic-function path below and came back as the
+  // bare constructor: `rational.<8> === rational`, and the width was dropped
+  // before anything ran - `rational.<8>(128, 1)` was 128. Only the realm's OWN
+  // constructor is read this way; a program that binds `rational` to something
+  // else keeps its meaning, as a program binding `int` does.
+  if (surroundingAgent.feature('runtime-types') && node.Expression.type === 'IdentifierReference'
+      && (value === surroundingAgent.currentRealmRecord.Intrinsics['%rational%']
+        || value === surroundingAgent.currentRealmRecord.Intrinsics['%complex%'])) {
+    const familyType = Q(yield* FamilyApplicationFor(node));
+    // The DEFAULT application is the bare name - "`rational` is `rational.<64>`",
+    // "`complex` is `complex.<number>`" - so it is the same value as the name:
+    // `rational.<64> === rational`. Every other application is its Type Object.
+    // Type Objects intern, so the bare name's own - its expansion, as the
+    // checker makes it - is the one this application must be to be the name.
+    if (familyType !== undefined && isTypeObject(familyType)) {
+      const name = (node.Expression as unknown as { name: string }).name;
+      const bareRecord = builtinTypeRecord(name, []);
+      if (bareRecord !== undefined && GetTypeObject(bareRecord as TypeRecord) === familyType) {
+        return value;
+      }
+    }
+    if (familyType !== undefined) {
+      return familyType;
+    }
+  }
   // proposal-runtime-types #sec-generics: applying arguments to a GENERIC CLASS
   // yields its specialization - "each distinct application is a distinct type
   // with its own Type Object and its own specialized body". The class is

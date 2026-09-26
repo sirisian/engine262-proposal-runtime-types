@@ -1,3 +1,4 @@
+import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
 import { SpecializedClassConstructor } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
@@ -2941,7 +2942,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // this while rational records were nominal; once they were built as
       // primitives that test stopped matching and the type lost its default.
       if (name === 'rational') {
-        return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord);
+        return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord, t);
       }
       if (name === 'int' || name === 'uint' || name === 'float16' || name === 'float32' || name === 'float64') {
         return new TypedNumberValue(0, t);
@@ -3176,7 +3177,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // answered here rather than beside the decimals. Zero is 0/1, which is
       // what canonicalization gives any zero numerator.
       if ((t as { LibraryName?: string }).LibraryName === 'rational') {
-        return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord);
+        return CreateRationalValue(0n, 1n, surroundingAgent.currentRealmRecord, t);
       }
       // A REFERENCE CLASS has no memberwise zero. A bare field of a reference
       // type is a non-null reference and a default has nothing to point at, so
@@ -3740,20 +3741,14 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   // and so did every literal, since the literal machinery produces exactly such an
   // object.
   //
-  // A BARE `rational` admits any width, as a bare name does elsewhere; an applied
-  // `rational.<N>` compares N. A value built by `rational(a, b)` carries no width,
-  // so it satisfies the bare spelling only - the applied one needs
-  // `CreateRationalValue` to take a width, as `CreateDecimalValue` does.
+  // #sec-rational-types: each width is its own type, and the bare `rational` IS
+  // `rational.<64>` - one width, not every width. This let a bare `rational`
+  // admit any width, so a `rational.<8>` reaching a `rational` annotation through
+  // `any` passed; and it read the width from a `RationalWidth` no value has, so
+  // an applied width admitted nothing. A value carries the type it was built at.
   if (t.Kind === 'primitive' && t.Name === 'rational') {
-    if (value instanceof ObjectValue && 'RationalNumerator' in value) {
-      const want = t.Arguments?.[0];
-      if (want === undefined) {
-        return true;
-      }
-      const carried = (value as unknown as { RationalWidth?: number }).RationalWidth;
-      return carried !== undefined && carried === want;
-    }
-    return false;
+    return isRationalObject(value)
+      && rationalWidthOf((value as { TypeRecord?: unknown }).TypeRecord) === rationalWidthOf(t);
   }
   if (t.Kind === 'primitive' && (t.Name === 'decimal32' || t.Name === 'decimal64' || t.Name === 'decimal128')) {
     if (value instanceof ObjectValue && 'DecimalSignificand' in value) {
@@ -4384,6 +4379,16 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
   // this engine carries them as software pairs, so membership is being one.
   if (name === 'float128') {
     return isFloat128Object(value);
+  }
+  // proposal-runtime-types #sec-rational-types: "For each positive integer N,
+  // `rational.<N>` is a value type" - each width a type of its own, the bare
+  // `rational` being `rational.<64>`. A rational carries the type it was built
+  // at, so membership is carrying this width. Without this case the name fell to
+  // the default, which knew only the bare type: a `rational.<8>` value failed a
+  // `rational.<8>` annotation and passed a `rational` one.
+  if (name === 'rational') {
+    return isRationalObject(value)
+      && rationalWidthOf((value as { TypeRecord?: unknown }).TypeRecord) === rationalWidthOf({ Arguments: args });
   }
   if (name === 'complex') {
     if (!isComplexObject(value)) {

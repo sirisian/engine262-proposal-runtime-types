@@ -7,6 +7,7 @@ import { IsPlainData, ReportedLayoutOf, SoAColumnsOf } from '../type-system/layo
 import { IsOfType, fitsNumericType } from '../type-system/runtime.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { CreateComplexValue } from './Complex.mts';
+import { ParseRationalLiteral, CreateRationalValue, RationalApproximateAt } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { Realm, Throw, R, wellKnownSymbols, CreateBuiltinFunction, X } from '#self';
 import { ParseDecimalDigits, CreateDecimalValue, DecimalPartsInRange } from './Decimal.mts';
@@ -38,6 +39,22 @@ function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }:
  * returning NaN: a malformed string is a SyntaxError, and a well-formed literal
  * whose value is out of range is a RangeError.
  */
+/**
+ * The design's `rational.approximate`, on a rational Type Object: the closest
+ * value of THAT type under the bound (the F10 plan's A1). A type with no
+ * rational values has no approximation to give.
+ */
+function* TypeProto_approximate(args: Arguments, { thisValue }: FunctionCallContext) {
+  if (!isTypeObject(thisValue)) {
+    return Throw.TypeError('$1 is not a type', thisValue);
+  }
+  const t = thisValue.TypeRecord;
+  if (!(t.Kind === 'primitive' && t.Name === 'rational')) {
+    return Throw.TypeError('approximate is not defined for $1', thisValue);
+  }
+  return Q(yield* RationalApproximateAt(args, t));
+}
+
 /** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
 /**
  * The string form of a complex, as the imaginary literal writes it: an optional
@@ -155,6 +172,20 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   // optional signed imaginary part carrying the `i` suffix, and either alone.
   // `'3-2i'`, `'4i'`, and `'5'` are each valid; a bare `'i'` is not, the suffix
   // being on a numeric literal rather than a name.
+  // #sec-parsing gives every numeric type a `parse`; a rational's is its literal
+  // grammar, `n` or `n/d`, and a literal its width cannot hold is the clause's
+  // RangeError. `rational.<N>` is a Type Object now, so it reaches here rather
+  // than the bare constructor's static, which parses at 64.
+  if (t.Kind === 'primitive' && t.Name === 'rational') {
+    if (!(S instanceof JSStringValue)) {
+      return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    const parsed = ParseRationalLiteral(S.stringValue());
+    if (!parsed) {
+      return Throw.SyntaxError('$1 is not a valid literal', S);
+    }
+    return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord, t);
+  }
   if (t.Kind === 'primitive' && t.Name === 'complex') {
     if (!(S instanceof JSStringValue)) {
       return Throw.SyntaxError('$1 is not a valid literal', S);
@@ -810,6 +841,7 @@ export function bootstrapTypePrototype(realmRec: Realm) {
     ['toString', TypeProto_toString, 0],
     ['parse', TypeProto_parse, 1],
     ['tryParse', TypeProto_tryParse, 1],
+    ['approximate', TypeProto_approximate, 2],
     ['bitLength', [TypeProto_bitLengthGetter]],
     ['elementByteLength', [TypeProto_elementByteLengthGetter]],
     ['byteLength', [TypeProto_byteLengthGetter]],

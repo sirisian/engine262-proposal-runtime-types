@@ -64,10 +64,10 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
   // the wrong answer for the literal.
   const rational = RationalContextLiteralDigits(node);
   if (rational !== undefined) {
-    const { sig, exp } = rational;
+    const { sig, exp, type } = rational;
     return exp >= 0
-      ? CreateRationalValue(sig * 10n ** BigInt(exp), 1n, surroundingAgent.currentRealmRecord)
-      : CreateRationalValue(sig, 10n ** BigInt(-exp), surroundingAgent.currentRealmRecord);
+      ? CreateRationalValue(sig * 10n ** BigInt(exp), 1n, surroundingAgent.currentRealmRecord, type)
+      : CreateRationalValue(sig, 10n ** BigInt(-exp), surroundingAgent.currentRealmRecord, type);
   }
   const source = typeof node.SourceText === 'string' ? node.SourceText : undefined;
   const width = source !== undefined ? DecimalContextLiteralWidth(node) : undefined;

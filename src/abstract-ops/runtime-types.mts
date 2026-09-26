@@ -1,3 +1,4 @@
+import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
@@ -1246,7 +1247,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         // same operation." This had no case, so it fell to the checked
         // conversion below, which threw a TypeError for NaN and refused a typed
         // float or a `decimal` the call form converts.
-        return ToRational(value, surroundingAgent.currentRealmRecord);
+        return ToRational(value, surroundingAgent.currentRealmRecord, t);
       case 'bigint': {
         // An integral Number is exactly a BigInt, so it converts. This is what
         // lets typed code write `65` where a `bigint` is wanted rather than
@@ -2176,10 +2177,23 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // plain Number and threw a TypeError for NaN - where #sec-requiretype
         // makes a numeric value that fails a numeric conversion "a question of
         // range: hence the RangeError", and the row names that error too.
-        if (!(value instanceof NumberValue) && !isTypedNumber(value) && !isDecimalObject(value)) {
+        // A rational already of this width IS a value of the type. It fell to the
+        // refusal below, which assumed every caller had asked membership first -
+        // and a binding's boundary had not, so a `rational.<8>` value failed a
+        // `rational.<8>` annotation. Another width is a different type: it does
+        // not convert implicitly, and is refused below.
+        if (isRationalObject(value)) {
+          if (primitiveMembership(value, 'rational', t.Arguments)) {
+            return value;
+          }
           break;
         }
-        return ToRational(value, surroundingAgent.currentRealmRecord);
+        // A `bigint` converts here too: the boundary runs the conversion the call
+        // and `:=` run, and the plan's B1 gives that conversion a `bigint` row.
+        if (!(value instanceof NumberValue) && !isTypedNumber(value) && !isDecimalObject(value) && !(value instanceof BigIntValue)) {
+          break;
+        }
+        return ToRational(value, surroundingAgent.currentRealmRecord, t);
       }
       case 'uint':
       case 'int':

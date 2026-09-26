@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-rational-types; rational.md.
@@ -20,10 +20,14 @@ const i64 = (digits: string) => `(BigInt('${digits}') := int64)`;
 const MAX = '9223372036854775807';
 
 test('conversion refuses a value that does not fit', () => {
-  for (const src of ['1e308 := rational;', '5e-324 := rational;', 'rational(1e308);',
-    'let v: any = 1e308; let r: rational = v;', 'let r: rational = 1e30;']) {
-    expectThrownKind(src, 'RangeError');
+  // A LITERAL out of range is refused before the program runs - #sec-literal-types:
+  // "a literal whose value that type cannot represent is a type error rather
+  // than a silent truncation" (the F10 plan's L1).
+  for (const src of ['1e308 := rational;', '5e-324 := rational;', 'rational(1e308);', 'let r: rational = 1e30;']) {
+    expectStaticTypeError(src);
   }
+  // A VALUE out of range is refused when it is converted.
+  expectThrownKind('let v: any = 1e308; let r: rational = v;', 'RangeError');
 });
 
 test('arithmetic refuses a result that does not fit', () => {

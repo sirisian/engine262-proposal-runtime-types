@@ -27,14 +27,16 @@ const outcome = (declaration: string, expression: string) => evaluated(
   `${declaration} let r; try { r = String(${expression}); } catch (e) { r = 'throws ' + e.constructor.name; } r;`,
 );
 
-test('element for element, an explicit array conversion holds what the scalar conversion holds', () => {
-  for (const type of TYPES) {
+// One test per target type: the grid is 330 pairs of evaluations, and one test
+// holding them all ran close enough to the timeout to fail on a loaded machine.
+for (const type of TYPES) {
+  test(`element for element, an explicit array conversion at ${type} holds what the scalar conversion holds`, () => {
     for (const [name, source] of VALUES) {
       const declaration = `let x = ${source};`;
       expect(outcome(declaration, `([x] := [].<${type}>)[0]`), `${name} at ${type}`).toBe(outcome(declaration, `x := ${type}`));
     }
-  }
-});
+  });
+}
 
 test('a literal element converts from its exact value, as a literal operand does', () => {
   const cases: [string, string][] = [

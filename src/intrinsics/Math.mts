@@ -25,7 +25,7 @@ import { isFloatTypeName, isIntegerTypeName, numericLibraryRows, type IntegerRow
 import { Decimal } from '../host-defined/decimal.mts';
 import { decodeFloat16, encodeFloat16 } from '../host-defined/ieee754.mts';
 import { isDecimalObject, CreateDecimalValue, decimalCompare } from './Decimal.mts';
-import { isRationalObject, CreateRationalValue, rationalCompare } from './Rational.mts';
+import { isRationalObject, CreateRationalValue, rationalCompare, rationalWidthOf } from './Rational.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import {
   isFloat128Object, Float128ToBinary128, Binary128ToFloat128, Float128FromNumber, type Float128Object,
@@ -85,7 +85,7 @@ function decimalOrRationalAbs(x: Value): Value | ThrowCompletion | undefined {
   if (isRationalObject(x)) {
     const num = (x as { RationalNumerator: bigint }).RationalNumerator;
     return num < 0n
-      ? CreateRationalValue(-num, (x as { RationalDenominator: bigint }).RationalDenominator, realmRec)
+      ? CreateRationalValue(-num, (x as { RationalDenominator: bigint }).RationalDenominator, realmRec, (x as { TypeRecord?: unknown }).TypeRecord)
       : x;
   }
   return undefined;
@@ -141,7 +141,9 @@ function rationalRounded(x: Value, functionName: string): Value | undefined {
   }
   // The width is the rational's own: `rational.<N>` holds two `int.<N>`, so the
   // nearest integer is an `int.<N>`. The bare `rational` is `rational.<64>`.
-  const intType = { Kind: 'primitive', Name: 'int', Arguments: [64] } as unknown as TypeRecord;
+  // rational.md: `Math.floor`, `ceil`, `round` and `trunc` "return the `int.<N>`
+  // nearest in their direction" - the operand's own width, which this fixed at 64.
+  const intType = { Kind: 'primitive', Name: 'int', Arguments: [rationalWidthOf((x as { TypeRecord?: unknown }).TypeRecord)] } as unknown as TypeRecord;
   return new TypedNumberValue(result, intType as never);
 }
 
@@ -155,7 +157,7 @@ function decimalOrRationalSign(x: Value): Value | undefined {
   }
   if (isRationalObject(x)) {
     const num = (x as { RationalNumerator: bigint }).RationalNumerator;
-    return X(CreateRationalValue(num === 0n ? 0n : (num < 0n ? -1n : 1n), 1n, realmRec)); // -1, 0 or 1 always fits
+    return X(CreateRationalValue(num === 0n ? 0n : (num < 0n ? -1n : 1n), 1n, realmRec, (x as { TypeRecord?: unknown }).TypeRecord)); // -1, 0 or 1 always fits
   }
   return undefined;
 }

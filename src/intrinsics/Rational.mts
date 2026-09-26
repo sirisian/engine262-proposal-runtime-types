@@ -37,6 +37,8 @@ import {
 export interface RationalObject extends OrdinaryObject {
   RationalNumerator: bigint;
   RationalDenominator: bigint;
+  /** The type the value was built at: `rational.<N>`, the bare `rational` being width 64. */
+  TypeRecord?: unknown;
 }
 
 export function isRationalObject(value: Value): value is RationalObject {
@@ -69,6 +71,12 @@ function canonicalize(num: bigint, den: bigint): { num: bigint, den: bigint } {
  * The width _N_ of a `rational.<N>` type record: its argument where it has one,
  * and 64 for the bare `rational`, which is `rational.<64>`.
  */
+/** The type's name as a diagnostic shows it: `rational` for width 64. */
+export function rationalDisplay(typeRecord: unknown): string {
+  const width = rationalWidthOf(typeRecord);
+  return width === 64 ? 'rational' : `rational.<${width}>`;
+}
+
 export function rationalWidthOf(typeRecord: unknown): number {
   const width = (typeRecord as { Arguments?: readonly unknown[] } | undefined)?.Arguments?.[0];
   return typeof width === 'number' ? width : 64;
@@ -114,13 +122,13 @@ export function CreateRationalValue(numerator: bigint, denominator: bigint, real
 
 // Exact arithmetic over canonical rationals. Each returns a fresh canonical value.
 export function rationalAdd(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
-  return CreateRationalValue(a.RationalNumerator * b.RationalDenominator + b.RationalNumerator * a.RationalDenominator, a.RationalDenominator * b.RationalDenominator, realmRec);
+  return CreateRationalValue(a.RationalNumerator * b.RationalDenominator + b.RationalNumerator * a.RationalDenominator, a.RationalDenominator * b.RationalDenominator, realmRec, a.TypeRecord);
 }
 export function rationalSub(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
-  return CreateRationalValue(a.RationalNumerator * b.RationalDenominator - b.RationalNumerator * a.RationalDenominator, a.RationalDenominator * b.RationalDenominator, realmRec);
+  return CreateRationalValue(a.RationalNumerator * b.RationalDenominator - b.RationalNumerator * a.RationalDenominator, a.RationalDenominator * b.RationalDenominator, realmRec, a.TypeRecord);
 }
 export function rationalMul(a: RationalObject, b: RationalObject, realmRec: Realm): RationalObject | ThrowCompletion {
-  return CreateRationalValue(a.RationalNumerator * b.RationalNumerator, a.RationalDenominator * b.RationalDenominator, realmRec);
+  return CreateRationalValue(a.RationalNumerator * b.RationalNumerator, a.RationalDenominator * b.RationalDenominator, realmRec, a.TypeRecord);
 }
 /**
  * `rational::unaryMinus` - #sec-which-operations-each-family-defines lists it for
@@ -138,17 +146,17 @@ export function rationalDiv(a: RationalObject, b: RationalObject, realmRec: Real
   if (b.RationalNumerator === 0n) {
     return { zero: true };
   }
-  return CreateRationalValue(a.RationalNumerator * b.RationalDenominator, a.RationalDenominator * b.RationalNumerator, realmRec);
+  return CreateRationalValue(a.RationalNumerator * b.RationalDenominator, a.RationalDenominator * b.RationalNumerator, realmRec, a.TypeRecord);
 }
 export function rationalPow(a: RationalObject, exp: bigint, realmRec: Realm): RationalObject | ThrowCompletion | { zero: true } {
   if (exp >= 0n) {
-    return CreateRationalValue(a.RationalNumerator ** exp, a.RationalDenominator ** exp, realmRec);
+    return CreateRationalValue(a.RationalNumerator ** exp, a.RationalDenominator ** exp, realmRec, a.TypeRecord);
   }
   if (a.RationalNumerator === 0n) {
     return { zero: true };
   }
   const n = -exp;
-  return CreateRationalValue(a.RationalDenominator ** n, a.RationalNumerator ** n, realmRec);
+  return CreateRationalValue(a.RationalDenominator ** n, a.RationalNumerator ** n, realmRec, a.TypeRecord);
 }
 // The sign of a - b, by cross-multiplication with positive denominators.
 export function rationalCompare(a: RationalObject, b: RationalObject): number {
@@ -162,6 +170,18 @@ export function rationalCompare(a: RationalObject, b: RationalObject): number {
   }
   return 0;
 }
+/**
+ * Whether two rationals are of one width. #sec-rational-types makes each width
+ * its own type, and the design has them compare "just as `int32` and `int64`"
+ * do - `===`, SameValue and SameValueZero see the type, `==` compares the value.
+ * These three compared the value alone, so a `rational.<8>` was `===` a
+ * `rational` holding the same number, where `(1 := int32) === (1 := int64)` is
+ * false.
+ */
+export function rationalSameWidth(a: RationalObject, b: RationalObject): boolean {
+  return rationalWidthOf(a.TypeRecord) === rationalWidthOf(b.TypeRecord);
+}
+
 export function rationalEquals(a: RationalObject, b: RationalObject): boolean {
   return a.RationalNumerator === b.RationalNumerator && a.RationalDenominator === b.RationalDenominator;
 }
@@ -287,9 +307,17 @@ function exactFractionOf(v: Value): { num: bigint, den: bigint } | null {
  * The 64-bit bound of `rational.<64>` is not enforced here, as it is not
  * anywhere yet; adding it belongs in this one place.
  */
-export function ToRational(a: Value, realmRec: Realm): RationalObject | ThrowCompletion {
+export function ToRational(a: Value, realmRec: Realm, typeRecord?: unknown): RationalObject | ThrowCompletion {
+  // A rational of this width is the value; one of another width converts to
+  // this one exactly, or is a RangeError - #sec-rational-types refuses rather
+  // than rounds, and the design has the widths meet "with an explicit cast".
+  // This returned any rational as it stood, so `r8 := rational.<32>` kept its
+  // width and failed its own target.
   if (isRationalObject(a)) {
-    return a;
+    if (rationalWidthOf(a.TypeRecord) === rationalWidthOf(typeRecord)) {
+      return a;
+    }
+    return CreateRationalValue(a.RationalNumerator, a.RationalDenominator, realmRec, typeRecord);
   }
   // A typed INTEGER is read exactly. Through a Number (`integerArg`) an `int64`
   // above 2**53 rounds, which would contradict the integer row's "the source's
@@ -297,27 +325,41 @@ export function ToRational(a: Value, realmRec: Realm): RationalObject | ThrowCom
   if (isTypedNumber(a)) {
     const record = a.TypeRecord as { Kind?: string, Name?: string };
     if (record.Kind === 'primitive' && isIntegerTypeName(record.Name as string)) {
-      return CreateRationalValue(a.bigintValue(), 1n, realmRec); // eslint-disable-line @engine262/mathematical-value -- the exact value of a wide integer; R is reachable only through ToNumber, which rounds an int64 above 2**53
+      return CreateRationalValue(a.bigintValue(), 1n, realmRec, typeRecord); // eslint-disable-line @engine262/mathematical-value -- the exact value of a wide integer; R is reachable only through ToNumber, which rounds an int64 above 2**53
     }
   }
   if (a instanceof NumberValue) {
     const integer = integerArg(a);
     if (integer !== null) {
-      return CreateRationalValue(integer, 1n, realmRec);
+      return CreateRationalValue(integer, 1n, realmRec, typeRecord);
     }
   }
   const fraction = exactFractionOf(a);
   if (fraction !== null) {
-    return CreateRationalValue(fraction.num, fraction.den, realmRec);
+    return CreateRationalValue(fraction.num, fraction.den, realmRec, typeRecord);
   }
   if ((a instanceof NumberValue || isTypedNumber(a))
     && !Number.isFinite(a.numberValue())) { // eslint-disable-line @engine262/mathematical-value -- finiteness of the stored Number is the question
     return Throw.RangeError('$1 is not in the range of $2', a, Value('rational'));
   }
-  return Throw.TypeError('$1 is not assignable to $2', a, Value('rational'));
+  // A `bigint` is the source's value over 1, a RangeError where it does not fit -
+  // the integer row's own terms. The table had no row from `bigint`, though
+  // `rational -> bigint` exists, and the way round it, `x := int64`, WRAPS.
+  if (a instanceof BigIntValue) {
+    return CreateRationalValue(a.bigintValue(), 1n, realmRec, typeRecord); // eslint-disable-line @engine262/mathematical-value -- the exact value of an unbounded integer
+  }
+  return Throw.TypeError('$1 is not assignable to $2', a, Value(rationalDisplay(typeRecord)));
 }
 
-function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: FunctionCallContext): ValueEvaluator {
+function* RationalConstructor(args: Arguments, _ctx: FunctionCallContext): ValueEvaluator {
+  return yield* RationalConstructAt(args, undefined);
+}
+
+/**
+ * The constructor at a width - `rational(...)` at 64, and a `rational.<N>` Type
+ * Object's call at N: one argument converts, two are the `int.<N>` parts.
+ */
+export function* RationalConstructAt([a = Value.undefined, b]: Arguments, typeRecord: unknown): ValueEvaluator {
   const realmRec = surroundingAgent.currentRealmRecord;
   // ONE numeric argument is the CONVERSION of #table-numeric-conversions, not
   // the numerator of the two-argument constructor. The arms are told apart by
@@ -338,7 +380,7 @@ function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: Functio
   // `rational(-1)` hand this a rational and were refused for it.
   // One argument: the conversion, shared with `:=` and the boundary.
   if (b === undefined) {
-    return ToRational(a, realmRec);
+    return ToRational(a, realmRec, typeRecord);
   }
   // A BigInt IS an integer, so "must be an integer" misstated why it is
   // refused. It is refused because the parts are `int.<N>`, and rational.md
@@ -348,7 +390,7 @@ function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: Functio
   const num = integerArg(a);
   if (num === null) {
     if (a instanceof BigIntValue) {
-      return Throw.TypeError('$1 is not assignable to $2', a, Value('int.<64>'));
+      return Throw.TypeError('$1 is not assignable to $2', a, Value(`int.<${rationalWidthOf(typeRecord)}>`));
     }
     return Throw.TypeError('a rational numerator must be an integer');
   }
@@ -357,7 +399,7 @@ function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: Functio
     const d = integerArg(b);
     if (d === null) {
       if (b instanceof BigIntValue) {
-        return Throw.TypeError('$1 is not assignable to $2', b, Value('int.<64>'));
+        return Throw.TypeError('$1 is not assignable to $2', b, Value(`int.<${rationalWidthOf(typeRecord)}>`));
       }
       return Throw.TypeError('a rational denominator must be an integer');
     }
@@ -366,7 +408,7 @@ function* RationalConstructor([a = Value.undefined, b]: Arguments, _ctx: Functio
   if (den === 0n) {
     return Throw.RangeError('a rational cannot have a zero denominator');
   }
-  return CreateRationalValue(num, den, realmRec);
+  return CreateRationalValue(num, den, realmRec, typeRecord);
 }
 
 function thisRational(thisValue: Value): RationalObject | undefined {
@@ -410,7 +452,7 @@ function* RationalProto_reciprocal(_args: Arguments, { thisValue }: FunctionCall
   if (self.RationalNumerator === 0n) {
     return Throw.RangeError('the reciprocal of zero is undefined');
   }
-  return CreateRationalValue(self.RationalDenominator, self.RationalNumerator, surroundingAgent.currentRealmRecord);
+  return CreateRationalValue(self.RationalDenominator, self.RationalNumerator, surroundingAgent.currentRealmRecord, self.TypeRecord);
 }
 /** https://sirisian.github.io/proposal-runtime-types/#sec-rational-types */
 function* RationalProto_toString(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
@@ -475,7 +517,7 @@ function* RationalProto_valueOf(_args: Arguments, { thisValue }: FunctionCallCon
  * greater than zero, so `1/-2` names no value of it, and normalizing is the
  * constructor's job rather than a text reader's.
  */
-function ParseRationalLiteral(source: string): { numerator: bigint, denominator: bigint } | null {
+export function ParseRationalLiteral(source: string): { numerator: bigint, denominator: bigint } | null {
   const text = source.trim();
   if (/^_|_$|__|_\/|\/_|[+-]_/.test(text)) {
     return null;
@@ -527,87 +569,101 @@ function* RationalTryParse([S = Value.undefined]: Arguments): ValueEvaluator {
   return CreateRationalValue(parsed.numerator, parsed.denominator, surroundingAgent.currentRealmRecord);
 }
 
-/**
- * `rational.approximate(f, maxDenominator)`.
- *
- * rational.md: "For a bounded approximation, `Rational.approximate(f,
- * maxDenominator)` returns the closest rational whose denominator does not
- * exceed the bound, by the continued-fraction expansion", with
- * `Rational.approximate(Math.PI, 1000)` giving `355/113`.
- *
- * Distinct from `rational(f)`, which is the float's EXACT dyadic value and can
- * need a denominator of 2^52. This is the approximation a program wants when it
- * has a measurement and a bound.
- *
- * The convergents of the continued fraction are the best approximations, so the
- * expansion runs until the next convergent would exceed the bound. The
- * SEMICONVERGENT at that point is sometimes closer and sometimes not, so both
- * are formed and the nearer wins - for pi at a bound of 1000 the convergent
- * 355/113 beats the semiconvergent 2818/897 by two orders of magnitude, and
- * taking the semiconvergent unconditionally would have returned the worse one.
- */
-function approximateRational(x: number, maxDen: bigint): { num: bigint, den: bigint } {
-  const negative = x < 0;
-  const ax = Math.abs(x);
-  let p0 = 0n;
-  let q0 = 1n;
-  let p1 = 1n;
-  let q1 = 0n;
-  let v = ax;
-  for (let i = 0; i < 64; i += 1) {
-    const whole = Math.floor(v);
-    if (!Number.isFinite(whole)) {
-      break;
-    }
-    const a = BigInt(whole);
-    const p2 = a * p1 + p0;
-    const q2 = a * q1 + q0;
-    if (q2 > maxDen) {
-      // The bound is reached. The semiconvergent with the largest denominator
-      // that still fits is the other candidate.
-      if (q1 > 0n) {
-        const k = (maxDen - q0) / q1;
-        const pc = k * p1 + p0;
-        const qc = k * q1 + q0;
-        if (qc > 0n && Math.abs(Number(pc) / Number(qc) - ax) < Math.abs(Number(p1) / Number(q1) - ax)) {
-          p1 = pc;
-          q1 = qc;
-        }
-      }
-      break;
-    }
-    p0 = p1;
-    q0 = q1;
-    p1 = p2;
-    q1 = q2;
-    const frac = v - whole;
-    if (frac === 0) {
-      break;
-    }
-    v = 1 / frac;
-  }
-  if (q1 === 0n) {
-    // A bound below 1 admits no denominator; the nearest whole number is the
-    // closest thing with a denominator of 1.
-    return { num: BigInt(Math.round(negative ? -ax : ax)), den: 1n };
-  }
-  return { num: negative ? -p1 : p1, den: q1 };
+function* RationalApproximate(args: Arguments): ValueEvaluator {
+  return yield* RationalApproximateAt(args, undefined);
 }
 
-function* RationalApproximate([x = Value.undefined, bound = Value.undefined]: Arguments): ValueEvaluator {
+/** A double's exact value, a dyadic rational: numerator over a power of two. */
+function exactOfDouble(v: number): { n: bigint, d: bigint } {
+  if (v === 0) {
+    return { n: 0n, d: 1n };
+  }
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, v);
+  const bits = view.getBigUint64(0);
+  const sign = (bits >> 63n) === 1n ? -1n : 1n;
+  const biased = Number((bits >> 52n) & 0x7ffn);
+  const fraction = bits & ((1n << 52n) - 1n);
+  const m = biased === 0 ? fraction : fraction | (1n << 52n);
+  const e = (biased === 0 ? 1 : biased) - 1075;
+  return e >= 0 ? { n: sign * (m << BigInt(e)), d: 1n } : { n: sign * m, d: 1n << BigInt(-e) };
+}
+
+/**
+ * The closest value of the type to x whose denominator does not exceed `bound` -
+ * the design's `approximate`, at a width (the F10 plan's A1). A value of
+ * `rational.<N>` has BOTH parts in `int.<N>`, so the continued-fraction search is
+ * bounded twice: the denominator by the bound and the type's maximum, the
+ * numerator by the type's range. Its last convergent within both bounds and the
+ * best semiconvergent short of them are the two candidates; the nearer wins, and
+ * of two equally near, the smaller denominator, then the one nearer zero. An x outside the type's range is overflow, not
+ * approximation, and is refused: saturating would answer 127 for 1000 at width 8.
+ */
+function approximateInWidth(x: number, bound: bigint, typeRecord: unknown): { num: bigint, den: bigint } | 'range' {
+  const width = BigInt(rationalWidthOf(typeRecord));
+  const max = (1n << (width - 1n)) - 1n;
+  const { n: xn, d: xd } = exactOfDouble(x);
+  if (xn > max * xd || xn < (-max - 1n) * xd) {
+    return 'range';
+  }
+  const negative = xn < 0n;
+  const an = negative ? -xn : xn;
+  const denominatorBound = bound < max ? bound : max;
+  const numeratorBound = negative ? max + 1n : max;
+  let [p0, q0, p1, q1] = [0n, 1n, 1n, 0n];
+  let [n, d] = [an, xd];
+  while (d !== 0n) {
+    const a = n / d;
+    const p2 = p0 + a * p1;
+    const q2 = q0 + a * q1;
+    if (q2 > denominatorBound || p2 > numeratorBound) {
+      break;
+    }
+    [p0, q0, p1, q1] = [p1, q1, p2, q2];
+    [n, d] = [d, n - a * d];
+  }
+  let p = p1;
+  let q = q1;
+  if (d !== 0n) {
+    const kq = (denominatorBound - q0) / q1;
+    const kp = p1 === 0n ? kq : (numeratorBound - p0) / p1;
+    const k = kq < kp ? kq : kp;
+    const sp = p0 + k * p1;
+    const sq = q0 + k * q1;
+    // |p1/q1 - x| against |sp/sq - x|, cross-multiplied. The nearer wins; of two
+    // equally near, the smaller denominator, then the one nearer zero - a rule
+    // stated by the values alone, so it does not depend on this algorithm.
+    const abs = (v: bigint) => (v < 0n ? -v : v);
+    if (sq !== 0n) {
+      const semi = abs(sp * xd - an * sq) * q1;
+      const conv = abs(p1 * xd - an * q1) * sq;
+      if (semi < conv || (semi === conv && (sq < q1 || (sq === q1 && sp < p1)))) {
+        p = sp;
+        q = sq;
+      }
+    }
+  }
+  return { num: negative ? -p : p, den: q };
+}
+
+/** `approximate` at a type: the bare constructor's at 64, a `rational.<N>` Type Object's at N. */
+export function* RationalApproximateAt([x = Value.undefined, bound = Value.undefined]: Arguments, typeRecord: unknown): ValueEvaluator {
   const realmRec = surroundingAgent.currentRealmRecord;
   const n = Q(yield* ToNumber(x));
   const value = n.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the source is a Number and its stored payload is what is approximated
   if (!Number.isFinite(value)) {
-    return Throw.RangeError('$1 is not in the range of $2', x, Value('rational'));
+    return Throw.RangeError('$1 is not in the range of $2', x, Value(rationalDisplay(typeRecord)));
   }
   const b = Q(yield* ToNumber(bound));
   const limit = b.numberValue(); // eslint-disable-line @engine262/mathematical-value -- a denominator bound is a count
   if (!Number.isFinite(limit) || limit < 1) {
     return Throw.RangeError('$1 is not in the range of $2', bound, Value('a denominator bound'));
   }
-  const { num, den } = approximateRational(value, BigInt(Math.floor(limit)));
-  return CreateRationalValue(num, den, realmRec);
+  const approximation = approximateInWidth(value, BigInt(Math.floor(limit)), typeRecord);
+  if (approximation === 'range') {
+    return Throw.RangeError('$1 is not in the range of $2', x, Value(rationalDisplay(typeRecord)));
+  }
+  return CreateRationalValue(approximation.num, approximation.den, realmRec, typeRecord);
 }
 
 export function bootstrapRational(realmRec: Realm): void {

@@ -899,10 +899,28 @@ export function ComplexContextRealLiteralComponent(node: object): TypeRecord | u
  * so a rational built from the double gives 3602879701896397/36028797018963968.
  * The digits have to come from the SOURCE TEXT, as the decimal mark's do.
  */
-const rationalLiterals = new WeakMap<object, { sig: bigint, exp: number }>();
+const rationalLiterals = new WeakMap<object, { sig: bigint, exp: number, type: TypeRecord }>();
 
-export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: number } | undefined {
+export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: number, type: TypeRecord } | undefined {
   return rationalLiterals.get(node);
+}
+
+/**
+ * Whether num/den, in lowest terms, is a value of `rational.<N>`: both parts in
+ * `int.<N>` (#sec-rational-types), the bare `rational` being width 64.
+ */
+function rationalFitsType(num: bigint, den: bigint, t: TypeRecord): boolean {
+  const width = t.Kind === 'primitive' && typeof t.Arguments[0] === 'number' ? t.Arguments[0] : 64;
+  let a = num < 0n ? -num : num;
+  let b = den;
+  while (b !== 0n) {
+    [a, b] = [b, a % b];
+  }
+  const g = a === 0n ? 1n : a;
+  const n = num / g;
+  const d = den / g;
+  const max = (1n << BigInt(width - 1)) - 1n;
+  return n >= -max - 1n && n <= max && d >= 1n && d <= max;
 }
 
 /**
@@ -12967,7 +12985,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (typeof text === 'string') {
         const digits = ParseDecimalDigits(text.replace(/_/g, ''));
         if (digits) {
-          rationalLiterals.set(node, { sig: digits.significand, exp: digits.exponent });
+          rationalLiterals.set(node, { sig: digits.significand, exp: digits.exponent, type: contextual });
+          // #sec-literal-types: "a literal whose value that type cannot represent
+          // is a type error rather than a silent truncation" - at every width,
+          // `rational.<1>`, which has no values, included.
+          const num = digits.exponent >= 0 ? digits.significand * 10n ** BigInt(digits.exponent) : digits.significand;
+          const den = digits.exponent >= 0 ? 1n : 10n ** BigInt(-digits.exponent);
+          if (!rationalFitsType(num, den, contextual)) {
+            const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(text), Value(displayType(contextual))) as ThrowCompletion;
+            errors.push(completion.Value as ObjectValue);
+          }
           return contextual;
         }
       }
@@ -13137,6 +13164,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const rat = foldRationalConstant(node);
       if (rat !== null) {
         foldedRationals.set(node, { ...rat, type: contextual as TypeRecord });
+        // A folded constant is a literal of the type as much as a bare one is.
+        if (!rationalFitsType(rat.num, rat.den, contextual as TypeRecord)) {
+          const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(`${rat.num}/${rat.den}`), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        }
         return contextual;
       }
     }

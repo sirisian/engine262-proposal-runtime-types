@@ -95,8 +95,11 @@ test('what the boundary does not reach is unchanged', () => {
   // Decimal is refused for every source at a boundary - a separate question.
   expectThrownKind(at('5n', 'decimal64'), 'TypeError');
   expectThrownKind(at('(5 := decimal64)', 'bigint'), 'TypeError');
-  // No integer type converts into `rational`; `bigint` matches them.
-  expectThrownKind(at('5n', 'rational'), 'TypeError');
+  // Into `rational`, a `bigint` converts as every integer type does: the
+  // implicit-conversions table checks an `any` value at the boundary and, "if it
+  // is a numeric value the target represents exactly, converted" - an `int32` 5
+  // already did, and the F10 plan's B1 gives `bigint` its conversion row.
+  expect(evaluated(at('5n', 'rational'))).toBe('5');
   // `complex` into an integer is refused for `uint8` too.
   expectThrownKind(at('(5 := complex64)', 'bigint'), 'TypeError');
   // Not numeric at all.

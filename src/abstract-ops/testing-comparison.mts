@@ -17,7 +17,7 @@ import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { IsValueTypeClass, LayoutOf, type ClassLayout } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
-import { isRationalObject, rationalEquals, rationalCompare } from '../intrinsics/Rational.mts';
+import { isRationalObject, rationalEquals, rationalSameWidth, rationalCompare } from '../intrinsics/Rational.mts';
 import { isComplexObject, complexSameValue, complexEquals } from '../intrinsics/Complex.mts';
 import { isDecimalObject, decimalEquals, decimalSameValue, decimalCompare } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, float128SameValue, Float128ToBinary128 } from '../intrinsics/Float128.mts';
@@ -224,7 +224,7 @@ export function SameValue(x: Value, y: Value): boolean {
   // value, so SameValue and SameValueZero compare it structurally, which is what
   // lets it serve as a Map or Set key by value.
   if (surroundingAgent.feature('runtime-types') && (isRationalObject(x) || isRationalObject(y))) {
-    return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y);
+    return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y) && rationalSameWidth(x, y);
   }
   // #sec-which-operations-each-family-defines gives the complex family equal,
   // sameValue and sameValueZero - and only those, since "the complex numbers
@@ -508,7 +508,7 @@ export function SameValueZero(x: Value, y: Value): boolean {
   // value, so SameValue and SameValueZero compare it structurally, which is what
   // lets it serve as a Map or Set key by value.
   if (surroundingAgent.feature('runtime-types') && (isRationalObject(x) || isRationalObject(y))) {
-    return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y);
+    return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y) && rationalSameWidth(x, y);
   }
   // #sec-which-operations-each-family-defines gives the complex family equal,
   // sameValue and sameValueZero - and only those, since "the complex numbers
@@ -822,6 +822,13 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
   // types remains an error; the two are deliberately not aligned. This runs ahead
   // of the SameType step below, which would otherwise route two typed numbers of
   // different types into the strict comparison and answer false.
+  // Two rationals of different widths, by the same rule: `==` compares their
+  // values, while `===` sees each width as its own type (#sec-rational-types).
+  // Without this they reached the strict comparison below and `==` answered
+  // false where `uint8(1) == uint16(1)` answers true.
+  if (surroundingAgent.feature('runtime-types') && isRationalObject(x) && isRationalObject(y)) {
+    return rationalEquals(x, y);
+  }
   if (surroundingAgent.feature('runtime-types')
       && (x instanceof TypedNumberValue || y instanceof TypedNumberValue)) {
     const xm = mathematicalValueForLooseEquality(x);
@@ -908,7 +915,7 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
   // numerator and denominator; a rational is never strictly equal to anything
   // else. This is what makes a rational usable as a Map or Set key by value.
   if (surroundingAgent.feature('runtime-types') && (isRationalObject(x) || isRationalObject(y))) {
-    return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y);
+    return isRationalObject(x) && isRationalObject(y) && rationalEquals(x, y) && rationalSameWidth(x, y);
   }
   // #sec-which-operations-each-family-defines gives the complex family equal,
   // sameValue and sameValueZero - and only those, since "the complex numbers
