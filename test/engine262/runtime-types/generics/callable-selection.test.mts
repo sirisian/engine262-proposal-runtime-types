@@ -449,3 +449,12 @@ test('an open family application forwards through the case its family proves (D8
     put<int.<const N>>(v: int.<N>): string { return 'i' + String(N) + '>' + this.put.<uint.<N>>((0 := uint.<N>)); } }
     new P().put.<int.<12>>((1 := int.<12>));`)).toBe('i12>u12');
 });
+
+// Step 9c: a class's own VALUE parameter as an explicit construction argument.
+test('new C.<S>() inside C is C over its own parameter, not the default', () => {
+  // A value parameter's name is not a type; the checker dropped it and fell
+  // back to the defaults, which B's own-parameter annotation exposed.
+  expect(evaluated(`class C<S: uint32 = 7> { plain(): C { const v = new C.<S>(); return v; } }
+    String(Reflect.typeOf(new C.<3>().plain()));`)).toBe('C.<3>');
+  expectEarlyError('class C<S: uint32 = 7> { plain(): C.<7> { return new C.<S>(); } }', 'StaticTypeError');
+});

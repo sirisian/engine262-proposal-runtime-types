@@ -15654,8 +15654,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // arguments has asked for the specialization and needs no adoption.
             const base = classTypeOf(specName) ?? libraryTypeRecord(specName);
             if (base && base.Kind === 'nominal') {
+              // An argument naming an enclosing declaration's parameter - a
+              // VALUE parameter's name, `new C.<S>()`, is not a type - is that
+              // open parameter; dropping it fell back to the defaults.
               const args = spec.TypeArguments.TypeArgumentList
                 .map((a) => resolveType(a as unknown as ParseNode.Type)
+                  ?? enclosingTypeParameter(node, a as unknown as ParseNode)
                   // proposal-runtime-types #sec-higher-kinded-parameters: an
                   // argument binding a kinded parameter is a DECLARATION, and
                   // resolveType answers null for a bare generic name because it
