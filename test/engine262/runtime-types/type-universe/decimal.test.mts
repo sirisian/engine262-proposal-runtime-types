@@ -76,11 +76,19 @@ test('a NUMBER converts by CARRYING WHAT THE FLOAT HOLDS', () => {
   // decimal - a double is m x 2^e, and m / 2^k is m x 5^k / 10^k - so the
   // expansion is exact before the rounding; `0.1` needs 55 digits, which is the
   // figure the spec quotes.
-  expect(evaluated('decimal128(0.1).toString();')).toBe('0.1000000000000000055511151231257827');
+  //
+  // The float has to reach the conversion as a VALUE. A LITERAL operand is read
+  // in the target's context - #sec-literalvalueintype, "the mathematical value
+  // denoted by the literal ... BEFORE ANY ROUNDING" - so `decimal128(0.1)` is the
+  // decimal one tenth, not the float; that is asserted below. These asserted the
+  // float's expansion OF A LITERAL, from before literal operands of a conversion
+  // were read that way.
+  const f = 'let f = 0.1;';
+  expect(evaluated(`${f} decimal128(f).toString();`)).toBe('0.1000000000000000055511151231257827');
   // **THE ASSERTION THAT SAYS WHY**: the converted float is NOT one tenth.
   // Making these equal would launder a binary approximation into an
   // exact-looking decimal and hide the whole reason these types exist.
-  expect(evaluated('String(decimal128(0.1) == decimal128.parse("0.1"));')).toBe('false');
+  expect(evaluated(`${f} String(decimal128(f) == decimal128.parse("0.1"));`)).toBe('false');
   // A value the double holds EXACTLY converts exactly, and arrives REDUCED
   // rather than padded to the width - `0.5` is `0.5`, not `0.5000...0`.
   expect(evaluated('decimal128(0.5).toString();')).toBe('0.5');
@@ -91,7 +99,10 @@ test('a NUMBER converts by CARRYING WHAT THE FLOAT HOLDS', () => {
   expect(evaluated('decimal128(0).toString();')).toBe('0');
   expect(evaluated('String(decimal128(0.5) == decimal128.parse("0.5"));')).toBe('true');
   // A narrower width rounds to its own precision.
-  expect(evaluated('decimal32(0.1).toString();')).toBe('0.1000000');
+  expect(evaluated(`${f} decimal32(f).toString();`)).toBe('0.1000000');
+  // And the LITERAL, read in the target's context, IS one tenth.
+  expect(evaluated('decimal128(0.1).toString();')).toBe('0.1');
+  expect(evaluated('String(decimal128(0.1) == decimal128.parse("0.1"));')).toBe('true');
 });
 
 test('a decimal OUT to a float is the ordinary direction of loss', () => {
