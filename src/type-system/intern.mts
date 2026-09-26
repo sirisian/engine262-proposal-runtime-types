@@ -1,7 +1,7 @@
 import type { Arguments } from '../value.mts';
 import { RationalConstructAt } from '../intrinsics/Rational.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
-import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
+import { CheckedConvertValue, GoverningMetaTypes } from '../abstract-ops/runtime-types.mts';
 import { VectorValue, ObjectValue, TypedStringValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
@@ -121,7 +121,7 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     // otherwise collapse a containment pair to one member and exit without
     // asking.
     if (t.Kind === 'intersection' && members.length === 2) {
-      const met = metResolutions.get(metKey(members[0].canonical, members[1].canonical));
+      const met = MetResolutionOf(members[0].canonical, members[1].canonical);
       if (met !== undefined) {
         return CanonicalizeType(met, copies);
       }
@@ -480,7 +480,18 @@ export function RegisterStampedClass(declaration: object, constructor: ObjectVal
   stampedClasses.set(declaration, constructor);
 }
 
-const metResolutions = new Map<string, TypeRecord>();
+// A meet belongs to the META TYPE whose `meet` hook computed it, and so to the
+// program that declared that meta type: meta types are per agent
+// (`claimsForAgent`). This was one module-level map keyed by the members' display
+// alone, which outlived the program and named no meta type - so a program's result
+// depended on unrelated programs run before it in the process, and one program's
+// user-written `meet` was applied to another program's meta type. Keyed by the meta
+// type now, which a WeakMap also lets go of with the program.
+//
+// Each record carries the order it was made in: where several governing meta types
+// each give a meet for one pair, the last recorded is the one used, as before.
+const metResolutions = new WeakMap<object, Map<string, { met: TypeRecord, order: number }>>();
+let metOrder = 0;
 
 function metKey(x: TypeRecord, y: TypeRecord): string {
   const a1 = displayType(x);
@@ -489,8 +500,38 @@ function metKey(x: TypeRecord, y: TypeRecord): string {
 }
 
 /** A meet the checking pass computed, keyed by DISPLAY: a canonical record is computed structurally and is not identity-stable. */
-export function SetMetResolution(left: TypeRecord, right: TypeRecord, met: TypeRecord): void {
-  metResolutions.set(metKey(left, right), met);
+export function SetMetResolution(left: TypeRecord, right: TypeRecord, met: TypeRecord, metaType: object): void {
+  let byPair = metResolutions.get(metaType);
+  if (byPair === undefined) {
+    byPair = new Map();
+    metResolutions.set(metaType, byPair);
+  }
+  metOrder += 1;
+  byPair.set(metKey(left, right), { met, order: metOrder });
+}
+
+/** The recorded meet of two members, found through the meta types governing them. */
+function MetResolutionOf(x: TypeRecord, y: TypeRecord): TypeRecord | undefined {
+  const key = metKey(x, y);
+  let found: { met: TypeRecord, order: number } | undefined;
+  const asked = new Set<object>();
+  for (const member of [x, y]) {
+    if ((member as { Kind?: string }).Kind !== 'parameterized') {
+      continue;
+    }
+    const metadata = (member as unknown as { Metadata: Parameters<typeof GoverningMetaTypes>[0] }).Metadata;
+    for (const metaType of GoverningMetaTypes(metadata).types) {
+      if (asked.has(metaType)) {
+        continue;
+      }
+      asked.add(metaType);
+      const hit = metResolutions.get(metaType)?.get(key);
+      if (hit !== undefined && (found === undefined || hit.order > found.order)) {
+        found = hit;
+      }
+    }
+  }
+  return found?.met;
 }
 
 export function isClassTypeObject(value: unknown): boolean {

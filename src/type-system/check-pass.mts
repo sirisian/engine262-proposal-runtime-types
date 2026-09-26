@@ -839,7 +839,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         if (snapshot.Type === 'normal') {
           SetMetResolution(pair.left, pair.right, {
             Kind: 'parameterized', Base: pair.left.Base, Metadata: snapshot.Value as unknown as Value,
-          } as unknown as TypeRecord);
+          } as unknown as TypeRecord, metaType);
           recordedAMeet = true;
         }
       }
