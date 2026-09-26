@@ -499,3 +499,18 @@ test('an extent over an open parameter stays open until specialization', () => {
   expect(evaluated(`class P<S: uint32 = 16> { #b: [S + 1].<uint8>; n(): string { return String(this.#b.length); } }
     new P().n() + '|' + new P.<4>().n();`)).toBe('17|5');
 });
+
+// Step 9h: a shift's distance is a count, and a case's value binder is typed.
+test('a shift takes a distance of any integer type, exactly; the result is the left type', () => {
+  expect(evaluated('String((1 := uint64) << (3 := uint32)) + \':\' + String(Reflect.typeOf((1 := uint64) << (3 := uint32)));')).toBe('8:uint.<64>');
+  // Forcing 256 into uint8 would shift by 0; the distance as written shifts all out.
+  expect(evaluated('const k = (256 := uint32); String((1 := uint8) << k);')).toBe('0');
+  expectEarlyError('String((1 := uint8) + (3 := uint16));', 'StaticTypeError');
+});
+
+test('a selected case\'s value binder keeps its declared type', () => {
+  // `maximum: float32` bound from `.<float32, 4>` was a plain number.
+  expect(evaluated(`class A { w<T: type>(v: T): string { return 'g'; }
+    w<float32, maximum: float32>(v: float32): string { return String(Reflect.typeOf(maximum)) + ':' + String(v / maximum); } }
+    new A().w.<float32, 4>((2 := float32));`)).toBe('float32:0.5');
+});

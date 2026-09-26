@@ -16,7 +16,7 @@
  */
 
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped } from '../type-system/runtime.mts';
 import { resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import { displayType, builtinTypeRecord, makePrimitive, type TypeRecord } from '../type-system/records.mts';
 import { IsSubtype } from '../type-system/relations.mts';
@@ -124,6 +124,28 @@ function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Decl
 }
 
 /** A case's capture bindings as a type-parameter frame, values marked as value parameters. */
+/**
+ * #sec-generics (decided in phase 4, step 9g), for a selected case: a value
+ * binder keeps its declared type where it is read - `maximum: float32` bound
+ * from `write.<float32, -1024, 1024, 18>` is a `float32`, so `value / maximum`
+ * divides two `float32`s. The binder's literal binds through
+ * `BindTypeParameterTyped`, as a declaration's defaults and a class
+ * specialization's arguments do.
+ */
+function* TypedFrameOfBindings(declaration: unknown, bindings: readonly { Capture: { Name: string }, Value: Argument }[]): PlainEvaluator<Map<string, TypeRecord>> {
+  const frame = FrameOfBindings(bindings);
+  const list = (declaration as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string }, IsValueParameter?: boolean }[] } | null } | undefined)
+    ?.TypeParameters?.TypeParameterList ?? [];
+  for (const tp of list) {
+    const name = tp.BindingIdentifier?.name;
+    const bound = name ? frame.get(name) : undefined;
+    if (name && bound && tp.IsValueParameter) {
+      Q(yield* BindTypeParameterTyped(frame, name, bound, tp));
+    }
+  }
+  return frame;
+}
+
 function FrameOfBindings(bindings: readonly { Capture: { Name: string }, Value: Argument }[]): Map<string, TypeRecord> {
   const frame = new Map<string, TypeRecord>();
   for (const b of bindings) {
@@ -189,7 +211,8 @@ export function* DispatchCaseGroup(
           if (result.Kind !== 'selected') break;
           const selectedCase = result.Case;
           const candidate = members.find((m) => m.declaration === selectedCase.Declaration)!.fn;
-          if (Q(yield* CaseFilterHolds(candidate, FrameOfBindings(result.Bindings as never), classFrameOfObject(thisValue)))) break;
+          const filterFrame = Q(yield* TypedFrameOfBindings(selectedCase.Declaration, result.Bindings as never));
+          if (Q(yield* CaseFilterHolds(candidate, filterFrame, classFrameOfObject(thisValue)))) break;
           remaining.splice(remaining.findIndex((c) => c.Declaration === selectedCase.Declaration), 1);
           if (remaining.length === 0) {
             result = { Kind: 'none' } as unknown as typeof result;
@@ -202,7 +225,8 @@ export function* DispatchCaseGroup(
         }
         if (result.Kind === 'selected') {
           const fn = members.find((m) => m.declaration === result.Case.Declaration)!.fn;
-          pushTypeParameterFrame(FrameOfBindings(result.Bindings as never));
+          const dispatchFrame = Q(yield* TypedFrameOfBindings((result as { Case?: { Declaration?: unknown } }).Case?.Declaration, result.Bindings as never));
+          pushTypeParameterFrame(dispatchFrame);
           try {
             return Q(yield* WithSelectedInvocation(fn, function* callCase() {
               return yield* Call(fn, thisValue, args as Value[]);
@@ -490,7 +514,6 @@ export function* SelectExplicitCase(
   }
   const { analysis, host, resolve } = Q(yield* AnalyzeGroupAtRuntime(members, name));
   const fnOf = (node: ParseNode) => members.find((m) => m.declaration === node)!.fn;
-  const frameOf = FrameOfBindings;
   // A chosen case whose filter does not hold is excluded, and selection runs
   // again among the rest (B12).
   const excluded = new Set<object>();
@@ -503,7 +526,7 @@ export function* SelectExplicitCase(
       return { fn: fnOf(choice.Declaration), frame: undefined };
     }
     const fn = fnOf(choice.Declaration);
-    const frame = frameOf(choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value })));
+    const frame = Q(yield* TypedFrameOfBindings(choice.Declaration, choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))));
     if (Q(yield* CaseFilterHolds(fn, frame, classFrame))) {
       return { fn, frame };
     }

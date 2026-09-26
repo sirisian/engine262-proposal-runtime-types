@@ -248,7 +248,15 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
  * other's type while any other untyped operand is a mix and throws.
  */
 export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypedNumberValue | ThrowCompletion {
-  const target = TypedOperandType(x, y, literals);
+  // #sec-integer-operations (phase 4, step 9h): a shift takes its distance as
+  // written - its exact value, read below - so the distance is a count, not a
+  // value mixed into the left operand: any integer type may give it, and the
+  // result has the LEFT operand's type (Rust's `Shl<u32> for u64`; C, Java and
+  // Go type the count independently). Forcing it into the left type could
+  // change it: `uint8 << 256` would shift by 0.
+  const shiftTarget = (op === '<<' || op === '>>' || op === '>>>') && x instanceof TypedNumberValue && y instanceof TypedNumberValue
+    ? ShiftDistanceExemptTarget(x as TypedNumberValue, y as TypedNumberValue) : undefined;
+  const target = shiftTarget ?? TypedOperandType(x, y, literals);
   if (target instanceof AbruptCompletion) {
     return target as ThrowCompletion;
   }
@@ -532,4 +540,15 @@ export function typedUnary(op: '-' | '~', x: TypedNumberValue): TypedNumberValue
   }
   const math = op === '-' ? -payload(x) : ~payload(x);
   return new TypedNumberValue(wrapToType(math, t), t);
+}
+
+/**
+ * The left operand's type, where a shift's two operands are both of integer
+ * types that differ; *undefined* otherwise, leaving the ordinary rule.
+ */
+function ShiftDistanceExemptTarget(x: TypedNumberValue, y: TypedNumberValue): TypeRecord | undefined {
+  const xt = UnderlyingOf(x.TypeRecord as TypeRecord);
+  const yt = UnderlyingOf(y.TypeRecord as TypeRecord);
+  const integer = (t: TypeRecord) => t.Kind === 'primitive' && (t.Name === 'int' || t.Name === 'uint');
+  return integer(xt) && integer(yt) && !SameType(xt, yt) ? xt : undefined;
 }

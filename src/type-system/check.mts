@@ -16390,6 +16390,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return contributed;
             }
           }
+          // A shift's distance is a count taken as written, not a value mixed
+          // into the left operand: any integer type gives it, and the result
+          // has the left operand's type (phase 4, step 9h; as the run time).
+          if (token === '<<' || token === '>>' || token === '>>>') {
+            const integer = (t: Known | undefined) => t?.Kind === 'primitive'
+              && ((t as { Name: string }).Name === 'int' || (t as { Name: string }).Name === 'uint');
+            if (integer(erasedForJudgment(lv)) && integer(erasedForJudgment(rv))) {
+              return lv;
+            }
+          }
           const completion = Throw.StaticTypeError('$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return lv;
