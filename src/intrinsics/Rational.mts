@@ -78,8 +78,24 @@ export function rationalDisplay(typeRecord: unknown): string {
 }
 
 export function rationalWidthOf(typeRecord: unknown): number {
+  const args = (typeRecord as { Arguments?: readonly unknown[] } | undefined)?.Arguments;
+  if (args === undefined || args.length === 0) {
+    return 64;
+  }
+  // #sec-rational-types: "For each positive integer N". Any other argument -
+  // `rational.<1.5>`, `rational.<0>`, `rational.<bigint>` - names no type: NaN, which
+  // no width equals. It answered 64 for anything that was not a number, so
+  // `rational.<bigint>` was silently a 64-bit rational, and a non-integer width
+  // reached `BigInt` and crashed the host.
+  const width = args[0];
+  return typeof width === 'number' && Number.isInteger(width) && width >= 1 ? width : Number.NaN;
+}
+
+/** Refusal of a rational type whose width is not a positive integer: it names no type. */
+function refuseRationalWidth(typeRecord: unknown): ThrowCompletion {
   const width = (typeRecord as { Arguments?: readonly unknown[] } | undefined)?.Arguments?.[0];
-  return typeof width === 'number' ? width : 64;
+  const shown = typeof width === 'number' ? String(width) : ((width as { Name?: string } | undefined)?.Name ?? 'a type');
+  return Throw.TypeError(`rational.<${shown}> is not a type: a rational width is a positive integer`);
 }
 
 /**
@@ -101,6 +117,9 @@ export function rationalWidthOf(typeRecord: unknown): number {
  */
 export function CreateRationalValue(numerator: bigint, denominator: bigint, realmRec: Realm, typeRecord?: unknown): RationalObject | ThrowCompletion {
   const { num, den } = canonicalize(numerator, denominator);
+  if (Number.isNaN(rationalWidthOf(typeRecord))) {
+    return refuseRationalWidth(typeRecord);
+  }
   const width = BigInt(rationalWidthOf(typeRecord));
   const max = (1n << (width - 1n)) - 1n;
   if (num < -max - 1n || num > max || den > max) {
@@ -649,6 +668,9 @@ function approximateInWidth(x: number, bound: bigint, typeRecord: unknown): { nu
 /** `approximate` at a type: the bare constructor's at 64, a `rational.<N>` Type Object's at N. */
 export function* RationalApproximateAt([x = Value.undefined, bound = Value.undefined]: Arguments, typeRecord: unknown): ValueEvaluator {
   const realmRec = surroundingAgent.currentRealmRecord;
+  if (Number.isNaN(rationalWidthOf(typeRecord))) {
+    return refuseRationalWidth(typeRecord);
+  }
   const n = Q(yield* ToNumber(x));
   const value = n.numberValue(); // eslint-disable-line @engine262/mathematical-value -- the source is a Number and its stored payload is what is approximated
   if (!Number.isFinite(value)) {

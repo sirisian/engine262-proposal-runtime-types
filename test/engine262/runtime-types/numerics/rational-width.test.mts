@@ -198,6 +198,19 @@ test('approximate: the design example at each width, and overflow refused', () =
   expect(outcome('uint8.approximate(1, 2)')).toBe('TypeError');
 });
 
+test('a width that is not a positive integer names no type', () => {
+  // "For each positive integer N": `rational.<1.5>` reached BigInt with a fraction
+  // and crashed the host, and `rational.<bigint>` was silently a 64-bit rational.
+  for (const w of ['1.5', '0', '-1', 'bigint', 'string']) {
+    expect(outcome(`rational.<${w}>(1, 1)`), `rational.<${w}>(1, 1)`).toBe('TypeError');
+    expect(outcome(`rational.<${w}>.parse('1')`), `rational.<${w}>.parse`).toBe('TypeError');
+    expect(outcome(`rational.<${w}>.approximate(1, 2)`), `rational.<${w}>.approximate`).toBe('TypeError');
+  }
+  expectStaticTypeError('const x: rational.<1.5> = 1;');
+  expect(evaluated("let m; try { rational.<bigint>(1, 3); } catch (e) { m = e.message; } m;"))
+    .toBe('rational.<bigint> is not a type: a rational width is a positive integer');
+});
+
 test('complex.<T> is its Type Object, as rational.<N> is', () => {
   expect(outcome('complex.<number> === complex')).toBe('true');
   expect(outcome('complex.<float32> === complex')).toBe('false');

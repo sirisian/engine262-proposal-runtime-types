@@ -910,7 +910,14 @@ export function RationalContextLiteralDigits(node: object): { sig: bigint, exp: 
  * `int.<N>` (#sec-rational-types), the bare `rational` being width 64.
  */
 function rationalFitsType(num: bigint, den: bigint, t: TypeRecord): boolean {
-  const width = t.Kind === 'primitive' && typeof t.Arguments[0] === 'number' ? t.Arguments[0] : 64;
+  const arg = t.Kind === 'primitive' ? t.Arguments[0] : undefined;
+  // A width that is not a positive integer names no type (#sec-rational-types:
+  // "For each positive integer N"), so no value fits it; reading it as a width
+  // reached `BigInt` with a fraction and crashed the checker.
+  if (arg !== undefined && !(typeof arg === 'number' && Number.isInteger(arg) && arg >= 1)) {
+    return false;
+  }
+  const width = typeof arg === 'number' ? arg : 64;
   let a = num < 0n ? -num : num;
   let b = den;
   while (b !== 0n) {
