@@ -3506,6 +3506,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (declaration?.type === 'PrimitiveOperatorDeclaration') {
       return pushTypeParameterScopeOf({ TypeParameters: { TypeParameterList: BlockCapturesOf(declaration as ParseNode.PrimitiveOperatorDeclaration) } } as unknown as ParseNode, only);
     }
+    // A callable's specialized case binds its list's captures too - `N` of
+    // `write<uint.<const N>>` - as a primitive block's header does (step 9d):
+    // a pattern-only case has no binders, and pushed no scope at all.
+    {
+      const tp = (declaration as unknown as { TypeParameters?: { ListKind?: string, TypeParameterList?: readonly ParseNode.TypeParameter[], Captures?: readonly unknown[] } | null } | null | undefined)?.TypeParameters;
+      if ((tp?.ListKind === 'specialization' || tp?.ListKind === 'mixed') && (tp.Captures?.length ?? 0) > 0) {
+        return pushTypeParameterScopeOf({ type: 'SpecializedCaseScope', TypeParameters: { TypeParameterList: [...(tp.TypeParameterList ?? []), ...(tp.Captures ?? [])] } } as unknown as ParseNode, only);
+      }
+    }
     if (!list || list.length === 0) {
       return false;
     }
@@ -7816,10 +7825,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!lookupAlias(name) && !builtinTypeRecord(name)
       && !(application && ['int', 'uint', 'rational', 'vector'].includes(name))) return null;
     if (classTypeOf(name)) return null;
+    // The synthesized node stands in the tree where its application does, so
+    // that an argument naming an enclosing class's or case's parameter -
+    // `uint.<B>(v)` in a method of `P<B: uint32>` - is found open, not closed
+    // and evaluated without a binding (phase 4, step 9e).
     const target = !application ? lookupAlias(name) ?? builtinTypeRecord(name) : resolveType({
       type: 'TypeReference',
       TypeName: { IdentifierReference: nameNode, MemberNames: [] },
       TypeArguments: application.TypeArguments,
+      parent: application,
     } as unknown as ParseNode.Type);
     return target && classDeclarationOf(target) !== undefined ? null : target;
   };
@@ -13782,7 +13796,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const fixed = resolveType(entry as ParseNode.Type);
           return !!fixed && SameType(fixed, arg);
         }
-        const bound = (arg as { Kind?: string, Constraint?: TypeRecord }).Kind === 'parameter' ? (arg as { Constraint?: TypeRecord }).Constraint : undefined;
+        // A parameter's bound, or - for a family application over an open
+        // argument, `uint.<N>` with `N` in scope - that family (step 9d).
+        const bound = (arg as { Kind?: string, Constraint?: TypeRecord }).Kind === 'parameter'
+          ? (arg as { Constraint?: TypeRecord }).Constraint
+          : (arg as { Kind?: string, Name?: string }).Kind === 'primitive' && ['int', 'uint', 'rational', 'complex', 'vector'].includes((arg as { Name: string }).Name)
+            ? { Kind: 'primitive', Name: (arg as { Name: string }).Name, Arguments: [], Family: true } as unknown as TypeRecord
+            : undefined;
         const reference = entry as ParseNode.TypeReference;
         const entryArgs = (reference.TypeArguments as { TypeArgumentList?: readonly ParseNode[] } | null | undefined)?.TypeArgumentList ?? [];
         return entry.type === 'TypeReference' && entryArgs.length > 0 && entryArgs.every((x) => isOpen(x))

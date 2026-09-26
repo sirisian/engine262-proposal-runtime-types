@@ -458,3 +458,30 @@ test('new C.<S>() inside C is C over its own parameter, not the default', () => 
     String(Reflect.typeOf(new C.<3>().plain()));`)).toBe('C.<3>');
   expectEarlyError('class C<S: uint32 = 7> { plain(): C.<7> { return new C.<S>(); } }', 'StaticTypeError');
 });
+
+// Step 9d: a case's captures in scope; widths in canonical form.
+test('a conversion to a case capture\'s width types in the case\'s scope', () => {
+  // `N` of `f<uint.<const N>>` was in no scope: a pattern-only case pushed none.
+  expect(evaluated(`function f<T: type>(v: T): string { return 'g'; }
+    function f<uint.<const N>>(v: uint.<N>): string { return 'u' + String(uint.<N>(v)); }
+    f.<uint.<8>>((3 := uint8));`)).toBe('u3');
+});
+
+test('a value parameter bound to a (typed) number is a plain width: uint.<N> at N = 8 is uint.<8>', () => {
+  // Was "uint.<8> is not assignable to uint.<8>": a literal record in the width.
+  expect(evaluated('function h<N: uint32>(v: uint.<N>): string { return \'ok\'; } h.<8>((3 := uint8));')).toBe('ok');
+});
+
+// Step 9e: open-width conversions.
+test('a conversion to an open width checks its range against the bound width', () => {
+  // `uint.<N>(v)` ranged over a `uint.<literal 8>` record: nothing fit.
+  expect(evaluated(`function g<N: uint32>(v: uint32): string { return String(uint.<N>(v)); }
+    g.<8>(3) + '|' + g.<8>(300);`)).toBe('3|44');
+});
+
+test('a conversion reading a class parameter, in a method, is open (not closed)', () => {
+  // The synthesized conversion node had no parent, so `B` looked closed.
+  expect(evaluated(`class P<B: uint32 = 64> { f(v: uint32): string { return String(uint.<B>(v)); }
+    g(): uint.<B> { return uint.<B>(1); } }
+    new P.<16>().f(3) + '|' + String(new P.<16>().g());`)).toBe('3|1');
+});

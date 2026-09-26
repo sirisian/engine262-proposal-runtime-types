@@ -38,7 +38,7 @@ import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
-import { FamilyBoundRecord, InjectedClassOf, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
+import { FamilyBoundRecord, InjectedClassOf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
 } from './budget.mts';
@@ -6368,6 +6368,10 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord {
 
 /** Whether a mathematical value fits a numeric value type. */
 export function fitsNumericType(v: number | bigint, name: string, args: readonly (TypeRecord | number)[]): boolean {
+  // A width may reach here as a numeric literal record (a value parameter's
+  // binding, typed or not) from a record no constructor canonicalized: read it
+  // as its number, or every value falls outside the range (phase 4, step 9e).
+  args = args.map(CanonicalWidthArgument);
   if (name === 'uint' || name === 'int') {
     const bits = typeof args[0] === 'number' ? args[0] : 0;
     // #sec-integer-types: the values are "the integers from -2**(N-1) through

@@ -645,6 +645,20 @@ export const anyType: TypeRecord = { Kind: 'any' };
 export const voidType: TypeRecord = { Kind: 'void' };
 export const neverType: TypeRecord = { Kind: 'union', Members: [] };
 
+/**
+ * A primitive's width or count in canonical form: a plain number. A numeric
+ * literal record - a value parameter's binding, typed (`N: uint32`) or not -
+ * is that number; anything else is unchanged (phase 4, steps 9d and 9e).
+ */
+export function CanonicalWidthArgument(a: TypeRecord | number): TypeRecord | number {
+  if (typeof a !== 'object' || a === null || (a as { Kind?: string }).Kind !== 'literal') return a;
+  const value = (a as { Value?: unknown }).Value;
+  // A plain number is read through R; a TYPED number carries its value.
+  const n = value instanceof NumberValue ? R(value)
+    : typeof (value as { value?: unknown } | undefined)?.value === 'number' ? (value as { value: number }).value : undefined;
+  return typeof n === 'number' && Number.isInteger(n) ? n : a;
+}
+
 export function makePrimitive(Name: string, Arguments: readonly (TypeRecord | number)[] = []): TypeRecord {
   // THE DEFAULT WIDTH IS NORMALIZED AWAY, so the two spellings of one type build
   // one record. `table-type-name-shorthands`: "`complex` is `complex.<number>`
@@ -660,6 +674,11 @@ export function makePrimitive(Name: string, Arguments: readonly (TypeRecord | nu
   // That contradiction is what made a metadata parameterization over `rational`
   // unreachable: its base is `rational.<64>`, the crossing converts the value to
   // that base first, and that step refused a rational.
+  // A width or count is a plain number in canonical form: one given as a
+  // numeric literal record - a value parameter's binding, typed (`N: uint32`)
+  // or not - is that number, whichever path applied it (phase 4, step 9d:
+  // `uint.<N>` at `N = 8` was `uint.<literal 8>`, and ranged over nothing).
+  Arguments = Arguments.map(CanonicalWidthArgument);
   if (Name === 'rational' && Arguments.length === 1 && Arguments[0] === 64) {
     return { Kind: 'primitive', Name, Arguments: [] };
   }
@@ -2040,9 +2059,14 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
   if (withArgs.Arguments && withArgs.Arguments.length > 0) {
     return {
       ...t,
-      Arguments: withArgs.Arguments.map((a) => (typeof a === 'number'
-        ? a
-        : substituteTypeParameters(a, bindings) as TypeRecord)),
+      Arguments: withArgs.Arguments.map((a) => {
+        if (typeof a === 'number') return a;
+        const substituted = substituteTypeParameters(a, bindings) as TypeRecord;
+        // A primitive's width or count is a plain number in canonical form:
+        // a value parameter bound to a numeric literal lands there as that
+        // number (`uint.<N>` at `N = 8` is `uint.<8>`, never `uint.<literal 8>`).
+        return t.Kind === 'primitive' ? CanonicalWidthArgument(substituted) : substituted;
+      }),
     } as Known;
   }
   // A TUPLE's elements, beside the array's singular [[Element]] arm below.

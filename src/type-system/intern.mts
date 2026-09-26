@@ -14,7 +14,7 @@ import {
 } from '../intrinsics/Decimal.mts';
 import { NumberValue, BigIntValue, isTypedNumber } from '../value.mts';
 import type { TypeRecord } from './records.mts';
-import { neverType, orderKey, propertiesInKeyOrder, displayType } from './records.mts';
+import { neverType, orderKey, propertiesInKeyOrder, displayType, CanonicalWidthArgument } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { AreDisjoint, IsSubtype, SameTypeStructural } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value, R } from '#self';
@@ -330,7 +330,16 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     return isNeverRecord(Base) ? neverType : { Kind: 'parameterized', Base, Metadata: t.Metadata };
   }
   if (t.Kind === 'primitive') {
-    return { Kind: 'primitive', Name: t.Name, Arguments: t.Arguments.map((a) => (typeof a === 'number' ? a : CanonicalizeType(a, copies))) };
+    // A width or count is a plain number in canonical form, however it was
+    // built: a numeric literal (a value parameter's binding, typed or not) is
+    // that number (phase 4, step 9e), as `makePrimitive` makes it.
+    return {
+      Kind: 'primitive', Name: t.Name,
+      Arguments: t.Arguments.map((a) => {
+        const width = CanonicalWidthArgument(a);
+        return typeof width === 'number' ? width : CanonicalizeType(width, copies);
+      }),
+    } as TypeRecord;
   }
   // proposal-runtime-types: an object's property and index-signature types are
   // themselves canonicalized, so a union or intersection nested in a property is
