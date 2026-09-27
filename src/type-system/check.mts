@@ -3698,10 +3698,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** #sec-generic-specialization: close obligations when an outer parameter binds. */
-  const checkSpecializedVariadics = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>): void => {
+  const checkSpecializedDeclaration = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>): void => {
     const visit = (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): void => {
       const scoped = new Map(available);
       if (node !== declaration) for (const name of typeParameterNamesOf(node) ?? []) scoped.delete(name);
+      // Actual bindings must remain formable after substitution. A function
+      // type's parameter names are descriptive, so they are not visited here.
+      if (['SingleNameBinding', 'BindingElement', 'BindingRestElement', 'BindingRestProperty',
+        'LexicalBinding', 'VariableDeclaration', 'Catch'].includes(node.type)) {
+        const annotation = (node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+        if (annotation) {
+          typeParameterScopes.push(scoped);
+          try {
+            requireBindingType(substituteTypeParameters(resolveType(annotation.Type), scoped));
+          } finally {
+            typeParameterScopes.pop();
+          }
+        }
+      }
       for (const obligation of variadicObligations.get(node) ?? []) {
         const type = substituteTypeParameters(obligation.type, scoped);
         if (!type || mentionsTypeParameter(type)) continue;
@@ -4432,6 +4446,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
+  // A finite key domain is a set of alternatives, not an unknown computed key.
+  // Only identities already established by checking are used; no expression is
+  // evaluated here. Cyclic/unbounded domains retain their runtime checks.
+  const memberKeys = (node: { IdentifierName?: { name: string } | null, Expression?: ParseNode | null }): readonly (string | SymbolValue)[] | undefined => {
+    const singleton = memberKey(node);
+    if (singleton !== undefined) return [singleton];
+    if (!node.Expression) return undefined;
+    const collect = (type: Known, seen = new Set<TypeRecord>()): (string | SymbolValue)[] | undefined => {
+      if (!type || seen.has(type)) return undefined;
+      if (type.Kind === 'union') {
+        const path = new Set(seen).add(type);
+        const arms = type.Members.map((arm) => collect(arm, path));
+        return arms.every((arm) => arm !== undefined) ? [...new Set(arms.flat())] as (string | SymbolValue)[] : undefined;
+      }
+      if (type.Kind !== 'literal') return undefined;
+      if (type.Value instanceof JSStringValue) return [type.Value.stringValue()];
+      if (type.Value instanceof SymbolValue) return [type.Value];
+      if (type.Value instanceof NumberValue || type.Value instanceof BigIntValue) return [String(R(type.Value))];
+      // eslint-disable-next-line @engine262/mathematical-value
+      if (type.Value instanceof TypedNumberValue) return [String((type.Value as TypedNumberValue).numberValue())];
+      return undefined;
+    };
+    return collect(staticType(node.Expression));
+  };
+
   // Library members have the same contract for dot and known String keys.
   // This describes the typed view, not the identity of the runtime method.
   const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
@@ -4550,7 +4589,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const property = privateMember(node);
       return property ? [property.writeType ?? property.type] : [];
     }
-    const key = memberKey(node);
+    const keys = memberKeys(node);
     const keyType = node.Expression ? staticType(node.Expression) : null;
     const from = (receiver: Known): TypeRecord[] => {
       if (receiver?.Kind === 'union') {
@@ -4559,17 +4598,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const vector = vectorWriteType(receiver, node);
       if (vector) return [vector];
       const shape = structureOf(receiver);
-      if (key === 'length' && (shape?.Kind === 'array' || shape?.Kind === 'tuple')) return [indexTypeRecord()];
-      if (shape?.Kind !== 'object') {
+      if (shape?.Kind === 'array' || shape?.Kind === 'tuple') {
+        if (keys) return keys.flatMap((key) => {
+          const target = typeof key === 'string' && (key === 'length' || /^(0|[1-9][0-9]*)$/.test(key))
+            ? sequencePropertyContribution(shape, key) : null;
+          return target ? [target] : [];
+        });
+        if (node.Expression && keyType && IsNumericIndexType(keyType)) {
+          return shape.Kind === 'array' ? [shape.Element]
+            : shape.Elements.flatMap((element) => {
+              const type = element.Rest ? restElementType(element.Type) : element.Type;
+              return type ? [type] : [];
+            });
+        }
         return [];
       }
-      const prop = key === undefined ? undefined : shape.Properties.find((p) => p.key === key);
-      if (prop) {
-        return [(prop as { writeType?: TypeRecord }).writeType ?? prop.type];
-      }
-      return shape.IndexSignatures.filter((ix) => key !== undefined
-        ? keyAdmittedBy(key, ix.Key)
-        : keyType !== null && !AreDisjoint(keyType, ix.Key)).map((ix) => ix.Value);
+      if (shape?.Kind !== 'object') return [];
+      if (keys) return keys.flatMap((key) => {
+        const prop = shape.Properties.find((p) => p.key === key);
+        return prop ? [prop.writeType ?? prop.type]
+          : shape.IndexSignatures.filter((ix) => keyAdmittedBy(key, ix.Key)).map((ix) => ix.Value);
+      });
+      return shape.IndexSignatures.filter((ix) => keyType !== null && !AreDisjoint(keyType, ix.Key)).map((ix) => ix.Value);
     };
     return from(staticType(node.MemberExpression));
   };
@@ -4585,11 +4635,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let owner = parent.parent;
     while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression') owner = owner.parent;
     if (!owner) return false;
-    const key = member.PrivateIdentifier?.name ?? memberKey(member);
-    return (owner.ClassTail.ClassBody ?? []).some((field) => field.type === 'FieldDefinition'
+    const keys = member.PrivateIdentifier ? [member.PrivateIdentifier.name] : memberKeys(member);
+    return !!keys?.length && keys.every((key) => (owner.ClassTail.ClassBody ?? []).some((field) => field.type === 'FieldDefinition'
       && !field.static
       && (field.ClassElementName.type === 'PrivateIdentifier') === !!member.PrivateIdentifier
-      && classElementKey(field.ClassElementName) === key);
+      && classElementKey(field.ClassElementName) === key));
   };
 
   const classElementKey = (key: ParseNode.ClassElementName | null | undefined): string | SymbolValue | undefined => {
@@ -4623,7 +4673,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (lhs?.type !== 'MemberExpression') return;
     const m = lhs;
     const sealedReceiver = staticType(m.MemberExpression);
-    const named = memberKey(m);
+    const keys = memberKeys(m);
     // #sec-vector-component-accessors: "An accessor whose key names a lane twice
     // is not assignable, since an assignment to it would give one lane two
     // values; it is a type error to assign to one."
@@ -4636,20 +4686,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const repeatsVectorLane = (receiver: Known): boolean => {
       const at = erasedForJudgment(receiver);
       if (at?.Kind === 'union') return at.Members.some(repeatsVectorLane);
-      if (typeof named !== 'string' || at?.Kind !== 'primitive' || at.Name !== 'vector') return false;
+      if (at?.Kind !== 'primitive' || at.Name !== 'vector') return false;
       const laneCount = at.Arguments[1];
-      const lanes = typeof laneCount === 'number' ? componentAccessorIndices(named, laneCount) : null;
-      return !!lanes && !isAssignableAccessor(lanes);
+      return keys?.some((key) => {
+        const lanes = typeof key === 'string' && typeof laneCount === 'number' ? componentAccessorIndices(key, laneCount) : null;
+        return !!lanes && !isAssignableAccessor(lanes);
+      }) ?? false;
     };
     if (repeatsVectorLane(sealedReceiver)) {
       errors.push(Throw.StaticTypeError(
-        '$1 names a lane twice and cannot be assigned to', Value(named as string),
+        '$1 names a lane twice and cannot be assigned to', Value(keys!.map(String).join(' | ')),
       ).Value as ObjectValue);
       return;
     }
-    if (!m.PrivateIdentifier && sealedReceiver?.Kind === 'nominal' && named !== undefined
-        && classHasOwnSealedStorage(sealedReceiver) && !IsReferenceClass(sealedReceiver) && !indexAccess(m)) {
-      const sealedStructure = structureOf(sealedReceiver);
+    const requireDeclaredMember = (receiver: Known, named: string | SymbolValue): void => {
+      if (receiver?.Kind === 'union') {
+        receiver.Members.forEach((arm) => requireDeclaredMember(arm, named));
+        return;
+      }
+      if (receiver?.Kind !== 'nominal' || !classHasOwnSealedStorage(receiver) || IsReferenceClass(receiver) || indexAccess(m, receiver)) return;
+      const sealedStructure = structureOf(receiver);
       const declaresName = (type: Known, seen = new Set<object>()): boolean => {
         if (type?.Kind !== 'nominal' || seen.has(type)) return false;
         seen.add(type);
@@ -4661,13 +4717,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       if (sealedStructure?.Kind === 'object'
           && !sealedStructure.Properties.some((property) => property.key === named)
-          && !declaresName(sealedReceiver)
+          && !declaresName(receiver)
           && sealedStructure.IndexSignatures.length === 0) {
         errors.push(Throw.StaticTypeError('$1 is not a member of $2',
-          typeof named === 'string' ? Value(named) : named, Value(displayType(sealedReceiver))).Value as ObjectValue);
-        return;
+          typeof named === 'string' ? Value(named) : named, Value(displayType(receiver))).Value as ObjectValue);
       }
-    }
+    };
+    if (!m.PrivateIdentifier && keys) keys.forEach((key) => requireDeclaredMember(sealedReceiver, key));
     if (constructorMayWrite(lhs)) return;
     if (lhs.PrivateIdentifier) {
       if (privateMember(lhs)?.readonly) {
@@ -4675,15 +4731,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return;
     }
-    if (named === undefined) return;
+    if (!keys) return;
     const hasReadonlyMember = (receiver: Known): boolean => {
       if (receiver?.Kind === 'union') return receiver.Members.some(hasReadonlyMember);
       const shape = structureOf(receiver);
-      return shape?.Kind === 'object' && shape.Properties.some((property) => property.key === named && property.readonly);
+      return shape?.Kind === 'object' && shape.Properties.some((property) => keys.includes(property.key) && property.readonly);
     };
     if (hasReadonlyMember(sealedReceiver)) {
       errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned',
-        typeof named === 'string' ? Value(named) : named).Value as ObjectValue);
+        keys.length === 1 && typeof keys[0] !== 'string' ? keys[0] : Value(keys.map((key) => typeof key === 'string'
+          ? key : key.Description instanceof JSStringValue ? `[${key.Description.stringValue()}]` : '[symbol]').join(' | '))).Value as ObjectValue);
     }
   };
 
@@ -4699,10 +4756,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const stores: ReferenceLocation[] = locationWriteTypes(source).filter((type) => type.Kind !== 'any')
       .map((writeType) => ({ writeType }));
     if (expression?.type !== 'MemberExpression') return stores;
-    const key = memberKey(expression);
-    if (key === undefined) return stores;
-    const collect = (receiver: Known): ReferenceLocation[] => {
-      if (receiver?.Kind === 'union') return receiver.Members.flatMap(collect);
+    const keys = memberKeys(expression);
+    if (!keys) return stores;
+    const collect = (receiver: Known, key: string | SymbolValue): ReferenceLocation[] => {
+      if (receiver?.Kind === 'union') return receiver.Members.flatMap((arm) => collect(arm, key));
       const shape = structureOf(receiver);
       const property = shape?.Kind === 'object' ? shape.Properties.find((p) => p.key === key) : undefined;
       if (!property?.readonly) return [];
@@ -4715,7 +4772,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return [{ key: typeof key === 'string' ? key : (key.Description instanceof JSStringValue ? key.Description.stringValue() : 'symbol'),
         ...(ownField ? { constructorOwner: declaration } : {}) }];
     };
-    return [...stores, ...collect(staticType(expression.MemberExpression))];
+    return [...stores, ...keys.flatMap((key) => collect(staticType(expression.MemberExpression), key))];
   };
 
   /**
@@ -5212,8 +5269,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const checkedVarianceDeclarations = new WeakSet<ParseNode>();
   const checkVariancePositions = (declaration: ParseNode): void => {
-    const declared = declaration as ParseNode.ClassDeclaration | ParseNode.InterfaceDeclaration;
+    const declared = declaration as ParseNode & { TypeParameters?: ParseNode.TypeParameters | null };
+    if (checkedVarianceDeclarations.has(declaration)) return;
+    checkedVarianceDeclarations.add(declaration);
     const params = declared.TypeParameters?.TypeParameterList ?? [];
     type Polarity = 1 | -1 | 0;
     const invert = (p: Polarity): Polarity => p === 0 ? 0 : p === 1 ? -1 : 1;
@@ -5245,10 +5305,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(Throw.SyntaxError('the type parameter $1 occurs in $2, incompatible with its declared variance', Value(name), Value(polarity === 0 ? 'a writable field or invariant position' : polarity === 1 ? 'an output position' : 'an input position')).Value as ObjectValue);
             reported = true;
           }
-          const target = classNodes.get(base) ?? interfaceNodes.get(base);
+          const binding = n.TypeName.MemberNames.length === 0 ? ResolveBindingDeclaration(n, base) : undefined;
+          const target = binding ? (binding.kind === 'class' || binding.kind === 'type' ? binding.node : undefined)
+            : n.TypeName.MemberNames.length === 0 ? classNodes.get(base) ?? interfaceNodes.get(base) ?? aliasNodes.get(base) : undefined;
           const nested = (target as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters?.TypeParameterList;
-          n.TypeArguments?.TypeArgumentList.forEach((arg, i) => {
-            const variance = nested?.[i]?.Variance ?? (base === 'Promise' ? 'covariant' : undefined);
+          const args = n.TypeArguments?.TypeArgumentList ?? [];
+          const builtinPromise = !binding && !target && n.TypeName.MemberNames.length === 0 && base === 'Promise';
+          const ordered = orderTypeArgumentsShared(
+            nested?.map((p) => p.BindingIdentifier.name) ?? (builtinPromise ? ['T'] : []),
+            args, args.map(typeArgumentNameOfShared),
+          );
+          // Formation errors belong to argument binding. Keep its original
+          // nodes while composing polarity in parameter order, including aliases.
+          if (ordered.ok) ordered.ordered.forEach((arg, i) => {
+            const variance = nested?.[i]?.Variance ?? (builtinPromise ? 'covariant' : undefined);
             inspect(arg, variance === 'covariant' ? polarity : variance === 'contravariant' ? invert(polarity) : 0);
           });
           return;
@@ -5260,6 +5330,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (n.type === 'FunctionType' || n.type === 'MethodSignature') {
           inspect(n.FunctionTypeParameterList, invert(polarity));
           inspect(n.type === 'FunctionType' ? n.ReturnType : n.TypeAnnotation, polarity);
+          return;
+        }
+        if (n.type === 'ReferenceType') {
+          inspect(n.Type, 0);
+          return;
+        }
+        if ((n.type === 'SingleNameBinding' || n.type === 'BindingRestElement') && (n as { Ref?: boolean }).Ref) {
+          inspect(n.TypeAnnotation, 0);
+          return;
+        }
+        if (n.type === 'ArrowFunction' || n.type === 'AsyncArrowFunction') {
+          inspect(n.ArrowParameters, invert(polarity));
+          inspect(n.TypeAnnotation, polarity);
           return;
         }
         if (n.type === 'FunctionTypeParameter') {
@@ -5279,7 +5362,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           inspect(n.ValueTypeAnnotation, 0);
           return;
         }
-        if (['MethodDefinition', 'AbstractMethodDefinition', 'GeneratorMethod', 'AsyncMethod', 'AsyncGeneratorMethod', 'OperatorDefinition'].includes(n.type)) {
+        if (['FunctionDeclaration', 'FunctionExpression', 'GeneratorDeclaration', 'GeneratorExpression', 'AsyncFunctionDeclaration', 'AsyncFunctionExpression', 'AsyncGeneratorDeclaration', 'AsyncGeneratorExpression', 'MethodDefinition', 'AbstractMethodDefinition', 'GeneratorMethod', 'AsyncMethod', 'AsyncGeneratorMethod', 'OperatorDefinition'].includes(n.type)) {
           const method = n as unknown as { TypeAnnotation?: ParseNode, Type?: ParseNode, UniqueFormalParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[], PropertySetParameterList?: readonly ParseNode[] };
           inspect(method.TypeAnnotation ?? method.Type, polarity);
           inspect(method.UniqueFormalParameters ?? method.FormalParameters ?? method.PropertySetParameterList, invert(polarity));
@@ -13734,12 +13817,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // EvaluatePropertyAccessWithExpressionKey selects index accessors only when
   // every supplied index is numeric; strings retain ordinary property access.
-  const indexAccess = (node: ParseNode.MemberExpression) => {
+  const indexAccess = (node: ParseNode.MemberExpression, receiver: Known = staticType(node.MemberExpression)) => {
     if (!node.Expression) return null;
     const indices = node.Expression.type === 'CommaOperator' ? node.Expression.ExpressionList : [node.Expression];
     const types = indices.map((index) => staticType(index));
     if (!types.every((type) => type && IsNumericIndexType(type))) return null;
-    const receiver = staticType(node.MemberExpression);
     deferOperatorCases(receiver, `[]#${indices.length}`);
     const get = declaredOperator(receiver, `[]#${indices.length}`);
     const set = declaredOperator(receiver, `[]=#${indices.length}`);
@@ -14850,7 +14932,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (params?.length) {
             const bindings = new Map<string, TypeRecord>();
             bindExplicitTypeArguments(typeParameterRecordsOf(params), specialization.TypeArguments.TypeArgumentList, bindings);
-            checkSpecializedVariadics(declaration, bindings);
+            checkSpecializedDeclaration(declaration, bindings);
           } else if (specialization.TypeArguments.TypeArgumentList.every((a) => resolveType(a as ParseNode.Type) !== null)) {
             // #sec-type-arguments-and-placement-new-in-expression-position:
             // "Where the expression's Static Type shows a value that is not
@@ -14905,8 +14987,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return [];
           }
           if (bindings.size !== parameters.length) return [signature];
-          const declaration = signatureDeclarations.get(signature);
-          if (declaration) checkSpecializedVariadics(declaration, bindings);
+          // Canonicalized member signatures retain their generic parameter
+          // declarations even when they no longer have the original record identity.
+          let genericOwner: ParseNode | undefined = parameters[0]?.Declaration;
+          while (genericOwner && !(genericOwner as { TypeParameters?: unknown }).TypeParameters) genericOwner = genericOwner.parent;
+          const declaration = signatureDeclarations.get(signature) ?? genericOwner;
+          if (declaration) checkSpecializedDeclaration(declaration, bindings);
           const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] } | undefined)?.WhereClauses;
           if (base.Signatures.length === 1 && declaration?.type === 'FunctionDeclaration'
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {
@@ -21236,14 +21322,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || ['string', 'boolean', 'symbol', 'undefined', 'null', 'vector', 'Composite'].includes(base.Name));
     };
     if (primitive(receiver)) errors.push(Throw.StaticTypeError('cannot take a ref of a property of a primitive').Value as ObjectValue);
-    const key = memberKey(target);
-    const fieldType = storageFieldType(receiver, key);
-    if (fieldType && !mentionsTypeParameter(fieldType)) {
+    const keys = memberKeys(target);
+    const isBitField = (type: Known, key: string | SymbolValue): boolean => {
+      if (type?.Kind === 'union') return type.Members.length > 0 && type.Members.every((arm) => isBitField(arm, key));
+      const fieldType = storageFieldType(type, key);
+      if (!fieldType || mentionsTypeParameter(fieldType)) return false;
       const layout = LayoutOf(fieldType);
-      if (layout && layout.bitLength < 8 && typeof key === 'string') errors.push(Throw.StaticTypeError(
-        'cannot take a ref of $1, which is a bit-field and has no byte address', Value(key),
-      ).Value as ObjectValue);
-    }
+      return !!layout && layout.bitLength < 8;
+    };
+    // Borrow formation rejects a proved impossibility. Unlike a store, a
+    // mixed eligible/ineligible selection keeps its runtime layout check.
+    if (keys?.length && keys.every((key) => isBitField(receiver, key))) errors.push(Throw.StaticTypeError(
+      'cannot take a ref of $1, which is a bit-field and has no byte address', Value(keys.map(String).join(' | ')),
+    ).Value as ObjectValue);
   };
 
   const cannotRefIterate = (type: Known): boolean => {
@@ -21861,10 +21952,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const requireBindingType = (type: Known): void => {
+    if (type?.Kind === 'void') errors.push(Throw.StaticTypeError('a binding cannot have type void').Value as ObjectValue);
+  };
+
   const checkPattern = (node: PatternNode, incoming: PatternSource, declaring: boolean,
     infer = false, frame = frames[frames.length - 1]): void => {
     let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? operandParticipates(incoming.expression) : incoming.type !== null) };
     const annotation = node.TypeAnnotation ? resolveType(node.TypeAnnotation.Type) : null;
+    if (declaring) requireBindingType(annotation);
     if (node.type === 'BindingRestElement') checkRestAnnotation(node.TypeAnnotation, annotation);
     const checkIncoming = (target: Known, value = source) => {
       if (value.ordinaryObject && ordinaryObjectArgumentFails(target)) {
@@ -22025,6 +22121,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement) => {
     if (b.type === 'SingleNameBinding' && b.BindingIdentifier) {
       const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null;
+      requireBindingType(declared);
       if (b.TypeAnnotation && declared && b.Initializer) {
         const source = staticType(b.Initializer);
         // Not `any`, not a literal, and assignable: the value is already of the
@@ -24825,6 +24922,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const n = node as ParseNode;
     if ((n as { TypeParameters?: unknown }).TypeParameters) {
+      checkVariancePositions(n);
       checkTypeParameterReads(n);
       checkHigherKindedDomains(n);
       const scope = pushTypeParameterScopeOf(n);
@@ -25396,6 +25494,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 TypeAnnotation?: ParseNode.TypeAnnotation | null,
               };
               const caught = cl.TypeAnnotation ? resolveType(cl.TypeAnnotation.Type) : null;
+              if (cl.CatchParameter) requireBindingType(caught);
               // A |CatchParameter| that is a single name IS the BindingIdentifier
               // - its name is on the node itself - rather than a node carrying
               // one. Reading `.BindingIdentifier.name` found nothing and the
@@ -25560,11 +25659,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 Value(':='), Value('='),
               ) as ThrowCompletion).Value as ObjectValue);
             }
+            requireBindingType(inferred);
             declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null, bindingFrame);
             walk(n.TypedInitializer.AssignmentExpression);
             return;
           }
           const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
+          requireBindingType(declared);
           if (n.TypeAnnotation && !declared) {
             frames[frames.length - 1].unresolvedAnnotations.set(n.BindingIdentifier.name, n.TypeAnnotation.Type);
           } else {
@@ -26779,8 +26880,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'MethodDefinition': {
         walkMemberName(n);
-        enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
-          contextualParameterTypes.get(n), undefined, undefined, contextualMethodReturns.get(n) ?? null);
+        const pushed = pushTypeParameterScopeOf(n);
+        try {
+          enterFunction(n.UniqueFormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
+            contextualParameterTypes.get(n), undefined, undefined, contextualMethodReturns.get(n) ?? null);
+        } finally {
+          if (pushed) typeParameterScopes.pop();
+        }
         return;
       }
       case 'ClassDeclaration':

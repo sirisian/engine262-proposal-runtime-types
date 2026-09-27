@@ -3593,6 +3593,13 @@ export function SubstituteTypeArguments(
     if (r.Kind === 'deferred') {
       return substituteTypeParameters(r as Known, byName) as TypeRecord;
     }
+    if (r.Kind === 'reference' || r.Kind === 'shared') {
+      if (!mentionsTypeParameter(r)) return r;
+      const out = { ...r };
+      seen.set(r, out);
+      out.Target = walk(r.Target);
+      return out;
+    }
     if (r.Kind === 'object') {
       const out = { Kind: 'object', Properties: r.Properties, IndexSignatures: r.IndexSignatures } as TypeRecord;
       seen.set(r, out);
@@ -3625,19 +3632,21 @@ export function SubstituteTypeArguments(
     // object, a union and an intersection, and a signature is the fourth place a
     // parameter can sit.
     if (r.Kind === 'function') {
-      const withSignatures = r as unknown as {
-        Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord }[],
-      };
-      if (withSignatures.Signatures) {
-        const out = { ...r } as TypeRecord;
-        seen.set(r, out);
-        (out as unknown as { Signatures: unknown }).Signatures = withSignatures.Signatures.map((sig) => ({
+      const out = { ...r };
+      seen.set(r, out);
+      out.Signatures = r.Signatures.map((sig) => {
+        // This walk binds the enclosing class/interface, never a method's
+        // locally declared parameter with the same spelling.
+        const scoped = sig.TypeParameters?.some((p) => byName.has(p.Name))
+          ? new Map([...byName].filter(([name]) => !sig.TypeParameters!.some((p) => p.Name === name))) : null;
+        const apply = scoped ? (type: TypeRecord) => substituteTypeParameters(type, scoped) as TypeRecord : walk;
+        return {
           ...sig,
-          ...(sig.Parameters ? { Parameters: sig.Parameters.map((prm) => ({ ...prm, Type: prm.Type ? walk(prm.Type) : prm.Type })) } : {}),
-          ...(sig.Return ? { Return: walk(sig.Return) } : {}),
-        }));
-        return out;
-      }
+          Parameters: sig.Parameters.map((prm) => ({ ...prm, Type: apply(prm.Type) })),
+          Return: sig.Return ? apply(sig.Return) : sig.Return,
+        };
+      });
+      return out;
     }
     if (r.Kind === 'tuple') {
       // A NOMINAL reaches this walk where an ALIAS reaches

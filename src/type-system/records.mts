@@ -1969,6 +1969,7 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
   if (t.Kind === 'parameter') {
     return true;
   }
+  if ((t.Kind === 'reference' || t.Kind === 'shared') && mentionsTypeParameter(t.Target, seen)) return true;
   const withMembers = t as { Members?: readonly TypeRecord[] };
   if (withMembers.Members?.some((m) => mentionsTypeParameter(m, seen))) {
     return true;
@@ -2075,12 +2076,38 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
  */
 
 export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
+  // Reference targets can close a recursive record. Install a shell before
+  // descending, and keep unchanged records (notably storage views) identical.
+  const seen = new Map<TypeRecord, Known>();
+  const walk = (type: Known): Known => {
+    if (!type) return type;
+    if (seen.has(type)) return seen.get(type)!;
+    const shell = { ...type } as TypeRecord;
+    seen.set(type, shell);
+    const result = substituteTypeParametersUncached(type, bindings, walk, t);
+    if (result !== type && result?.Kind === type.Kind && type.Kind !== 'parameter' && type.Kind !== 'deferred') {
+      Object.assign(shell, result);
+      return shell;
+    }
+    seen.set(type, result);
+    return result;
+  };
+  return walk(t);
+};
+
+const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string, TypeRecord>,
+  walk: (type: Known) => Known, root: Known): Known => {
   if (!t) {
     return t;
   }
-  if (t.Kind === 'family-pattern') return { ...t, Template: substituteTypeParameters(t.Template, bindings) as TypeRecord };
+  if (t.Kind === 'family-pattern') return { ...t, Template: walk(t.Template) as TypeRecord };
   if (t.Kind === 'parameter') {
     return bindings.get((t as { Name: string }).Name) ?? t;
+  }
+  if (t.Kind === 'reference' || t.Kind === 'shared') {
+    if (!mentionsTypeParameter(t)) return t;
+    const Target = walk(t.Target) as TypeRecord;
+    return Target === t.Target ? t : { ...t, Target };
   }
   if (t.Kind === 'deferred') {
     // Substitute into the operands; where one still mentions a parameter the
@@ -2090,7 +2117,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
     // specialization, so a closed builder record is left for that step.
     const Operands = t.Operands.map((a) => (
       a && typeof a === 'object' && 'Kind' in a
-        ? substituteTypeParameters(a as TypeRecord, bindings) as TypeRecord
+        ? walk(a as TypeRecord) as TypeRecord
         : a));
     const still = Operands.some((a) => a && typeof a === 'object' && 'Kind' in a && mentionsTypeParameter(a as TypeRecord));
     if (!still && isCoreOperator(t.Operator) && deferredOperatorImpl) {
@@ -2105,7 +2132,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
   if (withMembers.Members) {
     return {
       ...t,
-      Members: withMembers.Members.map((m) => substituteTypeParameters(m, bindings) as TypeRecord),
+      Members: withMembers.Members.map((m) => walk(m) as TypeRecord),
     } as Known;
   }
   const withArgs = t as { Arguments?: readonly (TypeRecord | number)[] };
@@ -2114,7 +2141,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
       ...t,
       Arguments: withArgs.Arguments.map((a) => {
         if (typeof a === 'number') return a;
-        const substituted = substituteTypeParameters(a, bindings) as TypeRecord;
+        const substituted = walk(a) as TypeRecord;
         // A primitive's width or count is a plain number in canonical form:
         // a value parameter bound to a numeric literal lands there as that
         // number (`uint.<N>` at `N = 8` is `uint.<8>`, never `uint.<literal 8>`).
@@ -2135,7 +2162,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
     return {
       ...t,
       Elements: withElements.Elements.map((el) => (el?.Type
-        ? { ...el, Type: substituteTypeParameters(el.Type, bindings) }
+        ? { ...el, Type: walk(el.Type) }
         : el)),
     } as unknown as Known;
   }
@@ -2149,7 +2176,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
       const withExtentS = t as { Extent?: number | 'dynamic' | TypeRecord };
       let nextExtent = withExtentS.Extent;
       if (nextExtent && typeof nextExtent === 'object') {
-        const done = substituteTypeParameters(nextExtent as Known, bindings);
+        const done = walk(nextExtent as Known);
         const lit = done as { Kind?: string, Value?: unknown } | null;
         const raw = lit && lit.Kind === 'literal' ? lit.Value : undefined;
         const asNumber = raw instanceof NumberValue ? R(raw) : undefined;
@@ -2157,7 +2184,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
       }
       return {
         ...t,
-        Element: substituteTypeParameters(withElement.Element, bindings) as TypeRecord,
+        Element: walk(withElement.Element) as TypeRecord,
         ...(withExtentS.Extent !== undefined ? { Extent: nextExtent } : {}),
       } as Known;
     }
@@ -2187,13 +2214,20 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
   if (withSignatures.Signatures && mentionsTypeParameter(t)) {
     return {
       ...t,
-      Signatures: withSignatures.Signatures.map((sig) => ({
-        ...sig,
-        Parameters: (sig.Parameters ?? []).map((prm) => (prm?.Type
-          ? { ...prm, Type: substituteTypeParameters(prm.Type, bindings) }
-          : prm)),
-        Return: sig.Return ? substituteTypeParameters(sig.Return, bindings) : sig.Return,
-      })),
+      Signatures: withSignatures.Signatures.map((sig) => {
+        // An application substitutes the root signature's own parameters.
+        // A nested generic signature introduces new lexical bindings.
+        const scoped = t !== root && sig.TypeParameters?.some((p) => bindings.has(p.Name))
+          ? new Map([...bindings].filter(([name]) => !sig.TypeParameters!.some((p) => p.Name === name))) : null;
+        const apply = scoped ? (type: Known) => substituteTypeParameters(type, scoped) : walk;
+        return {
+          ...sig,
+          Parameters: (sig.Parameters ?? []).map((prm) => (prm?.Type
+            ? { ...prm, Type: apply(prm.Type) }
+            : prm)),
+          Return: sig.Return ? apply(sig.Return) : sig.Return,
+        };
+      }),
     } as Known;
   }
   // An INDEX SIGNATURE's halves are substituted beside the properties.
@@ -2214,15 +2248,15 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
       ...t,
       ...(withProperties.Properties ? {
         Properties: withProperties.Properties.map((prop) => (prop?.type
-          ? { ...prop, type: substituteTypeParameters(prop.type, bindings),
-            ...(prop.writeType ? { writeType: substituteTypeParameters(prop.writeType, bindings) } : {}) }
+          ? { ...prop, type: walk(prop.type),
+            ...(prop.writeType ? { writeType: walk(prop.writeType) } : {}) }
           : prop)),
       } : {}),
       ...(withProperties.IndexSignatures ? {
         IndexSignatures: withProperties.IndexSignatures.map((ix) => ({
           ...ix,
-          ...(ix?.Key ? { Key: substituteTypeParameters(ix.Key, bindings) } : {}),
-          ...(ix?.Value ? { Value: substituteTypeParameters(ix.Value, bindings) } : {}),
+          ...(ix?.Key ? { Key: walk(ix.Key) } : {}),
+          ...(ix?.Value ? { Value: walk(ix.Value) } : {}),
         })),
       } : {}),
     } as Known;

@@ -457,6 +457,7 @@ export interface Throw {
   | 'WeakSet cannot be invoked without new'
   | 'a `match all` has no `default`: a clause that always contributes is `when _`'
   | 'a base-form meta type has no type parameters to bind'
+  | 'a binding cannot have type void'
   | 'a closed enum initializer does not satisfy its declaration'
   | 'a closed enum initializer does not satisfy its declaration: $1'
   | 'a column of this type cannot be read'
