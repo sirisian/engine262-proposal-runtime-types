@@ -240,9 +240,10 @@ function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Argume
   //
   // A zero is left to the reader below, which keeps its sign - the digits'
   // significand is a bigint, and a bigint has no negative zero. So are the forms
-  // that are not decimal digits (`Infinity`, `NaN`), and every other radix, whose
-  // digits `ParseDecimalDigits` would misread as decimal ones.
-  if (t.Kind === 'primitive' && t.Name === 'float128' && base === 10) {
+  // that are not decimal digits (`Infinity`, `NaN`). A float's parse reads base
+  // 10 only - the radix is an integer type's, set above for those alone - so
+  // there is no other base to guard against here.
+  if (t.Kind === 'primitive' && t.Name === 'float128') {
     const digits = ParseDecimalDigits(cleaned);
     if (digits !== undefined && digits.significand !== 0n) {
       const exact = Float128FromDecimal(digits.significand, digits.exponent);

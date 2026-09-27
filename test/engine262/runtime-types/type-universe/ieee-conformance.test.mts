@@ -238,6 +238,26 @@ test('float128.parse builds a value of the format, not a double wearing its name
   expect(evaluated('String(float128.tryParse("nope"));')).toBe('null');
 });
 
+test('a float128 hex, octal or binary literal is exact', () => {
+  // A non-decimal integer literal names an exact integer, and binary128 holds
+  // every integer to 2**113. The literal went through a double, so 2**53 + 1 -
+  // written in any radix - came out as 2**53, the double's rounding, and
+  // disagreed with the same value written in decimal.
+  for (const literal of ['0x20000000000001', '0o400000000000000001', '0b100000000000000000000000000000000000000000000000000001']) {
+    expect(evaluated(`String(float128(${literal}) == float128.parse("9007199254740993"));`), literal).toBe('true');
+  }
+  expect(evaluated('float128(-0x20000000000001).toString();')).toBe('-9007199254740993');
+  expect(evaluated('float128(0xf_f).toString();')).toBe('255');
+  // A double still rounds: 2**53 is the double nearest 2**53 + 1.
+  expect(evaluated('String(float64(0x20000000000001));')).toBe('9007199254740992');
+});
+
+test('a radix does not change a float parse', () => {
+  // A float's parse reads base 10; the radix is an integer type's.
+  expect(evaluated('String(float128.parse("0.1", 16) == float128.parse("0.1"));')).toBe('true');
+  expect(evaluated('String(float64.parse("1.5", 16));')).toBe('1.5');
+});
+
 test('float128.parse reads the range of the type, not of a double', () => {
   // A value the type holds and a double does not: refused as out of range while the
   // text went through a double.

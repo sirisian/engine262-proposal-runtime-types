@@ -90,6 +90,17 @@ export function NumericValue(node: ParseNode.NumericLiteral) {
     if (digits !== undefined && floatWidth === 128) {
       return Binary128ToFloat128(Float128FromDecimal(digits.significand, digits.exponent), surroundingAgent.currentRealmRecord);
     }
+    // A NON-DECIMAL integer literal - `0x`, `0o`, `0b` - names an exact integer
+    // too, which ParseDecimalDigits does not read: it fell through to the double
+    // below, so `float128(0x20000000000001)` was 2**53, the double's rounding,
+    // where binary128 holds 2**53 + 1 exactly. The narrower widths are left to
+    // the double, which holds every integer they round from below 2**53.
+    if (digits === undefined && floatWidth === 128) {
+      const text = node.SourceText.replace(/_/g, '');
+      if (/^0[xXoObB][0-9a-fA-F]+$/.test(text)) {
+        return Binary128ToFloat128(Float128FromDecimal(BigInt(text), 0), surroundingAgent.currentRealmRecord);
+      }
+    }
     if (digits !== undefined && floatWidth !== 128) {
       return Value(RoundDecimalToBinaryFloat(digits.significand, digits.exponent, floatWidth));
     }
