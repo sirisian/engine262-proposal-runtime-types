@@ -340,5 +340,5 @@ test('a class type parameter is in scope for its methods', () => {
   // A method's OWN parameter still shadows the class's, being pushed above it.
   expect(ok('class C2<T: type> { m<T: type>(v: T) { return v; } } new C2.<uint8>().m(5);')).toBe(true);
   // A VALUE parameter is untouched: it is not a type and is not pushed here.
-  expect(ok('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return this.b.length; } } new S.<4>().len;')).toBe(true);
+  expect(ok('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return uint32(this.b.length); } } new S.<4>().len;')).toBe(true);
 });

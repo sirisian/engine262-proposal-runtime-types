@@ -360,10 +360,11 @@ test('B12: a case whose where filter does not hold is not applicable; selection 
   expect(evaluated(`class P<Bits: uint32 = 64> { write<T: type>(v: T): string { return 'g'; }
     write<float64>(v: float64): string where Bits >= 64 { return 'f64'; } }
     const a: any = new P.<64>(); const b: any = new P.<32>(); a.write.<float64>(1.5) + '|' + b.write.<float64>(1.5);`)).toBe('f64|g');
-  // The checker does not yet evaluate filters while it selects: it refuses.
-  expectThrown(`function f<T: type>(x: T): string { return 'generic'; }
-    function f<uint.<const N>>(x: uint.<N>): string where N > 8 { return 'wide'; } f.<uint.<12>>((1 := uint.<12>));`,
-  'whose `where` filter is evaluated at run time, statically is not supported yet');
+  // The checker decides the filter too (step 9r, decision W1), as the run time does:
+  // it held 'not supported yet' until filters were evaluated while selecting.
+  expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
+    function f<uint.<const N>>(x: uint.<N>): string where N > 8 { return 'wide'; }
+    f.<uint.<12>>((1 := uint.<12>)) + '|' + f.<uint.<4>>((1 := uint.<4>));`)).toBe('wide|generic');
 });
 
 test('E8: an extracted method application binds no receiver', () => {
@@ -590,4 +591,36 @@ test('readAll as method cases: a standalone spread list takes the whole run', ()
     readAll<const T, ...const Rest>(): [T, ...Rest] { const first = this.read.<T>(); return [first, ...this.readAll.<...Rest>()]; } }
     const [a, b, c] = new R().readAll.<uint8, uint16, uint32>();
     String(a) + String(b) + String(c) + ':' + String(Reflect.typeOf(a)) + ',' + String(Reflect.typeOf(c));`)).toBe('123:uint.<8>,uint.<32>');
+});
+
+// Step 9q: a construction's extent makes a FIXED array, whatever it is written as.
+test('new [n].<T>() is fixed of a run-time length, never dynamic', () => {
+  // Typed as dynamic, `const d: [].<T> = new [n].<T>()` passed the checker and
+  // failed at run time; array types are invariant in their extent (spec 564).
+  expect(evaluated('function f(n: uint32): string { const a = new [n].<uint8>(); return String(a.length) + \':\' + String(Span.<uint8>(a).length); } f(3);')).toBe('3:3');
+  expect(evaluated('function g<S: uint32>(): string { const a = new [S / 3].<uint8>(); return String(a.length); } g.<9>();')).toBe('3');
+  expect(evaluated('function g<S: uint32>(): string { const a = new [S].<uint8>(); return String(a.length); } g.<4>();')).toBe('4');
+  expectEarlyError('function f(n: uint32): string { const d: [].<uint8> = new [n].<uint8>(); return \'x\'; }', 'StaticTypeError');
+});
+
+// Step 9r (decision W1): a `where` filter decided at compile time where its inputs are.
+test('a where-filtered case is selected or excluded statically, as the run time decides it', () => {
+  expect(evaluated(`class P<S: uint32 = 64> { m<T: type>(): string { return 'owner'; } m<boolean>(): string where S >= 64 { return 'wide'; } }
+    new P().m.<boolean>() + '|' + new P.<16>().m.<boolean>();`)).toBe('wide|owner');
+  // Integer division truncates, as a value parameter's does (decision A): 7 / 2 > 3 is false.
+  expect(evaluated(`class P<S: uint32 = 64> { m<T: type>(): string { return 'owner'; } m<boolean>(): string where S / 2 > 3 { return 'filtered'; } }
+    new P.<7>().m.<boolean>() + '|' + new P.<8>().m.<boolean>();`)).toBe('owner|filtered');
+  expect(evaluated(`function f<T: type>(): string { return 'owner'; } function f<uint.<const N>>(): string where N > 8 { return 'wide'; }
+    f.<uint.<16>>() + '|' + f.<uint.<8>>();`)).toBe('wide|owner');
+});
+
+// Step 0 of the construction plan: 9r's defects D0-D2.
+test('a where filter is decided statically with no owner, and per call site', () => {
+  // D0: the condition is the clause's RefinementPredicate (it was never read,
+  // so every filter was undecided). D1: owner-less groups decide too.
+  expect(evaluated('function f<uint.<const N>>(): string where N > 8 { return \'wide\'; } f.<uint.<16>>();')).toBe('wide');
+  expectEarlyError('function f<uint.<const N>>(): string where N > 8 { return \'wide\'; } f.<uint.<8>>();', 'StaticTypeError');
+  // D2: a decision at one site does not exempt an undecidable site elsewhere.
+  expectEarlyError(`function f<uint.<const N>>(): string where N > 8 { return 'wide'; } const a = f.<uint.<16>>();
+    class C<M: uint32 = 4> { m(): string { return f.<uint.<M>>(); } }`, 'StaticTypeError');
 });

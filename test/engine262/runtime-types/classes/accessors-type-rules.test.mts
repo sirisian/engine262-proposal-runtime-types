@@ -126,12 +126,15 @@ test('the one rule not implemented: field and accessor substitution', () => {
   // Field/accessor substitution, which needs the member KIND recorded on the
   // class type - only accessor keys are tracked, and only within one walk.
   expect(outcome('class B { a: uint8 = 1; } class D extends B { get a(): uint8 { return 1; } set a(v: uint8) {} }')).toBe('ACCEPTED');
-  // NOT a gap, recorded because two cycles read it as one: a value of one value
-  // type never implicitly becomes another, so refusing this is correct. The run
-  // time converting from an untyped parameter is a CHECKED conversion at a
-  // boundary, which is a different rule.
+  // NOT a gap: a value of one value type never implicitly becomes another, so
+  // refusing this is correct - statically and, since the stricter-runtime
+  // decision, at run time too. The run time used to CONVERT a typed value that
+  // arrived through an untyped parameter; a boundary now checks it, as the
+  // checker would with the types in view, and only a Number or BigInt, which
+  // carries no numeric type, converts (runtime type checks, amended step 3).
   expect(outcome('let a: uint8 = 5; let b: uint32 = a;')).toBe('StaticTypeError');
-  expect(evaluated('function f(x) { let b: uint32 = x; return b; } let a: uint8 = 5; String(f(a));')).toBe('5');
+  expect(outcome('function f(x) { let b: uint32 = x; return b; } let a: uint8 = 5; String(f(a));')).toBe('TypeError');
+  expect(evaluated('function f(x) { let b: uint32 = x; return b; } String(f(5));')).toBe('5');
 });
 
 test('NOMINAL SUBTYPING: a class is a subtype of the class it extends', () => {

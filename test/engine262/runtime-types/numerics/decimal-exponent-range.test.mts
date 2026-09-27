@@ -156,7 +156,8 @@ test('a boundary is not a conversion', () => {
   // row and refuses what it would truncate (the plan "how numeric values of
   // different types meet", B1). A TYPED source is the case this rule is about:
   // refused before the program runs.
-  expectThrownKind("let d = decimal64.parse('7.9'); let i: int64 = d;", 'RangeError');
+  // Refused by TYPE before any range question (stricter-runtime decision).
+  expectThrownKind("let d = decimal64.parse('7.9'); let i: int64 = d;", 'TypeError');
   expectStaticTypeError("let d: decimal64 = decimal64.parse('7.9'); let i: int64 = d;");
 });
 

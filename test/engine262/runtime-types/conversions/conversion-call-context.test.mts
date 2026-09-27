@@ -75,9 +75,13 @@ test('...but the POSITION wins where it converts', () => {
   // `README.md:2088` documents. The test is here because four attempts at this
   // step passed the two rows above and failed this one.
   const F = 'function f(): uint32 { return 10; } function f(): string { return "10"; } ';
-  expect(evaluated(`${F} function h(a: uint8) { return 1; } function h(a: string) { return 2; }`
-    + ' String(h(uint32(f())));')).toBe('1');
-  expect(evaluated('function h(a: uint8) { return 1; } const v: any = uint32(1); String(h(v));')).toBe('1');
+  // Since the stricter-runtime decision the position no longer wins: a
+  // conversion call answers its TARGET type everywhere, and a boundary checks a
+  // typed value rather than converting it (runtime type checks, amended step 3),
+  // so a `uint32` reaches neither a `uint8` parameter nor, through `any`, one.
+  expectThrown(`${F} function h(a: uint8) { return 1; } function h(a: string) { return 2; }`
+    + ' String(h(uint32(f())));', 'not assignable');
+  expectThrown('function h(a: uint8) { return 1; } const v: any = uint32(1); String(h(v));', 'is not assignable to');
 });
 
 test('a bad conversion source is a STATIC error', () => {

@@ -42,8 +42,12 @@ test('== is exact, and cohorts within one decimal type are unchanged', () => {
 
 test('the any boundary, from an integer', () => {
   const cases: [string, string, string, string][] = [["int32 1", "(1 := int32)", "int64", "1"], ["int32 100000", "(100000 := int32)", "int16", "RangeError"], ["int32 1", "(1 := int32)", "bigint", "1"], ["int32 1", "(1 := int32)", "float64", "1"], ["int32 16777217", "(16777217 := int32)", "float32", "16777216"], ["int32 1", "(1 := int32)", "number", "1"], ["int32 1", "(1 := int32)", "decimal64", "1"], ["int32 1", "(1 := int32)", "rational.<8>", "1"], ["int32 200", "(200 := int32)", "rational.<8>", "RangeError"], ["int32 1", "(1 := int32)", "complex128", "1+0i"]];
-  for (const [label, src, target, want] of cases) {
+  for (const [label, src, target, rowWant] of cases) {
     const got = at(src, target);
+    // Since the stricter-runtime decision a TYPED source of another numeric type
+    // is checked at the boundary, not converted: a TypeError, whatever its range.
+    const sourceType = label.split(' ')[0];
+    const want = !['number', 'bigint'].includes(sourceType) && sourceType !== target ? 'TypeError' : rowWant;
     // '*' - a rounding the row gives, so a value rather than an error
     if (want === '*') {
       expect(['RangeError', 'TypeError'], `${label} at ${target}`).not.toContain(got);
@@ -55,8 +59,12 @@ test('the any boundary, from an integer', () => {
 
 test('the any boundary, from a bigint', () => {
   const cases: [string, string, string, string][] = [["bigint 5n", "5n", "int32", "5"], ["bigint 2n**40n", "2n ** 40n", "int32", "RangeError"], ["bigint 5n", "5n", "float64", "5"], ["bigint 2n**2000n", "2n ** 2000n", "float64", "RangeError"], ["bigint 5n", "5n", "number", "5"], ["bigint 5n", "5n", "decimal64", "5"], ["bigint 2n**200n", "2n ** 200n", "decimal32", "*"], ["bigint 5n", "5n", "rational", "5"], ["bigint 2n**100n", "2n ** 100n", "rational", "RangeError"], ["bigint 5n", "5n", "complex128", "5+0i"]];
-  for (const [label, src, target, want] of cases) {
+  for (const [label, src, target, rowWant] of cases) {
     const got = at(src, target);
+    // Since the stricter-runtime decision a TYPED source of another numeric type
+    // is checked at the boundary, not converted: a TypeError, whatever its range.
+    const sourceType = label.split(' ')[0];
+    const want = !['number', 'bigint'].includes(sourceType) && sourceType !== target ? 'TypeError' : rowWant;
     // '*' - a rounding the row gives, so a value rather than an error
     if (want === '*') {
       expect(['RangeError', 'TypeError'], `${label} at ${target}`).not.toContain(got);
@@ -68,8 +76,12 @@ test('the any boundary, from a bigint', () => {
 
 test('the any boundary, from a binary float', () => {
   const cases: [string, string, string, string][] = [["float64 2", "(2 := float64)", "int32", "2"], ["float64 0.5", "(0.5 := float64)", "int32", "RangeError"], ["float64 1e10", "(1e10 := float64)", "int32", "RangeError"], ["float64 NaN", "(NaN := float64)", "int32", "RangeError"], ["float64 Infinity", "(Infinity := float64)", "int32", "RangeError"], ["float64 2", "(2 := float64)", "bigint", "2"], ["float64 0.5", "(0.5 := float64)", "bigint", "RangeError"], ["float64 NaN", "(NaN := float64)", "bigint", "RangeError"], ["float64 0.5", "(0.5 := float64)", "float32", "0.5"], ["float64 0.1", "(0.1 := float64)", "float32", "0.10000000149011612"], ["float64 1e300", "(1e300 := float64)", "float32", "RangeError"], ["float64 0.5", "(0.5 := float64)", "number", "0.5"], ["float64 0.1", "(0.1 := float64)", "decimal64", "*"], ["float64 0.5", "(0.5 := float64)", "rational.<8>", "1/2"], ["float64 0.1", "(0.1 := float64)", "rational.<8>", "RangeError"], ["float64 0.1", "(0.1 := float64)", "rational", "3602879701896397/36028797018963968"], ["float64 NaN", "(NaN := float64)", "rational", "RangeError"], ["float64 0.5", "(0.5 := float64)", "complex128", "0.5+0i"]];
-  for (const [label, src, target, want] of cases) {
+  for (const [label, src, target, rowWant] of cases) {
     const got = at(src, target);
+    // Since the stricter-runtime decision a TYPED source of another numeric type
+    // is checked at the boundary, not converted: a TypeError, whatever its range.
+    const sourceType = label.split(' ')[0];
+    const want = !['number', 'bigint'].includes(sourceType) && sourceType !== target ? 'TypeError' : rowWant;
     // '*' - a rounding the row gives, so a value rather than an error
     if (want === '*') {
       expect(['RangeError', 'TypeError'], `${label} at ${target}`).not.toContain(got);
@@ -81,8 +93,12 @@ test('the any boundary, from a binary float', () => {
 
 test('the any boundary, from a Number', () => {
   const cases: [string, string, string, string][] = [["number 0.5", "0.5", "int32", "RangeError"], ["number 2", "2", "int32", "2"], ["number 0.5", "0.5", "bigint", "RangeError"], ["number 0.5", "0.5", "float32", "0.5"], ["number 0.5", "0.5", "float64", "0.5"], ["number 0.5", "0.5", "decimal64", "0.5"], ["number 0.5", "0.5", "rational", "1/2"], ["number 0.5", "0.5", "complex128", "0.5+0i"]];
-  for (const [label, src, target, want] of cases) {
+  for (const [label, src, target, rowWant] of cases) {
     const got = at(src, target);
+    // Since the stricter-runtime decision a TYPED source of another numeric type
+    // is checked at the boundary, not converted: a TypeError, whatever its range.
+    const sourceType = label.split(' ')[0];
+    const want = !['number', 'bigint'].includes(sourceType) && sourceType !== target ? 'TypeError' : rowWant;
     // '*' - a rounding the row gives, so a value rather than an error
     if (want === '*') {
       expect(['RangeError', 'TypeError'], `${label} at ${target}`).not.toContain(got);
@@ -94,8 +110,12 @@ test('the any boundary, from a Number', () => {
 
 test('the any boundary, from a decimal', () => {
   const cases: [string, string, string, string][] = [["decimal64 2", "decimal64.parse('2')", "int32", "2"], ["decimal64 1.5", "decimal64.parse('1.5')", "int32", "RangeError"], ["decimal64 1e20", "decimal64.parse('1e20')", "int32", "RangeError"], ["decimal64 2", "decimal64.parse('2')", "bigint", "2"], ["decimal64 1.5", "decimal64.parse('1.5')", "bigint", "RangeError"], ["decimal64 1.5", "decimal64.parse('1.5')", "float64", "1.5"], ["decimal64 0.1", "decimal64.parse('0.1')", "float64", "0.1"], ["decimal128 1e400", "decimal128.parse('1e400')", "float64", "RangeError"], ["decimal64 1.5", "decimal64.parse('1.5')", "number", "1.5"], ["decimal64 1.5", "decimal64.parse('1.5')", "decimal32", "1.5"], ["decimal64 1.234567891", "decimal64.parse('1.234567891')", "decimal32", "1.234568"], ["decimal32 1.5", "decimal32.parse('1.5')", "decimal64", "1.5"], ["decimal64 1.5", "decimal64.parse('1.5')", "rational", "3/2"], ["decimal64 0.001", "decimal64.parse('0.001')", "rational.<8>", "RangeError"], ["decimal64 1.5", "decimal64.parse('1.5')", "complex128", "TypeError"]];
-  for (const [label, src, target, want] of cases) {
+  for (const [label, src, target, rowWant] of cases) {
     const got = at(src, target);
+    // Since the stricter-runtime decision a TYPED source of another numeric type
+    // is checked at the boundary, not converted: a TypeError, whatever its range.
+    const sourceType = label.split(' ')[0];
+    const want = !['number', 'bigint'].includes(sourceType) && sourceType !== target ? 'TypeError' : rowWant;
     // '*' - a rounding the row gives, so a value rather than an error
     if (want === '*') {
       expect(['RangeError', 'TypeError'], `${label} at ${target}`).not.toContain(got);
@@ -107,8 +127,12 @@ test('the any boundary, from a decimal', () => {
 
 test('the any boundary, from a rational', () => {
   const cases: [string, string, string, string][] = [["rational 2", "rational(2, 1)", "int32", "2"], ["rational 1/2", "rational(1, 2)", "int32", "RangeError"], ["rational 2", "rational(2, 1)", "bigint", "2"], ["rational 1/2", "rational(1, 2)", "bigint", "RangeError"], ["rational 1/3", "rational(1, 3)", "float64", "0.3333333333333333"], ["rational 1/3", "rational(1, 3)", "number", "0.3333333333333333"], ["rational 1/2", "rational(1, 2)", "decimal64", "0.5"], ["rational 1/3", "rational(1, 3)", "decimal64", "*"], ["rational 1/2", "rational(1, 2)", "rational.<8>", "1/2"], ["rational 1/1000", "rational(1, 1000)", "rational.<8>", "RangeError"], ["rational.<8> 1/2", "rational.<8>(1, 2)", "rational", "1/2"], ["rational 1/2", "rational(1, 2)", "rational.<bigint>", "1/2"], ["rational 1/2", "rational(1, 2)", "complex128", "TypeError"]];
-  for (const [label, src, target, want] of cases) {
+  for (const [label, src, target, rowWant] of cases) {
     const got = at(src, target);
+    // Since the stricter-runtime decision a TYPED source of another numeric type
+    // is checked at the boundary, not converted: a TypeError, whatever its range.
+    const sourceType = label.split(' ')[0];
+    const want = !['number', 'bigint'].includes(sourceType) && sourceType !== target ? 'TypeError' : rowWant;
     // '*' - a rounding the row gives, so a value rather than an error
     if (want === '*') {
       expect(['RangeError', 'TypeError'], `${label} at ${target}`).not.toContain(got);
@@ -120,8 +144,12 @@ test('the any boundary, from a rational', () => {
 
 test('the any boundary, from a complex', () => {
   const cases: [string, string, string, string][] = [["complex128 1+0i", "complex128.parse('1')", "complex64", "1+0i"], ["complex64 1+0i", "complex64.parse('1')", "complex128", "1+0i"], ["complex128 1+0i", "complex128.parse('1')", "float64", "TypeError"], ["complex128 1+0i", "complex128.parse('1')", "int32", "TypeError"], ["complex128 1+0i", "complex128.parse('1')", "decimal64", "TypeError"], ["complex128 1+0i", "complex128.parse('1')", "rational", "TypeError"]];
-  for (const [label, src, target, want] of cases) {
+  for (const [label, src, target, rowWant] of cases) {
     const got = at(src, target);
+    // Since the stricter-runtime decision a TYPED source of another numeric type
+    // is checked at the boundary, not converted: a TypeError, whatever its range.
+    const sourceType = label.split(' ')[0];
+    const want = !['number', 'bigint'].includes(sourceType) && sourceType !== target ? 'TypeError' : rowWant;
     // '*' - a rounding the row gives, so a value rather than an error
     if (want === '*') {
       expect(['RangeError', 'TypeError'], `${label} at ${target}`).not.toContain(got);
@@ -134,7 +162,8 @@ test('the any boundary, from a complex', () => {
 // An any float64 NaN at a decimal is the decimal NaN - the case this test once
 // left pending, settled by the plan "NaN and the infinities in the decimal types".
 test('the any boundary, a float NaN at a decimal', () => {
-  expect(at('(NaN := float64)', 'decimal64')).toBe('NaN');
+  // A typed NaN of another type is refused at the boundary (stricter-runtime decision).
+  expect(at('(NaN := float64)', 'decimal64')).toBe('TypeError');
 });
 
 test('the explicit conversions the boundary runs, in both spellings', () => {
@@ -144,6 +173,8 @@ test('the explicit conversions the boundary runs, in both spellings', () => {
   }
   // the boundary refuses the overflow the explicit conversion makes an infinity,
   // for a complex part and for a real lifted into one
-  expect(at("complex128.parse('1e300')", 'complex64')).toBe('RangeError');
+  // A typed complex128 at a complex64 boundary is refused before any overflow
+  // (stricter-runtime decision); an untyped Number still meets the range.
+  expect(at("complex128.parse('1e300')", 'complex64')).toBe('TypeError');
   expect(at('1e300', 'complex64')).toBe('RangeError');
 });

@@ -28,7 +28,7 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
-  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord, IsFamilyRecord, InjectedClassOf } from './records.mts';
+  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
@@ -4403,8 +4403,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return receiver.Element;
     }
     if (receiver.Kind === 'tuple') {
-      // Tuple storage is an ordinary Array with per-position boundaries.
-      if (key === 'length') return makePrimitive('number');
+      // Tuple storage is an ordinary Array with per-position boundaries. Its
+      // `length` is the index type, as an array's is and as member access and
+      // the run time both give it (a destructured `{ length }` said `number`,
+      // which the stricter-runtime rule then refused at run time).
+      if (key === 'length') return indexTypeRecord();
       if (!/^(0|[1-9][0-9]*)$/.test(key)) return null;
       const index = BigInt(key);
       if (index >= 0xffffffffn) return null;
@@ -13615,8 +13618,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const c of list?.Captures ?? []) names.add(c.BindingIdentifier.name);
     }
     let mentions = false;
+    const seen = new Set<unknown>();
     const visit = (v: unknown): void => {
-      if (mentions || !v || typeof v !== 'object') return;
+      if (mentions || !v || typeof v !== 'object' || seen.has(v)) return;
+      // Walk the SYNTAX TREE only - arrays, and parse nodes, which carry a
+      // `location` - never a cached non-AST property (a node's ContextualType,
+      // a type record, a value), which reaches much of the engine.
+      if (!Array.isArray(v) && !('location' in (v as object))) return;
+      seen.add(v);
       if (Array.isArray(v)) {
         v.forEach(visit);
         return;
@@ -13724,12 +13733,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A stored application (step 5) has no call, so no count to filter by.
     const stored = (node as { StoredApplication?: boolean }).StoredApplication === true;
     const valueCount = stored || valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement') ? undefined : valueArguments.length;
+    // Cases whose `where` filter this selection decided (step 9r): local to
+    // the one call, so a decision at one site never exempts another.
+    const filtersDecided = new Set<object>();
     const returnOf = (kase: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[]): Known => {
       // A case with a `where` filter is chosen at run time only if the filter
       // holds (B12); the checker does not yet evaluate filters while it selects,
       // so it refuses rather than type a choice the run time may not make.
       const kind = kase.TypeParameters?.ListKind;
-      if ((kind === 'specialization' || kind === 'mixed') && ((kase as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0) {
+      if ((kind === 'specialization' || kind === 'mixed') && ((kase as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0
+        && !filtersDecided.has(kase)) {
         report(`selecting \`${name}${(kase.TypeParameters as { sourceText?: string }).sourceText ?? ''}\`, whose \`where\` filter is evaluated at run time, statically is not supported yet`);
         return null;
       }
@@ -14017,6 +14030,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The ordinary default-evaluation pass will recheck with the completed
     // binding. Do not choose a fallback or report a missing case prematurely.
     if (pendingOwnerDefault) return { type: null };
+    // Decision W1 (phase 4, step 9r): a filtered candidate's `where` is decided
+    // at compile time where its inputs are - its bindings, the receiver's value
+    // parameters, literals - as the run time decides it: false is not admitted
+    // (the selection moves on), true is decided for this selection, and an
+    // undecidable filter makes the call open, which an owner's contract covers.
+    const receiverNode = (node as { CallExpression?: { type?: string, Expression?: { type?: string, MemberExpression?: ParseNode } } }).CallExpression;
+    const memberNode = receiverNode?.type === 'TypeArgumentsExpression' ? receiverNode.Expression : receiverNode;
+    const receiverType = memberNode?.type === 'MemberExpression' && (memberNode as { MemberExpression?: ParseNode }).MemberExpression
+      ? staticType((memberNode as { MemberExpression: ParseNode }).MemberExpression) : null;
     const namedValues = valueArguments.some((a) => a.type === 'NamedArgument');
     const selection = SelectCase(analysis, args, names, namedValues ? undefined : valueCount, host,
       (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType, name, boundOwners);
@@ -14047,6 +14069,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const placed = namedValues ? PlaceCaseArguments<ParseNode | undefined>(parameters, items, typeOf, undefined) : items.map((item) => item.value);
         admitted = !!placed && CaseArgumentsAdmit(parameters, placed.map(typeOf), placed.map((a) => a?.type === 'RefExpression'));
       }
+      if (admitted && ((candidate.Declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0) {
+        const verdict = staticFilterVerdict(candidate.Declaration as ParseNode,
+          candidate.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value })), receiverType);
+        if (verdict === false) admitted = false;
+        else if (verdict === true) filtersDecided.add(candidate.Declaration as object);
+      }
       step = selection.next(admitted);
     }
     const choice = step.value;
@@ -14059,8 +14087,100 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       report(choice.Message);
       return { type: null };
     }
+    const undecided = ((choice.Declaration as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0
+      && !filtersDecided.has(choice.Declaration as object);
+    const coveringOwner = undecided ? analysis.Owners.find((o) => boundOwners.has(o.Node)) : undefined;
+    if (coveringOwner) {
+      const bound = boundOwners.get(coveringOwner.Node)!;
+      const params = (coveringOwner.Node as D).TypeParameters?.TypeParameterList ?? [];
+      return { type: returnOf(coveringOwner.Node as D, params.map((p, i) => ({ Capture: { Name: p.BindingIdentifier.name }, Value: bound[i]! }))) };
+    }
     return { type: returnOf(choice.Declaration as D, choice.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))) };
 
+  };
+
+  /**
+   * A case's `where` filter at compile time: *true* or *false* where every
+   * input is a compile-time constant - the case's numeric bindings, the
+   * receiver's value parameters, literals - over integer arithmetic (a value
+   * parameter's division truncates, step 9g), comparisons, and logic;
+   * 'unknown' otherwise.
+   */
+  const staticFilterVerdict = (kase: ParseNode, bindings: readonly { Capture: { Name: string }, Value: unknown }[], receiver: Known): boolean | 'unknown' => {
+    const env = new Map<string, bigint>();
+    const numberOf = (v: unknown): bigint | undefined => {
+      if (typeof v === 'number' && Number.isInteger(v)) return BigInt(v);
+      const w = CanonicalWidthArgument(v as TypeRecord);
+      return typeof w === 'number' && Number.isInteger(w) ? BigInt(w) : undefined;
+    };
+    for (const b of bindings) {
+      const n = numberOf(b.Value);
+      if (n !== undefined) env.set(b.Capture.Name, n);
+    }
+    const r = receiver as { Kind?: string, Declaration?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } }, Arguments?: readonly unknown[] } | null;
+    if (r?.Kind === 'nominal') {
+      (r.Declaration?.TypeParameters?.TypeParameterList ?? []).forEach((tp, i) => {
+        const n = numberOf(r.Arguments?.[i]);
+        if (tp.IsValueParameter && n !== undefined && !env.has(tp.BindingIdentifier.name)) env.set(tp.BindingIdentifier.name, n);
+      });
+    }
+    const children = (n: object) => Object.entries(n).filter(([k, c]) => k !== 'parent' && k !== 'location' && c && typeof c === 'object' && typeof (c as { type?: unknown }).type === 'string').map(([, c]) => c as { type: string });
+    const operatorOf = (n: object) => Object.entries(n).find(([k, c]) => k !== 'type' && k !== 'sourceText' && typeof c === 'string'
+      && ['+', '-', '*', '/', '%', '<', '>', '<=', '>=', '==', '!=', '===', '!==', '!'].includes(c as string))?.[1] as string | undefined;
+    const evaluate = (n: { type: string, value?: unknown, name?: string }): bigint | boolean | undefined => {
+      switch (n.type) {
+        case 'NumericLiteral':
+          return typeof n.value === 'number' && Number.isInteger(n.value) ? BigInt(n.value) : undefined;
+        case 'IdentifierReference':
+          return n.name !== undefined ? env.get(n.name) : undefined;
+        case 'ParenthesizedExpression':
+          return evaluate(children(n)[0]!);
+        case 'LogicalANDExpression':
+        case 'LogicalORExpression': {
+          const [a, b] = children(n).map(evaluate);
+          if (typeof a !== 'boolean' || typeof b !== 'boolean') return undefined;
+          return n.type === 'LogicalANDExpression' ? a && b : a || b;
+        }
+        case 'UnaryExpression': {
+          const v = evaluate(children(n)[0]!);
+          const op = operatorOf(n);
+          if (op === '!' && typeof v === 'boolean') return !v;
+          if (op === '-' && typeof v === 'bigint') return -v;
+          return undefined;
+        }
+        default: {
+          const operands = children(n);
+          const op = operatorOf(n);
+          if (operands.length !== 2 || !op) return undefined;
+          const [a, b] = operands.map(evaluate);
+          if (typeof a !== 'bigint' || typeof b !== 'bigint') return undefined;
+          switch (op) {
+            case '+': return a + b;
+            case '-': return a - b;
+            case '*': return a * b;
+            case '/': return b === 0n ? undefined : a / b;
+            case '%': return b === 0n ? undefined : a % b;
+            case '<': return a < b;
+            case '>': return a > b;
+            case '<=': return a <= b;
+            case '>=': return a >= b;
+            case '==': case '===': return a === b;
+            case '!=': case '!==': return a !== b;
+            default: return undefined;
+          }
+        }
+      }
+    };
+    for (const clause of (kase as { WhereClauses?: readonly unknown[] | null }).WhereClauses ?? []) {
+      // A WhereClause holds its condition as its RefinementPredicate; a
+      // ConditionalRefinement (`if (...) { ... } else { ... }`) is left
+      // undecided, and so routes through rule 7.
+      const expression = (clause as { RefinementPredicate?: { type: string } }).RefinementPredicate ?? (clause as { type: string });
+      const v = evaluate(expression);
+      if (typeof v !== 'boolean') return 'unknown';
+      if (!v) return false;
+    }
+    return true;
   };
 
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
@@ -14820,8 +14940,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Composite-to-object boundaries have a member-conversion rule; their
         // nominal result alone is not an assignability judgment for that rule.
         if (conversion && !(conversion.Kind === 'primitive' && conversion.Name === 'Composite')) {
-          return contextualForCall && numericFamilyOf(conversion) !== null
-            && numericFamilyOf(contextualForCall) !== null ? contextualForCall : conversion;
+          // An explicit conversion produces its TARGET type, in every position:
+          // the call form and `v := T` are the same operation (#sec-conversions).
+          // The position no longer wins - it did because the run time converted a
+          // numeric value at a numeric boundary, and since the amended step 3 of
+          // the boundary check a typed value is checked there, not converted.
+          return conversion;
         }
         // A call's static type is the callee function type's return, when
         // known; the argument check happens in the walk.
@@ -15812,9 +15936,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const extentNode = extentElements.length === 1
               ? extentElements[0] as { type?: string, value?: unknown }
               : undefined;
-            const extent = extentNode?.type === 'NumericLiteral' && typeof extentNode.value === 'number'
-              ? extentNode.value
-              : 'dynamic';
+            // #sec-array-types (phase 4, step 9q): a construction's extent makes
+            // a FIXED array whatever it is written as - a spec line 564 array is
+            // invariant in its extent, and the run time builds a fixed array. A
+            // bare in-scope parameter is that parameter's extent, as in an
+            // annotation; a constant, its value; anything else - a run-time
+            // value, an expression over parameters - an extent known only at
+            // run time (Rust's `Box<[T]>`, not its growable `Vec<T>`). It was
+            // typed as a DYNAMIC array, so `const d: [].<T> = new [n].<T>()`
+            // passed the checker and failed at run time.
+            const extentName = (extentNode as { type?: string, name?: string } | undefined)?.type === 'IdentifierReference'
+              ? (extentNode as { name: string }).name : undefined;
+            const folded = extentNode && !(extentName && typeParameterInScope(extentName)) ? foldConstant(extentNode as ParseNode) : null;
+            const extent: unknown = !extentNode ? 'dynamic'
+              : extentNode.type === 'NumericLiteral' && typeof extentNode.value === 'number' ? extentNode.value
+                : extentName && typeParameterInScope(extentName) ? parameterTypeRecord(extentName, typeParameterConstraintOf(extentName) ?? undefined)
+                  : folded !== null && folded >= 0n ? Number(folded)
+                    : { Kind: 'parameter', Name: (extentNode as { sourceText?: string }).sourceText ?? 'extent', Opaque: true };
             return CanonicalizeType({
               Kind: 'array', Element: element as TypeRecord, Extent: extent,
             } as unknown as TypeRecord) as Known;
@@ -23536,8 +23674,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const blockDefinitionsFor = (typeName: string, op: string) => {
     if (!blockDefinitionIndex) {
       const index = new Map<string, { def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration }[]>();
+      // The SYNTAX TREE only, each node once: a node may cache non-AST data - a
+      // call's ContextualType holds a type record whose Declaration is the
+      // enclosing class - and following it re-entered the tree without end.
+      const seen = new Set<object>();
       const visit = (value: unknown): void => {
-        if (!value || typeof value !== 'object') return;
+        if (!value || typeof value !== 'object' || seen.has(value)) return;
+        if (!Array.isArray(value) && !('location' in value)) return;
+        seen.add(value);
         if (Array.isArray(value)) {
           value.forEach(visit);
           return;

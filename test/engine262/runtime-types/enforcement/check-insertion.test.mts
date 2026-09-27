@@ -568,7 +568,9 @@ test('a typed Set takes its element positions at the element type', () => {
   // run time still converts it, which is the backstop that assertion was
   // really about.
   expectStatic(`${s} s.has((65 := uint16));`);
-  expect(evaluated(`${s} s.add(65); function anyv(): any { return (65 := uint16); } String(s.has(anyv()));`)).toBe('true');
+  // ...but one of ANOTHER family is refused at that boundary: a typed value is
+  // checked there, not converted (stricter-runtime decision).
+  expect(thrownKind(`${s} s.add(65); function anyv(): any { return (65 := uint16); } String(s.has(anyv()));`)).toBe('TypeError');
   expect(evaluated(`${s} s.add(65); String(s.delete(65)) + "/" + String(s.size);`)).toBe('true/0');
   expect(evaluated(`${s} s.add(65); s.add(65); String(s.size);`)).toBe('1');
   // An untyped Set constrains nothing, exactly as an untyped array does not.
@@ -1161,7 +1163,7 @@ test('a typed collection takes its needle at the element type', () => {
   // A typed needle works, and one of another family converts through the same
   // boundary rather than failing to match.
   expect(evaluated(`${a} const c = (65 := uint16); String(a.includes(c));`)).toBe('true');
-  expect(evaluated(`${a} const c: any = (65 := uint8); String(a.includes(c));`)).toBe('true');
+  expect(thrownKind(`${a} const c: any = (65 := uint8); String(a.includes(c));`)).toBe('TypeError');
   expect(evaluated('let f: [].<float32> = [1.5]; String(f.includes(1.5));')).toBe('true');
   // An UNTYPED array is unchanged - it constrains nothing, so it answers rather
   // than throwing - and asking whether it contains a typed value is still

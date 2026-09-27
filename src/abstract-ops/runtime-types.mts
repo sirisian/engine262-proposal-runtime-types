@@ -15,13 +15,14 @@ import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrA
 import { CanonicalizeType, GetTypeObject, ConvertToDecimal } from '../type-system/intern.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
+import { ReferenceValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
-import { SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
+import { IsAssignable, SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -520,6 +521,51 @@ export function* RequireIdentityType(value: Value, t: TypeRecord): ValueEvaluato
   return Q(yield* RequireType(value, t));
 }
 
+/**
+ * #sec-runtime-type-checks (step 3, as amended): the run time applies the
+ * checker's rule to a value's actual type. A TYPED number - a value of a
+ * numeric type this proposal adds - never implicitly becomes another numeric
+ * type, statically or at run time: the checker refuses even `uint8` to
+ * `uint16`, and a boundary checks a value rather than coercing it. So where
+ * the target is a scalar numeric primitive (or a union of primitives) and the
+ * value's own type is a different scalar numeric primitive, the value is
+ * refused and the explicit conversion named. A Number or BigInt carries no
+ * numeric type and still converts with a range check, as a literal does. Other
+ * targets keep their own rules: a literal type's membership, a class's
+ * converting constructor, enumerators, brands, and a vector's broadcast (the
+ * README's declared conversion at an annotation). C#'s `dynamic` applies its
+ * static rules at run time the same way; Swift, Kotlin, Dart and Rust check a
+ * typed value's cast and never convert it.
+ */
+function TypedNumericMismatch(value: Value, record: TypeRecord): ThrowCompletion | undefined {
+  // A Number or BigInt carries no numeric type: it converts, as a literal does.
+  // Every other value's own type is its run-time type - a typed integer or
+  // float, and equally a rational, decimal or complex value (the numeric types
+  // this proposal adds, whatever value class holds them).
+  if (value instanceof NumberValue || value instanceof BigIntValue) {
+    return undefined;
+  }
+  // A `ref` names a location, not a value of a numeric type; its referent is
+  // checked where it is read or stored, and RuntimeTypeOf does not take it.
+  if (value instanceof ReferenceValue) {
+    return undefined;
+  }
+  const scalarNumeric = (t: TypeRecord | undefined) => t?.Kind === 'primitive'
+    && !['string', 'boolean', 'symbol', 'undefined', 'null', 'void', 'never', 'object', 'vector'].includes((t as { Name: string }).Name);
+  const target = scalarNumeric(record)
+    || (record.Kind === 'union' && (record as { Members: readonly TypeRecord[] }).Members.every((m) => m.Kind === 'primitive' && (m as { Name: string }).Name !== 'vector'));
+  const source = value instanceof TypedNumberValue || value instanceof TypedBigIntValue
+    ? (value as unknown as { TypeRecord?: TypeRecord }).TypeRecord
+    : RuntimeTypeOf(value);
+  if (target && source && scalarNumeric(source) && !IsAssignable(source, record)) {
+    return Throw.TypeError('$1 is not assignable to $2: $3', Value(displayType(source)), Value(displayType(record)),
+      Value(record.Kind === 'union'
+        ? 'convert it explicitly to one of its members'
+        : `convert it explicitly, as ${displayType(record)}(v) or v := ${displayType(record)}`)) as ThrowCompletion;
+  }
+  return undefined;
+}
+
 export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
   // proposal-runtime-types: an UNSUBSTITUTED generic parameter admits any
   // value. At the point a field of type `T` is defined, the application has
@@ -530,6 +576,11 @@ export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
   // declaration the design's opening example depends on.
   if (t.Kind === 'parameter') {
     return value;
+  }
+  // The checker's rule, at run time, for a field or property (TypedNumericMismatch).
+  const typedMismatch = TypedNumericMismatch(value, t);
+  if (typedMismatch) {
+    return typedMismatch;
   }
   // A SUBCLASS MAY NOT BE STORED IN A BASE VALUE TYPE CLASS POSITION.
   //
@@ -1585,6 +1636,11 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   // does; that is ConvertValue). An out-of-range literal is already an Early
   // Error caught by the checker before this runs.
   const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+  // The checker's rule, at run time (TypedNumericMismatch).
+  const typedMismatch = TypedNumericMismatch(value, record);
+  if (typedMismatch) {
+    return typedMismatch;
+  }
   return Q(yield* CheckedConvertValue(value, record));
 }
 

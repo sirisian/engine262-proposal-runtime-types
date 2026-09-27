@@ -35,8 +35,9 @@ test('to an integer, truncating toward zero', () => {
 test('an integer target still checks range', () => {
   // Explicitly, S3's row wraps, as every row to a fixed-width integer does.
   expect(evaluated('const r: rational = 300 / 1; String(uint8(r));')).toBe('44');
-  // At the boundary, wrapping does not excuse a result the type cannot hold.
-  expectThrown('let v: any = rational(300, 1); let a: uint8 = v;', 'is not in the range of');
+  // At the boundary a typed rational is refused, not converted (stricter-runtime
+  // decision): the explicit conversion above is the way to change its type.
+  expectThrown('let v: any = rational(300, 1); let a: uint8 = v;', 'is not assignable to');
 });
 
 test('the inbound direction and the identity are unchanged', () => {

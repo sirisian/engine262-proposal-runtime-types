@@ -41,12 +41,17 @@ const VALUES: Record<string, string> = {
 const call = (v: string) => `String(rational(${v}));`;
 const op = (v: string) => `String((${v}) := rational);`;
 const boundary = (v: string) => `let v: any = ${v}; let r: rational = v; String(r);`;
+// Since the stricter-runtime decision a TYPED value (a conversion or a parse of
+// another numeric type) is checked at the boundary, not converted: a TypeError
+// there, while the explicit paths - the call and `:=` - still convert it.
+const typed = (v: string) => v.includes(':=') || v.includes('.parse(');
 
 test('NaN and the infinities are a RangeError by every path', () => {
   for (const k of ['nan', 'inf', 'ninf', 'f32nan']) {
-    for (const src of [call(VALUES[k]), op(VALUES[k]), boundary(VALUES[k])]) {
+    for (const src of [call(VALUES[k]), op(VALUES[k])]) {
       expectThrownKind(src, 'RangeError');
     }
+    expectThrownKind(boundary(VALUES[k]), typed(VALUES[k]) ? 'TypeError' : 'RangeError');
   }
 });
 
@@ -61,17 +66,20 @@ test('a finite value converts to its exact value, by every path', () => {
     ['i64', '-7'],
   ];
   for (const [k, result] of want) {
-    for (const src of [call(VALUES[k]), op(VALUES[k]), boundary(VALUES[k])]) {
+    for (const src of [call(VALUES[k]), op(VALUES[k])]) {
       expect(evaluated(src)).toBe(result);
     }
+    if (typed(VALUES[k])) expectThrownKind(boundary(VALUES[k]), 'TypeError');
+    else expect(evaluated(boundary(VALUES[k]))).toBe(result);
   }
 });
 
 test('a wide integer converts exactly, not through a Number', () => {
   // Read through a Number, an int64 above 2**53 would round to ...992.
-  for (const src of [call(VALUES.wide), op(VALUES.wide), boundary(VALUES.wide)]) {
+  for (const src of [call(VALUES.wide), op(VALUES.wide)]) {
     expect(evaluated(src)).toBe('9007199254740993');
   }
+  expectThrownKind(boundary(VALUES.wide), 'TypeError');
 });
 
 test('a bigint converts exactly, by every path', () => {

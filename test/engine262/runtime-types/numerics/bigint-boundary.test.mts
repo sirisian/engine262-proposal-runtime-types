@@ -31,22 +31,27 @@ test('into bigint: a finite integer converts, whatever numeric type holds it', (
   // Every finite integer-valued double is exactly one BigInt - not only safe
   // ones. The loss beyond 2**53 happens where a literal becomes a Number, before
   // this boundary; `uint64` accepts the same Number here.
+  // A TYPED value of another numeric type is checked at the boundary, not
+  // converted (stricter-runtime decision): the typed sources below are refused,
+  // and a Number, which carries no numeric type, converts.
   expect(evaluated(at('9007199254740992', 'bigint'))).toBe('9007199254740992');
   expect(evaluated(at('1152921504606846976', 'bigint'))).toBe('1152921504606846976');
   expect(evaluated(at('1e21', 'bigint'))).toBe('1000000000000000000000');
-  expect(evaluated(at('(5 := uint8)', 'bigint'))).toBe('5');
-  expect(evaluated(at('(5 := int64)', 'bigint'))).toBe('5');
+  expectThrownKind(at('(5 := uint8)', 'bigint'), 'TypeError');
+  expectThrownKind(at('(5 := int64)', 'bigint'), 'TypeError');
   // A float holding an integer, as a Number does and as a float into `int32` does.
-  expect(evaluated(at('(5 := float32)', 'bigint'))).toBe('5');
-  expect(evaluated(at('(5 := float64)', 'bigint'))).toBe('5');
+  expectThrownKind(at('(5 := float32)', 'bigint'), 'TypeError');
+  expectThrownKind(at('(5 := float64)', 'bigint'), 'TypeError');
   // An integer-valued rational, as a rational into `uint8` does.
-  expect(evaluated(at('(5 := rational)', 'bigint'))).toBe('5');
+  expectThrownKind(at('(5 := rational)', 'bigint'), 'TypeError');
 });
 
 test('into bigint: a value with no integer is a RangeError, not a TypeError', () => {
   // The conversion exists; this value does not survive it.
   for (const v of ['5.5', 'NaN', 'Infinity', '(5.5 := float32)', '(NaN := float32)', '(Infinity := float64)']) {
-    expectThrownKind(at(v, 'bigint'), 'RangeError');
+    // An untyped value has the conversion and fails its range; a typed one is
+    // refused before any conversion (stricter-runtime decision).
+    expectThrownKind(at(v, 'bigint'), v.includes(':=') ? 'TypeError' : 'RangeError');
   }
 });
 
@@ -96,7 +101,8 @@ test('what the boundary does not reach is unchanged', () => {
   // separate question this once named, answered by B1.
   expect(evaluated(at('5n', 'decimal64'))).toBe('5');
   // S3's row: a decimal to bigint, truncated toward zero - exact here.
-  expect(evaluated(at('(5 := decimal64)', 'bigint'))).toBe('5');
+  // A typed decimal at a bigint boundary is refused, not converted (stricter-runtime decision).
+  expectThrownKind(at('(5 := decimal64)', 'bigint'), 'TypeError');
   // Into `rational`, a `bigint` converts as every integer type does: the
   // implicit-conversions table checks an `any` value at the boundary and, "if it
   // is a numeric value the target represents exactly, converted" - an `int32` 5

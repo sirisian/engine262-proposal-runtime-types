@@ -353,7 +353,9 @@ test('numeric types: the `number` target admits numeric values only', () => {
   // A NUMERIC value passes, which is the clause's own condition: a typed value
   // IS numeric and `number` represents it exactly.
   expect(evaluated('function a() { return 5; } let x: number = a(); String(x);')).toBe('5');
-  expect(evaluated('function a(): any { return (5 := uint8); } let x: number = a(); String(x);')).toBe('5');
+  // A typed value is checked at the boundary, not converted (stricter-runtime decision).
+  expectThrownKind('function a(): any { return (5 := uint8); } let x: number = a(); String(x);', 'TypeError');
+  expect(evaluated('function a(): any { return 5; } let x: number = a(); String(x);')).toBe('5');
 
   // A CAST refuses what the binding refuses. #sec-convertvalue has no step for a
   // non-numeric source at a numeric target, and #sec-parsing: "A `string` is

@@ -83,8 +83,12 @@ test('a numeric key converts where the target represents it EXACTLY, and not oth
   // `sec-requiretype` admits a numeric source only where the target represents
   // it exactly. So an `int64` 1 reaching a `uint64` key is admitted - it is the
   // same magnitude, and no two distinct sources can land on one key that way.
-  expect(ok('const m = new Map.<uint64, string>(); const v = ((1n := int64) := any); m.set(v, "x");')).toBe(true);
-  expect(evaluated('const m = new Map.<uint64, string>(); const v = ((1n := int64) := any); m.set(v, "x"); String(m.get(1n := uint64));')).toBe('x');
+  // Since the stricter-runtime decision an int64 key at a uint64 map is
+  // REFUSED, not converted: a typed value is checked at the boundary. The
+  // program converts it explicitly, and the same magnitude then lands on the
+  // one key, as before.
+  expect(ok('const m = new Map.<uint64, string>(); const v = ((1n := int64) := any); m.set(v, "x");')).toBe(false);
+  expect(evaluated('const m = new Map.<uint64, string>(); const v = ((1n := int64) := any); m.set(uint64(v), "x"); String(m.get(1n := uint64));')).toBe('x');
   // A magnitude the target CANNOT represent is refused rather than wrapped,
   // which is the half that keeps two keys from merging.
   expect(ok('const m = new Map.<uint64, string>(); const bad = ((-1n := int64) := any); m.set(bad, "x");')).toBe(false);

@@ -33,7 +33,10 @@ test.each(['U', 'V', '(U)', 'A.<uint8>', 'uint.<8>'])(
     const aliases = 'type U = uint8; type V = U; type A<T: type> = T;';
     expectStaticTypeError(`${aliases} function unused() { ${callee}("bad"); }`);
     expectStaticTypeError(`${aliases} function unused(): string { return ${callee}(1); }`);
-    expect(evaluated(`${aliases} const n: uint16 = ${callee}(1); String(n);`)).toBe('1');
+    // Its result is the TARGET type in every position (the call and `v := T` are
+    // one operation), so it is not widened implicitly (stricter-runtime decision).
+    expect(evaluated(`${aliases} const n: uint8 = ${callee}(1); String(n);`)).toBe('1');
+    expectStaticTypeError(`${aliases} const n: uint16 = ${callee}(1);`);
   },
 );
 

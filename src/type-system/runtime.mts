@@ -3989,7 +3989,20 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       }
       const len = R(unwrapToNumber(lenValue as NumberValue | TypedNumberValue));
       if (t.Kind === 'array') {
-        if (t.Extent !== 'dynamic' && t.Extent !== len) {
+        // An extent RECORD (phase 4, step 9q): a parameter's is its binding in
+        // the running frames, where bound; an opaque one - a construction's
+        // run-time extent, `new [n].<T>()` - and an unbound parameter's are
+        // unknown statically, so the value's own fixed length stands.
+        let extent: unknown = t.Extent;
+        if (typeof extent === 'object' && extent !== null) {
+          const record = extent as { Kind?: string, Name?: string, Opaque?: boolean };
+          const bound = record.Kind === 'parameter' && !record.Opaque && record.Name ? lookupTypeParameter(record.Name) : null;
+          const value = (bound as { Value?: unknown } | null)?.Value;
+          extent = value instanceof NumberValue ? R(value)
+            : typeof (value as { value?: unknown } | undefined)?.value === 'number' ? (value as { value: number }).value
+              : len;
+        }
+        if (extent !== 'dynamic' && extent !== len) {
           return false;
         }
         // The run-time half of #sec-array-and-tuple-types' extent rule. A FIXED
@@ -6780,8 +6793,14 @@ setDeferredOperatorImpl((operator, operands) => (operator === 'keyof'
 /** Whether _expression_ names a type parameter bound, where it is evaluated, to an OPEN parameter. */
 function ExtentNamesOpenParameter(expression: unknown): boolean {
   let open = false;
+  const seen = new Set<unknown>();
   const visit = (v: unknown): void => {
-    if (open || !v || typeof v !== 'object') return;
+    if (open || !v || typeof v !== 'object' || seen.has(v)) return;
+    // Walk the SYNTAX TREE only - arrays, and parse nodes, which carry a
+    // `location` - never a cached non-AST property (a node's ContextualType,
+    // a type record, a value), which reaches much of the engine.
+    if (!Array.isArray(v) && !('location' in (v as object))) return;
+    seen.add(v);
     if (Array.isArray(v)) {
       v.forEach(visit);
       return;

@@ -262,8 +262,8 @@ test.each([
 // Adjacent controls and regressions found while implementing the recommendation.
 test.each([
   [
-    "R13-extra-35: function f(a:[uint8]){const {length:n:number}=a;globalThis.settled=String(n);}f([1]);",
-    "function f(a:[uint8]){const {length:n:number}=a;globalThis.settled=String(n);}f([1]);",
+    "R13-extra-35: function f(a:[uint8]){const {length:n:uint64}=a;globalThis.settled=String(n);}f([1]);",
+    "function f(a:[uint8]){const {length:n:uint64}=a;globalThis.settled=String(n);}f([1]);",
     {
       "completion": "normal",
       "kind": null,

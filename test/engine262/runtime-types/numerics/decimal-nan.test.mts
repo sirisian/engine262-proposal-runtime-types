@@ -14,28 +14,48 @@ const outcome = (expr: string) => evaluated(`let r; try { r = String(${expr}); }
 
 test('decimal NaN and infinities: conversions in, explicit and at the boundary', () => {
   const cases: [string, string][] = [["NaN := decimal64", "NaN"], ["Infinity := decimal64", "Infinity"], ["-Infinity := decimal32", "-Infinity"], ["(NaN := float128) := decimal128", "NaN"], ["(() => { const f = Infinity; return decimal64(f); })()", "Infinity"], ["(() => { let b: any = (NaN := float64); let a: decimal64 = b; return a; })()", "NaN"], ["(() => { let b: any = NaN; let a: decimal64 = b; return a; })()", "NaN"], ["(NaN := decimal64) := decimal128", "NaN"], ["(-Infinity := decimal64) := decimal32", "-Infinity"]];
-  for (const [expr, want] of cases) {
+  for (const [expr, rowWant] of cases) {
+    // A typed value passed through `any` into a decimal binding is checked, not
+    // converted (stricter-runtime decision); the explicit conversions convert.
+    const from = /let b: any = \(.*:= ([a-z0-9]+)\)/.exec(expr)?.[1];
+    const to = /let a: ([a-z0-9]+)/.exec(expr)?.[1];
+    const want = from && to && from !== to ? 'TypeError' : rowWant;
     expect(outcome(expr), expr).toBe(want);
   }
 });
 
 test('decimal NaN and infinities: conversions out', () => {
   const cases: [string, string][] = [["(NaN := decimal64) := float64", "NaN"], ["(Infinity := decimal64) := number", "Infinity"], ["(-Infinity := decimal64) := float128", "-Infinity"], ["(NaN := decimal64) := int32", "RangeError"], ["(Infinity := decimal64) := bigint", "RangeError"], ["(NaN := decimal64) := rational", "RangeError"], ["(() => { let b: any = (NaN := decimal64); let a: int32 = b; return a; })()", "RangeError"]];
-  for (const [expr, want] of cases) {
+  for (const [expr, rowWant] of cases) {
+    // A typed value passed through `any` into a decimal binding is checked, not
+    // converted (stricter-runtime decision); the explicit conversions convert.
+    const from = /let b: any = \(.*:= ([a-z0-9]+)\)/.exec(expr)?.[1];
+    const to = /let a: ([a-z0-9]+)/.exec(expr)?.[1];
+    const want = from && to && from !== to ? 'TypeError' : rowWant;
     expect(outcome(expr), expr).toBe(want);
   }
 });
 
 test('decimal NaN and infinities: arithmetic, by O1', () => {
   const cases: [string, string][] = [["(NaN := decimal64) + decimal64.parse('1')", "NaN"], ["(Infinity := decimal64) + decimal64.parse('1')", "Infinity"], ["(-Infinity := decimal64) * decimal64.parse('2')", "-Infinity"], ["decimal64.parse('1') / (Infinity := decimal64)", "0"], ["(Infinity := decimal64) / decimal64.parse('-2')", "-Infinity"], ["decimal64.parse('5') % (Infinity := decimal64)", "5"], ["-(Infinity := decimal64)", "-Infinity"], ["-(NaN := decimal64)", "NaN"], ["(Infinity := decimal64) + (Infinity := decimal64)", "Infinity"], ["(Infinity := decimal64) - (Infinity := decimal64)", "RangeError"], ["decimal64.parse('0') * (Infinity := decimal64)", "RangeError"], ["(Infinity := decimal64) / (Infinity := decimal64)", "RangeError"], ["(Infinity := decimal64) % decimal64.parse('2')", "RangeError"], ["decimal64.parse('9e384') * decimal64.parse('10')", "RangeError"], ["decimal64.parse('1') / decimal64.parse('0')", "RangeError"], ["decimal64.parse('0') / decimal64.parse('0')", "RangeError"], ["decimal64.parse('1.5') + decimal64.parse('2.25')", "3.75"]];
-  for (const [expr, want] of cases) {
+  for (const [expr, rowWant] of cases) {
+    // A typed value passed through `any` into a decimal binding is checked, not
+    // converted (stricter-runtime decision); the explicit conversions convert.
+    const from = /let b: any = \(.*:= ([a-z0-9]+)\)/.exec(expr)?.[1];
+    const to = /let a: ([a-z0-9]+)/.exec(expr)?.[1];
+    const want = from && to && from !== to ? 'TypeError' : rowWant;
     expect(outcome(expr), expr).toBe(want);
   }
 });
 
 test('decimal NaN and infinities: equality, keys, ordering, text, predicates and Math', () => {
   const cases: [string, string][] = [["(() => { const n = (NaN := decimal64); return [n == n, n === n, Object.is(n, n), new Set([n, n]).size].join(' '); })()", "false false true 1"], ["(() => { const i = (Infinity := decimal64); return [i == i, i === i, new Set([i, i]).size].join(' '); })()", "true true 1"], ["Object.is((NaN := decimal32), (NaN := decimal64))", "false"], ["Composite([(NaN := decimal64)]) === Composite([(NaN := decimal64)])", "true"], ["[(NaN := decimal64) < decimal64.parse('1'), decimal64.parse('1') < (NaN := decimal64), (NaN := decimal64) > decimal64.parse('1')].join(' ')", "false false false"], ["[(-Infinity := decimal64) < decimal64.parse('1'), decimal64.parse('1') < (Infinity := decimal64)].join(' ')", "true true"], ["[(NaN := decimal64) == NaN, (Infinity := decimal64) == Infinity].join(' ')", "false true"], ["[String((NaN := decimal64)), String((Infinity := decimal64)), String((-Infinity := decimal64))].join(' ')", "NaN Infinity -Infinity"], ["[isNaN((NaN := decimal64)), isNaN((Infinity := decimal64)), isFinite((Infinity := decimal64)), isFinite(decimal64.parse('1'))].join(' ')", "true false false true"], ["[Math.max(decimal64.parse('1'), (NaN := decimal64)), Math.max(decimal64.parse('1'), (Infinity := decimal64)), Math.abs((-Infinity := decimal64)), Math.sign((-Infinity := decimal64)), Math.sign((NaN := decimal64))].join(' ')", "NaN Infinity Infinity -1 NaN"], ["decimal64.parse('NaN')", "SyntaxError"]];
-  for (const [expr, want] of cases) {
+  for (const [expr, rowWant] of cases) {
+    // A typed value passed through `any` into a decimal binding is checked, not
+    // converted (stricter-runtime decision); the explicit conversions convert.
+    const from = /let b: any = \(.*:= ([a-z0-9]+)\)/.exec(expr)?.[1];
+    const to = /let a: ([a-z0-9]+)/.exec(expr)?.[1];
+    const want = from && to && from !== to ? 'TypeError' : rowWant;
     expect(outcome(expr), expr).toBe(want);
   }
 });

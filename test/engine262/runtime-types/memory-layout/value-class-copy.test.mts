@@ -212,7 +212,7 @@ test('a GENERIC class keeps its private field through a copy', () => {
 
   // Two applications keep their own sizes across the same boundary - what would
   // break if the fix had reached for one shared prototype.
-  expect(evaluated('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return this.b.length; } }'
+  expect(evaluated('class S<N: uint32> { b: [N].<uint8>; get len(): uint32 { return uint32(this.b.length); } }'
     + ' class K { a: S.<4> = new S.<4>(); b: S.<8> = new S.<8>(); }'
     + ' const k = new K(); String(Number(k.a.len)) + "/" + String(Number(k.b.len));')).toBe('4/8');
 });
@@ -251,7 +251,7 @@ test('a GENERIC class has a default, per application', () => {
     + ' String(a.b.length) + "/" + String(b.b.length);')).toBe('4/8');
   // Both gaps at once - a private field whose type mentions the parameter, which
   // is the shape `FixedString` has and why it hit both independently.
-  expect(evaluated('class F<N: uint32> { #b: [N].<uint8>; get len(): uint32 { return this.#b.length; } }'
+  expect(evaluated('class F<N: uint32> { #b: [N].<uint8>; get len(): uint32 { return uint32(this.#b.length); } }'
     + ' let f: F.<4>; String(Number(f.len));')).toBe('4');
   // A generic whose fields do not mention the parameter always worked, and still does.
   expect(evaluated('class G2<N: uint32> { x: uint8 = 0; } let g: G2.<4>; String(Number(g.x));')).toBe('0');
