@@ -458,18 +458,25 @@ test('an instanceof test against a class that can never fail is refused', () => 
   expectStaticTypeError('class P { x: uint8 = 1; } let x: uint8 = 1; if (x instanceof P) { }');
 });
 
-test('instanceof against a class stays legal where the spec leaves it open', () => {
-  // #sec-aredisjoint is silent about two ~nominal~ types, so NarrowTo of two
-  // unrelated classes is their intersection rather than ~empty~: this test is
-  // NOT one the spec calls impossible, though `P & Q` written as a type is an
-  // error (#sec-intersection-type-early-errors). Kept legal until the spec
-  // reconciles the two.
-  expect(ok('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
-    + 'function unused(p: P) { if (p instanceof Q) { return 1; } return 0; } String(1);')).toBe(true);
+test('instanceof between unrelated classes can never succeed (Q7)', () => {
+  // Rule 967 refuses `P & Q` for two classes neither of which extends the
+  // other; NarrowTo now makes the same judgment, so the test that would narrow
+  // to that intersection is the dead branch it is. AreDisjoint stays silent on
+  // the interning path, as #sec-aredisjoint chooses.
+  expectStaticTypeError('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+    + 'function unused(p: P) { if (p instanceof Q) { return 1; } return 0; }');
+  // `is` keeps its own restriction to kinds whose membership a value cannot
+  // lose (primitives and literals); extending it to classes is a follow-up.
+});
+
+test('instanceof against a class stays legal where a value can be both', () => {
   expect(ok('class P { x: uint8 = 1; } class S extends P { } '
     + 'function unused(p: P) { if (p instanceof S) { return 1; } return 0; } String(1);')).toBe(true);
   expect(ok('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
     + 'function unused(p: P | Q) { if (p instanceof Q) { return 1; } return 0; } String(1);')).toBe(true);
+  // An interface stays open: a class may implement any number of them.
+  expect(ok('interface I { x: uint8; } class P { x: uint8 = 1; } '
+    + 'function unused(i: I) { if (i instanceof P) { return 1; } return 0; } String(1);')).toBe(true);
   // A test that guards no branch is a question with a constant answer.
   expect(ok('class P { x: uint8 = 1; } let p: P = new P(); String(p instanceof P);')).toBe(true);
 });

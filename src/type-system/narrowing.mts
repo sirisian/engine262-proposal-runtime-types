@@ -98,6 +98,11 @@ function isNumberCategory(t: TypeRecord): boolean {
  * disjoint from the sized numeric types, which is right for assignment and wrong
  * for a `typeof` narrowing.
  */
+/** A ~nominal~ whose [[Declaration]] is a class declaration: rule 967's test (check.mts `classDeclarationOf`). */
+function isClassNominal(t: TypeRecord): boolean {
+  return t.Kind === 'nominal' && (t as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
+}
+
 function categoryOverlap(m: TypeRecord, t: TypeRecord): boolean {
   return (isNumberCategory(t) && m.Kind === 'primitive' && typeofNumberNames.has(m.Name))
     || (isNumberCategory(m) && t.Kind === 'primitive' && typeofNumberNames.has(t.Name));
@@ -164,6 +169,17 @@ export function NarrowTo(s: TypeRecord, t: TypeRecord): NarrowResult {
   }
   if (IsSubtype(t, s, [])) {
     return t;
+  }
+  // Q7 of the round-2 review: two ~nominal~ records whose declarations are
+  // both CLASS declarations, neither a subtype of the other (both tests just
+  // failed), have no common value - the judgment the Early Error of
+  // #sec-intersection-type-early-errors makes of `P & Q`. It is made here and
+  // not in AreDisjoint: #sec-aredisjoint declines it on purpose, sitting on the
+  // interning path where deciding it costs a subtyping walk, and NarrowTo runs
+  // only in the checking pass, which is already running IsSubtype. Interfaces
+  // and enums stay overlapping, as they do for the intersection rule.
+  if (isClassNominal(s) && isClassNominal(t)) {
+    return empty;
   }
   if (categoryOverlap(s, t)) {
     return s;
