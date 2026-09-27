@@ -46,6 +46,15 @@ export function BoundNames(node: ParseNode | readonly ParseNode[]): JSStringValu
       if ((node as { ClassModifiers?: readonly string[] | null }).ClassModifiers?.includes('partial')) {
         return [];
       }
+      // A CASE - a class declaration whose list specializes its family rather
+      // than declaring parameters - joins the primary of the same name and
+      // declares no name of its own either (phase 5).
+      if (node.type === 'ClassDeclaration') {
+        const list = (node as { TypeParameters?: { ListKind?: string } | null }).TypeParameters;
+        if (list && list.ListKind !== 'parameters') {
+          return [];
+        }
+      }
       if (node.BindingIdentifier) {
         return BoundNames(node.BindingIdentifier);
       }

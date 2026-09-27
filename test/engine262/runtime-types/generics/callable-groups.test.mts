@@ -53,7 +53,9 @@ test('A17, A17b and A18: a bodyless owner needs an attached case, and is not abs
 test('A19, A20 and A21: what may not omit a body, or specialize, is unchanged', () => {
   expectThrown('class R { m(): string; }', 'An abstract method requires an abstract class');
   expectThrown('function r(x: string): string;', 'only an owner, whose generic list declares parameters only, may omit its body');
-  expectThrown('class B<uint8> {}', 'specialization is not supported yet');
+  // A class may now specialize (phase 5), but only a family declared in the
+  // same statement list: this case has no primary.
+  expectThrown('class B<uint8> {}', 'declares the family it would specialize');
 });
 
 test('A22, A22b, A22c and A23: an attached case is a replacement or an additive overload (Q4)', () => {

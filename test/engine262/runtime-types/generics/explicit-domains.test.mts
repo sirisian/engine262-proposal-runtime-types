@@ -61,12 +61,12 @@ test('C22: an entry without a domain is an argument, not a parameter', () => {
 });
 
 test('specialization lists and captures are reported, not accepted and ignored', () => {
-  // #sec-specialization-lists: selection is not implemented yet, and a list
-  // that cannot be selected must be reported.
-  expectEarlyError('class Box<T: type> {} class Box<uint32> {}', 'SyntaxError');
-  expectEarlyError('class Box<T: type, N: uint32> {} class Box<const T, 8> {}', 'SyntaxError');
-  expectThrown('class Box<uint32> {}', 'specialization is not supported yet');
-  expectThrown('class Box<Map.<string, uint8>> {}', 'specialization is not supported yet');
+  // #sec-specialization-lists: a class case beside its primary is selected
+  // (phase 5), so it is accepted; one with no primary is still reported.
+  expect(evaluated('class Box<T: type> {} class Box<uint32> {} "ok";')).toBe('ok');
+  expect(evaluated('class Box<T: type, N: uint32> {} class Box<const T, 8> {} "ok";')).toBe('ok');
+  expectThrown('class Box<uint32> {}', 'declares the family it would specialize');
+  expectThrown('class Box<Map.<string, uint8>> {}', 'a case of `Box` specializes a family declared in the same statement list');
   expectThrown('class Pair<const T, T> {}', 'a capture, `const T`');
 });
 

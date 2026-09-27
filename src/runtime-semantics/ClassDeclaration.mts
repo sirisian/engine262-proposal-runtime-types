@@ -153,6 +153,15 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
 /** https://tc39.es/ecma262/#sec-class-definitions-runtime-semantics-evaluation */
 //   ClassDeclaration : `class` BindingIdentifier ClassTAil
 export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDeclaration): PlainEvaluator {
+  // Phase 5, plan 6.3: a CASE is inert at its own position. It binds no name,
+  // runs no constructor and no static initialization; its body is evaluated
+  // only when an application of the family selects it (SpecializeFromFrame).
+  {
+    const list = (ClassDeclaration as { TypeParameters?: { ListKind?: string } | null }).TypeParameters;
+    if (surroundingAgent.feature('runtime-types') && list && list.ListKind !== 'parameters') {
+      return undefined;
+    }
+  }
   // proposal-runtime-types: under this proposal the reserved layout controls
   // are read from the syntax and never evaluated, and no other decorator is
   // implemented yet. Under the TC39 feature - which is mutually exclusive with

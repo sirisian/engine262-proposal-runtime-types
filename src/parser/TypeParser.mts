@@ -950,6 +950,17 @@ export abstract class TypeParser extends ExpressionParser {
     // overload, or a standalone case - is a declaration in its own right. The
     // checker's group analysis judges it. An operator's cases, and every
     // family's (classes, aliases, interfaces, partials), are not supported yet.
+    // Phase 5: a class DECLARATION's list may specialize its family - the case
+    // joins the primary declared in the same statement list, which owns it. A
+    // class expression has no family to join, and a partial class is an
+    // additive extension that must not become a replacement (plan 6.3), so both
+    // keep the error below.
+    if (context === 'class') {
+      // Whether the case has a primary is known only once its statement list
+      // is complete; the orphan-case pass (parse.mts) reports it, with this hint.
+      (list as { OrphanHint?: string }).OrphanHint = hint;
+      return;
+    }
     if (context === 'function' || context === 'method' || (context === 'operator' && this.parsingClassOperator)) {
       return;
     }

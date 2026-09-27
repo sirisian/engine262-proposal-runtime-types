@@ -107,7 +107,9 @@ function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Decl
       }
       // A mixed list's binders: their domains, bounds, and defaults.
       Q(yield* resolveAll((list.TypeParameterList ?? []).flatMap((tp) => [tp.TypeParameterDomain, tp.TypeParameterConstraint, tp.TypeParameterDefault].filter(Boolean) as unknown as ParseNode[])));
-      Q(yield* resolveAll((list.Captures ?? []).map((c) => c.TypeParameterDomain).filter(Boolean) as unknown as ParseNode[]));
+      // A capture's `extends` bound as well as its domain: an unresolved bound
+      // read as satisfied, so `const T: type extends [].<any>` admitted `string`.
+      Q(yield* resolveAll((list.Captures ?? []).flatMap((c) => [c.TypeParameterDomain, c.TypeParameterConstraint]).filter(Boolean) as unknown as ParseNode[]));
     }
   }
   const resolve = (node: ParseNode) => resolved.get(node) ?? null;
@@ -192,6 +194,41 @@ function FrameOfBindings(bindings: readonly { Capture: { Name: string }, Value: 
  * (as an explicit call's arguments would), else its body runs; a bodyless
  * owner no replacement matches is no viable overload.
  */
+/**
+ * Phase 5 (plan 6.3): the case of a CLASS family an application selects - the
+ * unique most specific case whose list matches the application's arguments,
+ * by the same rule function cases use (SelectSpecialization), so declaration
+ * order never decides - with the frame binding its captures; *undefined* when
+ * no case applies and the primary's body runs. Two maximal cases are a
+ * TypeError naming both.
+ */
+export function* SelectClassCase(primary: Declaration, cases: readonly Declaration[], args: readonly (TypeRecord | number)[]):
+  PlainEvaluator<{ Declaration: Declaration, Frame: Map<string, TypeRecord> } | undefined> {
+  if (cases.length === 0) return undefined;
+  const name = primary.BindingIdentifier?.name ?? '';
+  const members = [primary, ...cases].map((declaration) => ({ fn: Value.undefined as Value, declaration }));
+  const { analysis, host } = Q(yield* AnalyzeGroupAtRuntime(members, name));
+  const owner = analysis.Owners.find((o) => o.Node === primary);
+  if (!owner) return undefined;
+  const filled = args as readonly Argument[];
+  const attached = [];
+  for (const a of analysis.Attached) {
+    if (a.Owner !== owner) continue;
+    const matched = MatchSpecializationList(a.Case.List!, owner.Parameters as never, filled as never, host as never);
+    if (matched === 'no-match') continue;
+    attached.push({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label });
+  }
+  const result = SelectSpecialization(attached, owner.Parameters as never, filled as never, host as never);
+  if (result.Kind === 'ambiguous') {
+    return Throw.TypeError('$1 both apply to this application of $2, and neither is more specific; declare a case for it',
+      Value(result.Cases.map((c) => c.Label).join(' and ')), Value(name));
+  }
+  if (result.Kind !== 'selected') return undefined;
+  const bindings = result.Bindings as unknown as readonly { Capture: { Name: string }, Value: Argument }[];
+  const frame = Q(yield* TypedFrameOfBindings(result.Case.Declaration, bindings));
+  return { Declaration: result.Case.Declaration as Declaration, Frame: frame };
+}
+
 export function* DispatchCaseGroup(
   overloaded: Value,
   args: readonly Value[],

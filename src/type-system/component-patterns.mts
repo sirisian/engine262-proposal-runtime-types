@@ -442,6 +442,18 @@ export function CallableGroupHostFor(
       const n = resolve(narrow as unknown as ParseNode);
       return !!w && !!n && isSubtype(n, w);
     },
+    // A capture's `extends` bound, over the captures bound so far: the argument
+    // it binds must be a subtype of it. The component host's stub admitted
+    // every argument, so a case over `const T: type extends [].<any>` was
+    // selected for `string` - by functions and classes alike. A value capture
+    // takes a domain, not a bound; a bound not yet computable cannot refuse.
+    satisfiesBound: (value, bound, env) => {
+      if (typeof value !== 'object' || value === null) return true;
+      const record = env.size > 0
+        ? InstantiateComponentType(bound as unknown as ParseNode, env as never, resolve)
+        : resolve(bound as unknown as ParseNode);
+      return !record || isSubtype(value as TypeRecord, record as TypeRecord);
+    },
     admits: (entry, parameter) => {
       const slot = slotOf(parameter);
       const resolved = resolve(entry);

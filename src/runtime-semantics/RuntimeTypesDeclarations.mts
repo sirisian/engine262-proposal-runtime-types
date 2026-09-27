@@ -3,7 +3,7 @@ import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.mts';
-import { CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection } from '../abstract-ops/callable-selection.mts';
+import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject } from '../abstract-ops/runtime-types.mts';
 import { CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject, DecimalFromResult, CreateDecimalSpecial } from '../intrinsics/Decimal.mts';
@@ -2235,6 +2235,36 @@ export function* IsInstanceOfSomeSpecialization(declaration: ParseNode.ClassDecl
   return false;
 }
 
+/**
+ * Phase 5 (plan 6.3): a class family's CASES - the class declarations in the
+ * primary's own statement list, of the same name, whose list specializes the
+ * family. A case anywhere else - another block, another module - is not the
+ * family's: replacement is confined to the owning declaration group.
+ */
+function ClassCasesOf(declaration: ParseNode.ClassDeclaration): ParseNode.ClassDeclaration[] {
+  const name = declaration.BindingIdentifier?.name;
+  if (!name) return [];
+  let holder = declaration as unknown as { type?: string, parent?: object };
+  let container = holder.parent as { type?: string, parent?: object } | undefined;
+  if (container?.type === 'ExportDeclaration') {
+    holder = container;
+    container = container.parent as typeof container;
+  }
+  if (!container) return [];
+  const siblings = Object.values(container).find((v) => Array.isArray(v) && v.includes(holder)) as readonly unknown[] | undefined;
+  if (!siblings) return [];
+  const out: ParseNode.ClassDeclaration[] = [];
+  for (const item of siblings) {
+    const node = ((item as { type?: string }).type === 'ExportDeclaration' ? (item as { Declaration?: unknown }).Declaration : item) as
+      { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string } | null } | undefined;
+    if (node && node !== (declaration as unknown) && node.type === 'ClassDeclaration' && node.BindingIdentifier?.name === name
+      && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+      out.push(node as unknown as ParseNode.ClassDeclaration);
+    }
+  }
+  return out;
+}
+
 /** The tail both entry points share, so one specialization is built by one path. */
 function* SpecializeFromFrame(
   declaration: ParseNode.ClassDeclaration,
@@ -2263,20 +2293,33 @@ function* SpecializeFromFrame(
   if (underWay !== undefined && underWay.key === cacheKey && underWay.ctor !== undefined) {
     return underWay.ctor as never;
   }
-  pushTypeParameterFrame(frame);
+  // Phase 5: the application selects its body - a case's, complete, or the
+  // primary's - once per family and binding tuple (the cache above), and the
+  // case's captures join the frame. Identity stays the family's.
+  let body = declaration;
+  let bodyFrame = frame;
+  const cases = ClassCasesOf(declaration);
+  if (cases.length > 0) {
+    const selected = Q(yield* SelectClassCase(declaration as never, cases as never, argRecords));
+    if (selected) {
+      body = selected.Declaration as unknown as ParseNode.ClassDeclaration;
+      bodyFrame = new Map([...frame, ...selected.Frame]);
+    }
+  }
+  pushTypeParameterFrame(bodyFrame);
   specializationsInProgress.set(declaration, { key: cacheKey });
   let specialized;
   try {
     const className = Value(declaration.BindingIdentifier?.name ?? '');
     specialized = EnsureCompletion(yield* ClassDefinitionEvaluation(
-      declaration.ClassTail,
+      body.ClassTail,
       className,
       className,
       // The declaration's own source text, so that the constructor this
       // evaluation creates can be matched back to the declaration while its
       // body is still running - the window in which `AssociateClassType`
       // below has not happened yet and `LookupClassType` answers nothing.
-      (declaration as unknown as { sourceText?: string }).sourceText ?? '',
+      (body as unknown as { sourceText?: string }).sourceText ?? '',
       [],
     ));
   } finally {

@@ -6614,6 +6614,73 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return null;
   };
+  /**
+   * Phase 5, plan 6.3: a class CASE supplies a complete body, and keeps the
+   * primary's public contract after substitution - every public instance
+   * member the primary declares, at a type the primary's member accepts (a
+   * method by function assignability), and a constructor that accepts each of
+   * the primary's signatures - so code written against `Box.<T>` stays correct
+   * whichever body runs. It may add members or use another private
+   * representation. A comparison over a capture's own parameter is deferred to
+   * its bindings (recorded), not guessed here.
+   */
+  const checkCaseContract = (caseNode: ParseNode, primaryNode: ParseNode, name: string): void => {
+    const params = ((primaryNode as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null })
+      .TypeParameters?.TypeParameterList ?? []);
+    const entries = ((caseNode as unknown as { TypeParameters?: { SpecializationEntryList?: readonly { Pattern: ParseNode }[] } | null })
+      .TypeParameters?.SpecializationEntryList ?? []);
+    const bindings = new Map<string, TypeRecord>();
+    params.forEach((param, i) => {
+      const pattern = entries[i]?.Pattern as { type?: string, BindingIdentifier?: { name: string } } | undefined;
+      if (!pattern) return;
+      // An entry holding a capture anywhere - `const T`, or `Map.<K: string,
+      // V: const E>` - is open: its parameter stays a parameter, and what
+      // depends on it is compared at its bindings, not here.
+      const seen = new Set<object>();
+      const holdsCapture = (v: unknown): boolean => {
+        if (!v || typeof v !== 'object' || seen.has(v)) return false;
+        if (!Array.isArray(v) && !('location' in v)) return false;
+        seen.add(v);
+        if ((v as { type?: string }).type === 'CaptureBinding') return true;
+        return Array.isArray(v) ? v.some(holdsCapture)
+          : Object.entries(v).some(([k, c]) => k !== 'parent' && k !== 'location' && holdsCapture(c));
+      };
+      const record = holdsCapture(pattern)
+        ? { Kind: 'parameter', Name: pattern.type === 'CaptureBinding' ? pattern.BindingIdentifier!.name : param.BindingIdentifier.name } as unknown as TypeRecord
+        : resolveType(pattern as unknown as ParseNode.Type);
+      if (record) bindings.set(param.BindingIdentifier.name, record as TypeRecord);
+    });
+    const label = `\`${name}${(caseNode as unknown as { TypeParameters?: { sourceText?: string } }).TypeParameters?.sourceText ?? ''}\``;
+    const fail = (message: string) => {
+      errors.push((Throw.StaticTypeError('$1', Value(`${label} does not keep \`${name}\`'s public contract: ${message}`)) as ThrowCompletion).Value as ObjectValue);
+    };
+    const primary = classMemberWalk(primaryNode, 'instance');
+    const kase = classMemberWalk(caseNode, 'instance');
+    for (const member of primary.Properties) {
+      if (typeof member.key !== 'string' || member.key.startsWith('#') || member.protected) continue;
+      const own = kase.Properties.find((m) => m.key === member.key);
+      if (!own) {
+        fail(`it has no \`${member.key}\``);
+        continue;
+      }
+      const wanted = substituteTypeParameters(member.type, bindings) ?? member.type;
+      if (mentionsTypeParameter(wanted) || mentionsTypeParameter(own.type)) continue;
+      if (!IsAssignable(own.type, wanted)) {
+        fail(`its \`${member.key}\` is ${displayType(own.type)}, not assignable to ${displayType(wanted)}`);
+      }
+    }
+    for (const signature of (primary.construct ?? []) as readonly { Parameters: readonly ParameterRecord[] }[]) {
+      const wanted = signature.Parameters.map((q) => substituteTypeParameters(q.Type as TypeRecord, bindings) ?? q.Type);
+      if (wanted.some((t) => t && mentionsTypeParameter(t as TypeRecord))) continue;
+      const cases = (kase.construct ?? []) as readonly { Parameters: readonly ParameterRecord[] }[];
+      const accepts = (cases.length === 0 && wanted.length === 0) || cases.some((c) => c.Parameters.length >= wanted.length
+        && c.Parameters.every((q, k) => k >= wanted.length ? !!(q as { Optional?: boolean }).Optional || !!(q as { Initializer?: unknown }).Initializer
+          : !q.Type || !wanted[k] || IsAssignable(wanted[k] as TypeRecord, q.Type as TypeRecord)));
+      if (!accepts) {
+        fail(`its constructor does not accept (${wanted.map((t) => (t ? displayType(t as TypeRecord) : 'any')).join(', ')})`);
+      }
+    }
+  };
   const classInstanceType = (n: ParseNode): Known => {
     const acc = classMemberWalk(n, 'instance');
     classMemberFolds(acc);
@@ -20471,7 +20538,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const n of list) {
       if (n.type === 'ClassDeclaration') {
         const className = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        if (className && !classNodes.has(className)) {
+        // A case (phase 5) joins its family and never names it.
+        const isCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
+        if (className && !classNodes.has(className) && !isCase) {
           classNodes.set(className, n);
         }
       } else if (n.type === 'InterfaceDeclaration') {
@@ -20779,8 +20848,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const partialOfKnown = ((n as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('partial')
           && !!name && classNodes.has(name) && classNodes.get(name) !== n;
         const reopened = partialOfKnown ? classNodes.get(name!) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } : undefined;
-        if (name) {
+        // A case (phase 5) joins its family and never names it; it is checked
+        // against the family's public contract instead.
+        if (name && ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') === 'parameters') {
           classNodes.set(name, n);
+        } else if (name && classNodes.has(name)) {
+          checkCaseContract(n as ParseNode, classNodes.get(name) as ParseNode, name);
         }
         // A partial of a GENERIC class re-opens it with the class's own
         // parameters in scope (plan OQ1 A). The run time does not yet carry a

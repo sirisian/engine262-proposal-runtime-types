@@ -82,8 +82,8 @@ test('a builder call exposes no component', () => {
   expectEarlyError('class S<Make.<const T>(1)> {}', 'SyntaxError');
   expectThrown('class S<Make(const T)> {}', 'stands in the arguments of a builder call');
   // A capture REFERENCE in a builder's arguments is a forward computation, and
-  // reaches the not-supported error rather than this one.
-  expectThrown('class S<const T, Make(T)> {}', 'specialization is not supported yet');
+  // reaches the orphan-case error (no primary `S`) rather than this one.
+  expectThrown('class S<const T, Make(T)> {}', 'declares the family it would specialize');
 });
 
 test('a mixed list is a selector-prefixed overload, which only a callable declares', () => {
@@ -112,12 +112,14 @@ test('an argument carries no variance, bound, or default', () => {
   expectThrown('class S<Map.<string, uint8> extends B> {}', 'an argument has no `extends` bound');
 });
 
-test('a valid specialization still reports that selection is not supported', () => {
+test('a valid class specialization is accepted beside its primary, and an orphan is reported', () => {
   // Not as a second declaration of the family's name: a specialization
   // introduces no binding of its own.
-  expectThrown('class Box<T: type> {} class Box<uint32> {}', 'specialization is not supported yet');
-  expectThrown('class Store<T: type> {} class Store<Map.<K: string, V: const E>> {}', 'specialization is not supported yet');
-  expectThrown('class Box<> {}', '`<>` specializes a declared family at its defaults');
+  // Phase 5: class cases are selected, so a valid one is accepted.
+  expect(evaluated('class Box<T: type> {} class Box<uint32> {} "ok";')).toBe('ok');
+  expect(evaluated('class Store<T: type> {} class Store<Map.<K: string, V: const E>> {} "ok";')).toBe('ok');
+  // With no primary in its statement list, a case specializes nothing.
+  expectThrown('class Box<> {}', 'a case of `Box` specializes a family declared in the same statement list');
   // A class operator's case is a declaration (phase 4, step 1); a USE of its
   // group is what is deferred (generics/callable-groups.test.mts).
   expect(evaluated('class M { operator+.<uint32>(rhs: uint32) { return this; } } "ok";')).toBe('ok');

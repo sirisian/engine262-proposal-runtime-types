@@ -263,6 +263,60 @@ export function ParseRange(
   return TokensFromParse(log as never, slice, source as never, 0, slice.length);
 }
 
+/**
+ * Phase 5 (plan 6.3): a class CASE - a class declaration whose list
+ * specializes a family - belongs to the primary of the same name declared in
+ * its own statement list. One with no primary there specializes nothing the
+ * program owns, and is an early error: replacement is confined to the owning
+ * declaration group. The list's own hint, where the parser left one (an entry
+ * with no domain is an argument), explains it best.
+ */
+function ReportOrphanClassCases(root: unknown, p: Parser): void {
+  type ClassNode = { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string, OrphanHint?: string } | null,
+    ClassModifiers?: readonly string[] | null };
+  const declarationOf = (item: unknown) => ((item as { type?: string })?.type === 'ExportDeclaration'
+    ? (item as { Declaration?: unknown }).Declaration : item) as ClassNode | undefined;
+  const isCase = (d: ClassNode | undefined): d is ClassNode => d?.type === 'ClassDeclaration' && !!d.TypeParameters
+    && d.TypeParameters.ListKind !== 'parameters' && !d.ClassModifiers?.includes('partial');
+  const seen = new Set<object>();
+  const visit = (v: unknown): void => {
+    if (!v || typeof v !== 'object' || seen.has(v)) return;
+    if (!Array.isArray(v) && !('location' in v)) return;
+    seen.add(v);
+    if (Array.isArray(v)) {
+      // A statement list: its cases, against the primaries it declares.
+      const primaries = new Set(v.map(declarationOf)
+        .filter((d) => d?.type === 'ClassDeclaration' && d.TypeParameters?.ListKind === 'parameters')
+        .map((d) => d!.BindingIdentifier?.name));
+      for (const item of v) {
+        const d = declarationOf(item);
+        if (!isCase(d)) continue;
+        const name = d.BindingIdentifier?.name ?? '';
+        if (primaries.has(name)) continue;
+        const orphan = `no \`class ${name}<...>\` in this statement list declares the family it would specialize`;
+        const first = (d.TypeParameters as { SpecializationEntryList?: readonly { Pattern?: { type?: string, BindingIdentifier?: { name?: string } } }[] })
+          .SpecializationEntryList?.[0]?.Pattern;
+        // What the list itself says - a bare name with no domain is an
+        // argument; a capture belongs to a specialization list - then why it
+        // specializes nothing here.
+        // A leading capture says most, as the parser's own report ranked it.
+        const hint = first?.type === 'CaptureBinding'
+          ? `a capture, \`const ${first.BindingIdentifier?.name ?? ''}\`, belongs to a specialization list, and ${orphan}`
+          : d.TypeParameters!.OrphanHint?.replace(', and specialization is not supported yet;', `, and ${orphan};`);
+        p.addEarlyError(Throw.SyntaxError('$1', hint
+          ?? `a case of \`${name}\` specializes a family declared in the same statement list, and none is declared there; the primary is written \`class ${name}<T: type> { ... }\``),
+        d.TypeParameters as never);
+      }
+      v.forEach(visit);
+      return;
+    }
+    for (const [k, c] of Object.entries(v)) {
+      if (k !== 'parent' && k !== 'location') visit(c);
+    }
+  };
+  visit(root);
+}
+
 export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T): T | ObjectValue[] {
   const options = {
     ...init,
@@ -279,6 +333,9 @@ export function wrappedParse<T>(init: ParserOptions, f: (parser: Parser) => T): 
     if (surroundingAgent.feature('runtime-types') && init.typedStrictRanges === undefined) {
       const ranges = TypedStrictRanges(r);
       if (ranges.length) return wrappedParse({ ...options, typedStrictRanges: ranges }, f);
+    }
+    if (surroundingAgent.feature('runtime-types')) {
+      ReportOrphanClassCases(r, p);
     }
     const errors = [];
     for (const error of p.earlyErrors) {
