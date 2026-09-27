@@ -1,8 +1,7 @@
 import { SetPendingCalleeContext } from '../type-system/runtime.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { SoAGather, SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
-import { isValueParameterBinding, lookupTypeParameter, ValuePackView, MetadataObjectFromType } from '../type-system/runtime.mts';
-import { MetadataAsObject } from './runtime-types.mts';
+import { isValueParameterBinding, lookupTypeParameter, ValuePackView, MetadataCaptureView } from '../type-system/runtime.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import {
   ReferenceRecord,
@@ -156,7 +155,7 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
         // A metadata value parameter reads as its metadata object, the form
         // a meta type's hooks receive, so a builder call can compute with it.
         if (bound.Kind === 'object' && isValueParameterBinding(bound)) {
-          return MetadataAsObject(MetadataObjectFromType(bound));
+          return Q(yield* MetadataCaptureView(bound));
         }
         return GetTypeObject(bound);
       }

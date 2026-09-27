@@ -196,16 +196,13 @@ function PortionByShape(metadata: MetadataRecord, shape: TypeRecord | null): Met
  * The bindings of a primitive block's METADATA captures, `X` of `primitive
  * float32<const X: D>`, for a receiver of type _receiver_: each the portion of
  * the receiver's metadata its written meta type claims, as dispatch binds it;
- * *null* where the receiver carries no metadata.
+ * including the default where the receiver carries no metadata of that type.
  */
 export function BindMetadataCaptures(
   captures: readonly ParseNode.CaptureBinding[],
   receiver: TypeRecord,
   resolve: (node: ParseNode) => TypeRecord | null,
 ): Map<string, Argument> | null {
-  if (receiver.Kind !== 'parameterized') {
-    return null;
-  }
   const host = componentHost(resolve);
   const out = new Map<string, Argument>();
   for (const c of captures) {
@@ -268,7 +265,8 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       return {
         Name: inner,
         Parameters: [{ Name: 'metadata', Variadic: false, HasDefault: false, Metadata: true }],
-        argumentsOf: (subject) => (typeof subject === 'object' && subject.Kind === 'parameterized' && SameType(subject.Base, base) ? [subject] : null),
+        argumentsOf: (subject) => (typeof subject === 'object'
+          && SameType(subject.Kind === 'parameterized' ? subject.Base : subject, base) ? [subject] : null),
         defaultOf: () => undefined,
       };
     },
@@ -287,7 +285,7 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       Elements: elements.map((e) => ({ Type: e as TypeRecord, Rest: false, Initial: 'none' as const })),
     } as unknown as Argument),
     metadataOf: (subject, meta) => {
-      if (typeof subject !== 'object' || subject.Kind !== 'parameterized') {
+      if (typeof subject !== 'object') {
         return null;
       }
       const domain = resolve(meta as unknown as ParseNode);
@@ -297,13 +295,13 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       // lane's whole metadata, which is its meta type's portion wherever one
       // meta type governs the lane (as the scalar result's checking assumes).
       if (metaType !== undefined) {
-        return metadataAsObjectRecord(MetadataPortion(subject.Metadata, metaType));
+        return metadataAsObjectRecord(MetadataPortion(subject.Kind === 'parameterized' ? subject.Metadata : null as unknown as MetadataRecord, metaType), domain ?? undefined);
       }
       // Before the meta type is registered - statically - its portion is the
       // metadata's keys that its written shape declares: a portion by the
       // domain's own properties, as the run time's portion is by the keys the
       // meta type claims.
-      return metadataAsObjectRecord(PortionByShape(subject.Metadata, domain));
+      return subject.Kind === 'parameterized' ? metadataAsObjectRecord(PortionByShape(subject.Metadata, domain), domain ?? undefined) : null;
     },
     // A FORWARD computation: the pattern's type with the captures substituted,
     // which the matcher compares with the subject. This always threw, and the

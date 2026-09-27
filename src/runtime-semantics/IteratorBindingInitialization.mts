@@ -1,4 +1,4 @@
-import { Value, ReferenceValue, ReferenceRunValue, ObjectValue } from '../value.mts';
+import { Value, ReferenceValue, ReferenceRunValue, ObjectValue, JSStringValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
 import { DecayReferenceValue, withReferenceRunInitializationEvaluator } from '../abstract-ops/reference-operations.mts';
 import {
@@ -14,10 +14,11 @@ import {
 } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { __ts_cast__ } from '../utils/language.mts';
-import { CreateRefBinding, DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
+import { CreateRefBinding, DeclarativeEnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
 import { EnforceAnnotation, IsOfTypeNode, CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
-import { IsOfType, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { IsOfType, TypeNodeToTypeRecord, RuntimeTypeOf } from '../type-system/runtime.mts';
+import { SameType } from '../type-system/relations.mts';
 import { restElementType, displayType } from '../type-system/records.mts';
 import { SequenceAssignment } from '../type-system/sequence-assignment.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -37,7 +38,7 @@ import {
   type IteratorRecord,
 
   IteratorStepValue,
-  UndefinedValue, type EnvironmentRecord, type FunctionDeclaration,
+  UndefinedValue, EnvironmentRecord, type FunctionDeclaration,
   Throw,
 } from '#self';
 
@@ -249,6 +250,36 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
     }
     if (node.TypeAnnotation) {
       const referent = Q(yield* GetValue(v.Location));
+      const expected = Q(yield* TypeNodeToTypeRecord(node.TypeAnnotation.Type));
+      // Value admission does not change a location's invariant metadata type.
+      // Checking only its present value accepted a bare location as Scalar
+      // through `any`, although a later store can put metres in that location.
+      let location = v.Location;
+      let locationType: TypeRecord | undefined;
+      for (;;) {
+        const holder = location.Base instanceof EnvironmentRecord && location.ReferencedName instanceof JSStringValue
+          ? RefBindingHolder(location.Base, location.ReferencedName) : undefined;
+        const binding = holder?.bindings.get(location.ReferencedName as JSStringValue);
+        if (binding?.refLocation) {
+          location = binding.refLocation;
+          continue;
+        }
+        locationType = binding?.declaredType as TypeRecord | undefined;
+        break;
+      }
+      if (location.Base instanceof ObjectValue && location.ReferencedName instanceof JSStringValue) {
+        const key = location.ReferencedName.stringValue();
+        const base = location.Base as ObjectValue & {
+          TypedProperties?: Map<string, { TypeRecord: TypeRecord }>, TypedElement?: { TypeRecord: TypeRecord },
+        };
+        locationType = base.TypedProperties?.get(key)?.TypeRecord
+          ?? (String(Number(key)) === key ? base.TypedElement?.TypeRecord : undefined);
+      }
+      locationType ??= RuntimeTypeOf(referent);
+      if ((expected.Kind === 'parameterized' || locationType.Kind === 'parameterized')
+          && !SameType(locationType, expected)) {
+        return Throw.TypeError('the location bound by ref to $1 must have the same metadata type', bindingId);
+      }
       const ok = Q(yield* IsOfTypeNode(referent, node.TypeAnnotation.Type));
       if (!ok) {
         return Throw.TypeError('the argument bound by ref to $1 does not satisfy its type annotation', bindingId);

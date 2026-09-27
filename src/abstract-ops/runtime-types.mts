@@ -2855,6 +2855,10 @@ export function LookupPrimitiveOperatorLevels(value: Value, opText: string): rea
     names.push('complex');
   } else if (isRationalObject(value)) {
     names.push('rational');
+  } else if (isDecimalObject(value) || isFloat128Object(value)) {
+    const record = RuntimeTypeOf(value);
+    const base = record.Kind === 'parameterized' ? record.Base : record;
+    if (base.Kind === 'primitive') names.push(base.Name);
   } else if (value.type === 'Vector') {
     // A vector's blocks are over the family, `primitive vector<...>`.
     names.push('vector');
@@ -3094,9 +3098,24 @@ export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
 
 const metaDefaultSnapshots = new WeakMap<object, Value>();
 
+/** Match the numeric leaves produced by written and computed metadata records. */
+export function NormalizeMetadataNumbers(value: unknown): Value {
+  if (value instanceof Value && isTypedNumber(value)) {
+    const numeric = (value as TypedNumberValue).value;
+    return typeof numeric === 'bigint' ? Value(numeric) : Value(Number(numeric));
+  }
+  if (value instanceof Value || value === null || typeof value !== 'object') return value as Value;
+  // Range endpoints retain the host primitive's type (table-metadata-values).
+  if ((value as { __range?: unknown }).__range) return value as Value;
+  if (Array.isArray(value)) return Object.freeze(value.map(NormalizeMetadataNumbers)) as unknown as Value;
+  const out: Record<string, Value> = Object.create(null);
+  for (const [key, leaf] of Object.entries(value)) out[key] = NormalizeMetadataNumbers(leaf as Value);
+  return Object.freeze(out) as unknown as Value;
+}
+
 /** The declaration-time snapshot of a meta type's `default`. */
 export function RegisterMetaDefaultSnapshot(typeObject: object, snapshot: Value): void {
-  metaDefaultSnapshots.set(typeObject, snapshot);
+  metaDefaultSnapshots.set(typeObject, NormalizeMetadataNumbers(snapshot));
 }
 
 export function LookupMetaDefaultSnapshot(typeObject: object): Value | undefined {

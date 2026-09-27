@@ -1,4 +1,4 @@
-import { SetPendingCalleeContext, markValueParameterBinding } from '../type-system/runtime.mts';
+import { SetPendingCalleeContext, markValueParameterBinding, SetMetadataCaptureDomain } from '../type-system/runtime.mts';
 import {
   isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow, CreateComplexValue,
   type ComplexObject,
@@ -18,8 +18,8 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
-import { MetaTypeForConstraint, MetadataPortion, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels } from '../abstract-ops/runtime-types.mts';
-import { IsSubtype } from '../type-system/relations.mts';
+import { MetaTypeForConstraint, MetadataPortion, MetaTypeGoverns, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels } from '../abstract-ops/runtime-types.mts';
+import { IsSubtype, SameType as SameTypeRecord } from '../type-system/relations.mts';
 import { MatchComponentList, ComponentOperandAdmits } from '../type-system/component-patterns.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -46,7 +46,7 @@ import {
  * rebuilds the same parameterization. Each property is a ~literal~ record,
  * which is the form the projection hands back unchanged.
  */
-export function metadataAsObjectRecord(metadata: MetadataRecord): TypeRecord {
+export function metadataAsObjectRecord(metadata: MetadataRecord, domain?: TypeRecord): TypeRecord {
   const Properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
   if (metadata && typeof metadata === 'object') {
     for (const key of Object.keys(metadata as unknown as Record<string, unknown>)) {
@@ -59,7 +59,9 @@ export function metadataAsObjectRecord(metadata: MetadataRecord): TypeRecord {
       });
     }
   }
-  return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as TypeRecord;
+  const record = { Kind: 'object', Properties, IndexSignatures: [] } as unknown as TypeRecord;
+  if (domain) SetMetadataCaptureDomain(record, domain);
+  return record;
 }
 
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
@@ -509,9 +511,17 @@ function MostSpecificPrimitiveOperator(candidates: readonly PreparedPrimitiveOpe
  * specific admitting operand, an ambiguity being a *TypeError*.
  */
 export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rval: Value): PlainEvaluator<Value | BodylessContributions | undefined> {
-  if (!surroundingAgent.feature('runtime-types') || (lval instanceof ObjectValue && !isComplexObject(lval) && !isRationalObject(lval))) {
+  if (!surroundingAgent.feature('runtime-types') || (lval instanceof ObjectValue && !isComplexObject(lval) && !isRationalObject(lval) && !isDecimalObject(lval) && !isFloat128Object(lval))) {
     return undefined;
   }
+  const receiverType = RuntimeTypeOf(lval);
+  const operandType = RuntimeTypeOf(rval);
+  const plainReceiver = receiverType.Kind === 'primitive'
+    && !(receiverType.Name === 'vector' && (receiverType.Arguments[0] as TypeRecord)?.Kind === 'parameterized');
+  const protectedPair = plainReceiver && (opText.startsWith('unary ') || SameTypeRecord(receiverType, operandType));
+  // Protect both the value and the result's metadata. A bodyless definition
+  // returning Meter would otherwise change the type of ordinary plain + plain.
+  if (protectedPair) return undefined;
   // The admitting definitions WITHOUT a body, from every level: each
   // contributes its meta type's portion of the result's metadata, whichever
   // definition with a body - or the primitive operation - computes the value.
@@ -550,22 +560,9 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
       const componentNames = entry.deferred?.componentNames ?? [];
       const componentList = entry.deferred?.componentList as ParseNode.TypeParameters | undefined;
       let componentMismatch = false;
-      if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0 || componentList)) {
+      if (entry.deferred) {
         const carried = RuntimeTypeOf(lval);
-        // A block with METADATA parameters matches only a receiver that carries
-        // metadata: #sec-primitive-operator-blocks, "If _subject_ carries no
-        // metadata of _M_, return ~no-match~". The checker skips such a block
-        // (BindMetadataCaptures answers *null*). Here a block that also has a
-        // COMPONENT capture went on to bind the component, leave the metadata
-        // parameter unbound, and resolve the operand and result types - so
-        // `complex.<E>.<T>` threw "T is not defined" before the block could be
-        // rejected, and `complex128 + complex128` failed wherever a block over
-        // `complex<const E><const T: P>` was declared. It is rejected before
-        // anything is bound or resolved.
-        const metadataFree = (entry.deferred.parameterNames?.length ?? 0) > 0 && carried.Kind !== 'parameterized';
-        if (metadataFree) {
-          componentMismatch = true;
-        } else if (carried.Kind === 'parameterized' || componentNames.length > 0 || componentList) {
+        {
           const frame = new Map<string, TypeRecord>();
           // A component list with a nested pattern is matched against the
           // receiver's own arguments by the specialization matcher: the
@@ -607,32 +604,22 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
           // The meta type each parameter speaks for, resolved from its
           // constraint, so the parameter binds to THAT meta type's portion.
           const spokenFor: object[] = [];
-          for (let pi = 0; pi < entry.deferred.parameterNames.length && carried.Kind === 'parameterized'; pi += 1) {
+          for (let pi = 0; pi < entry.deferred.parameterNames.length; pi += 1) {
             const name = entry.deferred.parameterNames[pi]!;
             const constraintNode = entry.deferred.parameterConstraints?.[pi];
-            let portion = carried.Metadata;
+            let constraint: TypeRecord | undefined;
+            let portion = carried.Kind === 'parameterized' ? carried.Metadata : Object.freeze(Object.create(null)) as MetadataRecord;
             if (constraintNode) {
-              const constraint = Q(yield* ResolveTypeNode(constraintNode as never));
+              constraint = Q(yield* ResolveTypeNode(constraintNode as never));
               const metaType = MetaTypeForConstraint(constraint);
               if (metaType !== undefined) {
                 spokenFor.push(metaType);
-                portion = MetadataPortion(carried.Metadata, metaType);
+                portion = MetadataPortion(portion, metaType);
               }
             }
-            frame.set(name, markValueParameterBinding(metadataAsObjectRecord(portion)));
+            frame.set(name, markValueParameterBinding(metadataAsObjectRecord(portion, constraint)));
           }
           deferredSpokenFor = spokenFor;
-          for (const name of [] as string[]) {
-            // The parameter stands for the receiver's METADATA, and it is
-            // bound as an ~object~ record reproducing it. That form is not a
-            // convenience: `float64.<D>` builds a parameterization only where
-            // its type argument is an object record, and anything else falls
-            // through to the bare base - which is why binding a record of any
-            // other kind left `float64.<D>` unparameterized and the result
-            // unstamped, silently, with the arithmetic still giving the right
-            // number.
-            frame.set(name, markValueParameterBinding(metadataAsObjectRecord((carried as TypeRecord & { Kind: 'parameterized' }).Metadata)));
-          }
           // The frame stays pushed for the WHOLE invocation, not only while
           // the types are resolved: the operator's own parameter boundary
           // resolves `float64.<D>` when the body is entered, and popping first
@@ -648,21 +635,22 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
           // Only the first is bound: an operator takes one argument, so a second
           // name would have nothing to name.
           const operatorNames = entry.deferred.operatorParameterNames ?? [];
-          if (operatorNames.length > 0 && isTypedNumber(rval)
-              && (rval.TypeRecord as TypeRecord).Kind === 'parameterized') {
-            const argCarried = rval.TypeRecord as TypeRecord & { Kind: 'parameterized' };
+          if (operatorNames.length > 0) {
+            const argCarried = RuntimeTypeOf(rval);
             // The portion of the operand's metadata the parameter's meta type
             // claims, as a block capture binds - `Y: Dim` over a value that also
             // carries bounds binds its Dim portion.
-            let argPortion = argCarried.Metadata;
+            let argPortion = argCarried.Kind === 'parameterized' ? argCarried.Metadata : Object.freeze(Object.create(null)) as MetadataRecord;
             const argConstraint = entry.deferred.operatorParameterConstraints?.[0];
+            let constraint: TypeRecord | undefined;
             if (argConstraint) {
-              const metaType = MetaTypeForConstraint(Q(yield* ResolveTypeNode(argConstraint as never)));
+              constraint = Q(yield* ResolveTypeNode(argConstraint as never));
+              const metaType = MetaTypeForConstraint(constraint);
               if (metaType !== undefined) {
-                argPortion = MetadataPortion(argCarried.Metadata, metaType);
+                argPortion = MetadataPortion(argPortion, metaType);
               }
             }
-            frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argPortion)));
+            frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argPortion, constraint)));
           }
           pushTypeParameterFrame(frame);
           framePushed = true;
@@ -745,7 +733,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     EnterOperatorBody();
     let raw;
     try {
-      raw = Q(yield* Call(chosen.entry.fn as never, lval, [rval]));
+      raw = Q(yield* Call(chosen.entry.fn as never, WithoutMetadata(lval), [WithoutMetadata(rval)]));
     } finally {
       LeaveOperatorBody();
       if (chosen.frame) {
@@ -762,7 +750,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
         deferredSpokenFor.map((metaType) => ({ metaType, portion: contributedPortions.get(metaType) ?? MetadataPortion(returnMetadata, metaType) })),
         governing,
       );
-      deferredReturnType = { Kind: 'parameterized', Base: deferredReturnType.Base, Metadata: mergedMetadata } as unknown as TypeRecord;
+      deferredReturnType = ResultWithMetadata(deferredReturnType.Base, mergedMetadata);
       if (isTypedNumber(raw)) {
         return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
       }
@@ -830,6 +818,13 @@ function isVectorType(t: TypeRecord | null | undefined): boolean {
   return !!t && t.Kind === 'primitive' && t.Name === 'vector';
 }
 
+/** Arithmetic need not stamp a portion that only restates absence. Types stay distinct. */
+function ResultWithMetadata(base: TypeRecord, metadata: MetadataRecord): TypeRecord {
+  const governing = GoverningMetaTypes(metadata);
+  return governing.unclaimed.length > 0 || governing.types.some((metaType) => MetaTypeGoverns(metadata, metaType))
+    ? { Kind: 'parameterized', Base: base, Metadata: metadata } as TypeRecord : base;
+}
+
 export function StampBodylessContributions(lval: Value, raw: Value, found: BodylessContributions): Value | ThrowCompletion {
   // A vector's metadata is its LANES': the contributing definition's return
   // type is the result's type, with each lane carrying its lane type. One
@@ -858,10 +853,9 @@ export function StampBodylessContributions(lval: Value, raw: Value, found: Bodyl
   const merged = MergeOperatorResultMetadata(portions, governing);
   const rawType = RuntimeTypeOf(raw);
   const base = rawType.Kind === 'parameterized' ? rawType.Base : rawType;
-  const stampedType = { Kind: 'parameterized', Base: base, Metadata: merged } as unknown as TypeRecord;
+  const stampedType = ResultWithMetadata(base, merged);
   if (isTypedNumber(raw)) {
     return new TypedNumberValue((raw as TypedNumberValue).value, stampedType);
   }
   return StampFamilyValue(raw, stampedType) ?? raw;
 }
-

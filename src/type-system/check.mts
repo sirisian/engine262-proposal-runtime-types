@@ -23576,9 +23576,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const bodylessResult = (op: string, left: TypeRecord, right: TypeRecord, withBodies = false, site?: ParseNode): TypeRecord | null | undefined => {
     // A vector's metadata is its lanes', so a vector is judged by its own type.
-    const isVector = left.Kind === 'primitive' && left.Name === 'vector';
-    if (!isVector && (left.Kind !== 'parameterized' || left.Base.Kind !== 'primitive')) return undefined;
-    const base = (isVector ? left : (left as TypeRecord & { Kind: 'parameterized' }).Base) as TypeRecord & { Kind: 'primitive' };
+    const base = left.Kind === 'parameterized' ? left.Base : left;
+    if (base.Kind !== 'primitive') return undefined;
     const levels: string[] = [];
     const firstArgument = (base.Arguments ?? [])[0];
     if (typeof firstArgument === 'number') levels.push(`${base.Name}${firstArgument}`);
@@ -23588,6 +23587,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let unknownContribution = false;
     for (const name of levels) {
       for (const { def, block } of blockDefinitionsFor(name, op)) {
+        // Two bare static types can still hold two parameterized values. A
+        // value body may return a different base, so the runtime plain-pair
+        // fast path is not a static proof of the result's primitive type.
+        if (left.Kind === 'primitive' && SameType(left, right)
+            && def.FunctionBody && (block.MetadataParameters?.Captures?.length ?? 0) > 0) return null;
         if (def.FunctionBody && !withBodies) continue;
         // One path for every block, as dispatch binds: the component list is
         // matched against the receiver's arguments, each metadata capture takes
@@ -23597,6 +23601,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the return type is instantiated from them.
         const components = block.ComponentParameters?.ListKind === 'specialization' ? block.ComponentParameters : null;
         const metadataCaptures = block.MetadataParameters?.Captures ?? [];
+        // A bare STATIC type includes values carrying metadata. Its portion is
+        // unknown, even though a bare VALUE's portion is the default. Defer
+        // this metadata computation and retain the primitive result type.
+        // In particular, do not evaluate mul(default, D) for a float32 binding
+        // that can still hold metres. The runtime judges the actual pair.
+        const rightBase = right.Kind === 'parameterized' ? right.Base : right;
+        if (!def.FunctionBody && metadataCaptures.length > 0
+            && (left.Kind === 'primitive' || right.Kind === 'primitive')
+            && SameType(base, rightBase)) return base;
         const bound = components ? MatchComponentListRaw(components, base.Name, base.Arguments ?? [], resolveNode) : new Map<string, number | TypeRecord>();
         if (!bound) continue;
         if (metadataCaptures.length > 0) {

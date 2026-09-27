@@ -23,7 +23,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook } from '../abstract-ops/runtime-types.mts';
 import { SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -362,6 +362,41 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
  * different numeric types"*.
  */
 const valueParameterBindings = new WeakSet<object>();
+
+// A capture's canonical record is used for identity and matching. Reading it
+// as a value must instead satisfy the capture's written domain. Keeping these
+// views separate avoids making Number(0) and int32(0) different metadata.
+const metadataCaptureDomains = new WeakMap<object, TypeRecord>();
+const metadataCaptureViews = new WeakMap<object, Value>();
+
+export function SetMetadataCaptureDomain(record: TypeRecord, domain: TypeRecord): void {
+  metadataCaptureDomains.set(record, domain);
+}
+
+export function* MetadataCaptureView(record: TypeRecord): ValueEvaluator {
+  const cached = metadataCaptureViews.get(record);
+  if (cached) return cached;
+  const domain = metadataCaptureDomains.get(record);
+  const materialize = function* (snapshot: MetadataRecord, shape: TypeRecord | undefined): ValueEvaluator {
+    if (shape?.Kind !== 'object') return MetadataAsObject(snapshot);
+    const fields: Record<string, Value> = Object.create(null);
+    for (const [key, raw] of Object.entries(snapshot as unknown as Record<string, Value>)) {
+      const property = shape.Properties.find((p) => p.key === key);
+      if (!property) {
+        fields[key] = raw;
+      } else if (raw !== null && typeof raw === 'object' && !(raw instanceof Value)
+          && property.type.Kind === 'object') {
+        fields[key] = Q(yield* materialize(raw as MetadataRecord, property.type));
+      } else {
+        fields[key] = Q(yield* RequireType(raw, property.type));
+      }
+    }
+    return MetadataAsObject(Object.freeze(fields) as unknown as MetadataRecord);
+  };
+  const value = Q(yield* materialize(MetadataObjectFromType(record), domain));
+  metadataCaptureViews.set(record, value);
+  return value;
+}
 
 /** Binds _record_ to _name_ in _frame_, marking it if _param_ was declared with `:`. */
 /**
@@ -3878,11 +3913,12 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       const { types: governing } = GoverningMetaTypes(t.Metadata);
       for (const metaType of governing) {
         if (!MetaTypeGoverns(t.Metadata, metaType)) {
-          // The sit-out (the judgment's "whose portion is not M's default"): a
-          // portion equal to the default constrains nothing, so the meta type
-          // takes no part, and a brand written at its own default admits every
-          // bare value of the base while remaining a distinct type - the third
-          // consequence of the participation rule.
+          // Default admission is about the source's effective portion too.
+          // Testing only the target admitted metres as dimensionless scalars.
+          if (carried?.Kind === 'parameterized' && MetaTypeGoverns(carried.Metadata, metaType)
+              && Q(yield* ApplyMetaHook(metaType, 'subtype', [
+                MetadataPortion(carried.Metadata, metaType), MetadataPortion(t.Metadata, metaType),
+              ], t.Base)) !== Value.true) return false;
           continue;
         }
         // "it holds of v and THAT PORTION": each meta type judges its own
@@ -6681,9 +6717,11 @@ function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Val
         // A metadata VALUE parameter - `D` of `multiplyDimensions(D, D2)` - is
         // passed as its metadata object, which is what the builder computes
         // with; a type parameter is passed as its Type Object.
-        args.push(boundParam.Kind === 'object' && isValueParameterBinding(boundParam)
-          ? MetadataAsObject(MetadataObjectFromType(boundParam))
-          : GetTypeObject(boundParam));
+        if (boundParam.Kind === 'object' && isValueParameterBinding(boundParam)) {
+          args.push(Q(yield* MetadataCaptureView(boundParam)));
+        } else {
+          args.push(GetTypeObject(boundParam));
+        }
         continue;
       }
     }
