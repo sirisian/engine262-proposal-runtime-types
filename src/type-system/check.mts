@@ -2,14 +2,17 @@ import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, 
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
-import { MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
+import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
 import { StaticIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
+import { EnsureCompletion } from '../completion.mts';
+import { skipDebugger } from '../evaluator.mts';
+import { MostSpecificPrimitiveOperator, OperandNamesCapture } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
-import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators } from '../abstract-ops/runtime-types.mts';
+import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes } from '../abstract-ops/runtime-types.mts';
 import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
@@ -3741,6 +3744,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- the function context -----------------------------------------
 
   const returnTypes: Known[] = [];
+  // Facts describe the value read, independently of the location's annotation.
+  // Mutable facts survive straight-line stores; unknown calls, borrowing and
+  // control-flow joins invalidate them. Const facts are immutable primitive values.
+  const metadataValueFacts = new WeakMap<Frame, Map<string, { type: TypeRecord, mutable: boolean, depth: number }>>();
+  const invalidateMutableMetadataFacts = (): void => {
+    for (const frame of frames) {
+      const facts = metadataValueFacts.get(frame);
+      if (facts) for (const [name, fact] of facts) if (fact.mutable) facts.delete(name);
+    }
+  };
+  const metadataFact = (expression: ParseNode | null | undefined, depth = 0): TypeRecord | undefined => {
+    if (!expression || depth > 20) return undefined;
+    if (expression.type === 'ParenthesizedExpression') return metadataFact(expression.Expression, depth + 1);
+    if (expression.type === 'IdentifierReference') {
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        const frame = frames[i]!;
+        if (!frame.bindings.has(expression.name) && !frame.bindingKinds.has(expression.name)) continue;
+        const fact = metadataValueFacts.get(frame)?.get(expression.name);
+        return fact && (!fact.mutable || (fact.depth === returnTypes.length && !assignedInsideFunction.has(expression.name))) ? fact.type : undefined;
+      }
+      return undefined;
+    }
+    if (expression.type === 'NumericLiteral') {
+      const type = staticType(expression);
+      return type?.Kind === 'literal' ? type.Base : type?.Kind === 'primitive' ? type : makePrimitive('number');
+    }
+    if (expression.type === 'TypedConversionExpression') {
+      const target = resolveType(expression.Type);
+      if (!target || !['primitive', 'parameterized'].includes(target.Kind)) return undefined;
+      const source = metadataFact(expression.Expression, depth + 1);
+      return source?.Kind === 'primitive' && !(target.Kind === 'primitive' && target.Name === 'vector') ? target : undefined;
+    }
+    if (expression.type === 'UnaryExpression' && ['+', '-', '~'].includes(expression.operator)) {
+      const fact = metadataFact(expression.UnaryExpression, depth + 1);
+      return fact?.Kind === 'primitive' ? fact : undefined;
+    }
+    if (['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression', 'ShiftExpression', 'BitwiseANDExpression', 'BitwiseORExpression', 'BitwiseXORExpression'].includes(expression.type)) {
+      const [left, right] = arithmeticOperands(expression);
+      const a = metadataFact(left, depth + 1), b = metadataFact(right, depth + 1);
+      if (a?.Kind === 'primitive' && b?.Kind === 'primitive' && SameType(a, b)) return a;
+    }
+    return undefined;
+  };
+  const setMetadataFact = (frame: Frame, name: string, type: TypeRecord | undefined, mutable: boolean): void => {
+    let facts = metadataValueFacts.get(frame);
+    if (!facts) {
+      facts = new Map(); metadataValueFacts.set(frame, facts);
+    }
+    if (type && (frame.bindingKinds.get(name) ?? 'ordinary') === 'ordinary') facts.set(name, { type, mutable, depth: returnTypes.length });
+    else facts.delete(name);
+  };
+
   const asyncReturns: boolean[] = [];
 
   /**
@@ -9125,7 +9180,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 ? ({ Kind: 'parameter', Name: baseName } as TypeRecord)
                 : (baseIsGeneric ? null : lookupAlias(baseName) as TypeRecord | null));
             if (base) {
-              const metadata = MetadataObjectFromType(args[0] as TypeRecord);
+              const metadata = MetadataObjectFromType(args[0] as TypeRecord, base);
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
               const keys = Object.keys(metadata as unknown as Record<string, unknown>);
               // table-metadata-values: the value language is CLOSED - "Nothing
@@ -9549,7 +9604,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return {
           Kind: 'parameterized',
           Base: baseType as TypeRecord,
-          Metadata: MetadataObjectFromType(metaArgs[0] as TypeRecord) as unknown as MetadataRecord,
+          Metadata: MetadataObjectFromType(metaArgs[0] as TypeRecord, baseType) as unknown as MetadataRecord,
         } as unknown as Known;
       }
       case 'IndexedAccessType': {
@@ -10133,7 +10188,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const raw = node.negated && typeof node.value === 'number' ? -node.value : node.value;
         const base = node.kind === 'number' ? makePrimitive('number') : node.kind === 'string' ? makePrimitive('string') : node.kind === 'boolean' ? makePrimitive('boolean') : makePrimitive('bigint');
-        return { Kind: 'literal', Value: Value(raw as never), Base: base };
+        return { Kind: 'literal', Value: Value(raw as never), Base: base, SourceText: node.SourceText };
       }
       default:
         return null;
@@ -16354,7 +16409,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (lvc && rvc && !ordinaryNumericOrdering(strictOperator, lvc, rvc) && !SameType(lvc, rvc)
               // A block's comparison for the pair is its meaning, and the run
               // time dispatches it as it dispatches arithmetic.
-              && blockOperatorResult(strictOperator, lvc, rvc) === undefined) {
+              && bodylessResult(strictOperator, lvc, rvc, true, node) === undefined) {
             const completion = Throw.StaticTypeError(
               '$1 and $2 are different numeric types and do not mix',
               Value(displayType(lvc)), Value(displayType(rvc)),
@@ -16533,8 +16588,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         // Through `shared` and a literal's base: a `shared uint8` is a `uint8`
         // for every question about what the value can do.
-        const lv = asValueType(erasedKeepingBrand(leftT));
-        const rv = asValueType(erasedKeepingBrand(rightT));
+        let lv = asValueType(erasedKeepingBrand(leftT));
+        let rv = asValueType(erasedKeepingBrand(rightT));
 
         // #table-family-operations: a binary floating-point type "does not
         // define bitwiseNOT, the shifts, and the bitwise operations, since each
@@ -16611,8 +16666,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         };
-        if (lv && rightLit) {
-          const base = lv.Kind === 'parameterized' ? lv.Base : lv;
+        if (lv && rightLit && lv.Kind === 'parameterized'
+            && !(token === '**' && lv.Base.Kind === 'primitive' && lv.Base.Name === 'rational')) {
+          adopt(rightLit, lv.Base);
+          rv = lv.Base;
+        }
+        if (rv && leftLit && rv.Kind === 'parameterized') {
+          adopt(leftLit, rv.Base);
+          lv = rv.Base;
+        }
+        if (lv && rightLit && lv.Kind !== 'parameterized') {
+          const base = lv;
           if (isNumericValueTypeName((base as { Name?: string }).Name)
             || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(leftNode))
             // A RATIONAL operand adopts a literal too - rational.md, "a literal
@@ -16622,8 +16686,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             || (base.Kind === 'primitive' && base.Name === 'rational' && token !== '**')) adopt(rightLit, lv);
           return lv;
         }
-        if (rv && leftLit) {
-          const base = rv.Kind === 'parameterized' ? rv.Base : rv;
+        if (rv && leftLit && rv.Kind !== 'parameterized' && !lv) {
+          const base = rv;
           if (isNumericValueTypeName((base as { Name?: string }).Name)
             || (base.Kind === 'primitive' && base.Name === 'bigint' && operandParticipates(rightNode))
             // A RATIONAL operand adopts a literal too - rational.md, "a literal
@@ -16640,7 +16704,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (lv && rv) {
           if (SameType(lv, rv)) {
             if (token) {
-              const contributed = bodylessResult(token, lv, rv, false, node);
+              const contributed = bodylessResult(token, lv, rv, true, node);
               if (contributed !== undefined) return contributed;
             }
             // A LITERAL-DERIVED LOOP BINDING IN ARITHMETIC. This returned the LEFT
@@ -16669,7 +16733,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // the operator, not an implicit conversion; the mixing rule applies
           // where no block speaks for the pair.
           if (token) {
-            const declared = blockOperatorResult(token, lv, rv);
+            const declared = bodylessResult(token, lv, rv, true, node);
             if (declared !== undefined) {
               return declared;
             }
@@ -23623,7 +23687,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // receiver; and a bodyless definition only contributes metadata.
         // An operand naming a metadata capture, `float64.<X>`, is a
         // parameterization even where the open argument resolves away.
-        if (e.FormalParameters.length === 1 && raw.Kind === 'primitive' && !roles.includes('#meta:')) {
+        if (e.FormalParameters.length === 1 && raw.Kind === 'primitive' && !roles.includes('#meta:')
+            && (node.MetadataParameters?.Captures?.length ?? 0) === 0 && NestedComponentCapturesOf(node).length === 0) {
           const family = PrimitiveDeclaresParameters(typeName);
           const own = family ? null : builtinTypeRecord(typeName, []);
           if (family ? raw.Name === typeName : (own !== null && SameType(raw, own))) {
@@ -23728,14 +23793,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     levels.push(base.Name);
     const resolveNode = (n: ParseNode) => resolveType(n as ParseNode.Type);
     const found: TypeRecord[] = [];
+    const bodies: TypeRecord[] = [];
+    const bodyCandidates: { parameter: TypeRecord | null, fixed: boolean, result: TypeRecord, level: string }[] = [];
+    const operandNodes = site ? arithmeticOperands(site) : [];
+    const leftFact = metadataFact(operandNodes[0]);
+    const rightFact = metadataFact(operandNodes[1]);
+    const plain = (fact: TypeRecord | undefined, type: TypeRecord) => fact?.Kind === 'primitive' && SameType(fact, type);
+    const leftPlain = plain(leftFact, left) || (!!operandNodes[0] && !!literalOperand(operandNodes[0]) && left.Kind === 'primitive');
+    const rightPlain = plain(rightFact, right) || (!!operandNodes[1] && !!literalOperand(operandNodes[1]) && right.Kind === 'primitive');
+    if (leftPlain && rightPlain && SameType(left, right)) return left;
+    const unknownSubjects = new Set<TypeRecord>();
+    if (!leftPlain && (!leftFact || !SameType(leftFact, left))) unknownSubjects.add(left);
+    if (!rightPlain && (!rightFact || !SameType(rightFact, right))) unknownSubjects.add(right);
+
     let unknownContribution = false;
     for (const name of levels) {
       for (const { def, block } of blockDefinitionsFor(name, op)) {
         // Two bare static types can still hold two parameterized values. A
         // value body may return a different base, so the runtime plain-pair
         // fast path is not a static proof of the result's primitive type.
-        if (left.Kind === 'primitive' && SameType(left, right)
-            && def.FunctionBody && (block.MetadataParameters?.Captures?.length ?? 0) > 0) return null;
         if (def.FunctionBody && !withBodies) continue;
         // One path for every block, as dispatch binds: the component list is
         // matched against the receiver's arguments, each metadata capture takes
@@ -23750,14 +23826,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // this metadata computation and retain the primitive result type.
         // In particular, do not evaluate mul(default, D) for a float32 binding
         // that can still hold metres. The runtime judges the actual pair.
-        const rightBase = right.Kind === 'parameterized' ? right.Base : right;
-        if (!def.FunctionBody && metadataCaptures.length > 0
-            && (left.Kind === 'primitive' || right.Kind === 'primitive')
-            && SameType(base, rightBase)) return base;
         const bound = components ? MatchComponentListRaw(components, base.Name, base.Arguments ?? [], resolveNode) : new Map<string, number | TypeRecord>();
         if (!bound) continue;
         if (metadataCaptures.length > 0) {
-          const metadata = BindMetadataCaptures(metadataCaptures, left, resolveNode);
+          const metadata = BindMetadataCaptures(metadataCaptures, left, resolveNode, unknownSubjects);
           if (!metadata) continue;
           for (const [k, v] of metadata) bound.set(k, v);
         }
@@ -23768,20 +23840,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null } | undefined)?.TypeAnnotation;
         let admitted: Map<string, number | TypeRecord> | null = bound;
         if (annotation) {
-          admitted = MatchComponentOperand(annotation.Type as unknown as ParseNode, captures, bound, right, resolveNode);
+          admitted = MatchComponentOperand(annotation.Type as unknown as ParseNode, captures, bound, right, resolveNode, unknownSubjects);
         }
         if (!admitted) continue;
         const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, admitted, resolveNode) : null;
         // A return computed by a builder - `float32.<mul(X, Y)>` - is known
         // only when the builder runs; the definition applies, its type is
         // left unknown rather than guessed.
-        if (!def.FunctionBody && def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)
+        if (def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)
             && !(returns && typeof returns === 'object' && returns.Kind === 'parameterized')) {
           // The builder runs in the pass before evaluation, with the captures
           // bound to the operands' static metadata; the recheck then types
           // the site with the result. A copy detached from the block resolves
           // as a closed annotation - the captures are bound by the pass, not
           // open parameters - and carries every function and alias in view.
+          if ([...admitted.values()].some(IsUnknownMetadataCapture)) {
+            const widened = resolveType(def.TypeAnnotation.Type);
+            (def.FunctionBody ? bodies : found).push(widened?.Kind === 'parameterized' ? widened.Base : widened ?? base);
+            continue;
+          }
           const evaluatedHere = site ? evaluatedTypeNodes.get(site) : undefined;
           if (evaluatedHere) {
             found.push(evaluatedHere);
@@ -23802,15 +23879,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A definition with a body computes the value, so its return type is
         // the result's - for a unary operator, where no mixing rule decides it.
         if (def.FunctionBody) {
-          return returns && typeof returns === 'object' ? returns : null;
+          if (returns && typeof returns === 'object') {
+            bodies.push(returns);
+            const parameter = annotation ? InstantiateComponentType(annotation.Type as ParseNode, admitted, resolveNode) : null;
+            bodyCandidates.push({ parameter: typeof parameter === 'object' ? parameter : null, result: returns, level: name,
+              fixed: !OperandNamesCapture({ parameterTypeNode: annotation?.Type, captureDeclarations: captures }) });
+          } else unknownContribution = true;
+          continue;
         }
         if (returns && typeof returns === 'object' && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) {
           found.push(returns);
         }
       }
     }
+    if (bodies.length > 0) {
+      if (bodyCandidates.length === bodies.length && unknownSubjects.size === 0
+          && bodyCandidates.some((c) => c.parameter?.Kind === 'parameterized' && GoverningMetaTypes(c.parameter.Metadata).unclaimed.length > 0)) return null;
+      if (bodyCandidates.length === bodies.length && unknownSubjects.size === 0
+          && bodyCandidates.every((c) => c.parameter?.Kind !== 'parameterized' || GoverningMetaTypes(c.parameter.Metadata).unclaimed.length === 0)) {
+        const candidates = bodyCandidates.filter((c) => c.level === bodyCandidates[0].level);
+        const selection = EnsureCompletion(skipDebugger(MostSpecificPrimitiveOperator(candidates, right)));
+        if (selection.Type === 'normal' && selection.Value && selection.Value !== 'ambiguous') return selection.Value.result;
+        if (selection.Type === 'normal' && selection.Value === 'ambiguous') {
+          errors.push((Throw.StaticTypeError('$1', `operator ${op} on ${displayType(left)} is ambiguous for an operand of ${displayType(right)}`) as ThrowCompletion).Value as ObjectValue);
+          return null;
+        }
+      }
+      // The built-in path is possible for a pair whose actual values could both
+      // be plain. Include its successful result without inventing defaults.
+      if (left.Kind === 'primitive' && SameType(left, right) && (!leftPlain || !rightPlain)) bodies.push(left);
+      if (unknownContribution) return null;
+      return bodies.reduce((a, b) => joinTypes(a, b) ?? anyTypeRecord);
+    }
     if (unknownContribution && found.length === 0) return null;
-    if (found.length !== 1) return undefined;
+    if (found.length > 1) {
+      // Several portions may be recomputed after a shared conversion. Preserve
+      // the numeric layout while leaving their merged metadata to that plan.
+      if (base.Name === 'vector') {
+        const lane = base.Arguments[0] as TypeRecord;
+        return { ...base, Arguments: [lane.Kind === 'parameterized' ? lane.Base : lane, base.Arguments[1]] };
+      }
+      return base;
+    }
+    if (found.length === 0) return undefined;
     // A receiver carrying metadata no contribution claims takes that meta
     // type's DEFAULT in the result ("each meta type contributing its default
     // where no matching definition mentions it"), and the contributed type
@@ -23820,47 +23931,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // registered, through the deferred metadata checks, before the program runs.
     return found[0];
   };
-  const blockOperatorResult = (op: string, left: TypeRecord, right: TypeRecord): TypeRecord | null | undefined => {
-    const base = left.Kind === 'parameterized' ? left.Base : left;
-    if (base.Kind !== 'primitive') return undefined;
-    const levels: string[] = [];
-    const first = (base.Arguments ?? [])[0];
-    if (typeof first === 'number') levels.push(`${base.Name}${first}`);
-    levels.push(base.Name);
-    for (const name of levels) {
-      const admitting: { operand: TypeRecord | null, def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration }[] = [];
-      for (const { def, block } of blockDefinitionsFor(name, op)) {
-        const annotation = (def.FormalParameters![0] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-        const scoped = BlockCapturesOf(block).length > 0 && pushTypeParameterScopeOf(block);
-        let operand: TypeRecord | null = null;
-        try {
-          operand = annotation ? resolveType(annotation.Type) : null;
-        } finally {
-          if (scoped) typeParameterScopes.pop();
-        }
-        if (annotation && !operand) continue; // an operand the checker cannot resolve is left to the run time
-        if (operand === null || IsSubtype(right, operand, [])) admitting.push({ operand, def, block });
-      }
-      if (admitting.length === 0) continue;
-      const atLeastAsSpecific = (a: TypeRecord | null, b: TypeRecord | null) => b === null || (a !== null && IsSubtype(a, b, []));
-      const winners = admitting.filter((c) => admitting.every((d) => d === c || atLeastAsSpecific(c.operand, d.operand)));
-      if (winners.length !== 1) {
-        const completion = Throw.StaticTypeError('$1', `operator ${op} on ${displayType(left)} is ambiguous for an operand of ${displayType(right)}: two definitions of one primitive block level admit it, and neither operand type is more specific than the other`) as ThrowCompletion;
-        errors.push(completion.Value as ObjectValue);
-        return null;
-      }
-      const returns = winners[0].def.TypeAnnotation;
-      if (!returns) return null;
-      const scoped = BlockCapturesOf(winners[0].block).length > 0 && pushTypeParameterScopeOf(winners[0].block);
-      try {
-        return resolveType(returns.Type);
-      } finally {
-        if (scoped) typeParameterScopes.pop();
-      }
-    }
-    return undefined;
-  };
-
   /**
    * A literal operand of a comparison takes the type of the other operand where
    * that operand is a `decimal`, a `rational` or a `complex` - see the
@@ -23888,12 +23958,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
       const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
       if (name === 'rational' || name === 'complex' || name === 'float128' || (name !== undefined && name.startsWith('decimal'))) {
-        staticTypeIn(innermostLiteral(lit), otherType);
+        staticTypeIn(innermostLiteral(lit), base!);
       }
     }
   };
 
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
+    const single = node && !Array.isArray(node) ? node as ParseNode : undefined;
+    const barrier = single && ['CallExpression', 'RefExpression', 'IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunction'].includes(single.type);
+    if (barrier) invalidateMutableMetadataFacts();
+    walkNode(node);
+    if (barrier) invalidateMutableMetadataFacts();
+    if (single?.type === 'AssignmentExpression' && single.LeftHandSideExpression.type === 'IdentifierReference') {
+      const name = single.LeftHandSideExpression.name;
+      const fact = single.AssignmentOperator === '=' ? metadataFact(single.AssignmentExpression) : undefined;
+      for (let i = frames.length - 1; i >= 0; i -= 1) if (frames[i]!.bindings.has(name) || frames[i]!.bindingKinds.has(name)) {
+        const declared = frames[i]!.bindings.get(name);
+        setMetadataFact(frames[i]!, name, declared?.Kind === 'parameterized' ? undefined : fact, true);
+        break;
+      }
+    }
+    if (single?.type === 'UpdateExpression') invalidateMutableMetadataFacts();
+  };
+  const walkNode = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
     }
@@ -25419,6 +25506,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           declare(n.BindingIdentifier.name, declared, bindingFrame);
+          const fact = metadataFact(n.Initializer);
+          setMetadataFact(bindingFrame, n.BindingIdentifier.name,
+            fact && (!declared || declared.Kind === 'primitive') ? (fact.Kind === 'primitive' ? declared ?? fact : fact) : undefined,
+            !isConstDeclaration);
           return;
         }
         // A BINDING PATTERN declares names too, and each member may write its

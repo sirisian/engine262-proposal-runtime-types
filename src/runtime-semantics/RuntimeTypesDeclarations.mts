@@ -59,7 +59,7 @@ import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { Assert, OrdinaryObjectCreate, CreateDataProperty } from '#self';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -1604,6 +1604,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
     ))
     : shape;
   if (claimShape && claimShape.Kind === 'object') {
+    RegisterMetaShape(typeObject as object, claimShape);
     for (const property of claimShape.Properties) {
       const conflict = ClaimMetaKey(property.key, typeObject as object);
       if (conflict !== undefined) {
@@ -1697,48 +1698,11 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         // still faces the membership test.
         // The snapshot is FROZEN - it is the artifact portions are built from -
         // so this builds a converted copy rather than writing through it.
-        let converted = snapshot;
-        if (claimShape.Kind === 'object' && snapshot !== null && typeof snapshot === 'object'
-            && !Array.isArray(snapshot)) {
-          const source = snapshot as unknown as Record<string, Value>;
-          const copy: Record<string, Value> = Object.create(null);
-          for (const k of Object.keys(source)) {
-            copy[k] = source[k]!;
-          }
-          let changed = false;
-          for (const property of claimShape.Properties) {
-            const keyName = typeof property.key === 'string' ? property.key : undefined;
-            if (keyName === undefined || !(keyName in copy)) {
-              continue;
-            }
-            const target = property.type as TypeRecord | undefined;
-            if (!target) {
-              continue;
-            }
-            // Only LEAVES convert. `MetadataAsObject` tells the forms apart by
-            // shape: a nested metadata record has a null prototype, a list is a
-            // real Array, and everything else is an engine Value. A range and a
-            // pattern are carried as null-prototype markers, and handing one to
-            // `ConvertValue` asks it to make a primitive of a marker object.
-            const leaf = copy[keyName]!;
-            if (leaf !== null && typeof leaf === 'object'
-                && (Array.isArray(leaf) || Object.getPrototypeOf(leaf) === null)) {
-              continue;
-            }
-            const promoted = EnsureCompletion(yield* ConvertValue(leaf, target));
-            if (promoted.Type === 'normal') {
-              copy[keyName] = promoted.Value as Value;
-              changed = true;
-            }
-          }
-          if (changed) {
-            converted = Object.freeze(copy) as unknown as Value;
-          }
-        }
+        const converted = NormalizeMetadataRecord(snapshot, claimShape);
         if (!Q(yield* IsOfType(MetadataAsObject(converted), claimShape))) {
           return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
         }
-        RegisterMetaDefaultSnapshot(typeObject, converted);
+        RegisterMetaDefaultSnapshot(typeObject, converted as unknown as Value);
       }
       sawDefault = true;
     } else {

@@ -276,12 +276,12 @@ test('meta: a hook receives nested metadata as ordinary values', () => {
   // the conversion at the hook boundary nests too; handing a hook the host
   // record left values the engine has no case for, and `typeof` alone hit one
   expect(evaluated(`
-    type N = { rr: number };
+    type N = { rr: any };
     meta N { subtype(a, b) { return true; } default = { rr: 0 }; validate(v, m) { return typeof m.rr === "object" && m.rr.lo === 0; } }
     String((1 := float32) is float32.<{ rr: { lo: 0 } }>);
   `)).toBe('true');
   expect(evaluated(`
-    type L = { ll: number };
+    type L = { ll: any };
     meta L { subtype(a, b) { return true; } default = { ll: 0 }; validate(v, m) { return Array.isArray(m.ll) && m.ll.length === 2 && m.ll[1] === 2; } }
     String((1 := float32) is float32.<{ ll: [1, 2] }>);
   `)).toBe('true');
@@ -311,7 +311,7 @@ test('meta: a pattern is compared by source and flags, not by object identity', 
 
 test('meta: a hook is handed a RegExp built from the carried pattern', () => {
   expect(evaluated(`
-    type SP = { pat: number };
+    type SP = { pat: any };
     meta SP { subtype(a, b) { return true; } default = { pat: 0 }; validate(v, m) { return m.pat instanceof RegExp && m.pat.source === "^a" && m.pat.flags === "i"; } }
     String(("ab" := string) is string.<{ pat: /^a/i }>);
   `)).toBe('true');
@@ -321,7 +321,7 @@ test('meta: the whole-string match a StringPattern meta type would perform', () 
   // the validation judgment the clause gives StringPattern, written as an
   // ordinary meta type now that the pattern reaches the hook
   expect(evaluated(`
-    type SP2 = { rex: number };
+    type SP2 = { rex: any };
     meta SP2 { subtype(a, b) { return true; } default = { rex: 0 }; validate(v, m) { let re = new RegExp("^(?:" + m.rex.source + ")$", m.rex.flags); return re.test(String(v)); } }
     String((("abc" := string) is string.<{ rex: /a.c/ }>) + "/" + (("xbc" := string) is string.<{ rex: /a.c/ }>));
   `)).toBe('true/false');

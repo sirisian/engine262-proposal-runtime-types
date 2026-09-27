@@ -429,7 +429,8 @@ export function AdoptLiteralOperand(x: Value, y: Value, literals: { left: boolea
   if ((xt && yt) || (!xt && !yt)) {
     return undefined;
   }
-  const target = (xt ?? yt)!;
+  const peer = (xt ?? yt)!;
+  const target = peer.Kind === 'parameterized' ? peer.Base : peer;
   const literalIsRight = !!xt;
   if (literalIsRight ? !literals.right : !literals.left) {
     return undefined;

@@ -424,6 +424,9 @@ export abstract class TypeParser extends ExpressionParser {
         ? (tok.value === 'NaN' ? NaN : Infinity)
         : tok.value as number | bigint | string);
     node.negated = negated;
+    if (tok.type === Token.NUMBER) {
+      node.SourceText = `${negated ? '-' : ''}${this.source.slice(tok.startIndex, tok.endIndex)}`;
+    }
     this.next();
     return this.finishNode(node, 'LiteralType');
   }

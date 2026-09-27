@@ -3254,6 +3254,7 @@ export namespace ParseNode {
   export interface LiteralType extends BaseParseNode {
     readonly type: 'LiteralType';
     readonly kind: 'number' | 'bigint' | 'imaginary' | 'string' | 'boolean';
+    readonly SourceText?: string;
     readonly value: number | bigint | string | boolean;
     readonly negated: boolean;
   }

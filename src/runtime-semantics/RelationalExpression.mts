@@ -14,7 +14,7 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { AbruptCompletion } from '../completion.mts';
 import { JSStringValue, TypedNumberValue } from '../value.mts';
-import { TypedOperandType } from '../type-system/arithmetic.mts';
+import { AdoptLiteralOperand, TypedOperandType } from '../type-system/arithmetic.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import { DispatchPrimitiveBlockOperator, isBodylessContributions } from './ApplyStringOrNumericBinaryOperator.mts';
 import {
@@ -125,11 +125,20 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
   // 1. Let lref be the result of evaluating RelationalExpression.
   const lref = Q(yield* Evaluate(RelationalExpression!));
   // 2. Let lval be ? GetValue(lref).
-  const lval = Q(yield* GetValue(lref));
+  let lval = Q(yield* GetValue(lref));
   // 3. Let rref be the result of evaluating ShiftExpression.
   const rref = Q(yield* Evaluate(ShiftExpression));
   // 4. Let rval be ? GetValue(rref).
-  const rval = Q(yield* GetValue(rref));
+  let rval = Q(yield* GetValue(rref));
+  if (surroundingAgent.feature('runtime-types') && ['<', '>', '<=', '>='].includes(operator)) {
+    const adopted = AdoptLiteralOperand(lval, rval, {
+      left: isNumericLiteralOperand(RelationalExpression as ParseNode),
+      right: isNumericLiteralOperand(ShiftExpression as ParseNode),
+    });
+    if (adopted) {
+      lval = adopted.left; rval = adopted.right;
+    }
+  }
   // proposal-runtime-types (spec sec-class-operators): the relational operators
   // are overloadable. When the left operand is an Object whose class declares the
   // operator, dispatch to it with the receiver being the left operand and the

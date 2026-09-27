@@ -24,12 +24,11 @@ test('a block binds its component captures by matching the receiver', () => {
     String(a * 'x');`)).toBe('N=4');
 });
 
-test('a vector the pattern does not match is not spoken for', () => {
-  // Dimensionless lanes do not match `float32.<const D: Dim>`: the lane-wise
-  // operation runs as it always has.
+test('plain vector lanes project their metadata default', () => {
+  // A capture observes the default portion of a plain lane type.
   expect(evaluated(`${D} primitive vector<float32.<const D: Dim>, const N: uint32> {
       operator *(rhs: string): string { return 'matched'; } }
-    String(float32x4(1, 2, 3, 4) * 'x');`)).toBe('(NaN, NaN, NaN, NaN)');
+    String(float32x4(1, 2, 3, 4) * 'x');`)).toBe('matched');
 });
 
 test('a bodyless definition gives the lane-wise result its type, lanes included', () => {
@@ -97,4 +96,11 @@ test("the checker types the design's vector result exactly", () => {
     const s: float32.<{ m: 2 }> = 10;`;
   expect(evaluated(`${D} ${block} const c = a * s; String(Reflect.typeOf(c));`)).toBe('vector.<float32.<{ m: 3 }>, 4>');
   expectEarlyError(`${D} ${block} const c: V = a * s;`, 'StaticTypeError');
+});
+
+
+test('a fixed nondefault lane pattern does not match plain vector lanes', () => {
+  expect(evaluated(`${D} primitive vector<float32.<{ m: 1 }>, const N: uint32> {
+      operator *(rhs: string): string { return 'matched'; } }
+    String(float32x4(1, 2, 3, 4) * 'x');`)).toBe('(NaN, NaN, NaN, NaN)');
 });

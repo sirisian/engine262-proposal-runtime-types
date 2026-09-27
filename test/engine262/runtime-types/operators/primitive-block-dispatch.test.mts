@@ -141,7 +141,8 @@ test('#sec-operator-declarations: a block may not redeclare an operation its typ
   const D = 'type D = { m: int32 }; meta D { default = { m: 0 }; subtype(a: D, b: D): boolean { return a.m === b.m; } }';
   expect(evaluated(`${D} primitive float64<const X: D> { operator *(rhs: float64.<X>): string { return 'ok'; } } 'ok';`)).toBe('ok');
   expect(evaluated(`primitive uint16 { operator +(rhs: uint8): string { return 'ok'; } } 'ok';`)).toBe('ok');
-  expectThrown(`${D} primitive float64<const X: D> { operator *(rhs: float64): string { return 'r'; } }`, 'redeclares');
+  expect(evaluated(`${D} primitive float64<const X: D> { operator *(rhs: float64): string { return 'r'; } }
+    String((2 := float64) * (3 := float64));`)).toBe('6');
 });
 
 test('a block\'s comparisons are dispatched, as its arithmetic is', () => {

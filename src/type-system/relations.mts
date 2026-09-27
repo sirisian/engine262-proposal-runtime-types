@@ -1,4 +1,5 @@
 import { SameValue, R } from '../abstract-ops/all.mts';
+import { NormalizeMetadataRecord } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
@@ -517,7 +518,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'literal':
       return t.Kind === 'literal' && SameValue(s.Value, t.Value) && SameTypeWithAssumptions(s.Base, t.Base, next);
     case 'parameterized':
-      return t.Kind === 'parameterized' && SameMetadata(s.Metadata, t.Metadata) && SameTypeWithAssumptions(s.Base, t.Base, next);
+      return t.Kind === 'parameterized' && SameMetadata(NormalizeMetadataRecord(s.Metadata), NormalizeMetadataRecord(t.Metadata)) && SameTypeWithAssumptions(s.Base, t.Base, next);
     case 'nominal':
       // A library generic type is identified by [[LibraryName]] and arguments;
       // all library types share one sentinel [[Declaration]], so compare the name

@@ -37,6 +37,15 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
   const rref = Q(yield* Evaluate(RelationalExpression));
   // 4. Let rval be ? GetValue(rref).
   let rval = Q(yield* GetValue(rref));
+  if (surroundingAgent.feature('runtime-types')) {
+    const adopted = AdoptLiteralOperand(lval, rval, {
+      left: isNumericLiteralOperand(EqualityExpression as ParseNode),
+      right: isNumericLiteralOperand(RelationalExpression as ParseNode),
+    });
+    if (adopted) {
+      lval = adopted.left; rval = adopted.right;
+    }
+  }
   // proposal-runtime-types (spec sec-class-operators): the equality operators are
   // overloadable. When the left operand is an Object whose class declares
   // `operator==`, `==` dispatches to it (receiver is the left operand, parameter

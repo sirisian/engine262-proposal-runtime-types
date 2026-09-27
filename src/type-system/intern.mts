@@ -1,7 +1,7 @@
 import type { Arguments } from '../value.mts';
 import { RationalConstructAt } from '../intrinsics/Rational.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
-import { CheckedConvertValue, GoverningMetaTypes } from '../abstract-ops/runtime-types.mts';
+import { CheckedConvertValue, GoverningMetaTypes, NormalizeMetadataRecord } from '../abstract-ops/runtime-types.mts';
 import { VectorValue, ObjectValue, TypedStringValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
@@ -49,7 +49,8 @@ export function isTypeObject(value: unknown): value is TypeObject {
   // was refused. Those values are recognised by their own slots.
   return value instanceof ObjectValue
     && (value as { TypeRecord?: unknown }).TypeRecord !== undefined
-    && !('DecimalSignificand' in value) && !('RationalNumerator' in value);
+    && !('DecimalSignificand' in value) && !('RationalNumerator' in value)
+    && !('Float128Significand' in value) && !('ComplexReal' in value);
 }
 
 /** #sec-canonicalizetype */
@@ -318,14 +319,14 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     return isNeverRecord(Target) ? neverType : { Kind: 'shared', Target };
   }
   if (t.Kind === 'literal') {
-    return { Kind: 'literal', Value: t.Value, Base: CanonicalizeType(t.Base, copies) };
+    return { ...t, Base: CanonicalizeType(t.Base, copies) };
   }
   if (t.Kind === 'parameterized') {
     // #sec-aredisjoint decides a parameterization on its BASE, so a refinement
     // of the empty type is empty: metadata narrows a type's values and cannot
     // add one.
     const Base = CanonicalizeType(t.Base, copies);
-    return isNeverRecord(Base) ? neverType : { Kind: 'parameterized', Base, Metadata: t.Metadata };
+    return isNeverRecord(Base) ? neverType : { ...t, Base, Metadata: NormalizeMetadataRecord(t.Metadata) };
   }
   if (t.Kind === 'primitive') {
     // A width or count is a plain number in canonical form, however it was

@@ -9,7 +9,7 @@ import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/int
 import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
 import { CaseGroupMembers, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
-import { SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
+import { SnapshotMetadataValue, CheckMetadataRecord } from '../abstract-ops/runtime-types.mts';
 import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';
 import type { DeferredMetadataCheck } from '../type-system/check.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
@@ -674,7 +674,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       // /^a+$/ } })` produced `string.<{ pattern: { lastIndex: 0 } }>` and was
       // not the type the annotation produces - the round trip this operation
       // exists to keep.
-      const record = Q(yield* SnapshotMetadataValue(metadataV));
+      const record = Q(yield* CheckMetadataRecord(Q(yield* SnapshotMetadataValue(metadataV)) as unknown as MetadataRecord, Base));
       // The entry check. The slot's canonical form is a plain record with
       // plain containers (see `MetadataRecord` in records.mts), and nothing in
       // the type system enforces it - the slot is declared `Value` and holds
@@ -2137,4 +2137,3 @@ export function ClassFieldReflection(classRecord: TypeRecord, name: string, real
   X(CreateDataProperty(obj, Value('isBitField'), placement.isBitField ? Value.true : Value.false));
   return obj;
 }
-

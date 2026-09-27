@@ -1,4 +1,4 @@
-import { JSStringValue, NumberValue, Value, type SymbolValue } from '../value.mts';
+import { JSStringValue, NumberValue, BigIntValue, TypedNumberValue, Value, type SymbolValue } from '../value.mts';
 // `R` reads a Number's mathematical value, for the one place the substitution
 // below turns a ~literal~ argument into a value-parameter binding. Imported
 // from the module that defines it rather than from the package root: this file
@@ -564,7 +564,7 @@ export type TypeRecord =
     readonly Arity?: number,
   }
   | { readonly Kind: 'primitive', readonly Name: string, readonly Arguments: readonly (TypeRecord | number)[] }
-  | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord }
+  | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord, readonly SourceText?: string }
   // proposal-runtime-types (table-metadata-values): a pattern, carried as its
   // source and flags so that one pattern written in two modules is one type. A
   // RegExp object is materialized only where a hook receives the metadata.
@@ -1312,7 +1312,33 @@ function defaultOrderKey(initial: unknown): string {
   return `=${metadataOrderKey(initial)}`;
 }
 
+/** Numeric objects are semantic atoms; never walk their realm or prototype. */
+function numericMetadataText(value: unknown): string | undefined {
+  if (value instanceof BigIntValue) return `${R(value)}n`;
+  if (value instanceof TypedNumberValue && typeof (value as TypedNumberValue).value === 'bigint') return String((value as TypedNumberValue).value);
+  if (!value || typeof value !== 'object') return undefined;
+  if ('RationalNumerator' in value) {
+    const r = value as { RationalNumerator: bigint, RationalDenominator: bigint };
+    return `${r.RationalNumerator}/${r.RationalDenominator}`;
+  }
+  if ('DecimalSignificand' in value) {
+    const d = value as { DecimalSignificand: bigint, DecimalExponent: number, DecimalSpecial?: string };
+    return d.DecimalSpecial ?? `${d.DecimalSignificand}e${d.DecimalExponent}`;
+  }
+  if ('Float128Significand' in value) {
+    const f = value as { Float128Significand: bigint, Float128Exponent: number, Float128Class: string, Float128Sign: number };
+    return `${f.Float128Class}:${f.Float128Sign}:${f.Float128Significand}p${f.Float128Exponent}`;
+  }
+  if ('ComplexReal' in value) {
+    const c = value as { ComplexReal: number, ComplexImaginary: number };
+    return `${c.ComplexReal}+${c.ComplexImaginary}i`;
+  }
+  return undefined;
+}
+
 function metadataOrderKey(m: unknown): string {
+  const numeric = numericMetadataText(m);
+  if (numeric !== undefined) return `numeric:${numeric}`;
   if (m === null || m === undefined) {
     return String(m);
   }
@@ -1742,6 +1768,8 @@ function displayTypeWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
 }
 
 function displayMetadataValue(m: unknown): string {
+  const numeric = numericMetadataText(m);
+  if (numeric !== undefined) return numeric;
   if (m === null || m === undefined) {
     return String(m);
   }

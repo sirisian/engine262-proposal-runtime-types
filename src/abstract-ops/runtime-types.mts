@@ -19,10 +19,11 @@ import { ReferenceValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
 import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray } from './array-view.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
+import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
-import { generatorDeclaredType, generatorParameters, anyType, displayType, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
-import { IsAssignable, SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
+import { IsAssignable, IsSubtype, SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -36,10 +37,10 @@ import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime
 import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
   wellKnownSymbols,
-  Call, R, Throw, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
+  Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
   IsComposite, CompositeFromShape } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
-import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, ParseDecimalDigits } from '../intrinsics/Decimal.mts';
+import { isDecimalObject, DoubleFromDecimal, CreateDecimalValue, CreateDecimalSpecial, ParseDecimalDigits, DecimalFromRational, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { CreateComplexValue, isComplexObject } from '../intrinsics/Complex.mts';
 import {
   Float128FromNumber, isFloat128Object, Float128ToBinary128, Binary128ToFloat128,
@@ -2007,7 +2008,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       return value;
     }
     if (t.Kind !== 'parameterized' && SameType(carried.Base, t)) {
-      return new TypedNumberValue(value.value, t);
+      // A bare annotation accepts every parameterization; it is not an
+      // explicit request to erase the value's runtime metadata.
+      return value;
     }
   }
   // #sec-primitive-operator-blocks: a BARE value reaching a parameterization
@@ -2947,7 +2950,7 @@ export function LookupPrimitiveOperatorLevels(value: Value, opText: string): rea
  * its error.
  */
 export function* ApplyTupleConversionForDestructuring(value: Value): PlainEvaluator<Value> {
-  
+
   if (!(value instanceof ObjectValue)) {
     return value;
   }
@@ -3079,6 +3082,9 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
  * pattern form, pinned beside StringPattern.
  */
 export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
+  // Numeric families represented by objects are immutable atoms, not records
+  // of their enumerable implementation properties.
+  if (isRationalObject(value) || isDecimalObject(value) || isFloat128Object(value) || isComplexObject(value)) return value;
   if (!(value instanceof ObjectValue)) {
     return value;
   }
@@ -3153,25 +3159,105 @@ export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
 }
 
 const metaDefaultSnapshots = new WeakMap<object, Value>();
+const metaShapes = new WeakMap<object, TypeRecord>();
+export function RegisterMetaShape(owner: object, shape: TypeRecord): void {
+  metaShapes.set(owner, shape);
+}
+export function MetadataShape(owner: object, base?: TypeRecord): TypeRecord | undefined {
+  const shape = metaShapes.get(owner) ?? (owner as { TypeRecord?: TypeRecord }).TypeRecord;
+  const parameter = LookupMetaTypeParameterName(owner);
+  return shape && base && parameter ? substituteParametersNamed(shape, new Map([[parameter, base]])) ?? shape : shape;
+}
 
-/** Match the numeric leaves produced by written and computed metadata records. */
-export function NormalizeMetadataNumbers(value: unknown): Value {
-  if (value instanceof Value && isTypedNumber(value)) {
-    const numeric = (value as TypedNumberValue).value;
-    return typeof numeric === 'bigint' ? Value(numeric) : Value(Number(numeric));
+/** Normalize logical metadata values, independently of the engine's storage.
+ * Only literal numeric leaves acquire a declared numeric domain here. Invalid
+ * leaves remain invalid and are rejected by the checked shape boundary; this
+ * operation never invokes a user cast or turns a typed value into another type.
+ */
+export function NormalizeMetadataRecord(value: unknown, shape?: TypeRecord, base?: TypeRecord, claimed = true, literalSource?: string): MetadataRecord {
+  if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
+  if (shape?.Kind === 'union') {
+    // Prefer an already matching arm; numeric literal adoption is unambiguous
+    // only when the shape has one numeric arm (e.g. int32 | undefined).
+    const numeric = shape.Members.filter((m) => m.Kind === 'primitive' && ['number', 'bigint', 'int', 'uint', 'float16', 'float32', 'float64', 'float128', 'rational', 'decimal32', 'decimal64', 'decimal128', 'complex'].includes(m.Name));
+    if (numeric.length === 1) shape = numeric[0];
   }
-  if (value instanceof Value || value === null || typeof value !== 'object') return value as Value;
-  // Range endpoints retain the host primitive's type (table-metadata-values).
-  if ((value as { __range?: unknown }).__range) return value as Value;
-  if (Array.isArray(value)) return Object.freeze(value.map(NormalizeMetadataNumbers)) as unknown as Value;
-  const out: Record<string, Value> = Object.create(null);
-  for (const [key, leaf] of Object.entries(value)) out[key] = NormalizeMetadataNumbers(leaf as Value);
-  return Object.freeze(out) as unknown as Value;
+  // Written numeric metadata is a contextual literal. Read its digits before
+  // the lexer-rounded Number can lose a wide integer, rational, or decimal.
+  // Runtime Number values from builders/reflection retain their actual value.
+  if (literalSource !== undefined && value instanceof NumberValue && shape?.Kind === 'primitive') {
+    const text = literalSource.replace(/_/g, '');
+    const negative = text.startsWith('-');
+    const unsigned = negative ? text.slice(1) : text;
+    const digits = /^0[xXoObB]/.test(unsigned)
+      ? { significand: BigInt(unsigned) * (negative ? -1n : 1n), exponent: 0 }
+      : ParseDecimalDigits(text);
+    if (digits !== undefined) {
+      const { significand: sig, exponent: exp } = digits;
+      if (shape.Name.startsWith('decimal')) {
+        value = CreateDecimalValue(sig, exp, Number(shape.Name.slice(7)) as 32 | 64 | 128, surroundingAgent.currentRealmRecord);
+      } else if (shape.Name === 'float128' && sig !== 0n) {
+        value = Binary128ToFloat128(float128FromDecimal(sig, exp), surroundingAgent.currentRealmRecord);
+      } else if (sig !== 0n && ['int', 'uint', 'bigint', 'rational', 'float16', 'float32', 'float64'].includes(shape.Name)) {
+        const n = exp >= 0 ? sig * 10n ** BigInt(exp) : sig;
+        const d = exp < 0 ? 10n ** BigInt(-exp) : 1n;
+        if (shape.Name === 'rational') {
+          const rational = EnsureCompletion(CreateRationalValue(n, d, surroundingAgent.currentRealmRecord, shape));
+          value = rational.Type === 'normal' ? rational.Value : Value(NaN);
+        } else if (shape.Name.startsWith('float')) {
+          value = Value(roundRationalToBinaryFloat(n, d, Number(shape.Name.slice(5)) as 16 | 32 | 64));
+        } else {
+          value = n % d === 0n ? Value(n / d) : Value(NaN);
+        }
+      }
+    }
+  }
+  if (value instanceof Value) {
+    if (shape?.Kind === 'primitive' && (value instanceof NumberValue || value instanceof BigIntValue)
+        && ['int', 'uint', 'float16', 'float32', 'float64', 'float128', 'decimal32', 'decimal64', 'decimal128', 'rational', 'complex'].includes(shape.Name)) {
+      const exact = exactNumericValue(value);
+      const fits = !['int', 'uint', 'float16', 'float32', 'float64'].includes(shape.Name)
+        || fitsNumericType(R(value), shape.Name, shape.Arguments);
+      if (exact && fits) {
+        const converted = EnsureCompletion(skipDebugger(ConvertValue(value, shape)));
+        if (converted.Type === 'normal') return converted.Value as unknown as MetadataRecord;
+      }
+    }
+    return value as unknown as MetadataRecord;
+  }
+  if (value === null || typeof value !== 'object') return value as MetadataRecord;
+  if ((value as { __range?: unknown, __pattern?: unknown }).__range || (value as { __pattern?: unknown }).__pattern) return value as MetadataRecord;
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((v, i) => NormalizeMetadataRecord(v,
+      shape?.Kind === 'tuple' ? shape.Elements[i]?.Type : shape?.Kind === 'array' ? shape.Element : undefined, base, false))) as unknown as MetadataRecord;
+  }
+  const out: Record<string, unknown> = Object.create(null);
+  for (const [key, leaf] of Object.entries(value)) {
+    const owner = shape === undefined && claimed ? MetaTypeClaiming(key) : undefined;
+    let domain = shape ?? (owner ? MetadataShape(owner, base) : undefined);
+    if (domain?.Kind === 'nominal') domain = domain.Structure ?? domain;
+    out[key] = NormalizeMetadataRecord(leaf, domain?.Kind === 'object' ? domain.Properties.find((p) => p.key === key)?.type : undefined, base, false);
+  }
+  return Object.freeze(out) as unknown as MetadataRecord;
+}
+
+/** A construction boundary validates the completed, normalized claimed shape. */
+export function* CheckMetadataRecord(metadata: MetadataRecord, base: TypeRecord): PlainEvaluator<MetadataRecord> {
+  const normalized = NormalizeMetadataRecord(metadata, undefined, base);
+  for (const owner of GoverningMetaTypes(normalized).types) {
+    const shape = MetadataShape(owner, base);
+    if (shape?.Kind !== 'object') continue;
+    const portion = NormalizeMetadataRecord(MetadataPortion(normalized, owner), shape, base);
+    if (!Q(yield* IsOfType(MetadataAsObject(portion), shape))) {
+      return Throw.TypeError('$1', `${LookupMetaTypeName(owner) ?? 'a meta type'}'s metadata must satisfy its declared shape`);
+    }
+  }
+  return normalized;
 }
 
 /** The declaration-time snapshot of a meta type's `default`. */
 export function RegisterMetaDefaultSnapshot(typeObject: object, snapshot: Value): void {
-  metaDefaultSnapshots.set(typeObject, NormalizeMetadataNumbers(snapshot));
+  metaDefaultSnapshots.set(typeObject, NormalizeMetadataRecord(snapshot, (typeObject as { TypeRecord?: TypeRecord }).TypeRecord) as unknown as Value);
 }
 
 export function LookupMetaDefaultSnapshot(typeObject: object): Value | undefined {
@@ -3387,7 +3473,7 @@ export function MetadataPortion(metadata: MetadataRecord, metaType: object): Met
       }
     }
   }
-  return Object.freeze(portion) as unknown as MetadataRecord;
+  return NormalizeMetadataRecord(portion, MetadataShape(metaType));
 }
 
 /** Apply a named hook of a meta type, or *undefined* where it defines none. */
@@ -3415,7 +3501,7 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
   // abandoned, and calling on would be running code the budget already
   // refused.
   if (IsBudgetExhausted()) {
-    return undefined;
+    return Throw.TypeError('$1', `${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook exceeded the evaluation budget`);
   }
   ConsumeEvaluationSteps(1);
   // A hook may annotate its parameters
@@ -3462,7 +3548,9 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     // forbids an evaluation "no diagnostic names".
     EnterMetaHookEvaluation(`${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook`);
     try {
-      return Q(yield* Call(fn as never, Value.undefined, args.map((a) => MetadataAsObject(a))));
+      const values = args.map((a) => MetadataAsObject(a));
+      if ((name === 'validate' || name === 'quantize') && values.length > 0) values[0] = WithoutMetadata(values[0]);
+      return Q(yield* Call(fn as never, Value.undefined, values));
     } finally {
       ExitMetaHookEvaluation();
       EndTypeEvaluation();
@@ -3596,9 +3684,7 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
 }
 
 /**
- * #sec-primitive-metadata: a fresh complex or rational carrying the
- * parameterization _t_, or *undefined* for any other value. A decimal is made
- * fresh by its own path.
+ * A fresh value of an object-represented numeric family carrying _t_.
  */
 export function StampFamilyValue(value: Value, t: TypeRecord): Value | ThrowCompletion | undefined {
   const realm = surroundingAgent.currentRealmRecord;
@@ -3611,6 +3697,16 @@ export function StampFamilyValue(value: Value, t: TypeRecord): Value | ThrowComp
   if (isRationalObject(value)) {
     const r = value as unknown as { RationalNumerator: bigint, RationalDenominator: bigint };
     return CreateRationalValue(r.RationalNumerator, r.RationalDenominator, realm, t);
+  }
+  if (isDecimalObject(value)) {
+    return value.DecimalSpecial === undefined
+      ? CreateDecimalValue(value.DecimalSignificand, value.DecimalExponent, value.DecimalWidth, realm, t)
+      : CreateDecimalSpecial(value.DecimalSpecial, value.DecimalWidth, realm, t);
+  }
+  if (isFloat128Object(value)) {
+    const copy = Binary128ToFloat128(Float128ToBinary128(value), realm);
+    (copy as { TypeRecord?: TypeRecord }).TypeRecord = t;
+    return copy;
   }
   return undefined;
 }
@@ -3893,6 +3989,122 @@ export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord 
   return value;
 }
 
+/** Scaling is an abstract numeric-domain operation, not mixed-language `*`.
+ * Keep the exact fraction until the target's single rounding step.
+ */
+export function* ScaleMetadataValue(value: Value, n: bigint, d: bigint, base: TypeRecord, negativeFactorZero = false): ValueEvaluator {
+  if (n === d) return value;
+  if (base.Kind !== 'primitive') return Throw.TypeError('metadata scaling requires a numeric base');
+  const x = exactNumericValue(value);
+  if (!x) return Throw.TypeError('metadata scaling requires a numeric value');
+  if (x.kind === 'complex' && isComplexObject(value)) {
+    const component = value.ComplexComponent as TypeRecord;
+    const width = component.Kind === 'primitive' && component.Name === 'float32' ? 32 : 64;
+    const scale = (part: number): number => {
+      const exact = exactNumericValue(Value(part));
+      if (!exact || exact.kind !== 'finite') return part * roundRationalToBinaryFloat(n, d, 64);
+      const result = roundRationalToBinaryFloat(exact.n * n, exact.d * d, width);
+      return result === 0 && ((part < 0 || Object.is(part, -0)) !== (n < 0n || negativeFactorZero)) ? -0 : result;
+    };
+    return CreateComplexValue(scale(value.ComplexReal), scale(value.ComplexImaginary), component, surroundingAgent.currentRealmRecord, base);
+  }
+  if (x.kind === 'complex') return Throw.TypeError('metadata scaling requires a real factor');
+  if (x.kind !== 'finite') {
+    const scaled = x.kind === 'nan' || n === 0n ? NaN : (x.sign * (n < 0n ? -1 : 1)) * Infinity;
+    return Q(yield* ConvertValue(Value(scaled), base));
+  }
+  const numerator = x.n * n;
+  const denominator = x.d * d;
+  const negativeInput = x.n < 0n || (isFloat128Object(value) && value.Float128Sign < 0)
+    || ((value instanceof NumberValue || isTypedNumber(value)) && Object.is(value instanceof NumberValue ? R(value) : value.value, -0));
+  const negativeZero = numerator === 0n && (negativeInput !== (n < 0n || negativeFactorZero));
+  const realm = surroundingAgent.currentRealmRecord;
+  if (base.Name === 'rational') return Q(CreateRationalValue(numerator, denominator, realm, base));
+  if (base.Name === 'float128') return Binary128ToFloat128(negativeZero ? { cls: 'finite', sign: -1, sig: 0n, exp: 0 } : float128FromRational(numerator, denominator), realm);
+  if (base.Name.startsWith('decimal')) {
+    const width = Number(base.Name.slice(7)) as 32 | 64 | 128;
+    return Q(DecimalFromResult({ parts: DecimalFromRational(numerator, denominator, width), width }, realm));
+  }
+  if (base.Name === 'bigint') return Value(numerator / denominator);
+  if (isIntegerTypeName(base.Name)) return new TypedNumberValue(wrapToType(numerator / denominator, base), base);
+  if (base.Name === 'number' || isFloatTypeName(base.Name)) {
+    const width = base.Name === 'number' ? 64 : Number(base.Name.slice(5)) as 16 | 32 | 64;
+    let scaled = roundRationalToBinaryFloat(numerator, denominator, width);
+    if (negativeZero) scaled = -0;
+    return base.Name === 'number' ? Value(scaled) : new TypedNumberValue(scaled, base);
+  }
+  return Throw.TypeError('metadata scaling is unavailable for $1', Value(displayType(base)));
+}
+
+/** Operand admission is not repeated-capture equality. Only written portions
+ * constrain the operand; unrelated metadata is transported by conversion.
+ * `knownValue` distinguishes a plain value from the broad bare type in ranking.
+ */
+export function* MetadataOperandAdmits(from: TypeRecord, to: TypeRecord, knownValue = true): PlainEvaluator<boolean> {
+  if (SameType(from, to)) return true;
+  if (from.Kind === 'primitive' && to.Kind === 'primitive' && from.Name === 'vector' && to.Name === 'vector') {
+    return from.Arguments[1] === to.Arguments[1]
+      && (yield* MetadataOperandAdmits(from.Arguments[0] as TypeRecord, to.Arguments[0] as TypeRecord, knownValue));
+  }
+  if (to.Kind !== 'parameterized') return IsSubtype(from, to, []);
+  const base = from.Kind === 'parameterized' ? from.Base : from;
+  if (!SameType(base, to.Base) || (!knownValue && from.Kind !== 'parameterized')) return false;
+  const source = from.Kind === 'parameterized' ? from.Metadata : EMPTY_METADATA;
+  for (const metaType of GoverningMetaTypes(to.Metadata).types) {
+    const fp = MetadataPortion(source, metaType);
+    const tp = MetadataPortion(to.Metadata, metaType);
+    if (!SameMetadata(fp, tp)) {
+      const admits = Q(yield* ApplyMetaHook(metaType, 'subtype', [fp, tp], to.Base));
+      if (admits !== Value.true) return false;
+    }
+  }
+  return GoverningMetaTypes(to.Metadata).unclaimed.length === 0 || SameMetadata(source, to.Metadata);
+}
+
+/** Exactness compares only the requirements a parameter actually pins. */
+export function MetadataOperandExact(from: TypeRecord, to: TypeRecord): boolean {
+  if (from.Kind === 'primitive' && to.Kind === 'primitive' && from.Name === 'vector' && to.Name === 'vector') {
+    return from.Arguments[1] === to.Arguments[1] && MetadataOperandExact(from.Arguments[0] as TypeRecord, to.Arguments[0] as TypeRecord);
+  }
+  if (to.Kind !== 'parameterized') return SameType(from.Kind === 'parameterized' ? from.Base : from, to);
+  if (!SameType(from.Kind === 'parameterized' ? from.Base : from, to.Base)) return false;
+  const source = from.Kind === 'parameterized' ? from.Metadata : EMPTY_METADATA;
+  const pinned = GoverningMetaTypes(to.Metadata);
+  return pinned.types.every((m) => SameMetadata(MetadataPortion(source, m), MetadataPortion(to.Metadata, m)))
+    && (pinned.unclaimed.length === 0 || SameMetadata(source, to.Metadata));
+}
+
+/** Combine independent pinned requirements; a conflicting owner has no plan. */
+export function MergeMetadataOperandRequirements(a: TypeRecord, b: TypeRecord): TypeRecord | undefined {
+  if (SameType(a, b)) return a;
+  if (a.Kind === 'primitive' && b.Kind === 'primitive' && a.Name === 'vector' && b.Name === 'vector' && a.Arguments[1] === b.Arguments[1]) {
+    const lane = MergeMetadataOperandRequirements(a.Arguments[0] as TypeRecord, b.Arguments[0] as TypeRecord);
+    return lane ? { ...a, Arguments: [lane, a.Arguments[1]] } : undefined;
+  }
+  if (a.Kind !== 'parameterized' || b.Kind !== 'parameterized' || !SameType(a.Base, b.Base)) return undefined;
+  const owners = GoverningMetaTypes(a.Metadata).types;
+  for (const m of GoverningMetaTypes(b.Metadata).types) {
+    if (owners.includes(m) && !SameMetadata(MetadataPortion(a.Metadata, m), MetadataPortion(b.Metadata, m))) return undefined;
+  }
+  const merged = { ...a.Metadata, ...b.Metadata };
+  return { ...a, Metadata: Object.freeze(merged) };
+}
+
+/** Convert the selected argument once, including vector lanes. */
+export function* ConvertMetadataOperand(value: Value, target: TypeRecord): ValueEvaluator {
+  const source = RuntimeTypeOf(value);
+  if (value instanceof VectorValue && target.Kind === 'primitive' && target.Name === 'vector') {
+    const lanes: Value[] = [];
+    for (const lane of (value as VectorValue).lanes) {
+      lanes.push(Q(yield* ConvertMetadataOperand(lane, target.Arguments[0] as TypeRecord)));
+    }
+    return new VectorValue(lanes, target);
+  }
+  if (target.Kind !== 'parameterized' || SameType(source, target)) return value;
+  if (source.Kind !== 'parameterized') return Q(yield* CheckedConvertValue(value, target));
+  return Q(yield* ConvertParameterization(value, source, target));
+}
+
 export function* ConvertParameterization(value: Value, from: TypeRecord, to: TypeRecord): ValueEvaluator {
   if (from.Kind !== 'parameterized' || to.Kind !== 'parameterized') {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(to)));
@@ -3909,7 +4121,8 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // constraint requires nothing. With completion in place only a meta type
   // with a written claimed key can govern, so the key union above stays the
   // iteration and these are filters, provably equivalent to the rule.
-  const participating = [...governing].filter((m) => MetaTypeGoverns(from.Metadata, m) || MetaTypeGoverns(to.Metadata, m));
+  const pinned = new Set(GoverningMetaTypes(to.Metadata).types);
+  const participating = [...governing].filter((m) => pinned.has(m) && (MetaTypeGoverns(from.Metadata, m) || MetaTypeGoverns(to.Metadata, m)));
   const quantizing = [...governing].filter((m) => MetaTypeGoverns(to.Metadata, m));
   for (const metaType of participating) {
     const fp = MetadataPortion(from.Metadata, metaType);
@@ -3934,29 +4147,50 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   }
   // The factor is the product over every meta type that defines one, so two
   // independent scalings compose rather than one winning.
-  let factor = 1;
+  let numerator = 1n;
+  let denominator = 1n;
+  let exactFactor = false;
+  let negativeFactor = false;
   for (const metaType of participating) {
     const f = Q(yield* ApplyMetaHook(metaType, 'conversionFactor', [
       MetadataPortion(from.Metadata, metaType),
       MetadataPortion(to.Metadata, metaType),
     ], to.Base));
-    if (f !== undefined && f instanceof NumberValue) {
-      factor *= R(f) as number;
+    if (f === undefined) continue;
+    const ratio = exactNumericValue(f);
+    if (!ratio || ratio.kind !== 'finite') return Throw.TypeError('$1', `${LookupMetaTypeName(metaType) ?? 'a meta type'}'s conversionFactor hook must return a finite real numeric value`);
+    numerator *= ratio.n;
+    denominator *= ratio.d;
+    negativeFactor = negativeFactor !== (ratio.n < 0n || (isFloat128Object(f) && f.Float128Sign < 0)
+      || ((f instanceof NumberValue || isTypedNumber(f)) && Object.is(f instanceof NumberValue ? R(f) : f.value, -0)));
+    const factorType = RuntimeTypeOf(f);
+    const factorBase = factorType.Kind === 'parameterized' ? factorType.Base : factorType;
+    exactFactor ||= !(f instanceof NumberValue)
+      && !(factorBase.Kind === 'primitive' && ['float16', 'float32', 'float64'].includes(factorBase.Name));
+  }
+  const identityFactor = numerator === denominator;
+  // A protocol product must not acquire the default rational's 64-bit bound.
+  // Keep that ordinary presentation when it fits, otherwise use the unbounded
+  // rational domain. The payload calculation itself uses the exact fraction.
+  let factorValue: Value;
+  if (exactFactor) {
+    const boundedFactor = EnsureCompletion(CreateRationalValue(numerator, denominator, surroundingAgent.currentRealmRecord));
+    if (boundedFactor.Type === 'normal') {
+      factorValue = boundedFactor.Value;
+    } else {
+      factorValue = Q(CreateRationalValue(numerator, denominator, surroundingAgent.currentRealmRecord, makePrimitive('rational', [makePrimitive('bigint')])));
     }
+  } else {
+    factorValue = Value(numerator === 0n && negativeFactor ? -0 : roundRationalToBinaryFloat(numerator, denominator, 64));
   }
-  let converted = value;
-  if (factor !== 1 && (converted instanceof NumberValue || isTypedNumber(converted))) {
-    // A conversion factor is a ratio and the scaling is floating by nature, so
-    // the payload is read as a Number here even for a wide integer type.
-    const scaled = (isTypedNumber(converted) ? converted.numberValue() : (R(converted as NumberValue) as number)) * factor;
-    converted = new TypedNumberValue(wrapToType(scaled, to.Base), to.Base);
-  }
+  let converted = Q(yield* ScaleMetadataValue(value, numerator, denominator, to.Base, numerator === 0n && negativeFactor));
   for (const metaType of quantizing) {
     const q = Q(yield* ApplyMetaHook(metaType, 'quantize', [
       converted,
       MetadataPortion(to.Metadata, metaType),
     ], to.Base));
     if (q !== undefined) {
+      if (!Q(yield* IsOfType(q, to.Base))) return Throw.TypeError('$1', `${LookupMetaTypeName(metaType) ?? 'a meta type'}'s quantize hook must return a value of the numeric base`);
       converted = q;
     }
   }
@@ -3985,7 +4219,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // to be unintentional" - a false alarm from the annotation, not a defect in
   // the comparison, which is exactly the check it looks like.
   let targetMetadata: MetadataRecord = to.Metadata;
-  if (factor !== 1) {
+  {
     const carriedOver: Record<string, unknown> = Object.create(null);
     const source = to.Metadata as unknown as Record<string, unknown>;
     for (const key of Object.keys(source)) {
@@ -3993,20 +4227,22 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     }
     let carriedAny = false;
     for (const metaType of GoverningMetaTypes(from.Metadata).types) {
-      if (MetaTypeGoverns(to.Metadata, metaType)) {
+      if (pinned.has(metaType)) {
         continue; // the target constrains it; the target's portion wins
       }
-      if (LookupMetaHook(metaType, 'rescale') === undefined) {
+      if (!identityFactor && LookupMetaHook(metaType, 'rescale') === undefined) {
         continue; // declined to say, so the portion is dropped
       }
-      const rescaled = Q(yield* ApplyMetaHook(metaType, 'rescale', [
-        MetadataPortion(from.Metadata, metaType), Value(factor),
+      const rescaled = identityFactor ? MetadataAsObject(MetadataPortion(from.Metadata, metaType)) : Q(yield* ApplyMetaHook(metaType, 'rescale', [
+        MetadataPortion(from.Metadata, metaType), factorValue,
       ], to.Base));
-      const snap = EnsureCompletion(yield* SnapshotMetadataValue(rescaled as Value));
-      if (snap.Type !== 'normal') {
-        continue;
+      if (rescaled === undefined) return Throw.TypeError('a required rescale hook produced no result');
+      const portion = NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(rescaled)), (metaType as { TypeRecord?: TypeRecord }).TypeRecord) as unknown as Record<string, unknown>;
+      const shape = (metaType as { TypeRecord?: TypeRecord }).TypeRecord;
+      if (shape) {
+        const valid = Q(yield* IsOfType(MetadataAsObject(portion as MetadataRecord), shape));
+        if (!valid) return Throw.TypeError('$1', `${LookupMetaTypeName(metaType) ?? 'a meta type'}'s rescale hook must return its metadata shape`);
       }
-      const portion = snap.Value as unknown as Record<string, unknown>;
       if (portion && typeof portion === 'object') {
         for (const key of Object.keys(portion)) {
           carriedOver[key] = portion[key];
@@ -4030,8 +4266,10 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
     converted = new TypedNumberValue(R(converted) as number, carriedType);
   } else if (isTypedNumber(converted)) {
     converted = new TypedNumberValue(converted.value, carriedType);
+  } else {
+    converted = Q(StampFamilyValue(converted, carriedType)) ?? converted;
   }
-  return converted;
+  return Q(yield* RequireTypeAfterCast(converted, carriedType));
 }
 
 /**

@@ -18,7 +18,9 @@
  */
 
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { MetadataPortion, MetaTypeForConstraint } from '../abstract-ops/runtime-types.mts';
+import { MetadataPortion, MetaTypeForConstraint, MetadataOperandAdmits } from '../abstract-ops/runtime-types.mts';
+import { skipDebugger } from '../evaluator.mts';
+import { EnsureCompletion } from '../completion.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { Value } from '../value.mts';
 import { builtinTypeRecord, makePrimitive, type TypeRecord, type MetadataRecord } from './records.mts';
@@ -30,8 +32,19 @@ import {
 } from './specialization-patterns.mts';
 import type { CallableGroupHost } from './specialization-selection.mts';
 import { MetadataObjectFromType } from './runtime.mts';
+import { CanonicalizeType } from './intern.mts';
 
 type Argument = TypeRecord | number;
+
+const unknownMetadata = new WeakSet<object>();
+export function IsUnknownMetadataCapture(value: Argument): boolean {
+  return typeof value === 'object' && unknownMetadata.has(value);
+}
+function UnknownMetadataCapture(): TypeRecord {
+  const record = { Kind: 'object', Properties: [], IndexSignatures: [] } as TypeRecord;
+  unknownMetadata.add(record);
+  return record;
+}
 
 /**
  * The bindings of _list_'s captures for a receiver of the primitive _name_
@@ -70,9 +83,18 @@ export function MatchComponentListRaw(
   const primary: PatternSlotParameter<Argument>[] = PrimitiveParameterKinds(name).map((_kind, i) => ({
     Name: `#${i}`, Variadic: false, HasDefault: false,
   }));
+  // Omitted primitive arguments still have their declared defaults, notably
+  // rational's width. The component matcher sees the same arguments as the
+  // direct component-binding path.
+  const subjects = [...args];
+  for (let i = subjects.length; i < primary.length; i += 1) {
+    const fallback = PrimitiveParameterDefault(name, i);
+    if (fallback === undefined) break;
+    subjects.push(fallback);
+  }
   let matched;
   try {
-    matched = MatchSpecializationList(list, primary, args, componentHost(resolve));
+    matched = MatchSpecializationList(list, primary, subjects, componentHost(resolve));
   } catch {
     return null;
   }
@@ -112,18 +134,36 @@ export function MatchComponentOperand(
   bindings: ReadonlyMap<string, Argument>,
   right: TypeRecord,
   resolve: (node: ParseNode) => TypeRecord | null,
+  unknownSubjects: ReadonlySet<TypeRecord> = new Set(),
 ): Map<string, Argument> | null {
   let matched;
   try {
-    matched = MatchSpecializationPattern(operand, captures as readonly ParseNode.CaptureBinding[], right, componentHost(resolve), 'specialization', bindings);
+    // Bind fresh operand captures structurally, then judge the original seeded
+    // metadata requirements by admission. Repeated structural patterns elsewhere
+    // continue to use equality.
+    const structural = new Map([...bindings].filter(([, v]) => typeof v === 'number' || v.Kind !== 'object'));
+    matched = MatchSpecializationPattern(operand, captures as readonly ParseNode.CaptureBinding[], right, componentHost(resolve, unknownSubjects), 'specialization', structural);
   } catch {
     return null;
   }
   if (matched === 'no-match') {
-    return null;
+    const expected = InstantiateComponentType(operand, bindings, resolve);
+    if (!expected || typeof expected !== 'object') return null;
+    const admitted = EnsureCompletion(skipDebugger(MetadataOperandAdmits(right, expected)));
+    return admitted.Type === 'normal' && admitted.Value ? new Map(bindings) : null;
   }
   const out = new Map(bindings);
-  for (const b of matched) out.set(b.Capture.Name, b.Value);
+  for (const b of matched) if (!out.has(b.Capture.Name)) out.set(b.Capture.Name, b.Value);
+  const expected = InstantiateComponentType(operand, out, resolve);
+  if (expected && typeof expected === 'object' && !unknownSubjects.has(right)
+      && ![...out.values()].some(IsUnknownMetadataCapture)) {
+    const verdict = EnsureCompletion(skipDebugger(MetadataOperandAdmits(right, expected)));
+    // Before declarations are evaluated the metadata judgment is unresolved.
+    const registered = expected.Kind !== 'parameterized' || captures.some((c) => {
+      const domain = c.TypeParameterDomain && resolve(c.TypeParameterDomain as ParseNode); return domain && MetaTypeForConstraint(domain) !== undefined;
+    });
+    if (registered && (verdict.Type !== 'normal' || !verdict.Value)) return null;
+  }
   return out;
 }
 
@@ -151,7 +191,7 @@ export function InstantiateComponentType(
       const base = InstantiateComponentType(written.BaseType, bindings, resolve);
       const metadata = InstantiateComponentType(items[0], bindings, resolve);
       if (base !== null && typeof base === 'object' && metadata !== null && typeof metadata === 'object' && metadata.Kind === 'object') {
-        return { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
+        return IsUnknownMetadataCapture(metadata) ? base : { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
       }
     }
     return resolve(node);
@@ -165,12 +205,13 @@ export function InstantiateComponentType(
       const args = (node.TypeArguments.TypeArgumentList as unknown as ParseNode[]).map((a) => InstantiateComponentType(a, bindings, resolve));
       if (args.every((a) => a !== null)) {
         if (PrimitiveDeclaresParameters(name)) {
-          return builtinTypeRecord(name, args as (TypeRecord | number)[]) ?? resolve(node);
+          const type = builtinTypeRecord(name, args as (TypeRecord | number)[]);
+          return type ? CanonicalizeType(type) : resolve(node);
         }
         const base = builtinTypeRecord(name, []);
         const metadata = args[0];
         if (base && args.length === 1 && typeof metadata === 'object' && metadata.Kind === 'object') {
-          return { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
+          return IsUnknownMetadataCapture(metadata) ? base : { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
         }
       }
     }
@@ -202,8 +243,9 @@ export function BindMetadataCaptures(
   captures: readonly ParseNode.CaptureBinding[],
   receiver: TypeRecord,
   resolve: (node: ParseNode) => TypeRecord | null,
+  unknownSubjects: ReadonlySet<TypeRecord> = new Set(),
 ): Map<string, Argument> | null {
-  const host = componentHost(resolve);
+  const host = componentHost(resolve, unknownSubjects);
   const out = new Map<string, Argument>();
   for (const c of captures) {
     if (!c.TypeParameterDomain) continue;
@@ -230,7 +272,7 @@ export function PrimitiveSlotParameters(name: string): PatternSlotParameter<Argu
   }));
 }
 
-function componentHost(resolve: (node: ParseNode) => TypeRecord | null): SpecializationMatchHost<Argument> {
+function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownSubjects: ReadonlySet<TypeRecord> = new Set()): SpecializationMatchHost<Argument> {
   const same = (a: Argument, b: Argument) => (typeof a === 'number' || typeof b === 'number' ? a === b : SameType(a, b));
   return {
     resolveFixed: (node) => {
@@ -289,6 +331,7 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
         return null;
       }
       const domain = resolve(meta as unknown as ParseNode);
+      if (unknownSubjects.has(subject) && (subject.Kind !== 'parameterized' || domain?.Kind !== 'object' || !domain.Properties.some((p) => typeof p.key === 'string' && Object.hasOwn(subject.Metadata, p.key)))) return UnknownMetadataCapture();
       const metaType = domain ? MetaTypeForConstraint(domain) : undefined;
       // Before the meta type is registered - statically, where the checker
       // resolves a result's type ahead of evaluation - the capture binds the
@@ -301,7 +344,7 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       // metadata's keys that its written shape declares: a portion by the
       // domain's own properties, as the run time's portion is by the keys the
       // meta type claims.
-      return subject.Kind === 'parameterized' ? metadataAsObjectRecord(PortionByShape(subject.Metadata, domain), domain ?? undefined) : null;
+      return subject.Kind === 'parameterized' ? metadataAsObjectRecord(PortionByShape(subject.Metadata, domain), domain ?? undefined) : UnknownMetadataCapture();
     },
     // A FORWARD computation: the pattern's type with the captures substituted,
     // which the matcher compares with the subject. This always threw, and the

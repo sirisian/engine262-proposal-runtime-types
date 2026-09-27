@@ -4,7 +4,9 @@ import {
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { LookupClassOperator } from '../abstract-ops/runtime-types.mts';
+import { LookupClassOperator, ScaleMetadataValue } from '../abstract-ops/runtime-types.mts';
+import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { type Mutable } from '../utils/language.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToBoolean, ToIntegerOrInfinity } from '#self';
@@ -471,6 +473,20 @@ function* RangeProto_scale([factor = Value.undefined]: Arguments, { thisValue }:
   const self = thisRange(thisValue);
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
+  }
+  const exact = exactNumericValue(factor);
+  if (exact?.kind === 'finite' && !(factor instanceof NumberValue)) {
+    if (exact.n === 0n) return rangeScale(self, 0, surroundingAgent.currentRealmRecord);
+    const scale = function* (endpoint: RangeEndpoint | undefined): PlainEvaluator<RangeEndpoint | undefined> {
+      if (endpoint === undefined) return undefined;
+      const type = RuntimeTypeOf(endpoint);
+      return Q(yield* ScaleMetadataValue(endpoint, exact.n, exact.d, type.Kind === 'parameterized' ? type.Base : type)) as RangeEndpoint;
+    };
+    const start = Q(yield* scale(self.RangeStart));
+    const end = Q(yield* scale(self.RangeEnd));
+    return exact.n < 0n
+      ? CreateRangeObject(end, start, self.RangeEndBound, self.RangeStartBound, surroundingAgent.currentRealmRecord)
+      : CreateRangeObject(start, end, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
   }
   const f = scaleFactor(factor);
   if (f === null || Number.isNaN(f)) {

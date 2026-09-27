@@ -23,7 +23,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
 import { SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -365,7 +365,7 @@ const valueParameterBindings = new WeakSet<object>();
 
 // A capture's canonical record is used for identity and matching. Reading it
 // as a value must instead satisfy the capture's written domain. Keeping these
-// views separate avoids making Number(0) and int32(0) different metadata.
+// views separate preserves the declared domain after canonicalization.
 const metadataCaptureDomains = new WeakMap<object, TypeRecord>();
 const metadataCaptureViews = new WeakMap<object, Value>();
 
@@ -3034,14 +3034,14 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         return new TypedNumberValue(0, t);
       }
       if (name === 'string') {
- return Value(''); 
-}
+        return Value('');
+      }
       if (name === 'boolean') {
- return Value.false; 
-}
+        return Value.false;
+      }
       if (name === 'bigint') {
- return Value(0n); 
-}
+        return Value(0n);
+      }
       // #sec-defaultvalueof step 2 is "if _t_ is a numeric type, return the
       // value of _t_ representing 0", and the numeric types are broader than
       // the widths above: "Each integer, binary floating-point, DECIMAL
@@ -4627,9 +4627,10 @@ export function toNumericArgument(record: TypeRecord): TypeRecord | number {
  * clause says nothing else is a metadata value, and the parameterization that
  * writes one is a type error the checker is to report at the site.
  */
-function metadataValueFromType(t: TypeRecord): unknown {
+function metadataValueFromType(t: TypeRecord, shape?: TypeRecord): unknown {
+  if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
   if (t.Kind === 'literal') {
-    return t.Value;
+    return NormalizeMetadataRecord(t.Value, shape, undefined, false, t.SourceText);
   }
   if (t.Kind === 'pattern') {
     // A leaf of the metadata language, carried structurally. The marker is what
@@ -4655,7 +4656,7 @@ function metadataValueFromType(t: TypeRecord): unknown {
   if (t.Kind === 'object') {
     const nested: Record<string, unknown> = Object.create(null);
     for (const p of t.Properties) {
-      const v = metadataValueFromType(p.type);
+      const v = metadataValueFromType(p.type, shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === p.key)?.type : undefined);
       // A SYMBOL-keyed member is skipped in this projection rather than
       // stringified: the projection is the plain object a hook receives, and
       // giving it a key spelled "Symbol(x)" would let two distinct symbols
@@ -4669,8 +4670,8 @@ function metadataValueFromType(t: TypeRecord): unknown {
   }
   if (t.Kind === 'tuple') {
     const list: unknown[] = [];
-    for (const e of t.Elements) {
-      const v = metadataValueFromType(e.Type);
+    for (const [i, e] of t.Elements.entries()) {
+      const v = metadataValueFromType(e.Type, shape?.Kind === 'tuple' ? shape.Elements[i]?.Type : shape?.Kind === 'array' ? shape.Element : undefined);
       if (v === METADATA_NOT_A_VALUE) {
         return METADATA_NOT_A_VALUE;
       }
@@ -4717,34 +4718,17 @@ export function MetaTypeNamedByArgument(t: TypeRecord): object | undefined {
 
 /** The metadata record of a metadata object computed by a builder: its own string-keyed data, nested objects as nested records. */
 function* MetadataRecordFromObjectValue(value: ObjectValue): PlainEvaluator<MetadataRecord> {
-  const out: Record<string, unknown> = {};
-  for (const key of Q(yield* value.OwnPropertyKeys())) {
-    if (!(key instanceof JSStringValue)) {
-      continue;
-    }
-    const v = Q(yield* Get(value, key));
-    if (v instanceof ObjectValue && !isTypeObject(v)) {
-      out[key.stringValue()] = Q(yield* MetadataRecordFromObjectValue(v));
-    } else if (isTypedNumber(v)) {
-      // Metadata leaves are plain values, as a written `{ m: 3 }` gives them:
-      // a builder declared to return its meta type's shape, `{ m: int32 }`,
-      // hands back typed fields, and a typed 3 is not the leaf 3 to a
-      // structural comparison - so a computed `float32.<{ m: 3 }>` failed to
-      // relate to the written one (vector membership compares that way).
-      const n = (v as TypedNumberValue).value as unknown;
-      out[key.stringValue()] = typeof n === 'bigint' ? Value(n) : Value(Number(n));
-    } else {
-      out[key.stringValue()] = v;
-    }
-  }
-  return out as MetadataRecord;
+  return NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(value)));
 }
 
-export function MetadataObjectFromType(t: TypeRecord): MetadataRecord {
+export function MetadataObjectFromType(t: TypeRecord, base?: TypeRecord): MetadataRecord {
   const fields: Record<string, unknown> = Object.create(null);
   if (t.Kind === 'object') {
     for (const p of t.Properties) {
-      const v = metadataValueFromType(p.type);
+      const owner = typeof p.key === 'string' ? MetaTypeClaiming(p.key) : undefined;
+      let shape = owner ? MetadataShape(owner, base) : undefined;
+      if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
+      const v = metadataValueFromType(p.type, shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === p.key)?.type : undefined);
       // Symbol-keyed members are skipped here for the reason given above.
       if (v !== METADATA_NOT_A_VALUE && typeof p.key === 'string') {
         fields[p.key] = v;
@@ -4757,7 +4741,7 @@ export function MetadataObjectFromType(t: TypeRecord): MetadataRecord {
   // the `Value` readings of [[Metadata]] diverge behind three separate bugs.
   // The cast remains - a frozen null-prototype object is not a nominal type -
   // but it now asserts the shape the slot actually declares.
-  return Object.freeze(fields) as unknown as MetadataRecord;
+  return NormalizeMetadataRecord(fields);
 }
 
 
@@ -4855,6 +4839,12 @@ export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type): PlainEvalua
 }
 
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
+  const type = Q(yield* TypeNodeToTypeRecordUnchecked(node));
+  if (type.Kind !== 'parameterized') return type;
+  return { ...type, Metadata: Q(yield* CheckMetadataRecord(type.Metadata, type.Base)) };
+}
+
+function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
   // A bare family name in a bound (`T: type extends uint`) names the family.
   const family = FamilyBoundRecord(node);
   if (family) {
@@ -5012,7 +5002,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
             return CanonicalizeType({
               Kind: 'parameterized',
               Base: bound,
-              Metadata: MetadataObjectFromType(boundArgs[0]!),
+              Metadata: MetadataObjectFromType(boundArgs[0]!, bound),
             } as TypeRecord, new Map());
           }
           return bound;
@@ -5236,7 +5226,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
           const record = {
             Kind: 'parameterized',
             Base: base,
-            Metadata: MetadataObjectFromType(metadataRecord),
+            Metadata: MetadataObjectFromType(metadataRecord, base),
             ...(namedMetaType === undefined ? {} : { MetaType: namedMetaType }),
           } as TypeRecord;
           // #sec-meta-declarations: "A metadata object whose own key no meta type
@@ -5907,7 +5897,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       if (node.kind === 'imaginary') {
         return Throw.TypeError('$1 is not supported yet', Value('an imaginary literal type'));
       }
-      return { Kind: 'literal', Value: Value(raw as never), Base: literalBase(node.kind) };
+      return { Kind: 'literal', Value: Value(raw as never), Base: literalBase(node.kind), SourceText: node.SourceText };
     }
     case 'ObjectType': {
       // proposal-runtime-types #sec-object-types: an object type whose members
@@ -6176,7 +6166,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       // P-parameterization, and a family is never the same type as a member.
       const namedMetaType = MetaTypeNamedByArgument(metadataRecord);
       if (namedMetaType !== undefined) {
-        return { Kind: 'parameterized', Base: baseRecord, Metadata: MetadataObjectFromType(metadataRecord), MetaType: namedMetaType } as TypeRecord;
+        return { Kind: 'parameterized', Base: baseRecord, Metadata: MetadataObjectFromType(metadataRecord, baseRecord), MetaType: namedMetaType } as TypeRecord;
       }
       // CanonicalizeType is what makes the inline spelling and the alias
       // spelling the SAME type rather than two equal ones. The neighbouring
@@ -6185,7 +6175,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
       return CanonicalizeType({
         Kind: 'parameterized',
         Base: baseRecord,
-        Metadata: MetadataObjectFromType(metadataRecord),
+        Metadata: MetadataObjectFromType(metadataRecord, baseRecord),
       } as TypeRecord, new Map());
     }
     case 'IndexedAccessType': {

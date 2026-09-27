@@ -15,20 +15,19 @@ import { isRangeBinaryOperator, rangeBinaryOperator } from '../type-system/range
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { isTypedNumber, TypedNumberValue, VectorValue } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf } from '../type-system/runtime.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf, IsOfType } from '../type-system/runtime.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
-import { MetaTypeForConstraint, MetadataPortion, MetaTypeGoverns, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels } from '../abstract-ops/runtime-types.mts';
-import { IsSubtype, SameType as SameTypeRecord } from '../type-system/relations.mts';
-import { MatchComponentList, ComponentOperandAdmits } from '../type-system/component-patterns.mts';
+import { MetaTypeForConstraint, MetadataPortion, MetaTypeGoverns, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels, MetadataOperandAdmits, MetadataOperandExact, MergeMetadataOperandRequirements, ConvertMetadataOperand } from '../abstract-ops/runtime-types.mts';
+import { SameMetadata, SameType as SameTypeRecord } from '../type-system/relations.mts';
+import { MatchComponentList } from '../type-system/component-patterns.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { isTypedArithmetic, typedBinary } from '../type-system/arithmetic.mts';
+import { isTypedArithmetic, typedBinary, AdoptLiteralOperand } from '../type-system/arithmetic.mts';
 import {
   isRationalObject, rationalAdd, rationalSub, rationalMul, rationalDiv, rationalPow,
 } from '../intrinsics/Rational.mts';
 import { Q, type ThrowCompletion } from '../completion.mts';
-import { IsOfType } from '../type-system/runtime.mts';
 import { isDecimalObject, decimalAdd, decimalSubtract, decimalMultiply, decimalDivide, decimalRemainder, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
 import {
@@ -67,6 +66,13 @@ export function metadataAsObjectRecord(metadata: MetadataRecord, domain?: TypeRe
 export type BinaryOperator = '+' | '-' | '*' | '/' | '%' | '**' | '<<' | '>>' | '>>>' | '&' | '^' | '|';
 /** https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator */
 export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryOperator, rval: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }, contextualType?: TypeRecord) {
+  if (surroundingAgent.feature('runtime-types') && literals
+      && (RuntimeTypeOf(lval).Kind === 'parameterized' || RuntimeTypeOf(rval).Kind === 'parameterized')) {
+    const adopted = AdoptLiteralOperand(lval, rval, literals);
+    if (adopted) {
+      lval = adopted.left; rval = adopted.right;
+    }
+  }
   (globalThis as { __a?: string[] }).__a?.push(`apply ${opText}`);
   // proposal-runtime-types #sec-vector-types: a vector's values are "the
   // sequences of N values of T", so an operator over two vectors of one shape
@@ -85,7 +91,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         EnterOperatorBody();
         let raw;
         try {
-          raw = Q(yield* vectorBinaryOperator(WithoutMetadata(lval), opText, WithoutMetadata(rval)));
+          raw = Q(yield* vectorBinaryOperator(WithoutMetadata(lval), opText, WithoutMetadata(dispatched.operand ?? rval)));
         } finally {
           LeaveOperatorBody();
         }
@@ -150,7 +156,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         const primitiveOperation = ApplyStringOrNumericBinaryOperator as unknown as (
           l: Value, o: BinaryOperator, r: Value, lit?: typeof literals, c?: TypeRecord,
         ) => PlainEvaluator<Value>;
-        raw = Q(yield* primitiveOperation(WithoutMetadata(lval), opText, WithoutMetadata(rval), literals, contextualType));
+        raw = Q(yield* primitiveOperation(WithoutMetadata(lval), opText, WithoutMetadata(dispatched.operand ?? rval), literals, contextualType));
       } finally {
         LeaveOperatorBody();
       }
@@ -441,17 +447,17 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
 }
 
 interface PreparedPrimitiveOperator {
-  readonly entry: { readonly fn: unknown };
+  readonly entry: ReturnType<typeof LookupPrimitiveOperatorLevels>[number][number];
   readonly frame: Map<string, TypeRecord> | null;
-  readonly parameter: TypeRecord | null;
-  readonly returnType: TypeRecord | null;
+  parameter: TypeRecord | null;
+  returnType: TypeRecord | null;
   readonly spokenFor: object[];
   /** The operand is written without the block's captures: `uint.<16>`, not `uint.<W>`. */
   readonly fixed: boolean;
 }
 
 /** Whether a deferred definition's operand annotation names one of its block's captures. */
-function OperandNamesCapture(deferred: {
+export function OperandNamesCapture(deferred: {
   readonly parameterTypeNode?: unknown, readonly parameterNames?: readonly string[], readonly componentNames?: readonly string[],
   readonly captureDeclarations?: readonly unknown[],
 } | undefined): boolean {
@@ -481,24 +487,80 @@ function OperandNamesCapture(deferred: {
  * *undefined* where none admits, or ~ambiguous~. A definition with no operand
  * type admits everything and is the least specific.
  */
-function MostSpecificPrimitiveOperator(candidates: readonly PreparedPrimitiveOperator[]): PreparedPrimitiveOperator | 'ambiguous' | undefined {
-  if (candidates.length <= 1) {
-    return candidates[0];
+export function* MostSpecificPrimitiveOperator<T extends { parameter: TypeRecord | null, fixed: boolean }>(candidates: readonly T[], operand: TypeRecord): PlainEvaluator<T | 'ambiguous' | undefined> {
+  const winners: T[] = [];
+  for (const c of candidates) {
+    let wins = true;
+    for (const d of candidates) {
+      if (c === d) continue;
+      if (d.parameter === null) {
+        if (c.parameter === null && !c.fixed && d.fixed) wins = false; continue;
+      }
+      if (c.parameter === null) {
+        wins = false; break;
+      }
+      if (!Q(yield* MetadataOperandAdmits(c.parameter, d.parameter, false))) {
+        wins = false; break;
+      }
+      if (!Q(yield* MetadataOperandAdmits(d.parameter, c.parameter, false))) continue;
+      if (SameTypeRecord(c.parameter, d.parameter)) {
+        if (!c.fixed && d.fixed) wins = false;
+      } else {
+        if (!MetadataOperandExact(operand, c.parameter) || MetadataOperandExact(operand, d.parameter)) wins = false;
+      }
+    }
+    if (wins) winners.push(c);
   }
-  // Equal operand types at this receiver - `uint.<W>` with W bound to 16
-  // beside `uint.<16>` - are ordered as patterns are: a fixed operand is more
-  // specific than one naming a capture (plan section 6.1).
-  const atLeastAsSpecific = (c: PreparedPrimitiveOperator, d: PreparedPrimitiveOperator) => {
-    if (d.parameter === null) {
-      return c.parameter !== null || c.fixed || !d.fixed;
+  return candidates.length === 0 ? undefined : winners.length === 1 ? winners[0] : 'ambiguous';
+}
+
+/** Metadata uses subtype admission; ordinary literal and structural operands
+ * still require the value membership judgment, not just its widened type. */
+function* PrimitiveOperandAdmits(value: Value, target: TypeRecord): PlainEvaluator<boolean> {
+  if (target.Kind === 'union') {
+    for (const member of target.Members) {
+      const admits = Q(yield* PrimitiveOperandAdmits(value, member));
+      if (admits) return true;
     }
-    if (c.parameter === null || !IsSubtype(c.parameter, d.parameter, [])) {
-      return false;
+    return false;
+  }
+  if (target.Kind === 'parameterized' || (target.Kind === 'primitive' && target.Name === 'vector')) {
+    return Q(yield* MetadataOperandAdmits(RuntimeTypeOf(value), target));
+  }
+  return Q(yield* IsOfType(value, target));
+}
+
+/** Rebind operand captures and defer result builders until conversion is done. */
+function* FinishPrimitiveOperator(prepared: PreparedPrimitiveOperator, operand: Value): PlainEvaluator<boolean> {
+  const deferred = prepared.entry.deferred;
+  if (prepared.frame && deferred) {
+    pushTypeParameterFrame(prepared.frame);
+    try {
+      const names = deferred.operatorParameterNames ?? [];
+      for (let i = 0; i < names.length; i += 1) {
+        const domainNode = deferred.operatorParameterConstraints?.[i];
+        const domain = domainNode ? Q(yield* ResolveTypeNode(domainNode as never)) : undefined;
+        const metaType = domain ? MetaTypeForConstraint(domain) : undefined;
+        const carried = RuntimeTypeOf(operand);
+        let portion = carried.Kind === 'parameterized' ? carried.Metadata : {} as MetadataRecord;
+        if (metaType) portion = MetadataPortion(portion, metaType);
+        prepared.frame.set(names[i]!, markValueParameterBinding(metadataAsObjectRecord(portion, domain)));
+      }
+      if (deferred.parameterTypeNode) {
+        prepared.parameter = Q(yield* ResolveTypeNode(deferred.parameterTypeNode as never));
+      }
+      if (prepared.parameter) {
+        const admits = Q(yield* PrimitiveOperandAdmits(operand, prepared.parameter));
+        if (!admits) return false;
+      }
+      if (deferred.returnTypeNode) {
+        prepared.returnType = Q(yield* ResolveTypeNode(deferred.returnTypeNode as never));
+      }
+    } finally {
+      popTypeParameterFrame();
     }
-    return !IsSubtype(d.parameter, c.parameter, []) || c.fixed || !d.fixed;
-  };
-  const winners = candidates.filter((c) => candidates.every((d) => d === c || atLeastAsSpecific(c, d)));
-  return winners.length === 1 ? winners[0] : 'ambiguous';
+  }
+  return true;
 }
 
 
@@ -526,23 +588,12 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
   // contributes its meta type's portion of the result's metadata, whichever
   // definition with a body - or the primitive operation - computes the value.
   const contributions: PreparedPrimitiveOperator[] = [];
+  let selected: PreparedPrimitiveOperator | undefined;
   const contributedPortions = new Map<object, MetadataRecord>();
-    // "at most one definition with a body may match ... where no definition
-    // with a body matches, the primitive operation runs". MATCHING is on the
-    // right operand against the definition's parameter type, and skipping that
-    // test is not a shortcut: a `primitive number { operator *(rhs: V) }` would
-    // otherwise capture EVERY multiplication of two numbers in the program and
-    // fail on its own parameter. The definitions are tried in declaration
-    // order; the checker refuses a second definition for one pair of types, so
-    // where parameter types are known at most one admits the operand.
-    // #sec-primitive-operator-blocks: within the most specific block level
-    // with an admitting definition, the definition whose operand type is the
-    // most specific is chosen, whatever the declaration order - the rule the
-    // language's function overloads already follow - and admitting
-    // definitions none of which is more specific than the rest are an
-    // ambiguity, as an ambiguous call is. Every definition of a level is
-    // therefore prepared before any is invoked.
-    for (const level of LookupPrimitiveOperatorLevels(lval, opText)) {
+  // Select at the first receiver level with an admitting body. Within a
+  // level, specificity and the exact-metadata tie-break decide; declaration
+  // order never selects a body. Bodyless contributions may come from any level.
+  for (const level of LookupPrimitiveOperatorLevels(lval, opText)) {
     const candidates: PreparedPrimitiveOperator[] = [];
     for (const entry of level) {
       // #sec-primitive-operator-blocks: a PARAMETERIZED block declares its
@@ -550,148 +601,133 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
       // block's parameter is bound from the RECEIVER and the operand and result
       // types are resolved against that binding. `operator +(rhs: float64.<D>):
       // float64.<D>` is then dimension-preserving addition: it admits an
-      // operand of the receiver's own parameterization and nothing else, and
-      // the result carries the same metadata.
+      // operand admitted by the receiver's requirement, converting after
+      // selection, and the result carries the declared metadata.
       let deferredParameterType = null;
-      let deferredReturnType = null;
+      const deferredReturnType = null;
       let framePushed = false;
       let deferredSpokenFor: object[] = [];
       let entryFrame: Map<string, TypeRecord> | null = null;
       const componentNames = entry.deferred?.componentNames ?? [];
       const componentList = entry.deferred?.componentList as ParseNode.TypeParameters | undefined;
       let componentMismatch = false;
-      if (entry.deferred) {
-        const carried = RuntimeTypeOf(lval);
-        {
-          const frame = new Map<string, TypeRecord>();
-          // A component list with a nested pattern is matched against the
-          // receiver's own arguments by the specialization matcher: the
-          // lanes' type and count of a vector. A receiver it does not match
-          // is one the definition does not speak for.
-          if (componentList) {
-            const receiverBase = carried.Kind === 'parameterized' ? carried.Base : carried;
-            const matched = receiverBase.Kind === 'primitive'
-              ? MatchComponentList(componentList, entry.deferred.componentPrimitive!, receiverBase.Arguments ?? [], (n) => entry.deferred!.componentResolved?.get(n) ?? null)
-              : null;
-            if (matched) {
-              for (const [name, value] of matched) {
-                // A nested metadata capture - `D` of `float32.<const D:
-                // Dimensions>` - is a value parameter: an expression, and a
-                // builder such as `multiplyDimensions(D, D2)`, reads it as the
-                // metadata object. Component bindings of object kind are only
-                // such portions; lanes and components are numeric types.
-                frame.set(name, value.Kind === 'object' ? markValueParameterBinding(value) : value);
-              }
-            } else {
-              componentMismatch = true;
-            }
-          }
-          // #sec-primitive-operator-blocks: a COMPONENT capture is bound from
-          // the receiver's own argument at its position - `complex128`'s
-          // `float64`, `uint16`'s `16` - and a width is bound as the literal a
-          // written value argument resolves to. A position the record leaves
-          // out holds the primitive's default.
-          const base = carried.Kind === 'parameterized' ? carried.Base : carried;
-          componentNames.forEach((name, i) => {
-            const index = entry.deferred!.componentIndices?.[i] ?? i;
-            const argument = base.Kind === 'primitive' ? (base.Arguments ?? [])[index] ?? PrimitiveParameterDefault(base.Name, index) : undefined;
-            if (argument !== undefined) {
-              frame.set(name, typeof argument === 'number'
-                ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as unknown as TypeRecord
-                : argument as TypeRecord);
-            }
-          });
-          // The meta type each parameter speaks for, resolved from its
-          // constraint, so the parameter binds to THAT meta type's portion.
-          const spokenFor: object[] = [];
-          for (let pi = 0; pi < entry.deferred.parameterNames.length; pi += 1) {
-            const name = entry.deferred.parameterNames[pi]!;
-            const constraintNode = entry.deferred.parameterConstraints?.[pi];
-            let constraint: TypeRecord | undefined;
-            let portion = carried.Kind === 'parameterized' ? carried.Metadata : Object.freeze(Object.create(null)) as MetadataRecord;
-            if (constraintNode) {
-              constraint = Q(yield* ResolveTypeNode(constraintNode as never));
-              const metaType = MetaTypeForConstraint(constraint);
-              if (metaType !== undefined) {
-                spokenFor.push(metaType);
-                portion = MetadataPortion(portion, metaType);
+      let effectiveParameter: TypeRecord | null = null;
+      let admits = false;
+      try {
+        if (entry.deferred) {
+          const carried = RuntimeTypeOf(lval);
+          {
+            const frame = new Map<string, TypeRecord>();
+            // A component list with a nested pattern is matched against the
+            // receiver's own arguments by the specialization matcher: the
+            // lanes' type and count of a vector. A receiver it does not match
+            // is one the definition does not speak for.
+            if (componentList) {
+              const receiverBase = carried.Kind === 'parameterized' ? carried.Base : carried;
+              const matched = receiverBase.Kind === 'primitive'
+                ? MatchComponentList(componentList, entry.deferred.componentPrimitive!, receiverBase.Arguments ?? [], (n) => entry.deferred!.componentResolved?.get(n) ?? null)
+                : null;
+              if (matched) {
+                for (const [name, value] of matched) {
+                  // A nested metadata capture - `D` of `float32.<const D:
+                  // Dimensions>` - is a value parameter: an expression, and a
+                  // builder such as `multiplyDimensions(D, D2)`, reads it as the
+                  // metadata object. Component bindings of object kind are only
+                  // such portions; lanes and components are numeric types.
+                  frame.set(name, value.Kind === 'object' ? markValueParameterBinding(value) : value);
+                }
+              } else {
+                componentMismatch = true;
               }
             }
-            frame.set(name, markValueParameterBinding(metadataAsObjectRecord(portion, constraint)));
-          }
-          deferredSpokenFor = spokenFor;
-          // The frame stays pushed for the WHOLE invocation, not only while
-          // the types are resolved: the operator's own parameter boundary
-          // resolves `float64.<D>` when the body is entered, and popping first
-          // leaves that resolution without the binding - which is where
-          // "D is not defined" came from, raised inside the body of the very
-          // operator that declared D.
-          // #sec-primitive-operator-blocks: bind the OPERATOR's own type
-          // parameters to the ARGUMENT's metadata, beside the block's binding of
-          // the receiver's. One `set` each, into the same frame, which stays
-          // pushed for the whole invocation - so `float64.<{ bounds: ... B2 ... }>`
-          // in the return type can speak about the operand the caller passed.
-          //
-          // Only the first is bound: an operator takes one argument, so a second
-          // name would have nothing to name.
-          const operatorNames = entry.deferred.operatorParameterNames ?? [];
-          if (operatorNames.length > 0) {
-            const argCarried = RuntimeTypeOf(rval);
-            // The portion of the operand's metadata the parameter's meta type
-            // claims, as a block capture binds - `Y: Dim` over a value that also
-            // carries bounds binds its Dim portion.
-            let argPortion = argCarried.Kind === 'parameterized' ? argCarried.Metadata : Object.freeze(Object.create(null)) as MetadataRecord;
-            const argConstraint = entry.deferred.operatorParameterConstraints?.[0];
-            let constraint: TypeRecord | undefined;
-            if (argConstraint) {
-              constraint = Q(yield* ResolveTypeNode(argConstraint as never));
-              const metaType = MetaTypeForConstraint(constraint);
-              if (metaType !== undefined) {
-                argPortion = MetadataPortion(argPortion, metaType);
+            // #sec-primitive-operator-blocks: a COMPONENT capture is bound from
+            // the receiver's own argument at its position - `complex128`'s
+            // `float64`, `uint16`'s `16` - and a width is bound as the literal a
+            // written value argument resolves to. A position the record leaves
+            // out holds the primitive's default.
+            const base = carried.Kind === 'parameterized' ? carried.Base : carried;
+            componentNames.forEach((name, i) => {
+              const index = entry.deferred!.componentIndices?.[i] ?? i;
+              const argument = base.Kind === 'primitive' ? (base.Arguments ?? [])[index] ?? PrimitiveParameterDefault(base.Name, index) : undefined;
+              if (argument !== undefined) {
+                frame.set(name, typeof argument === 'number'
+                  ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as unknown as TypeRecord
+                  : argument as TypeRecord);
               }
+            });
+            pushTypeParameterFrame(frame);
+            framePushed = true;
+            entryFrame = frame;
+            // The meta type each parameter speaks for, resolved from its
+            // constraint, so the parameter binds to THAT meta type's portion.
+            const spokenFor: object[] = [];
+            for (let pi = 0; pi < entry.deferred.parameterNames.length; pi += 1) {
+              const name = entry.deferred.parameterNames[pi]!;
+              const constraintNode = entry.deferred.parameterConstraints?.[pi];
+              let constraint: TypeRecord | undefined;
+              let portion = carried.Kind === 'parameterized' ? carried.Metadata : Object.freeze(Object.create(null)) as MetadataRecord;
+              if (constraintNode) {
+                constraint = Q(yield* ResolveTypeNode(constraintNode as never));
+                const metaType = MetaTypeForConstraint(constraint);
+                if (metaType !== undefined) {
+                  spokenFor.push(metaType);
+                  portion = MetadataPortion(portion, metaType);
+                }
+              }
+              frame.set(name, markValueParameterBinding(metadataAsObjectRecord(portion, constraint)));
             }
-            frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argPortion, constraint)));
-          }
-          pushTypeParameterFrame(frame);
-          framePushed = true;
-          entryFrame = frame;
-          if (entry.deferred.parameterTypeNode) {
-            deferredParameterType = Q(yield* ResolveTypeNode(entry.deferred.parameterTypeNode as never));
-          }
-          if (entry.deferred.returnTypeNode) {
-            deferredReturnType = Q(yield* ResolveTypeNode(entry.deferred.returnTypeNode as never));
+            deferredSpokenFor = spokenFor;
+            // The frame stays pushed for the WHOLE invocation, not only while
+            // the types are resolved: the operator's own parameter boundary
+            // resolves `float64.<D>` when the body is entered, and popping first
+            // leaves that resolution without the binding - which is where
+            // "D is not defined" came from, raised inside the body of the very
+            // operator that declared D.
+            // #sec-primitive-operator-blocks: bind the OPERATOR's own type
+            // parameters to the ARGUMENT's metadata, beside the block's binding of
+            // the receiver's. One `set` each, into the same frame, which stays
+            // pushed for the whole invocation - so `float64.<{ bounds: ... B2 ... }>`
+            // in the return type can speak about the operand the caller passed.
+            //
+            // Only the first is bound: an operator takes one argument, so a second
+            // name would have nothing to name.
+            const operatorNames = entry.deferred.operatorParameterNames ?? [];
+            if (operatorNames.length > 0) {
+              const argCarried = RuntimeTypeOf(rval);
+              // The portion of the operand's metadata the parameter's meta type
+              // claims, as a block capture binds - `Y: Dim` over a value that also
+              // carries bounds binds its Dim portion.
+              let argPortion = argCarried.Kind === 'parameterized' ? argCarried.Metadata : Object.freeze(Object.create(null)) as MetadataRecord;
+              const argConstraint = entry.deferred.operatorParameterConstraints?.[0];
+              let constraint: TypeRecord | undefined;
+              if (argConstraint) {
+                constraint = Q(yield* ResolveTypeNode(argConstraint as never));
+                const metaType = MetaTypeForConstraint(constraint);
+                if (metaType !== undefined) {
+                  argPortion = MetadataPortion(argPortion, metaType);
+                }
+              }
+              frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argPortion, constraint)));
+            }
+            if (entry.deferred.parameterTypeNode) {
+              deferredParameterType = Q(yield* ResolveTypeNode(entry.deferred.parameterTypeNode as never));
+            }
+
           }
         }
-      }
-      const effectiveParameter = deferredParameterType ?? entry.parameterType;
-      let admits: boolean;
-      const captures = (entry.deferred?.captureDeclarations ?? []) as ParseNode.CaptureBinding[];
-      const operandNode = entry.deferred?.parameterTypeNode as ParseNode | undefined;
-      if (componentMismatch) {
-        admits = false;
-      } else if (entryFrame && operandNode && captures.length > 0 && OperandNamesCapture(entry.deferred)) {
-        // An operand naming the block's captures, `float32.<X>`, is admitted
-        // by the specialization matcher with those captures as references: a
-        // block for one meta type judges only that meta type's portion of the
-        // operand, so a Dimensions block applies to a value that also carries
-        // bounds. Testing the whole resolved type read the unmentioned meta
-        // types as their defaults, and such a block never applied.
-        const seed = new Map<string, TypeRecord | number>();
-        for (const [name, value] of entryFrame) {
-          seed.set(name, value.Kind === 'literal' ? R((value as unknown as { Value: NumberValue }).Value) as number : value);
+        effectiveParameter = deferredParameterType ?? entry.parameterType;
+        if (componentMismatch) {
+          admits = false;
+        } else if (effectiveParameter === null) {
+          admits = true;
+        } else {
+          admits = Q(yield* PrimitiveOperandAdmits(rval, effectiveParameter));
         }
-        admits = ComponentOperandAdmits(operandNode, captures, seed, RuntimeTypeOf(rval), (n) => entry.deferred!.operandResolved?.get(n) ?? null);
-      } else if (effectiveParameter === null) {
-        admits = true;
-      } else {
-        admits = Q(yield* IsOfType(rval, effectiveParameter));
+      } finally {
+        if (framePushed) popTypeParameterFrame();
       }
-      if (framePushed) {
-        popTypeParameterFrame();
-        framePushed = false;
-      }
-      if (admits && chosenBodyless(entry)) {
-        if (deferredReturnType?.Kind === 'parameterized' || isVectorType(deferredReturnType)) {
+      if (!componentMismatch && chosenBodyless(entry)) {
+        if (entry.deferred?.returnTypeNode) {
           contributions.push({
             entry, frame: entryFrame, parameter: effectiveParameter, returnType: deferredReturnType, spokenFor: deferredSpokenFor, fixed: true,
           });
@@ -707,19 +743,50 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
         });
       }
     }
-    const chosen = MostSpecificPrimitiveOperator(candidates);
-    if (chosen === 'ambiguous') {
-      return Throw.TypeError('$1', `operator ${opText} is ambiguous for this operand: two definitions of one primitive block level admit it, and neither operand type is more specific than the other`);
+    if (!selected) {
+      const winner = Q(yield* MostSpecificPrimitiveOperator(candidates, RuntimeTypeOf(rval)));
+      if (winner === 'ambiguous') return Throw.TypeError('operator $1 is ambiguous for this operand', opText);
+      selected = winner;
     }
-    if (chosen === undefined) {
-      continue;
-    }
-    // The bodyless definitions' portions join the chosen definition's own.
+  }
+  let effectiveOperand = rval;
+  if (selected?.parameter) {
+    effectiveOperand = Q(yield* ConvertMetadataOperand(rval, selected.parameter));
+  }
+  if (!selected) {
+    // Bodyless contracts may require one conversion, never successive conflicting
+    // conversions. Fresh operand captures already match and impose no conversion.
+    let target: TypeRecord | undefined;
     for (const c of contributions) {
+      if (!c.parameter || MetadataOperandExact(RuntimeTypeOf(rval), c.parameter)) continue;
+      if (!Q(yield* MetadataOperandAdmits(RuntimeTypeOf(rval), c.parameter))) continue;
+      const combined = target ? MergeMetadataOperandRequirements(target, c.parameter) : c.parameter;
+      if (!combined) return Throw.TypeError('bodyless operator $1 has incompatible operand conversion requirements', opText);
+      target = combined;
+    }
+    if (target) {
+      effectiveOperand = Q(yield* ConvertMetadataOperand(rval, target));
+    }
+  }
+  const applicable: PreparedPrimitiveOperator[] = [];
+  for (const c of contributions) {
+    const applies = Q(yield* FinishPrimitiveOperator(c, effectiveOperand));
+    if (applies && c.returnType) applicable.push(c);
+  }
+  if (selected) {
+    const chosen = selected;
+    const finished = Q(yield* FinishPrimitiveOperator(chosen, effectiveOperand));
+    if (!finished) return Throw.TypeError('the selected operator no longer admits its converted operand');
+    // The bodyless definitions' portions join the chosen definition's own.
+    for (const c of applicable) {
+      if (c.returnType?.Kind !== 'parameterized') continue;
       for (const metaType of c.spokenFor) {
+        const portion = MetadataPortion(c.returnType.Metadata, metaType);
+        const prior = contributedPortions.get(metaType);
+        if (prior && !SameMetadata(prior, portion)) return Throw.TypeError('bodyless operator $1 has conflicting result metadata', opText);
         if (!chosen.spokenFor.includes(metaType)) {
           chosen.spokenFor.push(metaType);
-          contributedPortions.set(metaType, MetadataPortion((c.returnType as TypeRecord & { Kind: 'parameterized' }).Metadata, metaType));
+          contributedPortions.set(metaType, portion);
         }
       }
     }
@@ -733,7 +800,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     EnterOperatorBody();
     let raw;
     try {
-      raw = Q(yield* Call(chosen.entry.fn as never, WithoutMetadata(lval), [WithoutMetadata(rval)]));
+      raw = Q(yield* Call(chosen.entry.fn as never, WithoutMetadata(lval), [WithoutMetadata(effectiveOperand)]));
     } finally {
       LeaveOperatorBody();
       if (chosen.frame) {
@@ -764,12 +831,13 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     }
     return raw;
     }
-  return contributions.length > 0 ? { contributions } : undefined;
+  return applicable.length > 0 ? { contributions: applicable, operand: effectiveOperand } : undefined;
 }
 
 /** The bodyless definitions admitting an operand where no definition with a body does. */
 export interface BodylessContributions {
   readonly contributions: readonly PreparedPrimitiveOperator[];
+  readonly operand?: Value;
 }
 
 export function isBodylessContributions(value: unknown): value is BodylessContributions {
@@ -796,6 +864,10 @@ function chosenBodyless(entry: { readonly fn: unknown }): boolean {
  * result is stamped with the contributions afterwards.
  */
 export function WithoutMetadata(value: Value): Value {
+  if (isDecimalObject(value) || isRationalObject(value) || isComplexObject(value) || isFloat128Object(value)) {
+    const type = RuntimeTypeOf(value);
+    return type.Kind === 'parameterized' ? StampFamilyValue(value, type.Base) as Value : value;
+  }
   if (isTypedNumber(value)) {
     const record = (value as TypedNumberValue).TypeRecord as TypeRecord;
     return record.Kind === 'parameterized' ? new TypedNumberValue((value as TypedNumberValue).value, record.Base) : value;

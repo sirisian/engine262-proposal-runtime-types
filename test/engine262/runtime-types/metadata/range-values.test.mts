@@ -31,7 +31,7 @@ import { evaluated, expectThrown, run } from '../harness.mts';
 // The design's meta type, as test source. Its `subtype` is containment and its
 // `validate` is membership, exactly as primitivemetadata.md writes them.
 const NumberBounds = `
-type NumberBounds = { bounds?: Range, nonZero?: boolean };
+type NumberBounds = { bounds?: RangeBounds, nonZero?: boolean };
 
 function excludesZero(c) {
   return c.nonZero === true || (c.bounds !== undefined && !c.bounds.contains(0));

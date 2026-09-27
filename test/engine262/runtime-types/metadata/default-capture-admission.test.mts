@@ -68,10 +68,8 @@ test('ordinary arithmetic does not invoke a default-bound value body', () => {
   String(x) + '/' + String(-(2 := float32));`)).toBe('5/-2');
 });
 
-// Known gap: the checker's pre-declaration selection rejects this before the
-// shared runtime matcher can use the registered default. Keep the reproducer.
-test.fails('known gap: a metadata specialization can match the plain type', () => {
-  expect(evaluated(`${dim()} function f<float32.<const D: Dim>>(): number { return D.m; }
+test('a metadata specialization can match the plain type', () => {
+  expect(evaluated(`${dim()} function f<float32.<const D: Dim>>(): int32 { return D.m; }
     String(f.<float32>());`)).toBe('0');
 });
 
@@ -87,12 +85,12 @@ test('a default-typed location can still be borrowed through any', () => {
     const g: any = f; let s: Scalar = (2 := float32); g(ref s); String(s);`)).toBe('3');
 });
 
-test.fails('known gap: int64 defaults and written Number leaves normalize alike', () => {
+test('int64 defaults and written numeric leaves normalize alike', () => {
   expect(evaluated(`${dim('int64')} let s: Scalar = (2 := float32);
     String(Reflect.typeOf(s));`)).toBe('float32');
 });
 
-test.fails('known gap: operator admission uses subtype rather than repeated-capture equality', () => {
+test('operator admission uses subtype rather than repeated-capture equality', () => {
   expect(evaluated(`type Bound = { hi: number };
     meta Bound { default = { hi: 100 }; subtype(a: Bound, b: Bound): boolean { return a.hi <= b.hi; } }
     primitive float32<const D: Bound> { operator *(rhs: float32.<D>): string { return 'admitted'; } }
