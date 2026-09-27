@@ -6581,6 +6581,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } as TypeRecord) as Known
       : declaredInstance;
   };
+  /**
+   * Decision N1 (phase 4, construction inside a class body): inside a generic
+   * class's own BODY, `new B(args)` - `B` the bare name, resolving to that class
+   * - constructs the specialization being evaluated, which at run time is what
+   * the inner class binding names (decision V1). So it is typed over the class's
+   * own parameters, `B.<T>`, and its arguments are checked against the
+   * constructor at those parameters: a mismatched argument is a static error
+   * rather than an inference of another specialization, and a value parameter's
+   * construction is `P.<S>`, not its default. Outside the body - including the
+   * class's own parameter list and heritage - and with explicit arguments
+   * (`new B.<X>(...)`), construction is unchanged. The class is found by name
+   * (`classTypeOf`), as all construction here is, so a local binding that
+   * shadows the class's name is not seen - a pre-existing limit, recorded.
+   */
+  const ownBodyConstruction = (n: ParseNode, instance: Known): Known => {
+    if (!instance || instance.Kind !== 'nominal') return null;
+    const target = patternExpression((n as { MemberExpression?: ParseNode }).MemberExpression);
+    if (target?.type !== 'IdentifierReference') return null;
+    const decl = (instance as unknown as { Declaration?: ParseNode }).Declaration as {
+      TypeParameters?: { ListKind?: string, TypeParameterList?: readonly unknown[] } | null,
+      ClassTail?: { ClassHeritage?: unknown },
+    } | undefined;
+    if (!decl || !decl.TypeParameters?.TypeParameterList?.length || decl.TypeParameters.ListKind !== 'parameters') return null;
+    const visited = new Set<unknown>([n]);
+    for (let p = (n as { parent?: object }).parent; p; p = (p as { parent?: object }).parent) {
+      if (p === decl) {
+        const fromOutside = visited.has(decl.TypeParameters) || visited.has(decl.ClassTail?.ClassHeritage);
+        return fromOutside ? null : classOverOwnParameters(decl as unknown as ParseNode);
+      }
+      visited.add(p);
+    }
+    return null;
+  };
   const classInstanceType = (n: ParseNode): Known => {
     const acc = classMemberWalk(n, 'instance');
     classMemberFolds(acc);
@@ -15922,7 +15955,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // A GENERIC class constructed bare yields the specialization its
             // context, arguments and defaults name (constructionArguments); a
             // non-generic one is its own type.
-            return constructedType(node, declared);
+            return ownBodyConstruction(node, declared) ?? constructedType(node, declared);
           }
           // A BUILTIN constructor, where the
           // call determines its own answer. `classTypeOf` knows only declared
@@ -25927,7 +25960,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const sigList = decl ? constructSignatures.get(decl) : undefined;
           if (sigList && sigList.length > 0) {
             const specialized = target.type === 'TypeArgumentsExpression' ? staticType(n) : null;
-            const constructed = specialized?.Kind === 'nominal' ? specialized.Arguments : constructionArguments(n, instance);
+            const own = specialized ? null : ownBodyConstruction(n, instance);
+            const constructed = specialized?.Kind === 'nominal' ? specialized.Arguments
+              : own?.Kind === 'nominal' ? (own as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? null
+                : constructionArguments(n, instance);
             const bindings = new Map<string, TypeRecord>();
             if (constructed && decl) {
               const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null })
@@ -25960,6 +25996,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               Return: instance,
             }));
             checkCallArguments({ CallExpression: target, Arguments: ne.Arguments }, { Kind: 'function', Signatures: signatures } as TypeRecord, n);
+            // N1: at the class's own specialization its parameters are FIXED, not
+            // inferable, so an argument meets a parameter typed over them with the
+            // relation a binding or a return uses - `uint16` does not reach `T`,
+            // nor `U` - which the general call check cannot apply, since there a
+            // parameter's `T` is the callee's own, still to be inferred. Positional
+            // arguments against a single signature; the others take the general path.
+            if (own && signatures.length === 1 && Array.isArray(ne.Arguments)
+              && (ne.Arguments as readonly ParseNode[]).every((a) => a.type !== 'AssignmentRestElement' && a.type !== 'NamedArgument')) {
+              const parameters = signatures[0]!.Parameters;
+              (ne.Arguments as readonly ParseNode[]).forEach((arg, i) => {
+                const parameter = parameters[i] as { Type?: Known } | undefined;
+                if (!parameter?.Type || !mentionsTypeParameter(parameter.Type as TypeRecord)) return;
+                withProvenance(arg, () => requireAssignable(staticTypeIn(arg, parameter.Type as Known), parameter.Type as Known));
+              });
+            }
           }
         }
         walk(ne.MemberExpression);
