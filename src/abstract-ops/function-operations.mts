@@ -1,3 +1,5 @@
+import { AdoptedReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
+import { SameType } from '../type-system/relations.mts';
 import { NoDefaultValueError } from '../type-system/intern.mts';
 import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import {
@@ -29,8 +31,8 @@ import {
 } from '../runtime-semantics/all.mts';
 import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { DefaultValueOf } from '../type-system/runtime.mts';
-import type { TypeRecord } from '../type-system/records.mts';
+import { DefaultValueOf, IsOfType } from '../type-system/runtime.mts';
+import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
@@ -185,6 +187,8 @@ export function PrepareForOrdinaryCall(F: ECMAScriptFunctionObject, newTarget: O
   // 14. Return calleeContext.
   return calleeContext;
 }
+
+const adoptedReceiverTypes = new WeakMap<object, TypeRecord>();
 
 /** https://tc39.es/ecma262/#sec-ordinarycallbindthis */
 export function OrdinaryCallBindThis(F: ECMAScriptFunctionObject, calleeContext: ExecutionContext, thisArgument: Value): PlainCompletion<void> {
@@ -493,6 +497,12 @@ function* FunctionCallSlot(this: FunctionObject, thisArgument: Value, argumentsL
   }
   // 2. Let callerContext be the running execution context.
   // 3. Let calleeContext be PrepareForOrdinaryCall(F, undefined).
+  const receiverType = surroundingAgent.feature('runtime-types') ? adoptedReceiverTypes.get(F) : undefined;
+  if (receiverType && receiverType !== SelfThisTypeRecord && !SameType(receiverType, SelfThisTypeRecord)) {
+    if (!Q(yield* IsOfType(thisArgument, receiverType))) {
+      return Throw.TypeError('the receiver does not satisfy the declared this type');
+    }
+  }
   const calleeContext = PrepareForOrdinaryCall(F, Value.undefined);
   // 4. Assert: calleeContext is now the running execution context.
   Assert(surroundingAgent.runningExecutionContext === calleeContext);
@@ -764,6 +774,12 @@ export function OrdinaryFunctionCreate(functionPrototype: ObjectValue, sourceTex
   const len = ExpectedArgumentCount(ParameterList);
   // 21. Perform ! SetFunctionLength(F, len).
   X(SetFunctionLength(F, len));
+  // #sec-this-adoption: retain the contextual receiver contract at entry,
+  // including calls through an erased alias or Function.prototype.call.
+  if (surroundingAgent.feature('runtime-types') && thisMode !== 'lexical-this' && Body.parent) {
+    const receiverType = AdoptedReceiverTypeOf(Body.parent);
+    if (receiverType) adoptedReceiverTypes.set(F, substituteTypeParameters(receiverType, currentTypeParameterFrame() ?? new Map())!);
+  }
   // 22. Return F.
   return F;
 }

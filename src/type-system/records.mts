@@ -938,8 +938,9 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
   // - under monomorphization - room for two specializations of every generic
   // instantiated at both spellings.
   //
-  // Only SoA carries a declared default among the library types; a generic with
-  // a DECLARATION applies its defaults where the declaration is read.
+  // #sec-inference-and-function-forms: Promise defaults both arguments to any.
+  // Complete intrinsic defaults here, before identity and method judgments;
+  // a source declaration applies its defaults where that declaration is read.
   // proposal-runtime-types (#sec-ranges): `Bound` and `Interval` are ENUMS, not
   // nominal library types tested by a prototype chain. Their records carry their
   // members, so membership is SameValue against the list and `Bound.Open is
@@ -960,7 +961,8 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
       LibraryName: 'Range',
     };
   }
-  const filled = name === 'SoA' && args.length === 1 ? [...args, 0]
+  const filled = name === 'Promise' && args.length <= 2 ? [args[0] ?? anyType, args[1] ?? anyType]
+    : name === 'SoA' && args.length === 1 ? [...args, 0]
     : name === 'Range' && args.length > 0 ? [args[0], args[1] ?? 0, args[2] ?? 1]
     : name === 'RangeFrom' && args.length > 0 ? [args[0], args[1] ?? 0]
     : name === 'RangeTo' && args.length > 0 ? [args[0], args[1] ?? 1] : args;
@@ -2027,10 +2029,12 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
   // one gap seen from both ends: a callback's shape neither constrained a
   // variable nor was recognised as mentioning one.
   const withSignatures = t as {
-    Signatures?: readonly { Parameters?: readonly { Type?: TypeRecord }[], Return?: TypeRecord | null }[],
+    Signatures?: readonly SignatureRecord[],
   };
   if (withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type, seen))
-    || (!!sig.Return && mentionsTypeParameter(sig.Return, seen)))) {
+    || (!!sig.Return && mentionsTypeParameter(sig.Return, seen))
+    || (!!sig.ThisType && mentionsTypeParameter(sig.ThisType, seen))
+    || sig.Narrows?.some((rule) => mentionsTypeParameter(rule.Type, seen)))) {
     return true;
   }
   // An OBJECT type mentions a parameter through its members. An interface
@@ -2238,6 +2242,8 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
             ? { ...prm, Type: apply(prm.Type) }
             : prm)),
           Return: sig.Return ? apply(sig.Return) : sig.Return,
+          ...(sig.ThisType ? { ThisType: apply(sig.ThisType) } : {}),
+          ...(sig.Narrows ? { Narrows: sig.Narrows.map((rule) => ({ ...rule, Type: apply(rule.Type)! })) } : {}),
         };
       }),
     } as Known;

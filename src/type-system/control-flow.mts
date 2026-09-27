@@ -12,172 +12,92 @@ import type { TypeRecord } from './records.mts';
  */
 
 /**
- * Whether _stmt_ can complete NORMALLY - that is, without returning or
- * throwing.
- *
- * Distinct from `endsWithReturn` below, and
- * deliberately not built on it: that helper is conservative in the direction
- * ELISION wants, where a false negative merely keeps a check that was not
- * needed. Here a false negative REJECTS A CORRECT PROGRAM, so the
- * conservatism has to run the other way - when this cannot tell, it answers
- * *true* ("can complete"), which withholds the error.
- *
- * Syntactic. It recognises the shapes a reader would call
- * obviously total; anything else is assumed to complete.
+ * #sec-check-elision and #sec-divergence: propagate possible completions.
+ * Sequential code consumes only normal flow. Switch clauses may fall through;
+ * loops and labels consume only the breaks/continues that target them.
  */
 export const canCompleteNormally = (
   stmt: ParseNode | null | undefined,
-  /**
-   * Whether a `switch` is exhaustive over its discriminant, which only the
-   * checker knows: it reads the enum's members or the sealed class's subclasses.
-   * #sec-divergence counts "every enumerator, every direct subclass, or a
-   * `default`" alike, and without this only the `default` was visible here - so
-   * a `switch` covering every enumerator, each clause returning, was still told
-   * it can complete without a return.
-   */
   covers?: (n: ParseNode) => boolean,
 ): boolean => {
-  const again = (n: ParseNode | null | undefined) => canCompleteNormally(n, covers);
-  if (!stmt) {
-    return true;
-  }
-  const n = stmt as ParseNode & Record<string, unknown>;
-  if (n.ExpressionBody !== undefined || n.AssignmentExpression !== undefined) {
-    return false;
-  }
-  switch (n.type) {
-    case 'ReturnStatement':
-    case 'ThrowStatement':
-      return false;
-    case 'FunctionBody':
-    case 'AsyncBody':
-    case 'GeneratorBody':
-    case 'AsyncGeneratorBody':
-    case 'Block': {
-      // A function BODY carries `FunctionStatementList`, not `StatementList`,
-      // which is why `endsWithReturn` reads both. Missing it here made every
-      // body fall to `default` and answer "can complete", so the phase-1
-      // count named every annotated function rather than the incomplete ones.
-      const list = (n.FunctionStatementList
-        ?? n.StatementList
-        ?? (n.Block as { StatementList?: readonly ParseNode[] })?.StatementList) as readonly ParseNode[] | undefined;
-      if (!list || list.length === 0) {
-        return true;
-      }
-      // Statements after an unconditional abrupt completion are unreachable.
-      return list.every(again);
+  type Outcome = 'normal' | 'return' | 'throw' | `break:${string}` | `continue:${string}`;
+  type Outcomes = Set<Outcome>;
+  const union = (...sets: Outcomes[]): Outcomes => new Set(sets.flatMap((set) => [...set]));
+  const sequence = (list: readonly ParseNode[] = []): Outcomes => {
+    let result: Outcomes = new Set(['normal']);
+    for (const node of list) {
+      if (!result.delete('normal')) break;
+      result = union(result, visit(node));
     }
-    case 'IfStatement': {
-      const alt = n.Statement_b as ParseNode | undefined;
-      if (!alt) {
-        // No `else`: the test may be false, so control reaches the tail.
-        return true;
+    return result;
+  };
+  const visit = (node: ParseNode | null | undefined, labels: readonly string[] = []): Outcomes => {
+    if (!node) return new Set(['normal']);
+    const n = node as ParseNode & Record<string, unknown>;
+    if (n.type === 'ConciseBody' || n.type === 'AsyncConciseBody') return new Set(['return']);
+    switch (n.type) {
+      case 'ReturnStatement': return new Set(['return']);
+      case 'ThrowStatement': return new Set(['throw']);
+      case 'BreakStatement': return new Set<Outcome>([`break:${n.LabelIdentifier?.name ?? ''}`]);
+      case 'ContinueStatement': return new Set<Outcome>([`continue:${n.LabelIdentifier?.name ?? ''}`]);
+      case 'FunctionBody': case 'AsyncBody': case 'GeneratorBody': case 'AsyncGeneratorBody': case 'Block':
+        return sequence((n.FunctionStatementList ?? n.StatementList
+          ?? (n.Block as ParseNode.Block | undefined)?.StatementList) as readonly ParseNode[] | undefined);
+      case 'IfStatement':
+        return union(visit(n.Statement_a as ParseNode), visit(n.Statement_b as ParseNode));
+      case 'TryStatement': {
+        const handlers = (n.CatchClauses as readonly ParseNode.Catch[] | undefined)
+          ?? (n.Catch ? [n.Catch as ParseNode.Catch] : []);
+        // A statement may throw through an expression or a cleanup. Conservatively
+        // consider each handler even when the body has no explicit throw.
+        const incoming = union(visit(n.Block as ParseNode), ...handlers.map((handler) => visit(handler.Block)));
+        const finalizer = (n.Finally as { Block?: ParseNode } | undefined)?.Block ?? n.Finally as ParseNode | undefined;
+        if (!finalizer || incoming.size === 0) return incoming;
+        const final = visit(finalizer);
+        const completes = final.delete('normal');
+        return completes ? union(incoming, final) : final;
       }
-      return again(n.Statement_a as ParseNode)
-        || again(alt);
-    }
-    case 'TryStatement': {
-      const block = n.Block as ParseNode | undefined;
-      const handlers = (n.CatchClauses as readonly ParseNode.Catch[] | undefined)
-        ?? (n.Catch ? [n.Catch as ParseNode.Catch] : []);
-      const fin = (n.Finally as { Block?: ParseNode })?.Block ?? n.Finally as ParseNode | undefined;
-      // A `finally` that cannot complete decides the whole statement.
-      if (fin && !again(fin)) {
-        return false;
-      }
-      return again(block) || handlers.some((handler) => again(handler.Block));
-    }
-    case 'WhileStatement': {
-      // #sec-divergence: only breaks leaving this loop permit completion.
-      const test = n.Expression as { type?: string, value?: unknown } | undefined;
-      const alwaysTrue = test?.type === 'BooleanLiteral' && test.value === true;
-      if (!alwaysTrue) {
-        return true;
-      }
-      return containsBreak(n.Statement as ParseNode);
-    }
-    case 'SwitchStatement': {
-      // A `switch` completes normally unless it has a `default` AND no clause
-      // completes normally AND no clause can `break` out. Without a `default`
-      // an unmatched value falls through, so the statement completes.
-      const cb = n.CaseBlock as {
-        CaseClauses_a?: readonly ParseNode[],
-        DefaultClause?: ParseNode,
-        CaseClauses_b?: readonly ParseNode[],
-      } | undefined;
-      // An exhaustive `switch` needs no `default`: #sec-divergence counts
-      // "every enumerator, every direct subclass, or a `default`", and the
-      // checker is what can tell. Without the hook only the `default` was seen.
-      // `cb` is tested on its own so that the walk below sees it as present.
-      // The earlier form - `!cb?.DefaultClause` - narrowed it as a side effect,
-      // and adding the exhaustiveness hook to the condition took that away: a
-      // switch covered by the hook now reaches the walk, and could in principle
-      // reach it with no CaseBlock at all. No block means no clause to fall out
-      // of, which completes normally.
-      if (!cb || (!cb.DefaultClause && !(covers?.(stmt) === true))) {
-        return true;
-      }
-      // The `default` is only present when there IS one: an exhaustive switch
-      // reaches here without one, and splicing an *undefined* into the list
-      // crashed the walk below on its `StatementList`. The early return above
-      // used to guarantee it.
-      const clauses = [
-        ...(cb.CaseClauses_a ?? []),
-        ...(cb.DefaultClause ? [cb.DefaultClause] : []),
-        ...(cb.CaseClauses_b ?? []),
-      ];
-      for (const c of clauses) {
-        const list = (c as { StatementList?: readonly ParseNode[] }).StatementList;
-        // An EMPTY clause falls through to the next one rather than
-        // completing, so it does not decide the statement.
-        if (!list || list.length === 0) {
-          continue;
+      case 'SwitchStatement': {
+        const cb = n.CaseBlock as ParseNode.CaseBlock | undefined;
+        if (!cb) return new Set(['normal']);
+        const clauses = [...(cb.CaseClauses_a ?? []), ...(cb.DefaultClause ? [cb.DefaultClause] : []), ...(cb.CaseClauses_b ?? [])];
+        let suffix: Outcomes = new Set(['normal']);
+        let result: Outcomes = new Set(cb.DefaultClause || covers?.(node) ? [] : ['normal']);
+        // Each label is an entry point; a normal clause reaches its successor.
+        for (const clause of clauses.toReversed()) {
+          const current = sequence(clause.StatementList ?? []);
+          const fallsThrough = current.delete('normal');
+          suffix = fallsThrough ? union(current, suffix) : current;
+          result = union(result, suffix);
         }
-        if (again(list[list.length - 1]!)) {
-          return true;
-        }
-        if (containsBreak(c as ParseNode)) {
-          return true;
-        }
+        if (result.delete('break:')) result.add('normal');
+        return result;
       }
-      return false;
-    }
-    case 'ForStatement': {
-      // `for (;;)` is `while (true)` with the test left out, so it reads the
-      // same way: no test at all, and the only way out is a `break`. A `for`
-      // WITH a test completes whenever the test is false, which this analysis
-      // does not evaluate. `for (let i = 0;;)` is the testless form too - an
-      // initializer says nothing about leaving.
-      //
-      // Missing, so `function f(): uint8 { for (;;) { } }` was told it can
-      // complete without a return while `while (true) { }` beside it was not.
-      if (n.Expression_b !== undefined && n.Expression_b !== null) {
-        return true;
+      case 'WhileStatement': case 'DoWhileStatement': case 'ForStatement':
+      case 'ForInStatement': case 'ForOfStatement': case 'ForAwaitStatement': {
+        const body = visit(n.Statement as ParseNode);
+        const test = (n.type === 'ForStatement' ? n.Expression_b : n.Expression) as ParseNode | undefined;
+        const unbounded = (n.type === 'ForStatement' && !test)
+          || (['WhileStatement', 'DoWhileStatement', 'ForStatement'].includes(n.type)
+            && test?.type === 'BooleanLiteral' && test.value === true);
+        let iterates = body.delete('normal');
+        iterates = body.delete('continue:') || iterates;
+        for (const label of labels) iterates = body.delete(`continue:${label}`) || iterates;
+        const exits = body.delete('break:');
+        // A do loop must reach its test; other loops may perform zero steps.
+        if (exits || (!unbounded && (n.type !== 'DoWhileStatement' || iterates))) body.add('normal');
+        return body;
       }
-      return containsBreak(n.Statement as ParseNode);
-    }
-    case 'DoWhileStatement': {
-      // The body runs BEFORE the condition is read, which is what separates
-      // this from `while`: a `while` whose body cannot complete may still
-      // complete by never entering it, and a `do` cannot. So a body that cannot
-      // complete carries the statement, whatever the condition says.
-      const test = n.Expression as { type?: string, value?: unknown } | undefined;
-      const alwaysTrue = test?.type === 'BooleanLiteral' && test.value === true;
-      const body = n.Statement as ParseNode;
-      if (alwaysTrue) {
-        return containsBreak(body);
+      case 'LabelledStatement': {
+        const label = (n.LabelIdentifier as ParseNode.LabelIdentifier).name;
+        const result = visit(n.LabelledItem as ParseNode, [...labels, label]);
+        if (result.delete(`break:${label}`)) result.add('normal');
+        return result;
       }
-      return again(body) || containsBreak(body);
+      default: return new Set(['normal']);
     }
-    case 'LabelledStatement': {
-      // A `break` naming the label resumes after the labelled statement, so it
-      // completes normally however total the statement it labels is.
-      const item = n.LabelledItem as ParseNode | undefined;
-      return again(item) || containsBreak(item, (n.LabelIdentifier as ParseNode.LabelIdentifier).name);
-    }
-    default:
-      return true;
-  }
+  };
+  return visit(stmt).has('normal');
 };
 
 /** Whether a statement contains a `break` that could leave its enclosing loop. */

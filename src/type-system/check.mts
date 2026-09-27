@@ -1,3 +1,4 @@
+import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
@@ -644,6 +645,7 @@ export function TakeDefaultRequirements(root: object): readonly DefaultRequireme
 }
 
 export interface DefaultConversionCheck {
+  readonly bindings?: ReadonlyMap<string, TypeRecord>;
   readonly initializer?: ParseNode;
   readonly value?: Value;
   readonly type: TypeRecord;
@@ -2481,6 +2483,16 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
 
 // ---- entry points ---------------------------------------------------
 
+const callReceiverTypes = new WeakMap<object, TypeRecord>();
+export function CallReceiverTypeOf(argumentsNode: object | undefined): TypeRecord | undefined {
+  return argumentsNode ? callReceiverTypes.get(argumentsNode) : undefined;
+}
+
+const adoptedReceiverTypes = new WeakMap<object, TypeRecord>();
+export function AdoptedReceiverTypeOf(node: object): TypeRecord | undefined {
+  return adoptedReceiverTypes.get(node);
+}
+
 const deferredGuardChecks = new WeakSet<object>();
 export interface DeferredTypeCheck {
   node: ParseNode.Type;
@@ -2747,6 +2759,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Declarations the pass must answer for. */
   const defaultsNeeded: DefaultRequirement[] = [];
   const defaultConversions: DefaultConversionCheck[] = [];
+  const specializedDefaultBindings: ReadonlyMap<string, TypeRecord>[] = [];
   const genericDefaults: GenericDefaultCheck[] = [];
   const whereChecks = new Map<object, GenericWhereCheck>();
   const signatureDeclarations = new WeakMap<object, ParseNode>();
@@ -3243,12 +3256,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Record a NARROWING of a name, which an assignment may later invalidate. */
+  const narrowedDeclarations = new WeakMap<Frame, Map<string, Known>>();
   const declareNarrowed = (name: string, t: Known) => {
     typeRevision += 1;
     if (!t) {
       return;
     }
     const frame = frames[frames.length - 1] as Frame & { narrowed?: Set<string> };
+    if (frame.declaredNames.has(name) && !frame.narrowed?.has(name)) {
+      let originals = narrowedDeclarations.get(frame);
+      if (!originals) { originals = new Map(); narrowedDeclarations.set(frame, originals); }
+      originals.set(name, frame.bindings.get(name) ?? null);
+    }
     frame.bindings.set(name, t as TypeRecord);
     ((frame as { narrowed?: Set<string> }).narrowed ??= new Set()).add(name);
   };
@@ -3263,6 +3282,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const f = frames[i] as Frame & { narrowed?: Set<string> };
       if (f.narrowed?.has(name)) {
+        if (f.declaredNames.has(name)) return narrowedDeclarations.get(f)?.get(name) ?? null;
         continue;
       }
       const t = f.bindings.get(name);
@@ -3289,7 +3309,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (f.narrowed) {
         for (const key of [...f.narrowed]) {
           if (key === name || key.startsWith(prefix)) {
-            f.bindings.delete(key);
+            const original = narrowedDeclarations.get(f)?.get(key);
+            if (original) f.bindings.set(key, original);
+            else f.bindings.delete(key);
+            narrowedDeclarations.get(f)?.delete(key);
             f.narrowed.delete(key);
           }
         }
@@ -3733,12 +3756,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const visit = (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): void => {
       const scoped = new Map(available);
       if (node !== declaration) for (const name of typeParameterNamesOf(node) ?? []) scoped.delete(name);
-      if (node.type === 'TupleType') {
+      if (node.type === 'TupleType' || node.type === 'ObjectType') {
         typeParameterScopes.push(scoped);
+        specializedDefaultBindings.push(scoped);
         try {
-          const invalidRest = invalidTupleRest(substituteTypeParameters(resolveType(node), scoped));
+          const specialized = substituteTypeParameters(resolveType(node), scoped);
+          checkClosedDefaults(specialized);
+          const invalidRest = invalidTupleRest(specialized);
           if (invalidRest) errors.push(Throw.StaticTypeError('$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`)).Value as ObjectValue);
         } finally {
+          specializedDefaultBindings.pop();
           typeParameterScopes.pop();
         }
       }
@@ -5709,6 +5736,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }));
         }
         const Return = tm.MethodSignature.TypeAnnotation ? resolveType(tm.MethodSignature.TypeAnnotation.Type) : null;
+        const predicate = methodPredicate(tm.MethodSignature.TypeAnnotation, Parameters, Return);
         checkAdjacentRestTypes(Parameters, tm.MethodSignature as ParseNode);
         if (pushedMethodScope) {
           typeParameterScopes.pop();
@@ -5718,7 +5746,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           type: {
             Kind: 'function',
             Signatures: [{
-              Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord,
+              Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord, ...predicate,
               ...(msTypeParameters && msTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(msTypeParameters) } : {}),
             }],
           } as unknown as TypeRecord,
@@ -5751,6 +5779,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             tmInitial = it.Value;
           }
         }
+        if (tmInit) checkFilledDefault(t, tmInit, tmInitial);
         Properties.push({ key, type: t, optional: tm.Optional === true, readonly: !!(tm as { Readonly?: boolean }).Readonly, initial: tmInitial, InitializerNode: tmInit ?? undefined });
       }
     }
@@ -5766,6 +5795,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // over the whole list.
     checkIndexSignatures(IndexSignatures);
     return inProgress;
+  };
+
+  const methodPredicate = (annotation: ParseNode.TypeAnnotation | null | undefined, Parameters: readonly ParameterRecord[], declared: Known): Pick<Partial<SignatureRecord>, 'Return' | 'Narrows'> => {
+    const target = (annotation as { NarrowsTarget?: string } | null | undefined)?.NarrowsTarget;
+    if (target === undefined) return {};
+    if (!Parameters.some((parameter) => parameter.Name === target)) {
+      errors.push(Throw.StaticTypeError('$1 is not a parameter of this method', Value(target)).Value as ObjectValue);
+      return {};
+    }
+    return declared ? { Return: makePrimitive('boolean'), Narrows: [{ Target: target, Type: declared }] } : {};
   };
 
   // ---- classes ------------------------------------------------------
@@ -6468,8 +6507,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (generator && Return) Return = generatorDeclaredType(Return, asyncGenerator);
         const Untyped = !md.TypeAnnotation && annotated.every((t) => t === null);
         const sigs = methods.get(key) ?? [];
-        const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[] } = {
-          Parameters, Return, Untyped,
+        const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null, Narrows?: SignatureRecord['Narrows'] } = {
+          Parameters, Return, Untyped, ...methodPredicate(md.TypeAnnotation, Parameters, Return),
           ...(mdTypeParameters && mdTypeParameters.length > 0 ? { TypeParameters: typeParameterRecordsOf(mdTypeParameters) } : {}),
         };
         recordOverloadDeclaration(signature, el, annotated.map((type, index) =>
@@ -8115,6 +8154,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } finally {
       typeParameterScopes.pop();
     }
+    if (resolvedBody) checkSpecializedDeclaration(declaration, bindings);
     return resolvedBody ? substituteTypeParameters(resolvedBody, bindings) : null;
   };
 
@@ -8970,8 +9010,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkFilledDefault = (type: TypeRecord, initializer?: ParseNode, value?: Value): void => {
     if ((initializer || value !== undefined) && !mentionsTypeParameter(type)) {
-      defaultConversions.push({ type, initializer, value, checked: true });
+      const bindings = new Map<string, TypeRecord>();
+      for (const scope of specializedDefaultBindings) for (const [name, bound] of scope) {
+        if (bound && !mentionsTypeParameter(bound)) bindings.set(name, bound);
+        else bindings.delete(name);
+      }
+      defaultConversions.push({ type, initializer, value, checked: true, bindings });
     }
+  };
+
+  const checkedDefaultRecords = new WeakSet<object>();
+  const checkClosedDefaults = (type: Known): void => {
+    if (!type || checkedDefaultRecords.has(type)) return;
+    checkedDefaultRecords.add(type);
+    if (type.Kind === 'tuple') {
+      for (const element of type.Elements) {
+        if (element.InitializerNode) checkFilledDefault(element.Type, element.InitializerNode, element.Initial === 'none' ? undefined : element.Initial);
+        checkClosedDefaults(element.Type);
+      }
+    } else if (type.Kind === 'object') {
+      for (const property of type.Properties) {
+        if (property.InitializerNode) checkFilledDefault(property.type, property.InitializerNode, property.initial);
+        checkClosedDefaults(property.type);
+      }
+    } else if (type.Kind === 'union' || type.Kind === 'intersection') type.Members.forEach(checkClosedDefaults);
+    else if (type.Kind === 'array') checkClosedDefaults(type.Element);
+    else if (type.Kind === 'nominal') checkClosedDefaults(type.Structure ?? null);
   };
 
   /**
@@ -9239,9 +9303,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const evaluated = evaluatedTypeNodes.get(node);
     if (evaluated) {
+      checkClosedDefaults(evaluated);
       return evaluated;
     }
     const result = resolveTypeStructure(node);
+    checkClosedDefaults(result);
     const invalidRest = invalidTupleRest(result)
       ?? (result?.Kind === 'nominal' ? invalidTupleRest(structureOf(result)) : null);
     if (invalidRest) {
@@ -9681,6 +9747,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 typeParameterScopes.pop();
               }
               if (body) {
+                checkSpecializedDeclaration(aliasDecl as ParseNode, bindings);
                 return substituteTypeParameters(body, bindings);
               }
             }
@@ -10305,17 +10372,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // source for the pre-evaluation phase. Arity needs only the presence
           // of a default, recorded independently in [[DeclaredDefault]].
           const initial = e.Initializer ? staticType(e.Initializer) : null;
-          // #sec-array-and-tuple-types: the |Initializer| "must be compile-time
-          // evaluable ... and it is a type error otherwise". A default that
-          // FOLDED to a literal is already recorded by `checkFilledDefault` when
-          // a binding of the type demands its value; one that did not fold was
-          // recorded nowhere, so the pass never evaluated it and the library half
-          // of the fragment - which only evaluating decides - went unjudged. The
-          // annotation positions that demand no default, a parameter and a
-          // return, are where that showed.
-          if (e.Initializer && initial?.Kind !== 'literal' && !mentionsTypeParameter(r)) {
-            defaultConversions.push({ type: r, initializer: e.Initializer, checked: true });
-          }
+          // #sec-array-and-tuple-types: every closed default is validated at
+          // formation, whether it folded or needs the checking evaluator.
+          if (e.Initializer) checkFilledDefault(r, e.Initializer, initial?.Kind === 'literal' ? initial.Value : undefined);
           Elements.push({ Type: e.Rest ? CanonicalizeType(r) : r, Rest: e.Rest, Initial: initial?.Kind === 'literal' ? initial.Value : 'none' as const,
             DeclaredDefault: !!e.Initializer, InitializerNode: e.Initializer ?? undefined });
         }
@@ -10440,6 +10499,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             let Parameters: ParameterRecord[] = [];
             let Return: Known = null;
+            let predicate: Partial<SignatureRecord> = {};
             try {
               Parameters = [];
               for (const p of asMethod.FunctionTypeParameterList ?? []) {
@@ -10458,6 +10518,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }));
               }
               Return = asMethod.TypeAnnotation ? resolveType(asMethod.TypeAnnotation.Type) : null;
+              predicate = methodPredicate(asMethod.TypeAnnotation, Parameters, Return);
             } finally {
               if (methodParamNames.length > 0) {
                 typeParameterScopes.pop();
@@ -10482,7 +10543,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               type: {
                 Kind: 'function',
                 Signatures: [{
-                  Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord,
+                  Parameters, Return, Untyped: false, ThisType: SelfThisTypeRecord, ...predicate,
                   ...(methodParamNames.length > 0
                     ? { TypeParameters: typeParameterRecordsOf(asMethod.TypeParameters!.TypeParameterList as readonly ParseNode.TypeParameter[]) }
                     : {}),
@@ -10539,12 +10600,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const initializerType = staticType(memberInitializer as ParseNode);
             if (initializerType && initializerType.Kind === 'literal') {
               initial = initializerType.Value;
-            } else if (r && !mentionsTypeParameter(r)) {
-              // The unfolded case, as at the tuple element above: recorded so the
-              // pass evaluates it, since only evaluating decides the library half
-              // of #annex-evaluable-fragment.
-              defaultConversions.push({ type: r, initializer: memberInitializer as ParseNode, checked: true });
             }
+            if (r) checkFilledDefault(r, memberInitializer as ParseNode, initial);
           }
           Properties.push({ key, type: r, optional: member.Optional, readonly: member.Readonly, initial, InitializerNode: memberInitializer ?? undefined });
         }
@@ -12550,6 +12607,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const wantedThis = (contextual.Signatures[0] as { ThisType?: TypeRecord }).ThisType;
       if (wantedThis !== undefined && node.type !== 'ArrowFunction' && node.type !== 'AsyncArrowFunction') {
         contextualThisTypes.set(node, wantedThis as Known);
+        adoptedReceiverTypes.set(node, wantedThis);
       }
     }
     // sec-new-expressions: `new.(...)` constructs the type its POSITION requires.
@@ -15056,7 +15114,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         const specialization = node as ParseNode.TypeArgumentsExpression;
-        const base = staticType(specialization.Expression);
+        const base = callableForm(staticType(specialization.Expression));
         const bare = patternExpression(specialization.Expression);
         if (bare?.type === 'IdentifierReference' && bare.name === 'Composite' && !shadowedByProgram('Composite')) {
           const compositeArgs = specialization.TypeArguments.TypeArgumentList.map((a) => resolveType(a as ParseNode.Type));
@@ -15939,6 +15997,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // The array arm's carve-out is kept: a bare literal's `length` reads
           // as a `number`, since the checker cannot tell `[1, 'a']` written
           // inline from a declared tuple and the run time answers a Number there.
+          if (receiver && (receiver.Kind === 'array' || receiver.Kind === 'tuple') && m.IdentifierName
+              && ['with', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat'].includes(m.IdentifierName.name)) {
+            return arrayContract(node, receiver, m.IdentifierName.name);
+          }
           if (receiver && receiver.Kind === 'tuple') {
             const tupleName = (m.IdentifierName as { name?: string } | undefined)?.name;
             if (tupleName === 'length') {
@@ -17965,6 +18027,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         contextualParameterTypes.set(member, contextual.map((type, index) => expected?.Parameters[index]?.Optional
           && expected.Parameters[index].Initial === undefined ? joinTypes(type, undefinedType) : type));
         if (expected?.Return) contextualMethodReturns.set(member, expected.Return);
+        if (expected?.ThisType) adoptedReceiverTypes.set(member, expected.ThisType);
         const scope = pushTypeParameterScopeOf(member);
         try {
           const params = member.UniqueFormalParameters ?? [];
@@ -17981,8 +18044,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const asyncGenerator = member.type === 'AsyncGeneratorMethod';
           let Return = member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null;
           if (Return && generator) Return = generatorDeclaredType(Return, asyncGenerator);
-          const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null } = {
-            Parameters, Return,
+          const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null, Narrows?: SignatureRecord['Narrows'] } = {
+            Parameters, Return, ...methodPredicate(member.TypeAnnotation, Parameters, Return),
             ...(expected?.ThisType ? { ThisType: expected.ThisType } : {}),
             Untyped: !member.TypeAnnotation && annotations.every((type) => !type) && !expected,
             // #sec-annotations-on-the-remaining-function-forms: "a method
@@ -18410,7 +18473,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return seen === 1 ? found : null;
   };
 
-  const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean, sense?: 'true' | 'false' } | undefined => {
+  const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean, sense?: 'true' | 'false', additional?: { name: string, type: TypeRecord, negated: boolean }[] } | undefined => {
     let e = expr;
     let negated = false;
     // `!(...)` inverts the sense; a parenthesized test is the test.
@@ -18665,38 +18728,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // at an annotation: [[Narrows]] has no source spelling, so a
     // constructed type behind an alias is the ONLY way a program states one.
     if (e.type === 'CallExpression') {
-      const call = e as unknown as { CallExpression?: ParseNode, Arguments?: ParseNode[] };
-      const callee = call.CallExpression;
-      const args = call.Arguments ?? [];
-      if (callee) {
-        const calleeType = staticType(callee);
-        const signatures = calleeType && calleeType.Kind === 'function' ? calleeType.Signatures : undefined;
-        // One signature only: with overloads, WHICH signature the call selects
-        // decides what it narrows, and resolving that here would duplicate
-        // ResolveOverload's contextual filter for a fact the branch can do
-        // without. An overloaded guard narrows nothing rather than guessing.
-        const narrows = signatures && signatures.length === 1
-          ? (signatures[0] as { Narrows?: readonly { Target: string, Type: TypeRecord }[] }).Narrows
-          : undefined;
-        if (narrows && narrows.length > 0) {
-          // The [[Target]] names a PARAMETER, so the argument in that position
-          // is what narrows - and only where that argument is a name there is
-          // something to narrow. `guard(o.x)` and `guard(1)` narrow nothing.
-          const parameters = (signatures![0] as { Parameters?: readonly { Name?: string }[] }).Parameters ?? [];
-          for (const rule of narrows) {
-            const position = parameters.findIndex((parameter) => parameter.Name === rule.Target);
-            if (position < 0 || position >= args.length) {
-              continue;
-            }
-            const argument = args[position]!;
-            const name = narrowableName(argument);
-            if (name === null) {
-              continue;
-            }
-            return { name, type: rule.Type, negated };
-          }
-        }
-      }
+      const facts = predicateFacts(e, false).map((fact) => ({ ...fact, negated }));
+      if (facts.length) return { ...facts[0], additional: facts.slice(1) };
     }
     // `if (v)` ON A NULLABLE, the last row of table-narrowing-forms: "`v` as the
     // test itself, where _s_ is a ~union~ with a `null` or an `undefined`
@@ -18805,6 +18838,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * dominates, so there is no branch to hang it on and it belongs here, where
    * the statements it dominates are still to be walked.
    */
+  const predicateFacts = (call: ParseNode.CallExpression, assertion: boolean): { name: string, type: TypeRecord }[] => {
+    const callee = callableForm(staticType(call.CallExpression));
+    // Named binding alone does not select among several signatures sharing
+    // the names. The call checker can retain its argument diagnostics without
+    // lending an arbitrary overload's predicate to control flow.
+    const names = call.Arguments.filter((arg) => arg.type === 'NamedArgument').map((arg) => arg.Name);
+    if (names.length && callee?.Kind === 'function'
+        && callee.Signatures.filter((sig) => names.every((name) => sig.Parameters.some((p) => p.Name === name))).length > 1) return [];
+    const signature = checkedCallSignatures.get(call)
+      ?? (callee?.Kind === 'function' && callee.Signatures.length === 1 ? callee.Signatures[0] : undefined);
+    if (!signature || (!signature.Return || signature.Return.Kind === 'void') !== assertion) return [];
+    const mapped = mapCallArguments(signature.Parameters, expandValueSpreads(call.Arguments));
+    const facts: { name: string, type: TypeRecord }[] = [];
+    for (const rule of signature.Narrows ?? []) {
+      if (mentionsTypeParameter(rule.Type)) continue;
+      if (rule.Target === 'this') {
+        let target: ParseNode = call.CallExpression;
+        while (target.type === 'ParenthesizedExpression' || target.type === 'TypeArgumentsExpression') target = target.Expression;
+        const name = target.type === 'MemberExpression' ? narrowableName(target.MemberExpression) : null;
+        if (name !== null) facts.push({ name, type: rule.Type });
+        continue;
+      }
+      const slot = signature.Parameters.findIndex((parameter) => parameter.Name === rule.Target);
+      const entries = mapped.certainEntries.filter((entry) => entry.slot === slot);
+      if (entries.length !== 1 || signature.Parameters[slot]?.Rest) continue;
+      const name = narrowableName(entries[0].node);
+      if (name !== null) facts.push({ name, type: rule.Type });
+    }
+    return facts;
+  };
+
   const applyAssertionNarrowing = (statement: ParseNode): void => {
     if (statement.type !== 'ExpressionStatement') {
       return;
@@ -18813,39 +18877,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!expression || expression.type !== 'CallExpression') {
       return;
     }
-    const call = expression as unknown as { CallExpression?: ParseNode, Arguments?: ParseNode[] };
-    const callee = call.CallExpression;
-    if (!callee) {
-      return;
-    }
-    const calleeType = staticType(callee);
-    if (!calleeType || calleeType.Kind !== 'function' || calleeType.Signatures.length !== 1) {
-      return;
-    }
-    const signature = calleeType.Signatures[0] as {
-      Return?: TypeRecord,
-      Narrows?: readonly { Target: string, Type: TypeRecord }[],
-      Parameters?: readonly { Name?: string }[],
-    };
-    // The ASSERTION form is the one returning ~void~. A `boolean` guard called
-    // as a statement asserts nothing - its answer was discarded - so narrowing
-    // on it would claim what the program did not test.
-    if (signature.Return !== undefined && signature.Return !== null
-      && (signature.Return as { Kind?: string }).Kind !== 'void') {
-      return;
-    }
-    const args = call.Arguments ?? [];
-    const parameters = signature.Parameters ?? [];
-    for (const rule of signature.Narrows ?? []) {
-      const position = parameters.findIndex((parameter) => parameter.Name === rule.Target);
-      if (position < 0 || position >= args.length) {
-        continue;
-      }
-      const name = narrowableName(args[position]!);
-      if (name !== null) {
-        declareNarrowed(name, rule.Type as Known);
+    const callee = expression.CallExpression;
+    if (!afterTypeEvaluation && callee.type === 'IdentifierReference' && !staticType(callee)) {
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        if (!frames[i].declaredNames.has(callee.name)) continue;
+        if (frames[i].unresolvedAnnotations.has(callee.name)) {
+          deferredGuardChecks.add(root);
+          for (const argument of expression.Arguments) {
+            const name = narrowableName(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument);
+            if (name !== null) declareNarrowed(name, anyTypeRecord);
+          }
+        }
+        break;
       }
     }
+    for (const fact of predicateFacts(expression, true)) declareNarrowed(fact.name, fact.type);
+
   };
 
   /**
@@ -18854,7 +18901,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * operator, which differ only in what they guard.
    */
   const walkGuarded = (test: ParseNode, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
-    const fact = narrowingFactOf(test);
     // #sec-metadata-narrowing: record the comparison for the checking pass,
     // which can call `narrow` where this pass cannot. The enclosing request is
     // the parent, so the resolution sweep can compose an inner narrowing onto
@@ -18864,6 +18910,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       narrowingRequestsHere.push({ ...request, parent: enclosingRequestKey });
     }
     walk(test);
+    const fact = narrowingFactOf(test);
     // The enclosing key covers BOTH paths. A relational comparison yields no
     // type-level fact, so the guard below returns early - and that is exactly
     // the shape a narrowing request has, so skipping the push here left every
@@ -18918,7 +18965,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // current reads as unknown for this provisional walk; writes still
             // use lookupDeclared. Independent literal/type errors are retained.
             for (const argument of call!.Arguments ?? []) {
-              const name = narrowableName(argument);
+              const name = narrowableName(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument);
               if (name !== null) {
                 declareNarrowed(name, { Kind: 'any' });
               }
@@ -18943,47 +18990,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * bookkeeping in `walkGuarded` covers both without duplicating the restore.
    */
   const walkGuardedBranches = (fact: NonNullable<ReturnType<typeof narrowingFactOf>>, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
-    const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
-    const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
-    const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
-    // sec-narrowing: "It is a type error to apply a narrowing form where the
-    // test can never succeed or can never fail, since the branch it guards is
-    // then dead code the program did not intend." The checker had this rule and
-    // reached it only for a test over a TYPE, never for one over a binding,
-    // which is the shape a program writes.
-    // The dead-branch rule reasons from the STATIC type, so it applies only
-    // where membership is a stable fact about the value. It is not, for an
-    // object type or a refinement: sec-isoftype says in as many words that the
-    // object case "is checked at the boundary but not afterwards", so a binding
-    // of an object type can stop satisfying it through mutation, and a `where`
-    // predicate is re-evaluated on every test. The suite has the case that
-    // proves it - `let p: Pos = ...; p.a = 0; p is Pos` is *false* at run time
-    // while the static type still says `Pos` - and reporting that branch as
-    // dead would have contradicted a documented behaviour. So the rule
-    // fires for the kinds whose membership a value cannot lose.
-    const decidable = (t: TypeRecord): boolean => t.Kind === 'primitive' || t.Kind === 'literal'
-      || (t.Kind === 'union' && t.Members.every(decidable));
-    if (source.Kind !== 'any' && !fact.sense && decidable(source) && decidable(fact.type)) {
-      if (whenTrue === empty) {
-        const completion = Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
-        errors.push(completion.Value as ObjectValue);
-      } else if (whenFalse === empty) {
-        const completion = Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
-        errors.push(completion.Value as ObjectValue);
+    const paths = [fact, ...(fact.additional ?? [])].map((entry) => {
+      const fact = { ...entry, sense: 'sense' in entry ? entry.sense : undefined };
+      const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
+      const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
+      const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+      // sec-narrowing: "It is a type error to apply a narrowing form where the
+      // test can never succeed or can never fail, since the branch it guards is
+      // then dead code the program did not intend." The checker had this rule and
+      // reached it only for a test over a TYPE, never for one over a binding,
+      // which is the shape a program writes.
+      // The dead-branch rule reasons from the STATIC type, so it applies only
+      // where membership is a stable fact about the value. It is not, for an
+      // object type or a refinement: sec-isoftype says in as many words that the
+      // object case "is checked at the boundary but not afterwards", so a binding
+      // of an object type can stop satisfying it through mutation, and a `where`
+      // predicate is re-evaluated on every test. The suite has the case that
+      // proves it - `let p: Pos = ...; p.a = 0; p is Pos` is *false* at run time
+      // while the static type still says `Pos` - and reporting that branch as
+      // dead would have contradicted a documented behaviour. So the rule
+      // fires for the kinds whose membership a value cannot lose.
+      const decidable = (t: TypeRecord): boolean => t.Kind === 'primitive' || t.Kind === 'literal'
+        || (t.Kind === 'union' && t.Members.every(decidable));
+      if (source.Kind !== 'any' && !fact.sense && decidable(source) && decidable(fact.type)) {
+        if (whenTrue === empty) {
+          const completion = Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        } else if (whenFalse === empty) {
+          const completion = Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+        }
       }
-    }
+      return { fact, whenTrue, whenFalse };
+    });
     if (whenTrueNode) {
       pushBlock(() => {
-        if (whenTrue !== empty && fact.sense !== 'false') {
-          declareNarrowed(fact.name, whenTrue as Known);
+        for (const { fact, whenTrue } of paths) {
+          if (whenTrue !== empty && fact.sense !== 'false') declareNarrowed(fact.name, whenTrue as Known);
         }
         walk(whenTrueNode);
       });
     }
     if (whenFalseNode) {
       pushBlock(() => {
-        if (whenFalse !== empty && fact.sense !== 'true') {
-          declareNarrowed(fact.name, whenFalse as Known);
+        for (const { fact, whenFalse } of paths) {
+          if (whenFalse !== empty && fact.sense !== 'true') declareNarrowed(fact.name, whenFalse as Known);
         }
         walk(whenFalseNode);
       });
@@ -20732,7 +20783,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // narrowing that can never fail, because a `for`-`of` body does not run
       // for the completion value. TypeScript, Rust and Python all keep "no more
       // values" in the protocol rather than in the element type.
-      if (mode !== 'yield' && !endsWithReturn(body)) {
+      if (mode !== 'yield' && canCompleteNormally(body, switchCoversDiscriminant)) {
         contributions.push(makePrimitive('undefined'));
       }
       if (contributions.length === 0) {
@@ -22699,6 +22750,80 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { entries, certainEntries, counts: groups.map((g) => g.length), spread, named };
   };
 
+  let provenArrayMembers: ReadonlySet<ParseNode> | undefined;
+  const arrayContract = (member: ParseNode, receiver: TypeRecord, name: string): Known => {
+    provenArrayMembers ??= ProvenArrayMembers(root, surroundingAgent.currentRealmRecord);
+    if (!provenArrayMembers.has(member)) return anyTypeRecord;
+    if (receiver.Kind !== 'array' && receiver.Kind !== 'tuple') return anyTypeRecord;
+    const elements = receiver.Kind === 'array' ? [receiver.Element]
+      : receiver.Elements.map((element) => element.Rest ? restElementType(element.Type) : element.Type);
+    // Composite or metadata conversions can invoke code while forming the
+    // receiver. Those origins require a stronger effect proof.
+    if (elements.some((element) => !element || !['primitive', 'any', 'literal'].includes(element.Kind))) return anyTypeRecord;
+    const element = elements.reduce<Known>((joined, type) => joined ? joinTypes(joined, type) : type, null) ?? anyTypeRecord;
+    const copy: TypeRecord = { Kind: 'array', Element: element, Extent: 'dynamic' };
+    const make = (Parameters: readonly ParameterRecord[], Return: Known): TypeRecord => ({ Kind: 'function', Signatures: [{ Parameters, Return }] });
+    const args = member.parent?.type === 'CallExpression' ? member.parent.Arguments : [];
+    if (name === 'with') {
+      let target: TypeRecord = element;
+      if (receiver.Kind === 'tuple') {
+        const index = args[0] ? staticType(args[0]) : null;
+        const literal = index?.Kind === 'literal' ? index.Value : undefined;
+        const numericIndex = literal instanceof NumberValue ? R(literal)
+          : literal instanceof JSStringValue ? Number(literal.stringValue())
+            : literal === Value.true ? 1 : literal === Value.false || literal === Value.null ? 0 : undefined;
+        const value = numericIndex === undefined ? undefined : Number.isNaN(numericIndex) ? 0 : Math.trunc(numericIndex);
+        const fixed = receiver.Elements.every((entry) => !entry.Rest && !entry.DeclaredDefault && entry.Initial === 'none');
+        if (value !== undefined && Number.isFinite(value) && (value >= 0 || fixed)) {
+          target = elements[value < 0 ? elements.length + value : value] ?? anyTypeRecord;
+        } else {
+          // A replacement must fit every possible destination, not merely one
+          // member of the tuple's union. Unknown values remain gradual.
+          target = CanonicalizeType({ Kind: 'intersection', Members: elements as TypeRecord[] });
+        }
+      }
+      return make([parameter(anyTypeRecord), parameter(target)], receiver.Kind === 'tuple'
+        ? receiver.Elements.every((entry) => !entry.Rest) ? receiver : anyTypeRecord : copy);
+    }
+    if (name === 'sort' || name === 'toSorted') {
+      const callback = make([parameter(element), parameter(element)], anyTypeRecord);
+      return make([parameter(callback, { Optional: true })], name === 'sort' ? receiver : receiver.Kind === 'tuple' ? anyTypeRecord : copy);
+    }
+    if (name === 'reduce' || name === 'reduceRight') {
+      const initial = args[1] ? staticType(args[1]) : element;
+      const callback = args[0] ? callableForm(staticType(args[0])) : null;
+      const returned = callback?.Kind === 'function' && callback.Signatures.length === 1 ? callback.Signatures[0].Return : null;
+      const accumulator = returned && initial ? joinTypes(widenForBinding(initial), returned) : initial ?? anyTypeRecord;
+      const contract = make([parameter(accumulator), parameter(element), parameter(indexTypeRecord()), parameter(receiver)], accumulator);
+      return make([parameter(contract), parameter(initial ?? anyTypeRecord, { Optional: true })], accumulator);
+    }
+    if (name === 'filter') {
+      const callback = make([parameter(element), parameter(indexTypeRecord()), parameter(receiver)], anyTypeRecord);
+      return make([parameter(callback), parameter(anyTypeRecord, { Optional: true })], receiver.Kind === 'tuple' ? anyTypeRecord : copy);
+    }
+    if (name === 'toReversed') {
+      const result = receiver.Kind === 'tuple' && receiver.Elements.every((entry) => !entry.Rest)
+        ? { ...receiver, Elements: receiver.Elements.toReversed() } : copy;
+      return make([], result);
+    }
+    if (name === 'slice') return make([parameter(anyTypeRecord, { Optional: true }), parameter(anyTypeRecord, { Optional: true })], receiver.Kind === 'array' ? copy : anyTypeRecord);
+    if (name === 'concat') {
+      if (receiver.Kind === 'tuple') return anyTypeRecord;
+      const joined = args.reduce<TypeRecord>((joined, arg) => {
+        const type = staticType(arg);
+        const added = type?.Kind === 'array' ? type.Element
+          : type?.Kind === 'tuple' ? type.Elements.reduce<TypeRecord>((sum, entry) => joinTypes(sum, entry.Type), neverType)
+            : type ? widenForBinding(type) : anyTypeRecord;
+        return joinTypes(joined, added);
+      }, element);
+      return make([parameter(anyTypeRecord, { Rest: true })], { ...copy, Element: joined });
+    }
+    // The remaining existing array signatures keep their argument policy;
+    // only fresh container storage is changed here.
+    const signature = ArrayMethodSignature(name, element, receiver);
+    return signature?.Kind === 'function' ? { ...signature, Signatures: signature.Signatures.map((sig) => ({ ...sig, Return: copy })) } : anyTypeRecord;
+  };
+
   const checkedCallSignatures = new WeakMap<object, SignatureRecord>();
   // #sec-published-return-types: selection uses declared signatures alone;
   // result inference and argument checking ask the same resolver in the current context.
@@ -22998,6 +23123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (sig) {
       checkedCallSignatures.set(c, sig as SignatureRecord);
       const chosen = sig;
+      let effectiveBindings: ReadonlyMap<string, TypeRecord> | undefined;
       const mapped = mapCallArguments(chosen.Parameters, supplied);
       if (mapped.spread && !mapped.named && chosen.Parameters.at(-1)?.Rest && chosen.Parameters.every((parameter) => !parameter.Optional)) {
         let minimumPosition = 0;
@@ -23493,6 +23619,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (bindings.size > 0) {
+            effectiveBindings = bindings;
             param = substituteTypeParameters(param, bindings) as TypeRecord;
           if (slot?.Rest && slot.Type.Kind === 'parameter' && param?.Kind === 'array') {
             param = param.Element;
@@ -23571,6 +23698,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           requireAssignable(argType, param);
         }
       });
+      const effective = effectiveBindings
+        ? (substituteTypeParameters({ Kind: 'function', Signatures: [chosen] }, effectiveBindings) as Extract<TypeRecord, { Kind: 'function' }>).Signatures[0]
+        : chosen;
+      checkedCallSignatures.set(c, effective);
+      // #sec-this-adoption: an explicit receiver contract is independent of
+      // the self marker used by ordinary method syntax.
+      const names = supplied.filter((arg) => arg.type === 'NamedArgument').map((arg) => arg.Name);
+      const selectedByNames = !names.length || callee.Signatures.filter((candidate) =>
+        names.every((name) => candidate.Parameters.some((p) => p.Name === name))).length === 1;
+      const expectedThis = selectedByNames ? effective.ThisType : undefined;
+      const argumentsNode = n.type === 'TaggedTemplateExpression' ? n.TemplateLiteral : c.Arguments;
+      if (expectedThis && argumentsNode) callReceiverTypes.set(argumentsNode, expectedThis);
+      if (expectedThis && expectedThis !== SelfThisTypeRecord && !SameType(expectedThis, SelfThisTypeRecord)
+          && !mentionsTypeParameter(expectedThis)) {
+        let target = c.CallExpression;
+        while (target?.type === 'ParenthesizedExpression' || target?.type === 'TypeArgumentsExpression') target = target.Expression;
+        if (target?.type === 'MemberExpression') requireAssignable(staticType(target.MemberExpression), expectedThis);
+        else if (target?.type === 'SuperProperty') requireAssignable(thisTypeFrames.at(-1) ?? null, expectedThis);
+      }
     }
   }
   };

@@ -3171,6 +3171,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // zero-length array of an element type that has one behave differently
       // from a zero-length array of one that does not.
       if (t.Extent === 0) {
+        (out as ObjectValue & { TypedExtent?: number }).TypedExtent = 0;
         return out;
       }
       const element = Q(yield* DefaultValueOf(t.Element));
@@ -3186,6 +3187,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         }
         X(CreateDataPropertyOrThrow(out, Value(String(i)), each));
       }
+      (out as ObjectValue & { TypedExtent?: number }).TypedExtent = t.Extent;
       return out;
     }
     case 'tuple': {
@@ -4033,6 +4035,11 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         if (extent !== 'dynamic' && extent !== len) {
           return false;
         }
+        // #sec-intrinsic-array-contracts: a growable typed copy is not fixed
+        // storage merely because its current length equals the target extent.
+        const storage = value as { TypedElement?: TypeRecord, TypedExtent?: number };
+        if (extent !== 'dynamic' && storage.TypedElement !== undefined && storage.TypedExtent !== extent) return false;
+
         // The run-time half of #sec-array-and-tuple-types' extent rule. A FIXED
         // array is not a member of a dynamic array type: it cannot be grown and
         // that type says it can. The static and dynamic answers have to agree,
@@ -5932,6 +5939,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         if (sawRest && e.Initializer) {
           return Throw.TypeError('$1 is not a type', Value('a tuple position with a default may not follow a rest'));
         }
+        const Type = Q(yield* TypeNodeToTypeRecord(e.Type));
         let Initial: Value | 'none' = 'none';
         if (e.Initializer) {
           // The default's VALUE, evaluated once for the type. A tuple type is
@@ -5952,6 +5960,9 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           BeginFragmentEvaluation();
           try {
             Initial = Q(yield* GetValue(Q(yield* Evaluate(e.Initializer))));
+            if (!mentionsTypeParameter(Type)) {
+              Initial = Q(yield* CheckedConvertValue(Initial, Type));
+            }
           } finally {
             EndFragmentEvaluation();
           }
@@ -5960,7 +5971,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         if (e.Rest) {
           sawRest = true;
         }
-        Elements.push({ Type: Q(yield* TypeNodeToTypeRecord(e.Type)), Rest: e.Rest, Initial });
+        Elements.push({ Type, Rest: e.Rest, Initial });
       }
       return { Kind: 'tuple', Elements };
     }
@@ -6139,6 +6150,9 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           BeginFragmentEvaluation();
           try {
             initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer as never))) as never));
+            if (!mentionsTypeParameter(type)) {
+              initial = Q(yield* CheckedConvertValue(initial, type));
+            }
           } finally {
             EndFragmentEvaluation();
           }

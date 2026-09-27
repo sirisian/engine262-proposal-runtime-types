@@ -18,11 +18,11 @@ test.each([
   expectStaticTypeError(`function unused() { ${source} }`);
 });
 
-test('a stored composite default is converted only when used', () => {
-  expect(ok('type T = [uint8 = "s"];')).toBe(true);
-  expect(ok('type T = { x?: uint8 = "s" };')).toBe(true);
-  expect(evaluated('type T = [uint8 = "s"]; const t: T = [1]; String(t[0]);')).toBe('1');
-  expect(evaluated('type T = { x?: uint8 = "s" }; const t: T = { x: 1 }; String(t.x);')).toBe('1');
+test('a closed composite default is checked when its type is formed', () => {
+  expectStaticTypeError('type T = [uint8 = "s"];');
+  expectStaticTypeError('type T = { x?: uint8 = "s" };');
+  expectStaticTypeError('type T = [uint8 = "s"]; const t: T = [1];');
+  expectStaticTypeError('type T = { x?: uint8 = "s" }; const t: T = { x: 1 };');
   expect(evaluated('type T = [uint8 = 1 + 2]; const t: T = []; String(t[0]);')).toBe('3');
   expect(evaluated('type T = { x?: uint8 = 1 }; const t: T = {}; String(t.x);')).toBe('1');
 });

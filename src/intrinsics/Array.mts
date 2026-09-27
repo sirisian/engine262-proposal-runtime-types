@@ -1,3 +1,4 @@
+import { RememberArrayIntrinsics } from '../type-system/array-intrinsics.mts';
 import {
   Await,
   IfAbruptCloseIterator,
@@ -370,4 +371,5 @@ export function bootstrapArray(realmRec: Realm) {
   ]);
 
   realmRec.Intrinsics['%Array%'] = cons;
+  RememberArrayIntrinsics(realmRec, proto);
 }

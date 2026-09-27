@@ -57,7 +57,7 @@ test('arrows, methods, getters and class methods', () => {
 
 test('async takes the awaited type; a generator its return type, not its yield type', () => {
   expect(evaluated(`${T} async function h(): Promise.<uint8> { ${LOOP} return 0; } h(); t;`)).toBe('uint.<8>');
-  expect(evaluated(`${T} function* g(): Generator.<uint8, uint16, void> { ${LOOP} } [...g()]; t;`)).toBe('uint.<16>');
+  expect(evaluated(`${T} function* g(): Generator.<uint8, uint16, void> { ${LOOP} return 0; } [...g()]; t;`)).toBe('uint.<16>');
 });
 
 test('a contextual return type counts, as the function\'s own', () => {

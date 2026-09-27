@@ -397,7 +397,7 @@ test('what the ARITY rule refuses, and what it deliberately does not', () => {
   // A SPREAD contributes an unknown count, and a REST position admits any number
   // past the fixed ones.
   expect(ok('if (false) { const s: [].<uint8> = [(1 := uint8)]; let x: [uint8] = [...s]; } 1;')).toBe(true);
-  expect(ok('if (false) { let x: [uint8, ...string] = [(1 := uint8), "a", "b"]; } 1;')).toBe(true);
+  expect(ok('if (false) { let x: [uint8, ...[].<string>] = [(1 := uint8), "a", "b"]; } 1;')).toBe(true);
   // The per-position ELEMENT TYPE is checked NOW.
   //
   // It was left out twice because it regressed a literal of PROMISES at a tuple

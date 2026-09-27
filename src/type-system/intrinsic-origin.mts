@@ -15,7 +15,7 @@ export function intrinsicData(object: Value, key: JSStringValue | SymbolValue): 
  * dependency and therefore defeat this proof. This is not an IC guard: a
  * run-time guard could not justify an irrevocable Early Error.
  */
-export function intrinsicSourceIsStable(root: ParseNode, realm: Realm): boolean {
+export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode: (node: ParseNode) => boolean = () => false): boolean {
   const nodes: ParseNode[] = [];
   const visit = (value: unknown): void => {
     if (!value || typeof value !== 'object') return;
@@ -63,6 +63,7 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm): boolean 
   };
   const callTarget = (expression: ParseNode): boolean => {
     const node = unwrap(expression);
+    if (safeNode(node)) return true;
     if (node.type === 'IdentifierReference') {
       if (localFunction(node.name)) return true;
       if (node.name === 'Symbol' && expression.parent?.type === 'CallExpression'
@@ -85,6 +86,7 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm): boolean 
       && (unwrap(node.MemberExpression) as ParseNode.IdentifierReference).name === 'Proxy' && intrinsicName('Proxy');
   };
   for (const node of nodes) {
+    if (safeNode(node)) continue;
     // A bare free name can itself select a global getter. Type-name syntax
     // follows its separate resolution rules; value reads need a data origin.
     if (node.type === 'IdentifierReference' && node.parent?.type !== 'TypeName'

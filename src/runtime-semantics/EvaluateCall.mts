@@ -1,3 +1,4 @@
+import { SameType } from '../type-system/relations.mts';
 import {
   NumberValue, ObjectValue, ReferenceRecord, ReferenceValue, TypedNumberValue, Value, isTypedNumber,
 } from '../value.mts';
@@ -5,8 +6,8 @@ import { Q, Completion, AbruptCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
 import { isTypeObject } from '../type-system/intern.mts';
-import type { TypeRecord } from '../type-system/records.mts';
-import { TakeStaticCallResolution } from '../type-system/check.mts';
+import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
+import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
 import { signatureInView } from './ArgumentListEvaluation.mts';
 import {
@@ -22,7 +23,7 @@ import {
   GetValue,
   R,
 } from '#self';
-import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext } from '../type-system/runtime.mts';
+import { pushContextualType, popContextualType, contextualTypeFor, SetPendingCalleeContext, currentTypeParameterFrame, IsOfType } from '../type-system/runtime.mts';
 import { soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
 
 /** https://tc39.es/ecma262/#sec-evaluatecall */
@@ -161,6 +162,13 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     // `('5', 10)`. Without a declared type in view, the callee's own parameter
     // list is read, as before.
     argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func, signature));
+  }
+  // #sec-this-adoption: enforce a typed call's receiver view even when the
+  // function value reached that view through an erased boundary.
+  const expectedThis = surroundingAgent.feature('runtime-types') ? CallReceiverTypeOf(args) : undefined;
+  if (expectedThis && expectedThis !== SelfThisTypeRecord && !SameType(expectedThis, SelfThisTypeRecord)) {
+    const closed = substituteTypeParameters(expectedThis, currentTypeParameterFrame() ?? new Map())!;
+    if (!Q(yield* IsOfType(thisValue, closed))) return Throw.TypeError('the receiver does not satisfy the declared this type');
   }
   // 6. If tailPosition is true, perform PrepareForTailCall().
   if (tailPosition) {

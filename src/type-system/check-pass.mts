@@ -408,6 +408,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     if (errors.length) return Throw(errors[0]);
   }
   for (const check of DefaultConversionChecksOf(root)) {
+    const context = surroundingAgent.runningExecutionContext;
     let value = check.value;
     if (value === undefined && check.initializer) {
       // The SYNTACTIC half of the fragment, and then what the initializer may
@@ -424,7 +425,17 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // still skipped: #sec-evaluatetotypeobject only evaluates what it can read
       // at check time, and a name this pass cannot resolve is not one of them.
       if (FirstNonEvaluableForm(check.initializer)
-        || FirstFreeReference(check.initializer, new Set(FRAGMENT_FLOOR))) continue;
+        || FirstFreeReference(check.initializer, new Set([...FRAGMENT_FLOOR, ...(check.bindings?.keys() ?? [])]))) continue;
+      const outer = context.LexicalEnvironment;
+      if (check.bindings?.size) {
+        const scope = new DeclarativeEnvironmentRecord(outer);
+        for (const [name, bound] of check.bindings) {
+          X(scope.CreateImmutableBinding(Value(name), Value.true));
+          X(scope.InitializeBinding(Value(name), bound.Kind === 'literal' ? bound.Value : GetTypeObject(bound)));
+        }
+        context.LexicalEnvironment = scope;
+      }
+      pushTypeParameterFrame(new Map(check.bindings));
       BeginFragmentEvaluation();
       let evaluated;
       try {
@@ -434,6 +445,8 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         }
       } finally {
         EndFragmentEvaluation();
+        popTypeParameterFrame();
+        context.LexicalEnvironment = outer;
       }
       // #sec-evaluatetotypeobject: an abrupt completion makes the result
       // ~empty~, and ~empty~ in type position "is a type error" - an Early Error

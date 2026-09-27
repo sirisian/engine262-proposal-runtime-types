@@ -27,7 +27,7 @@ import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
-import type { TypeRecord } from '../type-system/records.mts';
+import { mentionsTypeParameter, type TypeRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
@@ -718,6 +718,9 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         BeginFragmentEvaluation();
         try {
           initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer))) as never));
+          if (!mentionsTypeParameter(resolved)) {
+            initial = Q(yield* CheckedConvertValue(initial, resolved));
+          }
         } finally {
           EndFragmentEvaluation();
         }

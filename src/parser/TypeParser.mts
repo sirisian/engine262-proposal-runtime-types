@@ -1232,7 +1232,7 @@ export abstract class TypeParser extends ExpressionParser {
   // identifier directly followed by `:` selects the index signature.
   protected parseTypeMember(): ParseNode.TypeMember | ParseNode.IndexSignature {
     const node = this.startNode<ParseNode.TypeMember | ParseNode.IndexSignature>();
-    // A `readonly` modifier precedes the property/index. `readonly` is also a
+    // A `readonly` modifier precedes a named property. `readonly` is also a
     // valid property name, so only treat it as the modifier when another member
     // token follows (a name, `[`, `?`, or a string/number literal name).
     let Readonly = false;
@@ -1262,6 +1262,8 @@ export abstract class TypeParser extends ExpressionParser {
       const nameNode = this.startNode<ParseNode.PropertyName>();
       this.next(); // `[`
       if (this.test(Token.IDENTIFIER) && this.testAhead(Token.COLON)) {
+        // #sec-object-types: index signatures have no readonly contract.
+        if (Readonly) return this.unexpected();
         node.BindingIdentifier = this.parseBindingIdentifier();
         node.KeyTypeAnnotation = this.parseTypeAnnotation();
         this.expect(Token.RBRACK);

@@ -46,7 +46,18 @@ export const effectiveFunctionType = (t: Known): Known => {
  * function structurally". Both call-checking sites tested `Kind === 'function'`
  * on the raw type and so saw an interface-typed callee as uncallable-unknown.
  */
-export const callableForm = (t: Known): Known => {
+export const callableForm = (t: Known, seen = new Set<TypeRecord>()): Known => {
+  if (!t || seen.has(t)) return t;
+  seen.add(t);
+  // #sec-isoftype: keyed conjuncts do not erase a value's call contracts.
+  // Multiple callable conjuncts use the existing signature selection rules.
+  if (t.Kind === 'intersection') {
+    const Signatures = t.Members.flatMap((member) => {
+      const callable = callableForm(member, seen);
+      return callable?.Kind === 'function' ? callable.Signatures : [];
+    });
+    if (Signatures.length) return { Kind: 'function', Signatures };
+  }
   if (t && t.Kind === 'nominal') {
     const structure = (t as { Structure?: Known }).Structure;
     if (structure && structure.Kind === 'function') {

@@ -53,7 +53,7 @@ test('with() takes its value at the position it writes', () => {
   expectThrown(`${t} t.with(0, bad.v);`);
   expect(evaluated(`${t} const r = t.with(1, "ok"); r[1];`)).toBe('ok');
   // A position the rest collects takes the rest's type.
-  expect(evaluated('let r: [uint8, ...string] = [1, "a", "b"]; r.with(2, "z")[2];')).toBe('z');
+  expect(evaluated('let r: [uint8, ...[].<string>] = [1, "a", "b"]; r.with(2, "z")[2];')).toBe('z');
   // An untyped array is untouched.
   expect(evaluated('const u = [1, 2]; String(u.with(0, "x")[0]);')).toBe('x');
 });
@@ -65,8 +65,8 @@ test("a tuple's arity is fixed against length", () => {
   // fixed positions is within the type.
   expectThrown('let t: [uint8, string] = [1, "s"]; t.length = 1;');
   expect(evaluated('let t: [uint8, string] = [1, "s"]; t.length = 2; String(t.length);')).toBe('2');
-  expect(evaluated('let r: [uint8, ...string] = [1, "a", "b"]; r.length = 2; String(r.length);')).toBe('2');
-  expectThrown('let r: [uint8, ...string] = [1, "a"]; r.length = 0;');
+  expect(evaluated('let r: [uint8, ...[].<string>] = [1, "a", "b"]; r.length = 2; String(r.length);')).toBe('2');
+  expectThrown('let r: [uint8, ...[].<string>] = [1, "a"]; r.length = 0;');
   // A dynamic array's length is not part of its type.
   expect(evaluated('let a: [].<uint8> = [1, 2]; a.length = 1; String(a.length);')).toBe('1');
 });
@@ -95,7 +95,7 @@ test('a copy of a tuple carries the shape the operation produced', () => {
   // guess. Recorded as the measured answer, not as the desired one.
   expect(evaluated(`${t} const r = t.toSorted(); r[0] = bad.v; String(r[0]);`)).toBe('no');
   // A tuple with a REST is left alone: its positions are not a fixed list.
-  expect(evaluated('let r: [uint8, ...string] = [1, "a"]; const c = r.toReversed(); c[0] = 5; String(c[0]);')).toBe('5');
+  expect(evaluated('let r: [uint8, ...[].<string>] = [1, "a"]; const c = r.toReversed(); c[0] = 5; String(c[0]);')).toBe('5');
 });
 
 test('a count is checked as a count, not coerced', () => {
