@@ -55,6 +55,7 @@ import {
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
+import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
@@ -3612,6 +3613,7 @@ export function SubstituteTypeArguments(
       seen.set(r, out);
       (out as { Properties: unknown }).Properties = r.Properties.map((prop) => ({
         ...prop, type: walk(prop.type as TypeRecord),
+        ...(prop.writeType ? { writeType: walk(prop.writeType) } : {}),
       }));
       // [[IndexSignatures]] was copied VERBATIM beside a [[Properties]] that is
       // walked, so a NOMINAL target kept its parameter:
@@ -4873,6 +4875,8 @@ export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type, expectedArit
 
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
   const type = Q(yield* TypeNodeToTypeRecordUnchecked(node));
+  const invalidRest = invalidTupleRest(type);
+  if (invalidRest) return Throw.TypeError('$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`));
   if (type.Kind !== 'parameterized') return type;
   return { ...type, Metadata: Q(yield* CheckMetadataRecord(type.Metadata, type.Base)) };
 }

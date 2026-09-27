@@ -16,6 +16,7 @@ import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluat
 import { RegisterReflectionContexts } from '../type-system/reflection-contexts.mts';
 import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord, displayType } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { invalidTupleRest } from '../type-system/tuple-rests.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type {
@@ -575,7 +576,10 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
         const restV = Q(yield* Get(el, Value('rest')));
         out.push({ Type: type, Rest: restV === Value.true, Initial: 'none' });
       }
-      return { Kind: 'tuple', Elements: out };
+      const record: TypeRecord = { Kind: 'tuple', Elements: out };
+      const invalidRest = invalidTupleRest(record);
+      if (invalidRest) return Throw.TypeError('$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`));
+      return record;
     }
     case 'array': {
       const element = Q(yield* typeProp('element'));
@@ -1246,6 +1250,8 @@ function Reflect_getReflection([type = Value.undefined]: Arguments) {
 function* Reflect_makeType([node = Value.undefined]: Arguments): ValueEvaluator {
   // proposal-runtime-types #sec-reflect-maketype.
   const record = Q(yield* nodeToTypeRecord(node));
+  const invalidRest = invalidTupleRest(record);
+  if (invalidRest) return Throw.TypeError('$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`));
   // GetTypeObject canonicalizes and interns; canonicalization is where any
   // invalidity is caught, matching the equivalent source declaration.
   return GetTypeObject(record);

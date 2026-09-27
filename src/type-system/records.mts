@@ -39,6 +39,8 @@ export interface PropertyTypeRecord {
    * outside the checker consults it.
    */
   readonly protected?: boolean;
+  /** Declaring class for the checker's erased access permission. */
+  readonly protectedOwner?: ParseNode;
   /**
    * proposal-runtime-types: an optional member's DECLARED DEFAULT, `c?: T = v`.
    *

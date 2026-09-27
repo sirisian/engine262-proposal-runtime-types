@@ -295,7 +295,8 @@ test('a buffer view gains the same surface', () => {
   const v = 'const b = new ArrayBuffer(4); const v = Span.<uint8>(b); ';
   expect(evaluated(`${v}String(v.map((x) => x).length);`)).toBe('4');
   expect(evaluated(`${v}let n = 0; for (const x of v) { n += 1; } String(n);`)).toBe('4');
-  expect(evaluated(`${v}String(typeof v.push);`)).toBe('undefined');
+  expectStaticTypeError(`${v}String(typeof v.push);`);
+  expect(evaluated('const b = new ArrayBuffer(4); const v:any = Span.<uint8>(b); String(typeof v.push);')).toBe('undefined');
 });
 
 test('equipping the window disturbs neither arrays nor liveness', () => {
@@ -354,11 +355,11 @@ test('a window of the wrong element type is refused, not converted', () => {
   // search then re-entered membership. The stack overflowed inside the
   // diagnostic being built for the failure, which is why it presented as a
   // `displayType` bug and not as a coercion one.
-  expectThrownKind('const b = new ArrayBuffer(4);'
-    + ' function f(p: Span.<uint32>) { return p.length; } f(Span.<uint8>(b));', 'TypeError');
-  // The SoA column reaches the same refusal STATICALLY, its type being visible
-  // where the `Span.<uint8>(b)` above is built from a run-time buffer. Same
-  // judgment, seen earlier.
+  expectStaticTypeError('const b = new ArrayBuffer(4);'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(Span.<uint8>(b));');
+  expectThrownKind('const b = new ArrayBuffer(4); const view:any = Span.<uint8>(b);'
+    + ' function f(p: Span.<uint32>) { return p.length; } f(view);', 'TypeError');
+  // A column projection preserves the same window contract.
   expectStaticTypeError('class P { x: float32; } const s = new SoA.<P>(); s.push({ x: 1 });'
     + ' function f(p: Span.<uint32>) { return p.length; } f(s.fields.x);');
 });
