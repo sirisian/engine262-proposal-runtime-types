@@ -140,6 +140,22 @@ export function InstantiateComponentType(
   bindings: ReadonlyMap<string, Argument>,
   resolve: (node: ParseNode) => TypeRecord | null,
 ): Argument | null {
+  // The two-list form, `complex.<E>.<T>`: a parameterized primitive's component
+  // list and then its metadata list. The base instantiates as any application
+  // does; the one metadata argument, an object record, becomes the metadata -
+  // as a parameterless primitive's single list does below.
+  if (node.type === 'ParameterizedType') {
+    const written = node as unknown as { BaseType?: ParseNode, TypeArguments?: { TypeArgumentList?: readonly unknown[] } };
+    const items = (written.TypeArguments?.TypeArgumentList ?? []) as readonly ParseNode[];
+    if (written.BaseType && items.length === 1) {
+      const base = InstantiateComponentType(written.BaseType, bindings, resolve);
+      const metadata = InstantiateComponentType(items[0], bindings, resolve);
+      if (base !== null && typeof base === 'object' && metadata !== null && typeof metadata === 'object' && metadata.Kind === 'object') {
+        return { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
+      }
+    }
+    return resolve(node);
+  }
   if (node.type === 'TypeReference' && node.TypeName.MemberNames.length === 0) {
     const name = node.TypeName.IdentifierReference.name;
     if (!node.TypeArguments && bindings.has(name)) {
@@ -289,8 +305,19 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null): Special
       // meta type claims.
       return metadataAsObjectRecord(PortionByShape(subject.Metadata, domain));
     },
-    evaluate: () => {
-      throw new Error('a component pattern has no forward computation');
+    // A FORWARD computation: the pattern's type with the captures substituted,
+    // which the matcher compares with the subject. This always threw, and the
+    // throw was caught as a refusal - so a pattern the matcher cannot take
+    // apart, the two-list `complex.<E>.<T>` among them, admitted nothing, and a
+    // block over `complex<const E><const T: P>` never applied, even to a
+    // receiver carrying the metadata it names. Where the type cannot be built
+    // from the bindings there is still no computation.
+    evaluate: (node, env) => {
+      const instantiated = InstantiateComponentType(node, env, resolve);
+      if (instantiated === null) {
+        throw new Error('a component pattern has no forward computation');
+      }
+      return instantiated;
     },
     satisfiesBound: () => true,
   };

@@ -40,6 +40,27 @@ test('a block binds its metadata capture from a complex receiver, and stamps the
     const s = a + b; String(s) + ' ' + String(Reflect.typeOf(s));`)).toBe('4+6i complex.<float64>.<{ phase: 1 }>');
 });
 
+test('a block over a two-list parameterization applies to a receiver carrying its metadata', () => {
+  // The operand `complex.<E>.<T>` is a PARAMETERIZED type - the two-list form -
+  // which the component matcher does not take apart, so it is a forward
+  // computation: the type with the captures substituted. That computation always
+  // threw, and the throw was read as a refusal, so the block never applied, even
+  // to the receiver it names. The test above passed without it: its `+` computes
+  // what the built-in does, and `const s` took its type from the checker. This
+  // block's `+` SUBTRACTS, so its applying shows in the value.
+  const block = `${P}primitive complex<const E><const T: P> {
+      operator +(rhs: complex.<E>.<T>): complex.<E>.<T> { return this - rhs; }
+    } `;
+  const ab = 'const x: complex128 = complex128(5, 5); const y: complex128 = complex128(1, 1); const a: Ph = x; const b: Ph = y; ';
+  expect(evaluated(`${block}${ab}String(a + b);`)).toBe('4+4i');
+  // Its result carries the receiver's metadata directly, from the block's return type.
+  expect(evaluated(`${block}${ab}String(Reflect.typeOf(a + b));`)).toBe('complex.<float64>.<{ phase: 1 }>');
+  // THE METADATA GUARD. `T` is bound from the receiver, so an operand of other
+  // metadata is not admitted, and the two do not mix.
+  expectThrown(`${block}const x: complex128 = complex128(5, 5); const a: Ph = x;
+    type Ph2 = complex.<float64>.<{ phase: 2 }>; const z: complex128 = complex128(1, 1); const c: Ph2 = z; a + c;`, 'do not mix');
+});
+
 test('a block with a metadata capture does not match a receiver that carries none', () => {
   // #sec-primitive-operator-blocks: "If _subject_ carries no metadata of _M_,
   // return ~no-match~". The checker skipped such a block; the run time applied
