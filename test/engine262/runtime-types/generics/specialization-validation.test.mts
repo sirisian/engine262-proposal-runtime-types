@@ -12,17 +12,16 @@ test.each([
   expectStaticTypeError(`function unused() { ${source} }`);
 });
 
-// #sec-type-references: a named argument that names no parameter, a name
-// supplied twice, and a positional argument after a named one are Syntax
-// Errors, and #sec-bindtypearguments says so again where the applied
-// declaration is known statically.
+// #sec-type-references: one name twice in a list is a Syntax Error, visible in
+// the list alone; a name that is no parameter, and a positional argument after
+// a named one, need the declaration and are type errors (Q3).
 test.each([
-  'function f<T: type>(x: T): T { return x; } const s = f.<Missing: uint8>;',
-  'function f<T: type>(x: T): T { return x; } const s = f.<T: uint8, T: string>;',
-  'function f<T: type, U: type>(x: T): T { return x; } const s = f.<T: uint8, string>;',
-])('a malformed named argument list is a Syntax Error at value creation: %s', (source) => {
-  expectEarlyError(source, 'SyntaxError');
-  expectEarlyError(`function unused() { ${source} }`, 'SyntaxError');
+  ['function f<T: type>(x: T): T { return x; } const s = f.<Missing: uint8>;', 'StaticTypeError'],
+  ['function f<T: type>(x: T): T { return x; } const s = f.<T: uint8, T: string>;', 'SyntaxError'],
+  ['function f<T: type, U: type>(x: T): T { return x; } const s = f.<T: uint8, string>;', 'StaticTypeError'],
+] as const)('a malformed named argument list is refused at value creation: %s', (source, kind) => {
+  expectEarlyError(source, kind);
+  expectEarlyError(`function unused() { ${source} }`, kind);
 });
 
 test('defaulted specializations publish a concrete type and preserve const inference', () => {

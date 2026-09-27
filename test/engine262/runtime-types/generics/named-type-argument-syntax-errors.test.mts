@@ -4,21 +4,23 @@ import { evaluated, expectEarlyError, expectStaticTypeError } from '../harness.m
 /**
  * Spec: #sec-type-references and #sec-bindtypearguments.
  *
- * A named type argument whose name is not a parameter, two with the same name,
- * and a positional argument after a named one are Syntax Errors. They were
- * raised as StaticTypeErrors, and where the number of written arguments
- * differed from the parameter count an arity check reported first and named
- * the wrong mistake: `h.<V: uint8>` against a two-parameter `h` read "the call
- * takes 1 type arguments".
+ * Two named type arguments with the same name are a Syntax Error: the list
+ * alone shows it. A name that is not a parameter, and a positional argument
+ * after a named one, are TYPE errors (Q3 of the round-2 review): deciding them
+ * needs the applied declaration - a positional argument after a variadic
+ * parameter's name joins its run - and a Syntax Error cannot wait for an
+ * imported or computed declaration to resolve. Either way each is reported
+ * before an arity check can name the wrong mistake: `h.<V: uint8>` against a
+ * two-parameter `h` once read "the call takes 1 type arguments".
  */
 
 const H = 'function h<T: type, U: type>(x: T, y: U): U { return y; } ';
 
-test('each malformed named list is a Syntax Error naming its mistake', () => {
-  expectEarlyError(`${H} h.<V: uint8>(1, 2);`, 'SyntaxError');
+test('each malformed named list is refused early, naming its mistake', () => {
   expectEarlyError(`${H} h.<T: uint8, T: uint16>(1, 2);`, 'SyntaxError');
-  expectEarlyError(`${H} h.<T: uint8, uint16>(1, 2);`, 'SyntaxError');
-  expectEarlyError('function h<T: type>(x: T) {} h.<U: uint8>(1);', 'SyntaxError');
+  expectEarlyError(`${H} h.<V: uint8>(1, 2);`, 'StaticTypeError');
+  expectEarlyError(`${H} h.<T: uint8, uint16>(1, 2);`, 'StaticTypeError');
+  expectEarlyError('function h<T: type>(x: T) {} h.<U: uint8>(1);', 'StaticTypeError');
 });
 
 test('a well-formed named list binds, and one that leaves a parameter out is still a type error', () => {

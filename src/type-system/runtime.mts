@@ -1329,12 +1329,19 @@ function closedInhabitants(constraint: TypeRecord, cap = TRIAL_CEILING): TypeRec
     return [constraint];
   }
   if (constraint.Kind === 'union') {
-    const members = (constraint as { Members: readonly TypeRecord[] }).Members.map((m) => closedInhabitants(m, cap));
-    if (members.some((m) => m === null)) {
+    // #sec-trial-specialization: "a union of types ... whose candidates are the
+    // members in declaration order". The candidates are the MEMBER TYPES, not
+    // the members' own inhabitants: `T: type extends uint8 | string` trials
+    // `uint8` and `string`. Flattening each member's inhabitants refused every
+    // union with a member that is not itself enumerable, which is most of them,
+    // and then reported "declares no inverse" for a call one candidate fits.
+    // For a union of literals the two readings agree, a literal's one
+    // inhabitant being itself.
+    const members = (constraint as { Members: readonly TypeRecord[] }).Members;
+    if (members.some((m) => m.Kind === 'any' || m.Kind === 'parameter' || m.Kind === 'deferred')) {
       return null;
     }
-    const all = (members as TypeRecord[][]).flat();
-    return all.length <= cap ? all : null;
+    return members.length <= cap ? [...members] : null;
   }
   if (constraint.Kind === 'array') {
     const extent = (constraint as { Extent?: number | string }).Extent;

@@ -479,6 +479,32 @@ const WEAK_COLLECTION_ABSENT: ReadonlySet<string> = new Set([
   'size', 'clear', 'keys', 'values', 'entries', 'forEach',
 ]);
 
+/** Is _t_ the library `WeakMap` or `WeakSet` nominal, typed or bare? A user subclass is not. */
+function isWeakCollectionType(t: TypeRecord | null | undefined): boolean {
+  return t?.Kind === 'nominal' && (t.LibraryName === 'WeakMap' || t.LibraryName === 'WeakSet');
+}
+
+/**
+ * #sec-collection-iteration: the weak collections have "none of the members in
+ * the table above, nor `size`, and reading any of them from a value of either
+ * type is a type error". The table lists `@@iterator` beside the String-named
+ * members, so a read with that Symbol key is refused like `w.keys`.
+ */
+function weakCollectionRefusesRead(t: TypeRecord | null | undefined, key: string | SymbolValue): boolean {
+  if (!isWeakCollectionType(t)) return false;
+  return typeof key === 'string' ? WEAK_COLLECTION_ABSENT.has(key) : key === wellKnownSymbols.iterator;
+}
+
+/**
+ * The iteration hooks a weak collection is KNOWN not to have, for the protocol
+ * judgments of #sec-iteration-types (line 9033). `@@asyncIterator` is not in the
+ * member table - reading it is an ordinary absent read, as on a `Map` - but it
+ * is absent all the same, so `for await` falls back to `@@iterator` and fails.
+ */
+function weakCollectionLacksHook(t: TypeRecord | null | undefined, key: string | SymbolValue): boolean {
+  return isWeakCollectionType(t) && (key === wellKnownSymbols.iterator || key === wellKnownSymbols.asyncIterator);
+}
+
 // ---- obligations handed to the checking pass (check-pass.mts) -------
 
 /**
@@ -4474,13 +4500,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Library members have the same contract for dot and known String keys.
   // This describes the typed view, not the identity of the runtime method.
   const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
+    // Checked before the String-key and type-argument gates: the absence is a
+    // fact of WeakMap and WeakSet themselves, and `@@iterator` is in the table.
+    if (weakCollectionRefusesRead(receiver, key)) {
+      errors.push(Throw.StaticTypeError('$1 is not declared by $2', typeof key === 'string' ? Value(key) : key, Value(displayType(receiver!))).Value as ObjectValue);
+      return null;
+    }
     if (typeof key !== 'string' || receiver?.Kind !== 'nominal' || receiver.Arguments.length === 0
       || !['Set', 'Map', 'WeakSet', 'WeakMap', 'FinalizationRegistry'].includes(receiver.LibraryName ?? '')) return null;
     if (key === 'size' && (receiver.LibraryName === 'Set' || receiver.LibraryName === 'Map')) return indexTypeRecord();
-    if (WEAK_COLLECTION_ABSENT.has(key) && (receiver.LibraryName === 'WeakSet' || receiver.LibraryName === 'WeakMap')) {
-      errors.push(Throw.StaticTypeError('$1 is not declared by $2', Value(key), Value(displayType(receiver))).Value as ObjectValue);
-      return null;
-    }
     return collectionMethodSignature(receiver.LibraryName!, key, receiver.Arguments, receiver);
   };
 
@@ -6039,6 +6067,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-resolveoverload: "Two signatures declared for one name must not be
+   * ambiguous for any argument list", and declaring one "viable for the same
+   * argument list as an existing one at the same rank, after specificity and
+   * declared return discrimination leave them tied" is a type error at the
+   * declaration. The checks below proved overlap only where the parameter
+   * types were the SAME, so `f(a: uint8 | string)` beside `f(a: uint8 |
+   * boolean)` was accepted and reported at each ambiguous call - and through
+   * a converting constructor, only at run time.
+   *
+   * This finds a WITNESS: for each common position, the members of either
+   * parameter's type that the other accepts, and then asks overload
+   * resolution itself whether some combination of them is ambiguous. It proves
+   * nothing where a rest, `any` or a type parameter is involved, so it can only
+   * add a refusal the ranking already makes at a call.
+   */
+  const ambiguousForSomeArguments = (pa: readonly ParameterRecord[], pb: readonly ParameterRecord[]): boolean => {
+    if (pa.some((p) => p.Rest) || pb.some((p) => p.Rest)) return false;
+    const count = Math.min(pa.length, pb.length);
+    if (!pa.slice(count).every((p) => p.Optional) || !pb.slice(count).every((p) => p.Optional)) return false;
+    const membersOf = (t: TypeRecord): readonly TypeRecord[] => (t.Kind === 'union' ? (t as { Members: readonly TypeRecord[] }).Members : [t]);
+    const choices: TypeRecord[][] = [];
+    for (let i = 0; i < count; i += 1) {
+      const x = pa[i]!.Type;
+      const y = pb[i]!.Type;
+      if (!x || !y || x.Kind === 'any' || y.Kind === 'any' || mentionsTypeParameter(x) || mentionsTypeParameter(y)) return false;
+      if (!!pa[i]!.Ref !== !!pb[i]!.Ref) return false;
+      const shared = [...membersOf(x).filter((m) => IsAssignable(m, y)), ...membersOf(y).filter((m) => IsAssignable(m, x))];
+      if (shared.length === 0) return false;
+      choices.push(shared);
+    }
+    // A small, bounded search: the first witness per position, then each
+    // alternative at one position at a time.
+    const first = choices.map((c) => c[0]!);
+    const candidates: TypeRecord[][] = [first];
+    choices.forEach((c, i) => c.slice(1, 8).forEach((m) => candidates.push(first.map((f, j) => (j === i ? m : f)))));
+    const signatures = [{ Parameters: pa, Function: Value.undefined }, { Parameters: pb, Function: Value.undefined }];
+    return candidates.some((args) => resolveOverloadByTypes(signatures as never, args).Kind === 'ambiguous');
+  };
+
   const validateOverloadDeclaration = (name: string, existing: readonly DeclaredOverload[], signature: DeclaredOverload): void => {
     const b = overloadDeclarations.get(signature);
     if (!b || signature.Untyped) return;
@@ -6109,6 +6177,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ], args).Kind === 'ambiguous';
         });
       }
+      if (!overlap && ap.length === 0 && bp.length === 0) overlap = ambiguousForSomeArguments(pa, pb);
       if (overlap) {
         errors.push(Throw.StaticTypeError('$1 is declared twice with overlapping parameter types and return type', Value(name)).Value as ObjectValue);
         return;
@@ -7233,6 +7302,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
             break;
           }
+          // #sec-constructor-overloading reports ambiguity "at the class ... and
+          // not deferred to the constructions that would be ambiguous"; a
+          // partial overlap is ambiguous for its witnesses just as a duplicate
+          // is for every argument list (#sec-resolveoverload).
+          if (ambiguousForSomeArguments(a, b)) {
+            errors.push(Throw.StaticTypeError('$1 declares two constructors that are ambiguous for some argument list', Value(classNameForDiagnostics(n) ?? 'the class')).Value as ObjectValue);
+            break;
+          }
         }
       }
       constructSignatures.set(n, construct);
@@ -8306,6 +8383,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const protocolMember = (type: Known, key: string | SymbolValue): Known => {
+    // Known absent rather than unknown, so `notIterable` treats the missing
+    // hook as invalid and every iteration consumer refuses the value.
+    if (weakCollectionLacksHook(erasedForJudgment(type), key)) return undefinedType;
     const shape = structureOf(type);
     if (shape?.Kind !== 'object') return null;
     const property = shape.Properties.find((p) => p.key === key);
@@ -9305,6 +9385,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // are not, so the runtime's ordering (or its refusal) governs alone
           // rather than being contradicted.
           const rawArgList = node.TypeArguments!.TypeArgumentList;
+          // #sec-type-references: a spread type argument "must resolve to a
+          // ~tuple~ type or to an ~array~ type whose extent is stated, and it is
+          // a type error otherwise". The expression path
+          // (`bindExplicitTypeArguments`) refused a dynamic array; an annotation
+          // left it to evaluation, so a parameter's was reported at its first
+          // call and a never-called function's never.
+          for (const a of rawArgList) {
+            if (!(a as { IsSpread?: boolean }).IsSpread) continue;
+            const spread = resolveType(a as ParseNode.Type);
+            if (spread?.Kind === 'array' && typeof (spread as { Extent?: unknown }).Extent !== 'number') {
+              errors.push(Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(spread)), Value('a tuple or an array of stated extent, as a spread type argument')).Value as ObjectValue);
+              return null;
+            }
+          }
           const rawArgNames = rawArgList.map((a) => typeArgumentNameOfShared(a));
           let orderedArgList: readonly ParseNode.Type[] = rawArgList as readonly ParseNode.Type[];
           if (rawArgNames.some((n) => n !== undefined)) {
@@ -10598,16 +10692,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           missing: `the type parameter ${name} has no argument and no default`,
           unmatched: 'the type arguments do not match the parameter list',
         };
-        // #sec-type-references makes three of these refusals Syntax Errors - a
-        // name that is not a parameter, a name supplied twice, and a positional
-        // argument after a named one - and #sec-bindtypearguments says that
-        // where the applied declaration is known statically they "are the
-        // Syntax Errors of" that clause. They are facts about the argument list
-        // as written, not about the types it names.
-        const syntactic = assigned.kind === 'unknown-name' || assigned.kind === 'supplied-twice' || assigned.kind === 'positional-after-named';
-        errors.push((syntactic
-          ? Throw.SyntaxError('$1', Value(messages[assigned.kind]))
-          : Throw.StaticTypeError('$1', Value(messages[assigned.kind]))).Value as ObjectValue);
+        // Every refusal that reaches here needed the DECLARATION: whether a
+        // name is one of its parameters, whether a name was already supplied
+        // positionally, and whether a positional argument after a name joins a
+        // variadic run. Those are type errors (#sec-type-references, Q3 of the
+        // round-2 review), decided where the applied declaration is resolved,
+        // which for an imported or computed callee is past the point a Syntax
+        // Error could be. The purely syntactic ones - one name twice in a list,
+        // a name on an array type - are the parser's.
+        errors.push(Throw.StaticTypeError('$1', Value(messages[assigned.kind])).Value as ObjectValue);
       }
       return;
     }
@@ -19022,13 +19115,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // n }` types `n` from `A`'s `x` and not from the union's.
       case 'MatchJuxtapositionPattern': {
         // The head rule - "it is a type error if the |MatchNamePattern| of a
-        // juxtaposition ... resolves to a binding" - is NOT decidable here.
-        // Measured: a head naming a value binding and a head naming a class
-        // through a namespace object both resolve to *null* statically, so no
-        // test at this site separates them. The clause anticipates exactly this
-        // - the rule is "decided at the site where the head's Static Type is
-        // known and AT RUN TIME OTHERWISE" - so `PatternMatches` carries it.
+        // juxtaposition ... resolves to a binding" - is "decided at the site
+        // where the head's Static Type is known and AT RUN TIME OTHERWISE".
+        // `resolveType` cannot decide it: a head naming a value binding and a
+        // head naming a class through a namespace object both resolve to
+        // *null*. The head's Static Type decides the first below; whatever it
+        // leaves open, `PatternMatches` carries at run time.
         const headType = resolveType(pattern.Head as ParseNode.Type);
+        // Not decidable from `resolveType`, which answers *null* for both - but
+        // the head's STATIC TYPE separates them where it is known, which is the
+        // half of the rule this site owns. A type, a class and a Type Object are
+        // all Objects, so a head whose Static Type proves a non-object value
+        // (`let T: uint8`, a `T: string` parameter) cannot denote a type. An
+        // unknown, `any` or parameter-mentioning head is left to the run time,
+        // as a namespace-qualified class is.
+        // The head is a TypeReference, so its Static Type is its NAME's: an
+        // unqualified name with no type arguments, the only form that can name
+        // a value binding in the lexical scope.
+        const headName = (pattern.Head as { TypeName?: { IdentifierReference?: ParseNode } | null, TypeArguments?: unknown })
+          .TypeArguments ? undefined : (pattern.Head as { TypeName?: { IdentifierReference?: ParseNode } | null }).TypeName?.IdentifierReference;
+        if ((!headType || headType.Kind === 'any') && headName) {
+          const valueType = staticType(headName);
+          if (valueType && valueType.Kind !== 'any' && !mentionsTypeParameter(valueType) && knownNonObject(valueType)) {
+            errors.push(Throw.StaticTypeError('a juxtaposed head must denote a type').Value as ObjectValue);
+          }
+        }
         // The shape is checked against the HEAD's type, not the subject's: the
         // head has already excluded everything that is not of it, so a binding
         // in the shape is typed from the head. That is what makes writing the
@@ -21768,6 +21879,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (key === null) {
       return { type: null };
     }
+    // #sec-collection-iteration: "reading any of them from a value of either
+    // type is a type error", and a pattern property IS a read. This is not a
+    // missing-key rule for patterns in general - the collection rule already
+    // states the absence - so only the weak collections' table reaches here.
+    if (weakCollectionRefusesRead(erasedForJudgment(source.type), key)) {
+      errors.push(Throw.StaticTypeError('$1 is not declared by $2', typeof key === 'string' ? Value(key) : key, Value(displayType(source.type!))).Value as ObjectValue);
+      return { type: null };
+    }
     const expr = patternExpression(source.expression);
     if (expr?.type === 'ArrayLiteral' && typeof key === 'string') {
       if (key === 'length') return { type: makePrimitive('number') };
@@ -23707,12 +23826,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (args.some((a) => a.type === 'AssignmentRestElement' || a.type === 'NamedArgument')) return;
     const argumentTypes = args.map((a) => staticType(a));
     if (argumentTypes.some((t) => !t || t.Kind === 'any' || mentionsTypeParameter(t))) return;
+    // The closed candidate sets of #sec-trial-specialization: a literal, `boolean`,
+    // an enum, a union of types - its MEMBERS are the candidates, whether or
+    // not each is enumerable - and a stated-extent array over a closed element.
+    // The run time's `closedInhabitants` proposes from the same sets.
     const closed = (t: Known): boolean => !!t && (t.Kind === 'literal'
       || (t.Kind === 'primitive' && t.Name === 'boolean')
       || (t.Kind === 'nominal' && t.EnumMembers !== undefined)
-      || (t.Kind === 'union' && t.Members.length > 0 && t.Members.every(closed)));
-    const trialed = list.filter((tp) => !tp.IsValueParameter && !tp.IsVariadic && tp.TypeParameterConstraint
-      && closed(resolveType(tp.TypeParameterConstraint)));
+      || (t.Kind === 'union' && t.Members.length > 0 && t.Members.every((m) => m.Kind !== 'any' && !mentionsTypeParameter(m)))
+      || (t.Kind === 'array' && typeof (t as { Extent?: unknown }).Extent === 'number' && closed((t as { Element: TypeRecord }).Element)));
+    // A value parameter trials its DOMAIN (Q5 of the round-2 review): `M: 'a' |
+    // 'b'` and `M: type extends 'a' | 'b'` name one candidate set, and the run
+    // time already trials the domain.
+    const trialSet = (tp: ParseNode.TypeParameter): Known => {
+      const written = tp.IsValueParameter ? (tp as { TypeParameterDomain?: ParseNode.Type | null }).TypeParameterDomain : tp.TypeParameterConstraint;
+      return written ? resolveType(written) : null;
+    };
+    // #sec-declared-inverses: a parameter no trial reaches binds only through
+    // its builder's inverse. A builder that is a function declaration of this
+    // source text with NO decoration certainly has none - the association is
+    // made only by its own decoration - so the pass's ladder refuses the call
+    // exactly as the run time would. A decorated builder may carry an inverse
+    // the pass cannot see yet (Q4), and is left to the run time.
+    const undecoratedBuilderReads = (name: string): boolean => declaration.FormalParameters!.some((formal) => {
+      const type = (formal as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation?.Type as ParseNode.ComputedType | undefined;
+      if (type?.type !== 'ComputedType' || !FreeReferences(type).some((r) => r.name === name)) return false;
+      const callee = type.Callee as { type?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } | null, TypeArguments?: unknown };
+      const builderName = callee.type === 'TypeReference' && !callee.TypeArguments && (callee.TypeName?.MemberNames?.length ?? 0) === 0
+        ? callee.TypeName?.IdentifierReference?.name : undefined;
+      const builder = builderName ? functionNodes.get(builderName) as { type?: string, Decorators?: readonly unknown[] | null } | undefined : undefined;
+      return builder?.type === 'FunctionDeclaration' && (builder.Decorators?.length ?? 0) === 0;
+    });
+    const trialed = list.filter((tp) => !tp.IsVariadic && (closed(trialSet(tp))
+      || (!tp.IsValueParameter && undecoratedBuilderReads(tp.BindingIdentifier.name))));
     if (trialed.length === 0) return;
     const names = new Set(trialed.map((tp) => tp.BindingIdentifier.name));
     let annotation: ParseNode.Type | null = null;
@@ -25126,7 +25272,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (rel.operator === 'instanceof' && rel.RelationalExpression) {
           const s = staticType(rel.RelationalExpression as ParseNode);
-          const t = typeDenotedBy(rel.ShiftExpression as ParseNode);
+          // #sec-narrowfrom: the same resolution the narrowing fact uses
+          // (`narrowingFactOf`), so a CLASS operand is judged too. With aliases
+          // and built-ins alone, `p instanceof Q` for unrelated classes - a test
+          // the engine already knows is empty, refusing `P & Q` as `never` -
+          // was never reported.
+          const rightNode = rel.ShiftExpression as ParseNode;
+          const rightName = rightNode.type === 'IdentifierReference' ? (rightNode as unknown as { name: string }).name : null;
+          const t = (rightName ? classTypeOf(rightName) : null) ?? typeDenotedBy(rightNode);
           if (s && t) {
             reportImpossibleTest(s, t, 'instanceof', guardsABranch(rel as ParseNode));
           }
@@ -25922,6 +26075,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const c = n as { CallExpression: ParseNode, Arguments?: readonly ParseNode[] };
         checkInvocation(c.CallExpression, false);
         const callee = callableForm(staticType(c.CallExpression));
+        // #sec-this-adoption: a signature with a [[ThisType]] "is usable nowhere
+        // a `this` is absent" - a method's self marker or a declared one alike.
+        // The relation refused the method where a free function TYPE was
+        // required; a call through a binding that kept the marker - `const f =
+        // c.m; f()`, a destructured `m()`, `(0, c.m)()` - supplies no `this` at
+        // all and was left to fail inside the method. A member call, however
+        // parenthesized, supplies its object; `super.m()` supplies `this`.
+        if (callee?.Kind === 'function' && callee.Signatures.length > 0
+          && callee.Signatures.every((sig) => !!(sig as { ThisType?: TypeRecord | null }).ThisType)) {
+          let head: ParseNode = c.CallExpression;
+          // Parentheses and explicit type arguments (`c.m.<4>()`) keep the
+          // member access, and with it the object, underneath.
+          while (head.type === 'ParenthesizedExpression' || head.type === 'TypeArgumentsExpression') {
+            head = (head as ParseNode.ParenthesizedExpression | ParseNode.TypeArgumentsExpression).Expression as ParseNode;
+          }
+          if (head.type !== 'MemberExpression' && head.type !== 'SuperProperty' && head.type !== 'OptionalExpression') {
+            errors.push(Throw.StaticTypeError('a method called without its object has no `this`; call it through the object, or bind it first').Value as ObjectValue);
+          }
+        }
         // Type-object calls share lexical resolution with result inference.
         const conversionTarget = callee?.Kind === 'function' ? undefined : typeObjectTarget(c.CallExpression) ?? undefined;
         vectorCallType(n as ParseNode.CallExpression, true);

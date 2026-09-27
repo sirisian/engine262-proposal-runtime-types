@@ -8,12 +8,15 @@
 // Before this, such a parameter bound silently to `any` and the builder ran
 // over nothing.
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 const WRAP = 'function wrapOf(T) { return T; }';
 
 test('rung three: a builder with no inverse refuses the call, naming the builder and the parameter', () => {
   expectThrown(`${WRAP} function j<T: type>(x: wrapOf(T)): uint32 { return 1; } j(1);`, 'wrapOf declares no inverse');
+  // An undecorated builder of this source text certainly declares no inverse,
+  // so the checking pass refuses the call before the program runs.
+  expectStaticTypeError(`${WRAP} function j<T: type>(x: wrapOf(T)): uint32 { return 1; } j(1);`);
   expectThrown(`${WRAP} function j3<...Ts: [].<type>>(...ps: wrapOf(Ts)): uint64 { return ps.length; } j3(1, "a");`, 'wrapOf declares no inverse, so Ts');
 });
 

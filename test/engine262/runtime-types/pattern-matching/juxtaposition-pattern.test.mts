@@ -62,17 +62,26 @@ test('a head that denotes a value is the type error the clause states', () => {
   // extractor form resolves to a binding: the juxtaposed head must denote a
   // TYPE." That rule had nothing to enforce it while the form did not parse.
   //
-  // Decided AT RUN TIME, which is the half of the clause that applies here:
-  // "at the site where the head's Static Type is known and at run time
-  // otherwise". It is otherwise - measured, a head naming a value binding and
-  // one naming a class through a namespace object both resolve to *null*
-  // statically, so no test in the checker separates them.
+  // Both halves of "decided at the site where the head's Static Type is known
+  // and at run time otherwise". An unannotated `let` is `any`, so its head is
+  // decided at run time. A head whose Static Type proves a non-object value
+  // cannot denote a type - a type, a class and a Type Object are all Objects -
+  // so it is refused before the program runs, wherever the match is written.
   expectThrownKind('let Foo = 5; let v: any = {}; match (v) { when Foo { x: let n }: 1; default: 0; };', 'TypeError');
-  expectThrownKind('let Foo: uint8 = (5 := uint8); let v: any = {}; '
-    + 'match (v) { when Foo { x: let n }: 1; default: 0; };', 'TypeError');
+  expectStaticTypeError('let Foo: uint8 = (5 := uint8); let v: any = {}; '
+    + 'match (v) { when Foo { x: let n }: 1; default: 0; };');
+  expectStaticTypeError('function unused(Foo: string, v: any) { return match (v) { when Foo [let n]: 1; default: 0; }; }');
+  expectStaticTypeError('let Foo: uint8 = (5 := uint8); let v: any = {}; if (v is Foo { x: let n }) {}');
   // The extractor's half of the same sentence is unchanged, and IS static.
   expectStaticTypeError('let Foo: uint8 = (5 := uint8); let v: any = 5; '
     + 'match (v) { when Foo(let a): 1; default: 0; };');
+});
+
+test('a head that denotes a type stays legal, however it is named', () => {
+  // "Resolves to a binding" is read as a binding that does not denote a type:
+  // every name resolves to some binding, a class declaration's included.
+  expect(evaluated('class P { a: uint8 = 1; } const v: P = new P(); String(match (v) { when P { a: let a }: a; default: 0; });')).toBe('1');
+  expect(evaluated('class P { a: uint8 = 1; } const Q = P; const v: P = new P(); String(match (v) { when Q { a: let a }: a; default: 0; });')).toBe('1');
 });
 
 test('it composes with the rest of the pattern grammar', () => {

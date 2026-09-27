@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectEarlyError, expectStaticTypeError, ok } from '../harness.mts';
+import { evaluated, expectEarlyError, expectStaticTypeError, expectThrown, ok } from '../harness.mts';
 
 /**
  * Early errors the specification states and the checker did not raise.
@@ -400,4 +400,198 @@ test('meta declarations that are distinct, base-form, or generic stand', () => {
   // pre-scan, must not make two different shapes look like one.
   expect(ok('type Dim2 = { m?: number, ratio?: number }; meta Dim2 { default = { m: 0, ratio: 1 }; subtype(a, b) { return true; } } '
     + 'type NBr = { bounds?: RangeBounds.<any> }; meta NBr { default = {}; subtype(a, b) { return true; } } String(1);')).toBe(true);
+});
+
+// ---- round 2, Gap 1 - #sec-collection-iteration: weak collections --------
+
+const WEAK = 'function unused(w: WeakMap.<object, uint8>, s: WeakSet.<object>) { ';
+
+test('a weak collection has no @@iterator, and nothing consumes one as iterable', () => {
+  // "`WeakMap` and `WeakSet` have none of the members in the table above, nor
+  // `size`, and reading any of them from a value of either type is a type
+  // error rather than *undefined*." The table lists `@@iterator` beside the
+  // String-named members, and #sec-iteration-types makes consuming a value
+  // whose entry hook is proved invalid a type error too. The String-named
+  // members were refused; the Symbol-keyed one, and every consumer, were not.
+  expectStaticTypeError(`${WEAK}return w[Symbol.iterator]; }`);
+  expectStaticTypeError(`${WEAK}const k = Symbol.iterator; return w[k]; }`);
+  expectStaticTypeError(`${WEAK}for (const e of w) {} }`);
+  expectStaticTypeError(`${WEAK}return [...w]; }`);
+  expectStaticTypeError(`${WEAK}const [a] = w; }`);
+  expectStaticTypeError('function* unused(s: WeakSet.<object>): Generator.<object> { yield* s; }');
+  // `@@asyncIterator` is absent too, so `for await` falls back and fails.
+  expectStaticTypeError('async function unused(s: WeakSet.<object>) { for await (const x of s) {} }');
+  // The absence is a fact of the collection, not of its type arguments.
+  expectStaticTypeError('function unused(w: WeakMap) { return w.size; }');
+});
+
+test('an object pattern reads a weak collection as a dot read does (Q2)', () => {
+  // A pattern property is a read, so the collection rule reaches it. Patterns
+  // gain no missing-key rule in general: only the weak collections' table.
+  expectStaticTypeError(`${WEAK}const { size } = w; }`);
+  expectStaticTypeError(`${WEAK}const { keys: k } = s; }`);
+  expectStaticTypeError(`${WEAK}let size; ({ size } = w); }`);
+  expect(ok(`${WEAK}const { get } = w; } String(1);`)).toBe(true);
+  expect(ok('function unused(o: { a: uint8 }) { const { b } = o; } String(1);')).toBe(true);
+});
+
+test('what a weak collection does have, and what iterates, stay legal', () => {
+  expect(ok(`${WEAK}const o = {}; return w.get(o); } String(1);`)).toBe(true);
+  // Not in the member table: an ordinary absent read, as on a Map.
+  expect(ok(`${WEAK}return w[Symbol.asyncIterator]; } String(1);`)).toBe(true);
+  expect(ok('function unused(m: Map.<string, uint8>) { for (const e of m) {} } String(1);')).toBe(true);
+  // A subclass that declares an iterator has one.
+  expect(ok('class IW extends WeakMap.<object, uint8> { *[Symbol.iterator]() { yield 1; } } '
+    + 'function unused(w: IW) { for (const e of w) {} } String(1);')).toBe(true);
+});
+
+// ---- round 2, Gap A - #sec-narrowfrom: a class operand of instanceof ------
+
+test('an instanceof test against a class that can never fail is refused', () => {
+  // "It is a type error to apply a narrowing form where the test can never
+  // succeed or can never fail." The impossible-test check resolved only
+  // aliases and built-ins, so a CLASS operand was never judged. NarrowFrom of
+  // a class by itself is ~empty~, so the else branch is dead.
+  expectStaticTypeError('class P { x: uint8 = 1; } let p: P = new P(); if (p instanceof P) { } else { }');
+  // A primitive against a class is disjoint (#sec-aredisjoint), so it can
+  // never succeed.
+  expectStaticTypeError('class P { x: uint8 = 1; } let x: uint8 = 1; if (x instanceof P) { }');
+});
+
+test('instanceof against a class stays legal where the spec leaves it open', () => {
+  // #sec-aredisjoint is silent about two ~nominal~ types, so NarrowTo of two
+  // unrelated classes is their intersection rather than ~empty~: this test is
+  // NOT one the spec calls impossible, though `P & Q` written as a type is an
+  // error (#sec-intersection-type-early-errors). Kept legal until the spec
+  // reconciles the two.
+  expect(ok('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+    + 'function unused(p: P) { if (p instanceof Q) { return 1; } return 0; } String(1);')).toBe(true);
+  expect(ok('class P { x: uint8 = 1; } class S extends P { } '
+    + 'function unused(p: P) { if (p instanceof S) { return 1; } return 0; } String(1);')).toBe(true);
+  expect(ok('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+    + 'function unused(p: P | Q) { if (p instanceof Q) { return 1; } return 0; } String(1);')).toBe(true);
+  // A test that guards no branch is a question with a constant answer.
+  expect(ok('class P { x: uint8 = 1; } let p: P = new P(); String(p instanceof P);')).toBe(true);
+});
+
+// ---- round 2, Gap 5 - #sec-this-adoption: a call that supplies no this ----
+
+const M = 'class C { x: uint8 = 1; m(): uint8 { return this.x; } static s(): uint8 { return 1; } } const c: C = new C(); ';
+
+test('a method called without its object is refused', () => {
+  // A signature with a [[ThisType]] "is usable nowhere a `this` is absent",
+  // and a method's carries the self marker. A binding that kept the marker
+  // could still be called bare, and failed inside the method.
+  expectStaticTypeError(`${M}const f = c.m; f();`);
+  expectStaticTypeError(`${M}const { m } = c; m();`);
+  expectStaticTypeError(`${M}(0, c.m)();`);
+  expectStaticTypeError(`${M}function unused(k: C) { const f = k.m; return f(); }`);
+  expectStaticTypeError('interface I { m(): uint8; } function unused(i: I) { const f = i.m; return f(); }');
+});
+
+test('every call that supplies a this stays legal', () => {
+  expect(evaluated(`${M}String(c.m());`)).toBe('1');
+  expect(evaluated(`${M}String((c.m)());`)).toBe('1');
+  expect(evaluated(`${M}String(c?.m());`)).toBe('1');
+  expect(evaluated(`${M}const f = c.m.bind(c); String(f());`)).toBe('1');
+  expect(evaluated(`${M}const f = c.m; String(f.call(c));`)).toBe('1');
+  expect(evaluated(`${M}const f = C.s; String(f());`)).toBe('1');
+  expect(evaluated('class B { m(): uint8 { return 1; } } class D extends B { m(): uint8 { return super.m(); } } String(new D().m());')).toBe('1');
+  // An arrow field has no `this` of its own to require.
+  expect(evaluated('class E { x: uint8 = 1; f = (): uint8 => this.x; } const e: E = new E(); const g = e.f; String(g());')).toBe('1');
+});
+
+test('the refusal at a boundary names the this the method needs', () => {
+  // The self marker prints, so the two sides no longer read identically.
+  expectThrown(`${M}const g: () => uint8 = c.m;`, '(this: its receiver) => uint.<8>');
+});
+
+// ---- round 2, Gap 2 - #sec-type-references: argument lists in annotations --
+
+const PAIR = 'class P<A: type = uint8, B: type = uint8> {} ';
+
+test('a spread type argument of unstated length is refused in an annotation', () => {
+  // "its |Type| must resolve to a ~tuple~ type or to an ~array~ type whose
+  // extent is stated, and it is a type error otherwise". The expression path
+  // refused it; an annotation deferred it to evaluation, so a parameter's was
+  // reported at its first call and a never-called function's never.
+  expectStaticTypeError(`${PAIR}let p: P.<...[].<uint8>>;`);
+  expectStaticTypeError(`${PAIR}function unused(p: P.<...[].<uint8>>) {}`);
+  expect(ok(`${PAIR}let p: P.<...[2].<uint8>>; String(1);`)).toBe(true);
+  expect(ok(`${PAIR}let p: P.<...[uint8, string]>; String(1);`)).toBe(true);
+});
+
+test('the syntactic named-argument rules are Syntax Errors (Q3)', () => {
+  // A named argument on an array type names nothing, and one name twice in a
+  // list is visible in the list alone - both refused as they parse.
+  expectEarlyError('let a: [4].<E: uint8>;', 'SyntaxError');
+  expectEarlyError('function unused(a: [].<E: uint8>) {}', 'SyntaxError');
+  expectEarlyError('class Q<A: type, B: type> {} let q: Q.<A: uint8, A: uint8>;', 'SyntaxError');
+  expectEarlyError('function f<T: type>(x: T) {} f.<T: uint8, T: uint8>(1);', 'SyntaxError');
+});
+
+test('the named-argument rules that need the declaration are type errors (Q3)', () => {
+  // Whether a name is a parameter, was already supplied positionally, or is
+  // followed by a positional argument joining its variadic run, all turn on
+  // the declaration applied - an imported or computed one included.
+  expectStaticTypeError('function f<T: type>(x: T) {} f.<U: uint8>(1);');
+  expectStaticTypeError('class Box<T: type> {} let b: Box.<U: uint8>;');
+  expectStaticTypeError('function f<A: type, B: type>(a: A, b: B) {} f.<A: uint8, string>(1, "s");');
+  expectStaticTypeError('function f<A: type, B: type>(a: A, b: B) {} f.<uint8, A: string>(1, "s");');
+  // A positional argument after a variadic parameter's name joins its run.
+  expect(evaluated('function q<...I: [].<uint32>, N: uint32>(): uint32 { return N; } String(q.<I: 0, 1, N: 8>());')).toBe('8');
+});
+
+// ---- round 2, Gap B - #sec-resolveoverload: ambiguity at the declaration ----
+
+test('an overload set ambiguous for some argument list is refused where it is declared', () => {
+  // "Two signatures declared for one name must not be ambiguous for any
+  // argument list." Overlap was proved only for the SAME parameter types, so a
+  // partial overlap was reported at each ambiguous call, and through a
+  // converting constructor only at run time.
+  expectStaticTypeError('function f(a: uint8 | string) {} function f(a: uint8 | boolean) {}');
+  expectStaticTypeError('function unused() { function f(a: uint8 | string) {} function f(a: uint8 | boolean) {} }');
+  expectStaticTypeError('function f(a: uint8 | string, b: string) {} function f(a: uint8 | boolean, b: string) {}');
+  // #sec-constructor-overloading: "at the class ... not deferred to the
+  // constructions that would be ambiguous".
+  expectStaticTypeError('class T { constructor(a: uint8 | string) {} constructor(a: uint8 | boolean) {} }');
+});
+
+test('overload sets that resolution can always decide stand', () => {
+  expect(ok('function f(a: uint8) {} function f(a: string) {} String(1);')).toBe(true);
+  // Specificity ranks the narrower one first for the shared argument.
+  expect(evaluated('function f(a: uint8) { return 1; } function f(a: uint8 | string) { return 2; } String(f((1 := uint8)));')).toBe('1');
+  expect(ok('function f(a: uint8 | string, b: string) {} function f(a: uint8 | boolean, b: uint8) {} String(1);')).toBe(true);
+  // Declared returns discriminate by contextual type.
+  expect(ok('function f(a: uint8 | string): uint8 { return 1; } function f(a: uint8 | boolean): string { return "s"; } String(1);')).toBe(true);
+  expect(evaluated('class T { constructor(a: uint8) {} constructor(a: string) {} } String(new T("x") instanceof T);')).toBe('true');
+  // A catch-all, a generic and a rest prove nothing here.
+  expect(ok('function f(a) {} function f(a: uint8 | string) {} String(1);')).toBe(true);
+  expect(ok('function f<T: type>(a: T | string) {} function f(a: uint8 | string) {} String(1);')).toBe(true);
+  expect(ok('function f(...a: [].<uint8>) {} function f(a: uint8 | string) {} String(1);')).toBe(true);
+});
+
+// ---- round 2, Gap 4 - #sec-trial-specialization, #sec-declared-inverses ----
+
+const WRAP = 'function wrapOf(T) { return T; } ';
+
+test('a call the inference ladder must refuse is refused before the program runs', () => {
+  // "zero or more than one is a type error asking for explicit arguments", and
+  // where no inverse proposes a binding "the site is a type error". The pass
+  // ran only trials over literal unions; every other refusal waited for the
+  // call, and a call in a function nothing invoked raised nothing.
+  expectStaticTypeError(`${WRAP}function j<T: type>(x: wrapOf(T)): uint32 { return 1; } j(1);`);
+  expectStaticTypeError(`${WRAP}function j<T: type>(x: wrapOf(T)): uint32 { return 1; } function unused() { return j(1); }`);
+  // A union of TYPES is a closed candidate set whose candidates are its members.
+  expectStaticTypeError(`${WRAP}function j<T: type extends uint8 | string>(x: wrapOf(T)): uint32 { return 1; } j(true);`);
+  // A value parameter trials its domain (Q5).
+  expectStaticTypeError(`${WRAP}function j<T: 'a' | 'b'>(x: wrapOf(T)): uint32 { return 1; } j(true);`);
+});
+
+test('the ladder binds what it can', () => {
+  // One member of a union of types fits: it binds, where the run time used to
+  // flatten each member's inhabitants, give up, and report "no inverse".
+  expect(evaluated(`${WRAP}function j<T: type extends uint8 | string>(x: wrapOf(T)): string { return String(T); } j('s');`)).toBe('string');
+  expect(evaluated(`${WRAP}function j<T: type>(x: wrapOf(T)): uint32 { return 1; } String(j.<uint8>(1));`)).toBe('1');
+  expect(evaluated(`${WRAP}function j<T: type>(y: T, x: wrapOf(T)): uint32 { return 1; } String(j((1 := uint8), (2 := uint8)));`)).toBe('1');
 });

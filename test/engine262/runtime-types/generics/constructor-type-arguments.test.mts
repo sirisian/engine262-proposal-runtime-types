@@ -176,6 +176,7 @@ test('B4: a parameter reached through a shape binds structurally, on both sides'
   expect(evaluated('function g<T: type>(cb: (x: T) => void): string { return String(T); } g((x) => {});')).toBe('any');
   // A builder formal is rung three's, never resolved over a placeholder here.
   expectThrown('function wrapOf(T) { return T; } function j<T: type>(x: wrapOf(T)): uint32 { return 1; } j(1);', 'declares no inverse');
+  expectStaticTypeError('function wrapOf(T) { return T; } function j<T: type>(x: wrapOf(T)): uint32 { return 1; } j(1);');
 });
 
 test('B3: a value parameter binds the literal, converted to its constraint', () => {

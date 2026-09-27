@@ -533,8 +533,8 @@ export abstract class TypeParser extends ExpressionParser {
    *
    * ONE function serves six call sites - type references, both array forms, and
    * MemberExpression/CallExpression - so `[4].<Element: uint8>` parses here too.
-   * It is refused during resolution, where the absence of a declared parameter
-   * to match is what makes it an error.
+   * The array forms refuse any name as they parse (`parseArrayTypeArguments`),
+   * since the form alone shows there is no parameter to match.
    */
   parseTypeArgument(): ParseNode.Type {
     // proposal-runtime-types #sec-type-references: `... Type` SPREADS a tuple
@@ -595,7 +595,39 @@ export abstract class TypeParser extends ExpressionParser {
     this.expect(Token.GT);
     this.noFuseGT -= 1;
     node.TypeArgumentList = TypeArgumentList;
+    // #sec-type-references: "It is a Syntax Error for two |TypeArgument|s of
+    // the second form in one |TypeArgumentList| to have the same
+    // |BindingIdentifier|." The one ordering rule decidable from the list
+    // alone: whether a name was ALREADY SUPPLIED POSITIONALLY, or a positional
+    // argument after a name joins a variadic run, needs the declaration, and
+    // is judged where the list is resolved.
+    const seen = new Set<string>();
+    for (const argument of TypeArgumentList) {
+      const name = (argument as { ArgumentName?: string }).ArgumentName;
+      if (name === undefined) continue;
+      if (seen.has(name)) {
+        this.addEarlyError(Throw.SyntaxError('$1', `the type argument ${name} is supplied twice in one list`), argument);
+      }
+      seen.add(name);
+    }
     return this.finishNode(node, 'TypeArguments');
+  }
+
+  /**
+   * #sec-type-references: a named argument on a form that declares no
+   * parameters - an |ArrayOrTupleType| such as `[4].<uint8>`, "whose extent and
+   * element the grammar does not name" - "names nothing and is refused" as a
+   * Syntax Error. The form is known here, so no resolution is needed.
+   */
+  private parseArrayTypeArguments(): ParseNode.TypeArguments {
+    const args = this.parseTypeArguments();
+    for (const argument of args.TypeArgumentList) {
+      const name = (argument as { ArgumentName?: string }).ArgumentName;
+      if (name !== undefined) {
+        this.addEarlyError(Throw.SyntaxError('$1', `an array type declares no parameters, so the named type argument ${name} names nothing`), argument);
+      }
+    }
+    return args;
   }
 
   // TypeParameters :
@@ -1088,7 +1120,7 @@ export abstract class TypeParser extends ExpressionParser {
       // `First<[]>` got the array of `any` and no diagnostic.
       if (this.test(Token.PERIOD_LT)) {
         node.ArrayExtent = null;
-        node.TypeArguments = this.parseTypeArguments();
+        node.TypeArguments = this.parseArrayTypeArguments();
         return this.finishNode(node, 'ArrayType');
       }
       node.TupleElementList = [];
@@ -1106,7 +1138,7 @@ export abstract class TypeParser extends ExpressionParser {
       if (!variadic && this.test(Token.RBRACK) && this.testAhead(Token.PERIOD_LT)) {
         this.next(); // `]`
         node.ArrayExtent = leading as unknown as ParseNode.AssignmentExpressionOrHigher;
-        node.TypeArguments = this.parseTypeArguments();
+        node.TypeArguments = this.parseArrayTypeArguments();
         return this.finishNode(node, 'ArrayType');
       }
     }
@@ -1135,7 +1167,7 @@ export abstract class TypeParser extends ExpressionParser {
       if (this.test(Token.RBRACK) && this.testAhead(Token.PERIOD_LT)) {
         this.next(); // `]`
         node.ArrayExtent = extent;
-        node.TypeArguments = this.parseTypeArguments();
+        node.TypeArguments = this.parseArrayTypeArguments();
         return this.finishNode(node, 'ArrayType');
       }
     } catch (e) {

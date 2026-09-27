@@ -1716,8 +1716,18 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
             return `${tp.Variadic ? '...' : ''}${tp.Name}${holes}${domain ? `: ${domain}` : ''}`;
           }).join(', ')}>`
           : '';
+        // #sec-this-adoption: a [[ThisType]] is part of the signature, so it
+        // prints, as a leading `this:` entry. Without it a method and a free
+        // function of one shape printed identically, and the refusal read as
+        // "() => uint.<8> is not assignable to () => uint.<8>". A METHOD's is the
+        // self marker of check.mts - its receiver, whatever that is - which has
+        // no type name to print.
+        const thisType = (s as { ThisType?: TypeRecord | null }).ThisType;
+        const thisEntry = thisType
+          ? [`this: ${(thisType as { Declaration?: { type?: string } }).Declaration?.type === 'SelfThisMarker' ? 'its receiver' : displayType(thisType)}`]
+          : [];
         // A null Return is representable and must not print as `null`.
-        return `${generic}(${params.join(', ')}) => ${s.Return ? displayType(s.Return) : 'void'}`;
+        return `${generic}(${[...thisEntry, ...params].join(', ')}) => ${s.Return ? displayType(s.Return) : 'void'}`;
       };
       // Overloads join with `&`, which is how an overloaded function type is
       // written, and matches the intersection case above.
