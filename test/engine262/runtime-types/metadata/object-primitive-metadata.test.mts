@@ -40,6 +40,29 @@ test('a block binds its metadata capture from a complex receiver, and stamps the
     const s = a + b; String(s) + ' ' + String(Reflect.typeOf(s));`)).toBe('4+6i complex.<float64>.<{ phase: 1 }>');
 });
 
+test('a block with a metadata capture does not match a receiver that carries none', () => {
+  // #sec-primitive-operator-blocks: "If _subject_ carries no metadata of _M_,
+  // return ~no-match~". The checker skipped such a block; the run time applied
+  // it, with the component capture `E` bound and the metadata capture `T` not,
+  // and resolving its signature threw "T is not defined" - so `complex128 +
+  // complex128` failed wherever this block was declared. Unmatched, the
+  // built-in operator applies: the block's `+` SUBTRACTS, so its applying would
+  // show as -2-2i rather than 4+6i, and the result carries no metadata.
+  const block = `${P}primitive complex<const E><const T: P> {
+      operator +(rhs: complex.<E>.<T>): complex.<E>.<T> { return this - rhs; }
+    } `;
+  expect(evaluated(`${block}const x: complex128 = complex128(1, 2); const y: complex128 = complex128(3, 4);
+    String(x + y) + ' ' + String(Reflect.typeOf(x + y));`)).toBe('4+6i complex.<float64>');
+});
+
+test('a block with only component captures still matches a receiver without metadata', () => {
+  // THE OVER-BROAD GUARD. Only a METADATA capture needs metadata to bind; a block
+  // whose captures are all components - `W` of `uint<const W>` - binds them from
+  // the receiver's own arguments, and applies to a plain value.
+  expect(evaluated("primitive uint<const W> { operator *(rhs: string): string { return `uint${W}`; } } (3 := uint16) * 'x';"))
+    .toBe('uint16');
+});
+
 test('a value of a family represented as an object is not a type', () => {
   // Its carried [[TypeRecord]] made `isTypeObject` take it for one, while the
   // same annotation over a `uint8` value was refused.

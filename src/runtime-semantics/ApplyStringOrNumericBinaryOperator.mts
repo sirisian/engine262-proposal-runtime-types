@@ -552,7 +552,20 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
       let componentMismatch = false;
       if (entry.deferred && (isTypedNumber(lval) || isComplexObject(lval) || isRationalObject(lval) || componentNames.length > 0 || componentList)) {
         const carried = RuntimeTypeOf(lval);
-        if (carried.Kind === 'parameterized' || componentNames.length > 0 || componentList) {
+        // A block with METADATA parameters matches only a receiver that carries
+        // metadata: #sec-primitive-operator-blocks, "If _subject_ carries no
+        // metadata of _M_, return ~no-match~". The checker skips such a block
+        // (BindMetadataCaptures answers *null*). Here a block that also has a
+        // COMPONENT capture went on to bind the component, leave the metadata
+        // parameter unbound, and resolve the operand and result types - so
+        // `complex.<E>.<T>` threw "T is not defined" before the block could be
+        // rejected, and `complex128 + complex128` failed wherever a block over
+        // `complex<const E><const T: P>` was declared. It is rejected before
+        // anything is bound or resolved.
+        const metadataFree = (entry.deferred.parameterNames?.length ?? 0) > 0 && carried.Kind !== 'parameterized';
+        if (metadataFree) {
+          componentMismatch = true;
+        } else if (carried.Kind === 'parameterized' || componentNames.length > 0 || componentList) {
           const frame = new Map<string, TypeRecord>();
           // A component list with a nested pattern is matched against the
           // receiver's own arguments by the specialization matcher: the
