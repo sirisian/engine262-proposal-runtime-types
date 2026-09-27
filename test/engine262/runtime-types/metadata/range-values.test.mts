@@ -23,9 +23,9 @@ import { evaluated, expectThrown, run } from '../harness.mts';
  *
  * The `NumberBounds` block below is transcribed from primitivemetadata.md
  * rather than built into the engine, which deliberately ships no meta type of
- * its own. Two deviations from the document are recorded at their tests: the
- * shape uses OPTIONAL keys with an empty default, and narrowing is not
- * exercised at all.
+ * its own. This suite uses optional keys with an empty default; total range
+ * defaults are covered in range-origin-shapes.test.mts. Narrowing is not
+ * exercised here.
  */
 
 // The design's meta type, as test source. Its `subtype` is containment and its
@@ -156,17 +156,14 @@ test('one spelling is one type, and differing bounds are different types', () =>
 });
 
 /**
- * DEFERRED, with what was measured.
+ * Fixture choices and deferred coverage.
  *
- * 1. The design's `default = { bounds: .., nonZero: false }` cannot be written
- *    here. A meta type's default is checked by ordinary membership against its
- *    constraint shape, and that judgement does not admit a Range against a
- *    `Range`-typed field -- nor a RegExp against a `RegExp`-typed one, so this
- *    is a pre-existing limit of the meta-type machinery rather than anything
- *    about ranges. The optional-key shape with an empty default is what the
- *    engine can host, so the hooks above test for absence where the design's
- *    total default lets them not. Design-side this is a real question: the
- *    total default was adopted precisely to delete those absence checks.
+ * 1. A full range default is supported with a RangeBounds.<T> field. A
+ *    two-ended Range.<T, S, E> field rejects it at every metadata origin:
+ *    `..` has no endpoints. The old note mistook that shape mismatch for an
+ *    unsupported default. The optional-key fixture here continues to cover
+ *    absence; range-origin-shapes.test.mts covers populated defaults and
+ *    holds both the field type and range value fixed across origins.
  *
  * 2. Every test below CASTS, and the reason is a rule rather than a limit. A
  *    bare number reaches a parameterization only through an implicit cast the
