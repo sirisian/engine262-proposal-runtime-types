@@ -1,3 +1,4 @@
+import { bindIntrinsicArguments } from '../type-system/intrinsic-generics.mts';
 import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
@@ -2033,6 +2034,16 @@ export function* MaterializeSpecialization(
  * A non-generic class is its own Type Object with no type parameters and is not
  * this; a generic INTERFACE has no |ClassTail| and is not constructible at all.
  */
+// Defaults are evaluated in the class declaration's scope, including for a
+// built-in default constructor that has no ECMAScript [[Environment]] slot.
+const classTypeEnvironments = new WeakMap<Value, EnvironmentRecord>();
+export function RegisterClassTypeEnvironment(ctor: Value, environment: EnvironmentRecord): void {
+  classTypeEnvironments.set(ctor, environment);
+}
+export function ClassTypeEnvironmentOf(ctor: Value): EnvironmentRecord | undefined {
+  return classTypeEnvironments.get(ctor) ?? (ctor as { Environment?: EnvironmentRecord }).Environment;
+}
+
 export function GenericClassDeclarationOf(ctor: Value): ParseNode.ClassDeclaration | undefined {
   const typeObject = LookupClassType(ctor);
   if (typeObject === undefined) {
@@ -2424,7 +2435,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     // class BODY. An argument is read before any substitution, and reading it
     // under the frame is what stopped the recovery working here: the same
     // helper recovers on the annotation path, which has no frame pushed.
-    const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode))) as TypeRecord | undefined;
+    const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode, params[i]?.Arity ?? 0))) as TypeRecord | undefined;
     let record;
     if (asDecl !== undefined) {
       record = asDecl;
@@ -2503,7 +2514,9 @@ function* FamilyApplicationFor(node: ParseNode.TypeArgumentsExpression): PlainEv
     // byteLength and interns unequal to `int8`.
     args.push(toNumericArgument(resolved as TypeRecord));
   }
-  const record = builtinTypeRecord(name, args);
+  const bound = bindIntrinsicArguments(name, args, node.TypeArguments.TypeArgumentList.map(typeArgumentNameOf))!;
+  if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+  const record = builtinTypeRecord(name, bound.Arguments);
   if (record === null) {
     return undefined;
   }
@@ -2661,16 +2674,9 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     return ref;
   }
   const value = peeked.Value;
-  // proposal-runtime-types #sec-type-names: `rational.<8>` and `complex.<float32>`
-  // are applications of a generic family, and a type in expression position is
-  // its Type Object. The bare names are shorthands in the realm's type-name table
-  // - `rational` is `rational.<64>`, `complex` is `complex.<number>` - so where the
-  // name resolves to that table's Type Object, the application is the family's,
-  // recognized by NAME as `int.<8>` is (R3). It was recognized by the identity of
-  // the realm's constructor functions, which the bare names no longer are. A
-  // program that binds `rational` itself keeps its own meaning, scope first. The
-  // default application interns to the bare name's own Type Object, so
-  // `rational.<64> === rational` needs no case of its own.
+  // complex's concrete default and family declaration share their public
+  // spelling. Reapplication of that unshadowed intrinsic spelling binds the
+  // family, without creating an identity-distinct default Type Object.
   if (surroundingAgent.feature('runtime-types') && node.Expression.type === 'IdentifierReference'
       && isFamilyShorthandTypeObject((node.Expression as unknown as { name: string }).name, value)) {
     const familyType = Q(yield* FamilyApplicationFor(node));
@@ -2758,6 +2764,17 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
   }
   if (isTypeObject(value)) {
     const record = value.TypeRecord;
+    const intrinsic = intrinsicDeclarationName(record);
+    if (intrinsic) {
+      const args: (TypeRecord | number)[] = [];
+      for (const argument of node.TypeArguments.TypeArgumentList) {
+        args.push(toNumericArgument(Q(yield* TypeNodeToTypeRecord(argument))));
+      }
+      const bound = bindIntrinsicArguments(intrinsic, args, node.TypeArguments.TypeArgumentList.map(typeArgumentNameOf))!;
+      if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+      return GetTypeObject((builtinTypeRecord(intrinsic, bound.Arguments) ?? libraryTypeRecord(intrinsic, bound.Arguments))!);
+    }
+
     if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
       const argRecords: TypeRecord[] = [];
       const argNames: (string | undefined)[] = [];
@@ -2826,28 +2843,16 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
         Metadata: MetadataObjectFromType(argRecords[0]!),
       } as unknown as TypeRecord, new Map()));
     }
-    // A parameterized primitive FAMILY re-applied. #sec-complex-numbers: "the
-    // bare name `complex` is `complex.<number>`", so unlike `int`, `uint` and
-    // `vector` - which are not values bare, and reach FamilyApplicationFor by
-    // NAME before anything is evaluated - `complex` evaluates to a Type Object
-    // and arrives HERE with a ~primitive~ record, its default argument already
-    // applied. `complex.<float32>` then matched no arm above and was refused as
-    // a non-generic callable. `builtinTypeRecord` is the one place the families
-    // are enumerated, and it answers a record for a family name with arguments
-    // and *null* for anything else, so asking it by the record's own name is
-    // both the fix and the guard: a primitive that is not a family, `string`
-    // say, gets *null* and falls through to the refusal as before.
-    //
-    // The guard is that the family CONSUMED the arguments: `builtinTypeRecord`
-    // answers `string` for `string.<uint8>` too, ignoring what it was given, and
-    // taking that answer would make a refused application silently evaluate to
-    // its base. A record whose [[Arguments]] are the ones supplied is one the
-    // name actually parameterizes over.
+    // A concrete intrinsic alias can be reapplied. Resolve its declaration's
+    // domains and defaults before constructing the replacement application,
+    // just as a direct family spelling does. Non-generic primitives fall through.
     if (record.Kind === 'primitive') {
       const supplied = argRecords.map(toNumericArgument);
-      const reapplied = builtinTypeRecord(record.Name, supplied);
+      const bound = bindIntrinsicArguments(record.Name, supplied, node.TypeArguments.TypeArgumentList.map(typeArgumentNameOf));
+      if (bound && 'Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+      const reapplied = bound ? builtinTypeRecord(record.Name, bound.Arguments) : null;
       if (reapplied && reapplied.Kind === 'primitive'
-        && ((reapplied as { Arguments?: readonly unknown[] }).Arguments?.length ?? 0) === supplied.length) {
+        && bound) {
         return GetTypeObject(reapplied);
       }
     }
@@ -2940,11 +2945,15 @@ function NumericValueOfEnumerator(v: Value): number | undefined {
   return v instanceof NumberValue ? (R(v) as number) : undefined;
 }
 
-/** Whether `value` is the type-name table's Type Object for the bare shorthand `name` - `rational` or `complex`. */
+/** Whether the source names complex's intrinsic default Type Object. */
 function isFamilyShorthandTypeObject(name: string, value: Value): boolean {
-  if (name !== 'rational' && name !== 'complex') {
+  if (name !== 'complex') {
     return false;
   }
   const record = builtinTypeRecord(name, []);
   return !!record && isTypeObject(value) && GetTypeObject(record as TypeRecord) === value;
 }
+
+import { intrinsicDeclarationName } from '../type-system/records.mts';
+
+import { libraryTypeRecord } from '../type-system/records.mts';

@@ -54,7 +54,7 @@ import {
   ClassFieldDefinitionEvaluation_decorator,
 } from './all.mts';
 import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
-import { GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf } from './RuntimeTypesDeclarations.mts';
+import { GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf, RegisterClassTypeEnvironment } from './RuntimeTypesDeclarations.mts';
 import { TakePendingCalleeContext } from '../type-system/runtime.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
 import {
@@ -837,6 +837,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         (F as { OverloadContext?: unknown }).OverloadContext = surroundingAgent.runningExecutionContext;
       }
     }
+  }
+  if (surroundingAgent.feature('runtime-types')) {
+    RegisterClassTypeEnvironment(F, classScope);
   }
   __ts_cast__<Mutable<DefaultConstructorBuiltinFunction>>(F);
   F.HostInitialName = className;

@@ -31,7 +31,7 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
-  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, FamilyBoundRecord, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument } from './records.mts';
+  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
@@ -7199,6 +7199,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const decl = (userClass as unknown as { Declaration?: ParseNode }).Declaration;
     const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } | undefined)
       ?.TypeParameters?.TypeParameterList ?? [];
+    if (params.length > 0 && args.length > params.length && !params.some((q) => (q as ParseNode.TypeParameter).IsVariadic)) {
+      errors.push(Throw.StaticTypeError('$1', Value(`this declaration takes ${params.length} type arguments`)).Value as ObjectValue);
+    }
     if (params.length === 0 || (args.length >= params.length && args.every((arg) => arg !== undefined))
         || params.some((q) => (q as unknown as { IsVariadic?: boolean }).IsVariadic === true)) {
       return args.filter((arg): arg is TypeRecord | number => arg !== undefined);
@@ -7221,9 +7224,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // and the parameter records then replaced by the bindings so far.
       const pushed = pdefault ? pushTypeParameterScopeOf(decl) : false;
       let resolved: Known = null;
+      enterFamilyPattern();
       try {
         resolved = pdefault ? resolveType(pdefault) : null;
       } finally {
+        leaveFamilyPattern();
         if (pushed) {
           typeParameterScopes.pop();
         }
@@ -7265,7 +7270,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (params.length === 0 || (resolved as { Arguments?: readonly unknown[] }).Arguments?.length) {
       return resolved;
     }
-    if ((node as { parent?: { type?: string } }).parent?.type === 'TypeArguments') {
+    if (isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) {
       return resolved;
     }
     // Fill what can be filled and report what cannot; the report names the
@@ -9010,9 +9015,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const resolveType = (node: ParseNode.Type): Known => {
-    // A bare family name in a bound (`T: type extends uint`) names the family.
-    const family = FamilyBoundRecord(node);
-    if (family) return family;
+    const pendingDeclarationDefault = deferredDeclarationDefault(node, (name) => typeParameterInScope(name) ? { Kind: 'parameter', Name: name } : null);
+    if (pendingDeclarationDefault) return pendingDeclarationDefault;
+    try {
+      const prepared = prepareFamilyPattern(node, (name) => classNodes.get(name) ?? interfaceNodes.get(name) ?? aliasNodes.get(name));
+      if (prepared) {
+        typeParameterScopes.push(new Map(prepared.Wildcards.map((name) => [name, null])));
+        enterFamilyPattern();
+        try {
+          const template = resolveType(prepared.Node);
+          if (!template) return null;
+          const pattern = finishFamilyPattern(template, prepared.Wildcards);
+          rememberDeclaredConstraint(node, pattern);
+          return pattern;
+        } finally {
+          leaveFamilyPattern(); typeParameterScopes.pop();
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof FamilyPatternError)) throw error;
+      errors.push(Throw.StaticTypeError('$1', Value(error.message)).Value as ObjectValue);
+      return null;
+    }
     // A generic class's bare name in its own body is the class over its own
     // parameters (step 9b).
     const injected = InjectedClassOf(node);
@@ -9130,6 +9154,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     switch (node.type) {
       case 'TypeReference': {
+        const intrinsicName = node.TypeName.IdentifierReference.name;
+        // A named class expression has a private binding in its own body;
+        // it is absent from the surrounding declaration map.
+        if (!node.TypeArguments && node.TypeName.MemberNames.length === 0
+            && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)) {
+          for (let parent: ParseNode | undefined = node.parent; parent; parent = parent.parent) {
+            if (parent.type === 'ClassExpression' && parent.BindingIdentifier?.name === intrinsicName) {
+              return instanceTypeOf(parent);
+            }
+          }
+        }
+        if (node.TypeName.MemberNames.length === 0 && intrinsicParameters(intrinsicName)
+            && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)
+            && !aliasNodes.has(intrinsicName) && !classNodes.has(intrinsicName) && !interfaceNodes.has(intrinsicName)) {
+          if (!node.TypeArguments && isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) return intrinsicDeclarationRecord(intrinsicName)!;
+          const written = node.TypeArguments?.TypeArgumentList ?? [];
+          const arguments_: (TypeRecord | number)[] = [];
+          for (const argument of written) {
+            const resolved = resolveType(argument);
+            if (!resolved) return null;
+            arguments_.push(CanonicalWidthArgument(resolved));
+          }
+          const bound = bindIntrinsicArguments(intrinsicName, arguments_, written.map(typeArgumentNameOfShared))!;
+          if ('Error' in bound) {
+            errors.push(Throw.StaticTypeError('$1', Value(bound.Error)).Value as ObjectValue);
+            return null;
+          }
+          return builtinTypeRecord(intrinsicName, bound.Arguments) ?? libraryTypeRecord(intrinsicName, bound.Arguments);
+        }
         if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {
           const args: (TypeRecord | number)[] = [];
           if (node.TypeName.MemberNames.length > 0) {
@@ -9191,14 +9244,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return null;
             }
             const order = orderTypeArgumentsShared(libNames, rawArgList, rawArgNames);
-            if (!order.ok) return null;
+            if (!order.ok) {
+              const message = order.kind === 'unknown-name' ? `${order.name} does not name a type parameter of ${namedBase}`
+                : order.kind === 'supplied-twice' ? `${order.name} is supplied twice to ${namedBase}`
+                : order.kind === 'positional-after-named' ? 'a positional type argument follows a named argument'
+                : `${namedBase} takes ${libNames.length} type arguments`;
+              errors.push(Throw.StaticTypeError('$1', Value(message)).Value as ObjectValue);
+              return null;
+            }
             const userParams = (classNodes.get(namedBase) as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
             const filled = order.ordered.map((arg, index) => arg ?? userParams?.[index]?.TypeParameterDefault);
-            if (filled.some((arg) => !arg)) return null;
+            const missing = filled.findIndex((arg) => !arg);
+            if (missing !== -1) {
+              errors.push(Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default', Value(libNames[missing]), Value(namedBase)).Value as ObjectValue);
+              return null;
+            }
             orderedArgList = filled as readonly ParseNode.Type[];
           }
-          for (const a of orderedArgList) {
-            const r = resolveType(a);
+          const applicationDeclaration = classNodes.get(node.TypeName.IdentifierReference.name) ?? aliasNodes.get(node.TypeName.IdentifierReference.name);
+          const applicationParameters = (applicationDeclaration as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters?.TypeParameterList ?? [];
+          for (const [index, a] of orderedArgList.entries()) {
+            const r = (applicationParameters[index]?.Arity ?? 0) > 0 ? kindedArgumentOf(a) : resolveType(a);
             if (!r) {
               return null;
             }
@@ -9506,7 +9572,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               errors.push(completion.Value as ObjectValue);
               return null;
             }
-            return CanonicalizeType({ ...userClass, Arguments: fillClassDefaults(userClass, args) });
+            const completed = fillClassDefaults(userClass, args);
+            if (!inFamilyPattern() && completed.some((a) => typeof a !== 'number' && a.Kind === 'deferred' && a.DefaultNode)) return null;
+            return CanonicalizeType({ ...userClass, Arguments: completed });
           }
           return userClass;
         }
@@ -9550,7 +9618,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A source class named Range (or Map, etc.) denotes that class in its
         // own annotations, just as it does in `new Range()`. The library name
         // must not substitute an unrelated intrinsic type for the parameter.
-        return refuseBareGeneric(node, classTypeOf(name) ?? builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name) ?? lookupAlias(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
+        return refuseBareGeneric(node, classTypeOf(name) ?? lookupAlias(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name)) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : makePrimitive('null');
@@ -9611,6 +9679,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // operation is already a plain function over records, so both resolvers
       // call the one implementation.
       case 'ComputedType': {
+        const pendingDefault = deferredFamilyDefault(node, (name) => typeParameterInScope(name) ? { Kind: 'parameter', Name: name } : null);
+        if (pendingDefault) return pendingDefault;
         // The ASSUMED half. #sec-checked-contracts:
         // "before specialization, where the application is deferred and no
         // result exists, the checker takes each clause as a known fact about the
@@ -10367,6 +10437,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (ref.type === 'TypeReference' && !ref.TypeArguments && !ref.TypeName?.MemberNames?.length) {
       const name = ref.TypeName?.IdentifierReference?.name;
       if (!name || typeParameterInScope(name)) return null;
+      const intrinsic = !shadowedByProgram(name) && intrinsicDeclarationRecord(name);
+      if (intrinsic) return intrinsic;
       const declared = classTypeOf(name) ?? interfaceTypeOf(name);
       if (declared) return declared as TypeRecord;
     }
@@ -14067,7 +14139,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const reference = entry as ParseNode.TypeReference;
         const entryArgs = (reference.TypeArguments as { TypeArgumentList?: readonly ParseNode[] } | null | undefined)?.TypeArgumentList ?? [];
         return entry.type === 'TypeReference' && entryArgs.length > 0 && entryArgs.every((x) => isOpen(x))
-          && IsFamilyRecord(bound) && (bound as { Name: string }).Name === reference.TypeName.IdentifierReference.name;
+          && ((IsFamilyRecord(bound) && (bound as { Name: string }).Name === reference.TypeName.IdentifierReference.name)
+            || (bound?.Kind === 'family-pattern' && bound.Template.Kind === 'primitive'
+              && bound.Template.Name === reference.TypeName.IdentifierReference.name
+              && bound.Template.Arguments.length === entryArgs.length));
       };
       const patternCases = [...analysis.Attached.map((a) => a.Case), ...analysis.Standalone]
         .filter((d) => d.List && d.List.ListKind === 'specialization' && ValueArityAdmits(d.Node, valueCount));
@@ -16296,7 +16371,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // `new A.<>(5)` and `new Grid.<8>()` bind their defaults, as the
                 // runtime's SpecializeGenericClass does (#sec-type-references).
                 const ordered = orderTypeArgumentsShared(specParams.map((q) => q.BindingIdentifier.name), valueArgs, argNameAt);
-                return CanonicalizeType({ ...base, Arguments: fillClassDefaults(base, ordered.ok ? ordered.ordered : valueArgs) });
+                const completed = fillClassDefaults(base, ordered.ok ? ordered.ordered : valueArgs);
+                if (completed.some((a) => typeof a !== 'number' && a.Kind === 'deferred' && a.DefaultNode)) return null;
+                return CanonicalizeType({ ...base, Arguments: completed });
               }
             }
             return base;
@@ -22398,6 +22475,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The return type does not participate in ranking - it filters
         // what ranking left tied - so this is passed as a third argument
         // and read only there.
+        if (candidates.some((candidate) => candidate.Parameters.some((parameter) => hasDeferredFamilyDefault(parameter.Type)))) return null;
         const resolution = resolveOverloadByTypes(
           candidates as never,
           argTypes as TypeRecord[],
@@ -27417,3 +27495,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   return errors;
 }
+
+import { intrinsicDeclarationRecord } from './records.mts';
+import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
+import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
+
+import { rememberDeclaredConstraint } from './records.mts';

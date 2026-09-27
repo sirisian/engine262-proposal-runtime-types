@@ -33,14 +33,14 @@ test('every numeric source truncates alike', () => {
   expect(evaluated('String((5.5 := float32) := bigint);')).toBe('5');
   expect(evaluated('String((-5.5 := float64) := bigint);')).toBe('-5');
   expect(evaluated('String((5.5 := float16) := bigint);')).toBe('5');
-  expect(evaluated('String((5.5 := rational) := bigint);')).toBe('5');
-  expect(evaluated('String((-5.5 := rational) := bigint);')).toBe('-5');
+  expect(evaluated('String((5.5 := rational64) := bigint);')).toBe('5');
+  expect(evaluated('String((-5.5 := rational64) := bigint);')).toBe('-5');
   // Integer sources are exact - including a wide one above 2**53, which a read
   // through a Number would round.
   expect(evaluated('String((5 := uint8) := bigint);')).toBe('5');
   expect(evaluated('String((5 := int64) := bigint);')).toBe('5');
   expect(evaluated('String((9007199254740993n := int64) := bigint);')).toBe('9007199254740993');
-  expect(evaluated('String((5 := rational) := bigint);')).toBe('5');
+  expect(evaluated('String((5 := rational64) := bigint);')).toBe('5');
 });
 
 test('NaN and the infinities are a RangeError, from every source', () => {

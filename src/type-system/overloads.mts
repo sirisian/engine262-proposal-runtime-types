@@ -13,8 +13,10 @@ import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argum
 import type { ParameterRecord, TypeRecord } from './records.mts';
 import { anyType, restElementType } from './records.mts';
 import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
-import { ClassImplements, IsAssignable } from './relations.mts';
-import { RuntimeTypeOf } from './runtime.mts';
+import { ClassImplements, IsAssignable, IsSubtype } from './relations.mts';
+import { RuntimeTypeOf, ConstraintAdmits } from './runtime.mts';
+import { Q } from '../completion.mts';
+import type { PlainEvaluator } from '../evaluator.mts';
 
 /**
  * One parameter of a signature, as overload resolution reads it.
@@ -292,6 +294,7 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
   // so it admits every argument - at the Generic tier, below every concrete
   // match.
   if (paramType.Kind === 'parameter') {
+    if (paramType.Constraint?.Kind === 'family-pattern' && !IsAssignable(argType, paramType.Constraint)) return null;
     return Tier.Generic;
   }
   // Template objects are immutable language-created sequences with exact
@@ -576,6 +579,25 @@ export function parameterReceiving(params: readonly ParameterRecord[], args: rea
 }
 
 /** #sec-overload-resolution: fixed-position specificity is pointwise. */
+function compareFamilyConstraints(a: OverloadSignature, b: OverloadSignature, args: readonly TypeRecord[]): number {
+  let sign = 0;
+  for (let i = 0; i < args.length; i += 1) {
+    const ap = parameterReceiving(a.Parameters, args, i)?.Type;
+    const bp = parameterReceiving(b.Parameters, args, i)?.Type;
+    if (ap?.Kind !== 'parameter' || bp?.Kind !== 'parameter') continue;
+    const ac = ap.Constraint ?? anyType;
+    const bc = bp.Constraint ?? anyType;
+    if (ac.Kind !== 'family-pattern' && bc.Kind !== 'family-pattern') continue;
+    const ab = IsSubtype(ac, bc, []), ba = IsSubtype(bc, ac, []);
+    if (!ab && !ba) return 0;
+    if (ab === ba) continue;
+    const here = ab ? -1 : 1;
+    if (sign && sign !== here) return 0;
+    sign = here;
+  }
+  return sign;
+}
+
 function compareFixedPositions(a: OverloadSignature, b: OverloadSignature, args: readonly TypeRecord[]): number {
   let sign = 0;
   for (let i = 0; i < args.length; i += 1) {
@@ -651,7 +673,8 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
   const compare = (a: typeof viable[number], b: typeof viable[number]) =>
     compareTiers(a.tiers, b.tiers)
       || compareByLiteralRank(a, b, argTypes)
-      || compareFixedPositions(a.sig, b.sig, argTypes);
+      || compareFixedPositions(a.sig, b.sig, argTypes)
+      || compareFamilyConstraints(a.sig, b.sig, argTypes);
   // Specificity is a partial order: retain every undominated candidate so an
   // incomparable signature cannot disappear merely because it was declared first.
   const best = viable.filter((candidate) => !viable.some((other) => compare(other, candidate) < 0));
@@ -692,4 +715,25 @@ export function operatorTableKey(e: ParseNode.OperatorDefinition): string {
     return `[]#${params}`;
   }
   return params === 0 ? `unary ${name}` : name;
+}
+
+
+/** Runtime viability evaluates defaults before ranking, preserving abrupt failures. */
+export function* resolveOverloadChecked(signatures: readonly OverloadSignature[], values: readonly Value[], contextualType?: TypeRecord): PlainEvaluator<OverloadResolution> {
+  const args = values.map((v) => templateArgumentTypeOf(v) ?? RuntimeTypeOf(v));
+  const viable: OverloadSignature[] = [];
+  for (const signature of signatures) {
+    let admits = true;
+    for (let i = 0; i < args.length; i += 1) {
+      const parameter = parameterReceiving(signature.Parameters, args, i)?.Type;
+      if (parameter?.Kind === 'parameter' && parameter.Constraint?.Kind === 'family-pattern') {
+        const yes = Q(yield* ConstraintAdmits(args[i], parameter.Constraint));
+        if (!yes) {
+          admits = false; break;
+        }
+      }
+    }
+    if (admits) viable.push(signature);
+  }
+  return resolveOverloadByTypes(viable, args, contextualType);
 }

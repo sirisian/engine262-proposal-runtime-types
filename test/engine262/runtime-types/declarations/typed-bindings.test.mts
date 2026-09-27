@@ -238,8 +238,8 @@ test('a bit-vector mask defaults to all false', () => {
 test('rational defaults to zero', () => {
   // A numeric type that resolves as a LIBRARY type rather than a primitive, so
   // its zero is answered beside the nominals.
-  expect(value('let q: rational; q.toString();')).toBe('0');
-  expect(value('let q: rational; String(q is rational);')).toBe('true');
+  expect(value('let q: rational64; q.toString();')).toBe('0');
+  expect(value('let q: rational64; String(q is rational64);')).toBe('true');
 });
 
 test('a class field of these types takes the default', () => {

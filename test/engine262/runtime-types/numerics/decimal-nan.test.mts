@@ -25,7 +25,7 @@ test('decimal NaN and infinities: conversions in, explicit and at the boundary',
 });
 
 test('decimal NaN and infinities: conversions out', () => {
-  const cases: [string, string][] = [["(NaN := decimal64) := float64", "NaN"], ["(Infinity := decimal64) := number", "Infinity"], ["(-Infinity := decimal64) := float128", "-Infinity"], ["(NaN := decimal64) := int32", "RangeError"], ["(Infinity := decimal64) := bigint", "RangeError"], ["(NaN := decimal64) := rational", "RangeError"], ["(() => { let b: any = (NaN := decimal64); let a: int32 = b; return a; })()", "RangeError"]];
+  const cases: [string, string][] = [["(NaN := decimal64) := float64", "NaN"], ["(Infinity := decimal64) := number", "Infinity"], ["(-Infinity := decimal64) := float128", "-Infinity"], ["(NaN := decimal64) := int32", "RangeError"], ["(Infinity := decimal64) := bigint", "RangeError"], ["(NaN := decimal64) := rational64", "RangeError"], ["(() => { let b: any = (NaN := decimal64); let a: int32 = b; return a; })()", "RangeError"]];
   for (const [expr, rowWant] of cases) {
     // A typed value passed through `any` into a decimal binding is checked, not
     // converted (stricter-runtime decision); the explicit conversions convert.

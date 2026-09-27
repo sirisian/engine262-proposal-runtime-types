@@ -27,8 +27,8 @@ test('each decimal width reports its own type', () => {
 test('a complex reports its component width', () => {
   // The bare name is `complex.<number>`, so a width prints through its
   // component - which is also how the written `complex128` resolves.
-  expect(evaluated('`${Reflect.typeOf(complex64(1, 2))}`;')).toBe('complex.<float32>');
-  expect(evaluated('`${Reflect.typeOf(complex128(1, 2))}`;')).toBe('complex.<float64>');
+  expect(evaluated('`${Reflect.typeOf(complex64(1, 2))}`;')).toBe('complex64');
+  expect(evaluated('`${Reflect.typeOf(complex128(1, 2))}`;')).toBe('complex128');
   expect(evaluated('`${Reflect.typeOf(complex128(1, 2)) === (type complex128)}`;')).toBe('true');
   expect(evaluated('`${Reflect.typeOf(complex64(1, 2)) === Reflect.typeOf(complex128(1, 2))}`;')).toBe('false');
 });
@@ -44,7 +44,7 @@ test('an enumerator over one of these still reports its ENUM', () => {
 });
 
 test('the families that already reported correctly still do', () => {
-  expect(evaluated('`${Reflect.typeOf(rational(1, 2))}`;')).toBe('rational');
+  expect(evaluated('`${Reflect.typeOf(rational64(1, 2))}`;')).toBe('rational64');
   expect(evaluated('`${Reflect.typeOf(vector.<uint8, 4>(1,2,3,4))}`;')).toBe('vector.<uint.<8>, 4>');
   expect(evaluated('let a: uint8 = 1; `${Reflect.typeOf(a)}`;')).toBe('uint.<8>');
   expect(evaluated('let a: uint8 = 0; let b: uint8 = 5; `${Reflect.typeOf(a..<b)}`;')).toBe('ClosedOpenRange.<uint.<8>>');

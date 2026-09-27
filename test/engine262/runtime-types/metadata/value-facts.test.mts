@@ -56,5 +56,5 @@ test('case labels and comparisons use base adoption', () => {
 });
 
 test('integer exponents and shift counts keep their existing domains', () => {
-  expect(evaluated(`String(rational(2,3)**2)+'/'+String((4:=uint64)<<(1:=uint8));`)).toBe('4/9/8');
+  expect(evaluated(`String(rational64(2,3)**2)+'/'+String((4:=uint64)<<(1:=uint8));`)).toBe('4/9/8');
 });

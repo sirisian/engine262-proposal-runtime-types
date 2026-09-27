@@ -16,8 +16,8 @@ const sources: [string, string, string][] = [
   ['a float64 value', 'let x: float64 = 0.5;', '0.5'],
   ['a bigint', 'let x = 5n;', '5'],
   ['a float128', 'let x = (1 := float128) / (3 := float128);', '0.3333333333333333333333333333333333'],
-  ['a terminating rational', 'let x = rational(-7, 8);', '-0.875'],
-  ['a non-terminating rational', 'let x = rational(1, 3);', '0.3333333333333333333333333333333333'],
+  ['a terminating rational', 'let x = rational64(-7, 8);', '-0.875'],
+  ['a non-terminating rational', 'let x = rational64(1, 3);', '0.3333333333333333333333333333333333'],
 ];
 
 test('the call and the operator agree for every source', () => {
@@ -28,9 +28,9 @@ test('the call and the operator agree for every source', () => {
 });
 
 test('a rational: exact where its expansion terminates, rounded once where it does not', () => {
-  expect(evaluated('String(decimal32(rational(1, 8)));')).toBe('0.125');
-  expect(evaluated('String(decimal32(rational(2, 3)));')).toBe('0.6666667');
-  expect(evaluated('String(rational(2, 3) := decimal32);')).toBe('0.6666667');
+  expect(evaluated('String(decimal32(rational64(1, 8)));')).toBe('0.125');
+  expect(evaluated('String(decimal32(rational64(2, 3)));')).toBe('0.6666667');
+  expect(evaluated('String(rational64(2, 3) := decimal32);')).toBe('0.6666667');
 });
 
 test('what does not change', () => {

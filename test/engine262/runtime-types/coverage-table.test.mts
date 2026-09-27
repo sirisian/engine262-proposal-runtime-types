@@ -17,10 +17,7 @@ import { ok, evaluated } from './harness.mts';
  */
 
 test('the parameterized numeric extensions resolve in an annotation', () => {
-  // Written as the design writes them: complex has NAMED widths and rational is
-  // applied. Probing complex with `complex.<64>` or rational with `rational64`
-  // reports "not defined" and would look like a gap in the coverage row - which
-  // is how this check first went wrong.
+  // Complex component aliases and explicit rational widths are concrete types.
   expect(ok('function f(x: complex64) {}')).toBe(true);
   expect(ok('function f(x: complex128) {}')).toBe(true);
   expect(ok('function f(x: rational.<64>) {}')).toBe(true);
@@ -53,8 +50,8 @@ test('a bare parameterized primitive is not a value, and an applied one is', () 
   // Object, whose call still constructs from two parts, `complex(0, 4)` (the plan
   // "the bare names rational and complex as Type Objects").
   expect(evaluated('type _ = uint8; String(typeof complex);')).toBe('object');
-  expect(evaluated('type _ = uint8; String(typeof rational);')).toBe('object');
-  expect(evaluated('String((type rational) === (type rational.<64>));')).toBe('true');
+  expect(evaluated('type _ = uint8; String(typeof rational64);')).toBe('object');
+  expect(evaluated('String((type rational64) === (type rational.<64>));')).toBe('true');
   expect(evaluated('String((type complex) === (type complex.<number>));')).toBe('true');
 });
 

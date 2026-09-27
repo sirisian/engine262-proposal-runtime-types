@@ -52,11 +52,11 @@ test('C22: an entry without a domain is an argument, not a parameter', () => {
   // is a selector the checker resolves: statically refused, with the same hint.
   expectEarlyError('function f<T>(x: T) {}', 'StaticTypeError');
   expectEarlyError('class Box<T> {}', 'SyntaxError');
-  expectEarlyError('function f<T extends uint>(x: T) {}', 'SyntaxError');
+  expectEarlyError('function f<T extends uint.<_>>(x: T) {}', 'SyntaxError');
   expectEarlyError('class A<T = uint8> {}', 'SyntaxError');
   expectEarlyError('function f<...Ts>() {}', 'SyntaxError');
   expectThrown('function f<T>(x: T) {}', 'a type parameter is declared as `T: type`');
-  expectThrown('function f<T extends uint>(x: T) {}', 'write `T: type extends ...`');
+  expectThrown('function f<T extends uint.<_>>(x: T) {}', 'write `T: type extends ...`');
   expectThrown('function f<...Ts>() {}', 'a type parameter is declared as `...Ts: [].<type>`');
 });
 

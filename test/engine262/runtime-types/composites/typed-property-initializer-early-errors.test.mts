@@ -21,7 +21,7 @@ test('valid literals retain contextual representation, including discarded liter
   expect(evaluated('const o = { (x: uint8): 1 }; String(Reflect.typeOf(o.x) === uint8);')).toBe('true');
   expect(evaluated('const o = { ([Symbol.iterator]: uint8): 1 }; String(o[Symbol.iterator]);')).toBe('1');
   expect(ok('({ (x: uint8): 1 });')).toBe(true);
-  expect(evaluated('const o = { (x: rational): 1 / 3 }; String(o.x);')).toBe('1/3');
+  expect(evaluated('const o = { (x: rational64): 1 / 3 }; String(o.x);')).toBe('1/3');
   expect(evaluated('const o = { (x: decimal64): 1.00 }; String(o.x);')).toBe('1.00');
 });
 

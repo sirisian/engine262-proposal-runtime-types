@@ -10,7 +10,7 @@ import { evaluated } from '../harness.mts';
  * Nothing did. A literal in that position was never read at the member's type,
  * so it kept whatever it would have been without one:
  *
- *   Composite({ (v: rational): 1 / 3 }).v   // 6004799503160661/18014398509481984
+ *   Composite({ (v: rational64): 1 / 3 }).v   // 6004799503160661/18014398509481984
  *   Composite({ (v: decimal64): 1.00 }).v   // "1 is not assignable to decimal64"
  *
  * The first is the fraction never folded - Number division, then the exact
@@ -23,10 +23,10 @@ import { evaluated } from '../harness.mts';
  */
 
 test('a rational member folds its fraction exactly', () => {
-  expect(evaluated('String(Composite({ (v: rational): 1 / 3 }).v);')).toBe('1/3');
-  // Three thirds summing to one is rational.md's own headline claim, and it
+  expect(evaluated('String(Composite({ (v: rational64): 1 / 3 }).v);')).toBe('1/3');
+  // Three thirds summing to one is rational64.md's own headline claim, and it
   // holds through a composite member now.
-  expect(evaluated(`const c = Composite({ (v: rational): 1 / 3 });
+  expect(evaluated(`const c = Composite({ (v: rational64): 1 / 3 });
     String(c.v + c.v + c.v);`)).toBe('1');
 });
 

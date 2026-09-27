@@ -68,11 +68,11 @@ test('numeric types: a decimal literal converts, and so does a float128', () => 
   expect(evaluated('let a: float128 = 1.5; a.toString();')).toBe('1.5');
 });
 
-test('numeric types: rational and complex are both registered value types', () => {
+test('numeric types: rational64 and complex are both registered value types', () => {
   // The bare names are type names - shorthands for `rational.<64>` and
   // `complex.<number>` - so, in a text that admits type names, their Type Objects.
-  expect(evaluated('const r: rational = rational(1, 2); typeof rational;')).toBe('object');
-  expect(evaluated('let r: rational = rational(1, 2); typeof r;')).toBe('object');
+  expect(evaluated('const r: rational64 = rational64(1, 2); typeof rational64;')).toBe('object');
+  expect(evaluated('let r: rational64 = rational64(1, 2); typeof r;')).toBe('object');
   // #sec-complex-numbers: `complex(re, im)` is how the clause writes its own
   // example, `4i` being `complex(0, 4)`.
   expect(evaluated('const z: complex = complex(3, 4); typeof complex;')).toBe('object');

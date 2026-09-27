@@ -37,7 +37,7 @@ function outcome(source: string): string {
   return `ok: ${(c.Value as { stringValue?: () => string })?.stringValue?.() ?? String(c.Value)}`;
 }
 
-const meta = (meet: string) => 'type NB = { bounds?: Range }; meta NB { default = {}; '
+const meta = (meet: string) => 'type NB = { bounds?: RangeBounds.<any> }; meta NB { default = {}; '
   + 'validate(value, c) { return c.bounds === undefined || c.bounds.contains(value); } '
   + 'subtype(a,b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; '
   + `return b.bounds.contains(a.bounds); } ${meet} } `

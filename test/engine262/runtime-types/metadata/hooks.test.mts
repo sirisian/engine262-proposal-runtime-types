@@ -74,7 +74,7 @@ test('`meet` answers what two constraints have in common', () => {
   // string share values - so two parameterizations of one base were left
   // standing however their constraints related, and an empty one was reported
   // nowhere.
-  const NB = 'type NB = { bounds?: Range }; meta NB { default = {}; '
+  const NB = 'type NB = { bounds?: RangeBounds.<any> }; meta NB { default = {}; '
     + 'subtype(a,b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
     + 'meet(a,b) { if (a.bounds === undefined) return b; if (b.bounds === undefined) return a;'
     + ' const r = a.bounds.intersect(b.bounds); return r.isEmpty ? null : { bounds: r }; } } ';
@@ -141,7 +141,7 @@ test('a non-empty `meet` becomes the TYPE', () => {
   // aliases, because a meta names its constraint shape and needs the alias. So
   // the alias is built before the hook exists, and the only way through is to
   // build it twice.
-  const NB = 'type NB = { bounds?: Range }; meta NB { default = {}; '
+  const NB = 'type NB = { bounds?: RangeBounds.<any> }; meta NB { default = {}; '
     + 'subtype(a,b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
     + 'meet(a,b) { if (a.bounds === undefined) return b; if (b.bounds === undefined) return a;'
     + ' const r = a.bounds.intersect(b.bounds); return r.isEmpty ? null : { bounds: r }; } } ';

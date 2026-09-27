@@ -64,7 +64,7 @@ test('shared keeps its marker, which is what the round trip was losing', () => {
 // an ordinary record. `bounds` needs a user `meta` declaration, which is why it
 // took a preamble to reach at all - and why nine sampled kinds missed it.
 test('range metadata round-trips', () => {
-  const meta = 'type NB = { bounds?: RangeBounds }; meta NB { default = {}; subtype(a,b){ return true; } } ';
+  const meta = 'type NB = { bounds?: RangeBounds.<any> }; meta NB { default = {}; subtype(a,b){ return true; } } ';
   const declaration = 'type R = float64.<{ bounds: 0..<10 }>; ';
   expect(evaluated(`${meta}${declaration} String(Reflect.makeType(Reflect.getReflection(R)) === R);`)).toBe('true');
 });

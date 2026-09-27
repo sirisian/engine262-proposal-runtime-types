@@ -1,3 +1,5 @@
+import { intrinsicParameters } from './intrinsic-generics.mts';
+import type { FamilyPatternRecord } from './family-patterns.mts';
 import { JSStringValue, NumberValue, BigIntValue, TypedNumberValue, Value, type SymbolValue } from '../value.mts';
 // `R` reads a Number's mathematical value, for the one place the substitution
 // below turns a ~literal~ argument into a value-parameter binding. Imported
@@ -278,6 +280,7 @@ export interface TypeParameterRecord {
   readonly Variance: 'invariant' | 'covariant' | 'contravariant';
   readonly Arity: number;
   readonly ConstraintNode: ParseNode.Type | null;
+  readonly Constraint?: TypeRecord;
   readonly DefaultNode: ParseNode.Type | null;
   readonly Declaration: ParseNode.TypeParameter;
   /**
@@ -289,6 +292,13 @@ export interface TypeParameterRecord {
    * built under a frame.
    */
   readonly Parameter?: TypeRecord;
+}
+
+// A resolved description accompanies the source constraint. Evaluation still
+// uses ConstraintNode under each application's bindings.
+const declaredConstraints = new WeakMap<ParseNode.Type, TypeRecord>();
+export function rememberDeclaredConstraint(node: ParseNode.Type, record: TypeRecord): void {
+  declaredConstraints.set(node, record);
 }
 
 /** The Type Parameter Records of a declared TypeParameterList, in declaration order. */
@@ -303,6 +313,7 @@ export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] 
     Variance: tp.Variance ?? 'invariant' as const,
     Arity: tp.Arity ?? 0,
     ConstraintNode: tp.TypeParameterConstraint ?? null,
+    Constraint: tp.TypeParameterConstraint ? declaredConstraints.get(tp.TypeParameterConstraint) : undefined,
     DefaultNode: (tp as unknown as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault ?? null,
     Declaration: tp,
   }));
@@ -493,6 +504,7 @@ export interface ContractFact {
 export type Known = TypeRecord | null;
 
 export type TypeRecord =
+  | FamilyPatternRecord
   | { readonly Kind: 'any' }
   /**
    * A DEFERRED COMPUTATION over a generic parameter - the one kind for every
@@ -525,6 +537,9 @@ export type TypeRecord =
   | {
     readonly Kind: 'deferred',
     readonly Operator: DeferredOperator,
+    readonly DefaultNode?: ParseNode.Type,
+    readonly DefaultEnvironment?: object,
+    readonly OperandNames?: readonly string[],
     readonly Operands: readonly (TypeRecord | Value)[],
     /**
      * The builder's `where` clauses, as FACTS about this deferred call.
@@ -660,28 +675,9 @@ export function CanonicalWidthArgument(a: TypeRecord | number): TypeRecord | num
 }
 
 export function makePrimitive(Name: string, Arguments: readonly (TypeRecord | number)[] = []): TypeRecord {
-  // THE DEFAULT WIDTH IS NORMALIZED AWAY, so the two spellings of one type build
-  // one record. `table-type-name-shorthands`: "`complex` is `complex.<number>`
-  // and `rational` is `rational.<64>`" - the bare name IS the application, so
-  // they must not be distinguishable afterwards.
-  //
-  // They were. `rational.<64> === rational` answered *true*, because the Type
-  // Objects intern to one; but a rational VALUE carries `rational` with an empty
-  // argument list while the written `rational.<64>` carries `[64]`, so
-  // `r is rational.<64>` answered *false* and `const s: rational.<64> = r` was
-  // refused - the same type by identity and not by membership.
-  //
-  // That contradiction is what made a metadata parameterization over `rational`
-  // unreachable: its base is `rational.<64>`, the crossing converts the value to
-  // that base first, and that step refused a rational.
-  // A width or count is a plain number in canonical form: one given as a
-  // numeric literal record - a value parameter's binding, typed (`N: uint32`)
-  // or not - is that number, whichever path applied it (phase 4, step 9d:
-  // `uint.<N>` at `N = 8` was `uint.<literal 8>`, and ranged over nothing).
+  // Complete arguments are the identity. Public defaults and preferred aliases
+  // never erase an argument from an already applied type.
   Arguments = Arguments.map(CanonicalWidthArgument);
-  if (Name === 'rational' && Arguments.length === 1 && Arguments[0] === 64) {
-    return { Kind: 'primitive', Name, Arguments: [] };
-  }
   return { Kind: 'primitive', Name, Arguments };
 }
 
@@ -801,7 +797,6 @@ const libraryTypeNames = new Set([
   // for the four intervals rather than two.
   'ClosedRange', 'ClosedOpenRange', 'OpenClosedRange', 'OpenRange',
   // proposal-runtime-types (rational.md): the rational value type is a usable type name.
-  'rational',
   // proposal-runtime-types #sec-generator-types: the generic whose instances are
   // the objects a generator function returns, and the async one. The design
   // writes `Generator.<Y, R, N>` throughout and the core already parses a return
@@ -963,7 +958,10 @@ export function libraryTypeRecord(name: string, args: readonly (TypeRecord | num
       LibraryName: 'Range',
     };
   }
-  const filled = name === 'SoA' && args.length === 1 ? [...args, 0] : args;
+  const filled = name === 'SoA' && args.length === 1 ? [...args, 0]
+    : name === 'Range' && args.length > 0 ? [args[0], args[1] ?? 0, args[2] ?? 1]
+    : name === 'RangeFrom' && args.length > 0 ? [args[0], args[1] ?? 0]
+    : name === 'RangeTo' && args.length > 0 ? [args[0], args[1] ?? 1] : args;
   return {
     Kind: 'nominal',
     Declaration: libraryDeclarationSentinel,
@@ -1023,7 +1021,7 @@ export function compositeTreeShape(shape: TypeRecord): TypeRecord {
 }
 
 export function builtinTypeRecord(name: string, args: readonly (TypeRecord | number)[] = []): TypeRecord | null {
-  const m = /^(u?int)(8|16|32|64|128)$/.exec(name);
+  const m = /^(u?int|rational)(8|16|32|64|128)$/.exec(name);
   if (m) {
     return makePrimitive(m[1], [Number(m[2])]);
   }
@@ -1182,7 +1180,7 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     // record, and every numeric-literal path is keyed on `Kind === 'primitive'`,
     // so no literal reached any rational form.
     case 'rational':
-      return makePrimitive('rational', args);
+      return args.length > 0 ? makePrimitive('rational', args) : null;
     // The width-named shorthands "count total bits rather than component bits,
     // following the convention of NumPy and Go, so `complex64` is a pair of
     // `float32` and not a pair of `float64`".
@@ -1190,7 +1188,7 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     case 'complex64': return makePrimitive('complex', [makePrimitive('float32')]);
     case 'complex128': return makePrimitive('complex', [makePrimitive('float64')]);
     case 'complex256': return makePrimitive('complex', [makePrimitive('float128')]);
-    case 'int': case 'uint': case 'rational': case 'vector':
+    case 'int': case 'uint': case 'vector':
       return args.length > 0 ? makePrimitive(name, args) : null;
     default:
       break;
@@ -1404,6 +1402,7 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
   const within = [...seen, t];
   const orderKey = (x: TypeRecord): string => orderKeyWithin(x, within);
   switch (t.Kind) {
+    case 'family-pattern': return `family-pattern:${orderKey(t.Template)}`;
     case 'any': return 'any';
     case 'void': return 'void';
     case 'primitive': return `primitive:${t.Name}:${t.Arguments.map((a) => (typeof a === 'number' ? String(a) : orderKey(a))).join(',')}`;
@@ -1579,7 +1578,19 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
   switch (t.Kind) {
     case 'any': return 'any';
     case 'void': return 'void';
-    case 'primitive': return t.Arguments.length > 0 ? `${t.Name}.<${t.Arguments.map((a) => displayTypeArgument(a, seen)).join(', ')}>` : t.Name;
+    case 'family-pattern': return t.Wildcards.reduce((text, name) => text.split(name).join('_'), displayType(t.Template));
+    case 'primitive': {
+      if (t.Name === 'rational' && t.Arguments.length === 1 && [8, 16, 32, 64, 128].includes(t.Arguments[0] as number)) return `rational${t.Arguments[0]}`;
+      if (t.Name === 'complex' && t.Arguments.length === 1) {
+        const component = t.Arguments[0];
+        if (typeof component !== 'number' && component.Kind === 'primitive') {
+          if (component.Name === 'number') return 'complex';
+          const width = { float16: 32, float32: 64, float64: 128, float128: 256 }[component.Name];
+          if (width) return `complex${width}`;
+        }
+      }
+      return t.Arguments.length > 0 ? `${t.Name}.<${t.Arguments.map((a) => displayTypeArgument(a, seen)).join(', ')}>` : t.Name;
+    }
     case 'literal': {
       // The VALUE, because a literal type IS one value and a diagnostic that
       // names only the base says nothing a reader can act on: a wrong literal
@@ -1646,7 +1657,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
           return `${alias}.<${typeof element === 'number' ? String(element) : displayType(element)}>`;
         }
       }
-      const name = t.LibraryName ?? declared?.BindingIdentifier?.name ?? declared?.TypeName?.IdentifierReference?.name;
+      const name = intrinsicDeclarationName(t) ?? t.LibraryName ?? declared?.BindingIdentifier?.name ?? declared?.TypeName?.IdentifierReference?.name;
       const args = t.Arguments.length > 0 ? `.<${t.Arguments.map((a) => displayTypeArgument(a, seen)).join(', ')}>` : '';
       return name ? `${name}${args}` : `nominal${args}`;
     }
@@ -1849,7 +1860,19 @@ const LIBRARY_ARITY: Record<string, number> = {
   IteratorHelper: 3, AsyncIteratorHelper: 3, RegExp: 2,
 };
 
+/** An internal declaration descriptor; never the concrete default application. */
+export function intrinsicDeclarationRecord(name: string): TypeRecord | undefined {
+  if (!intrinsicParameters(name)) return undefined;
+  return { Kind: 'nominal', Declaration: libraryDeclarationSentinel, LibraryName: `@intrinsic:${name}`, Arguments: [] };
+}
+
+export function intrinsicDeclarationName(t: TypeRecord): string | undefined {
+  return t.Kind === 'nominal' && t.LibraryName?.startsWith('@intrinsic:') ? t.LibraryName.slice(11) : undefined;
+}
+
 export function declarationParameterCount(t: TypeRecord | null | undefined): number | null {
+  const intrinsic = t && intrinsicDeclarationName(t);
+  if (intrinsic) return intrinsicParameters(intrinsic)!.length;
   if (!t || t.Kind !== 'nominal') {
     return null;
   }
@@ -1926,6 +1949,7 @@ export function isHigherKinded(t: TypeRecord | null | undefined): boolean {
  * which is the ordinary way a generic is called.
  */
 export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): boolean => {
+  if (t?.Kind === 'family-pattern') return mentionsTypeParameter(substituteTypeParameters(t.Template, new Map(t.Wildcards.map((name) => [name, anyType]))), seen);
   if (!t) {
     return false;
   }
@@ -2054,6 +2078,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
   if (!t) {
     return t;
   }
+  if (t.Kind === 'family-pattern') return { ...t, Template: substituteTypeParameters(t.Template, bindings) as TypeRecord };
   if (t.Kind === 'parameter') {
     return bindings.get((t as { Name: string }).Name) ?? t;
   }
@@ -2205,25 +2230,7 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
   return t;
 };
 
-/**
- * A bare family name in a BOUND - `T: type extends uint` - names every width
- * of that family: `T extends uint` holds exactly when _T_ is some `uint.<N>`.
- * Only a bound: elsewhere a bare family name names no type, since a value of
- * unknown width has no fixed layout (Rust bounds integer families by trait,
- * C++ by concept, Swift by protocol, none by a storage type). The record is
- * marked, since `rational` with no arguments already means `rational.<64>`.
- * *undefined* for any node that is not a bare family name in a bound.
- */
-export function FamilyBoundRecord(node: unknown): TypeRecord | undefined {
-  const n = node as { type?: string, TypeArguments?: unknown, TypeName?: { MemberNames?: readonly unknown[], IdentifierReference?: { name?: string } }, parent?: { type?: string, TypeParameterConstraint?: unknown } } | null;
-  if (n?.type !== 'TypeReference' || n.TypeArguments || (n.TypeName?.MemberNames?.length ?? 0) > 0) return undefined;
-  const name = n.TypeName?.IdentifierReference?.name;
-  if (name !== 'int' && name !== 'uint' && name !== 'rational' && name !== 'complex' && name !== 'vector') return undefined;
-  if (n.parent?.type !== 'TypeParameter' || n.parent.TypeParameterConstraint !== node) return undefined;
-  return { Kind: 'primitive', Name: name, Arguments: [], Family: true } as unknown as TypeRecord;
-}
-
-/** Whether _t_ is a family bound's record. */
+/** Internal primitive-family proof used by specialization selection, never a source storage type. */
 export function IsFamilyRecord(t: unknown): boolean {
   return !!t && (t as { Family?: boolean }).Family === true;
 }

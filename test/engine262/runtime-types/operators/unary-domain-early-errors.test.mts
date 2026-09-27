@@ -31,7 +31,7 @@ test('BigInt negation, bitwise NOT and proposal numeric families remain valid', 
   expect(evaluated('function f(x: bigint) { return String(-x) + "," + String(~x); } f(2n);')).toBe('-2,-3');
   expect(evaluated('function f(x: uint64) { return +x; } String(f(uint64(2)));')).toBe('2');
   expect(evaluated('let d: decimal64 = 1.00; String(+d);')).toBe('1.00');
-  expect(evaluated('let r: rational = 1 / 3; String(+r);')).toBe('1/3');
+  expect(evaluated('let r: rational64 = 1 / 3; String(+r);')).toBe('1/3');
 });
 
 test('overloads and ordinary primitive coercions retain their domains', () => {

@@ -19,7 +19,7 @@ import { evaluated } from '../harness.mts';
  * compiler what the constant told only the reader.
  */
 const NumberBounds = `
-type NumberBounds = { bounds?: Range, nonZero?: boolean };
+type NumberBounds = { bounds?: RangeBounds.<any>, nonZero?: boolean };
 function excludesZero(c) { return c.nonZero === true || (c.bounds !== undefined && !c.bounds.contains(0)); }
 meta NumberBounds {
   default = {};

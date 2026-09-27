@@ -273,7 +273,7 @@ test('a primitive block may declare an implicit cast into a parameterization', (
   // actually write - `uint8.<{ bounds: 1..=6 }>` - and which reaches a boundary
   // the dimensions case above cannot: a singleton range is a type with one
   // value, so it is where "a cast is a way IN, not a way PAST" is sharpest.
-  const nb = 'type NB = { bounds?: Range }; '
+  const nb = 'type NB = { bounds?: RangeBounds.<any> }; '
     + 'meta NB { default = {}; '
     + 'subtype(a, b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
     + 'validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); } } ';

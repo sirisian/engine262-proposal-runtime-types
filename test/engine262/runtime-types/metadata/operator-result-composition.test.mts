@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-const dimensions = `type Dim = { m: int32, ratio: rational };
+const dimensions = `type Dim = { m: int32, ratio: rational64 };
   meta Dim { default = { m: 0, ratio: 1 }; subtype(a: Dim, b: Dim): boolean { return a.m === b.m; } }
   type M = float32.<{ m: 1 }>;
   const a = 2 := M; const b = 3 := M;`;

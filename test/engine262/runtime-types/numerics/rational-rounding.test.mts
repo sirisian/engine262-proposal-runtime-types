@@ -16,7 +16,7 @@ import { evaluated } from '../harness.mts';
  * tidiness: a rational whose numerator exceeds 2^53 has an exact floor, and a
  * double cannot give it.
  */
-const R = (n: string) => `const r: rational = ${n}; `;
+const R = (n: string) => `const r: rational64 = ${n}; `;
 
 test('each rounds in its own direction', () => {
   expect(evaluated(`${R('7 / 2')}String(Math.floor(r));`)).toBe('3');
@@ -51,7 +51,7 @@ test('a rational that is already whole is itself', () => {
 
 test('the overloads that return a rational still do', () => {
   expect(evaluated(`${R('-1 / 3')}String(Math.abs(r));`)).toBe('1/3');
-  expect(evaluated(`${R('-1 / 3')}String(Reflect.typeOf(Math.abs(r)));`)).toBe('rational');
+  expect(evaluated(`${R('-1 / 3')}String(Reflect.typeOf(Math.abs(r)));`)).toBe('rational64');
   expect(evaluated(`${R('-1 / 3')}String(Math.sign(r));`)).toBe('-1');
 });
 

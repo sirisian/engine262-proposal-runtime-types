@@ -43,7 +43,7 @@ test('into bigint: a finite integer converts, whatever numeric type holds it', (
   expectThrownKind(at('(5 := float32)', 'bigint'), 'TypeError');
   expectThrownKind(at('(5 := float64)', 'bigint'), 'TypeError');
   // An integer-valued rational, as a rational into `uint8` does.
-  expectThrownKind(at('(5 := rational)', 'bigint'), 'TypeError');
+  expectThrownKind(at('(5 := rational64)', 'bigint'), 'TypeError');
 });
 
 test('into bigint: a value with no integer is a RangeError, not a TypeError', () => {
@@ -107,7 +107,7 @@ test('what the boundary does not reach is unchanged', () => {
   // implicit-conversions table checks an `any` value at the boundary and, "if it
   // is a numeric value the target represents exactly, converted" - an `int32` 5
   // already did, and the F10 plan's B1 gives `bigint` its conversion row.
-  expect(evaluated(at('5n', 'rational'))).toBe('5');
+  expect(evaluated(at('5n', 'rational64'))).toBe('5');
   // `complex` into an integer is refused for `uint8` too.
   expectThrownKind(at('(5 := complex64)', 'bigint'), 'TypeError');
   // Not numeric at all.

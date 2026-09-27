@@ -23,9 +23,9 @@ primitive rational<const W><const T: U> { operator rational.<W>.<T>() { return t
 
 test('a crossing carries the parameterization on a fresh value', () => {
   expect(evaluated(`${P}const c: complex128 = 1 + 2i; const p: Ph = c;
-    String(Reflect.typeOf(p)) + ' / ' + String(Reflect.typeOf(c));`)).toBe('complex.<float64>.<{ phase: 1 }> / complex.<float64>');
-  expect(evaluated(`${U}const r: rational = 1 / 3; const p: rational.<64>.<{ unit: 1 }> = r;
-    String(Reflect.typeOf(p)) + ' / ' + String(Reflect.typeOf(r));`)).toBe('rational.<{ unit: 1 }> / rational');
+    String(Reflect.typeOf(p)) + ' / ' + String(Reflect.typeOf(c));`)).toBe('complex128.<{ phase: 1 }> / complex128');
+  expect(evaluated(`${U}const r: rational64 = 1 / 3; const p: rational.<64>.<{ unit: 1 }> = r;
+    String(Reflect.typeOf(p)) + ' / ' + String(Reflect.typeOf(r));`)).toBe('rational64.<{ unit: 1 }> / rational64');
 });
 
 test('membership reads the carried metadata', () => {
@@ -37,7 +37,7 @@ test('a block binds its metadata capture from a complex receiver, and stamps the
       operator +(rhs: complex.<E>.<T>): complex.<E>.<T> { return this + rhs; }
     }
     const a: Ph = (1 + 2i := complex128); const b: Ph = (3 + 4i := complex128);
-    const s = a + b; String(s) + ' ' + String(Reflect.typeOf(s));`)).toBe('4+6i complex.<float64>.<{ phase: 1 }>');
+    const s = a + b; String(s) + ' ' + String(Reflect.typeOf(s));`)).toBe('4+6i complex128.<{ phase: 1 }>');
 });
 
 test('a block over a two-list parameterization applies to a receiver carrying its metadata', () => {
@@ -54,7 +54,7 @@ test('a block over a two-list parameterization applies to a receiver carrying it
   const ab = 'const x: complex128 = complex128(5, 5); const y: complex128 = complex128(1, 1); const a: Ph = x; const b: Ph = y; ';
   expect(evaluated(`${block}${ab}String(a + b);`)).toBe('4+4i');
   // Its result carries the receiver's metadata directly, from the block's return type.
-  expect(evaluated(`${block}${ab}String(Reflect.typeOf(a + b));`)).toBe('complex.<float64>.<{ phase: 1 }>');
+  expect(evaluated(`${block}${ab}String(Reflect.typeOf(a + b));`)).toBe('complex128.<{ phase: 1 }>');
   // THE METADATA GUARD. `T` is bound from the receiver, so an operand of other
   // metadata is not admitted, and the two do not mix.
   expectThrown(`${block}const x: complex128 = complex128(5, 5); const a: Ph = x;
@@ -73,7 +73,7 @@ test('a block with a metadata capture does not match a receiver that carries non
       operator +(rhs: complex.<E>.<T>): complex.<E>.<T> { return this - rhs; }
     } `;
   expect(evaluated(`${block}const x: complex128 = complex128(1, 2); const y: complex128 = complex128(3, 4);
-    String(x + y) + ' ' + String(Reflect.typeOf(x + y));`)).toBe('4+6i complex.<float64>');
+    String(x + y) + ' ' + String(Reflect.typeOf(x + y));`)).toBe('4+6i complex128');
 });
 
 test('a block with only component captures still matches a receiver without metadata', () => {
@@ -87,6 +87,6 @@ test('a block with only component captures still matches a receiver without meta
 test('a value of a family represented as an object is not a type', () => {
   // Its carried [[TypeRecord]] made `isTypeObject` take it for one, while the
   // same annotation over a `uint8` value was refused.
-  expectThrown('const r: rational = 1 / 3; let v: r = 2;', '"r" is not a type');
+  expectThrown('const r: rational64 = 1 / 3; let v: r = 2;', '"r" is not a type');
   expectThrown('const d: decimal128 = 1.5; let v: d = 2;', '"d" is not a type');
 });

@@ -408,6 +408,7 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       Enumerable: Value.false,
       Configurable: Value.false,
     })));
+    registerIntrinsicNamespace(realmRec, 'Range', rangeGlobal);
     X(global.DefineOwnProperty(Value('Range'), Descriptor({
       Value: rangeGlobal,
       Writable: Value.true,
@@ -441,14 +442,9 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
       // from `complex` explicitly and not implicitly, exactly as `float32` and
       // `float64` convert to and from `number`".
       'complex32', 'complex64', 'complex128', 'complex256',
-      // #sec-type-names' shorthand table: `rational` is `rational.<64>` and
-      // `complex` is `complex.<number>` - type names as `uint8` is, bound HERE
-      // rather than as global constructors, which the scope chain found first and
-      // so shadowed the table (the plan "the bare names rational and complex as
-      // Type Objects", R2). The Type Objects' call converts one argument and
-      // constructs from two parts, so `rational(1, 3)` and `complex(1, 2)` keep
-      // their meaning.
-      'rational', 'complex',
+      // Rational widths are explicit aliases; complex retains its declared
+      // number default. Every binding is the canonical concrete Type Object.
+      'rational8', 'rational16', 'rational32', 'rational64', 'rational128', 'complex',
       // proposal-runtime-types #sec-vector-types: the SIMD shorthands, so
       // `float32x4(1, 2, 3, 4)` names something to call. They are GENERATED
       // rather than listed because builtinTypeRecord decides which exist by
@@ -703,3 +699,5 @@ export function SetDefaultGlobalBindings(realmRec: Realm) {
     }
   }
 }
+
+import { registerIntrinsicNamespace } from '../type-system/intrinsic-generics.mts';

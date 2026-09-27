@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
  * #sec-rational-types: "For each positive integer N, `rational.<N>` is a value
@@ -15,7 +15,7 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
  */
 
 const WIDTHS = [1, 2, 7, 8, 16, 32, 64, 128, 256];
-const T = (n: number) => (n === 64 ? 'rational' : `rational.<${n}>`);
+const T = (n: number) => ([8, 16, 32, 64, 128].includes(n) ? `rational${n}` : `rational.<${n}>`);
 const maxOf = (n: number) => (1n << BigInt(n - 1)) - 1n;
 const minOf = (n: number) => -(1n << BigInt(n - 1));
 const gcd = (a: bigint, b: bigint): bigint => {
@@ -90,7 +90,7 @@ for (const n of WIDTHS) {
         expect(outcome(src), src).toBe(expected(num, den, n));
       }
       // an in-range result keeps the width
-      expect(outcome(`Reflect.typeOf(${at(0n)} + ${at(1n)})`)).toBe(T(n) === 'rational' ? 'rational' : T(n));
+      expect(outcome(`Reflect.typeOf(${at(0n)} + ${at(1n)})`)).toBe(T(n));
       // ++ past the end
       expect(outcome(`(() => { let r = ${at(max)}; r++; return r; })()`)).toBe(expected(max + 1n, 1n, n));
     });
@@ -125,16 +125,16 @@ test('the widths are distinct types, meeting only through a conversion', () => {
       expect(outcome(`Reflect.typeOf(${va} := ${T(b)})`)).toBe(T(b));
     }
   }
-  expect(outcome('rational.<64> === rational')).toBe('true');
-  expect(outcome('rational.<8> === rational')).toBe('false');
+  expect(outcome('rational.<64> === rational64')).toBe('true');
+  expect(outcome('rational.<8> === rational64')).toBe('false');
   expect(outcome('rational.<8> === rational.<8>')).toBe('true');
 });
 
 test('a literal takes its width, and one out of range is refused before the program runs', () => {
   expect(outcome('(() => { const x: rational.<8> = 1 / 3; return x + x; })()')).toBe('2/3');
-  expect(outcome('(() => { const x: rational.<8> = 0.1; return Reflect.typeOf(x); })()')).toBe('rational.<8>');
+  expect(outcome('(() => { const x: rational.<8> = 0.1; return Reflect.typeOf(x); })()')).toBe('rational8');
   for (const src of ['const x: rational.<8> = 300;', 'const x: rational.<8> = 1 / 300;', 'let y = 128 := rational.<8>;',
-    'const x: rational = 1180591620717411303424;', 'const x: rational.<1> = 0;']) {
+    'const x: rational64 = 1180591620717411303424;', 'const x: rational.<1> = 0;']) {
     expectStaticTypeError(src);
   }
 });
@@ -195,7 +195,7 @@ test('approximate breaks a tie by the smaller denominator, then nearer zero', ()
 test('approximate: the design example at each width, and overflow refused', () => {
   expect(outcome('rational.<8>.approximate(Math.PI, 1000)')).toBe('22/7');
   expect(outcome('rational.<16>.approximate(Math.PI, 1000)')).toBe('355/113');
-  expect(outcome('rational.approximate(Math.PI, 1000)')).toBe('355/113');
+  expect(outcome('rational64.approximate(Math.PI, 1000)')).toBe('355/113');
   expect(outcome('rational.<8>.approximate(1000, 10)')).toBe('RangeError');
   expect(outcome('uint8.approximate(1, 2)')).toBe('TypeError');
 });
@@ -206,13 +206,12 @@ test('a width that is not a positive integer names no type', () => {
   // The widths are those of `int.<N>`, 1 to 2**16: `rational.<65537>` names no type.
   expect(outcome('rational.<65536>.byteLength')).toBe('16384');
   for (const w of ['1.5', '0', '-1', '65537', 'string', 'number']) {
-    expect(outcome(`rational.<${w}>(1, 1)`), `rational.<${w}>(1, 1)`).toBe('TypeError');
-    expect(outcome(`rational.<${w}>.parse('1')`), `rational.<${w}>.parse`).toBe('TypeError');
-    expect(outcome(`rational.<${w}>.approximate(1, 2)`), `rational.<${w}>.approximate`).toBe('TypeError');
+    expectThrown(`rational.<${w}>(1, 1)`, "integer width");
+    expectThrown(`rational.<${w}>.parse('1')`, "integer width");
+    expectThrown(`rational.<${w}>.approximate(1, 2)`, "integer width");
   }
   expectStaticTypeError('const x: rational.<1.5> = 1;');
-  expect(evaluated("let m; try { rational.<string>(1, 3); } catch (e) { m = e.message; } m;"))
-    .toBe('rational.<string> is not a type: a rational width is a positive integer');
+  expectThrown("rational.<string>(1, 3);", "integer width");
 });
 
 // `rational.<bigint>`: the quotient of two `bigint` values - every rational, with
@@ -274,7 +273,7 @@ test('rational.<bigint>: a type of its own, with bigint parts and no layout', ()
   // Refused by type before its range is asked (stricter-runtime decision).
   expect(outcome(`(() => { let v: any = ${B}(2n ** 100n); let w: ${T(8)} = v; return w; })()`)).toBe('TypeError');
   expect(outcome(`${B}(1, 2) === ${B}(1, 2)`)).toBe('true');
-  expectStaticTypeError(`${B}(1, 2) + rational(1, 2);`);
+  expectStaticTypeError(`${B}(1, 2) + rational64(1, 2);`);
   expect(outcome(`Reflect.typeOf(${B}(2n ** 100n).numerator)`)).toBe('bigint');
   expect(outcome(`${B}(2n ** 100n, 3n).denominator`)).toBe('3');
   for (const f of ['floor', 'ceil', 'round', 'trunc']) {
@@ -389,7 +388,7 @@ test('a rational.<N> is laid out as a record of its two int.<N> fields', () => {
   expect(outcome(`${T(12)}.byteLength`)).toBe('4');
   expect(outcome(`${T(24)}.byteLength`)).toBe('8');
   expect(outcome(`${T(24)}.bitLength`)).toBe('48');
-  expect(outcome('Reflect.typeOf(rational(1, 2)).byteLength')).toBe('16');
+  expect(outcome('Reflect.typeOf(rational64(1, 2)).byteLength')).toBe('16');
 });
 
 test('complex.<T> is its Type Object, as rational.<N> is', () => {

@@ -83,7 +83,7 @@ test('a literal the BASE cannot hold is refused by the base', () => {
 });
 
 test('the boundaries the invariant must not be read to cross', () => {
-  const NB = 'type NB = { bounds?: Range }; meta NB { default = {};'
+  const NB = 'type NB = { bounds?: RangeBounds.<any> }; meta NB { default = {};'
     + ' subtype(a,b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false;'
     + ' return b.bounds.contains(a.bounds); }'
     + ' validate(v,c) { return c.bounds === undefined || c.bounds.contains(Number(v)); } } ';

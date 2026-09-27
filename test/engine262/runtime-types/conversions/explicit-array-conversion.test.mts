@@ -17,7 +17,7 @@ import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.m
 
 const TYPES = ['int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64', 'bigint',
   'float16', 'float32', 'float64', 'number', 'float128', 'decimal32', 'decimal64', 'decimal128',
-  'rational', 'complex64', 'complex128', 'boolean', 'string'];
+  'rational64', 'complex64', 'complex128', 'boolean', 'string'];
 const VALUES: readonly [string, string][] = [['300', '300'], ['-1', '-1'], ['1.5', '1.5'], ['0.1', '0.1'],
   ['NaN', 'NaN'], ['Infinity', 'Infinity'], ['-Infinity', '-Infinity'], ['-0', '-0'], ['1e300', '1e300'],
   ['2n**53n+1n', '2n ** 53n + 1n'], ["'5'", "'5'"], ['true', 'true'], ['undefined', 'undefined'], ['null', 'null'],
@@ -40,20 +40,20 @@ for (const type of TYPES) {
 
 test('a literal element converts from its exact value, as a literal operand does', () => {
   const cases: [string, string][] = [
-    ['([0.1] := [].<rational>)[0]', '1/10'],
-    ['([-0.1] := [].<rational>)[0]', '-1/10'],
+    ['([0.1] := [].<rational64>)[0]', '1/10'],
+    ['([-0.1] := [].<rational64>)[0]', '-1/10'],
     ['([0.1] := [].<decimal128>)[0]', '0.1'],
     ['([0.1] := [].<float128>)[0]', '0.1'],
     ['([16777217.0000000001] := [].<float32>)[0]', '16777218'],
     ['([9007199254740993] := [].<uint64>)[0]', '9007199254740993'],
     ['([200 + 100] := [].<uint8>)[0]', '44'],
     ['([300] := [].<uint8>)[0]', '44'],
-    ['(([0.1]) := [].<rational>)[0]', '1/10'],
-    ['([[0.1]] := [].<[].<rational>>)[0][0]', '1/10'],
+    ['(([0.1]) := [].<rational64>)[0]', '1/10'],
+    ['([[0.1]] := [].<[].<rational64>>)[0][0]', '1/10'],
   ];
   for (const [expression, want] of cases) expect(evaluated(`String(${expression});`), expression).toBe(want);
   // A value is not a literal: it converts from what it holds.
-  expect(evaluated('let x = 0.1; String(([x] := [].<rational>)[0]);')).toBe('3602879701896397/36028797018963968');
+  expect(evaluated('let x = 0.1; String(([x] := [].<rational64>)[0]);')).toBe('3602879701896397/36028797018963968');
 });
 
 test('structure: values are converted, shape is not information', () => {

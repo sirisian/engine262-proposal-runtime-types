@@ -23,32 +23,32 @@ test('a rational parses its own written form', () => {
   // #sec-rational-types defines no literal, so the accepted input is the form
   // the type WRITES. Where a type has no literal, its written form is the only
   // available reading of "the grammar of a literal of that type".
-  expect(evaluated("String(rational.parse('1/2'));")).toBe('1/2');
-  expect(evaluated("String(rational.parse('-1/2'));")).toBe('-1/2');
+  expect(evaluated("String(rational64.parse('1/2'));")).toBe('1/2');
+  expect(evaluated("String(rational64.parse('-1/2'));")).toBe('-1/2');
   // A bare integer stands for a denominator of one.
-  expect(evaluated("String(rational.parse('5'));")).toBe('5');
+  expect(evaluated("String(rational64.parse('5'));")).toBe('5');
   // Construction normalizes, so the parse lands in lowest terms.
-  expect(evaluated("String(rational.parse('2/4'));")).toBe('1/2');
+  expect(evaluated("String(rational64.parse('2/4'));")).toBe('1/2');
   // Separators and surrounding space, as the clause requires of every parse.
-  expect(evaluated("String(rational.parse('1_000/3'));")).toBe('1000/3');
-  expect(evaluated("String(rational.parse('  1/2  '));")).toBe('1/2');
+  expect(evaluated("String(rational64.parse('1_000/3'));")).toBe('1000/3');
+  expect(evaluated("String(rational64.parse('  1/2  '));")).toBe('1/2');
 });
 
 test('a rational round-trips its toString', () => {
-  expect(evaluated('let r = rational(3, 7); String(rational.parse(String(r)));')).toBe('3/7');
+  expect(evaluated('let r = rational64(3, 7); String(rational64.parse(String(r)));')).toBe('3/7');
 });
 
 test('what a rational refuses', () => {
   // A denominator of zero is a literal whose value no rational type can represent:
-  // the Parsing clause's RangeError, the one `rational(1, 0)` throws. A SIGNED
+  // the Parsing clause's RangeError, the one `rational64(1, 0)` throws. A SIGNED
   // denominator is not a literal of the type at all.
-  expectThrownKind("rational.parse('1/0');", 'RangeError');
-  expectThrownKind("rational.parse('1/-2');", 'SyntaxError');
-  expectThrownKind("rational.parse('zz');", 'SyntaxError');
+  expectThrownKind("rational64.parse('1/0');", 'RangeError');
+  expectThrownKind("rational64.parse('1/-2');", 'SyntaxError');
+  expectThrownKind("rational64.parse('zz');", 'SyntaxError');
   // "The entire string must be a literal of the type: no trailing text."
-  expectThrownKind("rational.parse('1/2x');", 'SyntaxError');
-  expect(evaluated("String(rational.tryParse('zz'));")).toBe('null');
-  expect(evaluated("String(rational.tryParse('1/2'));")).toBe('1/2');
+  expectThrownKind("rational64.parse('1/2x');", 'SyntaxError');
+  expect(evaluated("String(rational64.tryParse('zz'));")).toBe('null');
+  expect(evaluated("String(rational64.tryParse('1/2'));")).toBe('1/2');
 });
 
 test('the bare complex parses what its shorthands parse', () => {
@@ -64,7 +64,7 @@ test('the bare complex parses what its shorthands parse', () => {
 test('the constructor forms the clause writes are untouched', () => {
   // "`4i` is `complex(0, 4)`" - the clause's own example.
   expect(evaluated('String(complex(0, 4));')).toBe('4i');
-  expect(evaluated('String(rational(1, 2));')).toBe('1/2');
+  expect(evaluated('String(rational64(1, 2));')).toBe('1/2');
   // And the one-argument conversion stays a conversion.
-  expect(evaluated('String(rational(0.5));')).toBe('1/2');
+  expect(evaluated('String(rational64(0.5));')).toBe('1/2');
 });

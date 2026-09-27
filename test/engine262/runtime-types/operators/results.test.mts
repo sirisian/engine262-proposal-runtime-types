@@ -110,7 +110,7 @@ test('unary + returns the other numeric families unchanged', () => {
   // Each of these took a different wrong path before: a rational answered NaN
   // silently, and a decimal and a vector threw with a message about an
   // arithmetic this operator does not perform.
-  expect(evaluated('String(+rational(1, 2));')).toBe('1/2');
+  expect(evaluated('String(+rational64(1, 2));')).toBe('1/2');
   // The decimal keeps its COHORT MEMBER, which is the sharpest test that the
   // operand came back untouched: `1.50` is not `1.5`.
   expect(evaluated('let d: decimal128 = 1.50; (+d).toString();')).toBe('1.50');

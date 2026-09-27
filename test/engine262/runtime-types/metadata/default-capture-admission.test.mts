@@ -34,7 +34,7 @@ test.each([
   ['float32', '', '(2 := float32)'],
   ['uint', '<const W>', '(2 := uint16)'],
   ['complex', '<const E>', 'complex128(1, 2)'],
-  ['rational', '<const W>', 'rational(1, 2)'],
+  ['rational', '<const W>', 'rational64(1, 2)'],
   ['decimal128', '', 'decimal128(2)'],
 ])('a %s capture reads the default on a mixed operation', (family, components, receiver) => {
   expect(evaluated(`${dim()} primitive ${family}${components}<const D: Dim> {

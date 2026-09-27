@@ -18,7 +18,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped, BindTypeArgumentRecordsInto, RuntimeTypeOf, valueArguments as argumentTypeOracle } from '../type-system/runtime.mts';
-import { resolveOverload, resolveOverloadByTypes, describeParameters, assignArguments, type OverloadSignature } from '../type-system/overloads.mts';
+import { resolveOverloadChecked, resolveOverloadByTypes, describeParameters, assignArguments, type OverloadSignature } from '../type-system/overloads.mts';
 import { displayType, builtinTypeRecord, makePrimitive, anyType, restElementType, type ParameterRecord, type TypeRecord } from '../type-system/records.mts';
 import { IsSubtype, SameType } from '../type-system/relations.mts';
 import { MatchSpecializationList, SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
@@ -249,7 +249,7 @@ export function* DispatchCaseGroup(
   // replacement is chosen (`const c: 'u' = f(x)` with `f<uint8>(x: uint8): 'u'`).
   // The chosen declaration's return is checked where the result is bound.
   const routes = analysis.Owners.some((o) => analysis.Attached.some((a) => a.Owner === o && replacements.has(a.Case.Node as object)));
-  const resolution = resolveOverload(signatures, args, routes ? undefined : callContext);
+  const resolution = Q(yield* resolveOverloadChecked(signatures, args, routes ? undefined : callContext));
   if (resolution.Kind === 'none') {
     return Throw.TypeError('no overload of $1 matches these arguments', Value(name));
   }
@@ -679,6 +679,7 @@ export function* SelectExplicitCase(
       return yield* BindTypeArgumentRecordsInto((owner.Node as Declaration).TypeParameters?.TypeParameterList ?? [], args as TypeRecord[], names, new Map(), name);
     }));
     if (bound.Type === 'normal') boundOwners.set(owner.Node, bound.Value as readonly TypeRecord[]);
+    else if (IsFamilyConstraintEvaluationFailure(bound.Value)) return bound;
   }
   const items = evaluateArguments ? Q(yield* evaluateArguments()) : undefined;
   const values = items?.map((a) => a.value);
@@ -729,3 +730,5 @@ export function* SelectExplicitCase(
 }
 
 void builtinTypeRecord;
+
+import { IsFamilyConstraintEvaluationFailure } from '../type-system/runtime.mts';

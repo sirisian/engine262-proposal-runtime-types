@@ -390,6 +390,92 @@ function isCanonicalMetadata(record: unknown): boolean {
  * so structurally equal descriptions produce the same Type Object (the round
  * trip makeType(getReflection(T)) === T).
  */
+// Declaration context retains deferred constraints/defaults without turning
+// them into concrete types. It is an opaque, per-description capability.
+const reflectedFamilyDefaults = new WeakMap<ObjectValue, TypeRecord>();
+const reflectedParameterContexts = new WeakMap<ObjectValue, TypeParameterRecord>();
+
+function reflectionRecord(fields: Record<string, Value>, realm = surroundingAgent.currentRealmRecord): ObjectValue {
+  const result = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
+  for (const [name, value] of Object.entries(fields)) {
+    X(CreateDataProperty(result, Value(name), value));
+  }
+  return result;
+}
+
+function familyPatternNode(pattern: FamilyPatternRecord, realm: Realm): ObjectValue {
+  const entry = (argument: TypeRecord | number): Value => {
+    if (typeof argument !== 'number' && argument.Kind === 'deferred' && argument.DefaultNode) {
+      const context = reflectionRecord({}, realm);
+      reflectedFamilyDefaults.set(context, argument);
+      return reflectionRecord({ kind: Value('declaration-default'), context }, realm);
+    }
+    if (typeof argument === 'number') return reflectionRecord({ kind: Value('fixed'), value: Value(argument) }, realm);
+    if (argument.Kind === 'parameter' && pattern.Wildcards.includes(argument.Name)) {
+      return reflectionRecord({ kind: Value('wildcard'), index: Value(pattern.Wildcards.indexOf(argument.Name)) }, realm);
+    }
+    if ((argument.Kind === 'primitive' || argument.Kind === 'nominal') && argument.Arguments.length > 0) {
+      const head = argument.Kind === 'primitive' ? Value(argument.Name)
+        : argument.LibraryName ? Value(argument.LibraryName) : GetTypeObject({ ...argument, Arguments: [] }, realm);
+      return reflectionRecord({ kind: Value('application'), head, arguments: CreateArrayFromList(argument.Arguments.map(entry)) }, realm);
+    }
+    return reflectionRecord({ kind: Value('fixed'), type: GetTypeObject(argument, realm) }, realm);
+  };
+  return reflectionRecord({ kind: Value('family-pattern'), application: entry(pattern.Template) }, realm);
+}
+
+function* readFamilyPattern(node: ObjectValue): PlainEvaluator<TypeRecord> {
+  const holes = new Set<number>();
+  const entry = function* (value: Value): PlainEvaluator<TypeRecord | number> {
+    if (!(value instanceof ObjectValue)) return Throw.TypeError('$1', Value('a family-pattern argument must be a description'));
+    const kind = Q(yield* Get(value, Value('kind')));
+    const tag = kind instanceof JSStringValue ? kind.stringValue() : '';
+    if (tag === 'declaration-default') {
+      const context = Q(yield* Get(value, Value('context')));
+      const record = context instanceof ObjectValue && reflectedFamilyDefaults.get(context);
+      if (!record) return Throw.TypeError('$1', Value('a declaration default requires its reflected declaration context'));
+      return record;
+    }
+    if (tag === 'wildcard') {
+      const index = R(Q(yield* ToNumber(Q(yield* Get(value, Value('index'))))));
+      if (!Number.isSafeInteger(index) || index < 0) return Throw.TypeError('$1', Value('a wildcard index must be a nonnegative integer'));
+      holes.add(index);
+      return { Kind: 'parameter', Name: `#family${index}` };
+    }
+    if (tag === 'fixed') {
+      const type = Q(yield* Get(value, Value('type')));
+      if (type !== Value.undefined) {
+        return Q(yield* nodeToTypeRecord(type));
+      }
+      return R(Q(yield* ToNumber(Q(yield* Get(value, Value('value'))))));
+    }
+    if (tag !== 'application') return Throw.TypeError('$1', Value('unknown family-pattern argument kind'));
+    const head = Q(yield* Get(value, Value('head')));
+    const list = Q(yield* CreateListFromArrayLike(Q(yield* Get(value, Value('arguments'))) as ObjectValue));
+    const args: (TypeRecord | number)[] = [];
+    for (const child of list) {
+      args.push(Q(yield* entry(child)));
+    }
+    if (head instanceof JSStringValue) {
+      const name = head.stringValue();
+      const normalized = bindIntrinsicArguments(name, args);
+      if (normalized && 'Error' in normalized) return Throw.TypeError('$1', Value(normalized.Error));
+      const record = builtinTypeRecord(name, normalized?.Arguments ?? args) ?? libraryTypeRecord(name, normalized?.Arguments ?? args);
+      if (!record) return Throw.TypeError('$1', Value('unknown intrinsic family-pattern head'));
+      return record;
+    }
+    const base = Q(yield* nodeToTypeRecord(head));
+    if (base.Kind !== 'nominal' || base.Declaration.type === 'InterfaceDeclaration') return Throw.TypeError('$1', Value('a family pattern requires a nominal declaration'));
+    const parameters = (base.Declaration as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList ?? [];
+    if (parameters.some((p) => p.IsVariadic)) return Throw.TypeError('$1', Value('wildcard applications of variadic declarations are not supported'));
+    if (args.length !== parameters.length) return Throw.TypeError('$1', Value('a reflected family application requires its complete argument list'));
+    return { ...base, Arguments: args };
+  };
+  const template = Q(yield* entry(Q(yield* Get(node, Value('application')))));
+  if (typeof template === 'number' || (template.Kind !== 'primitive' && template.Kind !== 'nominal')) return Throw.TypeError('$1', Value('a family pattern requires an application'));
+  return finishFamilyPattern(template, [...holes].sort((a, b) => a - b).map((i) => `#family${i}`));
+}
+
 function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
   if (isTypeObject(node)) {
     // A Type Object used where a node is expected contributes its record.
@@ -502,8 +588,13 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
       // arguments (the write half of the reflected `generic` view). The base must
       // be a nominal type (a library type such as Promise/Record, or a generic
       // class/interface); its arguments are replaced with the given ones.
-      const baseRec = Q(yield* typeProp('base'));
-      if (baseRec.Kind !== 'nominal') {
+      const baseValue = Q(yield* Get(node, Value('base')));
+      const intrinsicName = baseValue instanceof JSStringValue ? baseValue.stringValue() : undefined;
+      let baseRec: TypeRecord | null = null;
+      if (!intrinsicName) {
+        baseRec = Q(yield* nodeToTypeRecord(baseValue));
+      }
+      if (!intrinsicName && baseRec?.Kind !== 'nominal') {
         return Throw.TypeError('$1 is not a generic type', Value('the base'));
       }
       const argsV = Q(yield* Get(node, Value('arguments')));
@@ -519,8 +610,14 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
           }
         }
       }
-      return { ...baseRec, Arguments };
+      if (intrinsicName) {
+        const bound = bindIntrinsicArguments(intrinsicName, Arguments);
+        if (!bound || 'Error' in bound) return Throw.TypeError('$1', Value(bound && 'Error' in bound ? bound.Error : 'unknown intrinsic generic family'));
+        return (builtinTypeRecord(intrinsicName, bound.Arguments) ?? libraryTypeRecord(intrinsicName, bound.Arguments))!;
+      }
+      return { ...baseRec!, Arguments } as TypeRecord;
     }
+    case 'family-pattern': return Throw.TypeError('$1', Value('a family pattern is a constraint, not a concrete type'));
     case 'object': {
       const props = Q(yield* listProp('properties'));
       const Properties: PropertyTypeRecord[] = [];
@@ -639,7 +736,33 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
             return Throw.TypeError('$1 is not a valid type node', Value('a signature that narrows must return boolean or void'));
           }
         }
-        Signatures.push({ Parameters, Return, ThisType, Narrows });
+        const typeParametersV = Q(yield* Get(sig, Value('typeParameters')));
+        const TypeParameters: TypeParameterRecord[] = [];
+        if (typeParametersV instanceof ObjectValue) {
+          const entries = Q(yield* CreateListFromArrayLike(typeParametersV));
+          for (const value of entries) {
+            if (!(value instanceof ObjectValue)) return Throw.TypeError('$1', Value('invalid type parameter description'));
+            const context = Q(yield* Get(value, Value('context')));
+            const original = context instanceof ObjectValue ? reflectedParameterContexts.get(context) : undefined;
+            if (!original) return Throw.TypeError('$1', Value('a reflected generic parameter requires its declaration context'));
+            for (const [field, expected] of Object.entries({ name: original.Name, kind: original.Kind, variance: original.Variance, arity: original.Arity, variadic: original.Variadic })) {
+              const got = Q(yield* Get(value, Value(field)));
+              if (!SameValue(got, Value(expected))) return Throw.TypeError('$1', Value(`the reflected ${field} disagrees with its generic declaration context`));
+            }
+            const constraint = Q(yield* Get(value, Value('constraint')));
+            let Constraint = original.Constraint;
+            if (constraint instanceof ObjectValue) {
+              const kind = Q(yield* Get(constraint, Value('kind')));
+              if (kind instanceof JSStringValue && kind.stringValue() === 'family-pattern') {
+                Constraint = Q(yield* readFamilyPattern(constraint));
+              } else {
+                Constraint = Q(yield* nodeToTypeRecord(constraint));
+              }
+            }
+            TypeParameters.push({ ...original, Constraint });
+          }
+        }
+        Signatures.push({ Parameters, Return, ThisType, Narrows, ...(TypeParameters.length ? { TypeParameters } : {}) });
       }
       return { Kind: 'function', Signatures };
     }
@@ -801,7 +924,14 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       // `node.generic.base` and `node.generic.arguments` (spec ~nominal~
       // [[Arguments]]). The bare base is the same nominal with no arguments, so
       // `Promise` and the base of `Promise.<T>` are the same interned object.
-      if (t.Kind === 'nominal' && t.Arguments.length > 0) {
+      const intrinsicName = t.Kind === 'primitive' ? t.Name : t.Kind === 'nominal' ? t.LibraryName : undefined;
+      if ((t.Kind === 'primitive' || t.Kind === 'nominal') && intrinsicName && intrinsicParameters(intrinsicName)) {
+        const parameters = intrinsicParameters(intrinsicName)!;
+        const args = t.Arguments.map((a) => typeof a === 'number' ? Value(a) : typeObj(a));
+        const declarations = parameters.map((p) => reflectionRecord({ name: Value(p.Name), domain: Value(p.Domain),
+          default: p.Default === undefined ? Value.undefined : typeof p.Default === 'number' ? Value(p.Default) : typeObj(p.Default) }, realm));
+        set('generic', reflectionRecord({ base: Value(intrinsicName), arguments: CreateArrayFromList(args), parameters: CreateArrayFromList(declarations) }, realm));
+      } else if (t.Kind === 'nominal' && t.Arguments.length > 0) {
         const nominalT = t;
         const genericView = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
         X(CreateDataProperty(genericView, Value('base'), typeObj({ ...nominalT, Arguments: [] })));
@@ -923,7 +1053,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
         // application site. `constraint` and `default` type objects (or their
         // deferred applications) follow once resolution under the signature's
         // own frame is available here.
-        const tpRecords = (sig as { TypeParameters?: readonly { Name: string, Kind: string, Variadic: boolean, Variance: string, Arity: number }[] }).TypeParameters;
+        const tpRecords = sig.TypeParameters;
         if (tpRecords && tpRecords.length > 0) {
           const tps = tpRecords.map((tp) => {
             const o = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -932,6 +1062,12 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
             X(CreateDataProperty(o, Value('variadic'), tp.Variadic ? Value.true : Value.false));
             X(CreateDataProperty(o, Value('variance'), Value(tp.Variance)));
             X(CreateDataProperty(o, Value('arity'), Value(tp.Arity)));
+            const context = OrdinaryObjectCreate(Value.null);
+            reflectedParameterContexts.set(context, tp);
+            X(CreateDataProperty(o, Value('context'), context));
+            X(CreateDataProperty(o, Value('constraint'), tp.Constraint?.Kind === 'family-pattern'
+              ? familyPatternNode(tp.Constraint, realm) : tp.Constraint ? typeObj(tp.Constraint) : Value.undefined));
+
             return o as Value;
           });
           X(CreateDataProperty(sr, Value('typeParameters'), CreateArrayFromList(tps)));
@@ -2137,3 +2273,9 @@ export function ClassFieldReflection(classRecord: TypeRecord, name: string, real
   X(CreateDataProperty(obj, Value('isBitField'), placement.isBitField ? Value.true : Value.false));
   return obj;
 }
+
+import { builtinTypeRecord, libraryTypeRecord, type TypeParameterRecord } from '../type-system/records.mts';
+import { bindIntrinsicArguments, intrinsicParameters } from '../type-system/intrinsic-generics.mts';
+import { finishFamilyPattern, type FamilyPatternRecord } from '../type-system/family-patterns.mts';
+
+import { SameValue } from '../abstract-ops/testing-comparison.mts';

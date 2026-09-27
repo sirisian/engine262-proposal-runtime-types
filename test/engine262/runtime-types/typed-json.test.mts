@@ -248,8 +248,8 @@ test('a float token the type cannot hold SATURATES; an integer token is refused'
 test('the numeric families the arm once omitted', () => {
   // A well-formed number reaching these fell to the terminal throw - "expected
   // rational, got 0.5" - though the table has a row for each.
-  expect(evaluated("String(JSON.parse.<rational>('0.5'));")).toBe('1/2');
-  expect(evaluated("String(Reflect.typeOf(JSON.parse.<rational>('0.5')));")).toBe('rational');
+  expect(evaluated("String(JSON.parse.<rational64>('0.5'));")).toBe('1/2');
+  expect(evaluated("String(Reflect.typeOf(JSON.parse.<rational64>('0.5')));")).toBe('rational64');
   expect(evaluated("String(JSON.parse.<float128>('1.5'));")).toBe('1.5');
   // `bigint` and `decimal128` stay refused: the operation DEFERS them by name,
   // as exact wide types "whose digits must convert without first rounding

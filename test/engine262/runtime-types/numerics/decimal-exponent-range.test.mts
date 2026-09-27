@@ -194,36 +194,36 @@ test('a boundary still refuses what a conversion wraps', () => {
  * #table-numeric-conversions, `binary float or the Number type` to `rational`:
  * "The source's exact value, which is a dyadic rational, in lowest terms."
  * decimal.md adds the decimal source: "a terminating decimal is exactly a
- * rational with a power-of-ten denominator, so `rational(d)` is exact - `0.1`
+ * rational with a power-of-ten denominator, so `rational64(d)` is exact - `0.1`
  * becomes `1/10`".
  *
  * One numeric argument was answered by the TWO-argument constructor's rule, "a
- * rational numerator must be an integer", so `rational(5)` worked and
- * `rational(0.5)` did not - one spelling, two verdicts, decided by whether the
+ * rational numerator must be an integer", so `rational64(5)` worked and
+ * `rational64(0.5)` did not - one spelling, two verdicts, decided by whether the
  * source happened to be integral.
  */
 test('one numeric argument is the conversion, exactly', () => {
-  expect(evaluated('String(rational(0.5));')).toBe('1/2');
-  expect(evaluated('String(rational(0.25));')).toBe('1/4');
-  expect(evaluated('String(rational(-0.5));')).toBe('-1/2');
-  expect(evaluated('let f: float32 = 0.5; String(rational(f));')).toBe('1/2');
+  expect(evaluated('String(rational64(0.5));')).toBe('1/2');
+  expect(evaluated('String(rational64(0.25));')).toBe('1/4');
+  expect(evaluated('String(rational64(-0.5));')).toBe('-1/2');
+  expect(evaluated('let f: float32 = 0.5; String(rational64(f));')).toBe('1/2');
   // A literal is read for its digits: `0.1` denotes one tenth, as it does in
-  // `0.1 := rational` and `let r: rational = 0.1`.
-  expect(evaluated('String(rational(0.1));')).toBe('1/10');
+  // `0.1 := rational64` and `let r: rational64 = 0.1`.
+  expect(evaluated('String(rational64(0.1));')).toBe('1/10');
   // The DOUBLE 0.1 is a dyadic rational, and a double value converts to exactly
   // that - not one tenth, which is the point of converting exactly rather than
   // prettily.
-  expect(evaluated('let x = 0.1; String(rational(x));')).toBe('3602879701896397/36028797018963968');
+  expect(evaluated('let x = 0.1; String(rational64(x));')).toBe('3602879701896397/36028797018963968');
   // A decimal converts to the power-of-ten fraction decimal.md names.
-  expect(evaluated("let d = decimal64.parse('0.1'); String(rational(d));")).toBe('1/10');
+  expect(evaluated("let d = decimal64.parse('0.1'); String(rational64(d));")).toBe('1/10');
 });
 
 test('the constructor and its failures are unchanged', () => {
-  expect(evaluated('String(rational(5));')).toBe('5');
-  expect(evaluated('String(rational(1, 10));')).toBe('1/10');
-  expectThrownKind('rational(1, 0);', 'RangeError');
+  expect(evaluated('String(rational64(5));')).toBe('5');
+  expect(evaluated('String(rational64(1, 10));')).toBe('1/10');
+  expectThrownKind('rational64(1, 0);', 'RangeError');
   // "A *RangeError* ... if the source is NaN or an infinity" - neither has an
   // exact value to be the fraction of.
-  expectThrownKind('rational(NaN);', 'RangeError');
-  expectThrownKind('rational(Infinity);', 'RangeError');
+  expectThrownKind('rational64(NaN);', 'RangeError');
+  expectThrownKind('rational64(Infinity);', 'RangeError');
 });

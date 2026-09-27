@@ -48,7 +48,7 @@ test('the rule reaches every numeric type', () => {
   // target - only `string` and `boolean` targets have a PrimitiveConvert step -
   // and throws. So `number`, `bigint`, the decimals, `rational` and complex refuse
   // a string as the sized types do; `boolean` keeps its truth-value conversion.
-  for (const target of ['int32', 'float128', 'number', 'bigint', 'decimal128', 'rational', 'complex64']) {
+  for (const target of ['int32', 'float128', 'number', 'bigint', 'decimal128', 'rational64', 'complex64']) {
     expectStaticTypeError(`let x = ('5' := ${target});`);
     expectStaticTypeError(`let x = ${target}('5');`);
   }

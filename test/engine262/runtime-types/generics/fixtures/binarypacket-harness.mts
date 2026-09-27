@@ -244,7 +244,7 @@ class PacketWriter<Size: uint32 = 1400, HeaderSize: uint32 = 16, BufferBits: uin
 	}
 
 	@doc('Writes a length-prefixed ASCII string. A non-ASCII character fails the uint.<7> cast with a TypeError.')
-	write<string, LengthType: type extends uint = uint16>(value: string): PacketWriter {
+	write<string, LengthType: type extends uint.<_> = uint16>(value: string): PacketWriter {
 		this.write.<LengthType>(LengthType(value.length));
 		for (let index: uint64 = 0; index < uint64(value.length); ++index) {
 			this.write.<uint.<7>>(uint.<7>(value.charCodeAt(index)));
@@ -399,7 +399,7 @@ class PacketReader<Size: uint32 = 1400, HeaderSize: uint32 = 16, BufferBits: uin
 	}
 
 	@doc('Reads a length-prefixed ASCII string.')
-	read<string, LengthType: type extends uint = uint16>(): string {
+	read<string, LengthType: type extends uint.<_> = uint16>(): string {
 		let value = '';
 		const length = uint32(this.read.<LengthType>());
 		for (let index: uint32 = 0; index < length; ++index) {

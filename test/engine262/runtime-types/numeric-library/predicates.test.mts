@@ -103,15 +103,15 @@ test('numeric predicates: the visible cost of the split, pinned where it can be 
 
 // -- The rational family --------------------------------------------------------
 test('numeric predicates: a rational is never NaN and integral at a unit denominator', () => {
-  expect(evaluated('String(Number.isNaN(rational(1, 2)));')).toBe('false');
-  expect(evaluated('String(Number.isFinite(rational(1, 2)));')).toBe('true');
-  expect(evaluated('String(isFinite(rational(1, 2)));')).toBe('true');
-  expect(evaluated('String(Number.isInteger(rational(1, 2)));')).toBe('false');
+  expect(evaluated('String(Number.isNaN(rational64(1, 2)));')).toBe('false');
+  expect(evaluated('String(Number.isFinite(rational64(1, 2)));')).toBe('true');
+  expect(evaluated('String(isFinite(rational64(1, 2)));')).toBe('true');
+  expect(evaluated('String(Number.isInteger(rational64(1, 2)));')).toBe('false');
   // canonical form means 4/2 has already reduced to 2/1, so it is an integer
-  expect(evaluated('String(Number.isInteger(rational(4, 2)));')).toBe('true');
-  expect(evaluated('String(Number.isInteger(rational(5)));')).toBe('true');
-  expect(evaluated('String(Number.isSafeInteger(rational(4, 2)));')).toBe('true');
-  expect(evaluated('String(Number.isSafeInteger(rational(1, 2)));')).toBe('false');
+  expect(evaluated('String(Number.isInteger(rational64(4, 2)));')).toBe('true');
+  expect(evaluated('String(Number.isInteger(rational64(5)));')).toBe('true');
+  expect(evaluated('String(Number.isSafeInteger(rational64(4, 2)));')).toBe('true');
+  expect(evaluated('String(Number.isSafeInteger(rational64(1, 2)));')).toBe('false');
 });
 
 // -- The untyped surface is untouched -------------------------------------------

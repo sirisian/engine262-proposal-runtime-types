@@ -58,7 +58,8 @@ export function settledAfterJobs(source: string): string {
 
 /** Extract the string-ish value of a normal completion (shared by the evaluators). */
 function normalValueString(completion: unknown, source: string): string {
-  expect(completion, `expected normal completion for: ${source}`).toMatchObject({ Type: 'normal' });
+  const result = completion as { Type: string, Value?: { HostDefinedMessageString?: string } };
+  expect(result.Type, `expected normal completion for: ${source}\n${result.Value?.HostDefinedMessageString ?? ''}`).toBe('normal');
   const v = (completion as { Value: { stringValue?(): string, numberValue?(): number } }).Value;
   if (v?.stringValue) {
     return v.stringValue();

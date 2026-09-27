@@ -37,7 +37,7 @@ import {
   currentTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
   pushContextualType, popContextualType, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
 } from '../type-system/runtime.mts';
-import { resolveOverload } from '../type-system/overloads.mts';
+import { resolveOverloadChecked } from '../type-system/overloads.mts';
 import { functionTypeParameters, SignaturesOf } from './runtime-types.mts';
 import { DecayReferenceValue } from './reference-operations.mts';
 import { LookupTypeDefault, RequireType } from './runtime-types.mts';
@@ -624,7 +624,7 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   const ctorOverloads = (F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
   if (surroundingAgent.feature('runtime-types') && ctorOverloads && ctorOverloads.length > 1) {
     const signatures = Q(yield* SignaturesOf(F as unknown as Value));
-    const resolution = resolveOverload(signatures, argumentsList as readonly Value[], undefined);
+    const resolution = Q(yield* resolveOverloadChecked(signatures, argumentsList as readonly Value[], undefined));
     if (resolution.Kind === 'none') {
       surroundingAgent.executionContextStack.pop(calleeContext);
       return Throw.TypeError('no overload of $1 matches these arguments', F);

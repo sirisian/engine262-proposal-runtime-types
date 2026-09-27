@@ -155,8 +155,8 @@ test('sec-ranges: the four shapes and `RangeBounds` are named', () => {
   //  is written against."
   // Aliases rather than bindings: #sec-defaultvalueof refuses a binding whose
   // type has no default, and a library nominal has none.
-  expect(evaluated('type A = Range; type B = RangeFrom; type C = RangeTo; type D = RangeFull; type E = RangeBounds; "ok";')).toBe('ok');
-  expect(evaluated('let r: Range = 0..<10; typeof r;')).toBe('object');
+  expect(evaluated('type A = Range.<number>; type B = RangeFrom.<number>; type C = RangeTo.<number>; type D = RangeFull.<number>; type E = RangeBounds.<any>; "ok";')).toBe('ok');
+  expect(evaluated('let r: Range.<number> = 0..<10; typeof r;')).toBe('object');
 });
 
 test('sec-ranges: _S_ and _E_ are values of `Bound`', () => {
@@ -187,12 +187,12 @@ test('sec-ranges: each of the four shapes is its own type, and each implements R
   // Decided by the value rather than by a prototype chain, since the four
   // shapes share one dynamic representation and an absent endpoint is how it
   // says which shape it has.
-  expect(evaluated('String((0..<10) is Range) + "," + String((5..) is Range);')).toBe('true,false');
-  expect(evaluated('String((5..) is RangeFrom) + "," + String((..<5) is RangeTo) + "," + String((..) is RangeFull);')).toBe('true,true,true');
+  expect(evaluated('String((0..<10) is Range.<number>) + "," + String((5..) is Range.<number>);')).toBe('true,false');
+  expect(evaluated('String((5..) is RangeFrom.<number>) + "," + String((..<5) is RangeTo.<number>) + "," + String((..) is RangeFull.<number>);')).toBe('true,true,true');
   // "Each implements `RangeBounds.<T>`, which is the interface a consumer of an
   //  arbitrary range is written against."
-  expect(evaluated('String((0..<10) is RangeBounds) + "," + String((5..) is RangeBounds) + "," + String((..) is RangeBounds);')).toBe('true,true,true');
-  expect(evaluated('String(5 is RangeBounds);')).toBe('false');
+  expect(evaluated('String((0..<10) is RangeBounds.<any>) + "," + String((5..) is RangeBounds.<any>) + "," + String((..) is RangeBounds.<any>);')).toBe('true,true,true');
+  expect(evaluated('String(5 is RangeBounds.<any>);')).toBe('false');
   // A bound named on a one-ended shape constrains that shape's own endpoint.
   expect(evaluated('String((5..) is RangeFrom.<uint8, Range.Bound.Closed>) + "," + String((5<..) is RangeFrom.<uint8, Range.Bound.Closed>);')).toBe('true,false');
 });
@@ -201,9 +201,9 @@ test('sec-ranges: an annotation naming an interval admits only that interval', (
   expect(evaluated('let r: Range.<uint8, Range.Bound.Closed, Range.Bound.Open> = 0..<10; "ok";')).toBe('ok');
   expectThrown('let r: Range.<uint8, Range.Bound.Open, Range.Bound.Open> = 0..<10; "ok";');
   // The shape is checked with the bounds.
-  expect(evaluated('let r: RangeFrom = 5..; "ok";')).toBe('ok');
-  expectThrown('let r: RangeFrom = 0..<10; "ok";');
-  expect(evaluated('let r: RangeBounds = 0..<10; "ok";')).toBe('ok');
+  expect(evaluated('let r: RangeFrom.<number> = 5..; "ok";')).toBe('ok');
+  expectThrown('let r: RangeFrom.<number> = 0..<10; "ok";');
+  expect(evaluated('let r: RangeBounds.<any> = 0..<10; "ok";')).toBe('ok');
 });
 
 test('ranges.md: the four aliases name the four intervals', () => {
@@ -231,7 +231,7 @@ test('ranges.md: a range and its type print as they were written', () => {
   // A range VALUE names itself in a runtime diagnostic - the cast path, which
   // an annotation no longer takes now that the wrong interval is caught at
   // check time.
-  expect(message('const r = ((0..<10) := RangeFrom);')).toContain('0..<10');
+  expect(message('const r = ((0..<10) := RangeFrom.<number>);')).toContain('0..<10');
   // And a range TYPE names itself by its alias in a check-time diagnostic.
   expect(message('let r: ClosedRange.<uint8> = 0..<10;')).toContain('ClosedOpenRange');
   // The alias is preferred over the raw parameterization; the element prints in
@@ -247,10 +247,10 @@ test('sec-ranges: a wrong interval is reported at CHECK time, before the code ru
   const dead = (src: string) => `if (false) { ${src} } "ran";`;
   expect(evaluated(dead('let r: ClosedOpenRange.<uint8> = 0..<10;'))).toBe('ran');
   expectThrown(dead('let r: ClosedRange.<uint8> = 0..<10;'));
-  expectThrown(dead('let r: RangeFrom = 0..<10;'));
-  expectThrown(dead('let r: Range = 5..;'));
+  expectThrown(dead('let r: RangeFrom.<number> = 0..<10;'));
+  expectThrown(dead('let r: Range.<number> = 5..;'));
   // Every shape implements `RangeBounds`, so that annotation admits them all.
-  expect(evaluated('let a: RangeBounds = 5..; let b: RangeBounds = ..; let c: RangeBounds = ..<3; "ok";')).toBe('ok');
+  expect(evaluated('let a: RangeBounds.<any> = 5..; let b: RangeBounds.<any> = ..; let c: RangeBounds.<any> = ..<3; "ok";')).toBe('ok');
 });
 
 test('sec-ranges: explicit enum bounds are compared before execution', () => {
@@ -500,7 +500,7 @@ test('random.md: the no-argument form is unchanged', () => {
 
 // A meta type that narrows, written as primitivemetadata.md writes it: each
 // comparison is a one-sided range and narrowing is intersection.
-const NARROWS = `type NBn = { bounds?: RangeBounds };
+const NARROWS = `type NBn = { bounds?: RangeBounds.<any> };
 meta NBn { default = {};
   subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
   validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); }
@@ -560,7 +560,7 @@ test('sec-metadata-narrowing: a meta type defining no `narrow` keeps the constra
   // "a meta type that defines no `narrow` learns nothing from a comparison and
   //  keeps the constraint it had, which costs a check at the next boundary and
   //  nothing else". Participation is by hook DEFINITION, not by portion.
-  const quiet = `type NBq = { bounds?: RangeBounds };
+  const quiet = `type NBq = { bounds?: RangeBounds.<any> };
     meta NBq { default = {};
       subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
       validate(v, c) { return true; } }`;
@@ -574,7 +574,7 @@ test('sec-metadata-narrowing: a `narrow` hook that throws leaves the binding un-
   // `narrow` produces KNOWLEDGE, and the clause already sanctions learning
   // nothing. Not hypothetical: this pass runs BEFORE evaluation, so a hook
   // touching anything the script initializes throws a TDZ ReferenceError.
-  const boom = `type NBb = { bounds?: RangeBounds };
+  const boom = `type NBb = { bounds?: RangeBounds.<any> };
     meta NBb { default = {};
       subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
       validate(v, c) { return true; }
@@ -730,8 +730,8 @@ test('ranges.md: `take` and `drop` stay in the family, because they are CLOSED',
   // The first n values of a contiguous range are a contiguous range, and so are
   // the rest - the same test `intersect` passes and `step` fails. So these two
   // return a `Range` where `map` returns an `Iterator`: closure, not uniformity.
-  expect(evaluated('const t = (0..<10).take(3); String(t is Range) + "/" + String(t.start) + "/" + String(t.end);')).toBe('true/0/3');
-  expect(evaluated('const d = (0..<10).drop(7); String(d is Range) + "/" + String(d.start) + "/" + String(d.end);')).toBe('true/7/10');
+  expect(evaluated('const t = (0..<10).take(3); String(t is Range.<number>) + "/" + String(t.start) + "/" + String(t.end);')).toBe('true/0/3');
+  expect(evaluated('const d = (0..<10).drop(7); String(d is Range.<number>) + "/" + String(d.start) + "/" + String(d.end);')).toBe('true/7/10');
   // An open start shifts which values are taken, as it shifts the first index.
   // The result normalizes to CLOSED-OPEN: `1..<4`, not `0<..=3`, both being {1,2,3}.
   expect(evaluated('const t = (0<..<10).take(3); String(t.start) + "/" + String(t.end) + "/" + t.toArray().join("");')).toBe('1/4/123');
@@ -847,7 +847,7 @@ test('sec-matchrange: a range `case` label matches by containment', () => {
 // =============================================================================
 
 const NB = `
-type NumberBounds = { bounds?: RangeBounds };
+type NumberBounds = { bounds?: RangeBounds.<any> };
 meta NumberBounds {
   default = {};
   subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
@@ -907,7 +907,7 @@ test('table-metadata-values: the value language is closed', () => {
   //  a program's own that implements the interface has no structural
   //  comparison, could not be written into an expansion artifact, and would
   //  give interning no answer."
-  const meta = `type NBc = { bounds?: RangeBounds };
+  const meta = `type NBc = { bounds?: RangeBounds.<any> };
     meta NBc { default = {}; subtype(a,b){return true;} validate(v,c){return true;} }`;
   expectThrown(`${meta} class MyR { contains(v){return true;} } type T = float64.<{ bounds: MyR }>; "ok";`);
   expectThrown(`${meta} type T = float64.<{ bounds: Date }>; "ok";`);
@@ -942,13 +942,13 @@ test('sec-meta-declarations: a meta default may hold a range, and a pattern', ()
   // rejected. Carried structurally now, in the same markers the metadata value
   // language uses, which is the same fix the pattern case needs, for the
   // identical reason.
-  expect(evaluated('type X = { bounds: RangeBounds }; meta X { default = { bounds: .. }; subtype(a,b){return true;} } "ok";')).toBe('ok');
+  expect(evaluated('type X = { bounds: RangeBounds.<any> }; meta X { default = { bounds: .. }; subtype(a,b){return true;} } "ok";')).toBe('ok');
   expect(evaluated('type X = { p: RegExp }; meta X { default = { p: /x/ }; subtype(a,b){return true;} } "ok";')).toBe('ok');
   // primitivemetadata.md's own total default, the one adopted so that no hook
   // tests for absence.
-  expect(evaluated('type NB = { bounds?: RangeBounds, nonZero?: boolean }; meta NB { default = { bounds: .., nonZero: false }; subtype(a,b){return true;} validate(v,c){return true;} } "ok";')).toBe('ok');
+  expect(evaluated('type NB = { bounds?: RangeBounds.<any>, nonZero?: boolean }; meta NB { default = { bounds: .., nonZero: false }; subtype(a,b){return true;} validate(v,c){return true;} } "ok";')).toBe('ok');
   // And a hook receives the default's range as a range.
-  expect(evaluated('type NB = { bounds?: RangeBounds }; meta NB { default = { bounds: .. }; subtype(a,b){return true;} validate(v,c){ return c.bounds.isFull; } } type A = float64.<{ }>; "ok";')).toBe('ok');
+  expect(evaluated('type NB = { bounds?: RangeBounds.<any> }; meta NB { default = { bounds: .. }; subtype(a,b){return true;} validate(v,c){ return c.bounds.isFull; } } type A = float64.<{ }>; "ok";')).toBe('ok');
 });
 
 test('sec-metadata-narrowing: both hooks the protocol defines are now invoked', () => {
@@ -965,7 +965,7 @@ test('sec-metadata-narrowing: both hooks the protocol defines are now invoked', 
       subtype(a, b) { return a.m === b.m; }
       validate(v, c) { return true; }
       conversionFactor(from, to) { return (from.ratio ?? 1) / (to.ratio ?? 1); } }
-    type NBr = { bounds?: RangeBounds };
+    type NBr = { bounds?: RangeBounds.<any> };
     meta NBr { default = {};
       subtype(a, b) { return b.bounds === undefined || (a.bounds !== undefined && b.bounds.contains(a.bounds)); }
       validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); }

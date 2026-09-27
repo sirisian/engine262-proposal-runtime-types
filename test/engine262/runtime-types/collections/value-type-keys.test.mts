@@ -150,10 +150,10 @@ test('comparison recurses by field KIND, not by byte image', () => {
 // ---------------------------------------------------------------------------
 
 test('control: the built-in aggregate value types already key structurally', () => {
-  // rational.md states this one verbatim: "new Set.<rational>([rational(1, 2),
-  // rational(50, 100)]).size; // 1". Canonical form makes structural equality
+  // rational.md states this one verbatim: "new Set.<rational64>([rational64(1, 2),
+  // rational64(50, 100)]).size; // 1". Canonical form makes structural equality
   // and mathematical equality the same question.
-  expect(evaluated('const s = new Set.<rational>(); s.add(rational(1, 2)); s.add(rational(50, 100)); String(s.size);')).toBe('1');
+  expect(evaluated('const s = new Set.<rational64>(); s.add(rational64(1, 2)); s.add(rational64(50, 100)); String(s.size);')).toBe('1');
   // decimal.md: "as a `Map` or `Set` key a decimal compares by value under
   // SameValueZero, so `1.0` and `1.00` are one key rather than two" - the split
   // Java's BigDecimal does not make.

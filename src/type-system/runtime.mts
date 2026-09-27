@@ -39,9 +39,9 @@ import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
-import { FamilyBoundRecord, InjectedClassOf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
+import { InjectedClassOf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
-  ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation,
+  ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation, EnterMetaHookEvaluation, ExitMetaHookEvaluation,
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
@@ -55,7 +55,7 @@ import {
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
-import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
@@ -630,7 +630,13 @@ export function* BindTypeArgumentsInto(
     pushTypeParameterFrame(frame);
     let t: TypeRecord;
     try {
-      t = Q(yield* TypeNodeToTypeRecord(a));
+      const named = typeArgumentNameOf(a);
+      const p = named === undefined ? params[entries.length] : params.find((q) => q.BindingIdentifier.name === named);
+      const declaration = Q(yield* TypeArgumentAsDeclaration(a, p?.Arity ?? 0));
+      if (declaration) t = declaration;
+      else {
+        t = Q(yield* TypeNodeToTypeRecord(a));
+      }
     } finally {
       popTypeParameterFrame();
     }
@@ -751,7 +757,7 @@ export function* BindTypeArgumentRecordsInto(
         // Base moves with the value (see SpecializeGenericClass): a `uint32`
         // 4 over a `number` base failed its own formal's boundary.
         record = { ...record, Value: converted.Value as Value, Base: constraint } as TypeRecord;
-      } else if (constraint && !IsAssignable(record, constraint)) {
+      } else if (constraint && !Q(yield* ConstraintAdmits(record, constraint))) {
         // A non-literal explicit argument is checked against the constraint here (step 8).
         return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
       }
@@ -881,7 +887,7 @@ export function* BindTypeArgumentRecords(
             return converted as never;
           }
           record = { ...record, Value: converted.Value as Value, Base: constraint } as TypeRecord;
-        } else if (!IsAssignable(record, constraint)) {
+        } else if (!Q(yield* ConstraintAdmits(record, constraint))) {
           return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
         }
       }
@@ -1720,7 +1726,7 @@ export function* InferGenericBindingsFrom(
         frame.set(paramName, pre);
         if (checkerSupplied && tp.TypeParameterConstraint) {
           const preConstraint = Q(yield* TypeNodeToTypeRecord(tp.TypeParameterConstraint));
-          if (preConstraint !== null && !IsAssignable(pre, preConstraint)
+          if (preConstraint !== null && !Q(yield* ConstraintAdmits(pre, preConstraint))
               && !literalArmsFit(pre, preConstraint)) {
             return Throw.TypeError('$1 is not assignable to $2', Value(displayType(pre)), Value(displayType(preConstraint)));
           }
@@ -1957,7 +1963,7 @@ export function* InferGenericBindingsFrom(
               return Throw.TypeError('$1 is not assignable to $2', Value(displayType(el.Type)), Value(displayType(constraint.Element)));
             }
           }
-        } else if (!IsAssignable(bound, constraint) && !literalArmsFit(bound, constraint)) {
+        } else if (!Q(yield* ConstraintAdmits(bound, constraint)) && !literalArmsFit(bound, constraint)) {
           return Throw.TypeError('$1 is not assignable to $2', Value(displayType(bound)), Value(displayType(constraint)));
         }
       }
@@ -2329,9 +2335,9 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   //
   // Unlike a collection this needs no stamp: the element type is the type of an
   // endpoint, and the bounds are the ordinals of `Range.Bound` the object
-  // already carries. Only the two-endpoint shape is answered here, which is the
-  // one whose arguments are all recoverable; `RangeFrom`, `RangeTo` and
-  // `RangeFull` keep the previous answer rather than getting a guessed element.
+  // already carries. A one-ended range recovers T from its one endpoint too.
+  // An endpoint-free range retains the existing contextual representation;
+  // this does not invent an element type for an uncontextualized full range.
   if (isRangeObject(value)) {
     const r = value as unknown as {
       RangeStart?: Value, RangeEnd?: Value,
@@ -2348,6 +2354,10 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
       if (record) {
         return record;
       }
+    } else if (r.RangeStart !== undefined && r.RangeStartBound !== undefined) {
+      return libraryTypeRecord('RangeFrom', [RuntimeTypeOf(r.RangeStart), r.RangeStartBound === 'open' ? 1 : 0])!;
+    } else if (r.RangeEnd !== undefined && r.RangeEndBound !== undefined) {
+      return libraryTypeRecord('RangeTo', [RuntimeTypeOf(r.RangeEnd), r.RangeEndBound === 'open' ? 1 : 0])!;
     }
   }
   if (value instanceof ObjectValue) {
@@ -4786,7 +4796,7 @@ function declarationNamed(from: ParseNode, name: string): ParseNode | null {
         if (!inner) {
           continue;
         }
-        if ((inner.type === 'ClassDeclaration' || inner.type === 'TypeAliasDeclaration')
+        if ((inner.type === 'ClassDeclaration' || inner.type === 'TypeAliasDeclaration' || inner.type === 'InterfaceDeclaration' || inner.type === 'FunctionDeclaration')
             && inner.BindingIdentifier?.name === name) {
           return inner as unknown as ParseNode;
         }
@@ -4813,7 +4823,14 @@ function declarationNamed(from: ParseNode, name: string): ParseNode | null {
  * specialization altogether - which is why a kinded application was never
  * specialized and `Reflect.typeOf(new B.<Id>())` reported bare `B`.
  */
-export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type): PlainEvaluator<TypeRecord | undefined> {
+export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type, expectedArity: number = 0): PlainEvaluator<TypeRecord | undefined> {
+  if (expectedArity > 0 && argNode.type === 'TypeReference' && !argNode.TypeArguments && argNode.TypeName.MemberNames.length === 0) {
+    const name = argNode.TypeName.IdentifierReference.name;
+    if (Q(yield* UsesIntrinsicDeclaration(argNode, name))) {
+      const intrinsic = intrinsicDeclarationRecord(name);
+      if (intrinsic) return intrinsic;
+    }
+  }
   const asType = EnsureCompletion(yield* TypeNodeToTypeRecord(argNode));
   if (asType.Type !== 'throw') {
     return undefined;
@@ -4845,10 +4862,32 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
 }
 
 function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
-  // A bare family name in a bound (`T: type extends uint`) names the family.
-  const family = FamilyBoundRecord(node);
-  if (family) {
-    return family;
+  const pendingDeclarationDefault = deferredDeclarationDefault(node, lookupTypeParameter);
+  if (pendingDeclarationDefault) {
+    return { ...pendingDeclarationDefault, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
+  }
+  if (node.type === 'TypeReference' && !node.TypeArguments && node.TypeName.MemberNames.length === 0
+      && isHigherKindedArgument(node, (name) => declarationNamed(node, name) ?? undefined)) {
+    const intrinsic = intrinsicDeclarationRecord(node.TypeName.IdentifierReference.name);
+    if (intrinsic && Q(yield* UsesIntrinsicDeclaration(node, node.TypeName.IdentifierReference.name))) return intrinsic;
+  }
+
+  try {
+    const prepared = prepareFamilyPattern(node, (name) => declarationNamed(node, name) ?? undefined);
+    if (prepared) {
+      pushTypeParameterFrame(new Map(prepared.Wildcards.map((Name) => [Name, { Kind: 'parameter', Name } as TypeRecord])));
+      enterFamilyPattern();
+      try {
+        const pattern = finishFamilyPattern(Q(yield* TypeNodeToTypeRecord(prepared.Node)), prepared.Wildcards);
+        rememberDeclaredConstraint(node, pattern);
+        return pattern;
+      } finally {
+        leaveFamilyPattern(); popTypeParameterFrame();
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof FamilyPatternError)) throw error;
+    return Throw.TypeError('$1', Value(error.message));
   }
   // A generic class's bare name in its own body is the class over its own
   // parameters (step 9b): here, their bindings in the running frames.
@@ -4881,6 +4920,12 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           for (const argNode of node.TypeArguments.TypeArgumentList) {
             argNames.push((argNode as { ArgumentName?: string }).ArgumentName);
             argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+          }
+          const intrinsic = intrinsicDeclarationName(boundDecl);
+          if (intrinsic) {
+            const bound = bindIntrinsicArguments(intrinsic, argRecords.map(toNumericArgument), argNames)!;
+            if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+            return (builtinTypeRecord(intrinsic, bound.Arguments) ?? libraryTypeRecord(intrinsic, bound.Arguments))!;
           }
           if (boundDecl.Kind === 'nominal' && boundDecl.Declaration?.type === 'TypeAliasDeclaration'
               && (boundDecl.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
@@ -5056,13 +5101,26 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             }
             return Throw.TypeError('$1', Value(`the computed argument of ${name} is neither a type nor a metadata object`));
           }
-          const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode))) as TypeRecord | undefined;
+          const applicationDeclaration = declarationNamed(node, name) as { TypeParameters?: ParseNode.TypeParameters | null } | null;
+          const parameters = applicationDeclaration?.TypeParameters?.TypeParameterList ?? [];
+          const argName = (argNode as { ArgumentName?: string }).ArgumentName;
+          const p = argName === undefined ? parameters[argRecords.length] : parameters.find((q) => q.BindingIdentifier.name === argName);
+          const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode, p?.Arity ?? 0))) as TypeRecord | undefined;
           if (asDecl !== undefined) {
             argRecords.push(asDecl);
             continue;
           }
           argRecords.push(Q(EnsureCompletion(yield* TypeNodeToTypeRecord(argNode))) as TypeRecord);
         }
+      }
+      let intrinsicAvailable = true;
+      if (intrinsicParameters(name)) {
+        intrinsicAvailable = Q(yield* UsesIntrinsicDeclaration(node, name));
+      }
+      if (intrinsicParameters(name) && intrinsicAvailable) {
+        const bound = bindIntrinsicArguments(name, argRecords.map(toNumericArgument), argNames2)!;
+        if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+        return (builtinTypeRecord(name, bound.Arguments) ?? libraryTypeRecord(name, bound.Arguments))!;
       }
       // proposal-runtime-types (primitivemetadata.md, the metadata protocol): a
       // primitive given an OBJECT type argument is a metadata parameterization,
@@ -5162,7 +5220,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         if (isIterationInterfaceName(name)) {
           return true;
         }
-        const applied = builtinTypeRecord(name, argRecords);
+        const applied = intrinsicAvailable ? builtinTypeRecord(name, argRecords) : null;
         if (!applied) {
           return false;
         }
@@ -5187,7 +5245,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         // base type-checks everywhere and guarantees nothing, which is the
         // worst shape this can fail in - every primitive kept its
         // parameterization, so it looked like a working feature.
-        let base = builtinTypeRecord(name);
+        let base = intrinsicAvailable ? builtinTypeRecord(name) : null;
         if (!base) {
           const aliasRef = EnsureCompletion(yield* ResolveTypeName(Value(name)));
           if (aliasRef.Type === 'normal') {
@@ -5277,7 +5335,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       // declaration-backed sites below order it against the real parameters.
       const sourceDeclaration = declarationNamed(node, name);
       const sourceClass = sourceDeclaration?.type === 'ClassDeclaration' || sourceDeclaration?.type === 'ClassExpression';
-      if (!sourceClass && argNames2.some((n) => n !== undefined)) {
+      if (!sourceClass && intrinsicAvailable && argNames2.some((n) => n !== undefined)) {
         const earlyLibNames = libraryTypeParameterNames(name);
         if (earlyLibNames) {
           const orderedEarly = Q(yield* OrderNamedTypeArguments(
@@ -5292,7 +5350,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           return Throw.TypeError('$1 does not name a type parameter of $2', Value(argNames2.find((n) => n !== undefined)!), Value(name));
         }
       }
-      const builtin = sourceClass ? null : builtinTypeRecord(name, argRecords.map(toNumericArgument));
+      const builtin = sourceClass || !intrinsicAvailable ? null : builtinTypeRecord(name, argRecords.map(toNumericArgument));
       if (builtin) {
         // proposal-runtime-types (spec sec-vector-types): a `vector.<T, N>` is
         // well-formed only when T is a lane type and N a positive integer. A
@@ -5324,7 +5382,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       // extent - arrives as a ~literal~ record wrapping a Number, and every
       // consumer wants the number. Without this an \ carried a
       // literal where its layout rule expected 4 and reported no layout at all.
-      const library = sourceClass ? null : libraryTypeRecord(name, argRecords.map(toNumericArgument));
+      const library = sourceClass || !intrinsicAvailable ? null : libraryTypeRecord(name, argRecords.map(toNumericArgument));
       if (library) {
         return library;
       }
@@ -5452,9 +5510,17 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           if (!params2) {
             return Throw.TypeError('$1 does not name a type parameter of $2', Value(argNames2.find((n) => n !== undefined)!), Value(name));
           }
-          const ordered2 = Q(yield* OrderNamedTypeArguments(params2, argRecords, argNames2, name));
-          argRecords.length = 0;
-          argRecords.push(...ordered2);
+          const context = surroundingAgent.runningExecutionContext;
+          const savedEnvironment = context.LexicalEnvironment;
+          const declarationEnvironment = ClassTypeEnvironmentOf(value);
+          if (declarationEnvironment) context.LexicalEnvironment = declarationEnvironment;
+          try {
+            const ordered2 = Q(yield* OrderNamedTypeArguments(params2, argRecords, argNames2, name));
+            argRecords.length = 0;
+            argRecords.push(...ordered2);
+          } finally {
+            context.LexicalEnvironment = savedEnvironment;
+          }
         }
         // A VALUE parameter's argument in TYPE position stayed the plain
         // literal it was written as, while `SpecializeGenericClass` converts it
@@ -5475,7 +5541,10 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // left as the declaration in one place only: as a type ARGUMENT, where
           // it may be binding a higher-kinded parameter and is a declaration
           // rather than a type; badKindedArgument decides that position.
-          const isTypeArgumentPosition = (node as { parent?: { type?: string } }).parent?.type === 'TypeArguments';
+          const isTypeArgumentPosition = isHigherKindedArgument(node, (declName) => declarationNamed(node, declName) ?? undefined);
+          if (declParamsC && argRecords.length > declParamsC.length && !declParamsC.some((q) => q.IsVariadic)) {
+            return Throw.TypeError('$1', Value(`${name} takes ${declParamsC.length} type arguments`));
+          }
           const bindsDefaults = declParamsC !== undefined && declParamsC.length > 0
             && !declParamsC.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)
             && (argRecords.length > 0 || node.TypeArguments != null || !isTypeArgumentPosition);
@@ -5490,9 +5559,14 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
                   return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(paramC.BindingIdentifier?.name ?? String(i)), Value(name));
                 }
                 pushTypeParameterFrame(frameC);
+                const context = surroundingAgent.runningExecutionContext;
+                const savedEnvironment = context.LexicalEnvironment;
+                const declarationEnvironment = ClassTypeEnvironmentOf(value);
+                if (declarationEnvironment) context.LexicalEnvironment = declarationEnvironment;
                 try {
                   argRecords[i] = Q(yield* TypeNodeToTypeRecord(((defC as { Type?: ParseNode.Type }).Type ?? defC) as ParseNode.Type));
                 } finally {
+                  context.LexicalEnvironment = savedEnvironment;
                   popTypeParameterFrame();
                 }
               }
@@ -6238,6 +6312,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       return CanonicalizeType({ Kind: 'union', Members: results });
     }
     case 'ComputedType': {
+      const pendingDefault = deferredFamilyDefault(node, lookupTypeParameter);
+      if (pendingDefault) return { ...pendingDefault, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
       // #sec-evaluatebuildercall: the callee evaluates and is called with the
       // evaluated arguments; the result must be a Type Object.
       const result = Q(yield* evaluateComputedType(node));
@@ -6616,6 +6692,9 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
     pushedTypeParameterFrame = true;
   }
   try {
+  if (tpFrame && typeParameters) {
+    Q(yield* FillGenericConstraintFrame(typeParameters, tpFrame));
+  }
   const Parameters: ParameterRecord[] = [];
   let ThisType: TypeRecord | null = null;
   for (const p of params) {
@@ -6810,3 +6889,83 @@ function ExtentNamesOpenParameter(expression: unknown): boolean {
   visit(expression);
   return open;
 }
+
+import { intrinsicDeclarationRecord, intrinsicDeclarationName } from './records.mts';
+import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
+import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument, isIntrinsicNamespace } from './intrinsic-generics.mts';
+
+import { rememberDeclaredConstraint } from './records.mts';
+
+/** Evaluate a default in the binder, never in a pure subtype/inclusion query. */
+export function* ConstraintAdmits(candidate: TypeRecord, constraint: TypeRecord | null): PlainEvaluator<boolean> {
+  if (!constraint) return true;
+  if (constraint.Kind !== 'family-pattern') return IsAssignable(candidate, constraint);
+  let failure: ThrowCompletion | undefined;
+  const admitted = matchesFamilyPattern(candidate, constraint, SameTypeStructural, (record) => {
+    if (failure) return undefined;
+    const frame = new Map((record.OperandNames ?? []).map((name, i) => [name, record.Operands[i] as TypeRecord]));
+    pushTypeParameterFrame(frame);
+    BeginTypeEvaluation();
+    // The evaluator's step meter is shared with pure metadata hooks.
+    EnterMetaHookEvaluation('a family declaration default');
+    const context = surroundingAgent.runningExecutionContext;
+    const savedEnvironment = context.LexicalEnvironment;
+    if (record.DefaultEnvironment) context.LexicalEnvironment = record.DefaultEnvironment as typeof savedEnvironment;
+    try {
+      const result = EnsureCompletion(skipDebugger(TypeNodeToTypeRecord(record.DefaultNode!)));
+      if (result.Type !== 'normal') {
+        failure = result as ThrowCompletion;
+        return undefined;
+      }
+      if (IsBudgetExhausted()) {
+        failure = Throw.TypeError('$1', Value('the type evaluation budget was exhausted in a family default'));
+        return undefined;
+      }
+      return result.Value as TypeRecord;
+    } finally {
+      context.LexicalEnvironment = savedEnvironment;
+      ExitMetaHookEvaluation();
+      EndTypeEvaluation();
+      popTypeParameterFrame();
+    }
+  });
+  if (failure) {
+    familyConstraintEvaluationFailures.add(failure.Value);
+    return failure;
+  }
+  return admitted;
+}
+
+import { matchesFamilyPattern } from './family-patterns.mts';
+import { SameTypeStructural } from './relations.mts';
+
+const familyConstraintEvaluationFailures = new WeakSet<object>();
+export function IsFamilyConstraintEvaluationFailure(value: object): boolean {
+  return familyConstraintEvaluationFailures.has(value);
+}
+
+
+export function* FillGenericConstraintFrame(params: readonly ParseNode.TypeParameter[], frame: Map<string, TypeRecord>): PlainEvaluator<void> {
+  for (const parameter of params) {
+    const node = parameter.TypeParameterConstraint;
+    if (node && !containsComputedType(node)) {
+      const Constraint = Q(yield* TypeNodeToTypeRecord(node));
+      const Name = parameter.BindingIdentifier.name;
+      frame.set(Name, { Kind: 'parameter', Name, Constraint });
+      rememberDeclaredConstraint(node, Constraint);
+    }
+  }
+}
+
+
+/** Scope lookup precedes an intrinsic application, including ordinary value bindings. */
+function* UsesIntrinsicDeclaration(node: ParseNode, name: string): PlainEvaluator<boolean> {
+  if (declarationNamed(node, name)) return false;
+  const reference = Q(yield* ResolveTypeName(Value(name)));
+  if (reference.Base === 'unresolvable' || reference.Base === TypeNameEnvironmentFor(surroundingAgent.currentRealmRecord)) return true;
+  if (name !== 'Range') return false;
+  const value = Q(yield* GetValue(reference));
+  return isIntrinsicNamespace(surroundingAgent.currentRealmRecord, name, value);
+}
+
+import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';

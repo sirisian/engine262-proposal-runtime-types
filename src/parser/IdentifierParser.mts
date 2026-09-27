@@ -22,15 +22,15 @@ export function isBuiltinTypeNameString(name: unknown): boolean {
   if (/^(u?int|float|decimal|complex|boolean)(1|8|16|32|64|128|256)$/.test(name)) {
     return true;
   }
+  if (/^rational(8|16|32|64|128)$/.test(name)) return true;
   if (/^(u?int|float|boolean)(8|16|32|64)x(2|4|8|16|32)$/.test(name)) {
     return true;
   }
   return name === 'string' || name === 'number' || name === 'boolean'
     || name === 'bigint' || name === 'symbol' || name === 'object'
     || name === 'any' || name === 'never' || name === 'type'
-    // #sec-type-names' shorthand table: `rational` is `rational.<64>` and `complex`
-    // is `complex.<number>` - shorthands, as `uint8` is (the plan "the bare names
-    // rational and complex as Type Objects", R1).
+    // Family spellings remain syntactic type names. Resolution applies the
+    // declared complex default and diagnoses rational's required argument.
     || name === 'rational' || name === 'complex';
 }
 

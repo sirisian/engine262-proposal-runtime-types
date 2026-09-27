@@ -44,7 +44,7 @@ test('an exact quotient is unchanged, and the range check still applies', () => 
 test('every other context is untouched', () => {
   // The rational context, where `/` is exact division - the other half of the
   // same rule.
-  expect(evaluated('let r: rational = 1 / 3; String(r);')).toBe('1/3');
+  expect(evaluated('let r: rational64 = 1 / 3; String(r);')).toBe('1/3');
   expect(evaluated('let f: float64 = 1 / 3; String(f);')).toBe('0.3333333333333333');
   expect(evaluated('let d: decimal128 = 0.1 + 0.2; String(d);')).toBe('0.3');
   // No context at all: ordinary Number division.

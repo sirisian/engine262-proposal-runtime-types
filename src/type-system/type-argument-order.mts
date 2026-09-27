@@ -1,3 +1,4 @@
+import { intrinsicParameters } from './intrinsic-generics.mts';
 /**
  * proposal-runtime-types #sec-type-references: named type arguments, ordered
  * into PARAMETER order before anything is bound. This is the SYNTACTIC half of
@@ -79,6 +80,8 @@ export function orderTypeArguments<T>(
  * A declared prelude would retire this table.
  */
 export function libraryTypeParameterNames(name: string): readonly string[] | null {
+  const intrinsic = intrinsicParameters(name);
+  if (intrinsic) return intrinsic.map((p) => p.Name);
   switch (name) {
     case 'Map':
     case 'WeakMap':

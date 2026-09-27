@@ -34,7 +34,7 @@ import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed 
 import { containsComputedType } from '../type-system/runtime.mts';
 import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
-import { describeParameters, minimumArity, resolveOverload, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
+import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
   wellKnownSymbols,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
@@ -3650,10 +3650,8 @@ function OpenComponentsCover(castBase: TypeRecord, base: TypeRecord): boolean {
   const open = castBase.Arguments ?? [];
   const actual = base.Arguments ?? [];
   const isOpen = (a: unknown) => typeof a === 'object' && (a as TypeRecord).Kind === 'parameter';
-  // A primitive's record may omit an argument that is its default -
-  // `rational.<64>` is recorded as `rational` - so a position the actual base
-  // leaves out holds the default, which an open parameter covers too.
-  if (actual.length > open.length || !open.some(isOpen)) {
+  // Closed applications carry every argument, including declared defaults.
+  if (actual.length !== open.length || !open.some(isOpen)) {
     return false;
   }
   return open.every((a, i) => {
@@ -3756,7 +3754,7 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
     ? `${base.Name}${firstArgument}`
     : base.Name;
   // A bare Number is spelled `number`; a typed value names its own base.
-  const declaredOn = value instanceof NumberValue ? ['number', name] : [name];
+  const declaredOn = [...new Set(value instanceof NumberValue ? ['number', name, base.Name] : [name, base.Name])];
   for (const key of declaredOn) {
     for (const cast of PrimitiveCastsFor(key)) {
       // The cast is chosen by whether it produces the metadata the target
@@ -4172,17 +4170,14 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
       && !(factorBase.Kind === 'primitive' && ['float16', 'float32', 'float64'].includes(factorBase.Name));
   }
   const identityFactor = numerator === denominator;
-  // A protocol product must not acquire the default rational's 64-bit bound.
-  // Keep that ordinary presentation when it fits, otherwise use the unbounded
+  // The protocol explicitly presents rational64 where the exact product fits.
+  // Keep that bounded presentation when it fits, otherwise use the unbounded
   // rational domain. The payload calculation itself uses the exact fraction.
   let factorValue: Value;
   if (exactFactor) {
-    const boundedFactor = EnsureCompletion(CreateRationalValue(numerator, denominator, surroundingAgent.currentRealmRecord));
-    if (boundedFactor.Type === 'normal') {
-      factorValue = boundedFactor.Value;
-    } else {
-      factorValue = Q(CreateRationalValue(numerator, denominator, surroundingAgent.currentRealmRecord, makePrimitive('rational', [makePrimitive('bigint')])));
-    }
+    const presentation = rationalPartsFitWidth(numerator, denominator, 64)
+      ? makePrimitive('rational', [64]) : makePrimitive('rational', [makePrimitive('bigint')]);
+    factorValue = Q(CreateRationalValue(numerator, denominator, surroundingAgent.currentRealmRecord, presentation));
   } else {
     factorValue = Value(numerator === 0n && negativeFactor ? -0 : roundRationalToBinaryFloat(numerator, denominator, 64));
   }
@@ -5383,6 +5378,9 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     pushTypeParameterFrame(genericFrame);
   }
   try {
+  if (genericFrame && genericTypeParameters) {
+    Q(yield* FillGenericConstraintFrame(genericTypeParameters, genericFrame));
+  }
   const resolved = new Map<ParseNode, TypeRecord>();
   for (const p of formals) {
     const ann = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
@@ -5612,7 +5610,7 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     // string` selected by `string`.
     const callContext = TakeBodyContext();
     const signatures = Q(yield* SignaturesOf(overloaded));
-    const resolution = resolveOverload(signatures, args, callContext);
+    const resolution = Q(yield* resolveOverloadChecked(signatures, args, callContext));
     if (resolution.Kind === 'none') {
       return Throw.TypeError('no overload of $1 matches these arguments', name);
     }
@@ -6116,3 +6114,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   };
   return out;
 }
+
+import { rationalPartsFitWidth } from '../intrinsics/Rational.mts';
+
+import { FillGenericConstraintFrame } from '../type-system/runtime.mts';

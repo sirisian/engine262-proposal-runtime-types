@@ -130,15 +130,15 @@ test('a standalone case selects statically too, typed by its own signature (B9, 
   expect(evaluated(`function s<A: type, B: type>(): string { return 'owner'; }
     function s<string>(): string { return 'standalone'; } s.<string>();`)).toBe('standalone');
   const W = `function write<T: type>(v: T): string { return 'g'; }
-    function write<string, LengthType: type extends uint = uint16>(v: string): string { return 'len ' + String(LengthType); }`;
+    function write<string, LengthType: type extends uint.<_> = uint16>(v: string): string { return 'len ' + String(LengthType); }`;
   expect(evaluated(`${W} write.<string>('s') + '|' + write.<string, uint8>('s');`)).toBe('len uint.<16>|len uint.<8>');
   expectEarlyError(`${W} write.<string, int8>('s');`, 'StaticTypeError');
-  expectThrown(`${W} write.<string, int8>('s');`, 'int.<8> does not satisfy the bound `uint` of `LengthType`');
+  expectThrown(`${W} write.<string, int8>('s');`, 'int.<8> does not satisfy the bound `uint.<_>` of `LengthType`');
   // Value arguments are checked against the chosen case's own parameters.
   expectEarlyError(`${W} write.<string>(3);`, 'StaticTypeError');
   // Rule 8 beside a bodyless owner.
   expect(evaluated(`function read<T: type>(): T; function read<boolean>(): boolean { return true; }
-    function read<string, LengthType: type extends uint = uint16>(): string { return 'str'; }
+    function read<string, LengthType: type extends uint.<_> = uint16>(): string { return 'str'; }
     read.<string>() + '|' + String(read.<boolean>());`)).toBe('str|true');
 });
 
@@ -150,11 +150,11 @@ test('rule 4: a case whose value parameters cannot take the arguments does not a
   expect(evaluated(`${A} const g: any = f; g.<uint8>(3) + '|' + g.<uint8>(3, 'e');`)).toBe('generic|additive');
 });
 
-test('a bare family name is a bound, and only a bound', () => {
-  const G = `function g<L: type extends uint>(): string { return 'ok'; }`;
+test('a wildcard family application is a constraint, and only a constraint', () => {
+  const G = `function g<L: type extends uint.<_>>(): string { return 'ok'; }`;
   expect(evaluated(`${G} g.<uint8>() + g.<uint.<12>>();`)).toBe('okok');
-  expectThrown(`${G} g.<int8>();`, 'is not assignable to "uint"');
-  expectThrown(`${G} g.<string>();`, 'is not assignable to "uint"');
+  expectThrown(`${G} g.<int8>();`, 'is not assignable to "uint.<_>"');
+  expectThrown(`${G} g.<string>();`, 'is not assignable to "uint.<_>"');
   // Not a type elsewhere: a value of unknown width has no layout.
   expectEarlyError('let x: uint = 3;', 'StaticTypeError');
 });
@@ -267,20 +267,20 @@ test('F1 and B4: through an owner, checked once, selected per specialization', (
 });
 
 test('F2: through a case the argument\'s bound proves applicable to every binding (D8)', () => {
-  expect(evaluated(`${WRITE} function g<L: type extends uint>(v: L): string { return write.<L>(v); }
+  expect(evaluated(`${WRITE} function g<L: type extends uint.<_>>(v: L): string { return write.<L>(v); }
     g.<uint8>((3 := uint8)) + '|' + g.<uint.<12>>((5 := uint.<12>));`)).toBe('uint 8|uint 12');
   // A more specific case keeping the proven signature is reached by its bindings.
   expect(evaluated(`${WRITE} function write<uint8>(v: uint8): string { return 'eight'; }
-    function g<L: type extends uint>(v: L): string { return write.<L>(v); }
+    function g<L: type extends uint.<_>>(v: L): string { return write.<L>(v); }
     g.<uint8>((3 := uint8)) + '|' + g.<uint16>((3 := uint16));`)).toBe('eight|uint 16');
   // A case its parameters exclude (rule 4) is never reached, so it does not count.
   expect(evaluated(`${WRITE} function write<uint8>(v: uint8, extra: string): string { return 'x'; }
-    function g<L: type extends uint>(v: L): string { return write.<L>(v); } g.<uint8>((3 := uint8));`)).toBe('uint 8');
+    function g<L: type extends uint.<_>>(v: L): string { return write.<L>(v); } g.<uint8>((3 := uint8));`)).toBe('uint 8');
 });
 
 test('F3: a more specific case a binding would reach with another signature is refused (D8)', () => {
   expectThrown(`${WRITE} function write<uint8>(v: string): string { return 'x'; }
-    function g<L: type extends uint>(v: L): string { return write.<L>(v); }`,
+    function g<L: type extends uint.<_>>(v: L): string { return write.<L>(v); }`,
   '`write.<L>` forwards through `write<uint.<const N>>`, but `write<uint8>`, which a binding of the argument would select, has another signature');
 });
 
@@ -520,7 +520,7 @@ test('a selected case\'s value binder keeps its declared type', () => {
 test('a type parameter converts as its Type Object does, with no this value', () => {
   // #sec-type-objects: "a type may be applied to an argument as `T(v)`"; the
   // reference names no Environment Record, and EvaluateCall asserted one.
-  expect(evaluated(`function f<T: type extends uint = uint16>(v: uint32): string { return String(Reflect.typeOf(T(v))); }
+  expect(evaluated(`function f<T: type extends uint.<_> = uint16>(v: uint32): string { return String(Reflect.typeOf(T(v))); }
     f.<uint16>(3) + '|' + f(3);`)).toBe('uint.<16>|uint.<16>');
   expect(evaluated('function f<T: type>(v: uint32): string { const x = T(v); return String(x); } f.<uint8>(300);')).toBe('44');
   // An ordinary call keeps its this value.

@@ -28,8 +28,8 @@ test('the additive spelling works, which is the one the documents use', () => {
   // the bare `4i` adopted its component and `1 + 2i` did not, so the two
   // spellings of one value disagreed.
   expect(evaluated('const c: complex128 = 1 + 2i; String(c);')).toBe('1+2i');
-  expect(evaluated('const c: complex128 = 1 + 2i; String(Reflect.typeOf(c));')).toBe('complex.<float64>');
-  expect(evaluated('const c: complex64 = 1 + 2i; String(Reflect.typeOf(c));')).toBe('complex.<float32>');
+  expect(evaluated('const c: complex128 = 1 + 2i; String(Reflect.typeOf(c));')).toBe('complex128');
+  expect(evaluated('const c: complex64 = 1 + 2i; String(Reflect.typeOf(c));')).toBe('complex64');
   // Subtraction is the same production.
   expect(evaluated('const c: complex128 = 1 - 2i; String(c);')).toBe('1-2i');
 });
@@ -42,9 +42,9 @@ test('other contexts are not reshaped by that reach-through', () => {
 });
 
 test('a literal adopts the component its context asks for', () => {
-  expect(evaluated('const c: complex128 = 4i; String(Reflect.typeOf(c));')).toBe('complex.<float64>');
-  expect(evaluated('const c: complex64 = 4i; String(Reflect.typeOf(c));')).toBe('complex.<float32>');
-  expect(evaluated('const c: complex.<float64> = 4i; String(Reflect.typeOf(c));')).toBe('complex.<float64>');
+  expect(evaluated('const c: complex128 = 4i; String(Reflect.typeOf(c));')).toBe('complex128');
+  expect(evaluated('const c: complex64 = 4i; String(Reflect.typeOf(c));')).toBe('complex64');
+  expect(evaluated('const c: complex.<float64> = 4i; String(Reflect.typeOf(c));')).toBe('complex128');
 });
 
 test('the value is right, not merely the type', () => {
@@ -73,9 +73,9 @@ test('a complex with no written component reports complex.<number>', () => {
   // Such a value reported no type record at all and rendered as `{}` - an empty
   // object type. It made the defects around it harder to diagnose than they
   // needed to be, since the type a value carried could not be read off it.
-  expect(evaluated('String(Reflect.typeOf(1 + 2i));')).toBe('complex.<number>');
-  expect(evaluated('String(Reflect.typeOf(4i));')).toBe('complex.<number>');
-  expect(evaluated('String(Reflect.typeOf(complex(1, 2)));')).toBe('complex.<number>');
+  expect(evaluated('String(Reflect.typeOf(1 + 2i));')).toBe('complex');
+  expect(evaluated('String(Reflect.typeOf(4i));')).toBe('complex');
+  expect(evaluated('String(Reflect.typeOf(complex(1, 2)));')).toBe('complex');
 });
 
 test('and it is a member of the type it now reports', () => {

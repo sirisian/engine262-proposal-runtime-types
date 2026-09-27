@@ -21,7 +21,7 @@ test('family: the numeric families', () => {
     .toBe('float,float,float,float');
   expect(evaluated('String([decimal32, decimal64, decimal128].map((t) => t.family).join(","));'))
     .toBe('decimal,decimal,decimal');
-  expect(evaluated('type R = rational.<int32>; type C = complex.<float32>;'
+  expect(evaluated('type R = rational.<32>; type C = complex.<float32>;'
     + ' String(R.family) + "," + String(C.family);')).toBe('rational,complex');
   expect(evaluated('String(bigint.family);')).toBe('bigint');
 });

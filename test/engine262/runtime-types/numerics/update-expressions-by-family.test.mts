@@ -21,9 +21,9 @@ test('an update of a complex number is refused', () => {
 });
 
 test('rational and decimal numbers step by one in their own type', () => {
-  expect(evaluated('let r: rational = 1 / 3; r++; String(r);')).toBe('4/3');
-  expect(evaluated('let r: rational = 1 / 3; String(--r);')).toBe('-2/3');
-  expect(evaluated('let r: rational = 1 / 3; String(r++) + " " + String(r);')).toBe('1/3 4/3');
+  expect(evaluated('let r: rational64 = 1 / 3; r++; String(r);')).toBe('4/3');
+  expect(evaluated('let r: rational64 = 1 / 3; String(--r);')).toBe('-2/3');
+  expect(evaluated('let r: rational64 = 1 / 3; String(r++) + " " + String(r);')).toBe('1/3 4/3');
   expect(evaluated('let d: decimal128 = (1.5 := decimal128); d++; String(d);')).toBe('2.5');
   expect(evaluated('let d: decimal128 = (1.5 := decimal128); String(--d);')).toBe('0.5');
 });

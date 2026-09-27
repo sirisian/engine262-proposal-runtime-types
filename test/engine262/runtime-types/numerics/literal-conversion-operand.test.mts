@@ -10,10 +10,10 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
  * call and `:=`, "are the same operation".
  *
  * They were not. The call typed a bare literal at a rational or decimal target
- * without its context, so `rational(0.1)` was the dyadic value while
- * `rational(-0.1)` - a folded constant - was -1/10; the operator offered its
- * target only to a bare literal, so `-0.1 := rational` was dyadic while
- * `0.1 := rational` was 1/10. A sign changed the rule, in opposite directions.
+ * without its context, so `rational64(0.1)` was the dyadic value while
+ * `rational64(-0.1)` - a folded constant - was -1/10; the operator offered its
+ * target only to a bare literal, so `-0.1 := rational64` was dyadic while
+ * `0.1 := rational64` was 1/10. A sign changed the rule, in opposite directions.
  *
  * A float VALUE still converts from its bits: only a literal is read.
  */
@@ -22,21 +22,21 @@ const DYADIC = '3602879701896397/36028797018963968';
 const v = (expr: string) => evaluated(`String(${expr});`);
 
 test('a literal is read for its digits, in every spelling', () => {
-  for (const src of ['rational(0.1)', '0.1 := rational']) expect(v(src)).toBe('1/10');
-  expect(evaluated('let r: rational = 0.1; String(r);')).toBe('1/10');
-  for (const src of ['rational(-0.1)', '-0.1 := rational']) expect(v(src)).toBe('-1/10');
-  for (const src of ['rational(1 / 3)', '(1 / 3) := rational']) expect(v(src)).toBe('1/3');
-  expect(v('rational(0.1 + 0.2)')).toBe('3/10');
+  for (const src of ['rational64(0.1)', '0.1 := rational64']) expect(v(src)).toBe('1/10');
+  expect(evaluated('let r: rational64 = 0.1; String(r);')).toBe('1/10');
+  for (const src of ['rational64(-0.1)', '-0.1 := rational64']) expect(v(src)).toBe('-1/10');
+  for (const src of ['rational64(1 / 3)', '(1 / 3) := rational64']) expect(v(src)).toBe('1/3');
+  expect(v('rational64(0.1 + 0.2)')).toBe('3/10');
   for (const src of ['decimal128(0.1)', '0.1 := decimal128']) expect(v(src)).toBe('0.1');
   expect(v('decimal128(19.99)')).toBe('19.99');
 });
 
 test('a float value converts from its binary value', () => {
-  expect(evaluated('let x = 0.1; String(rational(x));')).toBe(DYADIC);
-  expect(evaluated('const f: float64 = 0.1; String(rational(f));')).toBe(DYADIC);
+  expect(evaluated('let x = 0.1; String(rational64(x));')).toBe(DYADIC);
+  expect(evaluated('const f: float64 = 0.1; String(rational64(f));')).toBe(DYADIC);
   expect(evaluated('let x = 0.1; String(decimal128(x));')).toBe('0.1000000000000000055511151231257827');
   // The deliberate route to a literal's binary value: make it a float first.
-  expect(v('rational(float64(0.1))')).toBe(DYADIC);
+  expect(v('rational64(float64(0.1))')).toBe(DYADIC);
 });
 
 test('the conversion still wraps; only the declaration checks the range', () => {
@@ -47,6 +47,6 @@ test('the conversion still wraps; only the declaration checks the range', () => 
 });
 
 test('the two-argument constructor keeps an integer numerator', () => {
-  expect(v('rational(3, 4)')).toBe('3/4');
-  expect(v('rational(5)')).toBe('5');
+  expect(v('rational64(3, 4)')).toBe('3/4');
+  expect(v('rational64(5)')).toBe('5');
 });

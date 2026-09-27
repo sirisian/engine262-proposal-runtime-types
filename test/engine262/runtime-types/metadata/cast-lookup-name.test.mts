@@ -36,18 +36,18 @@ test('a float cast is still found', () => {
     String(5 := Meter);`)).toBe('5');
 });
 
-test('a rational cast is still found, through its default width', () => {
+test('a rational cast is still found, through its explicit width', () => {
   expect(evaluated(`type U = { unit: int32 };
     meta U { default = { unit: 0 }; subtype(a: U, b: U): boolean { return true; } }
-    primitive rational { operator rational.<U>() { return this; } }
+    primitive rational64 { operator rational64.<U>() { return this; } }
     type R = rational.<64>.<{ unit: 1 }>;
-    const r: rational = 1 / 3; String(r := R);`)).toBe('1/3');
+    const r: rational64 = 1 / 3; String(r := R);`)).toBe('1/3');
 });
 
 test('a complex crossing works in the converting spelling', () => {
   expect(evaluated(`type P = { phase: int32 };
     meta P { default = { phase: 0 }; subtype(a: P, b: P): boolean { return true; } }
-    primitive complex { operator complex.<P>() { return this; } }
+    primitive complex<const T> { operator complex.<T>.<P>() { return this; } }
     type Ph = complex.<float64>.<{ phase: 1 }>;
     const c: complex128 = 1 + 2i; String(c := Ph);`)).toBe('1+2i');
 });

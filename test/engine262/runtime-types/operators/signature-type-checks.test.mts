@@ -79,7 +79,7 @@ test('duplicate untyped operators retain the last body', () => {
   expect(evaluated('class M { operator+(x) { return 1; } operator+(x) { return 2; } } String(new M() + 0);')).toBe('2');
 });
 
-test.each(['bigint', 'float128', 'decimal64', 'rational', 'complex.<float64>', 'float32x4'])('index dispatch includes the numeric type %s', (type) => {
+test.each(['bigint', 'float128', 'decimal64', 'rational64', 'complex.<float64>', 'float32x4'])('index dispatch includes the numeric type %s', (type) => {
   const value = type === 'float32x4' ? 'float32x4(1, 1, 1, 1)' : `(1 := ${type})`;
   const declaration = `class M { operator[](i: ${type}): string { return "index"; } }`;
   expect(evaluated(`${declaration} const m: M = new M(); m[${value}];`)).toBe('index');

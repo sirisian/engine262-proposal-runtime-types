@@ -120,7 +120,7 @@ test.each([
   ],
   [
     "rational exponent union",
-    "function f(x:rational,y:uint8|int8){x**y;}f(rational(2),uint8(2));"
+    "function f(x:rational64,y:uint8|int8){x**y;}f(rational64(2),uint8(2));"
   ]
 ])('R27 boundary control (ok): %s', (_name, source) => {
   expect(ok(source)).toBe(true);

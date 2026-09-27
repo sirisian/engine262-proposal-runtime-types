@@ -354,7 +354,7 @@ test('`Reflect.isAssignable` agrees with the checker on METADATA', () => {
   // returned the structural answer alone. A narrower bounded type was reported
   // unassignable to a wider one that an ordinary assignment accepts - and the
   // hook was never called at all, which is how the two answers could differ.
-  const NB = 'type NB = { bounds?: Range }; '
+  const NB = 'type NB = { bounds?: RangeBounds.<any> }; '
     + 'meta NB { default = {}; '
     + 'subtype(a, b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
     + 'validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); } } ';

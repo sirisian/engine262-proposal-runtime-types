@@ -18,7 +18,7 @@ const created = (shape: string, member: string) => evaluated(`interface S { v: $
 
 test('a member literal is read at the member type, in every family', () => {
   expect(created('decimal128', '0.1')).toBe('0.1');
-  expect(created('rational', '0.1')).toBe('1/10');
+  expect(created('rational64', '0.1')).toBe('1/10');
   expect(created('float32', '16777217.0000000001')).toBe('16777218');
   expect(created('uint64', '9007199254740993')).toBe('9007199254740993');
   expect(evaluated('interface O { p: { x: decimal128 } } String(Composite.<O>({ p: { x: 0.1 } }).p.x);')).toBe('0.1');
@@ -50,5 +50,5 @@ test('an array member converts as any array conversion does', () => {
 test('a tuple member is read position by position, and past them at the rest', () => {
   expect(evaluated('interface T { v: [decimal128, uint64] } String(Composite.<T>({ v: [0.1, 9007199254740993] }).v[0]);')).toBe('0.1');
   expect(evaluated('interface T { v: [decimal128, uint64] } String(Composite.<T>({ v: [0.1, 9007199254740993] }).v[1]);')).toBe('9007199254740993');
-  expect(evaluated('interface T { v: [uint8, ...[].<rational>] } String(Composite.<T>({ v: [1, 0.1, 0.1] }).v[2]);')).toBe('1/10');
+  expect(evaluated('interface T { v: [uint8, ...[].<rational64>] } String(Composite.<T>({ v: [1, 0.1, 0.1] }).v[2]);')).toBe('1/10');
 });

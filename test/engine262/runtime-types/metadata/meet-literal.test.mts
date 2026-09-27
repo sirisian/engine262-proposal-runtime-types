@@ -42,7 +42,7 @@ function outcome(source: string): string {
 
 const HONEST = 'meet(a,b) { if (a.bounds === undefined) return b; if (b.bounds === undefined) return a; '
   + 'const r = a.bounds.intersect(b.bounds); return r.isEmpty ? null : { bounds: r }; }';
-const nb = (meet: string, cast = true) => 'type NB = { bounds?: Range }; meta NB { default = {}; '
+const nb = (meet: string, cast = true) => 'type NB = { bounds?: RangeBounds.<any> }; meta NB { default = {}; '
   + 'validate(value, c) { return c.bounds === undefined || c.bounds.contains(value); } '
   + 'subtype(a,b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; '
   + `return b.bounds.contains(a.bounds); } ${meet} } `
@@ -94,7 +94,7 @@ test('a value-decided parameterization follows the meet before running', () => {
   // both members and not in the meet. Decided against the meet it is refused before
   // running; decided against a member it would be admitted, and refused only when the
   // binding ran.
-  const sb = (meet: string) => 'type SB = { len?: Range }; meta SB { default = {}; '
+  const sb = (meet: string) => 'type SB = { len?: RangeBounds.<any> }; meta SB { default = {}; '
     + 'validate(value, c) { return c.len === undefined || c.len.contains(value.length); } '
     + 'subtype(a,b) { if (b.len === undefined) return true; if (a.len === undefined) return false; '
     + `return b.len.contains(a.len); } ${meet} } `

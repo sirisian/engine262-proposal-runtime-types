@@ -5,9 +5,9 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  * Spec: #sec-conversions, #table-numeric-conversions, #sec-rational-types,
  * #sec-requiretype.
  *
- * `rational(v)` and `v := rational` are "the same operation", and the boundary
+ * `rational64(v)` and `v := rational64` are "the same operation", and the boundary
  * converts by the same row. There were three implementations, and they
- * disagreed: `rational(NaN)` was a RangeError while `NaN := rational` and the
+ * disagreed: `rational64(NaN)` was a RangeError while `NaN := rational64` and the
  * boundary were a TypeError, and a `float32` or a `decimal` converted by the
  * call form but not by `:=`. All three now run one conversion.
  *
@@ -38,9 +38,9 @@ const VALUES: Record<string, string> = {
   str: 'String("1/2")',
 };
 
-const call = (v: string) => `String(rational(${v}));`;
-const op = (v: string) => `String((${v}) := rational);`;
-const boundary = (v: string) => `let v: any = ${v}; let r: rational = v; String(r);`;
+const call = (v: string) => `String(rational64(${v}));`;
+const op = (v: string) => `String((${v}) := rational64);`;
+const boundary = (v: string) => `let v: any = ${v}; let r: rational64 = v; String(r);`;
 // Since the stricter-runtime decision a TYPED value (a conversion or a parse of
 // another numeric type) is checked at the boundary, not converted: a TypeError
 // there, while the explicit paths - the call and `:=` - still convert it.

@@ -1218,7 +1218,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           // regardless.)
           let asDeclaration: TypeRecord | undefined;
           if (kindedHere) {
-            asDeclaration = Q(yield* TypeArgumentAsDeclaration(argNode));
+            asDeclaration = Q(yield* TypeArgumentAsDeclaration(argNode, (p as { Arity?: number }).Arity ?? 0));
           }
           if (asDeclaration !== undefined) {
             record = asDeclaration;

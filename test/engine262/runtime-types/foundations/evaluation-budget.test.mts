@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion } from '#self';
 
 /**
  * Spec: #sec-evaluation-budget (The Evaluation Budget).
@@ -124,4 +124,19 @@ test('the depth limit does not reject ordinary nesting', () => {
   // Non-generic self-reference is a different rule entirely and keeps its own,
   // sharper diagnostic about a finite layout rather than a budget.
   expect(runWithBudget('type L = { next: L }; String(1);')).toMatchObject({ Type: 'throw' });
+});
+
+
+test('family-default budget exhaustion does not select an unconstrained fallback', () => {
+  const source = `function build(T: type): type { let n = 0; while (n < 10000) { n++; } return T; }
+    class Pair<T: type, U: type = build(T)> {}
+    function f<V: type extends Pair.<_>>(x: V) { return "equal"; }
+    function f<V: type extends Pair.<_, _>>(x: V) { return "fallback"; }
+    f(new Pair.<uint8, uint8>());`;
+  const low = EnsureCompletion(runWithBudget(source, { steps: 1000 }));
+  expect(low.Type).toBe('throw');
+  expect((low.Value as { HostDefinedMessageString?: string }).HostDefinedMessageString).toContain('budget');
+  const enough = EnsureCompletion(runWithBudget(source, { steps: 1000000 }));
+  expect(enough.Type).toBe('normal');
+  expect((enough.Value as { stringValue(): string }).stringValue()).toBe('equal');
 });

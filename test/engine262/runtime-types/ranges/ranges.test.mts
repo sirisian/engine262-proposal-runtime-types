@@ -364,13 +364,13 @@ test('a range is non-associative', () => {
 
 // -- Range as a type ----------------------------------------------------------
 test('Range is a usable type name', () => {
-  expect(evaluated('let r: Range = 0..<10; typeof r;')).toBe('object');
-  expect(evaluated('let r: Range = 0..=5; String(r.length);')).toBe('6');
+  expect(evaluated('let r: Range.<number> = 0..<10; typeof r;')).toBe('object');
+  expect(evaluated('let r: ClosedRange.<number> = 0..=5; String(r.length);')).toBe('6');
 });
 
 test('a non-range value is not assignable to Range', () => {
-  expectThrown('let r: Range = 5; "ok";');
-  expectThrown('let r: Range = "abc"; "ok";');
+  expectThrown('let r: Range.<number> = 5; "ok";');
+  expectThrown('let r: Range.<number> = "abc"; "ok";');
 });
 
 // -- the base grammar is unchanged with the feature off -----------------------

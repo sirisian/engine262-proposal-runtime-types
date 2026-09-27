@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-test.each(['int32', 'int64', 'uint64', 'float32', 'float64', 'float128', 'rational', 'decimal128'])('all metadata origins agree for %s', (field) => {
+test.each(['int32', 'int64', 'uint64', 'float32', 'float64', 'float128', 'rational64', 'decimal128'])('all metadata origins agree for %s', (field) => {
   expect(evaluated(`type D = { n: ${field} }; meta D { default = { n: 0 };
     subtype(a: D, b: D): boolean { return a.n === b.n; } }
     function builder(): D { return { n: 1 }; }
@@ -19,7 +19,7 @@ test('normalization does not wrap an out-of-range integer', () => {
 });
 
 test('nested records, tuples and optional numeric leaves normalize recursively', () => {
-  expect(evaluated(`type D = { data: { pair: [int64, rational], option: int32 | undefined } };
+  expect(evaluated(`type D = { data: { pair: [int64, rational64], option: int32 | undefined } };
     meta D { default = { data: { pair: [0, 1], option: 0 } }; subtype(a,b) { return true; } }
     type A = float32.<{ data: { pair: [1, 2], option: 3 } }>;
     function builder(): D { return { data: { pair: [1, 2], option: 3 } }; }
@@ -38,7 +38,7 @@ test('normalization preserves signed zero and wide integer identity', () => {
 
 test.each([
   ['uint64', '9007199254740993'], ['int64', '-9007199254740993'],
-  ['rational', '0.1'], ['decimal128', '0.1000000000000000000000000000000001'],
+  ['rational64', '0.1'], ['decimal128', '0.1000000000000000000000000000000001'],
   ['float128', '0.1'], ['uint64', '0x20000000000001'], ['decimal128', '0.00'],
 ])('written %s metadata keeps its exact source digits (%s)', (field, literal) => {
   expect(evaluated(`type D = { n: ${field} }; meta D { default = { n: 0 }; subtype(a,b) { return true; } }
@@ -49,13 +49,13 @@ test.each([
 });
 
 test.each(['0..<10', '0..=10', '0<..<10', '0<..=10', '0..', '0<..', '..<10', '..=10', '..'])('range metadata reflection preserves identity for %s', (bounds) => {
-  expect(evaluated(`type Bounds={bounds:RangeBounds};meta Bounds {default={bounds:..};subtype(a,b){return true;}}
+  expect(evaluated(`type Bounds={bounds:RangeBounds.<any>};meta Bounds {default={bounds:..};subtype(a,b){return true;}}
     type T=float64.<{bounds:${bounds}}>;
     String(Reflect.makeType(Reflect.getReflection(T))===T);`)).toBe('true');
 });
 
 test('range metadata still checks its declared shape', () => {
-  expectThrown(`type Bounds={bounds?:Range};meta Bounds {default={};subtype(a,b){return true;}}
+  expectThrown(`type Bounds={bounds?:Range.<any>};meta Bounds {default={};subtype(a,b){return true;}}
     type T=float64.<{bounds:0..}>;`, 'shape');
 });
 
@@ -66,7 +66,7 @@ test('reflection preserves an explicit default requirement as a distinct type', 
 });
 
 test('integral rational metadata uses the ordinary rational display', () => {
-  expect(evaluated(`type Dim={ratio:rational};meta Dim {default={ratio:1};subtype(a,b){return true;}}
+  expect(evaluated(`type Dim={ratio:rational64};meta Dim {default={ratio:1};subtype(a,b){return true;}}
     type T=float64.<{ratio:10}>;
-    String(T)+'/'+String(rational(10));`)).toBe('float64.<{ ratio: 10 }>/10');
+    String(T)+'/'+String(rational64(10));`)).toBe('float64.<{ ratio: 10 }>/10');
 });

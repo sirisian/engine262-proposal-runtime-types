@@ -464,6 +464,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
   }
   const next = [...assumptions, { First: s, Second: t }];
   switch (s.Kind) {
+    case 'family-pattern': return t.Kind === 'family-pattern' && SameTypeWithAssumptions(s.Template, t.Template, next);
     case 'any':
     case 'void':
       return true;
@@ -508,6 +509,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       // declarations may both write `T[K]`), and now there is one rule.
       return t.Kind === 'deferred'
         && s.Operator === t.Operator
+        && s.DefaultEnvironment === t.DefaultEnvironment
         && SameArgumentList(
           s.Operands as readonly (TypeRecord | number)[],
           t.Operands as readonly (TypeRecord | number)[],
@@ -932,6 +934,7 @@ function returnRequiredOfNothing(r: TypeRecord | null | undefined): boolean {
 }
 
 export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly Assumption[]): boolean {
+  if (t?.Kind === 'family-pattern') return matchesFamilyPattern(s, t, SameTypeStructural);
   // A family bound (`extends uint`) admits every member of its family.
   if (IsFamilyRecord(t)) {
     return !!s && s.Kind === 'primitive' && s.Name === (t as { Name: string }).Name && !IsFamilyRecord(s);
@@ -1746,6 +1749,11 @@ function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumpti
       ? { First: u.Parameter, Second: w.Parameter }
       : { First: { Kind: 'parameter', Name: u.Name, Arity: u.Arity } as TypeRecord, Second: { Kind: 'parameter', Name: w.Name, Arity: w.Arity } as TypeRecord });
   }
+  for (let k = 0; k < ap.length; k += 1) {
+    const u = ap[k].Constraint;
+    const w = bp[k].Constraint;
+    if (!!u !== !!w || (u && w && !SameTypeWithAssumptions(u, w, out))) return null;
+  }
   return out;
 }
 
@@ -2308,3 +2316,5 @@ export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
   // deliberately does not answer.
   return false;
 }
+
+import { matchesFamilyPattern } from './family-patterns.mts';

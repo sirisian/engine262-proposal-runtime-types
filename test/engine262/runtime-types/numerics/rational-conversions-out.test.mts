@@ -18,32 +18,32 @@ import { evaluated, expectThrown } from '../harness.mts';
  */
 
 test('to a float, rounded', () => {
-  expect(evaluated('const r: rational = 1 / 3; String(float64(r));')).toBe('0.3333333333333333');
-  expect(evaluated('const r: rational = 1 / 2; String(float64(r));')).toBe('0.5');
+  expect(evaluated('const r: rational64 = 1 / 3; String(float64(r));')).toBe('0.3333333333333333');
+  expect(evaluated('const r: rational64 = 1 / 2; String(float64(r));')).toBe('0.5');
   // At a narrower width the rounding is the width's, not float64's.
-  expect(evaluated('const r: rational = 1 / 3; String(float32(r));')).toBe('0.3333333432674408');
+  expect(evaluated('const r: rational64 = 1 / 3; String(float32(r));')).toBe('0.3333333432674408');
 });
 
 test('to an integer, truncating toward zero', () => {
-  expect(evaluated('const r: rational = 7 / 2; String(int64(r));')).toBe('3');
-  expect(evaluated('const r: rational = 5 / 1; String(int32(r));')).toBe('5');
+  expect(evaluated('const r: rational64 = 7 / 2; String(int64(r));')).toBe('3');
+  expect(evaluated('const r: rational64 = 5 / 1; String(int32(r));')).toBe('5');
   // Toward zero, not toward negative infinity - the same rule `/` follows at an
   // integer context.
-  expect(evaluated('const r: rational = -7 / 2; String(int64(r));')).toBe('-3');
+  expect(evaluated('const r: rational64 = -7 / 2; String(int64(r));')).toBe('-3');
 });
 
 test('an integer target still checks range', () => {
   // Explicitly, S3's row wraps, as every row to a fixed-width integer does.
-  expect(evaluated('const r: rational = 300 / 1; String(uint8(r));')).toBe('44');
+  expect(evaluated('const r: rational64 = 300 / 1; String(uint8(r));')).toBe('44');
   // At the boundary a typed rational is refused, not converted (stricter-runtime
   // decision): the explicit conversion above is the way to change its type.
-  expectThrown('let v: any = rational(300, 1); let a: uint8 = v;', 'is not assignable to');
+  expectThrown('let v: any = rational64(300, 1); let a: uint8 = v;', 'is not assignable to');
 });
 
 test('the inbound direction and the identity are unchanged', () => {
-  expect(evaluated('const r: rational = 1 / 2; String(rational(float64(r)));')).toBe('1/2');
-  expect(evaluated('const r: rational = 1 / 3; String(rational(r));')).toBe('1/3');
-  expect(evaluated('String(rational(0.5));')).toBe('1/2');
+  expect(evaluated('const r: rational64 = 1 / 2; String(rational64(float64(r)));')).toBe('1/2');
+  expect(evaluated('const r: rational64 = 1 / 3; String(rational64(r));')).toBe('1/3');
+  expect(evaluated('String(rational64(0.5));')).toBe('1/2');
 });
 
 test('other sources are untouched', () => {

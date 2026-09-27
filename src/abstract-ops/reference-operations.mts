@@ -118,6 +118,12 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
   }
   // 2. If IsUnresolvableReference(V) is true, throw a ReferenceError exception.
   if (IsUnresolvableReference(V) === Value.true) {
+    if (surroundingAgent.feature('runtime-types') && RunningSourceTextAdmitsTypeNames()
+        && V.ReferencedName instanceof JSStringValue) {
+      const name = V.ReferencedName.stringValue();
+      const missing = intrinsicParameters(name)?.find((p) => p.Default === undefined);
+      if (missing) return Throw.TypeError('$1', Value(missingIntrinsicArgument(name, missing.Name)));
+    }
     // proposal-runtime-types #sec-generic-parameters-as-values: a generic
     // parameter is reachable AS A VALUE inside its declaration, since a type is
     // a value here. It is not a value binding, so ResolveBinding cannot find
@@ -517,3 +523,6 @@ export function* DereferenceReferenceValue(value: Value): ValueEvaluator {
   }
   return value;
 }
+
+import { RunningSourceTextAdmitsTypeNames } from '../execution-context/TypeNames.mts';
+import { intrinsicParameters, missingIntrinsicArgument } from '../type-system/intrinsic-generics.mts';

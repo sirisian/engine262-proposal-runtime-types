@@ -17,12 +17,12 @@ const plus = (operand: string) =>
   `const x = ${operand}; String(+x) + ' [' + String(Reflect.typeOf(+x)) + ']';`;
 
 test('complex returns itself, with its type', () => {
-  expect(evaluated(plus('(3 := complex64)'))).toBe('3+0i [complex.<float32>]');
-  expect(evaluated(plus('(2.5 := complex128)'))).toBe('2.5+0i [complex.<float64>]');
+  expect(evaluated(plus('(3 := complex64)'))).toBe('3+0i [complex64]');
+  expect(evaluated(plus('(2.5 := complex128)'))).toBe('2.5+0i [complex128]');
 });
 
 test('every other family of the proposal returns itself, with its type', () => {
-  expect(evaluated(plus('rational(3, 4)'))).toBe('3/4 [rational]');
+  expect(evaluated(plus('rational64(3, 4)'))).toBe('3/4 [rational64]');
   expect(evaluated(plus('(5 := uint8)'))).toBe('5 [uint.<8>]');
   // Exactly - through ToNumber this would round to ...992.
   expect(evaluated(plus("(BigInt('9007199254740993') := int64)"))).toBe('9007199254740993 [int.<64>]');
@@ -43,5 +43,5 @@ test('existing JavaScript is unchanged', () => {
 
 test('a Number is had from a proposal type by explicit conversion', () => {
   // Unary `+` is not the coercion idiom for these types; the conversion is.
-  expect(evaluated('String(float64(rational(1, 4)));')).toBe('0.25');
+  expect(evaluated('String(float64(rational64(1, 4)));')).toBe('0.25');
 });

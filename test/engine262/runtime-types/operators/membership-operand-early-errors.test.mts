@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind, ok, runFlagOff } from '../harness.mts';
 
-test.each(['uint8', 'int64', 'float32', 'decimal128', 'rational', 'complex', 'number', 'bigint', 'string', 'boolean', 'symbol', 'null', 'undefined', 'uint8 | string', 'shared uint8'])(
+test.each(['uint8', 'int64', 'float32', 'decimal128', 'rational64', 'complex', 'number', 'bigint', 'string', 'boolean', 'symbol', 'null', 'undefined', 'uint8 | string', 'shared uint8'])(
   'a %s value cannot be the right operand of membership', (type) => {
     expectStaticTypeError(`function unused(n: ${type}) { "x" in n; }`);
     expectStaticTypeError(`function unused(n: ${type}) { return ({}) instanceof n; }`);

@@ -47,13 +47,13 @@ test('the parameterized block declares without error', () => {
 
 test('and its cast crosses a value into a parameterization', () => {
   expect(evaluated(`${CX}const c: complex128 = 1 + 2i; String(c := Ph);`)).toBe('1+2i');
-  expect(evaluated(`${RAT}const r: rational = 1 / 3; String(r := Ratio);`)).toBe('1/3');
+  expect(evaluated(`${RAT}const r: rational64 = 1 / 3; String(r := Ratio);`)).toBe('1/3');
   // `:=` converts by its own route, so it passes with no cast at all. An
   // ANNOTATED crossing needs the cast, and is what shows the cast covers its
   // targets: one cast, its component captured, covers every component.
   expect(evaluated(`${CX}const c: complex128 = 1 + 2i; const p: Ph = c; String(p);`)).toBe('1+2i');
   expect(evaluated(`${CX}const d: complex64 = 3 + 4i; const q: complex.<float32>.<{ phase: 1 }> = d; String(q);`)).toBe('3+4i');
-  expect(evaluated(`${RAT}const r: rational = 1 / 3; const p: Ratio = r; String(p);`)).toBe('1/3');
+  expect(evaluated(`${RAT}const r: rational64 = 1 / 3; const p: Ratio = r; String(p);`)).toBe('1/3');
 });
 
 test('#sec-type-references: a cast target is read by the rule every type follows', () => {

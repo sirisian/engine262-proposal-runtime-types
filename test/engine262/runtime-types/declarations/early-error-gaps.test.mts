@@ -399,5 +399,5 @@ test('meta declarations that are distinct, base-form, or generic stand', () => {
   // A member type declared in the same list, still resolving during the
   // pre-scan, must not make two different shapes look like one.
   expect(ok('type Dim2 = { m?: number, ratio?: number }; meta Dim2 { default = { m: 0, ratio: 1 }; subtype(a, b) { return true; } } '
-    + 'type NBr = { bounds?: RangeBounds }; meta NBr { default = {}; subtype(a, b) { return true; } } String(1);')).toBe(true);
+    + 'type NBr = { bounds?: RangeBounds.<any> }; meta NBr { default = {}; subtype(a, b) { return true; } } String(1);')).toBe(true);
 });

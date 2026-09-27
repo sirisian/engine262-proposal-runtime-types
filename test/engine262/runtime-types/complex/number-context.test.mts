@@ -87,7 +87,7 @@ test('text is unchanged - it never reaches valueOf', () => {
 
 test('complex operators and overloads are unchanged', () => {
   // Unary `+` returns the complex; unary `-` negates both components.
-  expect(evaluated(`${C}String(Reflect.typeOf(+c));`)).toBe('complex.<float32>');
+  expect(evaluated(`${C}String(Reflect.typeOf(+c));`)).toBe('complex64');
   expect(evaluated(`${C}const n = -c; String(n.real) + ' ' + String(Object.is(n.imaginary, -0));`)).toBe('-3 true');
   const sqrt = 'const s = Math.sqrt(complex(-1)); String(s.real) + " " + String(s.imaginary);';
   expect(evaluated(sqrt)).toBe('0 1');
@@ -107,8 +107,8 @@ test('decimal and rational: Number(x) converts explicitly, and implicit use stil
   // has no such row and refuses (above). The IMPLICIT path, ToNumber through
   // valueOf, still refuses all three.
   expect(evaluated("String(Number(decimal64.parse('1.5')));")).toBe('1.5');
-  expect(evaluated('String(Number(rational(1, 2)));')).toBe('0.5');
+  expect(evaluated('String(Number(rational64(1, 2)));')).toBe('0.5');
   expect(evaluated("String(isNaN(decimal64.parse('1.5')));")).toBe('false');
   expectThrownKind("decimal64.parse('1.5').valueOf();", 'TypeError');
-  expectThrownKind('rational(1, 2).valueOf();', 'TypeError');
+  expectThrownKind('rational64(1, 2).valueOf();', 'TypeError');
 });

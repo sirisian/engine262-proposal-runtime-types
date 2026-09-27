@@ -58,11 +58,11 @@ test('the completion table places the widths the main table omits', () => {
   expect(evaluated(two('uint32', 'uint.<24>'))).toBe('A');
   expect(evaluated(two('uint.<24>', 'uint16'))).toBe('A');
   // And a rational ranks "after every integer type".
-  expect(evaluated(two('uint8', 'rational'))).toBe('A');
-  expect(evaluated(two('int8', 'rational'))).toBe('A');
+  expect(evaluated(two('uint8', 'rational64'))).toBe('A');
+  expect(evaluated(two('int8', 'rational64'))).toBe('A');
   // Without displacing the families above it.
-  expect(evaluated(two('float64', 'rational'))).toBe('A');
-  expect(evaluated(two('decimal64', 'rational'))).toBe('A');
+  expect(evaluated(two('float64', 'rational64'))).toBe('A');
+  expect(evaluated(two('decimal64', 'rational64'))).toBe('A');
 });
 
 test('an omitted width is ranked by the completion table, not left unranked', () => {

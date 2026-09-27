@@ -37,7 +37,7 @@ import {
 export interface RationalObject extends OrdinaryObject {
   RationalNumerator: bigint;
   RationalDenominator: bigint;
-  /** The type the value was built at: `rational.<N>`, the bare `rational` being width 64. */
+  /** The type the value was built at: `rational.<N>`, with every concrete width stored explicitly. */
   TypeRecord?: unknown;
 }
 
@@ -69,24 +69,26 @@ function canonicalize(num: bigint, den: bigint): { num: bigint, den: bigint } {
 
 /**
  * The width _N_ of a `rational.<N>` type record: its argument where it has one,
- * and 64 for the bare `rational`, which is `rational.<64>`.
+ * and 64 only for an internal helper call with no explicit Type Record.
  */
-/** The type's name as a diagnostic shows it: `rational` for width 64. */
+/** The type's diagnostic name uses the stable standard width aliases. */
 export function rationalDisplay(typeRecord: unknown): string {
   const width = rationalWidthOf(typeRecord);
   if (width === Number.POSITIVE_INFINITY) {
     return 'rational.<bigint>';
   }
-  return width === 64 ? 'rational' : `rational.<${width}>`;
+  return [8, 16, 32, 64, 128].includes(width) ? `rational${width}` : `rational.<${width}>`;
 }
 
 export function rationalWidthOf(typeRecord: unknown): number {
-  const args = (typeRecord as { Arguments?: readonly unknown[] } | undefined)?.Arguments;
-  if (args === undefined || args.length === 0) {
-    return 64;
-  }
+  // Internal callers may explicitly use this helper's bounded policy. A
+  // malformed concrete record never acquires that policy from missing arguments.
+  if (typeRecord === undefined) return 64;
+  if ((typeRecord as { Kind?: string }).Kind === 'parameterized') return rationalWidthOf((typeRecord as { Base: unknown }).Base);
+  const args = (typeRecord as { Arguments?: readonly unknown[] }).Arguments;
+  if (args?.length !== 1) return Number.NaN;
   // #sec-rational-types: "For each positive integer N". Any other argument -
-  // `rational.<1.5>`, `rational.<0>`, `rational.<bigint>` - names no type: NaN, which
+  // `rational.<1.5>` or `rational.<0>` - names no type: NaN, which
   // no width equals. It answered 64 for anything that was not a number, so
   // `rational.<bigint>` was silently a 64-bit rational, and a non-integer width
   // reached `BigInt` and crashed the host.
@@ -131,6 +133,13 @@ function refuseRationalWidth(typeRecord: unknown): ThrowCompletion {
  * exactly. The canonical denominator is positive, so it must fit 1 to
  * 2**(N-1) - 1; the numerator must fit all of `int.<N>`.
  */
+/** Whether the reduced fraction fits the protocol's explicit bounded presentation. */
+export function rationalPartsFitWidth(numerator: bigint, denominator: bigint, width: number): boolean {
+  const { num, den } = canonicalize(numerator, denominator);
+  const max = (1n << (BigInt(width) - 1n)) - 1n;
+  return num >= -max - 1n && num <= max && den > 0n && den <= max;
+}
+
 export function CreateRationalValue(numerator: bigint, denominator: bigint, realmRec: Realm, typeRecord?: unknown): RationalObject | ThrowCompletion {
   const { num, den } = canonicalize(numerator, denominator);
   if (Number.isNaN(rationalWidthOf(typeRecord))) {
@@ -144,7 +153,7 @@ export function CreateRationalValue(numerator: bigint, denominator: bigint, real
   const max = (1n << (width - 1n)) - 1n;
   if (num < -max - 1n || num > max || den > max) {
     return Throw.RangeError('$1 is not in the range of $2', Value(`${num}/${den}`),
-      Value(width === 64n ? 'rational' : `rational.<${width}>`));
+      Value(rationalDisplay(typeRecord)));
   }
   return makeRationalObject(num, den, realmRec, typeRecord);
 }
@@ -160,7 +169,7 @@ function makeRationalObject(num: bigint, den: bigint, realmRec: Realm, typeRecor
   // rational carried none, so once `rational` became a primitive type the value
   // and the type no longer matched and every binding refused its own literal.
   // A crossing into a parameterization passes the parameterized type.
-  (obj as Mutable<RationalObject> & { TypeRecord?: unknown }).TypeRecord = typeRecord ?? makePrimitive('rational', []);
+  (obj as Mutable<RationalObject> & { TypeRecord?: unknown }).TypeRecord = typeRecord ?? makePrimitive('rational', [64]);
   return obj;
 }
 
@@ -755,7 +764,7 @@ function approximateInWidth(x: number, bound: bigint, typeRecord: unknown): { nu
   return { num: negative ? -p : p, den: q };
 }
 
-/** `approximate` at a type: the bare constructor's at 64, a `rational.<N>` Type Object's at N. */
+/** `approximate` at a type: the internal helper uses 64; a `rational.<N>` Type Object uses N. */
 export function* RationalApproximateAt([x = Value.undefined, bound = Value.undefined]: Arguments, typeRecord: unknown): ValueEvaluator {
   const realmRec = surroundingAgent.currentRealmRecord;
   if (Number.isNaN(rationalWidthOf(typeRecord))) {

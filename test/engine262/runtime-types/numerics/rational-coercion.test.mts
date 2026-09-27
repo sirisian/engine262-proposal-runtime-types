@@ -30,11 +30,11 @@ test('the exact rows answer for a decimal, at the decimal type', () => {
 });
 
 test('and for a rational, exactly', () => {
-  expect(evaluated('let r = rational(-1, 2); String(Math.abs(r));')).toBe('1/2');
-  expect(evaluated('let r = rational(-1, 2); String(Reflect.typeOf(Math.abs(r)));')).toBe('rational');
-  expect(evaluated('let r = rational(-1, 2); String(Math.sign(r));')).toBe('-1');
-  expect(evaluated('let a = rational(1, 2); let b = rational(1, 3); String(Math.max(a, b));')).toBe('1/2');
-  expect(evaluated('let a = rational(1, 2); let b = rational(1, 3); String(Math.min(a, b));')).toBe('1/3');
+  expect(evaluated('let r = rational64(-1, 2); String(Math.abs(r));')).toBe('1/2');
+  expect(evaluated('let r = rational64(-1, 2); String(Reflect.typeOf(Math.abs(r)));')).toBe('rational64');
+  expect(evaluated('let r = rational64(-1, 2); String(Math.sign(r));')).toBe('-1');
+  expect(evaluated('let a = rational64(1, 2); let b = rational64(1, 3); String(Math.max(a, b));')).toBe('1/2');
+  expect(evaluated('let a = rational64(1, 2); let b = rational64(1, 3); String(Math.min(a, b));')).toBe('1/3');
 });
 
 test('a row that rounds is refused, and says why', () => {
@@ -48,7 +48,7 @@ test('a row that rounds is refused, and says why', () => {
   // `rational-rounding.test.mts`. A decimal still has no such rule stated.
   expectThrownKind("let d = decimal64.parse('2.5'); Math.trunc(d);", 'TypeError');
   // A mixed pair is not one family, so it is not an exact row either.
-  expectThrownKind("let d = decimal64.parse('2.5'); let r = rational(1, 2); Math.max(d, r);", 'TypeError');
+  expectThrownKind("let d = decimal64.parse('2.5'); let r = rational64(1, 2); Math.max(d, r);", 'TypeError');
 });
 
 test('the other families are untouched', () => {
@@ -58,9 +58,9 @@ test('the other families are untouched', () => {
 });
 
 test('everything a rational could already do is unchanged', () => {
-  expect(evaluated('let r = rational(-1, 2); String(r);')).toBe('-1/2');
-  expect(evaluated('let r = rational(-1, 2); String(r.numerator);')).toBe('-1');
-  expect(evaluated('let r = rational(1, 2); String(r.reciprocal());')).toBe('2');
-  expect(evaluated('let a = rational(1, 2); let b = rational(1, 3); String(a + b);')).toBe('5/6');
-  expect(evaluated('String(rational(0.5));')).toBe('1/2');
+  expect(evaluated('let r = rational64(-1, 2); String(r);')).toBe('-1/2');
+  expect(evaluated('let r = rational64(-1, 2); String(r.numerator);')).toBe('-1');
+  expect(evaluated('let r = rational64(1, 2); String(r.reciprocal());')).toBe('2');
+  expect(evaluated('let a = rational64(1, 2); let b = rational64(1, 3); String(a + b);')).toBe('5/6');
+  expect(evaluated('String(rational64(0.5));')).toBe('1/2');
 });

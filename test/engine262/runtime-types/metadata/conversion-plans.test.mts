@@ -17,12 +17,12 @@ const addition = `primitive float64<const D: Dim> {
 }`;
 
 test.each([false, true])('typed hooks convert a boundary (rational=%s)', (rational) => {
-  expect(evaluated(`${units(rational ? 'rational' : 'float64')}
+  expect(evaluated(`${units(rational ? 'rational64' : 'float64')}
     let m: M = (1 := KM); String(m);`)).toBe('1000');
 });
 
 test('rational scaling does not round a wide integer through Number', () => {
-  expect(evaluated(`${units('rational', 'uint64')}
+  expect(evaluated(`${units('rational64', 'uint64')}
     let m: M = (9007199254741 := KM); String(m);`)).toBe('9007199254741000');
 });
 
@@ -142,7 +142,7 @@ test('invalid rescale and quantize results fail instead of disappearing', () => 
 
 test('a rational factor scales wide range endpoints without a Number round trip', () => {
   expect(evaluated(`const bounds=(9007199254741:=uint64)..=(9007199254742:=uint64);
-    const scaled=bounds.scale(rational(1000,1));String(scaled.start)+'/'+String(scaled.end);`)).toBe('9007199254741000/9007199254742000');
+    const scaled=bounds.scale(rational64(1000,1));String(scaled.start)+'/'+String(scaled.end);`)).toBe('9007199254741000/9007199254742000');
 });
 
 
@@ -151,3 +151,19 @@ test('exact factor products do not acquire the default rational width bound', ()
     conversionFactor(a,b){return 18446744073709551616n;}}
     let x:uint128.<{r:2}>=(1:=uint128.<{r:3}>);String(x);`)).toBe('18446744073709551616');
 });
+
+
+for (const [factor, presentation, scaled] of [
+  ['4', 'number', '4'],
+  ['rational64(4)', 'rational64', '4'],
+  ['18446744073709551616n', 'rational.<bigint>', '18446744073709551616'],
+]) {
+  test(`typed rescale observes the explicit ${presentation} factor presentation`, () => {
+    expect(evaluated(`type Units = { u: number }; meta Units { default = { u: 0 }; subtype(a,b) { return true; }
+      conversionFactor(a,b) { return ${factor}; } }
+      type Seen = { presentation: string }; meta Seen { default = { presentation: "none" }; subtype(a,b) { return true; }
+      rescale(c: Seen, factor: number | rational64 | rational.<bigint>): Seen { return { presentation: String(Reflect.typeOf(factor)) }; } }
+      type Source = uint128.<{ u: 1, presentation: "source" }>; type Target = uint128.<{ u: 2 }>;
+      const x: Target = Source(1); String(x) + '/' + Reflect.getReflection(Reflect.typeOf(x)).metadata.presentation;`)).toBe(`${scaled}/${presentation}`);
+  });
+}

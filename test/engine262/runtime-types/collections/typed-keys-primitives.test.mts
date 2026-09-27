@@ -85,12 +85,12 @@ test('decimal cohorts are ONE key', () => {
 });
 
 test('rational keys compare in canonical form', () => {
-  // rational.md states this one verbatim: "new Set.<rational>([rational(1, 2),
-  // rational(50, 100)]).size; // 1". Canonical form makes structural equality
+  // rational.md states this one verbatim: "new Set.<rational64>([rational64(1, 2),
+  // rational64(50, 100)]).size; // 1". Canonical form makes structural equality
   // and mathematical equality the same question.
-  expect(evaluated('const s = new Set.<rational>(); s.add(rational(1, 2)); s.add(rational(50, 100)); String(s.size);')).toBe('1');
-  expect(evaluated('const m = new Map.<rational, string>(); m.set(rational(1, 2), "half"); String(m.get(rational(2, 4))));'.replace('));', ');'))).toBe('half');
-  expect(evaluated('const s = new Set.<rational>(); s.add(rational(1, 2)); s.add(rational(1, 3)); String(s.size);')).toBe('2');
+  expect(evaluated('const s = new Set.<rational64>(); s.add(rational64(1, 2)); s.add(rational64(50, 100)); String(s.size);')).toBe('1');
+  expect(evaluated('const m = new Map.<rational64, string>(); m.set(rational64(1, 2), "half"); String(m.get(rational64(2, 4))));'.replace('));', ');'))).toBe('half');
+  expect(evaluated('const s = new Set.<rational64>(); s.add(rational64(1, 2)); s.add(rational64(1, 3)); String(s.size);')).toBe('2');
 });
 
 // ---------------------------------------------------------------------------

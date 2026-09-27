@@ -48,7 +48,7 @@ test('a string that is not a literal is still null', () => {
   expect(evaluated('String(uint8.tryParse(42));')).toBe('null');
   expect(evaluated("String(float16.tryParse('zz'));")).toBe('null');
   expect(evaluated("String(decimal64.tryParse('zz'));")).toBe('null');
-  expect(evaluated("String(rational.tryParse('zz'));")).toBe('null');
+  expect(evaluated("String(rational64.tryParse('zz'));")).toBe('null');
   expect(evaluated("String(complex64.tryParse('zz'));")).toBe('null');
 });
 
@@ -62,7 +62,7 @@ test('a successful parse is unchanged', () => {
   expect(evaluated("String(float16.parse('1.5'));")).toBe('1.5');
   expect(evaluated("String(float16.parse('0.1'));")).toBe('0.0999755859375');
   expect(evaluated("String(decimal64.parse('1.5'));")).toBe('1.5');
-  expect(evaluated("String(rational.parse('1/2'));")).toBe('1/2');
+  expect(evaluated("String(rational64.parse('1/2'));")).toBe('1/2');
   expect(evaluated("String(complex64.parse('1+2i'));")).toBe('1+2i');
 });
 

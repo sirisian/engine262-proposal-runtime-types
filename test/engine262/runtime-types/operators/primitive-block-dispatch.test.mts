@@ -29,7 +29,7 @@ test('a block over a family reaches each member, with its component bound', () =
     String((3 := uint8) * 'x') + ' ' + String((3 := uint16) * 'x');`)).toBe('w8 w16');
   // A position the record leaves out holds the default: rational.<64> is `rational`.
   expect(evaluated(`primitive rational<const W> { operator *(rhs: string): string { return 'r' + String(W); } }
-    const r: rational = 1 / 3; String(r * 'x');`)).toBe('r64');
+    const r: rational64 = 1 / 3; String(r * 'x');`)).toBe('r64');
   // A type component: complex128's is float64, complex64's float32. (An
   // operand of the receiver's own type would redeclare complex addition.)
   expect(evaluated(`primitive complex<const E> { operator *(rhs: string): string { return 'same:' + String(E); } }
