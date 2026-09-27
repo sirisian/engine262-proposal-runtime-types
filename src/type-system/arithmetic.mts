@@ -4,7 +4,7 @@ import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import { displayType, UnderlyingOf } from './records.mts';
 import { fitsNumericType } from './runtime.mts';
-import { AbruptCompletion, Throw, type ThrowCompletion } from '#self';
+import { AbruptCompletion, Throw, MetadataMismatchDescription, type ThrowCompletion } from '#self';
 
 /**
  * proposal-runtime-types R3 #sec-numeric-types: arithmetic over numeric value
@@ -482,6 +482,8 @@ export function TypedOperandType(x: Value, y: Value, literals?: { left: boolean,
     return Throw.TypeError('$1 and $2 are different numeric types and do not mix; convert one of them', Value(displayType((xt ?? yt)!)), Value('bigint'));
   }
   if (xt && yt && !SameType(xt, yt)) {
+    const metadata = MetadataMismatchDescription(xt, yt);
+    if (metadata !== undefined) return Throw.TypeError('$1', metadata);
     return Throw.TypeError('$1 and $2 are different numeric types and do not mix; convert one of them', Value(displayType(xt)), Value(displayType(yt)));
   }
   const target = (xt ?? yt)!;

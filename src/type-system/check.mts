@@ -12,7 +12,7 @@ import { skipDebugger } from '../evaluator.mts';
 import { MostSpecificPrimitiveOperator, OperandNamesCapture } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
-import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes } from '../abstract-ops/runtime-types.mts';
+import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
 import { SameValue } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
@@ -16788,7 +16788,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return lv;
             }
           }
-          const completion = Throw.StaticTypeError('$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv))) as ThrowCompletion;
+          const metadata = MetadataMismatchDescription(lv, rv);
+          const completion = (metadata === undefined
+            ? Throw.StaticTypeError('$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv)))
+            : Throw.StaticTypeError('$1', metadata)) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return lv;
         }

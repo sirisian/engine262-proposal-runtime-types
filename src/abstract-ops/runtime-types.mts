@@ -2705,6 +2705,7 @@ export function* AddClassOperator(proto: Value, key: string, fn: Value): PlainEv
 interface PrimitiveOperatorEntry {
   readonly fn: Value,
   readonly parameterType: TypeRecord | null,
+  readonly returnType?: TypeRecord,
   readonly deferred?: DeferredOperatorTypes,
   /** The OperatorDefinition that declared it, so a re-check of the same source does not meet itself. */
   readonly node?: object,
@@ -2781,7 +2782,7 @@ export interface DeferredOperatorTypes {
   readonly returnTypeNode: unknown;
 }
 
-export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null, deferred?: DeferredOperatorTypes, node?: object): void {
+export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null, deferred?: DeferredOperatorTypes, node?: object, returnType?: TypeRecord): void {
   const tables = primitiveTablesForAgent();
   let ops = tables.get(typeName);
   if (!ops) {
@@ -2802,7 +2803,7 @@ export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: 
   if (node !== undefined && entries.some((e) => e.node === node)) {
     return;
   }
-  entries.push({ fn, parameterType, deferred, node });
+  entries.push({ fn, parameterType, deferred, node, returnType });
 }
 
 /**
@@ -3120,12 +3121,14 @@ export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
     if (flag === Value.true) {
       const marker: Record<string, unknown> = Object.create(null);
       marker.__range = true;
-      marker.start = Q(yield* Get(value, Value('start')));
-      marker.end = Q(yield* Get(value, Value('end')));
+      const start = Q(yield* Get(value, Value('start')));
+      const end = Q(yield* Get(value, Value('end')));
+      marker.start = start === Value.undefined ? undefined : start;
+      marker.end = end === Value.undefined ? undefined : end;
       const startBound = Q(yield* Get(value, Value('startBound')));
       const endBound = Q(yield* Get(value, Value('endBound')));
-      marker.startBound = startBound instanceof JSStringValue ? startBound.stringValue() : startBound;
-      marker.endBound = endBound instanceof JSStringValue ? endBound.stringValue() : endBound;
+      marker.startBound = startBound === Value.undefined ? undefined : startBound instanceof JSStringValue ? startBound.stringValue() : startBound;
+      marker.endBound = endBound === Value.undefined ? undefined : endBound instanceof JSStringValue ? endBound.stringValue() : endBound;
       return Object.freeze(marker) as unknown as Value;
     }
   }
@@ -5815,6 +5818,19 @@ export function IsForbiddenReadonlyWrite(receiver: Value, key: import('../value.
   return running !== declaringConstructor;
 }
 
+/** Explain a failed numeric operation without running subtype/conversion hooks. */
+export function MetadataMismatchDescription(left: TypeRecord, right: TypeRecord): string | undefined {
+  const baseOf = (t: TypeRecord) => t.Kind === 'parameterized' ? t.Base : t;
+  if (!SameType(baseOf(left), baseOf(right))) return undefined;
+  const lm = left.Kind === 'parameterized' ? left.Metadata : {} as MetadataRecord;
+  const rm = right.Kind === 'parameterized' ? right.Metadata : {} as MetadataRecord;
+  const owners = new Set([...GoverningMetaTypes(lm).types, ...GoverningMetaTypes(rm).types]);
+  const differing = [...owners].filter((owner) => !SameMetadata(MetadataPortion(lm, owner), MetadataPortion(rm, owner)));
+  if (differing.length === 0) return undefined;
+  const names = differing.map((owner) => LookupMetaTypeName(owner) ?? 'a meta type').join(', ');
+  return `no applicable operator for differing ${names} metadata: ${displayType(left)} and ${displayType(right)}`;
+}
+
 /**
  * proposal-runtime-types #sec-primitive-operator-blocks: "the portions the
  * matching return types evaluate to are merged into one flat metadata object,
@@ -5831,14 +5847,19 @@ export function IsForbiddenReadonlyWrite(receiver: Value, key: import('../value.
 export function MergeOperatorResultMetadata(
   contributed: readonly { metaType: object, portion: MetadataRecord }[],
   governing: readonly object[],
-): MetadataRecord {
+): MetadataRecord | ThrowCompletion {
   const merged: Record<string, unknown> = Object.create(null);
-  const said = new Set<object>();
+  const said = new Map<object, MetadataRecord>();
   for (const { metaType, portion } of contributed) {
-    said.add(metaType);
-    if (portion && typeof portion === 'object') {
-      for (const key of Object.keys(portion as unknown as Record<string, unknown>)) {
-        merged[key] = (portion as unknown as Record<string, unknown>)[key];
+    const completed = MetadataPortion(portion, metaType);
+    const prior = said.get(metaType);
+    if (prior !== undefined && !SameMetadata(prior, completed)) {
+      return Throw.TypeError('$1', `conflicting operator result metadata for ${LookupMetaTypeName(metaType) ?? 'a meta type'}`);
+    }
+    said.set(metaType, completed);
+    if (completed && typeof completed === 'object') {
+      for (const key of Object.keys(completed as unknown as Record<string, unknown>)) {
+        merged[key] = (completed as unknown as Record<string, unknown>)[key];
       }
     }
   }

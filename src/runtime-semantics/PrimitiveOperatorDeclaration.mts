@@ -216,7 +216,13 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
       (opFn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator = true;
     }
     const key = e.FormalParameters.length === 0 ? `unary ${e.OperatorName}` : e.OperatorName;
-    RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred, e);
+    // A fixed definition's return type contributes metadata too. Resolve it
+    // in its declaration environment, just like its fixed operand type.
+    let returnType: TypeRecord | undefined;
+    if (!deferred && e.TypeAnnotation) {
+      returnType = Q(yield* TypeNodeToTypeRecord(e.TypeAnnotation.Type));
+    }
+    RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred, e, returnType);
   }
   return undefined;
 }

@@ -19,7 +19,7 @@ import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as 
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { MetaTypeForConstraint, MetadataPortion, MetaTypeGoverns, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels, MetadataOperandAdmits, MetadataOperandExact, MergeMetadataOperandRequirements, ConvertMetadataOperand } from '../abstract-ops/runtime-types.mts';
-import { SameMetadata, SameType as SameTypeRecord } from '../type-system/relations.mts';
+import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import { MatchComponentList } from '../type-system/component-patterns.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -589,7 +589,6 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
   // definition with a body - or the primitive operation - computes the value.
   const contributions: PreparedPrimitiveOperator[] = [];
   let selected: PreparedPrimitiveOperator | undefined;
-  const contributedPortions = new Map<object, MetadataRecord>();
   // Select at the first receiver level with an admitting body. Within a
   // level, specificity and the exact-metadata tie-break decide; declaration
   // order never selects a body. Bodyless contributions may come from any level.
@@ -604,7 +603,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
       // operand admitted by the receiver's requirement, converting after
       // selection, and the result carries the declared metadata.
       let deferredParameterType = null;
-      const deferredReturnType = null;
+      const deferredReturnType = entry.returnType ?? null;
       let framePushed = false;
       let deferredSpokenFor: object[] = [];
       let entryFrame: Map<string, TypeRecord> | null = null;
@@ -777,21 +776,10 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     const chosen = selected;
     const finished = Q(yield* FinishPrimitiveOperator(chosen, effectiveOperand));
     if (!finished) return Throw.TypeError('the selected operator no longer admits its converted operand');
-    // The bodyless definitions' portions join the chosen definition's own.
-    for (const c of applicable) {
-      if (c.returnType?.Kind !== 'parameterized') continue;
-      for (const metaType of c.spokenFor) {
-        const portion = MetadataPortion(c.returnType.Metadata, metaType);
-        const prior = contributedPortions.get(metaType);
-        if (prior && !SameMetadata(prior, portion)) return Throw.TypeError('bodyless operator $1 has conflicting result metadata', opText);
-        if (!chosen.spokenFor.includes(metaType)) {
-          chosen.spokenFor.push(metaType);
-          contributedPortions.set(metaType, portion);
-        }
-      }
-    }
-    let deferredReturnType = chosen.returnType;
-    const deferredSpokenFor = chosen.spokenFor;
+    // Merge every contributing definition, including the value body's own
+    // result, before invoking that body. No declaration order can hide a
+    // conflicting portion, and a rejected composition has no body effects.
+    let resultType = Q(MergePrimitiveResultType(lval, chosen.returnType ?? RuntimeTypeOf(lval), [chosen, ...applicable]));
     // The frame stays pushed for the WHOLE invocation: the operator's own
     // parameter boundary resolves the block's names when the body is entered.
     if (chosen.frame) {
@@ -807,31 +795,17 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
         popTypeParameterFrame();
       }
     }
-    if (deferredReturnType !== null && deferredReturnType.Kind === 'parameterized') {
-      const receiverType = RuntimeTypeOf(lval);
-      const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized'
-        ? receiverType.Metadata
-        : deferredReturnType.Metadata).types;
-      const returnMetadata = deferredReturnType.Metadata;
-      const mergedMetadata = MergeOperatorResultMetadata(
-        deferredSpokenFor.map((metaType) => ({ metaType, portion: contributedPortions.get(metaType) ?? MetadataPortion(returnMetadata, metaType) })),
-        governing,
-      );
-      deferredReturnType = ResultWithMetadata(deferredReturnType.Base, mergedMetadata);
-      if (isTypedNumber(raw)) {
-        return new TypedNumberValue((raw as TypedNumberValue).value, deferredReturnType);
-      }
-      const stamped = StampFamilyValue(raw, deferredReturnType);
-      if (stamped !== undefined) {
-        return stamped;
-      }
-      if (raw instanceof NumberValue) {
-        return new TypedNumberValue(Number((raw as unknown as { value: number }).value), deferredReturnType);
-      }
+    if (chosen.returnType === null) {
+      resultType = Q(MergePrimitiveResultType(lval, RuntimeTypeOf(raw), [chosen, ...applicable]));
     }
-    return raw;
-    }
-  return applicable.length > 0 ? { contributions: applicable, operand: effectiveOperand } : undefined;
+    return StampPrimitiveResult(raw, resultType);
+  }
+  if (applicable.length > 0) {
+    // Check the bodyless-only composition before running the primitive too.
+    Q(MergePrimitiveResultType(lval, RuntimeTypeOf(lval), applicable));
+    return { contributions: applicable, operand: effectiveOperand };
+  }
+  return undefined;
 }
 
 /** The bodyless definitions admitting an operand where no definition with a body does. */
@@ -897,37 +871,54 @@ function ResultWithMetadata(base: TypeRecord, metadata: MetadataRecord): TypeRec
     ? { Kind: 'parameterized', Base: base, Metadata: metadata } as TypeRecord : base;
 }
 
-export function StampBodylessContributions(lval: Value, raw: Value, found: BodylessContributions): Value | ThrowCompletion {
-  // A vector's metadata is its LANES': the contributing definition's return
-  // type is the result's type, with each lane carrying its lane type. One
-  // contribution decides it; the per-meta-type merge of a scalar's portions
-  // has no counterpart until a lane is governed by several meta types.
-  if ((raw as { type?: string }).type === 'Vector') {
-    const vector = raw as unknown as VectorValue;
-    const vectorReturns = found.contributions.map((c) => c.returnType).filter(isVectorType) as (TypeRecord & { Kind: 'primitive' })[];
-    if (vectorReturns.length !== 1) {
-      return raw;
+/** Merge scalar portions, or lane portions for a vector, by the same rule. */
+function MergePrimitiveResultType(
+  receiver: Value, result: TypeRecord, contributions: readonly PreparedPrimitiveOperator[],
+): TypeRecord | ThrowCompletion {
+  const laneOf = (type: TypeRecord): TypeRecord => isVectorType(type)
+    ? (type as TypeRecord & { Kind: 'primitive' }).Arguments[0] as TypeRecord : type;
+  const portions = contributions.flatMap((c) => {
+    if (!c.returnType) return [];
+    const type = laneOf(c.returnType);
+    if (type.Kind !== 'parameterized') return [];
+    // Explicitly written return portions contribute even in a fixed block
+    // without metadata captures. A captured but omitted portion is its default.
+    const owners = new Set([...c.spokenFor, ...GoverningMetaTypes(type.Metadata).types]);
+    return [...owners].map((metaType) => ({ metaType, portion: MetadataPortion(type.Metadata, metaType) }));
+  });
+  if (portions.length === 0) return result;
+  const receiverType = laneOf(RuntimeTypeOf(receiver));
+  const scalarResult = laneOf(result);
+  const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized'
+    ? receiverType.Metadata : scalarResult.Kind === 'parameterized' ? scalarResult.Metadata : {} as MetadataRecord).types;
+  const merged = Q(MergeOperatorResultMetadata(portions, governing));
+  const base = scalarResult.Kind === 'parameterized' ? scalarResult.Base : scalarResult;
+  const scalarType = ResultWithMetadata(base, merged);
+  return isVectorType(result)
+    ? { ...result, Arguments: [scalarType, ...(result as TypeRecord & { Kind: 'primitive' }).Arguments.slice(1)] } as TypeRecord
+    : scalarType;
+}
+
+function StampPrimitiveResult(raw: Value, resultType: TypeRecord): Value | ThrowCompletion {
+  if ((raw as { type?: string }).type === 'Vector' && isVectorType(resultType)) {
+    const laneType = (resultType as TypeRecord & { Kind: 'primitive' }).Arguments[0] as TypeRecord;
+    const lanes: Value[] = [];
+    for (const lane of (raw as VectorValue).lanes) {
+      const stamped = Q(StampPrimitiveResult(lane, laneType));
+      lanes.push(stamped);
     }
-    const resultType = vectorReturns[0];
-    const laneType = resultType.Arguments[0] as TypeRecord;
-    const lanes = vector.lanes.map((lane: Value) => (isTypedNumber(lane) ? new TypedNumberValue((lane as TypedNumberValue).value, laneType) : lane));
-    return new VectorValue(lanes, resultType) as unknown as Value;
+    return new VectorValue(lanes, resultType);
   }
-  const portions = found.contributions.flatMap((c) => c.spokenFor.map((metaType) => ({
-    metaType, portion: MetadataPortion((c.returnType as TypeRecord & { Kind: 'parameterized' }).Metadata, metaType),
-  })));
-  if (portions.length === 0) {
-    return raw;
+  if (isTypedNumber(raw)) return new TypedNumberValue(raw.value, resultType);
+  const stamped = StampFamilyValue(raw, resultType);
+  if (stamped !== undefined) return stamped;
+  if (raw instanceof NumberValue && resultType.Kind === 'parameterized') {
+    return new TypedNumberValue(R(raw), resultType);
   }
-  const receiverType = RuntimeTypeOf(lval);
-  const first = found.contributions[0].returnType as TypeRecord & { Kind: 'parameterized' };
-  const governing = GoverningMetaTypes(receiverType.Kind === 'parameterized' ? receiverType.Metadata : first.Metadata).types;
-  const merged = MergeOperatorResultMetadata(portions, governing);
-  const rawType = RuntimeTypeOf(raw);
-  const base = rawType.Kind === 'parameterized' ? rawType.Base : rawType;
-  const stampedType = ResultWithMetadata(base, merged);
-  if (isTypedNumber(raw)) {
-    return new TypedNumberValue((raw as TypedNumberValue).value, stampedType);
-  }
-  return StampFamilyValue(raw, stampedType) ?? raw;
+  return raw;
+}
+
+export function StampBodylessContributions(lval: Value, raw: Value, found: BodylessContributions): Value | ThrowCompletion {
+  const resultType = Q(MergePrimitiveResultType(lval, RuntimeTypeOf(raw), found.contributions));
+  return StampPrimitiveResult(raw, resultType);
 }

@@ -847,7 +847,7 @@ test('sec-matchrange: a range `case` label matches by containment', () => {
 // =============================================================================
 
 const NB = `
-type NumberBounds = { bounds?: Range };
+type NumberBounds = { bounds?: RangeBounds };
 meta NumberBounds {
   default = {};
   subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }

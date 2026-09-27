@@ -47,3 +47,26 @@ test.each([
     type B = float32.<builder()>; String(A === B)
       + '/' + String(Reflect.makeType(Reflect.getReflection(A)) === B);`)).toBe('true/true');
 });
+
+test.each(['0..<10', '0..=10', '0<..<10', '0<..=10', '0..', '0<..', '..<10', '..=10', '..'])('range metadata reflection preserves identity for %s', (bounds) => {
+  expect(evaluated(`type Bounds={bounds:RangeBounds};meta Bounds {default={bounds:..};subtype(a,b){return true;}}
+    type T=float64.<{bounds:${bounds}}>;
+    String(Reflect.makeType(Reflect.getReflection(T))===T);`)).toBe('true');
+});
+
+test('range metadata still checks its declared shape', () => {
+  expectThrown(`type Bounds={bounds?:Range};meta Bounds {default={};subtype(a,b){return true;}}
+    type T=float64.<{bounds:0..}>;`, 'shape');
+});
+
+test('reflection preserves an explicit default requirement as a distinct type', () => {
+  expect(evaluated(`type Dim={m:int32};meta Dim {default={m:0};subtype(a,b){return a.m===b.m;}}
+    type Zero=float64.<{m:0}>;
+    String(Reflect.makeType(Reflect.getReflection(Zero))===Zero)+'/'+String(Zero===float64);`)).toBe('true/false');
+});
+
+test('integral rational metadata uses the ordinary rational display', () => {
+  expect(evaluated(`type Dim={ratio:rational};meta Dim {default={ratio:1};subtype(a,b){return true;}}
+    type T=float64.<{ratio:10}>;
+    String(T)+'/'+String(rational(10));`)).toBe('float64.<{ ratio: 10 }>/10');
+});

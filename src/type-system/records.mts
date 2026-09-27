@@ -1313,13 +1313,13 @@ function defaultOrderKey(initial: unknown): string {
 }
 
 /** Numeric objects are semantic atoms; never walk their realm or prototype. */
-function numericMetadataText(value: unknown): string | undefined {
+function numericMetadataText(value: unknown, forDisplay = false): string | undefined {
   if (value instanceof BigIntValue) return `${R(value)}n`;
   if (value instanceof TypedNumberValue && typeof (value as TypedNumberValue).value === 'bigint') return String((value as TypedNumberValue).value);
   if (!value || typeof value !== 'object') return undefined;
   if ('RationalNumerator' in value) {
     const r = value as { RationalNumerator: bigint, RationalDenominator: bigint };
-    return `${r.RationalNumerator}/${r.RationalDenominator}`;
+    return forDisplay && r.RationalDenominator === 1n ? String(r.RationalNumerator) : `${r.RationalNumerator}/${r.RationalDenominator}`;
   }
   if ('DecimalSignificand' in value) {
     const d = value as { DecimalSignificand: bigint, DecimalExponent: number, DecimalSpecial?: string };
@@ -1768,7 +1768,7 @@ function displayTypeWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
 }
 
 function displayMetadataValue(m: unknown): string {
-  const numeric = numericMetadataText(m);
+  const numeric = numericMetadataText(m, true);
   if (numeric !== undefined) return numeric;
   if (m === null || m === undefined) {
     return String(m);
