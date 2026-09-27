@@ -24343,7 +24343,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (withParams.TypeParameters || withParams.TypeParameterList || withParams.TypeParameterDeclaration) {
               return null;
             }
-            const annotation = fn.TypeAnnotation as { Type?: ParseNode, NarrowsTarget?: string } | undefined;
+            const annotation = fn.TypeAnnotation as { Type?: ParseNode.Type, NarrowsTarget?: string } | undefined;
             if (!annotation?.Type || annotation.NarrowsTarget) {
               return null;
             }
