@@ -1346,6 +1346,17 @@ function closedInhabitants(constraint: TypeRecord, cap = TRIAL_CEILING): TypeRec
   if (constraint.Kind === 'literal') {
     return [constraint];
   }
+  // #sec-trial-specialization: "an enum of types ... whose candidates are ...
+  // the enumerators in declaration order". An enum whose enumerators are not
+  // all Type Objects - a numeric or string enum - is not an enum of types and
+  // proposes nothing.
+  if (constraint.Kind === 'nominal' && constraint.EnumMembers !== undefined) {
+    const records = constraint.EnumMembers.map((m) => (isTypeObject(m) ? m.TypeRecord : null));
+    if (records.length === 0 || records.some((r) => !r)) {
+      return null;
+    }
+    return records.length <= cap ? records as TypeRecord[] : null;
+  }
   if (constraint.Kind === 'union') {
     // #sec-trial-specialization: "a union of types ... whose candidates are the
     // members in declaration order". The candidates are the MEMBER TYPES, not

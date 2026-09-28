@@ -19212,7 +19212,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // while the static type still says `Pos` - and reporting that branch as
       // dead would have contradicted a documented behaviour. So the rule
       // fires for the kinds whose membership a value cannot lose.
+      // A CLASS joins them (Q7 of the round-2 review): its membership is an
+      // identity - the prototype chain - and not a structure, so no write to a
+      // field can take a value out of it. That is the fact the `instanceof`
+      // form and the Early Error on `P & Q` already rest on; an object type or a
+      // refinement stays out, for the reason above.
       const decidable = (t: TypeRecord): boolean => t.Kind === 'primitive' || t.Kind === 'literal'
+        || (t.Kind === 'nominal' && (t as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration')
         || (t.Kind === 'union' && t.Members.every(decidable));
       if (source.Kind !== 'any' && !fact.sense && decidable(source) && decidable(fact.type)) {
         if (whenTrue === empty) {
@@ -19306,6 +19312,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** #sec-pattern-static-semantics: annotations test and narrow; other bindings inherit their position's known type. */
+  /** Every class declaration name in this source text, collected once, whatever its nesting. */
+  let classNamesInSource: Set<string> | null = null;
+  const classNamedAnywhere = (name: string): boolean => {
+    if (classNamesInSource === null) {
+      const names = new Set<string>();
+      const visit = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+          node.forEach(visit);
+          return;
+        }
+        const n = node as { type?: string, BindingIdentifier?: { name?: string } | null };
+        if ((n.type === 'ClassDeclaration' || n.type === 'ClassExpression') && n.BindingIdentifier?.name) names.add(n.BindingIdentifier.name);
+        for (const [key, value] of Object.entries(node)) {
+          if (key !== 'parent' && key !== 'location') visit(value);
+        }
+      };
+      visit(statementList);
+      classNamesInSource = names;
+    }
+    return classNamesInSource.has(name);
+  };
+
   const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType: Known = null, subPattern = false): Known => {
     if (!pattern) return positionType;
     const narrow = (target: Known, diagnose: boolean): Known => {
@@ -19457,9 +19486,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // a value binding in the lexical scope.
         const headName = (pattern.Head as { TypeName?: { IdentifierReference?: ParseNode } | null, TypeArguments?: unknown })
           .TypeArguments ? undefined : (pattern.Head as { TypeName?: { IdentifierReference?: ParseNode } | null }).TypeName?.IdentifierReference;
-        if ((!headType || headType.Kind === 'any') && headName) {
+        // A class of the head's name ANYWHERE in the source leaves the head
+        // alone: the walk tracks classes apart from its frames, and registers a
+        // nested one only when it reaches it, so an inner `class T` does not
+        // shadow an outer `const T` here and the outer binding would be judged
+        // instead. Missing a refusal is the safe side of a rule the run time
+        // also enforces.
+        const headIdentifier = (headName as { name?: string } | undefined)?.name;
+        if ((!headType || headType.Kind === 'any') && headName && !(headIdentifier && classNamedAnywhere(headIdentifier))) {
           const valueType = staticType(headName);
-          if (valueType && valueType.Kind !== 'any' && !mentionsTypeParameter(valueType) && knownNonObject(valueType)) {
+          // A literal-only `const` has no Static Type (#sec-static-type-of-an-
+          // expression), but its numeric value is a fact the walk records, and
+          // a number denotes no type. Without this the head reached the checking
+          // pass, which refused it as "a closed type annotation could not be
+          // evaluated". The innermost binding decides, so a shadowing
+          // declaration ends the search.
+          const name = (headName as { name?: string }).name;
+          let literalConst = false;
+          for (let i = frames.length - 1; name && !lookupAlias(name) && i >= 0; i -= 1) {
+            if (frames[i].constLiteralValues.has(name)) {
+              literalConst = true;
+              break;
+            }
+            if (frames[i].declaredNames.has(name)) break;
+          }
+          if (literalConst || (valueType && valueType.Kind !== 'any' && !mentionsTypeParameter(valueType) && knownNonObject(valueType))) {
             errors.push(Throw.StaticTypeError('a juxtaposed head must denote a type').Value as ObjectValue);
           }
         }
@@ -24215,12 +24266,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const argumentTypes = args.map((a) => staticType(a));
     if (argumentTypes.some((t) => !t || t.Kind === 'any' || mentionsTypeParameter(t))) return;
     // The closed candidate sets of #sec-trial-specialization: a literal, `boolean`,
-    // an enum, a union of types - its MEMBERS are the candidates, whether or
-    // not each is enumerable - and a stated-extent array over a closed element.
-    // The run time's `closedInhabitants` proposes from the same sets.
+    // a union of types - its MEMBERS are the candidates, whether or not each is
+    // enumerable - and a stated-extent array over a closed element. The run
+    // time's `closedInhabitants` proposes from the same sets, and from an enum
+    // of types, which the pass leaves to it (below).
+    const isEnum = (t: Known): boolean => !!t && ((t.Kind === 'nominal' && t.EnumMembers !== undefined)
+      || (t.Kind === 'union' && t.Members.some(isEnum))
+      || (t.Kind === 'array' && isEnum((t as { Element: TypeRecord }).Element)));
     const closed = (t: Known): boolean => !!t && (t.Kind === 'literal'
       || (t.Kind === 'primitive' && t.Name === 'boolean')
-      || (t.Kind === 'nominal' && t.EnumMembers !== undefined)
       || (t.Kind === 'union' && t.Members.length > 0 && t.Members.every((m) => m.Kind !== 'any' && !mentionsTypeParameter(m)))
       || (t.Kind === 'array' && typeof (t as { Extent?: unknown }).Extent === 'number' && closed((t as { Element: TypeRecord }).Element)));
     // A value parameter trials its DOMAIN (Q5 of the round-2 review): `M: 'a' |
@@ -24245,8 +24299,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const builder = builderName ? functionNodes.get(builderName) as { type?: string, Decorators?: readonly unknown[] | null } | undefined : undefined;
       return builder?.type === 'FunctionDeclaration' && (builder.Decorators?.length ?? 0) === 0;
     });
-    const trialed = list.filter((tp) => !tp.IsVariadic && (closed(trialSet(tp))
-      || (!tp.IsValueParameter && undecoratedBuilderReads(tp.BindingIdentifier.name))));
+    // An ENUM of types is a closed set too, but its enumerators are the values
+    // of a declaration the pass has not evaluated - a same-source enum is still
+    // uninitialized when the pass runs - so any call whose parameters name one
+    // is left to the run time, which proposes the enumerators itself. A
+    // variadic parameter trials on the same terms as any other: the run time
+    // already proposes the tuples of a stated-extent array over a closed element.
+    if (list.some((tp) => isEnum(trialSet(tp)))) return;
+    const trialed = list.filter((tp) => closed(trialSet(tp))
+      || (!tp.IsValueParameter && undecoratedBuilderReads(tp.BindingIdentifier.name)));
     if (trialed.length === 0) return;
     const names = new Set(trialed.map((tp) => tp.BindingIdentifier.name));
     let annotation: ParseNode.Type | null = null;

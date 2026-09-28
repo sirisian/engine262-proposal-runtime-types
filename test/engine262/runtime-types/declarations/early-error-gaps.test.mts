@@ -465,8 +465,14 @@ test('instanceof between unrelated classes can never succeed (Q7)', () => {
   // the interning path, as #sec-aredisjoint chooses.
   expectStaticTypeError('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
     + 'function unused(p: P) { if (p instanceof Q) { return 1; } return 0; }');
-  // `is` keeps its own restriction to kinds whose membership a value cannot
-  // lose (primitives and literals); extending it to classes is a follow-up.
+  // The `is` form judges a class too: class membership is an identity, which
+  // no write to a field can change.
+  expectStaticTypeError('class P { x: uint8 = 1; } class Q { y: uint8 = 1; } '
+    + 'function unused(p: P) { if (p is Q) { return 1; } return 0; }');
+  expectStaticTypeError('class P { x: uint8 = 1; } let p: P = new P(); if (p is P) { } else { }');
+  // An object type stays open: a binding of one can stop satisfying it.
+  expect(ok('type Pos = { a: uint8 }; let p: Pos = { a: 1 }; if (p is Pos) { } else { } String(1);')).toBe(true);
+  expect(ok('class P { x: uint8 = 1; } class S extends P { } function unused(p: P) { if (p is S) { return 1; } return 0; } String(1);')).toBe(true);
 });
 
 test('instanceof against a class stays legal where a value can be both', () => {
@@ -601,4 +607,27 @@ test('the ladder binds what it can', () => {
   expect(evaluated(`${WRAP}function j<T: type extends uint8 | string>(x: wrapOf(T)): string { return String(T); } j('s');`)).toBe('string');
   expect(evaluated(`${WRAP}function j<T: type>(x: wrapOf(T)): uint32 { return 1; } String(j.<uint8>(1));`)).toBe('1');
   expect(evaluated(`${WRAP}function j<T: type>(y: T, x: wrapOf(T)): uint32 { return 1; } String(j((1 := uint8), (2 := uint8)));`)).toBe('1');
+});
+
+// ---- round 2 follow-ups ---------------------------------------------------
+
+test('a variadic parameter reached only through an undecorated builder is refused early', () => {
+  expectStaticTypeError(`${WRAP}function j3<...Ts: [].<type>>(...ps: wrapOf(Ts)): uint64 { return ps.length; } j3(1);`);
+  expectStaticTypeError(`${WRAP}function j3<...Ts: [].<type>>(...ps: wrapOf(Ts)): uint64 { return ps.length; } function unused() { return j3(1); }`);
+  expect(evaluated(`${WRAP}function j3<...Ts: [].<type>>(...ps: wrapOf(Ts)): uint64 { return ps.length; } String(j3.<uint8>((1 := uint8)));`)).toBe('1');
+});
+
+test('an enum of types proposes its enumerators, and the pass leaves it to the run time', () => {
+  // A same-source enum is uninitialized when the pass runs, which made the
+  // trial a false early error; the run time now trials the enumerators, so a
+  // call no enumerator fits names the enum rather than a missing inverse.
+  const E = 'class A { a: uint8 = 1; } class B { b: string = ""; } enum S: type { X = A, Y = B } ';
+  expectThrown(`${E}${WRAP}function j<T: type extends S>(x: wrapOf(T)): string { return "x"; } j(1);`, 'no inhabitant of S');
+});
+
+test('a juxtaposed head naming a numeric const is refused with the rule\'s own message', () => {
+  expectThrown('const T = 1; let x: uint8 = 1; match (x) { when T [let a]: 1; default: 0; };', 'a juxtaposed head must denote a type');
+  // A class of that name shadowing it in an inner scope is a type.
+  expect(evaluated('const T = 1; class P { a: uint8 = 1; } function g(v: P) { class T { a: uint8 = 1; } '
+    + 'return match (v) { when T { a: let a }: 1; default: 0; }; } String(g(new P()));')).toBe('0');
 });
