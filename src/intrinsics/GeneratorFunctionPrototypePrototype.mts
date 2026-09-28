@@ -8,8 +8,9 @@ import {
 import {
   Value, type Arguments, type FunctionCallContext,
 } from '../value.mts';
-import { bootstrapPrototype } from './bootstrap.mts';
+import { RememberGeneratorIntrinsics } from '../type-system/generator-intrinsics.mts';
 import { EnforceGeneratorNextArgument } from '../abstract-ops/runtime-types.mts';
+import { bootstrapPrototype } from './bootstrap.mts';
 import {
   GeneratorResume,
   GeneratorResumeAbrupt,
@@ -58,4 +59,5 @@ export function bootstrapGeneratorFunctionPrototypePrototype(realmRec: Realm) {
 
   // Used by `CreateListIteratorRecord`:
   realmRec.Intrinsics['%GeneratorFunction.prototype.prototype.next%'] = X(generatorPrototype.Get(Value('next'), generatorPrototype)) as FunctionObject;
+  RememberGeneratorIntrinsics(realmRec, generatorPrototype);
 }

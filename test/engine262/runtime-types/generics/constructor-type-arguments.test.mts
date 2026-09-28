@@ -1,21 +1,12 @@
 import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown, expectStaticTypeError } from '../harness.mts';
 
-// PLAN-v3 "Type arguments for a construction", the section 2 rows as a conformance
-// table. Every row that names the class in source reaches the CHECKER, which
-// runs first and refuses statically; the same row through `const C = Box` or
-// `Reflect.construct` reaches the RUNTIME alone. A row is green only when both
-// agree, which is the test section 3 says was missing: the checker refused A3 while the
-// runtime converted through it, and the disagreement was invisible because no
-// test reached the second side.
-//
-// Measurement discipline (PLAN-v3 section 7): a value's `Reflect.typeOf` answers for
-// the VALUE, whatever slot it sits in. Rows about a slot read the slot: `String(T)`
-// in a body for a binding, `Object.isExtensible` for sealing, a store that must
-// be refused for a field's type.
+// #sec-constructing-a-generic-class: direct and stable alias calls carry
+// static contracts. Explicit erasure exercises the corresponding runtime
+// boundary. Reflection observes the value produced by that boundary.
 
 const BOX = 'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } ';
-const ALIAS = `${BOX} const C = Box; `;
+const ALIAS = `${BOX} const C: any = Box; `;
 
 /** The runtime side alone: a throw inside try/catch is a runtime TypeError, not a static one. */
 function runtime(source: string): string {
@@ -151,7 +142,7 @@ test('B2/Q4: a parameter nothing reaches and no default is the naming error, bot
   expect(evaluated(`${K} String(Reflect.typeOf(new K.<uint8>().items));`)).toBe('[].<uint.<8>>');
   expect(evaluated(`${K} const k: K.<uint8> = new K(); String(Reflect.typeOf(k.items));`)).toBe('[].<uint.<8>>');
   // The function path agrees: no `any` fallback.
-  expectThrown('function f<A: type, B: type>(x: A): string { return String(B); } f((1 := uint8));', 'is not determined by the arguments and has no default');
+  expectStaticTypeError('function f<A: type, B: type>(x: A): string { return String(B); } f((1 := uint8));');
 });
 
 test('B4: a parameter reached through a shape binds structurally, on both sides', () => {

@@ -20,6 +20,8 @@ import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { ProvenResumedDelegations } from './generator-intrinsics.mts';
+import { CompletionValues } from './completion-values.mts';
 import { templateArgumentType, isTemplateArgumentType } from './template-argument.mts';
 import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type ReferenceLocation, type ReferenceOperation } from './reference-permissions.mts';
@@ -51,7 +53,6 @@ import {
   typeArgumentNameOf as typeArgumentNameOfShared,
   assignTypeArguments as assignTypeArgumentsShared,
 } from './type-argument-order.mts';
-import { Diverges } from './divergence.mts';
 import { IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
@@ -658,7 +659,7 @@ export function DefaultConversionChecksOf(root: object): readonly DefaultConvers
 }
 
 export interface GenericDefaultCheck {
-  readonly application: ParseNode.TypeArgumentsExpression;
+  readonly application: ParseNode.TypeArgumentsExpression | ParseNode.TypeReference | ParseNode.CallExpression | ParseNode.NewExpression;
   readonly node: ParseNode.Type;
   readonly parameters: readonly TypeParameterRecord[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
@@ -2750,6 +2751,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const errors: ObjectValue[] = [];
 
+  const resumedDelegations = ProvenResumedDelegations(root, statementList ?? [], surroundingAgent.currentRealmRecord);
+
   const deferred: DeferredMetadataCheck[] = [];
   const crossingChecks: DeferredCrossingCheck[] = [];
 
@@ -4726,7 +4729,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return String(key.value);
   };
 
-  const requireWritableMember = (expression: ParseNode | null | undefined) => {
+  // #sec-typed-string-properties: only fixed own String descriptors justify
+  // this proof. Other primitive members may reach inherited setters.
+  const fixedStringProperty = (receiver: Known, key: string | SymbolValue, operator = '='): boolean => {
+    if (receiver?.Kind === 'union') return receiver.Members.length > 0
+      && receiver.Members.every((arm) => fixedStringProperty(arm, key, operator));
+    const literal = receiver?.Kind === 'literal' && receiver.Value instanceof JSStringValue ? receiver.Value.stringValue() : null;
+    if (literal === null && !(receiver?.Kind === 'primitive' && receiver.Name === 'string')) return false;
+    const index = typeof key === 'string' && /^(0|[1-9][0-9]*)$/.test(key) ? Number(key) : -1;
+    const character = literal !== null && index >= 0 && index < literal.length;
+    if (key !== 'length' && !character) return false;
+    if (operator === '??=') return false;
+    if (operator === '&&=' || operator === '||=') {
+      const truthy = character ? true : literal === null ? null : literal.length > 0;
+      return truthy !== null && (operator === '&&=' ? truthy : !truthy);
+    }
+    return true;
+  };
+
+  const requireWritableMember = (expression: ParseNode | null | undefined, operator = '=') => {
     const lhs = patternExpression(expression ?? undefined);
     if (lhs?.type === 'IdentifierReference') {
       const slot = referenceSlotForName(lhs.name);
@@ -4751,6 +4772,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const m = lhs;
     const sealedReceiver = staticType(m.MemberExpression);
     const keys = memberKeys(m);
+    if (keys?.some((key) => fixedStringProperty(sealedReceiver, key, operator))) {
+      errors.push(Throw.StaticTypeError('a fixed String property cannot be assigned').Value as ObjectValue);
+      return;
+    }
     // #sec-vector-component-accessors: "An accessor whose key names a lane twice
     // is not assignable, since an assignment to it would give one lane two
     // values; it is a type error to assign to one."
@@ -7409,8 +7434,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (a.length !== b.length || !a.every((q, k) => sameConstructParameter(q.Type ?? null, b[k]?.Type ?? null))) {
               continue;
             }
-            if (!sig.Return || !base.Return || sig.Return.Kind === 'any' || base.Return.Kind === 'any'
-              || mentionsTypeParameter(sig.Return) || mentionsTypeParameter(base.Return)) {
+            // #sec-inferred-return-types: publication supplies the return
+            // contract wherever an explicit annotation would be consulted.
+            const returned = sig.Return ?? sig.InferredReturn;
+            const inheritedReturn = base.Return ?? base.InferredReturn;
+            if (!returned || !inheritedReturn || returned.Kind === 'any' || inheritedReturn.Kind === 'any'
+              || mentionsTypeParameter(returned) || mentionsTypeParameter(inheritedReturn)) {
               continue;
             }
             // The class being declared is not yet a registered subtype of its
@@ -7418,13 +7447,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // naming the class itself (`f(): B` over `f(): A`) stands in for
             // the base it extends: `B <: bareBase` by construction, and if
             // `bareBase <: inherited` then so is `B`.
-            const derivedReturn = sig.Return.Kind === 'nominal' && (sig.Return as { Declaration?: unknown }).Declaration === n && bareBase
+            const derivedReturn = returned.Kind === 'nominal' && (returned as { Declaration?: unknown }).Declaration === n && bareBase
               ? bareBase as TypeRecord
-              : sig.Return;
-            if (!IsSubtype(derivedReturn, base.Return, [])) {
+              : returned;
+            if (!IsSubtype(derivedReturn, inheritedReturn, [])) {
               errors.push((Throw.StaticTypeError(
                 '$1 changes the return type of an inherited signature from $2 to $3; an override may narrow a return but not change it',
-                Value(String(own.key)), Value(displayType(base.Return)), Value(displayType(sig.Return)),
+                Value(String(own.key)), Value(displayType(inheritedReturn)), Value(displayType(returned)),
               ) as ThrowCompletion).Value as ObjectValue);
             }
           }
@@ -9570,6 +9599,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // are not, so the runtime's ordering (or its refusal) governs alone
           // rather than being contradicted.
           const rawArgList = node.TypeArguments!.TypeArgumentList;
+          const appliedName = node.TypeName.IdentifierReference.name;
+          const genericDeclaration = aliasNodes.get(appliedName) ?? interfaceNodes.get(appliedName);
+          const genericParameters = (genericDeclaration as ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | undefined)?.TypeParameters?.TypeParameterList ?? [];
+          if (genericDeclaration && genericParameters.length) {
+            // #sec-bindtypearguments: aliases and interfaces share the same
+            // named/default/constraint binding as expression applications.
+            const parameters = typeParameterRecordsOf(genericParameters);
+            const bindings = new Map<string, TypeRecord>();
+            bindExplicitTypeArguments(parameters, rawArgList, bindings, { complete: true, application: node });
+            if (bindings.size !== parameters.length) return null;
+            if (genericDeclaration.type === 'TypeAliasDeclaration') {
+              if (resolvingAliases.has(appliedName)) return null;
+              resolvingAliases.add(appliedName);
+              typeParameterScopes.push(new Map(bindings));
+              try {
+                const body = resolveType(genericDeclaration.Type);
+                checkSpecializedDeclaration(genericDeclaration, bindings);
+                return body && substituteTypeParameters(body, bindings);
+              } finally {
+                typeParameterScopes.pop();
+                resolvingAliases.delete(appliedName);
+              }
+            }
+            const declared = interfaceTypeOf(appliedName);
+            if (declared?.Kind === 'nominal') return CanonicalizeType({ ...declared,
+              Arguments: parameters.map((parameter) => bindings.get(parameter.Name)!) });
+            return null;
+          }
+
           // #sec-type-references: a spread type argument "must resolve to a
           // ~tuple~ type or to an ~array~ type whose extent is stated, and it is
           // a type error otherwise". The expression path
@@ -10822,7 +10880,71 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return resolved && resolved.Kind !== 'any' && resolved.Kind !== 'parameter' ? resolved : null;
   };
 
-  const bindExplicitTypeArguments = (typeParams: readonly TypeParameterRecord[], argNodes: readonly ParseNode[], into: Map<string, TypeRecord>, validation?: { complete: boolean, application: ParseNode.TypeArgumentsExpression }): void => {
+  const finishTypeArgumentBindings = (typeParams: readonly TypeParameterRecord[], into: Map<string, TypeRecord>,
+    validation: { complete: boolean, application: GenericDefaultCheck['application'], mayInfer?: (name: string) => boolean }): void => {
+    const scope = new Map<string, Known>();
+    typeParams.forEach((p) => scope.set(p.Name, null));
+    typeParameterScopes.push(scope);
+    try {
+      for (const tp of typeParams) {
+        if (!into.has(tp.Name) && tp.DefaultNode) {
+          const resolved = evaluatedGenericDefaults.get(validation.application)?.get(tp.DefaultNode)
+            ?? resolveType(tp.DefaultNode);
+          const supplied = resolved && substituteTypeParameters(resolved, into);
+          if (supplied) into.set(tp.Name, supplied);
+          else if ([...into.values()].every((type) => !mentionsTypeParameter(type))) {
+            genericDefaults.push({ application: validation.application, node: tp.DefaultNode, parameters: typeParams, bindings: new Map(into) });
+          }
+        }
+        const supplied = into.get(tp.Name);
+        if (!supplied) {
+          if (validation.complete && !tp.DefaultNode && !validation.mayInfer?.(tp.Name)) {
+            errors.push(Throw.StaticTypeError('the type parameter $1 is not determined by the arguments and has no default', Value(tp.Name)).Value as ObjectValue);
+          }
+          continue;
+        }
+        const constraint = tp.ConstraintNode ? resolveType(tp.ConstraintNode as ParseNode.Type) : null;
+        const bound = constraint && substituteTypeParameters(constraint, into);
+        // #sec-the-type-type: "`type` is the type whose values are the Type
+        // Objects ... it is the Static Type of a type name or type expression
+        // in expression position ... a type argument may be constrained to
+        // it, which is what a generic parameter written `T: type` asks for."
+        //
+        // So `f<T: type>` takes a VALUE parameter, like `N: uint32`, and the
+        // argument `f.<uint8>` supplies a value of it - the Type Object
+        // `uint8`, whose Static Type is `type`. The judgment is therefore
+        // `type` against `type`, which holds. This code asked a different
+        // question: it took the record the argument DENOTES, `uint8`, and
+        // asked whether that type is assignable to `type`, so every such
+        // application was refused with `"uint.<8>" is not assignable to
+        // "type"` and the clause's own form was unwritable.
+        //
+        // The same confusion made the "requires a value argument" check below
+        // refuse it a second time, since a type name is not a ~literal~ -
+        // but a Type Object is exactly the value a `type`-typed parameter
+        // takes, so a type argument IS the value argument there.
+        const constrainedToType = bound?.Kind === 'primitive' && (bound as { Name?: string }).Name === 'type';
+        if (bound && !mentionsTypeParameter(bound) && !mentionsTypeParameter(supplied)) {
+          if (tp.Variadic && supplied.Kind === 'tuple') {
+            if (packConstraintRefuses(supplied.Elements.map((element) => element.Type), bound)) report(supplied, bound);
+          } else if (constrainedToType) {
+            // A literal is a value that is not a type, and is the one thing a
+            // `type`-constrained parameter refuses: `f.<4>` for `f<T: type>`.
+            if (supplied.Kind === 'literal') report(supplied, bound);
+          } else if (tp.Kind === 'value') requireAssignable(supplied, bound);
+          else if (!IsAssignable(supplied, bound)) report(supplied, bound);
+        }
+        scope.set(tp.Name, supplied);
+        if (tp.Kind === 'value' && !tp.Variadic && !constrainedToType && supplied.Kind !== 'literal' && supplied.Kind !== 'parameter') {
+          errors.push(Throw.StaticTypeError('$1 requires a value argument', Value(tp.Name)).Value as ObjectValue);
+        }
+      }
+    } finally {
+      typeParameterScopes.pop();
+    }
+  };
+
+  const bindExplicitTypeArguments = (typeParams: readonly TypeParameterRecord[], argNodes: readonly ParseNode[], into: Map<string, TypeRecord>, validation?: { complete: boolean, application: GenericDefaultCheck['application'] }): void => {
     if (validation && !validation.complete) requireTypeArgumentArity(argNodes, typeParams, 'the call');
     type Entry = { node: ParseNode | null, record: TypeRecord | null, name: string | undefined };
     const entries: Entry[] = [];
@@ -10903,6 +11025,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return;
     }
+    let unresolved = false;
     typeParams.forEach((tp, k) => {
       const run = assigned.runs[k]!;
       // #sec-higher-kinded-parameters: an argument bound to a higher-kinded
@@ -10931,6 +11054,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const resolvedRun = run.map((e) => e.record ?? resolveType(e.node as ParseNode.Type));
       if (resolvedRun.some((r) => !r)) {
+        unresolved = true;
         return;
       }
       if (tp.Variadic && (resolvedRun.length > 0 || !tp.DefaultNode)) {
@@ -10942,65 +11066,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         into.set(tp.Name, resolvedRun[0] as TypeRecord);
       }
     });
-    if (validation) {
-      const scope = new Map<string, Known>();
-      typeParams.forEach((p) => scope.set(p.Name, null));
-      typeParameterScopes.push(scope);
-      try {
-        for (const tp of typeParams) {
-          if (!into.has(tp.Name) && tp.DefaultNode) {
-            const resolved = evaluatedGenericDefaults.get(validation.application)?.get(tp.DefaultNode)
-              ?? resolveType(tp.DefaultNode);
-            const supplied = resolved && substituteTypeParameters(resolved, into);
-            if (supplied) into.set(tp.Name, supplied);
-            else if ([...into.values()].every((type) => !mentionsTypeParameter(type))) {
-              genericDefaults.push({ application: validation.application, node: tp.DefaultNode, parameters: typeParams, bindings: new Map(into) });
-            }
-          }
-          const supplied = into.get(tp.Name);
-          if (!supplied) {
-            if (validation.complete && !tp.DefaultNode) errors.push(Throw.StaticTypeError('$1 is not determined by this application', Value(tp.Name)).Value as ObjectValue);
-            continue;
-          }
-          const constraint = tp.ConstraintNode ? resolveType(tp.ConstraintNode as ParseNode.Type) : null;
-          const bound = constraint && substituteTypeParameters(constraint, into);
-          // #sec-the-type-type: "`type` is the type whose values are the Type
-          // Objects ... it is the Static Type of a type name or type expression
-          // in expression position ... a type argument may be constrained to
-          // it, which is what a generic parameter written `T: type` asks for."
-          //
-          // So `f<T: type>` takes a VALUE parameter, like `N: uint32`, and the
-          // argument `f.<uint8>` supplies a value of it - the Type Object
-          // `uint8`, whose Static Type is `type`. The judgment is therefore
-          // `type` against `type`, which holds. This code asked a different
-          // question: it took the record the argument DENOTES, `uint8`, and
-          // asked whether that type is assignable to `type`, so every such
-          // application was refused with `"uint.<8>" is not assignable to
-          // "type"` and the clause's own form was unwritable.
-          //
-          // The same confusion made the "requires a value argument" check below
-          // refuse it a second time, since a type name is not a ~literal~ -
-          // but a Type Object is exactly the value a `type`-typed parameter
-          // takes, so a type argument IS the value argument there.
-          const constrainedToType = bound?.Kind === 'primitive' && (bound as { Name?: string }).Name === 'type';
-          if (bound && !mentionsTypeParameter(bound) && !mentionsTypeParameter(supplied)) {
-            if (tp.Variadic && supplied.Kind === 'tuple') {
-              if (packConstraintRefuses(supplied.Elements.map((element) => element.Type), bound)) report(supplied, bound);
-            } else if (constrainedToType) {
-              // A literal is a value that is not a type, and is the one thing a
-              // `type`-constrained parameter refuses: `f.<4>` for `f<T: type>`.
-              if (supplied.Kind === 'literal') report(supplied, bound);
-            } else if (tp.Kind === 'value') requireAssignable(supplied, bound);
-            else if (!IsAssignable(supplied, bound)) report(supplied, bound);
-          }
-          if (tp.Kind === 'value' && !tp.Variadic && !constrainedToType && supplied.Kind !== 'literal' && supplied.Kind !== 'parameter') {
-            errors.push(Throw.StaticTypeError('$1 requires a value argument', Value(tp.Name)).Value as ObjectValue);
-          }
-        }
-      } finally {
-        typeParameterScopes.pop();
-      }
-    }
+    if (validation) finishTypeArgumentBindings(typeParams, into, { ...validation, complete: validation.complete && !unresolved });
   };
 
   // ---- standard-library signatures ----------------------------------
@@ -12704,9 +12770,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // contextual type, and read by the literal's own arm in `staticType`.
     if (isFunctionLiteral(node)
       && contextual && contextual.Kind === 'function' && contextual.Signatures.length === 1) {
-      if (node.type !== 'ArrowFunction' && node.type !== 'FunctionExpression') {
-        contextualParameterTypes.set(node, contextual.Signatures[0].Parameters.map((p) => p.Type));
-      }
+      contextualParameterTypes.set(node, contextual.Signatures[0].Parameters.map((p) => p.Type));
       const wanted = contextual.Signatures[0].Return;
       if (wanted && wanted.Kind !== 'void') {
         contextualReturnTypes.set(node, wanted as Known);
@@ -19256,6 +19320,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return neverType;
     };
     switch (pattern.type) {
+      case 'MatchInterpolationPattern': {
+        // #sec-pattern-static-semantics: interpolation compares an existing
+        // value; it does not adopt the position's numeric literal type.
+        const compared = staticType(pattern.Expression);
+        if (positionType && compared && AreDisjoint(positionType, compared)) {
+          errors.push(Throw.StaticTypeError('the interpolation cannot match a position of type $1',
+            Value(displayType(positionType))).Value as ObjectValue);
+        }
+        break;
+      }
       case 'MatchBindingPattern': {
         const type = pattern.TypeAnnotation ? narrow(resolveType(pattern.TypeAnnotation), true) : positionType;
         declare(pattern.Name, type);
@@ -19446,6 +19520,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!matcher && headType && headType.Kind !== 'any' && !mentionsTypeParameter(headType)) {
           errors.push(Throw.StaticTypeError('$1 has no custom matcher', Value(displayType(headType))).Value as ObjectValue);
         }
+        if (matcher && notCallable(matcher)) {
+          errors.push(Throw.StaticTypeError('the custom matcher must be callable').Value as ObjectValue);
+        }
         let result: Known = null;
         if (matcher?.Kind === 'function') {
           const call = { type: 'CallExpression', CallExpression: typedExpressionView(pattern.Head, matcher),
@@ -19489,33 +19566,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const completionValues = new WeakMap<ParseNode, Known>();
 
   const markCompletionContext = (node: ParseNode, contextual: Known): void => {
-    switch (node.type) {
-      case 'ExpressionStatement': completionContexts.set(node, contextual); break;
-      case 'Block': {
-        const tail = node.StatementList?.at(-1);
-        if (tail) markCompletionContext(tail, contextual);
-        break;
-      }
-      case 'IfStatement':
-        markCompletionContext(node.Statement_a, contextual);
-        if (node.Statement_b) markCompletionContext(node.Statement_b, contextual);
-        break;
-      case 'LabelledStatement': markCompletionContext(node.LabelledItem, contextual); break;
-      case 'TryStatement':
-        markCompletionContext(node.Block, contextual);
-        for (const handler of node.CatchClauses ?? (node.Catch ? [node.Catch] : [])) markCompletionContext(handler.Block, contextual);
-        break;
-      case 'SwitchStatement': {
-        const block = node.CaseBlock;
-        for (const clause of [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])]) {
-          const statements = clause.StatementList ?? [];
-          const last = statements.at(-1);
-          const tail = last?.type === 'BreakStatement' && !last.LabelIdentifier ? statements.at(-2) : last;
-          if (tail) markCompletionContext(tail, contextual);
-        }
-        break;
-      }
-      default: break;
+    for (const value of CompletionValues([node], switchCoversDiscriminant)) {
+      if (typeof value !== 'string') completionContexts.set(value, contextual);
     }
   };
 
@@ -19938,89 +19990,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * completion type would have been hard to state.
    */
   const completionTypeOf = (list: readonly ParseNode[] | undefined): Known => {
-    if (!list || list.length === 0) {
-      return undefinedType;
+    const values = CompletionValues(list, switchCoversDiscriminant);
+    if (values.length === 0) return neverType;
+    let result: Known = null;
+    for (const value of values) {
+      const type = value === 'unknown' ? null : typeof value === 'string' ? undefinedType
+        : completionValues.has(value) ? completionValues.get(value)! : staticType(value.Expression);
+      if (!type) return null;
+      result = result ? joinTypes(result, type) : type;
     }
-    const last = list[list.length - 1] as ParseNode & {
-      Expression?: ParseNode, StatementList?: readonly ParseNode[],
-      Statement_a?: ParseNode, Statement_b?: ParseNode | null,
-      LabelledItem?: ParseNode, Block?: { StatementList?: readonly ParseNode[] },
-      Catch?: { Block?: { StatementList?: readonly ParseNode[] } } | null,
-      CaseBlock?: { CaseClauses_a?: readonly ParseNode[], DefaultClause?: ParseNode | null, CaseClauses_b?: readonly ParseNode[] },
-    };
-    // A diverging tail contributes nothing, and a list all of whose paths
-    // diverge is the empty union - `never` - which is a subtype of everything,
-    // so `const port: uint16 = do { throw new E(); }` is accepted.
-    if (Diverges(last, { switchCoversDiscriminant })) {
-      return neverType;
-    }
-    const unionOf = (members: Known[]): Known => {
-      const present = members.filter((m): m is TypeRecord => !!m);
-      if (present.length !== members.length || present.length === 0) {
-        return null;
-      }
-      return present.length === 1 ? present[0] : CanonicalizeType({ Kind: 'union', Members: present });
-    };
-    switch (last.type) {
-      case 'ExpressionStatement':
-        return completionValues.has(last) ? completionValues.get(last)! : last.Expression ? staticType(last.Expression) : undefinedType;
-      case 'Block':
-        return completionTypeOf(last.StatementList);
-      case 'LabelledStatement':
-        return completionTypeOf(last.LabelledItem ? [last.LabelledItem] : undefined);
-      case 'IfStatement':
-        if (!last.Statement_b) {
-          // Refused by the Early Errors; the type is stated for completeness.
-          return undefinedType;
-        }
-        return unionOf([
-          completionTypeOf([last.Statement_a!]),
-          completionTypeOf([last.Statement_b]),
-        ]);
-      case 'TryStatement': {
-        const members: Known[] = [completionTypeOf(last.Block?.StatementList)];
-        for (const handler of last.CatchClauses ?? (last.Catch ? [last.Catch] : [])) {
-          members.push(completionTypeOf(handler.Block.StatementList));
-        }
-        // A `finally` contributes nothing: its completion is discarded unless
-        // it is abrupt.
-        return unionOf(members);
-      }
-      case 'SwitchStatement': {
-        const block = last.CaseBlock;
-        const clauses = [
-          ...(block?.CaseClauses_a ?? []),
-          ...(block?.DefaultClause ? [block.DefaultClause] : []),
-          ...(block?.CaseClauses_b ?? []),
-        ];
-        // A clause's trailing `break` has an EMPTY completion, so the value
-        // falls back to the statement before it - that is what UpdateEmpty does
-        // at run time, and `case E.A: 1; break;` completes with 1. Dropping it
-        // here rather than in the general rule is deliberate: a `do` whose own
-        // tail is a `break` genuinely diverges, since that break leaves the
-        // expression, and only a clause's break is caught by its switch.
-        const members = clauses.map((c) => {
-          const list = (c as { StatementList?: readonly ParseNode[] }).StatementList ?? [];
-          const trimmed = list.length > 0 && list[list.length - 1].type === 'BreakStatement'
-            && !(list[list.length - 1] as { LabelIdentifier?: unknown }).LabelIdentifier
-            ? list.slice(0, -1)
-            : list;
-          return completionTypeOf(trimmed);
-        });
-        // #sec-completiontypeof: an exhaustive switch takes no path where no
-        // clause ran, so it contributes no `undefined`. Exhaustiveness here is
-        // the SWITCH's, which this design reserves to enums and sealed
-        // hierarchies and which is deliberately narrower than a `match`'s atoms
-        // - a switch over a boolean covering true and false is not exhaustive
-        // for this operation, and the clause says so.
-        if (!switchCoversDiscriminant(last)) {
-          members.push(undefinedType);
-        }
-        return unionOf(members);
-      }
-      default:
-        return undefinedType;
-    }
+    return result;
   };
 
   /**
@@ -22491,9 +22470,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement) => {
+  const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement, contextual: Known = null) => {
     if (b.type === 'SingleNameBinding' && b.BindingIdentifier) {
-      const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null;
+      const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : contextual;
       requireBindingType(declared);
       if (b.TypeAnnotation && declared && b.Initializer) {
         const source = staticType(b.Initializer);
@@ -22532,9 +22511,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         participation = new Map();
         unaryBindingParticipation.set(frames[frames.length - 1], participation);
       }
-      participation.set(b.BindingIdentifier.name, !!b.TypeAnnotation && declared?.Kind !== 'any');
+      participation.set(b.BindingIdentifier.name, (!!b.TypeAnnotation || !!contextual) && declared?.Kind !== 'any');
     } else {
-      checkPattern(b, { type: b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : null }, true, !!b.TypeAnnotation);
+      if (!b.TypeAnnotation && contextual && b.Initializer) {
+        requireAssignable(staticTypeIn(b.Initializer, contextual), contextual);
+      }
+      checkPattern(b, { type: b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : contextual }, true, !!b.TypeAnnotation || !!contextual);
     }
   };
 
@@ -22665,7 +22647,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (p.type === 'SingleNameBinding' || p.type === 'BindingElement') {
         const fromContext = contextual?.[index];
         const annotated = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-        walkBindingElement(p);
+        walkBindingElement(p, fromContext);
         // An ANNOTATION wins over the context, since the program said what it
         // wanted; the context fills a parameter that said nothing.
         if (fromContext && !annotated && p.type === 'SingleNameBinding' && (p as ParseNode.SingleNameBinding).BindingIdentifier) {
@@ -23512,6 +23494,273 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         });
       }
+      const generic = (chosen as { TypeParameters?: readonly TypeParameterRecord[] }).TypeParameters;
+      const bindings = new Map<string, TypeRecord>();
+      if (generic && generic.length > 0) {
+        const spec = c.CallExpression as unknown as {
+          type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
+        } | undefined;
+        const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
+        if (argNodes && argNodes.length > 0) {
+          // bindExplicitTypeArguments orders named arguments before binding
+          // them, using the shared ordering for type application sites.
+          bindExplicitTypeArguments(generic, argNodes, bindings);
+        } else {
+          // THE CONTEXT RUNG, before the arguments. "A call binds from its
+          // context before its arguments" - the run time does this and the
+          // checker did not, so `const r: uint8 = f(1)` for `f<T>(x: T): T`
+          // had Static Type `number` while the run time bound `uint8`. The
+          // call node already carries its `ContextualType`; seeding from it
+          // here puts the checker on the same rung, and the seed stands
+          // because unification joins only among argument contributions.
+          const callContextual = (n as unknown as { ContextualType?: Known }).ContextualType
+            ?? (c.CallExpression as unknown as { ContextualType?: Known } | undefined)?.ContextualType;
+          const declaredReturn = (chosen as { Return?: TypeRecord }).Return;
+          if (callContextual && declaredReturn) {
+            bindTypeParametersFromArguments(
+              [{ Type: declaredReturn as Known }],
+              [callContextual as Known],
+              new Set(generic.map((tp) => tp.Name)),
+              bindings,
+            );
+          }
+          // #sec-contextual-types: substitute inferred type arguments before
+          // supplying a callback's contextual parameter and return types.
+          // bindTypeParametersFromArguments shares that inference with the
+          // runtime's generic argument binding.
+          bindTypeParametersFromArguments(
+            chosen.Parameters.map((pr) => ({ Type: pr.Type })),
+            chosen.Parameters.map((pr, pi) => {
+            // A COMPOSITE LITERAL is typed against the parameter's
+            // CONSTRAINT rather than bare. #sec-computed-constraints: "the
+            // constraint IS A CONTEXTUAL TYPE."
+            //
+            // Typed bare, `{ a: 1 }` at `T extends { a: uint8 }` infers
+            // `{ a: number }` - the member widened before anything could adapt
+            // it - and the constraint check then refuses the binding, while
+            // the same literal at a plain `o: { a: uint8 }` parameter adapts
+            // and is accepted, as does the explicit `f.<{ a: uint8 }>(...)`.
+            //
+            // Only the literals that ADAPT. A scalar literal is left bare:
+            // #sec-computed-constraints binds it as the literal type of its
+            // value and checks the constraint against that, and handing it the
+            // constraint here would make it take the constraint's type instead.
+            const adaptTo = pr.Type.Kind === 'parameter'
+              ? ((pr.Type as { Constraint?: Known }).Constraint ?? null) : null;
+            const supplied = mapped.entries.filter((entry) => entry.slot === pi).map((entry) => {
+              const kind = (entry.node as { type?: string }).type;
+              return adaptTo && (kind === 'ObjectLiteral' || kind === 'ArrayLiteral')
+                ? staticTypeIn(entry.node, adaptTo)
+                : argumentStaticType(entry.node);
+            });
+            if (!pr.Rest) {
+              return supplied[0] ?? null;
+            }
+            if (!supplied.every((t) => t !== null)) return null;
+            // A TUPLE for any pack bound to a type parameter, not only a
+            // VARIADIC one. The array-of-the-join form gave
+            // `[].<'a' | 'b' | 'c'>` where the run time built a tuple of the
+            // literals, so the two sides named different records for one
+            // binding - and an array is invariant, so the checker's record was
+            // assignable to no `[].<string>` constraint while the run time's
+            // tuple was fine. A builder reading the pack's `elements` needs
+            // the tuple in any case.
+            if (pr.Type.Kind === 'parameter') {
+              // An element follows the SCALAR rule: an unconstrained
+              // parameter widens a literal to its base, a constrained one
+              // keeps it. Taking the arguments' types unwidened gave an
+              // unconstrained pack the tuple `[1, 'a']`, so a builder over it
+              // produced a return type of literals and a body returning
+              // anything else - `xs.map((x) => new Box(x))` - was refused
+              // against `"1"`.
+              const packParam = generic.find((tp) => tp.Name === (pr.Type as { Name: string }).Name);
+              const packConstrained = !!packParam
+                && !!(packParam as { ConstraintNode?: ParseNode.Type | null }).ConstraintNode;
+              return {
+                Kind: 'tuple',
+                Elements: supplied.map((t) => ({
+                  Type: (packConstrained ? t! : widenForBinding(t!)),
+                  Rest: false,
+                  Initial: 'none' as const,
+                })),
+              } as TypeRecord;
+            }
+            return supplied.length > 0
+              ? { Kind: 'array', Element: supplied.reduce((a, t) => joinTypes(a!, t!))!, Extent: 'dynamic' } as TypeRecord : null;
+          }),
+            new Set(generic.map((t) => t.Name)),
+            bindings,
+          );
+        }
+        // #sec-generic-type-inference: computed formals may still bind through
+        // an inverse or finite trial. Missing static inference is not proof
+        // that those later rungs leave a parameter undetermined.
+        let declaration: ParseNode | undefined = generic[0]?.Declaration;
+        while (declaration && !(declaration as { TypeParameters?: unknown }).TypeParameters) declaration = declaration.parent;
+        const parameters = declaration as { FormalParameters?: readonly ParseNode[], UniqueFormalParameters?: readonly ParseNode[], ArrowParameters?: readonly ParseNode[] } | undefined;
+        const formals = parameters?.FormalParameters ?? parameters?.UniqueFormalParameters ?? parameters?.ArrowParameters;
+        const referenced = new Set<string>();
+        const collectReferences = (node: unknown): void => {
+          if (!node || typeof node !== 'object') return;
+          if (Array.isArray(node)) {
+            node.forEach(collectReferences);
+            return;
+          }
+          const at = node as ParseNode;
+          if (at.type === 'IdentifierReference') referenced.add(at.name);
+          for (const [key, child] of Object.entries(node)) {
+            if (!['parent', 'location', 'sourceText'].includes(key)) collectReferences(child);
+          }
+        };
+        for (const formal of formals ?? []) collectReferences((formal as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation);
+        for (const tp of generic) {
+          if (tp.Variadic && !tp.DefaultNode && !bindings.has(tp.Name) && formals && !referenced.has(tp.Name)) {
+            bindings.set(tp.Name, { Kind: 'tuple', Elements: [] });
+          }
+        }
+        finishTypeArgumentBindings(generic, bindings, {
+          complete: !mapped.spread && mapped.entries.every(({ node }) => {
+            const type = argumentStaticType(node);
+            return type !== null && type.Kind !== 'any';
+          }),
+          mayInfer: (name) => !formals || referenced.has(name),
+          application: n as GenericDefaultCheck['application'],
+        });
+        // AN INFERRED BINDING IS CHECKED AGAINST ITS CONSTRAINT, before the
+        // parameter is substituted away. Substitution replaces `K: keyof T`
+        // WHOLESALE with K's binding, so the argument `"zz"` was checked
+        // against `'zz'` - itself - and the constraint was never consulted:
+        // `pluck(o, "zz")` for `pluck<T, K: keyof T>` reached the run-time
+        // binder before the wrong key was refused, where `pluck.<P, "zz">`
+        // was refused at compile time. #sec-bindtypearguments applies the
+        // constraint to every binding; this is the checker's half of it.
+        //
+        // Once per call rather than once per argument, since the bindings
+        // are complete after the first and the message would only repeat.
+        // The constraint is resolved in the declaration's scope, since it may
+        // name an earlier parameter, and the bindings are substituted into it
+        // first - `keyof T` at `T = P` is `'a' | 'b'`, which is what `'zz'`
+        // is judged against.
+        if (bindings.size > 0 && !constraintCheckedCalls.has(c)) {
+          constraintCheckedCalls.add(c);
+          // THE CHECKER'S BINDINGS TRAVEL TO THE RUN TIME. The binder infers
+          // from the value it holds, and a declared type the value does not
+          // carry - `q: Q` with `a?: uint8`, holding `{}` - is the checker's
+          // knowledge alone: `pluck(q, "a")` compiled and then threw, the run
+          // time binding T to `{}` and finding no `a`. The explicit spelling
+          // `pluck.<Q, "a">` already runs correctly, because the run time
+          // takes bindings the program wrote rather than recomputing them.
+          // This stamps the ones the checker wrote on the call, for the
+          // evaluation to push as a frame the way it pushes explicit ones.
+          // Only CLOSED bindings: a partial inference still mentioning a
+          // parameter must not be pushed as if fixed. The precedent is
+          // `ContextualType`, set here and read by `contextualTypeFor`.
+          //
+          // And only DECLARED SHAPES - an object type, an interface or alias,
+          // a class - which are what a value cannot carry. A binding inferred
+          // from a literal is where the checker and the run time already
+          // disagree in shape: the checker binds a rest pack to
+          // `[].<'a' | 'b' | 'c'>` where the run time binds a TUPLE, and a
+          // builder reading the tuple's elements broke when handed the array.
+          // Those stay with the run time, which infers them from the value it
+          // holds and has always been right about them.
+          // Still restricted to declared shapes - what a value cannot carry.
+          // Removing it exposes three subjects the stamp is not the cause of;
+          // see `checked-bindings-leak.md`.
+          // NOT A VALUE PARAMETER. A value pack is read in the body as a
+          // VALUE - `Ps.length` - and the run time binds it as one; handing
+          // over a type record for it leaves the value binding unmade, so
+          // `Ps.length` was *undefined*. The checker's bindings stand in for
+          // the run time's TYPE inference only.
+          const valueParameterNames = new Set(generic
+            .filter((tp) => (tp as { Kind?: string }).Kind === 'value')
+            .map((tp) => tp.Name));
+          const closedBindings = new Map<string, TypeRecord>();
+          for (const [name, bound] of bindings) {
+            if (!mentionsTypeParameter(bound) && !valueParameterNames.has(name)) {
+              closedBindings.set(name, bound);
+            }
+          }
+          if (closedBindings.size > 0) {
+            (c as { CheckedBindings?: ReadonlyMap<string, TypeRecord> }).CheckedBindings = closedBindings;
+            let owner: ParseNode | undefined = generic[0]?.Declaration;
+            while (owner && !(owner as { TypeParameters?: unknown }).TypeParameters) owner = owner.parent;
+            const declaration = signatureDeclarations.get(chosen as SignatureRecord) ?? owner;
+            if (declaration) checkSpecializedDeclaration(declaration, closedBindings);
+          }
+          // The signature record carries no declaration, but each of its
+          // type parameters carries its own node, and `pushTypeParameterScopeOf`
+          // reads only a |TypeParameterList| - so one is assembled from them.
+          const scopeCarrier = {
+            TypeParameters: { TypeParameterList: generic.map((tp) => tp.Declaration) },
+          } as unknown as ParseNode;
+          const pushed = pushTypeParameterScopeOf(scopeCarrier);
+          // The parameters are bound to their INFERRED bindings in the scope
+          // the constraint resolves in, not left as placeholders. A COMPUTED
+          // constraint - `U: baseOf(T)` - is a builder call, and the checker
+          // evaluates one whose arguments are concrete: `type X = baseOf(uint32)`
+          // resolves to `uint.<32>` today. With `T` a placeholder the call
+          // could not be evaluated, so the constraint resolved to nothing and
+          // was skipped - losing the check entirely.
+          if (pushed) {
+            const scope = typeParameterScopes[typeParameterScopes.length - 1]!;
+            for (const [bname, bvalue] of bindings) {
+              if (!mentionsTypeParameter(bvalue)) {
+                scope.set(bname, bvalue as Known);
+              }
+            }
+          }
+          try {
+            for (const tp of generic) {
+              const bound = bindings.get(tp.Name);
+              const constraintNode = (tp as { ConstraintNode?: ParseNode.Type | null }).ConstraintNode;
+              // A VARIADIC pack's bound applies to each element, not to the
+              // tuple the pack binds to, and is checked where the pack is
+              // bound; applying it to the whole tuple here refused every
+              // bounded pack.
+              if (!bound || !constraintNode || tp.Variadic) {
+                continue;
+              }
+              const constraint = resolveType(constraintNode);
+              if (!constraint) {
+                continue;
+              }
+              const closed = substituteTypeParameters(constraint, bindings);
+              if (!closed || mentionsTypeParameter(closed)) {
+                continue;
+              }
+              // Literal fit, not plain assignability: a binding is the join
+              // of what the arguments contributed, so it may be a literal or
+              // a union of them, and a literal's widened base is assignable
+              // to no sized type. #sec-literal-propagation admits a literal
+              // that fits in any typed position.
+              const arms = bound.Kind === 'union'
+                ? (bound as { Members: readonly TypeRecord[] }).Members
+                : [bound];
+              const fitsOne = (arm: TypeRecord, target: TypeRecord): boolean => arm.Kind === 'literal'
+                && (IsAssignable(arm, target) || literalFitsNumericType(arm, target));
+              // A PACK binds a tuple of literals, and an array constraint is
+              // invariant - `['a', 'b', 'c']` is assignable to no
+              // `[].<string>` - so the element type is what admits it, each
+              // element on the same literal-fit terms as a scalar.
+              const closedRecord = closed as TypeRecord;
+              const element = closedRecord.Kind === 'array'
+                ? (closedRecord as { Element?: TypeRecord }).Element
+                : undefined;
+              const everyArmFits = element !== undefined && bound.Kind === 'tuple'
+                ? (bound as { Elements: readonly { Type: TypeRecord }[] }).Elements
+                  .every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element))
+                : arms.length > 0 && arms.every((arm) => fitsOne(arm, closedRecord));
+              if (!everyArmFits) {
+                requireAssignable(bound as Known, closed as Known);
+              }
+
+            }
+          } finally {
+            if (pushed) typeParameterScopes.pop();
+          }
+        }
+      }
       mapped.entries.forEach(({ node: arg, slot: slotIndex, offset }) => {
         const i = counts ? counts.slice(0, slotIndex).reduce((sum, count) => sum + count, 0) + offset : slotIndex;
         const slot = chosen.Parameters[slotIndex];
@@ -23526,238 +23775,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : slot?.Type;
         // #sec-generics: bind type arguments throughout the signature before
         // checking value arguments against its parameter types.
-        const generic = (chosen as { TypeParameters?: readonly TypeParameterRecord[] }).TypeParameters;
         if (param && generic && generic.length > 0) {
-          const spec = c.CallExpression as unknown as {
-            type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
-          } | undefined;
-          const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
-          const bindings = new Map<string, TypeRecord>();
-          if (argNodes && argNodes.length > 0) {
-            // bindExplicitTypeArguments orders named arguments before binding
-            // them, using the shared ordering for type application sites.
-            bindExplicitTypeArguments(generic, argNodes, bindings);
-          } else {
-            // THE CONTEXT RUNG, before the arguments. "A call binds from its
-            // context before its arguments" - the run time does this and the
-            // checker did not, so `const r: uint8 = f(1)` for `f<T>(x: T): T`
-            // had Static Type `number` while the run time bound `uint8`. The
-            // call node already carries its `ContextualType`; seeding from it
-            // here puts the checker on the same rung, and the seed stands
-            // because unification joins only among argument contributions.
-            const callContextual = (n as unknown as { ContextualType?: Known }).ContextualType
-              ?? (c.CallExpression as unknown as { ContextualType?: Known } | undefined)?.ContextualType;
-            const declaredReturn = (chosen as { Return?: TypeRecord }).Return;
-            if (callContextual && declaredReturn) {
-              bindTypeParametersFromArguments(
-                [{ Type: declaredReturn as Known }],
-                [callContextual as Known],
-                new Set(generic.map((tp) => tp.Name)),
-                bindings,
-              );
-            }
-            // #sec-contextual-types: substitute inferred type arguments before
-            // supplying a callback's contextual parameter and return types.
-            // bindTypeParametersFromArguments shares that inference with the
-            // runtime's generic argument binding.
-            bindTypeParametersFromArguments(
-              chosen.Parameters.map((pr) => ({ Type: pr.Type })),
-              chosen.Parameters.map((pr, pi) => {
-              // A COMPOSITE LITERAL is typed against the parameter's
-              // CONSTRAINT rather than bare. #sec-computed-constraints: "the
-              // constraint IS A CONTEXTUAL TYPE."
-              //
-              // Typed bare, `{ a: 1 }` at `T extends { a: uint8 }` infers
-              // `{ a: number }` - the member widened before anything could adapt
-              // it - and the constraint check then refuses the binding, while
-              // the same literal at a plain `o: { a: uint8 }` parameter adapts
-              // and is accepted, as does the explicit `f.<{ a: uint8 }>(...)`.
-              //
-              // Only the literals that ADAPT. A scalar literal is left bare:
-              // #sec-computed-constraints binds it as the literal type of its
-              // value and checks the constraint against that, and handing it the
-              // constraint here would make it take the constraint's type instead.
-              const adaptTo = pr.Type.Kind === 'parameter'
-                ? ((pr.Type as { Constraint?: Known }).Constraint ?? null) : null;
-              const supplied = mapped.entries.filter((entry) => entry.slot === pi).map((entry) => {
-                const kind = (entry.node as { type?: string }).type;
-                return adaptTo && (kind === 'ObjectLiteral' || kind === 'ArrayLiteral')
-                  ? staticTypeIn(entry.node, adaptTo)
-                  : argumentStaticType(entry.node);
-              });
-              if (!pr.Rest) {
-                return supplied[0] ?? null;
-              }
-              if (!supplied.every((t) => t !== null)) return null;
-              // A TUPLE for any pack bound to a type parameter, not only a
-              // VARIADIC one. The array-of-the-join form gave
-              // `[].<'a' | 'b' | 'c'>` where the run time built a tuple of the
-              // literals, so the two sides named different records for one
-              // binding - and an array is invariant, so the checker's record was
-              // assignable to no `[].<string>` constraint while the run time's
-              // tuple was fine. A builder reading the pack's `elements` needs
-              // the tuple in any case.
-              if (pr.Type.Kind === 'parameter') {
-                // An element follows the SCALAR rule: an unconstrained
-                // parameter widens a literal to its base, a constrained one
-                // keeps it. Taking the arguments' types unwidened gave an
-                // unconstrained pack the tuple `[1, 'a']`, so a builder over it
-                // produced a return type of literals and a body returning
-                // anything else - `xs.map((x) => new Box(x))` - was refused
-                // against `"1"`.
-                const packParam = generic.find((tp) => tp.Name === (pr.Type as { Name: string }).Name);
-                const packConstrained = !!packParam
-                  && !!(packParam as { ConstraintNode?: ParseNode.Type | null }).ConstraintNode;
-                return {
-                  Kind: 'tuple',
-                  Elements: supplied.map((t) => ({
-                    Type: (packConstrained ? t! : widenForBinding(t!)),
-                    Rest: false,
-                    Initial: 'none' as const,
-                  })),
-                } as TypeRecord;
-              }
-              return supplied.length > 0
-                ? { Kind: 'array', Element: supplied.reduce((a, t) => joinTypes(a!, t!))!, Extent: 'dynamic' } as TypeRecord : null;
-            }),
-              new Set(generic.map((t) => t.Name)),
-              bindings,
-            );
-          }
-          // AN INFERRED BINDING IS CHECKED AGAINST ITS CONSTRAINT, before the
-          // parameter is substituted away. Substitution replaces `K: keyof T`
-          // WHOLESALE with K's binding, so the argument `"zz"` was checked
-          // against `'zz'` - itself - and the constraint was never consulted:
-          // `pluck(o, "zz")` for `pluck<T, K: keyof T>` reached the run-time
-          // binder before the wrong key was refused, where `pluck.<P, "zz">`
-          // was refused at compile time. #sec-bindtypearguments applies the
-          // constraint to every binding; this is the checker's half of it.
-          //
-          // Once per call rather than once per argument, since the bindings
-          // are complete after the first and the message would only repeat.
-          // The constraint is resolved in the declaration's scope, since it may
-          // name an earlier parameter, and the bindings are substituted into it
-          // first - `keyof T` at `T = P` is `'a' | 'b'`, which is what `'zz'`
-          // is judged against.
-          if (bindings.size > 0 && !constraintCheckedCalls.has(c)) {
-            constraintCheckedCalls.add(c);
-            // THE CHECKER'S BINDINGS TRAVEL TO THE RUN TIME. The binder infers
-            // from the value it holds, and a declared type the value does not
-            // carry - `q: Q` with `a?: uint8`, holding `{}` - is the checker's
-            // knowledge alone: `pluck(q, "a")` compiled and then threw, the run
-            // time binding T to `{}` and finding no `a`. The explicit spelling
-            // `pluck.<Q, "a">` already runs correctly, because the run time
-            // takes bindings the program wrote rather than recomputing them.
-            // This stamps the ones the checker wrote on the call, for the
-            // evaluation to push as a frame the way it pushes explicit ones.
-            // Only CLOSED bindings: a partial inference still mentioning a
-            // parameter must not be pushed as if fixed. The precedent is
-            // `ContextualType`, set here and read by `contextualTypeFor`.
-            //
-            // And only DECLARED SHAPES - an object type, an interface or alias,
-            // a class - which are what a value cannot carry. A binding inferred
-            // from a literal is where the checker and the run time already
-            // disagree in shape: the checker binds a rest pack to
-            // `[].<'a' | 'b' | 'c'>` where the run time binds a TUPLE, and a
-            // builder reading the tuple's elements broke when handed the array.
-            // Those stay with the run time, which infers them from the value it
-            // holds and has always been right about them.
-            // Still restricted to declared shapes - what a value cannot carry.
-            // Removing it exposes three subjects the stamp is not the cause of;
-            // see `checked-bindings-leak.md`.
-            // NOT A VALUE PARAMETER. A value pack is read in the body as a
-            // VALUE - `Ps.length` - and the run time binds it as one; handing
-            // over a type record for it leaves the value binding unmade, so
-            // `Ps.length` was *undefined*. The checker's bindings stand in for
-            // the run time's TYPE inference only.
-            const valueParameterNames = new Set(generic
-              .filter((tp) => (tp as { Kind?: string }).Kind === 'value')
-              .map((tp) => tp.Name));
-            const closedBindings = new Map<string, TypeRecord>();
-            for (const [name, bound] of bindings) {
-              if (!mentionsTypeParameter(bound) && !valueParameterNames.has(name)) {
-                closedBindings.set(name, bound);
-              }
-            }
-            if (closedBindings.size > 0) {
-              (c as { CheckedBindings?: ReadonlyMap<string, TypeRecord> }).CheckedBindings = closedBindings;
-              let owner: ParseNode | undefined = generic[0]?.Declaration;
-              while (owner && !(owner as { TypeParameters?: unknown }).TypeParameters) owner = owner.parent;
-              const declaration = signatureDeclarations.get(chosen as SignatureRecord) ?? owner;
-              if (declaration) checkSpecializedDeclaration(declaration, closedBindings);
-            }
-            // The signature record carries no declaration, but each of its
-            // type parameters carries its own node, and `pushTypeParameterScopeOf`
-            // reads only a |TypeParameterList| - so one is assembled from them.
-            const scopeCarrier = {
-              TypeParameters: { TypeParameterList: generic.map((tp) => tp.Declaration) },
-            } as unknown as ParseNode;
-            const pushed = pushTypeParameterScopeOf(scopeCarrier);
-            // The parameters are bound to their INFERRED bindings in the scope
-            // the constraint resolves in, not left as placeholders. A COMPUTED
-            // constraint - `U: baseOf(T)` - is a builder call, and the checker
-            // evaluates one whose arguments are concrete: `type X = baseOf(uint32)`
-            // resolves to `uint.<32>` today. With `T` a placeholder the call
-            // could not be evaluated, so the constraint resolved to nothing and
-            // was skipped - losing the check entirely.
-            if (pushed) {
-              const scope = typeParameterScopes[typeParameterScopes.length - 1]!;
-              for (const [bname, bvalue] of bindings) {
-                if (!mentionsTypeParameter(bvalue)) {
-                  scope.set(bname, bvalue as Known);
-                }
-              }
-            }
-            try {
-              for (const tp of generic) {
-                const bound = bindings.get(tp.Name);
-                const constraintNode = (tp as { ConstraintNode?: ParseNode.Type | null }).ConstraintNode;
-                // A VARIADIC pack's bound applies to each element, not to the
-                // tuple the pack binds to, and is checked where the pack is
-                // bound; applying it to the whole tuple here refused every
-                // bounded pack.
-                if (!bound || !constraintNode || tp.Variadic) {
-                  continue;
-                }
-                const constraint = resolveType(constraintNode);
-                if (!constraint) {
-                  continue;
-                }
-                const closed = substituteTypeParameters(constraint, bindings);
-                if (!closed || mentionsTypeParameter(closed)) {
-                  continue;
-                }
-                // Literal fit, not plain assignability: a binding is the join
-                // of what the arguments contributed, so it may be a literal or
-                // a union of them, and a literal's widened base is assignable
-                // to no sized type. #sec-literal-propagation admits a literal
-                // that fits in any typed position.
-                const arms = bound.Kind === 'union'
-                  ? (bound as { Members: readonly TypeRecord[] }).Members
-                  : [bound];
-                const fitsOne = (arm: TypeRecord, target: TypeRecord): boolean => arm.Kind === 'literal'
-                  && (IsAssignable(arm, target) || literalFitsNumericType(arm, target));
-                // A PACK binds a tuple of literals, and an array constraint is
-                // invariant - `['a', 'b', 'c']` is assignable to no
-                // `[].<string>` - so the element type is what admits it, each
-                // element on the same literal-fit terms as a scalar.
-                const closedRecord = closed as TypeRecord;
-                const element = closedRecord.Kind === 'array'
-                  ? (closedRecord as { Element?: TypeRecord }).Element
-                  : undefined;
-                const everyArmFits = element !== undefined && bound.Kind === 'tuple'
-                  ? (bound as { Elements: readonly { Type: TypeRecord }[] }).Elements
-                    .every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element))
-                  : arms.length > 0 && arms.every((arm) => fitsOne(arm, closedRecord));
-                if (!everyArmFits) {
-                  requireAssignable(bound as Known, closed as Known);
-                }
-
-              }
-            } finally {
-              if (pushed) typeParameterScopes.pop();
-            }
-          }
           if (bindings.size > 0) {
             effectiveBindings = bindings;
             param = substituteTypeParameters(param, bindings) as TypeRecord;
@@ -23889,6 +23907,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type InvocationFact = {
     callable: boolean, constructible: boolean, typed: boolean,
     abstractClass?: string, ordinaryObject?: boolean,
+    classTargets?: readonly { declaration: ParseNode.ClassDeclaration | ParseNode.ClassExpression, arguments?: ParseNode.TypeArguments }[],
   };
   const invocationFact = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>(), budget = { remaining: 256 }): InvocationFact | null => {
     if (budget.remaining-- <= 0) return null;
@@ -23898,7 +23917,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const right = invocationFact(node.AssignmentExpression_b, scope, new Set(seen), budget);
       if (!left || !right) return null;
       return { callable: left.callable || right.callable, constructible: left.constructible || right.constructible,
-        typed: left.typed && right.typed };
+        typed: left.typed && right.typed,
+        ...(left.classTargets && right.classTargets ? { classTargets: [...left.classTargets, ...right.classTargets] } : {}) };
     }
     if (node.type === 'IdentifierReference') {
       for (let i = scope; i >= 0; i -= 1) {
@@ -23922,14 +23942,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return null;
     }
-    if (node.type === 'TypeArgumentsExpression') return invocationFact(node.Expression, scope, seen, budget);
+    if (node.type === 'TypeArgumentsExpression') {
+      const fact = invocationFact(node.Expression, scope, seen, budget);
+      return fact ? { ...fact, classTargets: fact.classTargets?.map((target) => ({ ...target, arguments: node.TypeArguments })) } : null;
+    }
     if (node.type === 'ObjectLiteral') return { callable: false, constructible: false, typed: false, ordinaryObject: true };
     if (node.type === 'ClassExpression' || node.type === 'ClassDeclaration') {
       if (node.Decorators?.length) return null;
       const typed = !!node.TypeParameters || !!node.ClassModifiers?.length || !!node.ClassTail.ImplementsClause?.length
         || (node.ClassTail.ClassBody ?? []).some((member) => member.type === 'OperatorDefinition'
           || typedInvocationSignature(member));
-      return { callable: false, constructible: true, typed,
+      return { callable: false, constructible: true, typed, classTargets: [{ declaration: node }],
         abstractClass: node.ClassModifiers?.includes('abstract') ? node.BindingIdentifier?.name ?? '(anonymous class)' : undefined };
     }
     if (['FunctionExpression', 'FunctionDeclaration', 'ArrowFunction', 'AsyncArrowFunction',
@@ -26382,6 +26405,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Deletion asks about protected storage, not the validity of a read.
           // A union proves refusal only when every executing arm does.
           const protectedStorage = (receiver: Known, named: string | SymbolValue): 'property' | 'element' | null => {
+            if (fixedStringProperty(receiver, named)) return named === 'length' ? 'property' : 'element';
             receiver = erasedForJudgment(receiver);
             if (receiver?.Kind === 'union') {
               const arms = receiver.Members.map((arm) => protectedStorage(arm, named));
@@ -26747,8 +26771,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             });
           }
         }
-        if (target && namedInstance && Array.isArray(ne.Arguments)) {
-          const instance = namedInstance;
+        // #sec-type-errors: an origin-preserving alias keeps the constructor
+        // contract. Conditional alternatives are checked independently.
+        const constructorTargets = namedInstance ? [{ instance: namedInstance, arguments: undefined as ParseNode.TypeArguments | undefined }]
+          : (target ? invocationFact(target)?.classTargets ?? [] : []).map((origin) => ({
+            instance: instanceTypeOf(origin.declaration), arguments: origin.arguments,
+          }));
+        for (const constructorTarget of constructorTargets) {
+          if (!target || !constructorTarget.instance || !Array.isArray(ne.Arguments)) continue;
+          const instance = constructorTarget.instance;
           const decl = instance && instance.Kind === 'nominal'
             ? (instance as unknown as { Declaration: ParseNode }).Declaration
             : null;
@@ -26756,7 +26787,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (sigList && sigList.length > 0) {
             const specialized = target.type === 'TypeArgumentsExpression' ? staticType(n) : null;
             const own = specialized ? null : ownBodyConstruction(n, instance);
-            const constructed = specialized?.Kind === 'nominal' ? specialized.Arguments
+            const explicitBindings = new Map<string, TypeRecord>();
+            const parameters = (decl as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
+            if (constructorTarget.arguments) bindExplicitTypeArguments(typeParameterRecordsOf(parameters),
+              constructorTarget.arguments.TypeArgumentList, explicitBindings, { complete: true, application: n });
+            const constructed = constructorTarget.arguments ? parameters.map((parameter) => explicitBindings.get(parameter.BindingIdentifier.name)!)
+              : specialized?.Kind === 'nominal' ? specialized.Arguments
               : own?.Kind === 'nominal' ? (own as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? null
                 : constructionArguments(n, instance);
             const bindings = new Map<string, TypeRecord>();
@@ -26862,6 +26898,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (!y.hasStar && asyncReturns.at(-1)) checkAwaitAssimilation(y.AssignmentExpression);
         const generator = generatorTypes[generatorTypes.length - 1];
+        if (y.hasStar && y.AssignmentExpression && resumedDelegations.has(n as ParseNode.YieldExpression)) {
+          const forwarded = generatorParameters(generator)?.Next;
+          const receiving = generatorParameters(staticType(y.AssignmentExpression))?.Next;
+          if (forwarded && receiving) requireAssignable(forwarded, receiving);
+        }
         const yieldedType = generatorParameters(generator)?.Yield ?? null;
         if (yieldedType) {
           const produced = y.hasStar && y.AssignmentExpression
@@ -27057,7 +27098,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             staticType(a.AssignmentExpression as ParseNode);
           }
         }
-        requireWritableMember(a.LeftHandSideExpression);
+        requireWritableMember(a.LeftHandSideExpression, a.AssignmentOperator);
         // EVERY assignment unseats the place it writes, not only the compound
         // ones below. A plain `b.a = null` inside a branch that narrowed `b.a`
         // left the narrowing standing, so the next read was typed by a fact the
@@ -27364,7 +27405,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // target's return type. A declaration is in no such position, so it has no
             // entry here and this passes nothing for it.
             enterFunction(n.FormalParameters, n.TypeAnnotation ?? null, n.FunctionBody, true,
-              undefined, undefined, undefined, isEnumeratorInitializer(n) ? null : contextualReturnTypes.get(n) ?? null);
+              contextualParameterTypes.get(n), undefined, undefined, isEnumeratorInitializer(n) ? null : contextualReturnTypes.get(n) ?? null);
           } finally {
             if (bodyTypeParams) {
               typeParameterScopes.pop();

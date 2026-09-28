@@ -324,6 +324,8 @@ export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] 
 export interface SignatureRecord {
   readonly Parameters: readonly ParameterRecord[];
   readonly Return: TypeRecord | null;
+  /** #sec-inferred-return-types: the published return when none was declared. */
+  readonly InferredReturn?: TypeRecord | null;
   // proposal-runtime-types: the declared `this` type, or null where none is
   // declared (the spec's [[ThisType]], a Type Record or ~none~). Part of the
   // signature's identity, compared as a type.
