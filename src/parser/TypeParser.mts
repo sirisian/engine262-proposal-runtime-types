@@ -987,7 +987,7 @@ export abstract class TypeParser extends ExpressionParser {
     // class expression has no family to join, and a partial class is an
     // additive extension that must not become a replacement (plan 6.3), so both
     // keep the error below.
-    if (context === 'class' || context === 'alias') {
+    if (context === 'class' || context === 'alias' || context === 'interface') {
       // Whether the case has a primary is known only once its statement list
       // is complete; the orphan-case pass (parse.mts) reports it, with this hint.
       (list as { OrphanHint?: string }).OrphanHint = hint;

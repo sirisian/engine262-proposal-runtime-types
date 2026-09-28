@@ -65,7 +65,11 @@ export function BoundNames(node: ParseNode | readonly ParseNode[]): JSStringValu
       // bind one of its own, so it contributes no bound name and no second
       // binding is created for it during declaration instantiation. Same shape
       // as a partial class, which also declares nothing.
-      return (node as { Partial?: boolean }).Partial ? [] : BoundNames(node.BindingIdentifier);
+      // An interface CASE (phase 5) refines its family and binds no name.
+      if ((node as { Partial?: boolean }).Partial || (node.TypeParameters && node.TypeParameters.ListKind !== 'parameters')) {
+        return [];
+      }
+      return BoundNames(node.BindingIdentifier);
     case 'TypeAliasDeclaration':
     case 'EnumDeclaration':
       // An alias CASE (phase 5) joins its family and binds no name.

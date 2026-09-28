@@ -127,6 +127,11 @@ export function getDeclarations(node: ParseNode | readonly ParseNode[]): Declara
       }
       return getDeclarations(node.BindingIdentifier);
     case 'InterfaceDeclaration':
+      // An interface CASE (phase 5) refines its family and declares no name.
+      if (node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+        return [];
+      }
+      return getDeclarations(node.BindingIdentifier);
     case 'EnumDeclaration':
       return getDeclarations(node.BindingIdentifier);
     default:

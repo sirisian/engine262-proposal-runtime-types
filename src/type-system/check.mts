@@ -5576,6 +5576,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!node) {
       return null;
     }
+    return interfaceTypeOfNode(node, interfaceDeclarations.get(name));
+  };
+  /**
+   * An interface's record from its DECLARATION: the primary through the name
+   * (with its partial declarations, merged), or a CASE (phase 5) through its
+   * own node alone - a case is never recorded under its family's name, so its
+   * members refine the application that selects it and merge into nothing.
+   */
+  const interfaceTypeOfNode = (node: ParseNode, declared: readonly ParseNode[] | undefined): Known => {
     const memo = interfaceTypeMemo.get(node);
     if (memo !== undefined) {
       return memo;
@@ -5640,7 +5649,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // meaning of an interface does not depend on the order its declarations
     // load". Taking the first and not overwriting keeps this pass order-
     // independent for the programs that are legal.
-    const declarations = interfaceDeclarations.get(name) ?? [decl];
+    const declarations = declared ?? [decl];
     // Each member paired with the INDEX of the declaration it came from, so a
     // redeclaration ACROSS declarations can be told from two members written in
     // one.
@@ -7037,7 +7046,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const siblings = container ? Object.values(container).find((v) => Array.isArray(v) && v.includes(holder)) as readonly unknown[] | undefined : undefined;
     return (siblings ?? []).map((item) => ((item as { type?: string }).type === 'ExportDeclaration' ? (item as { Declaration?: unknown }).Declaration : item) as
       { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string } | null } | undefined)
-      .filter((d) => d !== undefined && d !== (primary as unknown) && d.type === 'TypeAliasDeclaration' && d.BindingIdentifier?.name === name
+      .filter((d) => d !== undefined && d !== (primary as unknown) && d.type === (primary as { type?: string }).type && d.BindingIdentifier?.name === name
         && !!d.TypeParameters && d.TypeParameters.ListKind !== 'parameters') as unknown as ParseNode[];
   };
   /**
@@ -7121,6 +7130,65 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return body ? substituteTypeParameters(body, chosen ? new Map([...bindings, ...chosen.Bindings]) : bindings) : null;
   };
   setAliasApplicationImpl((alias, operands) => resolveClosedAliasApplication(alias as ParseNode, operands) as TypeRecord | null);
+  /**
+   * An interface CASE's record (phase 5): its own members, resolved with its
+   * captures in scope and then bound. Its Declaration is the case, so the
+   * application interns apart from the primary's; its Structure is closed.
+   */
+  const refinedInterfaceRecord = (caseNode: ParseNode, bindings: ReadonlyMap<string, TypeRecord>): Known => {
+    const scope = new Map<string, Known | null>();
+    for (const captured of bindings.keys()) scope.set(captured, null);
+    typeParameterScopes.push(scope);
+    let record: Known;
+    try {
+      record = interfaceTypeOfNode(caseNode, [caseNode]);
+    } finally {
+      typeParameterScopes.pop();
+    }
+    if (!record || record.Kind !== 'nominal') return null;
+    const structure = (record as unknown as { Structure?: TypeRecord }).Structure;
+    return { ...record, Structure: structure ? substituteTypeParameters(structure, bindings) ?? structure : structure } as unknown as TypeRecord;
+  };
+  /**
+   * Plan 6.4: an interface case REFINES its primary. Every member the primary
+   * declares, after substitution, is present in the case at a type the
+   * primary's accepts; the case may add members. A comparison over a capture
+   * is deferred to its bindings, as for class cases.
+   */
+  const checkInterfaceRefinement = (caseNode: ParseNode, primaryNode: ParseNode, name: string): void => {
+    const params = ((primaryNode as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null })
+      .TypeParameters?.TypeParameterList ?? []);
+    const entries = ((caseNode as unknown as { TypeParameters?: { SpecializationEntryList?: readonly { Pattern: ParseNode }[] } | null })
+      .TypeParameters?.SpecializationEntryList ?? []);
+    const bindings = new Map<string, TypeRecord>();
+    const captures = new Map<string, TypeRecord>();
+    params.forEach((param, i) => {
+      const pattern = entries[i]?.Pattern as { type?: string, BindingIdentifier?: { name: string } } | undefined;
+      if (!pattern) return;
+      if (pattern.type === 'CaptureBinding') {
+        bindings.set(param.BindingIdentifier.name, { Kind: 'parameter', Name: pattern.BindingIdentifier!.name } as unknown as TypeRecord);
+        return;
+      }
+      const record = resolveType(pattern as unknown as ParseNode.Type);
+      if (record) bindings.set(param.BindingIdentifier.name, record as TypeRecord);
+    });
+    const primary = interfaceTypeOf(name) as unknown as { Structure?: { Properties?: readonly { key: unknown, type: TypeRecord }[] } } | null;
+    const refined = refinedInterfaceRecord(caseNode, captures) as unknown as { Structure?: { Properties?: readonly { key: unknown, type: TypeRecord }[] } } | null;
+    const label = `\`${name}${(caseNode as unknown as { TypeParameters?: { sourceText?: string } }).TypeParameters?.sourceText ?? ''}\``;
+    for (const member of primary?.Structure?.Properties ?? []) {
+      if (typeof member.key !== 'string') continue;
+      const own = refined?.Structure?.Properties?.find((m) => m.key === member.key);
+      if (!own) {
+        errors.push((Throw.StaticTypeError('$1', Value(`${label} does not refine \`${name}\`: it has no \`${member.key}\``)) as ThrowCompletion).Value as ObjectValue);
+        continue;
+      }
+      const wanted = substituteTypeParameters(member.type, bindings) ?? member.type;
+      if (mentionsTypeParameter(wanted) || mentionsTypeParameter(own.type)) continue;
+      if (!IsAssignable(own.type, wanted)) {
+        errors.push((Throw.StaticTypeError('$1', Value(`${label} does not refine \`${name}\`: its \`${member.key}\` is ${displayType(own.type)}, not assignable to ${displayType(wanted)}`)) as ThrowCompletion).Value as ObjectValue);
+      }
+    }
+  };
   const classInstanceType = (n: ParseNode): Known => {
     const acc = classMemberWalk(n, 'instance');
     classMemberFolds(acc);
@@ -7260,6 +7328,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       });
       const bound = ifaceParams.length > 0 && ifaceBindings.size === ifaceParams.length;
       let istruct = declaredStructure;
+      // Phase 5, plan 6.4: implementing an application of an interface family
+      // whose case matches means meeting the case's REFINED contract. The
+      // refined structure is closed, so the substitution below leaves it as is.
+      const implementedCases = ifaceDecl ? aliasCasesOf(ifaceDecl as unknown as ParseNode) : [];
+      if (implementedCases.length > 0 && bound) {
+        const implementedArgs = ifaceParams.map((prm) => ifaceBindings.get((prm as unknown as { BindingIdentifier: { name: string } }).BindingIdentifier.name)!);
+        const chosen = aliasCaseSelection(ifaceDecl as unknown as ParseNode, implementedCases, nm, implementedArgs);
+        if (chosen && chosen !== 'open') {
+          const refined = refinedInterfaceRecord(chosen.Declaration, chosen.Bindings) as unknown as { Structure?: typeof declaredStructure } | null;
+          if (refined?.Structure) istruct = refined.Structure;
+        }
+      }
       if (istruct && bound) {
         istruct = substituteTypeParameters(istruct as Known, ifaceBindings) as typeof istruct;
       }
@@ -10053,6 +10133,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // literal check, which is the other half and cannot be separated.
           const userInterface = interfaceTypeOf(parameterizedName) as TypeRecord | null;
           if (userInterface && userInterface.Kind === 'nominal') {
+            // Phase 5, plan 6.4: an application of an interface family with a
+            // case whose list matches takes the case's REFINED contract - its
+            // record, captures bound - once the arguments are known. Open, it
+            // keeps the primary's contract, which every case refines, so nothing
+            // is assumed that a case could contradict.
+            const primaryNode = interfaceNodes.get(parameterizedName) as ParseNode;
+            const interfaceCases = aliasCasesOf(primaryNode);
+            if (interfaceCases.length > 0) {
+              const chosen = aliasCaseSelection(primaryNode, interfaceCases, parameterizedName, args as readonly (TypeRecord | number)[]);
+              if (chosen && chosen !== 'open') {
+                const refined = refinedInterfaceRecord(chosen.Declaration, chosen.Bindings);
+                if (refined) {
+                  return CanonicalizeType({ ...refined, Arguments: args } as TypeRecord);
+                }
+              }
+            }
             return CanonicalizeType({ ...userInterface, Arguments: args });
           }
           const userClass = classTypeOf(parameterizedName);
@@ -21208,7 +21304,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // pre-pass that collected only classes silently un-checked
         // `class C implements I { }`.
         const interfaceName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        if (interfaceName) {
+        // An interface case (phase 5) refines its family: it is neither
+        // recorded under the family's name nor registered as it.
+        const interfaceCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
+        if (interfaceName && !interfaceCase) {
           recordInterfaceDeclaration(interfaceName, n);
           if (!interfaceNodes.has(interfaceName)) {
             interfaceNodes.set(interfaceName, n);
@@ -21554,8 +21653,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (reopened && reopened !== n && (reopened.TypeParameters?.TypeParameterList?.length ?? 0) > 0) {
             errors.push(Throw.StaticTypeError('a partial declaration of the generic interface $1 is not supported yet: its members would not reach an application', Value(name)).Value as ObjectValue);
           }
-          recordInterfaceDeclaration(name, n);
-          interfaceNodes.set(name, n);
+          if (((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters') {
+            // An interface CASE (phase 5): checked as a refinement of its primary.
+            if (interfaceNodes.has(name)) checkInterfaceRefinement(n as ParseNode, interfaceNodes.get(name) as ParseNode, name);
+          } else {
+            recordInterfaceDeclaration(name, n);
+            interfaceNodes.set(name, n);
+          }
         }
       }
     }

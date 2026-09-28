@@ -161,7 +161,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   }
   // An alias CASE (phase 5) is inert where it is written; an application of
   // its family selects it.
-  if (node.type === 'TypeAliasDeclaration' && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+  if ((node.type === 'TypeAliasDeclaration' || node.type === 'InterfaceDeclaration') && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
     return undefined;
   }
   const name = StringValue(node.BindingIdentifier);
