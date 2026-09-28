@@ -148,9 +148,9 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
   const boolType = makePrimitive('boolean');
   const index = indexTypeRecord();
   const anyT = { Kind: 'any' as const } as TypeRecord;
-  const fn = (params: TypeRecord[], Return: TypeRecord) => ({
+  const fn = (params: TypeRecord[], Return: TypeRecord, names?: readonly string[]) => ({
     Kind: 'function',
-    Signatures: [{ Parameters: params.map((t, i) => parameter(t, { Name: `a${i}` })), Return, Untyped: false }],
+    Signatures: [{ Parameters: params.map((t, i) => parameter(t, { Name: names?.[i] ?? `a${i}` })), Return, Untyped: false }],
   } as unknown as Known);
   // (value, index) => U, the shape every helper callback takes.
   const cb = (ret: TypeRecord) => fn([element, index], ret);
@@ -164,7 +164,7 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
     case 'filter': return fn([cb(boolType) as TypeRecord], iteratorOf(element));
     case 'take':
     case 'drop': return fn([index], iteratorOf(element));
-    case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
+    case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT), ['callback']);
     case 'toArray': return fn([], { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord);
     case 'forEach': return fn([cb(voidType) as TypeRecord], voidType);
     case 'some':
@@ -178,7 +178,7 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
     // let `let x: uint8 = it.find(p)` through, where the same mistake through
     // `Map.prototype.get` is refused.
     case 'find': return fn([cb(boolType) as TypeRecord], orUndefined(element));
-    case 'reduce': return fn([fn([anyT, element, index], anyT) as TypeRecord, anyT], anyT);
+    case 'reduce': return fn([fn([anyT, element, index], anyT) as TypeRecord, anyT], anyT, ['callback', 'initial']);
     default: return null;
   }
 };
@@ -335,23 +335,10 @@ export const collectionMethodSignature = (library: string, name: string, args: r
     // its own semantics rather than quoted: it answers the value it found or
     // the one it inserted, and never *undefined*.
     case 'getOrInsert': return sig([key, value], value);
-    // Same shape, but the value is computed from the key rather than passed.
-    //
-    // The callback's PARAMETER is typed and its RETURN is left ~any~,
-    // deliberately. Constraining the return to V is more precise and refuses
-    // the natural spelling: `m.getOrInsertComputed("a", (k) => 1)` fails with
-    // "a literal type of number is not assignable to uint.<8>", because
-    // inferring a callback's return from the expected type is the
-    // argument-position inference the design lists as deferred. An
-    // annotated callback would work and an unannotated one would not, which
-    // is a worse trade than under-approximating - and the value is checked
-    // at insertion regardless, so a wrong one is refused either way, just at
-    // run time. Same reasoning as the `other` parameter of the set
-    // operations above; when inference from an expected type lands, tighten
-    // both together.
+    // #sec-keyed-collections: the computed value has the insertion type V.
     case 'getOrInsertComputed': return sig([key, ({
       Kind: 'function',
-      Signatures: [{ Parameters: [parameter(key, { Name: 'key' })], Return: anyType as TypeRecord, Untyped: false }],
+      Signatures: [{ Parameters: [parameter(key, { Name: 'key' })], Return: value, Untyped: false }],
     } as unknown as TypeRecord)], value);
     default: break;
   }

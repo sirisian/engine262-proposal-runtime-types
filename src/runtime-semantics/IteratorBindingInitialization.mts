@@ -343,143 +343,118 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
 //   `...` BindingPattern
 function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.BindingRestElement, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
   const { BindingIdentifier, BindingPattern, TypeAnnotation } = restNode;
-  if (BindingIdentifier) {
-    // 1. Let lhs be ? ResolveBinding(StringValue of BindingIdentifier, environment).
-    const lhs = Q(yield* ResolveBinding(StringValue(BindingIdentifier), environment, BindingIdentifier.strict));
-    // proposal-runtime-types #sec-function-types: `ref ...refs` - the
-    // modifier distributes over the run, so each argument the rest collects
-    // must be a ref argument, and the rest binds NO ARRAY: it binds the run of
-    // their locations, which the reference operations read and write through.
-    if ((restNode as { Ref?: boolean }).Ref === true) {
-      const locations: ReferenceRecord[] = [];
-      while (true) {
-        const next = Q(yield* IteratorStepValue(iteratorRecord));
-        if (next === 'done') {
-          break;
-        }
-        if (!(next instanceof ReferenceValue)) {
-          return Throw.TypeError('parameter $1 requires a ref argument', StringValue(BindingIdentifier));
-        }
-        locations.push(next.Location);
-      }
-      const run = new ReferenceRunValue(locations);
-      // The rest's OWN binding is the one place the run is stored.
-      const initialized = yield* withReferenceRunInitializationEvaluator(function* () {
-        return yield* InitializeReferencedBinding(lhs, run);
-      });
-      return initialized;
-    }
-    // #sec-type-annotations: "A rest element's annotation is the type of what it
-    // COLLECTS", so each argument the rest takes is checked against that type's
-    // ELEMENT type, the run-time half. This function did not read its
-    // annotation at all - the parameter was not even destructured - so a rest was
-    // the ONE position in the language whose declared type the run time ignored.
-    let restDeclared: TypeRecord | undefined;
-    if (TypeAnnotation) {
-      const resolvedRest = EnsureCompletion(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
-      if (resolvedRest.Type !== 'throw' && resolvedRest.Value) {
-        restDeclared = resolvedRest.Value as TypeRecord;
-      }
-    }
-    // 2. Let A be ! ArrayCreate(0).
-    const array = X(ArrayCreate(0));
-    // 3. Let n be 0.
-    let n = 0;
-    // 4. Repeat,
+  // 1. Let lhs be ? ResolveBinding(StringValue of BindingIdentifier, environment).
+  const lhs = BindingIdentifier ? Q(yield* ResolveBinding(StringValue(BindingIdentifier), environment, BindingIdentifier.strict)) : undefined;
+  // proposal-runtime-types #sec-function-types: `ref ...refs` - the
+  // modifier distributes over the run, so each argument the rest collects
+  // must be a ref argument, and the rest binds NO ARRAY: it binds the run of
+  // their locations, which the reference operations read and write through.
+  if (BindingIdentifier && lhs && (restNode as { Ref?: boolean }).Ref === true) {
+    const locations: ReferenceRecord[] = [];
     while (true) {
-      let next: 'done' | Value = 'done';
-      // a. If iteratorRecord.[[Done]] is false, then
-      if (iteratorRecord.Done === Value.false) {
-        // i. Let next be ? IteratorStepValue(iteratorRecord).
-        next = Q(yield* IteratorStepValue(iteratorRecord));
-      }
+      const next = Q(yield* IteratorStepValue(iteratorRecord));
       if (next === 'done') {
-        // #sec-type-annotations: "Where the annotation states an EXTENT -
-        // `[2].<uint8>`, or `[N].<uint8>` for a value parameter N - the extent is
-        // part of the type and the call must supply that many arguments".
-        //
-        // Checked once the rest has collected everything, since `n` is the count
-        // it received. A DYNAMIC extent admits any number and is the common case;
-        // a fixed extent, or a tuple with no rest of its own, fixes it - less any
-        // TRAILING DEFAULTS, which is the length range and is why the minimum
-        // and the maximum are computed apart.
-        //
-        // This is the half that makes the static
-        // check compatible: that check refuses these calls, and until now the run
-        // time accepted them, so the checker was refusing programs that worked.
-        if (restDeclared !== undefined) {
-          let least: number | null = null;
-          let most: number | null = null;
-          if (restDeclared.Kind === 'array' && typeof restDeclared.Extent === 'number') {
-            least = restDeclared.Extent;
-            most = restDeclared.Extent;
-          } else if (restDeclared.Kind === 'tuple' && !restDeclared.Elements.some((e) => e.Rest)) {
-            most = restDeclared.Elements.length;
-            least = most;
-            // `Initial`, not `DeclaredDefault`. This resolution EVALUATES the
-            // initializer, so a defaulted position carries its VALUE here;
-            // `DeclaredDefault` is the checker's flag, set where the resolution
-            // is synchronous and the value cannot be evaluated. Reading
-            // the checker's field on this path found nothing and refused
-            // `...a: [uint8, string = "d"]` given one argument - a program the
-            // clause's own length range admits.
-            while (least > 0
-              && (restDeclared.Elements[least - 1]!.Initial !== 'none'
-                || restDeclared.Elements[least - 1]!.DeclaredDefault === true)) {
-              least -= 1;
-            }
-          }
-          if (least !== null && most !== null && (n < least || n > most)) {
-            return Throw.TypeError(
-              '$1 is not assignable to $2',
-              array,
-              Value(displayType(restDeclared)),
-            );
+        break;
+      }
+      if (!(next instanceof ReferenceValue)) {
+        return Throw.TypeError('parameter $1 requires a ref argument', StringValue(BindingIdentifier));
+      }
+      locations.push(next.Location);
+    }
+    const run = new ReferenceRunValue(locations);
+    // The rest's OWN binding is the one place the run is stored.
+    const initialized = yield* withReferenceRunInitializationEvaluator(function* () {
+      return yield* InitializeReferencedBinding(lhs, run);
+    });
+    return initialized;
+  }
+  // #sec-type-annotations: "A rest element's annotation is the type of what it
+  // COLLECTS", so each argument the rest takes is checked against that type's
+  // ELEMENT type, the run-time half. This function did not read its
+  // annotation at all - the parameter was not even destructured - so a rest was
+  // the ONE position in the language whose declared type the run time ignored.
+  let restDeclared: TypeRecord | undefined;
+  if (TypeAnnotation) {
+    const resolvedRest = EnsureCompletion(yield* TypeNodeToTypeRecord(TypeAnnotation.Type));
+    if (resolvedRest.Type !== 'throw' && resolvedRest.Value) {
+      restDeclared = resolvedRest.Value as TypeRecord;
+    }
+  }
+  // 2. Let A be ! ArrayCreate(0).
+  const array = X(ArrayCreate(0));
+  // 3. Let n be 0.
+  let n = 0;
+  // 4. Repeat,
+  while (true) {
+    let next: 'done' | Value = 'done';
+    // a. If iteratorRecord.[[Done]] is false, then
+    if (iteratorRecord.Done === Value.false) {
+      // i. Let next be ? IteratorStepValue(iteratorRecord).
+      next = Q(yield* IteratorStepValue(iteratorRecord));
+    }
+    if (next === 'done') {
+      // #sec-type-annotations: "Where the annotation states an EXTENT -
+      // `[2].<uint8>`, or `[N].<uint8>` for a value parameter N - the extent is
+      // part of the type and the call must supply that many arguments".
+      //
+      // Checked once the rest has collected everything, since `n` is the count
+      // it received. A DYNAMIC extent admits any number and is the common case;
+      // a fixed extent, or a tuple with no rest of its own, fixes it - less any
+      // TRAILING DEFAULTS, which is the length range and is why the minimum
+      // and the maximum are computed apart.
+      //
+      // This is the half that makes the static
+      // check compatible: that check refuses these calls, and until now the run
+      // time accepted them, so the checker was refusing programs that worked.
+      if (restDeclared !== undefined) {
+        let least: number | null = null;
+        let most: number | null = null;
+        if (restDeclared.Kind === 'array' && typeof restDeclared.Extent === 'number') {
+          least = restDeclared.Extent;
+          most = restDeclared.Extent;
+        } else if (restDeclared.Kind === 'tuple' && !restDeclared.Elements.some((e) => e.Rest)) {
+          most = restDeclared.Elements.length;
+          least = most;
+          // `Initial`, not `DeclaredDefault`. This resolution EVALUATES the
+          // initializer, so a defaulted position carries its VALUE here;
+          // `DeclaredDefault` is the checker's flag, set where the resolution
+          // is synchronous and the value cannot be evaluated. Reading
+          // the checker's field on this path found nothing and refused
+          // `...a: [uint8, string = "d"]` given one argument - a program the
+          // clause's own length range admits.
+          while (least > 0
+            && (restDeclared.Elements[least - 1]!.Initial !== 'none'
+              || restDeclared.Elements[least - 1]!.DeclaredDefault === true)) {
+            least -= 1;
           }
         }
-        // i. If environment is undefined, return ? PutValue(lhs, A).
-        // Convert the collected type once, preserving tuple positions and
-        // installing the array's storage contract as well as its element type.
-        let collected: Value = array;
-        if (restDeclared) collected = Q(yield* CheckedConvertValue(array, restDeclared));
-        if (environment === Value.undefined) {
-          return Q(yield* PutValue(lhs, collected));
+        if (least !== null && most !== null && (n < least || n > most)) {
+          return Throw.TypeError(
+            '$1 is not assignable to $2',
+            array,
+            Value(displayType(restDeclared)),
+          );
         }
-        return yield* InitializeReferencedBinding(lhs, collected);
       }
-      // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
-      // proposal-runtime-types (references extension): a rest parameter is an
-      // array, a store a reference cannot survive, so a ref argument gathered
-      // by a rest decays to its referent's value as it is collected.
-      X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), Q(yield* DecayReferenceValue(next))));
-      // g. Set n to n + 1.
-      n += 1;
+      // i. If environment is undefined, return ? PutValue(lhs, A).
+      // Convert the collected type once, preserving tuple positions and
+      // installing the array's storage contract as well as its element type.
+      let collected: Value = array;
+      if (restDeclared) collected = Q(yield* CheckedConvertValue(array, restDeclared));
+      if (BindingPattern) return yield* BindingInitialization(BindingPattern, collected, environment);
+      Assert(lhs !== undefined);
+      if (environment === Value.undefined) {
+        return Q(yield* PutValue(lhs, collected));
+      }
+      return yield* InitializeReferencedBinding(lhs, collected);
     }
-  } else {
-    // 1. Let A be ! ArrayCreate(0).
-    const array = X(ArrayCreate(0));
-    // 2. Let n be 0.
-    let n = 0;
-    // 3. Repeat,
-    while (true) {
-      let next: 'done' | Value = 'done';
-      // a. If iteratorRecord.[[Done]] is false, then
-      if (iteratorRecord.Done === Value.false) {
-        // i. Let next be ? IteratorStepValue(iteratorRecord).
-        next = Q(yield* IteratorStepValue(iteratorRecord));
-      }
-      // b. If next is done, then
-      if (next === 'done') {
-        // i. Return the result of performing BindingInitialization of BindingPattern with A and environment as the arguments.
-        return yield* BindingInitialization(BindingPattern!, array, environment);
-      }
-      // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
-      // proposal-runtime-types (references extension): as above, the gathered
-      // element decays.
-      X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), Q(yield* DecayReferenceValue(Q(next)))));
-      // g. Set n to n + 1.
-      n += 1;
-    }
+    // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
+    // proposal-runtime-types (references extension): a rest parameter is an
+    // array, a store a reference cannot survive, so a ref argument gathered
+    // by a rest decays to its referent's value as it is collected.
+    X(CreateDataPropertyOrThrow(array, X(ToString(F(n))), Q(yield* DecayReferenceValue(next))));
+    // g. Set n to n + 1.
+    n += 1;
   }
 }
 

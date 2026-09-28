@@ -106,3 +106,74 @@ export function AsyncIterationContribution(
   const selected = select(hook.type);
   return hook.optional ? combine([selected, fallback()]) : selected;
 }
+
+export interface DelegationContribution {
+  readonly yielded: TypeRecord | null;
+  readonly terminal: TypeRecord | null;
+}
+
+/** #sec-generator-types: normal delegation separates yielding and terminal steps. */
+export function StaticDelegationContribution(
+  type: TypeRecord | null,
+  asynchronous: boolean,
+  structureOf: (type: TypeRecord | null) => TypeRecord | null,
+  awaitedType: (type: TypeRecord | null) => TypeRecord | null,
+): DelegationContribution {
+  const unknown: DelegationContribution = { yielded: null, terminal: null };
+  const never: TypeRecord = { Kind: 'union', Members: [] };
+  const combine = (parts: readonly DelegationContribution[]): DelegationContribution => ({
+    yielded: parts.every((part) => part.yielded !== null) ? join(parts.map((part) => part.yielded!)) ?? never : null,
+    terminal: parts.every((part) => part.terminal !== null) ? join(parts.map((part) => part.terminal!)) ?? never : null,
+  });
+  if (!type) return unknown;
+  if (type.Kind === 'union') return combine(type.Members.map((arm) => StaticDelegationContribution(arm, asynchronous, structureOf, awaitedType)));
+  if (type.Kind === 'nominal' && (type.LibraryName === 'Generator' || (asynchronous && type.LibraryName === 'AsyncGenerator'))) {
+    const [yielded, terminal] = type.Arguments;
+    return { yielded: typeof yielded === 'object' ? yielded : null, terminal: typeof terminal === 'object' ? terminal : null };
+  }
+  // Indexed array/tuple storage does not prove a replaceable iterator's results.
+  if (type.Kind === 'array' || type.Kind === 'tuple') return unknown;
+  const shape = structureOf(type);
+  if (shape?.Kind !== 'object') return unknown;
+  const step = (result: TypeRecord | null): DelegationContribution => {
+    if (!result) return unknown;
+    if (result.Kind === 'union') return combine(result.Members.map(step));
+    const record = structureOf(result);
+    if (record?.Kind !== 'object') return unknown;
+    const done = record.Properties.find((property) => property.key === 'done');
+    const value = record.Properties.find((property) => property.key === 'value');
+    const supplied = value && !value.optional ? value.type : null;
+    return {
+      yielded: !done?.optional && done?.type.Kind === 'literal' && done.type.Value === Value.true ? never : supplied,
+      terminal: done?.type.Kind === 'literal' && done.type.Value === Value.false ? never : supplied,
+    };
+  };
+  const next = (iterator: TypeRecord | null, asyncStep: boolean): DelegationContribution => {
+    if (!iterator) return unknown;
+    if (iterator.Kind === 'union') return combine(iterator.Members.map((arm) => next(arm, asyncStep)));
+    const record = structureOf(iterator);
+    const method = record?.Kind === 'object' ? record.Properties.find((property) => property.key === 'next') : undefined;
+    return !method?.optional && method?.type.Kind === 'function' && method.type.Signatures.length === 1
+      ? step(asyncStep ? awaitedType(method.type.Signatures[0]!.Return) : method.type.Signatures[0]!.Return) : unknown;
+  };
+  const enter = (method: TypeRecord | null, asyncStep: boolean): DelegationContribution => {
+    if (!method) return unknown;
+    if (method.Kind === 'union') return combine(method.Members.map((arm) => enter(arm, asyncStep)));
+    return method.Kind === 'function' && method.Signatures.length === 1 ? next(method.Signatures[0]!.Return, asyncStep) : unknown;
+  };
+  const sync = (): DelegationContribution => {
+    const hook = shape.Properties.find((property) => property.key === wellKnownSymbols.iterator);
+    const part = hook && !hook.optional ? enter(hook.type, false) : unknown;
+    return asynchronous ? { yielded: awaitedType(part.yielded), terminal: awaitedType(part.terminal) } : part;
+  };
+  if (!asynchronous) return sync();
+  const hook = shape.Properties.find((property) => property.key === wellKnownSymbols.asyncIterator);
+  if (!hook) return sync();
+  const select = (method: TypeRecord): DelegationContribution => {
+    if (method.Kind === 'union') return combine(method.Members.map(select));
+    if (method.Kind === 'primitive' && ['null', 'undefined'].includes(method.Name)) return sync();
+    return enter(method, true);
+  };
+  const selected = select(hook.type);
+  return hook.optional ? combine([selected, sync()]) : selected;
+}

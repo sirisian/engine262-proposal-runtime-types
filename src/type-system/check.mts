@@ -4,7 +4,7 @@ import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, N
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
-import { StaticIterationContribution, AsyncIterationContribution } from './iteration-contribution.mts';
+import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
@@ -5939,10 +5939,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const classBodyOf = (cls: ParseNode): readonly ParseNode[] => (cls as unknown as {
     ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
   }).ClassTail?.ClassBody ?? [];
-  const heritageClassOf = (cls: ParseNode): ParseNode | undefined => {
-    const heritage = (cls as unknown as { ClassTail?: { ClassHeritage?: { type?: string, name?: string } | null } | null }).ClassTail?.ClassHeritage;
-    return heritage?.type === 'IdentifierReference' && typeof heritage.name === 'string' ? classNodes.get(heritage.name) : undefined;
+  type ClassOrigin = { declaration: ParseNode.ClassDeclaration | ParseNode.ClassExpression, arguments?: ParseNode.TypeArguments };
+  // #sec-typed-classes: follow transparent syntax and immutable lexical aliases.
+  // Keep declaration identity: a same-spelled name in a caller's frame is not the base.
+  const stableClassOrigin = (expression: ParseNode, seen = new Set<ParseNode>()): ClassOrigin | undefined => {
+    const node = patternExpression(expression)!;
+    if (seen.has(node) || seen.size >= 256) return undefined;
+    seen.add(node);
+    if (node.type === 'ClassExpression' || node.type === 'ClassDeclaration') {
+      return node.Decorators?.length ? undefined : { declaration: node };
+    }
+    if (node.type === 'TypeArgumentsExpression') {
+      const origin = stableClassOrigin(node.Expression, seen);
+      return origin ? { ...origin, arguments: node.TypeArguments } : undefined;
+    }
+    if (node.type !== 'IdentifierReference' || hasDirectEval) return undefined;
+    const binding = ResolveBindingDeclaration(node, node.name);
+    if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
+        && !(binding.node as { Ref?: boolean }).Ref) {
+      return stableClassOrigin(binding.initializer, seen);
+    }
+    if (binding?.kind === 'class' && !assignedNames.has(node.name) && !assignedGlobalProperties.has(node.name)) {
+      return stableClassOrigin(binding.node, seen);
+    }
+    return undefined;
   };
+  const heritageOriginOf = (cls: ParseNode): ClassOrigin | undefined => {
+    const heritage = (cls as ParseNode.ClassDeclaration).ClassTail?.ClassHeritage;
+    const origin = heritage ? stableClassOrigin(heritage) : undefined;
+    return origin?.declaration === cls ? undefined : origin;
+  };
+  const heritageClassOf = (cls: ParseNode): ParseNode | undefined => heritageOriginOf(cls)?.declaration;
+
   /**
    * #sec-natural-alignment: "It is a type error for a field to be placed
    * outside the size a `size` fixes." Every layout control takes a numeric
@@ -6122,13 +6150,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     //
     // An unknown base contributes nothing rather than guessing, which is what
     // the instance path says of a heritage clause naming no class.
-    const heritage = ((node as unknown as {
-      ClassTail?: { ClassHeritage?: ParseNode | null } | null,
-    }).ClassTail)?.ClassHeritage;
-    const baseName = heritage && (heritage as { type?: string, name?: string }).type === 'IdentifierReference'
-      ? (heritage as { name: string }).name
-      : null;
-    const baseObject = baseName ? classObjectTypeOf(baseName) : null;
+    const origin = heritageOriginOf(node);
+    let baseObject = origin ? classObjectTypeOfNode(origin.declaration) : null;
+    if (baseObject && origin?.arguments) {
+      const pushed = pushTypeParameterScopeOf(node, 'type-only');
+      try {
+        const bindings = new Map<string, TypeRecord>();
+        bindExplicitTypeArguments(typeParameterRecordsOf(origin.declaration.TypeParameters?.TypeParameterList ?? []),
+          origin.arguments.TypeArgumentList, bindings, { complete: true, application: origin.arguments.parent as ParseNode.TypeArgumentsExpression });
+        baseObject = substituteTypeParameters(baseObject, bindings);
+      } finally {
+        if (pushed) typeParameterScopes.pop();
+      }
+    }
     const baseProperties = baseObject && baseObject.Kind === 'object'
       ? (baseObject as unknown as { Properties: readonly { key: string }[] }).Properties
       : null;
@@ -7203,6 +7237,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
   };
+  // #sec-interfaces-semantics: implements does not add [[Call]] to an instance.
+  // Inspect construction without executing it or assuming all classes return this.
+  const classCallCapability = (node: ParseNode, seen = new Set<ParseNode>()): Known | 'noncallable' => {
+    if (seen.has(node)) return null;
+    seen.add(node);
+    const cls = node as ParseNode.ClassDeclaration;
+    if (cls.Decorators?.length) return null;
+    const constructor = classBodyOf(node).find((member) => member.type === 'MethodDefinition'
+      && !member.static && classElementKey(member.ClassElementName) === 'constructor') as ParseNode.MethodDefinition | undefined;
+    const list = constructor?.FunctionBody?.FunctionStatementList;
+    const returns: ParseNode[] = [];
+    const collect = (at: ParseNode): void => {
+      if (at.type === 'ReturnStatement') {
+        if (at.Expression) returns.push(at.Expression);
+        return;
+      }
+      if (isFunctionLiteral(at) || ['FunctionDeclaration', 'ClassDeclaration', 'ClassExpression', 'MethodDefinition'].includes(at.type)) return;
+      for (const [key, value] of Object.entries(at)) {
+        if (['parent', 'location', 'sourceText'].includes(key)) continue;
+        for (const child of Array.isArray(value) ? value : [value]) {
+          if (child && typeof child === 'object' && 'type' in child) collect(child as ParseNode);
+        }
+      }
+    };
+    list?.forEach(collect);
+    if (returns.length) {
+      // A single unconditional function result has an ordinary callable contract.
+      if (list?.length === 1 && list[0].type === 'ReturnStatement' && isFunctionLiteral(patternExpression(returns[0])!)) {
+        return staticType(returns[0]);
+      }
+      // A replacement object, parameter, or branching return needs a stronger proof.
+      return null;
+    }
+    if (!cls.ClassTail.ClassHeritage) return 'noncallable';
+    const base = heritageClassOf(node);
+    return base ? classCallCapability(base, seen) : null;
+  };
+
   const classInstanceType = (n: ParseNode): Known => {
     const acc = classMemberWalk(n, 'instance');
     classMemberFolds(acc);
@@ -7213,92 +7285,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       BindingIdentifier?: { name: string } | null,
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
     };
-    // #sec-typed-classes: a subclass's instances have their superclass's
-    // members too, so the inherited shape is merged UNDER the class's own
-    // declarations - an override wins, which is what the prototype chain does
-    // at run time. Only a heritage clause naming a class is followed; an
-    // expression like `class B extends mixin(A)` leaves the base unknown, and
-    // an unknown base contributes nothing rather than guessing.
-    // An `implements` clause contributes members too: a class that satisfies an
-    // interface has that interface's members, and the checker could not see one
-    // the class did not also declare itself. Merged UNDER both the class's
-    // own declarations and its heritage, since either is more specific.
-    // The heritage is resolved BEFORE `implements` is verified, because an
-    // interface's member may be satisfied by one the class INHERITS: `class C
-    // extends B implements A {}` where `B` declares `a` is accepted, as
-    // TypeScript and the run time accept it, rather than refused with "C,
-    // which declares no member a".
-    const heritage = (cls.ClassTail as { ClassHeritage?: ParseNode | null } | null | undefined)?.ClassHeritage;
-    // `extends Box.<uint8>` is a |TypeArgumentsExpression| WRAPPING the name,
-    // not an |IdentifierReference|, so reading the heritage as a name alone left
-    // `baseName` *null* and the record with no [[Base]] at all. The relation
-    // walks [[Base]] for the inheritance chain, so `let b: Box.<uint8> = new
-    // IntBox()` was refused for a `class IntBox extends Box.<uint8>` while
-    // `instanceof` answered *true*, which is the disagreement this record exists
-    // to end - and the same omission the library-nominal case above was fixed
-    // for, one spelling along.
-    const heritageArgs = heritage && (heritage as { type?: string }).type === 'TypeArgumentsExpression'
-      ? (heritage as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode.Type[] } }).TypeArguments?.TypeArgumentList
-      : undefined;
-    const heritageName = heritageArgs
-      ? (heritage as unknown as { Expression?: { type?: string, name?: string } }).Expression
-      : (heritage as { type?: string, name?: string } | null | undefined);
-    const namedBase = heritageName && heritageName.type === 'IdentifierReference' ? heritageName.name : undefined;
-    // Heritage sees the class self-name in its TDZ, not an instance-type cycle.
-    // A value parameter likewise shadows an outer class of the same name.
-    const ownParameters = (n as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
-    const baseName = namedBase && namedBase !== cls.BindingIdentifier?.name
-      && !ownParameters.some((parameter) => parameter.BindingIdentifier.name === namedBase) ? namedBase : null;
-    // A class may extend a LIBRARY nominal - `class MyErr extends Error` - and
-    // `classTypeOf` finds only classes declared in source, so the library
-    // record stands in as [[Base]]. Otherwise the chain the subtype relation
-    // walks stops short, and `let e: Error = new MyErr()` is refused while
-    // `new MyErr() is Error` and `instanceof` answer *true* at run time - and
-    // the same class imported from another module, which this pass cannot see
-    // and so abstains on, is accepted, so the program's meaning would depend
-    // on which file its class was written in.
-    const bareBase = baseName ? (classTypeOf(baseName) ?? libraryTypeRecord(baseName)) : null;
-    // The SPECIALIZATION, not the declaration. The arguments a heritage clause
-    // supplies are what #sec-issubtype compares against the target's, so a base
-    // recorded without them relates to no instantiation of itself.
-    // ALL OR NOTHING. An argument that names one of this class's own type
-    // parameters - `class Sub<T> extends Box.<T>` - does not resolve here, the
-    // parameter having no binding at the declaration, and dropping it silently
-    // left a base of `Box` with NO arguments: a record that looks like a
-    // concrete instantiation and matches none. Better to record the bare base,
-    // which is what this did before and is honestly incomplete.
-    //
-    // The remaining case is that one: a generic subclass of a generic base
-    // relates to no instantiation of its base, because the base is recorded
-    // unparameterized and specializing the subclass does not substitute into it.
-    // Fixing it means substituting the subclass's arguments into [[Base]] where
-    // the specialization is built, which is a change to where specializations
-    // are made rather than to how a heritage clause is read.
-    // Resolved UNDER THE CLASS'S OWN TYPE PARAMETERS, so that
-    // `class Sub<T> extends Box.<T>` records a base of `Box.<T>` - the argument
-    // being a ~parameter~ record - rather than nothing at all. Without the scope
-    // `T` resolves to null here, the all-or-nothing rule below then keeps the
-    // BARE base, and a specialization of `Sub` relates to no instantiation of
-    // `Box`.
-    // The NODE, not the structural view of it above: `cls` is a bare cast for
-    // reading two fields and is not a |ParseNode|, which is what this helper
-    // reads its |TypeParameters| from.
-    const pushedForHeritage = pushTypeParameterScopeOf(n as ParseNode, 'type-only');
-    let heritageArgRecords;
+    // #sec-typed-classes: inherited contracts follow the constructor's origin
+    // and specialization. Calls and mutable or erased aliases remain unknown.
+    const heritage = (n as ParseNode.ClassDeclaration).ClassTail?.ClassHeritage;
+    const origin = heritageOriginOf(n);
+    const bareHeritage = heritage ? patternExpression(heritage) : undefined;
+    const libraryTarget = bareHeritage?.type === 'TypeArgumentsExpression' ? patternExpression(bareHeritage.Expression) : bareHeritage;
+    const libraryName = libraryTarget?.type === 'IdentifierReference'
+      && !ResolveBindingDeclaration(libraryTarget, libraryTarget.name) ? libraryTarget.name : undefined;
+    const bareBase = origin ? instanceTypeOf(origin.declaration) : libraryName ? libraryTypeRecord(libraryName) : null;
+    const pushedForHeritage = pushTypeParameterScopeOf(n, 'type-only');
+    let base = bareBase;
     try {
-      heritageArgRecords = heritageArgs
-        ? heritageArgs.map((a) => resolveType(a))
-        : undefined;
-    } finally {
-      if (pushedForHeritage) {
-        typeParameterScopes.pop();
+      if (libraryName && bareBase?.Kind === 'nominal' && bareHeritage?.type === 'TypeArgumentsExpression') {
+        const arguments_ = bareHeritage.TypeArguments.TypeArgumentList.map((argument) => resolveType(argument));
+        if (arguments_.every((argument): argument is TypeRecord => argument !== null)) base = { ...bareBase, Arguments: arguments_ };
       }
+      if (origin?.arguments && bareBase?.Kind === 'nominal') {
+        const parameters = typeParameterRecordsOf(origin.declaration.TypeParameters?.TypeParameterList ?? []);
+        const bindings = new Map<string, TypeRecord>();
+        bindExplicitTypeArguments(parameters, origin.arguments.TypeArgumentList, bindings, { complete: true, application: origin.arguments.parent as ParseNode.TypeArgumentsExpression });
+        if (parameters.every((parameter) => bindings.has(parameter.Name))) {
+          base = { ...bareBase, Arguments: parameters.map((parameter) => bindings.get(parameter.Name)!) };
+        }
+      }
+    } finally {
+      if (pushedForHeritage) typeParameterScopes.pop();
     }
-    const base = bareBase && bareBase.Kind === 'nominal'
-      && heritageArgRecords && heritageArgRecords.length > 0
-      && heritageArgRecords.every((t): t is TypeRecord => !!t)
-      ? { ...bareBase, Arguments: heritageArgRecords as readonly TypeRecord[] } as Known
-      : bareBase;
     // Merge the specialized base shape, not its declaration's still-generic
     // members. Inherited reads and disposal lookup need the same substitution.
     const baseStructure = base && base.Kind === 'nominal' ? structureOf(base) : null;
@@ -7351,6 +7364,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const [name, type] of it.SpecializationBindings ?? []) ifaceBindings.set(name, type);
       const bound = ifaceBindings.size > 0;
       const istruct = structureOf(it);
+      if (istruct?.Kind === 'function') {
+        const capability = classCallCapability(n);
+        if (capability === 'noncallable') {
+          errors.push(Throw.StaticTypeError('a non-callable class instance cannot implement $1', Value(nm)).Value as ObjectValue);
+        } else if (capability) requireAssignable(capability, istruct);
+      }
       if (istruct && istruct.Kind === 'object') {
         // `implements` is VERIFIED, not merely declared. Every member the
         // interface requires must be declared by the class with an assignable
@@ -7437,12 +7456,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (found) {
             return found;
           }
-          const inherits: { type?: string, name?: string } | null | undefined = (declaration as unknown as {
-            ClassTail?: { ClassHeritage?: { type?: string, name?: string } | null } | null,
-          }).ClassTail?.ClassHeritage;
-          declaration = inherits?.type === 'IdentifierReference' && inherits.name
-            ? classNodes.get(inherits.name) as ParseNode | undefined
-            : undefined;
+          declaration = heritageClassOf(declaration);
         }
         return undefined;
       };
@@ -16379,8 +16393,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const y = node as { hasStar?: boolean, AssignmentExpression?: ParseNode | null };
         if (y.hasStar) {
           const operand = y.AssignmentExpression ? staticType(y.AssignmentExpression) : null;
-          const delegated = generatorParameters(operand);
-          return delegated ? delegated.Return : null;
+          return StaticDelegationContribution(operand, ReferenceFunction(node)?.type.startsWith('Async') === true,
+            structureOf, awaitedType).terminal;
         }
         const enclosing = generatorParameters(generatorTypes[generatorTypes.length - 1] ?? null);
         return enclosing ? enclosing.Next : null;
@@ -16467,7 +16481,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const libraryMember = collectionMemberType(base, key) ?? VectorMaskMethodSignature(base, key);
             if (libraryMember) return libraryMember;
           }
-          if (typeof key === 'string' && (base?.Kind === 'union' || structureOf(base)?.Kind === 'object')) {
+          if (typeof key === 'string' && (base?.Kind === 'union' || structureOf(base)?.Kind === 'object'
+              || (base?.Kind === 'nominal' && ['Generator', 'IteratorHelper'].includes(base.LibraryName ?? '')))) {
             return staticType({ ...node, Expression: undefined, IdentifierName: { type: 'IdentifierName', name: key } } as unknown as ParseNode);
           }
           // #sec-object-types: finite keys preserve each exact-key contract;
@@ -16654,7 +16669,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const first = receiver.Arguments[0];
             if (first !== undefined && typeof first !== 'number') {
-              const sig = iteratorMethodSignature((m.IdentifierName as { name: string }).name, first);
+              const sig = receiver.LibraryName.startsWith('Async')
+                ? iteratorMethodSignature((m.IdentifierName as { name: string }).name, first)
+                : iteratorContract(node, first, (m.IdentifierName as { name: string }).name);
               if (sig) {
                 return sig;
               }
@@ -20497,10 +20514,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (n.type === 'YieldExpression') {
       const operand = n.AssignmentExpression ? staticType(n.AssignmentExpression) : null;
       if (n.hasStar) {
-        const delegated = generatorParameters(operand);
-        if (delegated) {
-          yielded.push(delegated.Yield);
-        }
+        const delegated = StaticDelegationContribution(operand, ReferenceFunction(node)?.type.startsWith('Async') === true, structureOf, awaitedType);
+        if (delegated.yielded) yielded.push(delegated.yielded);
       } else if (operand) {
         yielded.push(operand);
       }
@@ -21069,11 +21084,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (n.type === 'YieldExpression') {
             const y = n as unknown as { AssignmentExpression?: ParseNode | null, hasStar?: boolean };
             if (y.hasStar) {
-              // `yield*` contributes the yield type of its OPERAND, which this
-              // increment does not read: an unknown contribution is the honest
-              // answer rather than the operand's own type, which would be the
-              // iterable rather than what it yields.
-              unknown = true;
+              const delegated = StaticDelegationContribution(y.AssignmentExpression ? staticType(y.AssignmentExpression) : null,
+                fn.type.startsWith('AsyncGenerator'), structureOf, awaitedType).yielded;
+              const contribution = fn.type.startsWith('AsyncGenerator') ? awaitedType(delegated) : delegated;
+              if (contribution) contributions.push(contribution);
+              else unknown = true;
               return;
             }
             const t = y.AssignmentExpression ? staticTypeIn(y.AssignmentExpression, wanted) : null;
@@ -22071,7 +22086,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type PatternNode = {
     type: string,
     BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null,
-    BindingPattern?: PatternNode, Initializer?: ParseNode | null,
+    BindingPattern?: PatternNode, Initializer?: ParseNode | null, Optional?: boolean,
     BindingElementList?: readonly PatternNode[], BindingRestElement?: PatternNode,
     BindingPropertyList?: readonly PatternNode[], BindingRestProperty?: PatternNode,
     PropertyName?: ParseNode.PropertyNameLike | null, BindingElement?: PatternNode,
@@ -22258,6 +22273,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'IdentifierReference':
         return lookup(expr.name) !== null && !isNumericConstantExpression(expr);
       case 'ThisExpression':
+      case 'SuperProperty':
       case 'NewExpression':
       case 'CallExpression':
       case 'TypedConversionExpression':
@@ -22848,6 +22864,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let source = { ...incoming, typed: incoming.typed ?? (incoming.expression ? operandParticipates(incoming.expression) : incoming.type !== null) };
     const annotation = node.TypeAnnotation ? resolveType(node.TypeAnnotation.Type) : null;
     if (declaring) requireBindingType(annotation);
+    // #sec-typed-destructuring: optional members use undefined as the sentinel.
+    const admitted = annotation && node.Optional ? joinTypes(annotation, undefinedType) : annotation;
+    let bindingType = admitted;
     if (node.type === 'BindingRestElement') checkRestAnnotation(node.TypeAnnotation, annotation);
     const checkIncoming = (target: Known, value = source) => {
       if (value.ordinaryObject && ordinaryObjectArgumentFails(target)) {
@@ -22860,7 +22879,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // The default is an independently written typed boundary, even when a
       // particular caller always supplies this position.
       if (annotation) {
-        requireAssignable(staticTypeIn(node.Initializer, annotation), annotation);
+        requireAssignable(staticTypeIn(node.Initializer, admitted), admitted);
+        const fallback = staticTypeIn(node.Initializer, admitted);
+        if (node.Optional && fallback && AreDisjoint(fallback, undefinedType)) bindingType = annotation;
       }
       walk(node.Initializer);
       if (source.type) {
@@ -22871,8 +22892,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } else if (annotation) {
           // Check each contribution before joining: joining fresh literals
           // first would lose the position's numeric conversion.
-          checkIncoming(annotation, source);
-          source = { type: annotation, typed: true, annotated: true };
+          checkIncoming(admitted, { ...source, type: present as TypeRecord,
+            expression: AreDisjoint(source.type, undefinedType) ? source.expression : undefined });
+          source = { type: bindingType, typed: true, annotated: true };
         } else if (!AreDisjoint(source.type, undefinedType)) {
           source = { type: fallback ? joinTypes(present as TypeRecord, fallback) : null,
             typed: source.typed || operandParticipates(node.Initializer), annotated: source.annotated };
@@ -22880,14 +22902,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (annotation) {
-      checkIncoming(annotation);
+      checkIncoming(admitted);
     }
     if (node.BindingIdentifier) {
       // #sec-void-type: a name typed `void` through an enclosing pattern's
       // annotation is a `void` binding as much as one annotated itself - each
       // name's type "follows from the annotated type's members" (line 1761).
       if (declaring && !annotation && source.annotated) requireBindingType(source.type);
-      declare(node.BindingIdentifier.name, annotation ?? (infer ? source.type : null), frame);
+      declare(node.BindingIdentifier.name, bindingType ?? (infer ? source.type : null), frame);
       let participation = unaryBindingParticipation.get(frame);
       if (!participation) {
         participation = new Map();
@@ -22919,13 +22941,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         errors.push(Throw.StaticTypeError('the iterator cannot satisfy the closing contract of this empty pattern').Value as ObjectValue);
       }
       const elements = node.BindingElementList ?? node.AssignmentElementList ?? [];
+      const protocol = StaticIterationContribution(source.type, structureOf);
+      const literal = patternExpression(source.expression);
       elements.forEach((el, index) => {
         if (el.type !== 'Elision') {
-          const contribution = infer && source.type && !source.expression
-            ? { type: StaticIterationContribution(source.type, structureOf).element }
-            : infer && source.expression && patternExpression(source.expression)?.type !== 'ArrayLiteral'
-              ? { type: StaticIterationContribution(source.type, structureOf).element }
-              : patternElement(source, index);
+          const contribution = literal?.type === 'ArrayLiteral'
+              && !literal.ElementList.slice(0, index + 1).some((element) => element.type === 'SpreadElement')
+            ? patternElement(source, index)
+            : { type: protocol.positions ? protocol.positions[index] ?? undefinedType : protocol.element };
           checkPattern(el, { ...contribution, typed: source.typed, annotated: source.annotated }, declaring, infer, frame);
         }
       });
@@ -22936,14 +22959,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (expr?.type === 'ArrayLiteral' && !expr.ElementList.some((el) => el.type === 'SpreadElement')) {
           const tail = { ...expr, ElementList: expr.ElementList.slice(elements.length) };
           collected = { type: staticType(tail), expression: tail };
-        } else if (infer) {
-          const element = StaticIterationContribution(source.type, structureOf).element;
-          collected = { type: element ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null };
-        } else if (source.type?.Kind === 'tuple') {
-          collected = { type: { ...source.type, Elements: source.type.Elements.slice(elements.length) } };
+        } else if (protocol.positions) {
+          collected = { type: { Kind: 'tuple', Elements: protocol.positions.slice(elements.length)
+            .map((type) => ({ Type: type, Rest: false, Initial: 'none' })) } };
         } else {
-          const element = patternElement(source, elements.length).type;
-          collected = { type: element ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null };
+          collected = { type: protocol.element ? { Kind: 'array', Element: protocol.element, Extent: 'dynamic' } : null };
         }
         checkPattern(rest, { ...collected, typed: source.typed, annotated: source.annotated }, declaring, infer, frame);
       }
@@ -23206,7 +23226,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           frames[frames.length - 1].unresolvedAnnotations.set(named, annotated.Type);
         }
       } else if (p.type === 'BindingRestElement') {
-        checkRestAnnotation(p.TypeAnnotation, p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : null);
+        const restType = p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : contextual?.[index] ?? null;
+        checkRestAnnotation(p.TypeAnnotation, restType);
         // The static half of the ref-rest second-class rule
         // (#sec-function-types): the name a
         // `ref ...refs` binds in this frame. A reference to it is admitted in
@@ -23219,9 +23240,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if ((p as { Ref?: boolean }).Ref === true) {
             (frame.refRestNames ??= new Set<string>()).add(restName);
           }
-          declare(restName, p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) : contextual?.[index] ?? null);
+          declare(restName, restType);
         } else {
-          checkPattern(p.BindingPattern as PatternNode, { type: contextual?.[index] ?? null }, true, !!contextual?.[index]);
+          checkPattern(p.BindingPattern as PatternNode, { type: restType, typed: !!restType, annotated: !!p.TypeAnnotation }, true, !!restType);
         }
       }
       index += 1;
@@ -23440,6 +23461,61 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const certainEntries = !spread ? entries : entries.filter(({ node, slot }) => slot < prefix && node === args[slot]);
     return { entries, certainEntries, counts: groups.map((g) => g.length), spread, named };
+  };
+
+  const checkedFlatteningCallbacks = new WeakSet<ParseNode>();
+  const flatteningResultFails = (type: Known): boolean => everyProtocolAlternative(type, (arm) => {
+    if (knownNonObject(arm) || arm.Kind === 'void') return true;
+    const directFails = (iterator: Known): boolean => everyProtocolAlternative(iterator, (object) =>
+      knownNonObject(object) || protocolCallFails(protocolMember(object, 'next'), knownNonObject, [], object));
+    // GetIteratorFlattenable uses the object directly when @@iterator is nullish.
+    // An undeclared hook on an open shape remains unknown.
+    return everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.iterator), (hook) =>
+      nullishOnly(hook) ? directFails(arm) : protocolCallFails(hook, directFails, [], arm));
+  });
+  const iteratorContract = (member: ParseNode, element: TypeRecord, name: string): Known => {
+    const signature = iteratorMethodSignature(name, element);
+    if (signature?.Kind !== 'function' || !['reduce', 'flatMap'].includes(name)) return signature;
+    let parent = member.parent;
+    while (parent?.type === 'ParenthesizedExpression') parent = parent.parent;
+    if (parent?.type !== 'CallExpression') return signature;
+    const args = parent.Arguments;
+    const mapped = mapCallArguments(signature.Signatures[0].Parameters, args);
+    if (mapped.spread) return signature;
+    const callbackArgument = mapped.certainEntries.find((entry) => entry.slot === 0)?.node;
+    const initial = mapped.certainEntries.find((entry) => entry.slot === 1)?.node;
+    if (!callbackArgument) return signature;
+    const make = (Parameters: readonly ParameterRecord[], Return: Known): TypeRecord => ({ Kind: 'function', Signatures: [{ Parameters, Return }] });
+    if (name === 'reduce') {
+      // #sec-iterator-helper-contracts: U is shared by the initial value,
+      // callback input and result, and the completed reduction. Without an
+      // initial value, the first iterated T is the accumulator.
+      let accumulator: Known = element;
+      if (initial) {
+        const callback = patternExpression(callbackArgument)!;
+        const formals = (callback as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
+          ?? (callback as { FormalParameters?: readonly ParseNode[] }).FormalParameters;
+        const written = (formals?.[0] as { TypeAnnotation?: ParseNode.TypeAnnotation } | undefined)?.TypeAnnotation;
+        const known = isFunctionLiteral(callback) ? null : callableForm(staticType(callback));
+        const declaredInput = written ? resolveType(written.Type) : known?.Kind === 'function' && known.Signatures.length === 1
+          ? known.Signatures[0].Parameters[0]?.Type ?? null : null;
+        const input = declaredInput ?? contextualCallTypes.get(parent) ?? null;
+        accumulator = argumentStaticType(initial, input);
+        if (accumulator) accumulator = input && accumulator.Kind === 'literal' && literalFitsNumericType(accumulator, input)
+          ? input : widenForBinding(accumulator);
+      }
+      const type = accumulator ?? anyTypeRecord;
+      const callback = make([parameter(type), parameter(element), parameter(indexTypeRecord())], type);
+      return make([parameter(callback, { Name: 'callback' }), parameter(type, { Name: 'initial', Optional: !initial })], type);
+    }
+    if (!checkedFlatteningCallbacks.has(parent)) {
+      checkedFlatteningCallbacks.add(parent);
+      const callback = staticTypeIn(callbackArgument, signature.Signatures[0].Parameters[0].Type);
+      if (protocolCallFails(callback, flatteningResultFails, [element, indexTypeRecord()], undefinedType)) {
+        errors.push(Throw.StaticTypeError('an iterator flatMap callback must return a flattenable object').Value as ObjectValue);
+      }
+    }
+    return signature;
   };
 
   let provenArrayMembers: ReadonlySet<ParseNode> | undefined;
@@ -24434,9 +24510,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // against the exact location type above.
         if (slot?.Ref) return;
         const argType = argumentStaticType(arg, param);
+        let checkedParam = param;
+        // These APIs consume each produced callback value at a runtime boundary.
+        // An explicit any result defers that value check, while the callback's
+        // parameter and receiver obligations still apply.
+        if (argType?.Kind === 'function' && argType.Signatures.some((signature) => signature.Return?.Kind === 'any')
+            && param?.Kind === 'function') {
+          const member = patternExpression(c.CallExpression);
+          if (member?.type === 'MemberExpression') {
+            const receiver = staticType(member.MemberExpression);
+            const key = memberKey(member);
+            const dynamicResult = receiver?.Kind === 'nominal' && (
+              (slotIndex === 1 && key === 'getOrInsertComputed' && ['Map', 'WeakMap'].includes(receiver.LibraryName ?? ''))
+              || (slotIndex === 0 && key === 'reduce' && ['Generator', 'IteratorHelper'].includes(receiver.LibraryName ?? '')));
+            if (dynamicResult) checkedParam = { ...param, Signatures: param.Signatures.map((signature) => ({ ...signature, Return: anyTypeRecord })) };
+          }
+        }
         const optionalHere = slot?.Optional === true;
         if (!(optionalHere && argType && (argType as { Name?: string }).Name === 'undefined')) {
-          requireAssignable(argType, param);
+          requireAssignable(argType, checkedParam);
         }
       });
       const effective = effectiveBindings
@@ -27678,7 +27770,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const yieldedType = generatorParameters(generator)?.Yield ?? null;
         if (yieldedType) {
           const produced = y.hasStar && y.AssignmentExpression
-            ? iteratedElementType(y.AssignmentExpression)
+            ? StaticDelegationContribution(staticType(y.AssignmentExpression), ReferenceFunction(n)?.type.startsWith('Async') === true,
+              structureOf, awaitedType).yielded
             : y.AssignmentExpression ? staticTypeIn(y.AssignmentExpression, yieldedType) : undefinedType;
           const yielded = generator?.Kind === 'nominal' && generator.LibraryName === 'AsyncGenerator' ? awaitedType(produced) : produced;
           generatorContributions.at(-1)?.yielded.push(yielded);
