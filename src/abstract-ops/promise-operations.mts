@@ -15,6 +15,7 @@ import {
   X,
 } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
+import { RequireType } from './runtime-types.mts';
 import {
   Assert,
   Call,
@@ -127,7 +128,7 @@ export function CreateResolvingFunctions(toResolve: PromiseObject) {
     // 8. If Type(resolution) is not Object, then
     if (!(resolution instanceof ObjectValue)) {
       // a. Return FulfillPromise(promise, resolution).
-      FulfillPromise(promise, resolution);
+      yield* FulfillTypedPromise(promise, resolution);
       return Value.undefined;
     }
     // 9. Let then be Get(resolution, "then").
@@ -143,7 +144,7 @@ export function CreateResolvingFunctions(toResolve: PromiseObject) {
     // 12. If IsCallable(thenAction) is false, then
     if (!IsCallable(thenAction)) {
       // a. Return FulfillPromise(promise, resolution).
-      FulfillPromise(promise, resolution);
+      yield* FulfillTypedPromise(promise, resolution);
       return Value.undefined;
     }
     if (surroundingAgent.debugger_isPreviewing) {
@@ -161,13 +162,20 @@ export function CreateResolvingFunctions(toResolve: PromiseObject) {
   // 4. Let resolve be CreateBuiltinFunction(resolveSteps, 1, "", « »).
   const resolve = CreateBuiltinFunction(resolveSteps, 1, Value(''), []);
   // 7. Let rejectSteps be the algorithm steps defined in Promise Reject Functions.
-  const rejectSteps = function PromiseRejectFunctions([reason = Value.undefined]: Arguments): ValueCompletion<UndefinedValue> {
+  const rejectSteps = function* PromiseRejectFunctions([reason = Value.undefined]: Arguments): ValueEvaluator {
     if (!promiseOrEmpty.Value) {
       return Value.undefined;
     }
     const promise = promiseOrEmpty.Value;
     Q(surroundingAgent.debugger_tryTouchDuringPreview(promise));
     promiseOrEmpty.Value = undefined;
+    const rejectedType = promise.PromiseTypeArguments?.[1];
+    if (rejectedType && rejectedType.Kind !== 'any') {
+      const checked = EnsureCompletion(yield* RequireType(reason, rejectedType));
+      // A failed boundary rejects with its exception; checking that exception
+      // against E again would recursively fail the same boundary.
+      reason = checked.Value;
+    }
     RejectPromise(promise, reason);
     return Value.undefined;
   };
@@ -210,6 +218,22 @@ function NewPromiseResolveThenableJob(promiseToResolve: PromiseObject, thenable:
   // 5. NOTE: _thenRealm_ is never *null*. When _then_.[[Callback]] is a revoked Proxy and no code runs, _thenRealm_ is used to create error objects.
   // 6. Return { [[Job]]: job, [[Realm]]: thenRealm }.
   return { Job: job, Realm: thenRealm };
+}
+
+/** #sec-typed-promise-executors: validate the value after thenable assimilation. */
+function* FulfillTypedPromise(promise: PromiseObject, value: Value): PlainEvaluator<void> {
+  const type = promise.PromiseTypeArguments?.[0];
+  if (type && type.Kind !== 'any') {
+    // A void fulfillment is the existing no-value contract.
+    const checked = type.Kind === 'void' && value === Value.undefined
+      ? NormalCompletion(value) : EnsureCompletion(yield* RequireType(value, type));
+    if (checked instanceof AbruptCompletion) {
+      RejectPromise(promise, checked.Value);
+      return;
+    }
+    value = checked.Value;
+  }
+  FulfillPromise(promise, value);
 }
 
 /** https://tc39.es/ecma262/#sec-fulfillpromise */

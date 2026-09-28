@@ -17,6 +17,10 @@ import {
   type ValueCompletion,
 } from '../completion.mts';
 import { __ts_cast__, type Mutable } from '../utils/language.mts';
+import { TakePendingPromiseTypes } from '../type-system/promise-contracts.mts';
+import { anyType, type TypeRecord } from '../type-system/records.mts';
+import { libraryConstructParameters } from '../type-system/std-signatures.mts';
+import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
   surroundingAgent,
@@ -62,6 +66,7 @@ export interface PromiseObject extends OrdinaryObject {
   PromiseFulfillReactions: undefined | PromiseReactionRecord[];
   PromiseRejectReactions: undefined | PromiseReactionRecord[];
   PromiseIsHandled: BooleanValue;
+  PromiseTypeArguments?: readonly TypeRecord[];
 }
 
 export function isPromiseObject(value: Value): value is PromiseObject {
@@ -70,6 +75,7 @@ export function isPromiseObject(value: Value): value is PromiseObject {
 
 /** https://tc39.es/ecma262/#sec-promise-executor */
 function* PromiseConstructor(this: FunctionObject, [executor = Value.undefined]: Arguments, { NewTarget }: FunctionCallContext): ValueEvaluator {
+  const writtenTypes = TakePendingPromiseTypes();
   // 1. If NewTarget is undefined, throw a TypeError exception.
   if (NewTarget instanceof UndefinedValue) {
     return Throw.TypeError('Promise cannot be invoked without new');
@@ -77,6 +83,10 @@ function* PromiseConstructor(this: FunctionObject, [executor = Value.undefined]:
   // 2. If IsCallable(executor) is false, throw a TypeError exception.
   if (!IsCallable(executor)) {
     return Throw.TypeError('$1 is not a function', executor);
+  }
+  const types = writtenTypes ? [writtenTypes[0] ?? anyType, writtenTypes[1] ?? anyType] : undefined;
+  if (types) {
+    executor = Q(yield* RequireType(executor, libraryConstructParameters('Promise', types)![0]!.Type));
   }
   // 3. Let promise be ? OrdinaryCreateFromConstructor(NewTarget, "%Promise.prototype%", « [[PromiseState]], [[PromiseResult]], [[PromiseFulfillReactions]], [[PromiseRejectReactions]], [[PromiseIsHandled]] »).
   const promise = Q(yield* OrdinaryCreateFromConstructor(NewTarget, '%Promise.prototype%', [
@@ -94,6 +104,7 @@ function* PromiseConstructor(this: FunctionObject, [executor = Value.undefined]:
   promise.PromiseRejectReactions = [];
   // 7. Set promise.[[PromiseIsHandled]] to false.
   promise.PromiseIsHandled = Value.false;
+  if (types) promise.PromiseTypeArguments = types;
   // 8. Let resolvingFunctions be CreateResolvingFunctions(promise).
   const resolvingFunctions = CreateResolvingFunctions(promise);
   // 9. Let completion be Call(executor, undefined, « resolvingFunctions.[[Resolve]], resolvingFunctions.[[Reject]] »).

@@ -2425,11 +2425,8 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     // a fourth kind and what `Reflect_typeOf`'s own comment calls out for
     // callables.
     //
-    // No type ARGUMENTS are passed. `TypedCollection` is STAMPED by
-    // `StampTypedCollection` when a collection is created through a typed path;
-    // a promise's value type and a generator's yield type are not stamped
-    // anywhere, so there is nothing to read and inventing `any` arguments would
-    // be inference the program did not ask for. The NAME is what was missing.
+    // Typed construction records collection and Promise arguments. Untyped
+    // values and generators retain only the intrinsic library identity.
     const library = slots.MapData !== undefined ? 'Map'
       : slots.SetData !== undefined ? 'Set'
         : slots.WeakMapData !== undefined ? 'WeakMap'
@@ -2439,7 +2436,8 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
                 : slots.GeneratorState !== undefined ? 'Generator'
                   : undefined;
     if (library !== undefined) {
-      const record = libraryTypeRecord(library, collection ?? []);
+      const promiseTypes = library === 'Promise' ? (value as { PromiseTypeArguments?: readonly TypeRecord[] }).PromiseTypeArguments : undefined;
+      const record = libraryTypeRecord(library, collection ?? promiseTypes ?? []);
       if (record) {
         return record;
       }
@@ -2455,9 +2453,6 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     // `inferRegExpLiteralType` is the SAME operation the checker uses, so the two
     // cannot disagree about a pattern.
     //
-    // A PROMISE and a GENERATOR object stay `{}`: their arguments - a promise's
-    // R and E, a generator's Y/R/N - are not recoverable from the value and
-    // would need a stamp at construction, as a typed collection has.
     const regexpSource = (value as unknown as { OriginalSource?: { stringValue(): string }, OriginalFlags?: { stringValue(): string } });
     if (regexpSource.OriginalSource !== undefined && regexpSource.OriginalFlags !== undefined) {
       const inferred = inferRegExpLiteralType(

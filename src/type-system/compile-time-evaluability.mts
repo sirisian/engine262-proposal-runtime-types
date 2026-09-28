@@ -120,6 +120,8 @@ function declarationInList(items: readonly unknown[], name: string): BindingDecl
         if (boundNamesOf(item.VariableDeclarationList).includes(name)) return { kind: 'var', node: item };
         break;
       case 'ClassDeclaration':
+        // #sec-partial-classes: reopening a class introduces no binding.
+        if ((item.ClassModifiers as readonly string[] | null)?.includes('partial')) break;
         if ((item.BindingIdentifier as { name?: string } | null)?.name === name) return { kind: 'class', node: item };
         break;
       case 'ImportDeclaration':

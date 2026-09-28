@@ -3,6 +3,7 @@ import { SetPendingPlacement, ValidatePlacement } from '../abstract-ops/placemen
 import { SetPendingProxyRuntimeType } from '../intrinsics/Proxy.mts';
 import { SetPendingSoATypeArguments } from '../intrinsics/SoA.mts';
 import { SetPendingThreadLocalTypeArguments } from '../intrinsics/Synchronization.mts';
+import { SetPendingPromiseTypes } from '../type-system/promise-contracts.mts';
 import { Q } from '../completion.mts';
 import { TargetTypedNewType } from '../type-system/check.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -164,6 +165,21 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // The context is handed to [[Construct]] as the placement is: set just
   // before, taken at the constructor's entry, cleared whatever happened.
   if (surroundingAgent.feature('runtime-types')) {
+    // Use the actual constructor identity; a shadowed spelling or user
+    // constructor does not receive the intrinsic Promise contract.
+    if (constructor === surroundingAgent.currentRealmRecord.Intrinsics['%Promise%']) {
+      let types: TypeRecord[] | undefined;
+      if (constructExpr.type === 'TypeArgumentsExpression') {
+        types = [];
+        for (const argument of constructExpr.TypeArguments.TypeArgumentList) {
+          const type = Q(yield* TypeNodeToTypeRecord(argument));
+          types.push(type);
+        }
+      } else if (constructionContext?.Kind === 'nominal' && constructionContext.LibraryName === 'Promise') {
+        types = constructionContext.Arguments.filter((type): type is TypeRecord => typeof type === 'object');
+      }
+      SetPendingPromiseTypes(types);
+    }
     SetPendingCalleeContext(constructionContext);
   }
   try {
@@ -174,6 +190,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     SetPendingPlacement(undefined);
     if (surroundingAgent.feature('runtime-types')) {
       SetPendingCalleeContext(undefined);
+      SetPendingPromiseTypes(undefined);
     }
   }
   // proposal-runtime-types, the PLACEMENT forms: `new(buffer, byteOffset,

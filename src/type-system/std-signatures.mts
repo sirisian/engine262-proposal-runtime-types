@@ -450,6 +450,26 @@ export const libraryConstructParameters = (
   typeArgs: readonly (TypeRecord | number)[],
 ): readonly { Name: string, Type: TypeRecord, Optional: boolean, Rest: boolean }[] | null => {
   switch (name) {
+    case 'Promise': {
+      if (typeArgs.length === 0) return null;
+      const resolution = typeof typeArgs[0] === 'object' ? typeArgs[0] : anyType;
+      const rejection = typeof typeArgs[1] === 'object' ? typeArgs[1] : anyType;
+      const callable = (types: TypeRecord[], Return: TypeRecord): TypeRecord => ({
+        Kind: 'function', Signatures: [{ Parameters: types.map((type) => parameter(type)), Return }],
+      });
+      // #sec-typed-promise-executors: assimilation precedes the result boundary.
+      // A thenable's eventual value can remain unknown without erasing known
+      // incompatible direct scalar values from the resolver's contract.
+      const thenable: TypeRecord = { Kind: 'object', Properties: [{
+        key: 'then', type: callable([anyType, anyType], anyType), optional: false, readonly: true,
+      }], IndexSignatures: [] };
+      const input = resolution.Kind === 'any' ? resolution : CanonicalizeType({ Kind: 'union', Members: [
+        resolution.Kind === 'void' ? makePrimitive('undefined') : resolution,
+        libraryTypeRecord('Promise', [anyType, anyType])!, thenable,
+      ] });
+      const executor = callable([callable([input], voidType), callable([rejection], voidType)], voidType);
+      return [{ Name: 'executor', Type: executor, Optional: false, Rest: false }];
+    }
     case 'Proxy': {
       // Only a construction that WROTE a type argument. An untyped proxy is `any`
       // (#sec-reflection-and-declared-types), and the base language admits any

@@ -8,7 +8,7 @@ import { IsPlainData, IsValueType } from './layout.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { fitsNumericType, SubstituteTypeArguments } from './runtime.mts';
 import {
-  maximumSupply, parameterArgumentType, requiredArity, restElementType,
+  parameterArgumentType, restElementType, makePrimitive,
   substituteTypeParameters, mentionsTypeParameter,
 } from './records.mts';
 import { builtinImplements, libraryExtends, iterationInterfaceRecord } from './iteration-types.mts';
@@ -1970,7 +1970,10 @@ function expandTupleRests(params: readonly ParameterRecord[]): readonly Paramete
     }
     inner.Elements.forEach((e, i) => {
       const elementType = asReference ? { ...(p.Type as object), Target: e.Type } as TypeRecord : e.Type;
-      out.push({ ...p, Name: `${p.Name}${i}`, Type: elementType, Rest: false, Optional: e.Initial !== 'none' } as ParameterRecord);
+      out.push({ ...p, Name: `${p.Name}${i}`, Type: elementType, Rest: false,
+        Optional: e.Initial !== 'none' || !!e.DeclaredDefault,
+        DeclaredDefault: e.Initial !== 'none' || !!e.DeclaredDefault,
+        Initial: e.Initial !== 'none' ? e.Initial : undefined } as ParameterRecord);
     });
   }
   return out;
@@ -2035,9 +2038,36 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     if (sThis !== null && tThis !== null && !parameterAccepts(tThis, sThis, assumptions)) {
       return false;
     }
-    if (requiredArity(sg.Parameters) > maximumSupply(tg.Parameters)) {
+    // #sec-issignaturesubtype: an optional target admits omission, not just its
+    // maximum argument list. Defaults supplied by the target crossing still
+    // contribute a value; a source default or undefined-admitting parameter
+    // can safely bind an omitted argument.
+    const undefinedType = makePrimitive('undefined');
+    const hasDefault = (p: ParameterRecord): boolean => !!p.DeclaredDefault || p.Initial !== undefined;
+    const acceptsOmission = (p: ParameterRecord): boolean => p.Rest || p.Optional || hasDefault(p)
+      || parameterAccepts(undefinedType, p.Type, assumptions);
+    const minimumRequired = sg.Parameters.filter((p) => !acceptsOmission(p)).length;
+    const minimumSupplied = tg.Parameters.filter((p) => !p.Rest
+      && (hasDefault(p) || !acceptsOmission(p))).length;
+    const dynamicSupply = tg.Parameters.some((p) => parameterArgumentType(p).Kind === 'any');
+    if (!dynamicSupply && minimumRequired > minimumSupplied) {
       return false;
     }
+    if (!sg.Parameters.some((p) => p.Rest) && !tg.Parameters.some((p) => p.Rest)
+        && sg.Parameters.some((source, i) => {
+          if (acceptsOmission(source)) return false;
+          const target = tg.Parameters[i];
+          return !target || (target.Type.Kind !== 'any' && !hasDefault(target) && acceptsOmission(target));
+        })) return false;
+    const receives = (target: ParameterRecord, source: ParameterRecord): boolean => {
+      const supplied = !target.Rest && target.Optional && !hasDefault(target)
+        ? { Kind: 'union', Members: [target.Type, undefinedType] } as TypeRecord
+        : parameterArgumentType(target);
+      const accepted = !source.Rest && (source.Optional || hasDefault(source))
+        ? { Kind: 'union', Members: [source.Type, undefinedType] } as TypeRecord
+        : parameterArgumentType(source);
+      return parameterAccepts(supplied, accepted, assumptions);
+    };
     // Where the TARGET has several rests its
     // positions are not determined by their index and the exact relation is
     // regular-language inclusion, which is the same conservative case tuples
@@ -2047,7 +2077,7 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
         return false;
       }
       return sg.Parameters.every((sp, i) => sp.Rest === tg.Parameters[i].Rest
-        && parameterAccepts(parameterArgumentType(tg.Parameters[i]), parameterArgumentType(sp), assumptions))
+        && receives(tg.Parameters[i], sp))
         && (!sg.Return || returnRequiredOfNothing(tg.Return) || IsSubtype(sg.Return, tg.Return!, assumptions));
     }
     // Where the SOURCE has several rests and the target supplies a finite list,
@@ -2057,11 +2087,7 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     // to accept it is sound but refuses lists the source can plainly take.
     if (sg.Parameters.filter((p) => p.Rest).length > 1 && !tg.Parameters.some((p) => p.Rest)) {
       const slots = sg.Parameters.map((p) => ({ Rest: p.Rest, Optional: p.Optional }));
-      const assigned = SequenceAssignment(slots, tg.Parameters.length, (j, k) => parameterAccepts(
-        parameterArgumentType(tg.Parameters[j]),
-        parameterArgumentType(sg.Parameters[k]),
-        assumptions,
-      ));
+      const assigned = SequenceAssignment(slots, tg.Parameters.length, (j, k) => receives(tg.Parameters[j], sg.Parameters[k]));
       if (assigned === 'unmatched') {
         return false;
       }
@@ -2082,7 +2108,7 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
         // language ignores; the clause admits it.
         return true;
       }
-      return candidates.every((sp) => parameterAccepts(parameterArgumentType(tp), parameterArgumentType(sp), assumptions));
+      return candidates.every((sp) => receives(tp, sp));
     });
     if (!positionsOk) {
       return false;
