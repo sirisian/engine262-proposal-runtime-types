@@ -1916,9 +1916,10 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
  * consulted, a function type having none, and is checked at the specialization
  * the crossing performs (its interning).
  */
-function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[]): boolean {
+function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = false): boolean {
   if ((sg as { Untyped?: boolean }).Untyped === true
-      && (sg as { InferredReturn?: unknown }).InferredReturn === undefined) {
+      && (sg as { InferredReturn?: unknown }).InferredReturn === undefined
+      && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {
     return true;
   }
   const sTP = sg.TypeParameters ?? [];
@@ -1944,7 +1945,7 @@ function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, ass
       }
     }
     const substituted = substituteParameterRecords({ Kind: 'function', Signatures: [sg] } as TypeRecord, bindings) as Extract<TypeRecord, { Kind: 'function' }>;
-    return IsSignatureSubtypeCore(substituted.Signatures[0]!, tg, assumptions);
+    return IsSignatureSubtypeCore(substituted.Signatures[0]!, tg, assumptions, preserveReferences);
   }
   if (sTP.length === 0 && tTP.length > 0) {
     return false;
@@ -1954,9 +1955,9 @@ function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, ass
     if (identified === null) {
       return false;
     }
-    return IsSignatureSubtypeCore(sg, tg, identified);
+    return IsSignatureSubtypeCore(sg, tg, identified, preserveReferences);
   }
-  return IsSignatureSubtypeCore(sg, tg, assumptions);
+  return IsSignatureSubtypeCore(sg, tg, assumptions, preserveReferences);
 }
 
 /**
@@ -1997,7 +1998,35 @@ function expandTupleRests(params: readonly ParameterRecord[]): readonly Paramete
   return out;
 }
 
-function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, assumptions: readonly Assumption[]): boolean {
+/** Preserve the callable reference permissions a replacement publishes. */
+export function IsCallableContractSubtype(source: Extract<TypeRecord, { Kind: 'function' }>, target: Extract<TypeRecord, { Kind: 'function' }>): boolean {
+  return target.Signatures.every((wanted) => source.Signatures.some((actual) => IsSignatureSubtypeGeneric(actual, wanted, [], true)));
+}
+
+/** #sec-class-replacement-contracts: constructor calls preserve omission and arity. */
+export function IsConstructorSignatureSubtype(source: SignatureRecord, target: SignatureRecord): boolean {
+  if ((source as SignatureRecord & { Untyped?: boolean }).Untyped) return !target.Parameters.some((p) => p.Ref);
+  const sequenceCount = (type: TypeRecord, maximum: boolean): number => {
+    if (type.Kind === 'array') return typeof type.Extent === 'number' ? type.Extent : maximum ? Infinity : 0;
+    if (type.Kind === 'tuple') return type.Elements.reduce((count, element) => count + (element.Rest
+      ? sequenceCount(element.Type, maximum) : maximum || (element.Initial === 'none' && !element.DeclaredDefault) ? 1 : 0), 0);
+    return maximum ? Infinity : 0;
+  };
+  const count = (parameters: readonly ParameterRecord[], maximum: boolean): number => parameters.reduce((total, p) => total + (p.Rest
+    ? sequenceCount(p.Type, maximum) : maximum || (!p.Optional && !p.DeclaredDefault && p.Initial === undefined
+      && !parameterAccepts(makePrimitive('undefined'), p.Type, [])) ? 1 : 0), 0);
+  if (count(source.Parameters, false) > count(target.Parameters, false)
+    || count(source.Parameters, true) < count(target.Parameters, true)) return false;
+  // A primary's default admits omission; it does not run before selecting the
+  // replacement constructor. The selected constructor must handle that omission.
+  const promised = { ...target, Parameters: target.Parameters.map((p) => ({
+    ...p, Optional: p.Optional || !!p.DeclaredDefault || p.Initial !== undefined,
+    DeclaredDefault: false, Initial: undefined,
+  })) };
+  return IsSignatureSubtypeCore(source, promised, [], true);
+}
+
+function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = false): boolean {
     const sg = { ...sgIn, Parameters: expandTupleRests(sgIn.Parameters) } as SignatureRecord;
     const tg = { ...tgIn, Parameters: expandTupleRests(tgIn.Parameters) } as SignatureRecord;
     // #sec-issignaturesubtype step 1: "If a.[[Untyped]] is true, return true."
@@ -2026,7 +2055,8 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     // So the catch-all is for a signature with nothing to judge it BY, which is
     // what step 1 means and what [[Untyped]] alone does not establish.
     if ((sg as { Untyped?: boolean }).Untyped === true
-        && (sg as { InferredReturn?: unknown }).InferredReturn === undefined) {
+        && (sg as { InferredReturn?: unknown }).InferredReturn === undefined
+        && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {
       return true;
     }
     // proposal-runtime-types #sec-this-adoption: a signature's [[ThisType]] "is
@@ -2078,6 +2108,10 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
           return !target || (target.Type.Kind !== 'any' && !hasDefault(target) && acceptsOmission(target));
         })) return false;
     const receives = (target: ParameterRecord, source: ParameterRecord): boolean => {
+      if (preserveReferences) {
+        if (!!target.Ref !== !!source.Ref) return false;
+        if (target.Ref) return SameTypeWithAssumptions(parameterArgumentType(target), parameterArgumentType(source), assumptions);
+      }
       const supplied = !target.Rest && target.Optional && !hasDefault(target)
         ? { Kind: 'union', Members: [target.Type, undefinedType] } as TypeRecord
         : parameterArgumentType(target);
@@ -2124,7 +2158,7 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
       if (candidates.length === 0) {
         // The source takes fewer arguments than the target supplies, which the
         // language ignores; the clause admits it.
-        return true;
+        return !preserveReferences || !tp.Ref;
       }
       return candidates.every((sp) => receives(tp, sp));
     });

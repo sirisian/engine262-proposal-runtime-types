@@ -1,3 +1,4 @@
+import { RememberArrayCapacity } from '../type-system/array-capacity-origin.mts';
 import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions } from '../type-system/partial-types.mts';
 import { FixedTypeSubtrees } from '../type-system/component-patterns.mts';
 import { NominalRecordsOf } from '../type-system/intern.mts';
@@ -1903,6 +1904,7 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
     return arr;
   }, 1, Value('withCapacity'), []);
   X(CreateDataProperty(ctor as unknown as ObjectValue, Value('withCapacity'), withCapacity));
+  RememberArrayCapacity(key, ctor, withCapacity);
   // proposal-runtime-types #sec-instanceof-for-type-objects: "A Type Object has
   // a %Symbol.hasInstance% method. When called with argument v, it returns ?
   // IsOfType(v, the Type Object's [[TypeRecord]])."
