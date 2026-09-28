@@ -3494,6 +3494,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const variadicObligations = new Map<ParseNode, { kind: 'constraint' | 'default' | 'adjacent', type: TypeRecord }[]>();
 
   const typeParameterInScope = (name: string): boolean => typeParameterScopes.some((scope) => scope.has(name));
+  /**
+   * #sec-generic-parameters-as-values: a value parameter is in scope for its
+   * body, and "a body that reads `V` where a value is required ... reads the
+   * [[Value]]" of the literal type its argument binds. In the unspecialized
+   * body that value is unknown but its type is not: every argument is checked
+   * against the parameter's domain (EffectiveConstraint), so a read of it has
+   * the domain as its Static Type (Round 6, Gap 5 and Q1).
+   */
+  const valueParameterDomains = new WeakMap<Map<string, Known | null>, Map<string, Known>>();
+  const valueParameterDomainOf = (name: string): Known => {
+    for (let i = typeParameterScopes.length - 1; i >= 0; i -= 1) {
+      const scope = typeParameterScopes[i];
+      if (scope.has(name)) return valueParameterDomains.get(scope)?.get(name) ?? null;
+    }
+    return null;
+  };
 
   /** The innermost resolved constraint bound to _name_, or null where it has none. */
   /** Parameters whose constraint is written but not resolvable at the declaration. */
@@ -3661,6 +3677,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       scope.set(name, null);
+      {
+        const valueDomain = (tp as { IsValueParameter?: boolean, TypeParameterDomain?: ParseNode.Type }).IsValueParameter && !tp.IsVariadic
+          ? (tp as { TypeParameterDomain?: ParseNode.Type }).TypeParameterDomain : undefined;
+        const resolvedDomain = valueDomain ? resolveType(valueDomain) : null;
+        if (resolvedDomain && resolvedDomain.Kind !== 'any') {
+          let domains = valueParameterDomains.get(scope);
+          if (!domains) {
+            domains = new Map();
+            valueParameterDomains.set(scope, domains);
+          }
+          domains.set(name, resolvedDomain);
+        }
+      }
       if (tp.TypeParameterConstraint) {
         const resolvedConstraint = resolveType(tp.TypeParameterConstraint);
         // A COMPUTED constraint - a builder call over an earlier parameter -
@@ -6046,6 +6075,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return stableClassOrigin(binding.node, seen);
     }
     return undefined;
+  };
+  /**
+   * The type a class's generic parameter has where the class body reads it as a
+   * value. A value parameter is its domain (#sec-generic-parameters-as-values,
+   * EffectiveConstraint; Round 6, Gap 5 and Q1); a type or variadic parameter
+   * keeps the open type it had.
+   */
+  const classParameterBindingType = (parameter: ParseNode.TypeParameter): TypeRecord => {
+    if (parameter.IsValueParameter && !parameter.IsVariadic && parameter.TypeParameterDomain) {
+      const domain = resolveType(parameter.TypeParameterDomain);
+      if (domain && domain.Kind !== 'any' && !mentionsTypeParameter(domain)) return domain;
+    }
+    return anyTypeRecord;
   };
   const heritageOriginOf = (cls: ParseNode): ClassOrigin | undefined => {
     const heritage = (cls as ParseNode.ClassDeclaration).ClassTail?.ClassHeritage;
@@ -15732,7 +15774,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // something else - a local binding wins, as it does for every other
         // name.
         const bound = lookup(referenced);
-        return bound ?? classObjectTypeOf(referenced);
+        return bound ?? classObjectTypeOf(referenced) ?? valueParameterDomainOf(referenced);
       }
       // `super.x` NAMES A MEMBER OF THE BASE CLASS. It is its own node - not a
       // member access with a `super` receiver - so no arm reached it, and
@@ -17096,7 +17138,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const target = patternExpression((node as { MemberExpression?: ParseNode }).MemberExpression);
         if (target && target.type === 'IdentifierReference') {
           const targetName = (target as { name: string }).name;
-          const declared = lexicalClassType(target);
+          // A class expression bound immutably constructs its own instance type
+          // (Round 6, Gap 2 and Q2); a generic one is left as before.
+          const boundOrigin = classNodes.has(targetName) ? undefined : stableClassOrigin(target);
+          const boundExpression = boundOrigin?.declaration.type === 'ClassExpression' && !boundOrigin.arguments ? boundOrigin.declaration : undefined;
+          const expressionParams = (boundExpression as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
+          const declared = lexicalClassType(target)
+            ?? (boundExpression && !(expressionParams && expressionParams.length > 0) ? instanceTypeOf(boundExpression) : null);
           if (declared) {
             // A GENERIC class constructed bare yields the specialization its
             // context, arguments and defaults name (constructionArguments); a
@@ -26604,6 +26652,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'RelationalExpression': {
         adoptComparisonLiteral(n);
         const rel = n as ParseNode.RelationalExpression;
+        // #sec-arithmetic-never-promotes: "Where one operand is a literal it
+        // takes the type of the other", and #sec-literal-propagation makes a
+        // literal that type cannot represent a type error. Only the equality
+        // forms and `case` answer *false* instead (line 3662), so a relational
+        // operator is judged as arithmetic is (Round 6, Gap 4); the run time
+        // adopted the literal and threw a RangeError.
+        if (rel.RelationalExpression && ['<', '<=', '>', '>='].includes(rel.operator)) {
+          const sides: [ParseNode, ParseNode][] = [[rel.ShiftExpression, rel.RelationalExpression], [rel.RelationalExpression, rel.ShiftExpression]];
+          for (const [candidate, other] of sides) {
+            const lit = literalOperand(candidate);
+            if (!lit || literalOperand(other)) continue;
+            const t = erasedKeepingBrand(staticType(other));
+            const base = t?.Kind === 'parameterized' ? t.Base : t;
+            if (!isIntegerValueType(base)) continue;
+            const exact = signedLiteralValue(lit);
+            const prim = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
+            if (exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) {
+              errors.push(Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact)), Value(displayType(base as TypeRecord))).Value as ObjectValue);
+            }
+          }
+        }
         if (rel.RelationalExpression) {
           if (['<', '<=', '>', '>='].includes(rel.operator)) {
             if (!checkUndeclaredClassOperator(n, rel.operator, staticType(rel.RelationalExpression), staticType(rel.ShiftExpression))) {
@@ -28304,12 +28373,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ? (owner as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name
             : undefined;
           const ownerParams = (owner as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
-          const instance = ownerName && !(ownerParams && ownerParams.length > 0) ? classTypeOf(ownerName) : null;
+          // A class EXPRESSION is judged from its own node, named or not
+          // (Round 6, Gap 2): the rule is about the class body alone.
+          const instance = !(ownerParams && ownerParams.length > 0)
+            ? (owner?.type === 'ClassExpression' ? instanceTypeOf(owner) : ownerName ? classTypeOf(ownerName) : null) : null;
           const zero = instance ? staticType(n.Initializer) : null;
           if (instance && zero && zero.Kind !== 'any' && !mentionsTypeParameter(zero) && !IsAssignable(zero, instance)) {
             errors.push((Throw.StaticTypeError(
               'the declared zero of $1 is not a value of it: $2',
-              Value(ownerName!), Value(displayType(zero)),
+              Value(ownerName ?? 'the class'), Value(displayType(zero)),
             ) as ThrowCompletion).Value as ObjectValue);
           }
         }
@@ -28496,7 +28568,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           for (const parameter of n.TypeParameters?.TypeParameterList ?? []) {
             const name = parameter.BindingIdentifier.name;
             frames.at(-1)!.declaredNames.add(name);
-            frames.at(-1)!.bindings.set(name, anyTypeRecord);
+            frames.at(-1)!.bindings.set(name, classParameterBindingType(parameter));
           }
           try {
             checkInvocation(heritage, true);
@@ -28534,7 +28606,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const scoped = pushTypeParameterScopeOf(n);
           for (const parameter of n.TypeParameters?.TypeParameterList ?? []) {
             frames.at(-1)!.declaredNames.add(parameter.BindingIdentifier.name);
-            frames.at(-1)!.bindings.set(parameter.BindingIdentifier.name, anyTypeRecord);
+            frames.at(-1)!.bindings.set(parameter.BindingIdentifier.name, classParameterBindingType(parameter));
           }
           try {
             for (const element of n.ClassTail.ClassBody ?? []) walkMemberName(element);

@@ -46,7 +46,7 @@ import {
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
-import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
+import { MetadataObjectFor, classConstructorOfNode } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -4220,6 +4220,11 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           return false;
         }
         let ctor: Value | null = (t.Constructor as Value | undefined) ?? null;
+        // A class expression's node knows the constructor it evaluated to,
+        // named or not (Round 6, Q2).
+        if (!ctor && t.Declaration.type === 'ClassExpression') {
+          ctor = classConstructorOfNode.get(t.Declaration as object) ?? null;
+        }
         if (!ctor) {
           // Fall back to a name lookup for records built without a constructor.
           const bi = (t.Declaration as { BindingIdentifier?: { name?: string } }).BindingIdentifier;

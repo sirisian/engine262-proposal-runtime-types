@@ -490,7 +490,11 @@ test('the relational operators take the same rule as the arithmetic ones', () =>
   expect(thrownKind('(1 := uint8) < (2 := uint16);')).toBe('StaticTypeError');
   expect(thrownKind('(1 := uint8) >= (2 := uint16);')).toBe('StaticTypeError');
   expect(thrownKind('function anyv() { return 2; } (1 := uint8) < anyv();')).toBe('TypeError');
-  expect(thrownKind('(1 := uint8) < 300;')).toBe('RangeError');
+  // The literal takes the other operand's type (#sec-arithmetic-never-promotes)
+  // and one it cannot represent is a type error (#sec-literal-propagation); only
+  // the equality forms and `case` answer *false* instead, so a relational
+  // comparison is refused before it runs rather than throwing a RangeError.
+  expect(thrownKind('(1 := uint8) < 300;')).toBe('StaticTypeError');
   // A typed value does not compare with a BigInt either, which the comparison
   // path would otherwise do by its own BigInt cases.
   expect(thrownKind('(1 := uint8) < 2n;')).toBe('TypeError');

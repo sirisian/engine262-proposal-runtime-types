@@ -599,6 +599,9 @@ const INITIALIZABLE_CONTEXTS: readonly string[] = [
   'ClassMethod', 'ClassOperator', 'ObjectMethod', 'ObjectGetter', 'ObjectSetter',
 ];
 
+/** The constructor each class node last evaluated to (Round 6, Q2). */
+export const classConstructorOfNode = new WeakMap<object, ObjectValue>();
+
 export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator<FunctionObject> {
   const { ClassHeritage, ClassBody } = ClassTail;
   // 1. Let env be the LexicalEnvironment of the running execution context.
@@ -848,6 +851,14 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   F.SourceText = sourceText;
   // 16. Perform MakeConstructor(F, false, proto).
   MakeConstructor(F, Value.false, proto);
+  // proposal-runtime-types (Round 6, Q2): record the constructor the class's
+  // node evaluated to, so a class type whose [[Declaration]] is a class
+  // EXPRESSION - which may have no name to resolve - can find it for the
+  // prototype-chain membership test. The latest evaluation is recorded, which
+  // is the one a binding of it holds where the checker types that binding.
+  if (surroundingAgent.feature('runtime-types') && (ClassTail as { parent?: ParseNode }).parent) {
+    classConstructorOfNode.set((ClassTail as { parent?: ParseNode }).parent as object, F as ObjectValue);
+  }
   // https://github.com/tc39/ecma262/pull/3212/
   // 17. Perform MakeClassConstructor(F).
   MakeClassConstructor(F);

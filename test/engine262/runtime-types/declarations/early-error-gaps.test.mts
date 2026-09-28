@@ -808,3 +808,39 @@ test('an arrow function may declare a return predicate (Round 5, Gap 5)', () => 
   expectStaticTypeError('const f = function (x: any): y is uint8 { return true; };');
   expect(evaluated('const c = true; const g = c ? (x: uint8) => x : (x: uint8) => x; String(g(2));')).toBe('2');
 });
+
+// ---- round 6 ----------------------------------------------------------------
+
+test('a class extending a class-expression base meets the inheritance rules (Round 6, Gap 1 and Q2)', () => {
+  expectStaticTypeError('const A = abstract class { abstract m(): uint8; }; class B extends A { }');
+  expectStaticTypeError('class B extends (abstract class { abstract m(): uint8; }) { }');
+  expectStaticTypeError("const B = class { m(): uint8 { return 1; } }; class D extends B { m(): string { return 'x'; } }");
+  expectStaticTypeError('const B = class { x: uint8 = 1; }; class D extends B { x: uint8 = 2; }');
+  expect(ok('interface I { a: uint8; } const B = class { a: uint8 = 1; }; class C extends B implements I { } String(1);')).toBe(true);
+  expect(ok("let B = class { m(): uint8 { return 1; } }; class D extends B { m(): string { return 'x'; } } String(1);")).toBe(true);
+});
+
+test('a class expression is checked as a class, and its instances are typed (Round 6, Gap 2 and Q2)', () => {
+  expectStaticTypeError('const C = class { x: uint8 = 1; static default = 5; };');
+  expectStaticTypeError("const C = class { x: uint8 = 1; }; const c = new C(); c.x = 'a';");
+  expectStaticTypeError('const C = class { m(a: uint8): uint8 { return a; } }; new C().m(1, 2);');
+  expectStaticTypeError('const C = class { protected x: uint8 = 1; }; const c = new C(); c.x;');
+  // The run time finds an anonymous class expression's constructor by its node.
+  expect(evaluated('const C = class { x: uint8 = 1; }; const c = new C(); c.x = 2; String(c.x);')).toBe('2');
+});
+
+test('a relational literal the other operand cannot hold is refused (Round 6, Gap 4)', () => {
+  expectStaticTypeError('let i: uint8 = 0; i < 300;');
+  expectStaticTypeError('let i: uint8 = 0; 300 > i;');
+  expectStaticTypeError('for (let i: uint8 = 0; i < 300; i++) {}');
+  expect(evaluated('let i: uint8 = 0; String(i === 300);')).toBe('false');
+  expect(evaluated('let i: uint8 = 0; String(i < 200);')).toBe('true');
+});
+
+test('a value parameter reads as its domain in the body (Round 6, Gap 5 and Q1)', () => {
+  expectStaticTypeError('function f<N: uint8>() { let s: string = N; }');
+  expectStaticTypeError('function f<N: uint8>() { let y: uint16 = 1; return N + y; }');
+  expectStaticTypeError('function f<N: uint8>() { return N / 0; }');
+  expect(evaluated('function f<N: uint8>(): uint8 { return N; } String(f.<3>());')).toBe('3');
+  expect(evaluated('function f<N: uint32>(): uint32 { return N * 2; } String(f.<3>());')).toBe('6');
+});
