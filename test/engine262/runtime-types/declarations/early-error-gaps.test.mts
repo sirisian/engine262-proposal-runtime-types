@@ -844,3 +844,45 @@ test('a value parameter reads as its domain in the body (Round 6, Gap 5 and Q1)'
   expect(evaluated('function f<N: uint8>(): uint8 { return N; } String(f.<3>());')).toBe('3');
   expect(evaluated('function f<N: uint32>(): uint32 { return N * 2; } String(f.<3>());')).toBe('6');
 });
+
+// ---- round 7 ----------------------------------------------------------------
+
+test('a static partial member colliding with another is refused before the program runs (Round 7, Gap 1)', () => {
+  expectStaticTypeError('class C { static s() { } } partial class C { static s() { } }');
+  expectStaticTypeError('class C { static s: uint8 = 1; } partial class C { static s(): uint8 { return 2; } }');
+  expectStaticTypeError('class C { } partial class C { static m() { } } partial class C { static m() { } }');
+  expectStaticTypeError('function u() { class C { static s() { } } partial class C { static s() { } } }');
+  expect(ok('class C { m() { } } partial class C { static m() { } } String(1);')).toBe(true);
+  expect(evaluated('class C { static s(): uint8 { return 1; } } partial class C { static t(): uint8 { return 2; } } String(C.t());')).toBe('2');
+});
+
+test('a flatMap callback whose conditional arms are all primitive is refused (Round 7, Gap 2)', () => {
+  expectStaticTypeError("const c: boolean = Math.random() > 2; Iterator.from([1]).flatMap((x) => c ? 1 : 'a');");
+  expectStaticTypeError("const c: boolean = Math.random() > 2; Iterator.from([1]).flatMap((x) => c ? 1 : c ? 'a' : null);");
+  expect(evaluated('const c: boolean = Math.random() > 2; String([...Iterator.from([1]).flatMap((x) => c ? 1 : [x])].length);')).toBe('1');
+});
+
+test('a protected field read through an object rest or spread is refused (Round 7, Gap 3 and Q1)', () => {
+  const C = 'class C { protected x: uint8 = 1; y: uint8 = 2; } const c: C = new C(); ';
+  expectStaticTypeError(`${C}const { ...r } = c;`);
+  expectStaticTypeError(`${C}const { y, ...r } = c;`);
+  expectStaticTypeError(`${C}const o = { ...c };`);
+  expect(evaluated('class P { y: uint8 = 2; } const p: P = new P(); const { ...r } = p; String(r.y);')).toBe('2');
+  expect(evaluated('class C { protected m(): uint8 { return 1; } y: uint8 = 2; } const c: C = new C(); const { ...r } = c; String(r.y);')).toBe('2');
+});
+
+test('a fractional literal beside an integer operand is refused (Round 7, Gap 4)', () => {
+  expectStaticTypeError('let i: uint8 = 0; i + 1.5;');
+  expectStaticTypeError('let i: uint8 = 2; i * 0.5;');
+  expectStaticTypeError('let i: uint8 = 0; i < 1.5;');
+  expect(evaluated('let i: uint8 = 0; String(i + 2.0);')).toBe('2');
+  expect(evaluated('let i: uint8 = 1; String(i === 1.5);')).toBe('false');
+});
+
+test('a constructor returning an established non-callable object cannot meet a callable interface (Round 7, Gap 5)', () => {
+  const F = 'interface F { (x: uint8): uint8; } ';
+  expectStaticTypeError(`${F}class C implements F { constructor() { return {}; } }`);
+  expectStaticTypeError(`${F}class C implements F { constructor(b: boolean) { if (b) { return []; } } }`);
+  expect(ok(`${F}class C implements F { constructor() { return (x: uint8): uint8 => x; } } String(1);`)).toBe(true);
+  expect(ok(`${F}class C implements F { constructor(f: any) { return f; } } String(1);`)).toBe(true);
+});

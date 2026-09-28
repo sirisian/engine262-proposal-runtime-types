@@ -1545,6 +1545,37 @@ function literalOperand(node: ParseNode): ParseNode | null {
  * numeric literal under any number of parentheses and unary signs - or null
  * where it is not an integer literal.
  */
+/**
+ * The value of a numeric literal - through parentheses and a sign - that is
+ * not an integer, or null. #sec-literalvalueintype: for an integer type, "If
+ * _mv_ is not an integer, return ~unrepresentable~", so such a literal beside
+ * an integer operand is a type error as an out-of-range one is (Round 7, Gap
+ * 4); `signedLiteralValue` answers only integers, which left it unchecked.
+ */
+function fractionalLiteralValue(node: ParseNode): number | null {
+  let sign = 1;
+  let n: ParseNode | undefined = node;
+  while (n) {
+    if (n.type === 'NumericLiteral') {
+      const v = (n as unknown as { value?: unknown }).value;
+      return typeof v === 'number' && Number.isFinite(v) && !Number.isInteger(v) ? sign * v : null;
+    }
+    if (n.type === 'ParenthesizedExpression') {
+      n = (n as unknown as { Expression?: ParseNode }).Expression;
+      continue;
+    }
+    if (n.type === 'UnaryExpression') {
+      const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
+      if (u.operator !== '-' && u.operator !== '+') return null;
+      if (u.operator === '-') sign = -sign;
+      n = u.UnaryExpression;
+      continue;
+    }
+    return null;
+  }
+  return null;
+}
+
 function signedLiteralValue(node: ParseNode): bigint | null {
   let sign = 1n;
   let n: ParseNode | undefined = node;
@@ -7489,7 +7520,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (list?.length === 1 && list[0].type === 'ReturnStatement' && isFunctionLiteral(patternExpression(returns[0])!)) {
         return staticType(returns[0]);
       }
-      // A replacement object, parameter, or branching return needs a stronger proof.
+      // #sec-interfaces-semantics: only replacement objects "whose capability
+      // is unresolved" defer. In a class with no heritage, a return of an
+      // object or array literal, or of `this`, yields an object with no
+      // [[Call]], and a path that returns nothing yields the instance, which
+      // has none either - so construction is proved non-callable (Round 7,
+      // Gap 5). Any other replacement object, a parameter, or a heritage whose
+      // fall-through depends on the base still needs a stronger proof.
+      const establishedNonCallable = (e: ParseNode): boolean =>
+        ['ObjectLiteral', 'ArrayLiteral', 'ThisExpression'].includes(patternExpression(e)?.type ?? '');
+      if (!cls.ClassTail.ClassHeritage && returns.every(establishedNonCallable)) return 'noncallable';
       return null;
     }
     if (!cls.ClassTail.ClassHeritage) return 'noncallable';
@@ -8312,6 +8352,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * set of keys, shared by member access and by an object pattern's property,
    * which reads the same declaration (Round 3, Q2).
    */
+  /**
+   * The keys an object rest or spread of _receiverType_ reads, where it is an
+   * established typed-class instance: its declared public instance fields, own
+   * and inherited, less those _named_ elsewhere. They are own enumerable data
+   * properties, so CopyDataProperties reads each; methods live on the
+   * prototype and private names are not properties, so neither is read.
+   * #sec-typed-classes makes a protected one of them a type error outside its
+   * scope (Round 7, Gap 3 and Q1).
+   */
+  const checkProtectedCopy = (receiverType: Known, named: ReadonlySet<string | SymbolValue>): void => {
+    const receiver = erasedForJudgment(receiverType) as { Kind?: string, Declaration?: ParseNode } | null;
+    const declaration = receiver?.Kind === 'nominal' ? receiver.Declaration : undefined;
+    if (!declaration || (declaration.type !== 'ClassDeclaration' && declaration.type !== 'ClassExpression')) return;
+    const keys: (string | SymbolValue)[] = [];
+    for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
+      for (const element of classBodyOf(at)) {
+        if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
+        const key = classElementKey((element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName);
+        if (key !== undefined && !named.has(key)) keys.push(key);
+      }
+    }
+    if (keys.length > 0) checkProtectedKeys(receiverType, keys);
+  };
+
   const checkProtectedKeys = (receiverType: Known, keys: readonly (string | SymbolValue)[]): void => {
     const permitted = (owner: ParseNode): boolean => classContext.some((context) => {
       const seen = new Set<ParseNode>();
@@ -18038,9 +18102,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           staticTypeIn(innermostLiteral(lit), t);
           if (isIntegerValueType(t)) {
             const exact = signedLiteralValue(lit);
+            const fraction = exact === null ? fractionalLiteralValue(lit) : null;
             const prim = t as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
-            if (exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) {
-              const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact)), Value(displayType(t))) as ThrowCompletion;
+            if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
+              const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(t))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -23323,6 +23388,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const rest = node.BindingRestProperty ?? node.AssignmentRestProperty;
       if (rest) {
+        if (knownExclusions) checkProtectedCopy(source.type, consumed);
         const t = structureOf(source.type);
         const literal = patternExpression(source.expression);
         // Structural membership does not establish ownness/enumerability.
@@ -23848,7 +23914,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!checkedFlatteningCallbacks.has(parent)) {
       checkedFlatteningCallbacks.add(parent);
       const callback = staticTypeIn(callbackArgument, signature.Signatures[0].Parameters[0].Type);
-      if (protocolCallFails(callback, flatteningResultFails, [element, indexTypeRecord()], undefinedType)) {
+      // #sec-iterator-helper-contracts: "It is a type error when every
+      // established callback result alternative fails the reached flattening
+      // protocol." A concise body that is a conditional has one alternative
+      // per arm; where the callback's inferred result does not carry them, the
+      // arms are read directly, and a viable or unknown one still defers
+      // (Round 7, Gap 2).
+      const conditionalArms = (node: ParseNode | undefined): ParseNode[] | null => {
+        const e = node ? patternExpression(node) : undefined;
+        if (e?.type !== 'ConditionalExpression') return null;
+        const c = e as ParseNode.ConditionalExpression;
+        return [...(conditionalArms(c.AssignmentExpression_a) ?? [c.AssignmentExpression_a]),
+          ...(conditionalArms(c.AssignmentExpression_b) ?? [c.AssignmentExpression_b])];
+      };
+      const arrow = patternExpression(callbackArgument) as { type?: string, TypeAnnotation?: unknown, ConciseBody?: { type?: string, ExpressionBody?: ParseNode } } | undefined;
+      const arms = arrow?.type === 'ArrowFunction' && !arrow.TypeAnnotation && arrow.ConciseBody?.type === 'ConciseBody'
+        ? conditionalArms((arrow.ConciseBody.ExpressionBody as { AssignmentExpression?: ParseNode } | undefined)?.AssignmentExpression
+          ?? arrow.ConciseBody.ExpressionBody) : null;
+      const everyArmFails = !!arms && arms.every((arm) => {
+        const armType = staticType(arm);
+        return !!armType && armType.Kind !== 'any' && flatteningResultFails(armType);
+      });
+      if (protocolCallFails(callback, flatteningResultFails, [element, indexTypeRecord()], undefinedType) || everyArmFails) {
         errors.push(Throw.StaticTypeError('an iterator flatMap callback must return a flattenable object').Value as ObjectValue);
       }
     }
@@ -26825,9 +26912,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const base = t?.Kind === 'parameterized' ? t.Base : t;
             if (!isIntegerValueType(base)) continue;
             const exact = signedLiteralValue(lit);
+            const fraction = exact === null ? fractionalLiteralValue(lit) : null;
             const prim = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
-            if (exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) {
-              errors.push(Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact)), Value(displayType(base as TypeRecord))).Value as ObjectValue);
+            if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
+              errors.push(Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(base as TypeRecord))).Value as ObjectValue);
             }
           }
         }
@@ -27118,6 +27206,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ObjectLiteral': {
         walk(n.PropertyDefinitionList);
         checkObjectAccessorPairs(n);
+        // An object spread copies every own enumerable property of its operand,
+        // a protected field of a typed-class instance included (Round 7, Gap 3).
+        for (const member of n.PropertyDefinitionList) {
+          if (member.type === 'PropertyDefinition' && member.PropertyName === null && member.AssignmentExpression) {
+            checkProtectedCopy(staticType(member.AssignmentExpression), new Set());
+          }
+        }
         return;
       }
       case 'EnumDeclaration': {
@@ -28830,6 +28925,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   if (pattern.type === 'CaptureBinding') return { Kind: 'parameter', Name: pattern.BindingIdentifier.name } as TypeRecord;
                   return resolveType(pattern as ParseNode.Type) ?? argument;
                 }) });
+                // #sec-partial-classes: "A statically established collision ...
+                // is an early type error", and the static namespace collides
+                // within itself as the instance one does (Round 7, Gap 1). The
+                // static members merge only when something reads the class
+                // object, so merge them here, where the partial is declared.
+                withPartialStructure({ ...own, Structure: classObjectTypeOfNode(primary) ?? undefined }, true);
               }
             } finally {
               if (scope) typeParameterScopes.pop();
