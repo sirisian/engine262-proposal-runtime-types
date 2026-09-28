@@ -14226,6 +14226,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // #sec-user-defined-operators: compound fallback uses the binary judgment,
   // including literal propagation and the primitive operation's domain.
+  /**
+   * What a compound assignment stores, as the judgment of its target sees it.
+   * #sec-arithmetic-never-promotes: a shift's right operand is a DISTANCE, "the
+   * distance may be of any" integer type, "and the result has the left
+   * operand's type" - so `a <<= b` stores `a << b`, never `b`, and judging the
+   * distance against the target refused a valid store (Round 5, Gap 4). Every
+   * other arithmetic compound requires same-typed operands, so its right
+   * operand is the fact the target is judged by, as before.
+   */
+  const compoundStoreSource = (a: { AssignmentOperator: string, AssignmentExpression: ParseNode }, target: Known): Known => (
+    (a.AssignmentOperator === '<<=' || a.AssignmentOperator === '>>=' || a.AssignmentOperator === '>>>=')
+      && isIntegerValueType(erasedForJudgment(target))
+      // The exemption is for an integer distance ("where both operands are of
+      // integer types"); any other distance keeps the judgment it had.
+      && isIntegerValueType(erasedForJudgment(staticType(a.AssignmentExpression)))
+      ? compoundBinaryType(a as unknown as ParseNode.AssignmentExpression) : staticTypeIn(a.AssignmentExpression, target));
+
   const compoundBinaryType = (node: ParseNode.AssignmentExpression): Known => {
     const operator = node.AssignmentOperator.slice(0, -1);
     const left = typedExpressionView(node.LeftHandSideExpression, locationType(node.LeftHandSideExpression));
@@ -17515,7 +17532,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ? (node as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator
               : (node as unknown as { operator?: string }).operator;
             const distance = rightLit ? foldIntegerConstant(rightNode, constExactValue) : null;
-            if (distance !== null && (op === '/' || op === '%') && distance === 0n) {
+            // #sec-integer-operations, Q1 of Round 5: an explicit conversion of a
+            // literal zero to an integer type is a literal zero divisor too -
+            // `(0 := uint8)` is how a zero of the operand's type is written, and
+            // the conversion of zero is zero in every integer type.
+            const convertedZero = (() => {
+              if (rightLit || (op !== '/' && op !== '%')) return false;
+              const conversion = patternExpression(rightNode) as { type?: string, Expression?: ParseNode, Type?: ParseNode.Type } | undefined;
+              if (conversion?.type !== 'TypedConversionExpression' || !conversion.Expression || !conversion.Type) return false;
+              if (!isIntegerValueType(resolveType(conversion.Type))) return false;
+              return !!(literalOperand(conversion.Expression) ?? constUse(conversion.Expression))
+                && foldIntegerConstant(conversion.Expression, constExactValue) === 0n;
+            })();
+            if ((distance !== null && (op === '/' || op === '%') && distance === 0n) || convertedZero) {
               errors.push((Throw.StaticTypeError('a literal zero divisor is not a division at $1', Value(displayType(operandType!))) as ThrowCompletion).Value as ObjectValue);
             }
             if (distance !== null && node.type === 'ShiftExpression') {
@@ -22761,6 +22790,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (type.Kind === 'union') return type.Members.length > 0 && type.Members.every(fails);
       if (type.Kind === 'shared') return fails(type.Target);
       if (declaredOperator(type, `unary ${node.operator}`)) return false;
+      // A typed-class operand (Round 5, Gap 2): its conversion, inherited or
+      // its own, yields a number, and a number is stored back only where the
+      // location's class declares a conversion from one. So where every
+      // destination is such a class without one, every path fails "storing the
+      // updated value in the operand's location".
+      if (typedClassDeclarationOf(type)) {
+        const numberType = makePrimitive('number') as TypeRecord;
+        return destinations.length > 0 && destinations.every((destination) => !!typedClassDeclarationOf(destination)
+          && !declaresInboundConversion(erasedForJudgment(destination) as TypeRecord, numberType));
+      }
       const at = erasedForJudgment(type);
       if (at?.Kind !== 'primitive') return false;
       if (at.Name === 'symbol') return true;
@@ -25443,6 +25482,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-declared-narrowing: "It is a type error if the |BindingIdentifier| is
+   * not the name of a parameter of that signature." A function DECLARATION is
+   * judged where its signature is declared; an arrow or a function expression,
+   * whose return predicate now parses (Round 5, Gap 5), is judged here.
+   */
+  const checkPredicateTarget = (annotation: ParseNode.TypeAnnotation | null | undefined, formals: readonly ParseNode[] | null | undefined): void => {
+    const target = (annotation as { NarrowsTarget?: string } | null | undefined)?.NarrowsTarget;
+    if (target === undefined) return;
+    const names = (formals ?? []).map((formal) => {
+      const f = formal as { BindingIdentifier?: { name?: string } | null, BindingElement?: { BindingIdentifier?: { name?: string } | null } | null };
+      return f.BindingIdentifier?.name ?? f.BindingElement?.BindingIdentifier?.name;
+    });
+    if (!names.includes(target)) {
+      errors.push((Throw.StaticTypeError('$1 is not a parameter of this function, so a return predicate cannot narrow it', Value(target)) as ThrowCompletion).Value as ObjectValue);
+    }
+  };
+
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     const single = node && !Array.isArray(node) ? node as ParseNode : undefined;
     const barrier = single && ['CallExpression', 'RefExpression', 'IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunction'].includes(single.type);
@@ -27107,6 +27164,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const u = n as unknown as { operator?: string, UnaryExpression?: ParseNode };
         let target = patternExpression(u.UnaryExpression);
         if (target?.type === 'OptionalExpression') target = optionalChainView(target, false).expression;
+        // #sec-operator-declarations: "It is a type error to apply an arithmetic,
+        // bitwise or ordered operator to an instance of a typed class whose
+        // class declares neither that operator nor a primitive conversion of its
+        // own" - the unary forms included (Round 5, Q2): `-c` of such a class
+        // is the *NaN* the rule exists to refuse, and line 3819 already reads
+        // unary `+` on a class as an operator rather than ToNumber.
+        if ((u.operator === '-' || u.operator === '~' || u.operator === '+') && u.UnaryExpression) {
+          const operandType = staticType(u.UnaryExpression);
+          const operandClass = typedClassDeclarationOf(operandType);
+          if (operandClass && !declaredOperator(operandType, `unary ${u.operator}`) && !declaresPrimitiveConversion(operandClass)) {
+            errors.push(Throw.StaticTypeError('$1 is not defined for $2', Value(u.operator), Value(displayType(operandType as TypeRecord))).Value as ObjectValue);
+          }
+        }
         if (u.operator === 'delete' && target?.type === 'MemberExpression') {
           const keys = memberKeys(target);
           // Deletion asks about protected storage, not the validity of a read.
@@ -27840,7 +27910,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (access?.get && !access.set) {
             const result = operatorResult(access.get, access.arguments, indexed);
             if (result?.Kind === 'reference' && compoundChecksLikeAssignment(a.AssignmentOperator, result.Target)) {
-              requireAssignable(staticTypeIn(a.AssignmentExpression, result.Target), result.Target);
+              requireAssignable(compoundStoreSource(a, result.Target), result.Target);
             }
           }
         }
@@ -27857,7 +27927,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (patternExpression(a.LeftHandSideExpression)?.type === 'CallExpression') {
           for (const target of locationWriteTypes(a.LeftHandSideExpression)) {
             if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
-              requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+              requireAssignable(compoundStoreSource(a, target), target);
             }
           }
         }
@@ -27869,7 +27939,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const name = (a.LeftHandSideExpression as { name: string }).name;
           for (const target of locationWriteTypes(a.LeftHandSideExpression)) {
             if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
-              requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+              requireAssignable(compoundStoreSource(a, target), target);
             }
           }
           invalidateNarrowing(name);
@@ -27881,7 +27951,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const property = superMember(a.LeftHandSideExpression);
           const target = (property as { writeType?: TypeRecord } | undefined)?.writeType ?? property?.type ?? null;
           if (target && compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
-            requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+            requireAssignable(compoundStoreSource(a, target), target);
           }
         } else if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'MemberExpression') {
           // #table-check-sites rows 4 and 5, statically: a store whose target
@@ -27900,7 +27970,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } else if (memberWriteTypes(a.LeftHandSideExpression as ParseNode.MemberExpression).length > 0) {
             for (const written of memberWriteTypes(a.LeftHandSideExpression as ParseNode.MemberExpression)) {
               if (compoundChecksLikeAssignment(a.AssignmentOperator, written)) {
-                requireAssignable(staticTypeIn(a.AssignmentExpression, written), written);
+                requireAssignable(compoundStoreSource(a, written), written);
               }
             }
           } else if (objType && objType.Kind === 'array' && m.Expression) {
@@ -27914,7 +27984,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             target = staticType(a.LeftHandSideExpression);
           }
           if (target && compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
-            requireAssignable(staticTypeIn(a.AssignmentExpression, target), target);
+            requireAssignable(compoundStoreSource(a, target), target);
           }
         }
         walk(a.LeftHandSideExpression);
@@ -28028,6 +28098,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'FunctionDeclaration':
       case 'FunctionExpression': {
+        checkPredicateTarget((n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation, (n as { FormalParameters?: readonly ParseNode[] }).FormalParameters);
         // The adopted `this` is in
         // scope for exactly this literal's body. Pushed here rather than inside
         // `enterFunction` because only a literal that MET a contextual type has
@@ -28119,6 +28190,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'ArrowFunction':
+        checkPredicateTarget(n.TypeAnnotation, n.ArrowParameters as readonly ParseNode[] | undefined);
         publishLiteralReturn(n as ParseNode, (n.ArrowParameters ?? []).map((prm) => {
           const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
           return ann ? resolveType(ann.Type) : null;

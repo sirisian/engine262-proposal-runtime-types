@@ -1021,7 +1021,10 @@ export abstract class TypeParser extends ExpressionParser {
     const checkpoint = this.getLexerCheckpoint();
     const scopeDepth = this.scope.depth;
     try {
-      const annotation = this.parseTypeAnnotation();
+      // An arrow's return position is a |TypeAnnotation| (#sec-arrow-function-
+      // definitions), so it admits the predicate form `: x is T` as the other
+      // return sites do (Round 5, Gap 5). Return decorators are not changed.
+      const annotation = this.parseTypeAnnotation(false, true);
       if (this.test(Token.ARROW) && !this.peek().hadLineTerminatorBefore) {
         return annotation;
       }
@@ -1037,7 +1040,7 @@ export abstract class TypeParser extends ExpressionParser {
 
   // TypeAnnotation :
   //   `:` Type
-  parseTypeAnnotation(allowDecorators = false): ParseNode.TypeAnnotation {
+  parseTypeAnnotation(allowDecorators = false, allowPredicate = allowDecorators): ParseNode.TypeAnnotation {
     const node = this.startNode<ParseNode.TypeAnnotation>();
     this.expect(Token.COLON);
     // proposal-runtime-types decorators.md: `d(a: uint32): @f uint32` — a
@@ -1064,7 +1067,7 @@ export abstract class TypeParser extends ExpressionParser {
     // by `is`, so this is unambiguous against a type that happens to be named
     // `pet`. The declared return of such a signature is `boolean`; the type
     // after `is` is what the named parameter narrows to.
-    if (allowDecorators && surroundingAgent.feature('runtime-types')
+    if (allowPredicate && surroundingAgent.feature('runtime-types')
         && this.test(Token.IDENTIFIER) && this.testAhead('is')) {
       node.NarrowsTarget = this.parseIdentifierName().name;
       this.next();

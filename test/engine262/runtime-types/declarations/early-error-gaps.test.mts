@@ -756,3 +756,55 @@ test('a WeakMap seeded by a literal is checked (Round 4, Gap 5)', () => {
   expect(evaluated('const k = {}; const w = new WeakMap.<object, uint8>([[k, 1]]); String(w.get(k));')).toBe('1');
   expect(evaluated('const k = {}; const w = new WeakSet.<object>([k]); String(w.has(k));')).toBe('true');
 });
+
+// ---- round 5 ----------------------------------------------------------------
+
+test('an anonymous class expression may begin its tail with implements (Round 5, Gap 1)', () => {
+  expect(ok('interface I { } const C = class implements I { }; String(1);')).toBe(true);
+  expectStaticTypeError('interface I { a: uint8; } const C = class implements I { };');
+  expect(ok('interface I { } const C = class K implements I { }; String(1);')).toBe(true);
+  // A declaration still needs its name.
+  expect(ok('interface I { } class implements I { }')).toBe(false);
+});
+
+test('an update of a typed-class instance is refused before the program runs (Round 5, Gap 2)', () => {
+  const C = 'class C { x: uint8 = 1; } ';
+  expectStaticTypeError(`${C}let c: C = new C(); ++c;`);
+  expectStaticTypeError(`${C}function u(c: C) { c--; }`);
+  expectStaticTypeError('class C { x: uint8 = 1; valueOf() { return 1; } } let c: C = new C(); c++;');
+  expect(evaluated('let n: number = 1; n++; String(n);')).toBe('2');
+});
+
+test('a unary operator on a typed-class instance is refused (Round 5, Q2)', () => {
+  const C = 'class C { x: uint8 = 1; } ';
+  expectStaticTypeError(`${C}const c: C = new C(); -c;`);
+  expectStaticTypeError(`${C}const c: C = new C(); ~c;`);
+  expectStaticTypeError(`${C}const c: C = new C(); +c;`);
+  expectStaticTypeError(`${C}function u(c: C) { return -c; }`);
+  expect(evaluated('class C { x: uint8 = 1; valueOf() { return 1; } } const c: C = new C(); String(-c);')).toBe('-1');
+  expect(evaluated('class C { } const c = new C(); String(-c);')).toBe('NaN');
+});
+
+test('a converted literal zero divisor is refused (Round 5, Gap 3 and Q1)', () => {
+  expectStaticTypeError('let a: uint8 = 1; a / (0 := uint8);');
+  expectStaticTypeError('let a: int32 = 1; a % (0 := int32);');
+  expectStaticTypeError('let a: uint8 = 1; a /= (0 := uint8);');
+  expect(evaluated('let a: uint8 = 4; String(a / (2 := uint8));')).toBe('2');
+  expect(evaluated('let f: float32 = 1; String(f / (0 := float32));')).toBe('Infinity');
+});
+
+test('a compound shift by a distance of another integer type is valid (Round 5, Gap 4)', () => {
+  expect(evaluated('let a: uint8 = 1; let b: uint16 = 1; a <<= b; String(a);')).toBe('2');
+  expect(evaluated('let a: uint16 = 4; let b: uint8 = 1; a >>>= b; String(a);')).toBe('2');
+  expect(evaluated('let o: { a: uint8 } = { a: 1 }; let b: uint16 = 1; o.a <<= b; String(o.a);')).toBe('2');
+  expectStaticTypeError('let a: uint8 = 1; let b: uint16 = 1; a += b;');
+  expectStaticTypeError("let a: uint8 = 1; let s: string = 'x'; a <<= s;");
+  expectStaticTypeError('let a: uint8 = 1; a <<= 8;');
+});
+
+test('an arrow function may declare a return predicate (Round 5, Gap 5)', () => {
+  expect(evaluated('const f = (x: any): x is uint8 => true; String(f(1));')).toBe('true');
+  expectStaticTypeError('const f = (x: any): y is uint8 => true;');
+  expectStaticTypeError('const f = function (x: any): y is uint8 { return true; };');
+  expect(evaluated('const c = true; const g = c ? (x: uint8) => x : (x: uint8) => x; String(g(2));')).toBe('2');
+});

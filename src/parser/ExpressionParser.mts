@@ -2382,7 +2382,13 @@ export abstract class ExpressionParser extends FunctionParser {
     const isPartial = !!ClassModifiers && ClassModifiers.includes('partial');
 
     this.scope.with({ strict: true }, () => {
-      if (!this.test(Token.LBRACE) && !this.test(Token.EXTENDS) && !this.test(Token.LT)) {
+      // proposal-runtime-types: `ClassTail` may begin with an `ImplementsClause`,
+      // so `class implements I { }` is a class with no name (Round 5, Gap 1).
+      // `implements` is reserved in strict code and class code is strict, so it
+      // can never be the name.
+      const tailBegins = this.test(Token.LBRACE) || this.test(Token.EXTENDS) || this.test(Token.LT)
+        || (surroundingAgent.feature('runtime-types') && this.test('implements'));
+      if (!tailBegins) {
         node.BindingIdentifier = this.parseBindingIdentifier();
       } else if (this.test(Token.LT)) {
         // A generic class expression may omit the binding identifier: `class <T> {}`.
