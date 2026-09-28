@@ -1630,11 +1630,8 @@ function IsObjectSubtype(s: Extract<TypeRecord, { Kind: 'object' }>, t: Extract<
   const propsOk = t.Properties.every((tp) => {
     const sp = s.Properties.find((p) => p.key === tp.key);
     if (!sp) {
-      // A required property can still be met by a string index signature on s.
-      if (tp.optional) {
-        return true;
-      }
-      return s.IndexSignatures.some((ix) => ix.Key.Kind === 'primitive' && ix.Key.Name === 'string' && IsSubtype(ix.Value, tp.type, assumptions));
+      // #sec-isobjectsubtype: an index signature constrains values, not presence.
+      return tp.optional;
     }
     if (sp.optional && !tp.optional) {
       return false;
@@ -2036,6 +2033,14 @@ export function IsConstructorSignatureSubtype(source: SignatureRecord, target: S
     DeclaredDefault: false, Initial: undefined,
   })) };
   return IsSignatureSubtypeCore(source, promised, [], true);
+}
+
+/** #sec-typed-classes: the selected override binds its own defaults and rests. */
+export function OverrideParametersSubtype(source: SignatureRecord, target: SignatureRecord): boolean {
+  const parametersOnly = (signature: SignatureRecord): SignatureRecord => ({
+    Parameters: signature.Parameters, Return: null,
+  });
+  return IsConstructorSignatureSubtype(parametersOnly(source), parametersOnly(target));
 }
 
 /** #sec-declared-narrowing: preserve the advertised continuation facts. */

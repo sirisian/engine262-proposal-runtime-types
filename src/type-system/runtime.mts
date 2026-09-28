@@ -58,6 +58,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
 import { MergePartialStructures, RuntimePartialContributions } from './partial-types.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
@@ -5197,8 +5198,14 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         }
       }
       let intrinsicAvailable = true;
-      if (intrinsicParameters(name)) {
+      if (intrinsicParameters(name) || libraryTypeParameters(name)) {
         intrinsicAvailable = Q(yield* UsesIntrinsicDeclaration(node, name));
+      }
+      if (node.TypeArguments && libraryTypeParameters(name) && intrinsicAvailable) {
+        const bound = bindLibraryTypeArguments(name, argRecords, argNames2)!;
+        if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+        argRecords.splice(0, argRecords.length, ...bound.Arguments);
+        argNames2.length = 0;
       }
       if (intrinsicParameters(name) && intrinsicAvailable) {
         const bound = bindIntrinsicArguments(name, argRecords.map(toNumericArgument), argNames2)!;
@@ -7056,6 +7063,10 @@ function* UsesIntrinsicDeclaration(node: ParseNode, name: string): PlainEvaluato
   if (declarationNamed(node, name)) return false;
   const reference = Q(yield* ResolveTypeName(Value(name)));
   if (reference.Base === 'unresolvable' || reference.Base === TypeNameEnvironmentFor(surroundingAgent.currentRealmRecord)) return true;
+  if (libraryTypeParameters(name)) {
+    const value = Q(yield* GetValue(reference));
+    return value === (surroundingAgent.currentRealmRecord.Intrinsics as unknown as Record<string, Value>)[`%${name}%`];
+  }
   if (name !== 'Range') return false;
   const value = Q(yield* GetValue(reference));
   return isIntrinsicNamespace(surroundingAgent.currentRealmRecord, name, value);

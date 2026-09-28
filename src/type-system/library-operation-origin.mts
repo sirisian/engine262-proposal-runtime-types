@@ -6,7 +6,10 @@ import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 const groups = {
   '%Function.prototype%': ['call', 'apply', 'bind', 'callThread'],
   '%Atomics%': ['load', 'store', 'exchange', 'compareExchange', 'add', 'sub', 'and', 'or', 'xor', 'wait', 'waitAsync', 'notify'],
-  '%Object%': ['assign', 'defineProperty'],
+  '%Object%': ['assign', 'defineProperty', 'keys', 'values', 'entries', 'groupBy'],
+  '%Array%': ['from', 'fromAsync', 'of'],
+  '%Map%': ['groupBy'],
+  '%Promise%': ['all', 'race', 'any', 'allSettled', 'resolve'],
   '%Reflect%': ['set'],
   '%TypedArrayLike.prototype%': ['capacity'],
   '%Map.prototype%': ['size'],
@@ -25,6 +28,13 @@ export function RememberLibraryOperations(realm: Realm): void {
     }
   }
   originals.set(realm, saved);
+}
+
+/** Compare an actual data function with the identity captured at realm creation. */
+export function OriginalLibraryFunction(realm: Realm, group: string, key: string): boolean {
+  const object = (realm.Intrinsics as unknown as Record<string, ObjectValue>)[group];
+  const before = originals.get(realm)?.get(`${group}.${key}`);
+  return !!before?.Value && intrinsicData(object, Value(key)) === before.Value;
 }
 
 export interface LibraryOperation {

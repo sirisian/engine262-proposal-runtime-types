@@ -37,11 +37,12 @@ import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAli
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { BindTypeParameterTyped, toNumericArgument,
-  InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord,
+  InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { OrderNamedTypeArguments, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
+import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
 import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
@@ -3099,7 +3100,31 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     return Throw.TypeError('$1 is not generic and takes no type arguments', displayType(record));
   }
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
-    if (IsGenericBuiltin(value)) return ref;
+    if (IsGenericBuiltin(value)) {
+      const intrinsics = surroundingAgent.currentRealmRecord.Intrinsics as unknown as Record<string, Value>;
+      const name = ['Map', 'Set', 'WeakMap', 'WeakSet', 'Promise', 'WeakRef', 'FinalizationRegistry', 'Proxy']
+        .find((candidate) => intrinsics[`%${candidate}%`] === value);
+      if (name) {
+        const arguments_: TypeRecord[] = [];
+        const names: (string | undefined)[] = [];
+        for (const argument of node.TypeArguments.TypeArgumentList) {
+          const type = Q(yield* TypeNodeToTypeRecord(argument));
+          if ((argument as { IsSpread?: boolean }).IsSpread) {
+            const elements = spreadElementsOf(type);
+            if (!elements) return Throw.TypeError('a spread type argument must have a stated extent');
+            arguments_.push(...elements);
+            names.push(...elements.map(() => undefined));
+          } else {
+            arguments_.push(type);
+            names.push(typeArgumentNameOf(argument));
+          }
+        }
+        const bound = bindLibraryTypeArguments(name, arguments_, names)!;
+        if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+        if (node.parent?.type === 'NewExpression' && node.parent.MemberExpression === node) RememberLibraryApplication(node, name, bound.Arguments);
+      }
+      return ref;
+    }
     return Throw.TypeError('type arguments require a generic function');
   }
   // A primitive VALUE - `x.<uint8>` for a `let x: uint8` - is not generic, and

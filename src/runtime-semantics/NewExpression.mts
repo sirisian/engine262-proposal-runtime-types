@@ -12,9 +12,11 @@ import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { contextualTypeFor, pushContextualType, popContextualType, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
+import { contextualTypeFor, pushContextualType, popContextualType, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord, spreadElementsOf } from '../type-system/runtime.mts';
 import { StampTypedCollection, soleSignatureParameterTypes, RequireType } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
+import { bindLibraryTypeArguments, TakeLibraryApplication } from '../type-system/library-type-arguments.mts';
+import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
@@ -58,19 +60,42 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   const ref = Q(yield* Evaluate(constructExpr));
   // 4. Let constructor be ? GetValue(ref).
   const constructor = Q(yield* GetValue(ref as never));
+  let appliedLibraryTypes: readonly TypeRecord[] | undefined;
+  let appliedLibraryName: string | undefined;
+  if (surroundingAgent.feature('runtime-types') && constructExpr.type === 'TypeArgumentsExpression') {
+    const intrinsics = surroundingAgent.currentRealmRecord.Intrinsics as unknown as Record<string, Value>;
+    appliedLibraryName = ['Map', 'Set', 'WeakMap', 'WeakSet', 'Promise', 'WeakRef', 'FinalizationRegistry', 'Proxy']
+      .find((name) => intrinsics[`%${name}%`] === constructor);
+    if (appliedLibraryName) {
+      appliedLibraryTypes = TakeLibraryApplication(constructExpr, appliedLibraryName);
+    }
+    if (appliedLibraryName && !appliedLibraryTypes) {
+      const types: TypeRecord[] = [];
+      const names: (string | undefined)[] = [];
+      for (const argument of constructExpr.TypeArguments.TypeArgumentList) {
+        const type = Q(yield* TypeNodeToTypeRecord(argument));
+        if ((argument as { IsSpread?: boolean }).IsSpread) {
+          const elements = spreadElementsOf(type);
+          if (!elements) return Throw.TypeError('a spread type argument must have a stated extent');
+          types.push(...elements);
+          names.push(...elements.map(() => undefined));
+        } else {
+          types.push(type);
+          names.push(typeArgumentNameOf(argument));
+        }
+      }
+      const bound = bindLibraryTypeArguments(appliedLibraryName, types, names)!;
+      if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+      appliedLibraryTypes = bound.Arguments;
+    }
+  }
   let libraryParameters: ReturnType<typeof libraryConstructParameters> = null;
   if (surroundingAgent.feature('runtime-types')) {
     const intrinsics = surroundingAgent.currentRealmRecord.Intrinsics;
     const name = constructor === intrinsics['%WeakRef%'] ? 'WeakRef'
       : constructor === intrinsics['%FinalizationRegistry%'] ? 'FinalizationRegistry' : null;
     if (name) {
-      const types: TypeRecord[] = [];
-      if (constructExpr.type === 'TypeArgumentsExpression') {
-        for (const argument of constructExpr.TypeArguments.TypeArgumentList) {
-          types.push(Q(yield* TypeNodeToTypeRecord(argument)));
-        }
-      }
-      libraryParameters = libraryConstructParameters(name, types);
+      libraryParameters = libraryConstructParameters(name, appliedLibraryTypes ?? []);
     }
   }
   let argList;
@@ -144,15 +169,8 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     // proposal-runtime-types #sec-reflection-and-declared-types: `new
     // Proxy.<T>(target, handler)` carries T into the [[RuntimeType]] slot, which
     // is what makes `Reflect.typeOf` report T and the trap checks meaningful.
-    if (baseName === 'Proxy') {
-      const written = spec.TypeArguments.TypeArgumentList;
-      // `Q` is a macro and may not appear in a conditional expression, so the
-      // one-argument case is resolved in a statement of its own.
-      let declared: TypeRecord | undefined;
-      if (written.length === 1) {
-        declared = Q(yield* TypeNodeToTypeRecord(written[0]!));
-      }
-      SetPendingProxyRuntimeType(declared);
+    if (appliedLibraryName === 'Proxy') {
+      SetPendingProxyRuntimeType(appliedLibraryTypes?.[0]);
     }
     // proposal-runtime-types #sec-threadlocal-objects: `ThreadLocal.<T>` needs
     // its T for the same reason - "an agent that has not written the storage
@@ -192,12 +210,8 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     // constructor does not receive the intrinsic Promise contract.
     if (constructor === surroundingAgent.currentRealmRecord.Intrinsics['%Promise%']) {
       let types: TypeRecord[] | undefined;
-      if (constructExpr.type === 'TypeArgumentsExpression') {
-        types = [];
-        for (const argument of constructExpr.TypeArguments.TypeArgumentList) {
-          const type = Q(yield* TypeNodeToTypeRecord(argument));
-          types.push(type);
-        }
+      if (appliedLibraryTypes) {
+        types = [...appliedLibraryTypes];
       } else if (constructionContext?.Kind === 'nominal' && constructionContext.LibraryName === 'Promise') {
         types = constructionContext.Arguments.filter((type): type is TypeRecord => typeof type === 'object');
       }
@@ -238,15 +252,8 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   if (surroundingAgent.feature('runtime-types')
       && constructExpr.type === 'TypeArgumentsExpression'
       && constructed instanceof ObjectValue) {
-    const spec = constructExpr as unknown as ParseNode.TypeArgumentsExpression;
-    const baseName = spec.Expression.type === 'IdentifierReference'
-      ? (spec.Expression as unknown as { name: string }).name
-      : undefined;
-    if (baseName === 'Set' || baseName === 'Map' || baseName === 'WeakSet' || baseName === 'WeakMap') {
-      const argRecords: TypeRecord[] = [];
-      for (const argNode of spec.TypeArguments.TypeArgumentList) {
-        argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
-      }
+    if (appliedLibraryName && ['Set', 'Map', 'WeakSet', 'WeakMap'].includes(appliedLibraryName)) {
+      const argRecords = appliedLibraryTypes!;
       // Through StampTypedCollection, which REFUSES the entries a seed already
       // put in that do not fit: `new Set.<uint8>(["a"])` used to build a
       // `Set.<uint8>` holding the String "a", because the stamp lands on the

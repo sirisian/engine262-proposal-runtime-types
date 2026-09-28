@@ -47,8 +47,8 @@ export function StaticIterationContribution(
   for (const variant of result.Kind === 'union' ? result.Members : [result]) {
     const record = structureOf(variant);
     if (record?.Kind !== 'object') return unknownContribution;
-    const done = record.Properties.find((property) => property.key === 'done')?.type;
-    if (done?.Kind === 'literal' && done.Value === Value.true) continue;
+    const done = record.Properties.find((property) => property.key === 'done');
+    if (!done?.optional && done?.type.Kind === 'literal' && done.type.Value === Value.true) continue;
     const value = record.Properties.find((property) => property.key === 'value')?.type;
     if (!value) return unknownContribution;
     types.push(value);
