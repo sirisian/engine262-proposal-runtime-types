@@ -9712,6 +9712,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const n = value as ParseNode;
       if (typeof n.type !== 'string' || examined.has(n)) return;
       examined.add(n);
+      // A node holding a capture BINDING is a pattern - `[[].<const E>, string]`
+      // in a specialization list - never a closed type to evaluate.
+      if (n.type === 'CaptureBinding') {
+        open = true;
+        return;
+      }
       const name = n.type === 'TypeReference' ? n.TypeName.IdentifierReference.name
         : n.type === 'IdentifierReference' ? n.name : undefined;
       if (name && (assignedGlobalProperties.has(name) || typeParameterInScope(name) || enclosingParameters.has(name) || (frames.some((frame) => frame.declaredNames.has(name))

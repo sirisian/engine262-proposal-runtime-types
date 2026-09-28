@@ -551,7 +551,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
     case 'tuple':
       return t.Kind === 'tuple' && sameTupleElements(s.Elements, t.Elements, next);
     case 'array':
-      return t.Kind === 'array' && s.Extent === t.Extent && SameTypeWithAssumptions(s.Element, t.Element, next);
+      return t.Kind === 'array' && sameExtent(s.Extent, t.Extent, next) && SameTypeWithAssumptions(s.Element, t.Element, next);
     case 'reference':
       return t.Kind === 'reference' && SameTypeWithAssumptions(s.Target, t.Target, next);
     // #sec-threading-shared-modifier: invariant in Target, as ~reference~ is,
@@ -759,6 +759,24 @@ function isSpanRecord(t: TypeRecord): boolean {
  * constructor takes a count as an ARGUMENT, while a window over a known run of
  * elements can - and something has to carry it for a bounds check to be elided.
  */
+/**
+ * Two array extents are the same: equal numbers, both dynamic, or the same
+ * TYPE. A value parameter's extent - `[N]` in a generic - is a record, and two
+ * mentions of `N` are two records of one type, which `===` called different:
+ * `function f<N: uint32>(v: [N].<uint8>): [N].<uint8> { return v; }` refused
+ * its own parameter.
+ */
+function sameExtent(
+  a: number | 'dynamic' | TypeRecord,
+  b: number | 'dynamic' | TypeRecord,
+  assumptions: Parameters<typeof SameTypeWithAssumptions>[2],
+): boolean {
+  if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
+    return SameTypeWithAssumptions(a, b, assumptions);
+  }
+  return a === b;
+}
+
 function spanExtentOf(t: TypeRecord): number | undefined {
   const args = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
   const second = args && args.length > 1 ? args[1] : undefined;
@@ -1331,7 +1349,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // A function wanting "any array of T, however long" says `Span.<T>`
       // (#sec-span-type): the type that promises reading and writing elements
       // and says nothing about growth.
-      if (ta.Extent !== s.Extent) {
+      if (!sameExtent(ta.Extent, s.Extent, next)) {
         return false;
       }
       // A fixed target with an `any` element still fixes the extent, and takes

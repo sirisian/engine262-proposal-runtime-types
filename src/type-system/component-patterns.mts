@@ -276,6 +276,15 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownS
   const same = (a: Argument, b: Argument) => (typeof a === 'number' || typeof b === 'number' ? a === b : SameType(a, b));
   return {
     resolveFixed: (node) => {
+      // An array's EXTENT - `[4]` - is parsed as an expression, a
+      // NumericLiteral, and the host's extent is a number, so it compares as
+      // one. Only the extent: a top-level value entry (`f<4, 4>`) is a
+      // LiteralType and keeps resolving to its literal type, the
+      // representation value arguments have here.
+      const literal = node as unknown as { type?: string, value?: unknown };
+      if (literal.type === 'NumericLiteral' && typeof literal.value === 'number') {
+        return literal.value as Argument;
+      }
       const record = resolve(node);
       if (!record) {
         throw new Error('a component pattern names a type that is not resolved');
@@ -312,7 +321,20 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownS
         defaultOf: () => undefined,
       };
     },
-    arrayOf: () => null,
+    // An array exposes its parts to a pattern: its element, and its extent -
+    // `'dynamic'`, a number (a value argument, which `[const N]` binds and
+    // `[4]` compares), or a record where the extent is still a parameter
+    // (`[N]` in a generic body), which the checker's callers treat as open.
+    // This returned null, so no array pattern ever matched: `[].<const E>`,
+    // `[const N].<E>` and `[4].<const E>` fell through for every kind of case.
+    arrayOf: (subject: Argument) => {
+      const t = subject as TypeRecord | number;
+      if (typeof t !== 'object' || t === null || t.Kind !== 'array') {
+        return null;
+      }
+      const array = t as { Extent: number | 'dynamic' | TypeRecord, Element: TypeRecord };
+      return { Extent: array.Extent as Argument | 'dynamic', Element: array.Element as Argument };
+    },
     // A pack's binding - the tuple of its run (phase 4, step 9n) - is the
     // sequence of its element types; any other subject has none.
     sequenceOf: (subject: Argument) => {
@@ -405,6 +427,10 @@ export function FixedTypeSubtrees(node: ParseNode, names: ReadonlySet<string>): 
     if (!n || typeof n !== 'object') return false;
     if (Array.isArray(n)) return n.some(mentions);
     const v = n as { type?: string, name?: string };
+    // A capture's BINDING is a pattern part as much as a reference to it is,
+    // as the matcher's hasPatternPart says; otherwise `[].<const E>` read as
+    // fixed and its fixed leaves were never collected.
+    if (v.type === 'CaptureBinding') return true;
     if (v.type === 'IdentifierReference' && typeof v.name === 'string' && names.has(v.name)) return true;
     return Object.entries(v).some(([k, x]) => k !== 'parent' && k !== 'location' && mentions(x));
   };
@@ -416,6 +442,19 @@ export function FixedTypeSubtrees(node: ParseNode, names: ReadonlySet<string>): 
     }
     if (n.type === 'TypeReference' && n.TypeArguments) {
       (n.TypeArguments.TypeArgumentList as unknown as ParseNode[]).forEach(visit);
+    }
+    // The structural patterns the matcher descends into, so each FIXED leaf
+    // within them - an array's extent `4` or element, a tuple's `string` - is
+    // resolved before matching reads it. Before, only an application's
+    // arguments were descended, and matching `[4].<const E>` or
+    // `[const E, string]` asked for a leaf no one had resolved.
+    if (n.type === 'ArrayType') {
+      const array = n as unknown as { ArrayExtent?: ParseNode | null, TypeArguments?: { TypeArgumentList: readonly ParseNode[] } | null };
+      if (array.ArrayExtent) visit(array.ArrayExtent);
+      array.TypeArguments?.TypeArgumentList.forEach(visit);
+    }
+    if (n.type === 'TupleType') {
+      (n as unknown as { TupleElementList: readonly { Type: ParseNode }[] }).TupleElementList.forEach((e) => visit(e.Type));
     }
   };
   visit(node);
