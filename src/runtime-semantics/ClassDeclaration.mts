@@ -1,3 +1,4 @@
+import { IsPartialDeclaration } from '../type-system/partial-types.mts';
 import { Value, ObjectValue } from '../value.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import { Q, NormalCompletion } from '../completion.mts';
@@ -12,8 +13,9 @@ import { RecordTypeOrigin, OriginOfNode } from '../type-system/provenance.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { InstallTypeObjectSurface } from '../intrinsics/TypePrototype.mts';
 import { RegisterStampedClass } from '../type-system/intern.mts';
+import { RegisterPartialClass } from './RuntimeTypesDeclarations.mts';
 import {
-  InitializeBoundName, ClassDefinitionEvaluation, PartialClassMergeEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
+  InitializeBoundName, ClassDefinitionEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
   ApplyDecorators, ClassDecoratorContext,
 } from './all.mts';
 import {
@@ -36,7 +38,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       return Throw.SyntaxError('A partial class requires a name');
     }
     const partialName = StringValue(BindingIdentifier);
-    const ref = Q(yield* ResolveBinding(partialName, undefined));
+    const ref = Q(yield* ResolveBinding(partialName, undefined, true));
     const existing = Q(yield* GetValue(ref));
     // A CLASS, not any constructor: an ordinary function is constructible, and
     // `partial class f` over `function f() {}` used to pass this test and add
@@ -51,7 +53,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
     if (!(existing instanceof ObjectValue) || !IsConstructor(existing) || ordinaryNonClass) {
       return Throw.TypeError('$1 is not a class and cannot be extended by a partial class', partialName);
     }
-    Q(yield* PartialClassMergeEvaluation(existing, ClassTail));
+    Q(yield* RegisterPartialClass(existing, ClassDeclaration));
     return existing;
   }
   if (!BindingIdentifier) {
@@ -160,7 +162,7 @@ export function* Evaluate_ClassDeclaration(ClassDeclaration: ParseNode.ClassDecl
   // only when an application of the family selects it (SpecializeFromFrame).
   {
     const list = (ClassDeclaration as { TypeParameters?: { ListKind?: string } | null }).TypeParameters;
-    if (surroundingAgent.feature('runtime-types') && list && list.ListKind !== 'parameters') {
+    if (surroundingAgent.feature('runtime-types') && list && list.ListKind !== 'parameters' && !IsPartialDeclaration(ClassDeclaration)) {
       return undefined;
     }
   }

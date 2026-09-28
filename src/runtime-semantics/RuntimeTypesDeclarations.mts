@@ -1,3 +1,6 @@
+import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions } from '../type-system/partial-types.mts';
+import { FixedTypeSubtrees } from '../type-system/component-patterns.mts';
+import { NominalRecordsOf } from '../type-system/intern.mts';
 import { bindIntrinsicArguments } from '../type-system/intrinsic-generics.mts';
 import { setCaseSpecializationLookup } from '../type-system/layout.mts';
 import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
@@ -55,7 +58,7 @@ import {
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
 import { DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
-import { ClassDefinitionEvaluation } from './ClassDefinitionEvaluation.mts';
+import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassDefinitionEvaluation.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -155,13 +158,14 @@ function initializationErrorName(value: ObjectValue): string | null {
  *   and initializing the binding together: `binding !== undefined &&
  *   binding.initialized === false`.
  */
-export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration, rebind = false): PlainEvaluator {
+export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration, rebind = false, shapeOnly?: (type: TypeRecord) => void): PlainEvaluator {
   if (preEvaluatedTypeDeclarations.has(node) && !rebind) {
     return undefined;
   }
+  if (node.type === 'InterfaceDeclaration' && node.Partial && !shapeOnly) return yield* RegisterPartialInterface(node);
   // An alias CASE (phase 5) is inert where it is written; an application of
   // its family selects it.
-  if ((node.type === 'TypeAliasDeclaration' || node.type === 'InterfaceDeclaration') && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+  if ((node.type === 'TypeAliasDeclaration' || node.type === 'InterfaceDeclaration') && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters' && !IsPartialDeclaration(node)) {
     return undefined;
   }
   const name = StringValue(node.BindingIdentifier);
@@ -802,6 +806,10 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   // union the clause specifies: `type A = { x: number }` and `type B = { x:
   // number }` reach one Type Object and both sites land on it. Nothing about the
   // type's identity reads this, and no program can: it is the host's channel.
+  if (shapeOnly && isTypeObject(value)) {
+    shapeOnly(value.TypeRecord);
+    return undefined;
+  }
   if (value !== Value.undefined) {
     RecordTypeOrigin(value as object, OriginOfNode(node, node.type, name.stringValue()));
     // ...and the members, which is the half #sec-provenance also specifies - "A
@@ -1939,6 +1947,152 @@ function specializationKeyOf(record: TypeRecord): string {
   return String(id);
 }
 
+type PartialClassExtension = {
+  node: ParseNode.ClassDeclaration,
+  environment: EnvironmentRecord,
+  privateEnvironment: typeof surroundingAgent.runningExecutionContext.PrivateEnvironment,
+};
+const partialClassExtensions = new WeakMap<object, PartialClassExtension[]>();
+
+function* PartialPatternTypes(node: ParseNode.ClassDeclaration | ParseNode.InterfaceDeclaration): PlainEvaluator<Map<ParseNode, TypeRecord>> {
+  const resolved = new Map<ParseNode, TypeRecord>();
+  const list = node.TypeParameters;
+  const names = new Set((list?.Captures ?? []).map((c) => c.BindingIdentifier.name));
+  const nodes = (list?.SpecializationEntryList ?? []).flatMap((entry) => FixedTypeSubtrees(entry.Pattern as ParseNode, names));
+  const bounds = (list?.Captures ?? []).flatMap((c) => [c.TypeParameterDomain, c.TypeParameterConstraint].filter(Boolean) as ParseNode[]);
+  nodes.push(...bounds.flatMap((bound) => [...FixedTypeSubtrees(bound, names), bound]));
+  for (const type of nodes) {
+    const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(type as ParseNode.Type));
+    if (attempt.Type === 'normal') resolved.set(type, attempt.Value);
+  }
+  return resolved;
+}
+
+function* RegisterPartialInterface(node: ParseNode.InterfaceDeclaration): PlainEvaluator<void> {
+  const reference = Q(yield* ResolveTypeName(Value(node.BindingIdentifier.name)));
+  const existing = Q(yield* GetValue(reference));
+  if (!isTypeObject(existing) || existing.TypeRecord.Kind !== 'nominal'
+    || (existing.TypeRecord.Declaration.type !== 'InterfaceDeclaration' && !existing.TypeRecord.LibraryName)) return Throw.TypeError('$1 is not an interface', Value(node.BindingIdentifier.name));
+  const primary = existing.TypeRecord.Declaration as ParseNode.InterfaceDeclaration;
+  const frame = new Map<string, TypeRecord>();
+  for (const p of [...(primary.TypeParameters?.TypeParameterList ?? []), ...(node.TypeParameters?.Captures ?? [])]) {
+    frame.set(p.BindingIdentifier.name, { Kind: 'parameter', Name: p.BindingIdentifier.name } as TypeRecord);
+  }
+  let structure: TypeRecord | null = null;
+  let types: Map<ParseNode, TypeRecord>;
+  pushTypeParameterFrame(frame);
+  try {
+    types = Q(yield* PartialPatternTypes(node));
+    Q(yield* Evaluate_RuntimeTypesBindingDeclaration({ ...node, Partial: false, TypeParameters: null }, false,
+      (type) => {
+        if (type.Kind === 'nominal') structure = type.Structure ?? null;
+      }));
+  } finally {
+    popTypeParameterFrame();
+  }
+  const parts = RuntimePartialContributions(primary);
+  if (parts.some((part) => part.Declaration === node)) return undefined;
+  parts.push({ Declaration: node, Structure: () => structure, Resolve: (type) => types.get(type) ?? null });
+  const updates: { record: TypeRecord, merged: TypeRecord }[] = [];
+  let conflict: string | undefined;
+  for (const record of NominalRecordsOf(primary)) {
+    const merged = MergePartialStructures(record, parts, (key) => {
+      conflict ??= key;
+    });
+    updates.push({ record, merged });
+  }
+  if (conflict) {
+    parts.pop();
+    return Throw.TypeError('$1 is already declared on this interface', Value(conflict));
+  }
+  for (const { record, merged } of updates) Object.assign(record, merged);
+  return undefined;
+}
+
+function* ApplyPartialClass(extension: PartialClassExtension, primary: ParseNode.ClassDeclaration, ctor: Value,
+  args: readonly (TypeRecord | number)[]): PlainEvaluator<void> {
+  const context = surroundingAgent.runningExecutionContext;
+  const priorEnvironment = context.LexicalEnvironment;
+  const priorPrivate = context.PrivateEnvironment;
+  context.LexicalEnvironment = extension.environment;
+  context.PrivateEnvironment = extension.privateEnvironment;
+  const frame = new Map<string, TypeRecord>();
+  (primary.TypeParameters?.TypeParameterList ?? []).forEach((p, i) => {
+    const a = args[i];
+    frame.set(p.BindingIdentifier.name, typeof a === 'number' ? { Kind: 'literal', Value: Value(a), Base: builtinTypeRecord('uint32')! } : a);
+  });
+  pushTypeParameterFrame(frame);
+  try {
+    if (extension.node.TypeParameters) {
+      const selected = Q(yield* SelectClassCase(primary as never, [extension.node] as never, args));
+      if (!selected) return undefined;
+      for (const [name, type] of selected.Frame) frame.set(name, type);
+    }
+    Q(yield* PartialClassMergeEvaluation(ctor as never, extension.node.ClassTail));
+  } finally {
+    popTypeParameterFrame();
+    context.LexicalEnvironment = priorEnvironment;
+    context.PrivateEnvironment = priorPrivate;
+  }
+}
+
+function* RegisterPartialClassStructure(primary: ParseNode.ClassDeclaration, node: ParseNode.ClassDeclaration): PlainEvaluator<void> {
+  const frame = new Map<string, TypeRecord>();
+  for (const parameter of [...(primary.TypeParameters?.TypeParameterList ?? []), ...(node.TypeParameters?.Captures ?? [])]) {
+    frame.set(parameter.BindingIdentifier.name, { Kind: 'parameter', Name: parameter.BindingIdentifier.name });
+  }
+  pushTypeParameterFrame(frame);
+  let types: Map<ParseNode, TypeRecord>;
+  try {
+    types = Q(yield* PartialPatternTypes(node));
+  } finally {
+    popTypeParameterFrame();
+  }
+  const published = PublishedClassTypeOf(node);
+  if (published?.Kind !== 'nominal') return undefined;
+  const parts = RuntimePartialContributions(primary);
+  if (!parts.some((part) => part.Declaration === node)) {
+    parts.push({ Declaration: node, Structure: () => published.Structure ?? null, Resolve: (type) => types.get(type) ?? null });
+  }
+  const updates: { record: TypeRecord, merged: TypeRecord }[] = [];
+  let conflict: string | undefined;
+  for (const record of NominalRecordsOf(primary)) {
+    updates.push({ record, merged: MergePartialStructures(record, parts, (key) => {
+      conflict ??= key;
+    }) });
+  }
+  if (conflict) return Throw.TypeError('$1 is already declared on this class', Value(conflict));
+  for (const { record, merged } of updates) Object.assign(record, merged);
+  return undefined;
+}
+
+/** #sec-partial-classes: extend existing applications and every later one. */
+export function* RegisterPartialClass(ctor: Value, node: ParseNode.ClassDeclaration): PlainEvaluator<void> {
+  const declaration = GenericClassDeclarationOf(ctor);
+  if (!declaration) {
+    Q(yield* PartialClassMergeEvaluation(ctor as never, node.ClassTail));
+    const type = LookupClassType(ctor as object);
+    if (type && isTypeObject(type) && type.TypeRecord.Kind === 'nominal' && type.TypeRecord.Declaration.type === 'ClassDeclaration') {
+      Q(yield* RegisterPartialClassStructure(type.TypeRecord.Declaration as ParseNode.ClassDeclaration, node));
+    }
+    return undefined;
+  }
+  const extension = { node, environment: surroundingAgent.runningExecutionContext.LexicalEnvironment,
+    privateEnvironment: surroundingAgent.runningExecutionContext.PrivateEnvironment };
+  const extensions = partialClassExtensions.get(declaration) ?? [];
+  if (extensions.some((entry) => entry.node === node && entry.environment === extension.environment)) return undefined;
+  for (const specialized of classSpecializations.get(declaration)?.values() ?? []) {
+    const type = LookupClassType(specialized);
+    if (type && isTypeObject(type) && type.TypeRecord.Kind === 'nominal') {
+      Q(yield* ApplyPartialClass(extension, declaration, specialized, type.TypeRecord.Arguments));
+    }
+  }
+  Q(yield* RegisterPartialClassStructure(declaration, node));
+  extensions.push(extension);
+  partialClassExtensions.set(declaration, extensions);
+  return undefined;
+}
+
 /** One specialization per declaration and argument list. */
 const classSpecializations = new Map<unknown, Map<string, Value>>();
 
@@ -2278,7 +2432,7 @@ function ClassCasesOf(declaration: ParseNode.ClassDeclaration): ParseNode.ClassD
     const node = ((item as { type?: string }).type === 'ExportDeclaration' ? (item as { Declaration?: unknown }).Declaration : item) as
       { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string } | null } | undefined;
     if (node && node !== (declaration as unknown) && node.type === (declaration as { type: string }).type && node.BindingIdentifier?.name === name
-      && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+      && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters' && !IsPartialDeclaration(node)) {
       out.push(node as unknown as ParseNode.ClassDeclaration);
     }
   }
@@ -2351,11 +2505,19 @@ function* SpecializeFromFrame(
   }
   const ctor = specialized.Value as Value;
   const published = PublishedClassTypeOf(body);
-  AssociateClassType(ctor, GetTypeObject({
+  let conflict: string | undefined;
+  const record = MergePartialStructures({
     ...(published?.Kind === 'nominal' ? published : {}),
     Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
-  } as never));
+  } as TypeRecord, RuntimePartialContributions(declaration), (key) => {
+    conflict ??= key;
+  });
+  if (conflict) return Throw.TypeError('$1 is already declared on this class', Value(conflict));
+  AssociateClassType(ctor, GetTypeObject(record));
   byArgs.set(cacheKey, ctor);
+  for (const extension of partialClassExtensions.get(declaration) ?? []) {
+    Q(yield* ApplyPartialClass(extension, declaration, ctor, argRecords));
+  }
   selectedDeclarations.set(ctor as object, body);
   if (body !== declaration) {
     caseBuiltConstructors.add(ctor as object);
@@ -2923,7 +3085,12 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       if (!nominalParams || nominalParams.length === 0) {
         return Throw.TypeError('$1 is not generic and takes no type arguments', displayType(record));
       }
-      return GetTypeObject(CanonicalizeType({ ...record, Arguments: argRecords }));
+      let conflict: string | undefined;
+      const applied = MergePartialStructures({ ...record, Arguments: argRecords }, RuntimePartialContributions(record.Declaration), (key) => {
+        conflict ??= key;
+      });
+      if (conflict) return Throw.TypeError('$1 is already declared on this interface', Value(conflict));
+      return GetTypeObject(CanonicalizeType(applied));
     }
     // A Type Object of any other kind - a primitive that consumed no argument
     // above, an object type, a union - is not generic either.

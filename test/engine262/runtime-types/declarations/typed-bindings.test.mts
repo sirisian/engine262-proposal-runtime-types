@@ -139,7 +139,7 @@ test('a declared initial is used where a position has one', () => {
 });
 
 test('a rest position contributes nothing to the default', () => {
-  expect(value('let t: [uint8, ...uint8]; String(t.length);')).toBe('1');
+  expect(value('let t: [uint8, ...[].<uint8>]; String(t.length);')).toBe('1');
 });
 
 test('a position with no default leaves the tuple without one', () => {

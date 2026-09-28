@@ -384,7 +384,7 @@ test('the constraint is still checked against the literal', () => {
   expectStaticTypeError('function f<T: uint8 | string>(a: T): T { return a; } f(true);');
   expectStaticTypeError('function f<T: uint8>(a: T): T { return a; } f(300);');
   // A parameter in two positions binds the join of both literals.
-  expect(evaluated('function add<T: uint8>(a: T, b: T): T { return a; } String(add(200, 100));')).toBe('200');
+  expect(evaluated('function add<T: type extends uint8>(a: T, b: T): T { return a; } String(add(200 := uint8, 100 := uint8));')).toBe('200');
 });
 
 test('an argument with no literal type contributes its own type', () => {

@@ -1,20 +1,17 @@
 import { test, expect } from 'vitest';
 import {
-  CompareSpecificity, SelectSpecialization, FindDuplicateCases, AnalyzeCallableGroup,
-  type CallableGroupHost, type CallableDeclaration, type SpecializationCase,
-} from '../../../../src/type-system/specialization-selection.mts';
-import type { PatternSlotParameter } from '../../../../src/type-system/specialization-patterns.mts';
-import {
   type M, app, val, uint8, uint16, uint32, str, type, param, host, list, resolve,
 } from './specialization-model.mts';
+import {
+  CompareSpecificity, SelectSpecialization, FindDuplicateCases, AnalyzeCallableGroup,
+  type CallableGroupHost, type CallableDeclaration, type SpecializationCase,
+} from '#self';
+import type { PatternSlotParameter } from '#self';
 import { Agent, ManagedRealm, setSurroundingAgent, Parser } from '#self';
-import type { ParseNode } from '#self';
 
 /**
- * Plan phase 4, the pure half: specificity, selection, and the callable-group
- * rules of section 3.8, driven directly over real parse nodes and the model
- * universe of specialization-model.mts. Neither the checker nor the run time
- * calls these yet; the tests pin the rules they will share.
+ * #sec-selectspecialization: specificity, selection, and callable groups,
+ * exercised directly over real parse nodes and a small model universe.
  */
 
 // `Tiny` admits uint8; `Small` admits uint8 and uint16.
@@ -42,7 +39,7 @@ const pair = [param('A'), param('B')];
 const c = (entries: string): SpecializationCase<M> => ({ List: list(entries), Label: `<${entries}>` });
 const compare = (a: string, b: string, primary: PatternSlotParameter<M>[] = pair, defaults?: (q: number) => M | undefined) => CompareSpecificity(c(a), c(b), primary, groupHost, defaults);
 
-test('section 6.1: the schematic Pair table', () => {
+test('specificity among Pair patterns', () => {
   expect(compare('const T, T', 'uint32, _')).toBe('incomparable');
   expect(compare('uint32, uint32', 'const T, T')).toBe('more');
   expect(compare('uint32, uint32', 'uint32, _')).toBe('more');

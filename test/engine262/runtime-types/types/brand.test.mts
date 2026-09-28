@@ -240,6 +240,6 @@ test('a brand over a string base behaves the same way', () => {
 });
 
 test('a generic bound accepts the brand and refuses the base', () => {
-  expect(evaluated(`${U}function f<T: U>(v: T) { return v; } String(f(U((7 := uint32))));`)).toBe('7');
-  expectThrown(`${U}function f<T: U>(v: T) { return v; } function g(n: uint32) { return f(n); } g((7 := uint32));`);
+  expect(evaluated(`${U}function f<T: type extends U>(v: T) { return v; } String(f(U((7 := uint32))));`)).toBe('7');
+  expectThrown(`${U}function f<T: type extends U>(v: T) { return v; } function g(n: uint32) { return f(n); } g((7 := uint32));`);
 });

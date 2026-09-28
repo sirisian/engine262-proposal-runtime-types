@@ -1,12 +1,12 @@
 /**
  * A small model universe for exercising the specialization matcher and the
- * selection rules built on it directly (plan phases 3 and 4). Patterns come from
+ * selection rules built on it directly. Patterns come from
  * the real parser; subjects are plain records, and every relation the matcher
  * delegates is supplied here. The universe is deliberately not the engine's
  * Type Records: what the tests pin is the matcher's and selector's own logic.
  */
-import {
-  type SpecializationMatchHost, type NestedConstructor, type PatternSlotParameter, type CaptureBindingRecord,
+import type {
+  SpecializationMatchHost, NestedConstructor, PatternSlotParameter, CaptureBindingRecord,
 } from '../../../../src/type-system/specialization-patterns.mts';
 import { Agent, ManagedRealm, setSurroundingAgent, Parser } from '#self';
 import type { ParseNode } from '#self';

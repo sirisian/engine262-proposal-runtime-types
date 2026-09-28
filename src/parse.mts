@@ -273,11 +273,11 @@ export function ParseRange(
  */
 function ReportOrphanClassCases(root: unknown, p: Parser): void {
   type ClassNode = { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string, OrphanHint?: string } | null,
-    ClassModifiers?: readonly string[] | null };
+    ClassModifiers?: readonly string[] | null, Partial?: boolean };
   const declarationOf = (item: unknown) => ((item as { type?: string })?.type === 'ExportDeclaration'
     ? (item as { Declaration?: unknown }).Declaration : item) as ClassNode | undefined;
   const isCase = (d: ClassNode | undefined): d is ClassNode => (d?.type === 'ClassDeclaration' || d?.type === 'TypeAliasDeclaration' || d?.type === 'InterfaceDeclaration') && !!d.TypeParameters
-    && d.TypeParameters.ListKind !== 'parameters' && !d.ClassModifiers?.includes('partial');
+    && d.TypeParameters.ListKind !== 'parameters' && !d.ClassModifiers?.includes('partial') && !d.Partial;
   const seen = new Set<object>();
   const visit = (v: unknown): void => {
     if (!v || typeof v !== 'object' || seen.has(v)) return;

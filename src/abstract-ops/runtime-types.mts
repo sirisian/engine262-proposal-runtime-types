@@ -2660,6 +2660,17 @@ export function* IsOfTypeNode(value: Value, node: ParseNode.Type): PlainEvaluato
 // consults the table before the numeric machinery, only when the left operand
 // is an Object, keeping the untyped path unaffected.
 const classOperatorTables = new WeakMap<object, Map<string, Value>>();
+const partialOperatorKeys = new WeakMap<object, Set<string>>();
+
+/** #sec-partial-classes: preserve operator entries from earlier declarations. */
+export function BeginPartialOperatorAddition(target: ObjectValue): () => void {
+  const previous = partialOperatorKeys.get(target);
+  partialOperatorKeys.set(target, new Set(classOperatorTables.get(target)?.keys()));
+  return () => {
+    if (previous) partialOperatorKeys.set(target, previous);
+    else partialOperatorKeys.delete(target);
+  };
+}
 
 export function RegisterClassOperator(proto: Value, opText: string, fn: Value): void {
   let table = classOperatorTables.get(proto as object);
@@ -2672,6 +2683,9 @@ export function RegisterClassOperator(proto: Value, opText: string, fn: Value): 
 
 /** #sec-user-defined-operators: typed declarations sharing a key form an overload set. */
 export function* AddClassOperator(proto: Value, key: string, fn: Value): PlainEvaluator<void> {
+  if (partialOperatorKeys.get(proto)?.has(key)) {
+    return Throw.TypeError('$1 is already declared on this class', Value(`operator ${key}`));
+  }
   const previous = classOperatorTables.get(proto)?.get(key);
   if (previous) {
     const functions = (previous as unknown as OverloadSlots).OverloadFunctions ?? [previous];

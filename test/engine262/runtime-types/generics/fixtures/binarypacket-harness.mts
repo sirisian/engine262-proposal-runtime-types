@@ -284,7 +284,7 @@ class PacketReader<Size: uint32 = 1400, HeaderSize: uint32 = 16, BufferBits: uin
 	#maximumBitIndex: uint32;
 
 	@doc('Constructs a reader over received bytes, e.g. a WebSocket message or a WebTransport datagram.')
-	constructor(buffer: [].<uint8>) {
+	constructor(buffer: Span.<uint8>) {
 		// No writer of this Size produces more; a larger input is a mismatch.
 		if (uint32(buffer.length) > Size) {
 			throw new RangeError('The packet is larger than this reader\\'s Size');

@@ -153,7 +153,7 @@ test('a REST position cannot be deleted either', () => {
   // delete is not a shortening. `pop` removes an element and leaves a shorter
   // array; `delete` leaves the length alone and puts a HOLE in it, and a hole
   // reads as undefined, which is not a value of the position's type.
-  const r = 'type R = [uint8, ...string]; let r: R = [1, "a", "b"]; ';
+  const r = 'type R = [uint8, ...[].<string>]; let r: R = [1, "a", "b"]; ';
   expectThrown(`${r} delete r[2];`);
   expect(evaluated(`${r} r[9] = "grown"; String(r[9]);`)).toBe('grown');
 });
@@ -186,8 +186,8 @@ test('shortening is not deleting', () => {
   expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t.pop();');
   expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t.length = 1;');
   // A rest collects any number, so shrinking to the fixed positions is fine.
-  expect(evaluated('type R = [uint8, ...string]; let r: R = [1, "a", "b"]; String(r.pop());')).toBe('b');
-  expectThrown('type R = [uint8, ...string]; let r: R = [1, "a"]; r.length = 0;');
+  expect(evaluated('type R = [uint8, ...[].<string>]; let r: R = [1, "a", "b"]; String(r.pop());')).toBe('b');
+  expectThrown('type R = [uint8, ...[].<string>]; let r: R = [1, "a"]; r.length = 0;');
 });
 
 test('a redefinition is checked against the type the position already has', () => {
@@ -223,7 +223,7 @@ test('a redefinition is checked against the type the position already has', () =
   expect(evaluated(`${arr} Object.defineProperty(a, 0, { value: 7 }); String(a[0]);`)).toBe('7');
   expect(evaluated(`${tup} Object.defineProperty(t, 1, { value: "ok" }); t[1];`)).toBe('ok');
   // A tuple position the rest collects takes the rest's type.
-  expect(evaluated('let r: [uint8, ...string] = [1, "a"]; Object.defineProperty(r, 1, { value: "b" }); r[1];')).toBe('b');
+  expect(evaluated('let r: [uint8, ...[].<string>] = [1, "a"]; Object.defineProperty(r, 1, { value: "b" }); r[1];')).toBe('b');
 
   // A descriptor that stores nothing has nothing to check.
   expect(evaluated(`${cls} Object.defineProperty(c, "n", { enumerable: false }); String(c.n);`)).toBe('1');
@@ -265,7 +265,7 @@ test('a redefinition is checked against the type the position already has', () =
   expect(evaluated(`${arr} Object.defineProperty(a, 0, { value: 7 }); String(a[0]);`)).toBe('7');
   expect(evaluated(`${tup} Object.defineProperty(t, 1, { value: "ok" }); t[1];`)).toBe('ok');
   // A tuple position the rest collects takes the rest's type.
-  expect(evaluated('let r: [uint8, ...string] = [1, "a"]; Object.defineProperty(r, 1, { value: "b" }); r[1];')).toBe('b');
+  expect(evaluated('let r: [uint8, ...[].<string>] = [1, "a"]; Object.defineProperty(r, 1, { value: "b" }); r[1];')).toBe('b');
 
   // A descriptor that stores nothing has nothing to check.
   expect(evaluated(`${cls} Object.defineProperty(c, "n", { enumerable: false }); String(c.n);`)).toBe('1');

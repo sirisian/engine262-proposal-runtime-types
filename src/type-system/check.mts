@@ -20,6 +20,7 @@ import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { IsPartialDeclaration, MergePartialStructures, PartialBindings, PublishedPartialContributions, type PartialStructureContribution } from './partial-types.mts';
 import { VectorMaskMethodSignature } from './vector-signatures.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 import { CompletionValues } from './completion-values.mts';
@@ -1194,7 +1195,7 @@ function withTopLevelClasses(module: ParseNode.Module, aliases: Map<string, unkn
     const declaration = (node.type === 'ExportDeclaration'
       ? (node.ClassDeclaration ?? node.Declaration)
       : node) as { type?: string, BindingIdentifier?: { name?: string } | null } | undefined;
-    if (declaration?.type !== 'ClassDeclaration') {
+    if (declaration?.type !== 'ClassDeclaration' || IsPartialDeclaration(declaration)) {
       continue;
     }
     const name = declaration.BindingIdentifier?.name;
@@ -2461,10 +2462,13 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
       } as Known;
     }
     case 'slice':
-    case 'reverse':
-    case 'sort':
     case 'toReversed':
     case 'toSorted':
+      // #sec-span-type: copying methods produce an owned array, including on a window.
+      return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0),
+        Return: { Kind: 'array', Element: element, Extent: 'dynamic' }, Untyped: false }] } as unknown as Known;
+    case 'reverse':
+    case 'sort':
       return { Kind: 'function', Signatures: [{ Parameters: shapes([anyType, anyType], 0), Return: receiver, Untyped: false }] } as unknown as Known;
     default:
       return null;
@@ -2664,7 +2668,7 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
     const named = declaration as { type?: string, BindingIdentifier?: { name?: string } } | undefined;
     if (named?.type === 'FunctionDeclaration' && typeof named.BindingIdentifier?.name === 'string') {
       builders.set(named.BindingIdentifier.name, declaration as ParseNode);
-    } else if (named?.type === 'ClassDeclaration' && typeof named.BindingIdentifier?.name === 'string') {
+    } else if (named?.type === 'ClassDeclaration' && !IsPartialDeclaration(declaration) && typeof named.BindingIdentifier?.name === 'string') {
       classes.set(named.BindingIdentifier.name, declaration as ParseNode);
     }
   }
@@ -3615,6 +3619,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const pushTypeParameterScopeOf = (declaration: ParseNode | null | undefined, only?: 'type-only'): boolean => {
+    if (declaration && IsPartialDeclaration(declaration)) {
+      const primary = partialPrimaryOf(declaration) as ParseNode.ClassDeclaration | undefined;
+      const captures = (declaration as ParseNode.ClassDeclaration).TypeParameters?.Captures ?? [];
+      const parameters = primary?.TypeParameters?.TypeParameterList ?? [];
+      return pushTypeParameterScopeOf({ TypeParameters: { TypeParameterList: [...parameters, ...captures] } } as unknown as ParseNode, only);
+    }
+
     const list = (declaration as unknown as {
       TypeParameters?: {
         TypeParameterList?: readonly {
@@ -5038,6 +5049,78 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * the same way (RuntimeTypesDeclarations.mts, Evaluate_RuntimeTypesBindingDeclaration).
    */
   const interfaceDeclarations = new Map<string, ParseNode[]>();
+  const partialDeclarations = new Set<ParseNode>();
+  const partialShapes = new Map<ParseNode, TypeRecord | null>();
+  const partialStaticShapes = new Map<ParseNode, TypeRecord | null>();
+  const partialStructuresInProgress = new Set<object>();
+  const partialPrimaryOf = (node: ParseNode): ParseNode | undefined => {
+    const name = (node as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name;
+    if (!name) return undefined;
+    const target = ResolveBindingDeclaration(node, name);
+    const binding = target?.node;
+    if (node.type === 'ClassDeclaration' && target?.kind === 'const' && target.initializer) {
+      const origins = invocationFact(target.initializer)?.classTargets;
+      if (origins?.length === 1 && !origins[0].arguments) return origins[0].declaration;
+    }
+    const primary = binding?.type === node.type && !IsPartialDeclaration(binding) ? binding
+      : node.type === 'InterfaceDeclaration' ? interfaceNodes.get(name) ?? (((lookupAlias(name) ?? (binding ? null : BoundTypeRecordForName(name))) as { Declaration?: ParseNode } | null)?.Declaration) : classNodes.get(name);
+    return primary !== node ? primary : undefined;
+  };
+  const partialContribution = (part: ParseNode, staticMembers = false): PartialStructureContribution => ({
+    Declaration: part as ParseNode.ClassDeclaration | ParseNode.InterfaceDeclaration,
+    Resolve: (node) => resolveType(node as ParseNode.Type),
+    Operator: (key) => {
+      if (part.type !== 'ClassDeclaration') return null;
+      const definitions = (part.ClassTail.ClassBody ?? []).filter((member): member is ParseNode.OperatorDefinition =>
+        member.type === 'OperatorDefinition' && !member.static && operatorTableKey(member) === key);
+      if (!definitions.length) return null;
+      const pushed = pushTypeParameterScopeOf(part);
+      try {
+        return { Kind: 'function', Signatures: definitions.map((operator) => ({
+          Parameters: (operator.FormalParameters ?? []).map((formal) => {
+            const p = formal as ParseNode.SingleNameBinding & { Ref?: boolean, Optional?: boolean };
+            return parameter(p.TypeAnnotation ? resolveType(p.TypeAnnotation.Type) ?? anyTypeRecord : anyTypeRecord, {
+              Name: p.BindingIdentifier?.name ?? '', Optional: p.Optional === true || !!p.Initializer,
+              Ref: p.Ref === true, Rest: formal.type === 'BindingRestElement',
+            });
+          }),
+          Return: operator.TypeAnnotation ? resolveType(operator.TypeAnnotation.Type) ?? anyTypeRecord : anyTypeRecord,
+          Untyped: !operator.TypeAnnotation && !(operator.FormalParameters ?? []).some((p) => (p as { TypeAnnotation?: unknown }).TypeAnnotation),
+        })) };
+      } finally {
+        if (pushed) typeParameterScopes.pop();
+      }
+    },
+    Structure: () => {
+      const shapes = staticMembers ? partialStaticShapes : partialShapes;
+      if (shapes.has(part)) return shapes.get(part)!;
+      const pushed = pushTypeParameterScopeOf(part);
+      try {
+        const record = staticMembers ? classObjectTypeOfNode(part)
+          : part.type === 'InterfaceDeclaration' ? interfaceTypeOfNode(part, [part]) : instanceTypeOf(part);
+        const structure = staticMembers ? record : record?.Kind === 'nominal' ? record.Structure ?? null : null;
+        shapes.set(part, structure);
+        return structure;
+      } finally {
+        if (pushed) typeParameterScopes.pop();
+      }
+    },
+  });
+  const withPartialStructure = (type: Known, staticMembers = false): Known => {
+    if (type?.Kind !== 'nominal' || partialStructuresInProgress.has(type.Declaration)) return type;
+    const local = [...partialDeclarations].filter((p) => partialPrimaryOf(p) === type.Declaration);
+    const published = PublishedPartialContributions(type.Declaration, staticMembers).filter((p) => !local.includes(p.Declaration));
+    if (local.length === 0 && published.length === 0) return type;
+    partialStructuresInProgress.add(type.Declaration);
+    try {
+      return MergePartialStructures(type, [...published, ...local.map((part) => partialContribution(part, staticMembers))], (key) => {
+        errors.push(Throw.StaticTypeError('$1 is already declared on this type', Value(key)).Value as ObjectValue);
+      });
+    } finally {
+      partialStructuresInProgress.delete(type.Declaration);
+    }
+  };
+
 
   const recordInterfaceDeclaration = (name: string, node: ParseNode): void => {
     const list = interfaceDeclarations.get(name);
@@ -6119,7 +6202,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const classObjectTypeOf = (name: string): Known => {
     const node = classNodes.get(name);
-    return node && !shadowedByProgram(name) ? classObjectTypeOfNode(node) : null;
+    if (!node || shadowedByProgram(name)) return null;
+    if (![...partialDeclarations].some((part) => partialPrimaryOf(part) === node)
+      && PublishedPartialContributions(node, true).length === 0) return classObjectTypeOfNode(node);
+    const own = classOverOwnParameters(node);
+    if (own?.Kind !== 'nominal') return classObjectTypeOfNode(node);
+    const merged = withPartialStructure({ ...own, Structure: classObjectTypeOfNode(node) ?? undefined }, true);
+    return merged?.Kind === 'nominal' ? merged.Structure ?? null : null;
   };
 
   const classObjectTypeOfNode = (node: ParseNode): Known => {
@@ -6176,6 +6265,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : null;
     classObjectTypeMemo.set(node, built);
     return built;
+  };
+
+  const lexicalClassType = (reference: ParseNode.IdentifierReference): Known => {
+    const binding = ResolveBindingDeclaration(reference, reference.name);
+    if (binding?.node.type === 'ClassDeclaration' || binding?.node.type === 'ClassExpression') return instanceTypeOf(binding.node);
+    if (binding && binding.kind !== 'import') return null;
+    return classTypeOf(reference.name);
   };
 
   const classTypeOf = (name: string): Known => {
@@ -7095,7 +7191,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return (siblings ?? []).map((item) => ((item as { type?: string }).type === 'ExportDeclaration' ? (item as { Declaration?: unknown }).Declaration : item) as
       { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string } | null } | undefined)
       .filter((d) => d !== undefined && d !== (primary as unknown) && d.type === (primary as { type?: string }).type && d.BindingIdentifier?.name === name
-        && !!d.TypeParameters && d.TypeParameters.ListKind !== 'parameters') as unknown as ParseNode[];
+        && !!d.TypeParameters && d.TypeParameters.ListKind !== 'parameters' && !IsPartialDeclaration(d)) as unknown as ParseNode[];
   };
   /**
    * The case an alias application selects (the function rule), with its
@@ -7387,7 +7483,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               : undefined);
           if (!own) {
             if (!p.optional) {
-              const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(`${nm}`)) as ThrowCompletion;
+              const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(displayType(it))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             continue;
@@ -9643,6 +9739,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const resolveType = (node: ParseNode.Type): Known => {
+    // A pattern's constructor is a family, not a bare application of it.
+    if ((node as ParseNode).type === 'TypeName') {
+      const name = node as unknown as ParseNode.TypeName;
+      if (name.MemberNames.length) return null;
+      const text = name.IdentifierReference.name;
+      const binding = ResolveBindingDeclaration(name.IdentifierReference, text)?.node;
+      if (binding?.type === 'ClassDeclaration' || binding?.type === 'ClassExpression'
+        || binding?.type === 'InterfaceDeclaration') {
+        return binding.type === 'InterfaceDeclaration' ? interfaceTypeOfNode(binding, [binding]) : instanceTypeOf(binding);
+      }
+      if (binding) {
+        const origins = invocationFact(name.IdentifierReference)?.classTargets;
+        return origins?.length === 1 ? instanceTypeOf(origins[0].declaration) : null;
+      }
+      return classTypeOf(text) ?? interfaceTypeOf(text) ?? libraryTypeRecord(text);
+    }
     const pendingDeclarationDefault = deferredDeclarationDefault(node, (name) => typeParameterInScope(name) ? { Kind: 'parameter', Name: name } : null);
     if (pendingDeclarationDefault) return pendingDeclarationDefault;
     try {
@@ -9691,7 +9803,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       checkClosedDefaults(evaluated);
       return evaluated;
     }
-    const result = resolveTypeStructure(node);
+    const result = withPartialStructure(resolveTypeStructure(node));
     checkClosedDefaults(result);
     const invalidRest = invalidTupleRest(result)
       ?? (result?.Kind === 'nominal' ? invalidTupleRest(structureOf(result)) : null);
@@ -10783,7 +10895,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         let constantExtent: number | undefined;
         if (node.ArrayExtent) {
           const extentName = node.ArrayExtent.type === 'IdentifierReference' ? node.ArrayExtent.name : undefined;
-          if (extentName && typeParameterInScope(extentName)) {
+          let declaredExtent = false;
+          if (extentName) {
+            for (let scope: ParseNode | undefined = node.parent; scope; scope = scope.parent) {
+              const parameters = (scope as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList;
+              const parameter = parameters?.find((p) => p.BindingIdentifier.name === extentName);
+              if (parameter) {
+                declaredExtent = !!parameter.IsValueParameter;
+                break;
+              }
+            }
+          }
+          if (extentName && (typeParameterInScope(extentName) || declaredExtent)) {
             parameterExtent = parameterTypeRecord(extentName, typeParameterConstraintOf(extentName) ?? undefined);
           } else {
             const exact = foldConstant(node.ArrayExtent);
@@ -11130,6 +11253,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const structureOf = (t: Known): Known => {
+    t = withPartialStructure(t);
     if (t && t.Kind === 'nominal') {
       const s = (t as unknown as { Structure?: TypeRecord }).Structure;
       if (!s) {
@@ -13860,7 +13984,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // ordinary member: the run time does not refuse an undeclared property
         // either, so the case would be missed entirely.
         const targetIsInterface = contextual.Kind === 'nominal'
-          && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration';
+          && ['InterfaceDeclaration', 'MetadataInterface'].includes((contextual as { Declaration?: { type?: string } }).Declaration?.type ?? '');
         //
         // A key an INDEX SIGNATURE admits is still not excess: an
         // interface's signatures survive into the structure, and the rule below
@@ -14330,6 +14454,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     while (receiver?.Kind === 'nominal' && !seen.has(receiver)) {
       seen.add(receiver);
       const declaration = receiver.Declaration as ParseNode | undefined;
+      const local = [...partialDeclarations].filter((part) => partialPrimaryOf(part) === declaration);
+      const additions = [...PublishedPartialContributions(receiver.Declaration).filter((p) => !local.includes(p.Declaration)),
+        ...local.map((part) => partialContribution(part))];
+      for (const part of additions) {
+        const bindings = PartialBindings(receiver, part);
+        if (!bindings) continue;
+        const operator = part.Operator?.(key);
+        if (operator) return substituteTypeParameters(operator, bindings);
+      }
       const body = (declaration as ParseNode.ClassDeclaration | undefined)?.ClassTail?.ClassBody ?? [];
       let definitions = body.filter((member): member is ParseNode.OperatorDefinition =>
         member.type === 'OperatorDefinition' && !member.static && operatorTableKey(member) === key);
@@ -15216,7 +15349,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
-    const type = inferStaticType(node);
+    const type = withPartialStructure(inferStaticType(node));
     return node.type === 'CallExpression' ? callValueType(type) : type;
   });
 
@@ -15668,7 +15801,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const compositeArgs = specialization.TypeArguments.TypeArgumentList.map((a) => resolveType(a as ParseNode.Type));
           if (compositeArgs.every((a) => a !== null)) checkCompositeArgument(compositeArgs as TypeRecord[]);
         }
-        const classTarget = bare?.type === 'IdentifierReference' ? classTypeOf(bare.name) : null;
+        const classTarget = bare?.type === 'IdentifierReference' ? lexicalClassType(bare) : null;
         if (classTarget?.Kind === 'nominal') {
           const declaration = classTarget.Declaration;
           const params = (declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } }).TypeParameters?.TypeParameterList;
@@ -15676,6 +15809,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const bindings = new Map<string, TypeRecord>();
             bindExplicitTypeArguments(typeParameterRecordsOf(params), specialization.TypeArguments.TypeArgumentList, bindings);
             checkSpecializedDeclaration(declaration, bindings);
+            if ([...partialDeclarations].some((part) => partialPrimaryOf(part) === declaration)
+              || PublishedPartialContributions(declaration, true).length > 0) {
+              const merged = withPartialStructure({ ...classTarget,
+                Arguments: params.map((p) => bindings.get(p.BindingIdentifier.name) ?? parameterTypeRecord(p.BindingIdentifier.name)),
+                Structure: classObjectTypeOfNode(declaration as ParseNode) ?? undefined }, true);
+              return merged?.Kind === 'nominal' ? merged.Structure ?? null : null;
+            }
           } else if (specialization.TypeArguments.TypeArgumentList.every((a) => resolveType(a as ParseNode.Type) !== null)) {
             // #sec-type-arguments-and-placement-new-in-expression-position:
             // "Where the expression's Static Type shows a value that is not
@@ -16956,7 +17096,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const target = patternExpression((node as { MemberExpression?: ParseNode }).MemberExpression);
         if (target && target.type === 'IdentifierReference') {
           const targetName = (target as { name: string }).name;
-          const declared = classTypeOf(targetName);
+          const declared = lexicalClassType(target);
           if (declared) {
             // A GENERIC class constructed bare yields the specialization its
             // context, arguments and defaults name (constructionArguments); a
@@ -21503,6 +21643,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Names only. The instance type is still built lazily and memoised by
     // `instanceTypeOf`, so nothing is resolved earlier than before - only found.
     for (const n of list) {
+      if (IsPartialDeclaration(n)) {
+        partialDeclarations.add(n);
+        continue;
+      }
       if (n.type === 'ClassDeclaration') {
         const className = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         // A case (phase 5) joins its family and never names it.
@@ -21817,24 +21961,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkOperatorAmbiguity(n);
         checkPartialClass(n);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        const partialOfKnown = ((n as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('partial')
-          && !!name && classNodes.has(name) && classNodes.get(name) !== n;
-        const reopened = partialOfKnown ? classNodes.get(name!) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } : undefined;
-        // A case (phase 5) joins its family and never names it; it is checked
-        // against the family's public contract instead.
-        if (name && ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') === 'parameters') {
-          classNodes.set(name, n);
-        } else if (name && classNodes.has(name)) {
-          checkCaseContract(n as ParseNode, classNodes.get(name) as ParseNode, name);
-        }
-        // A partial of a GENERIC class re-opens it with the class's own
-        // parameters in scope (plan OQ1 A). The run time does not yet carry a
-        // partial's members to a specialization - `new Box.<uint8>()` sees none
-        // of them - so it is reported as unsupported rather than accepted and
-        // silently dropped, as #sec-specialization-lists asks of a
-        // specialization an implementation cannot select.
-        if (reopened && (reopened.TypeParameters?.TypeParameterList?.length ?? 0) > 0) {
-          errors.push(Throw.StaticTypeError('a partial declaration of the generic class $1 is not supported yet: its members would not reach a specialization', Value(name!)).Value as ObjectValue);
+        if (name && !IsPartialDeclaration(n)) {
+          if ((n.TypeParameters?.ListKind ?? 'parameters') === 'parameters') classNodes.set(name, n);
+          else if (classNodes.has(name)) checkCaseContract(n, classNodes.get(name)!, name);
         }
         // `ClassModifiers` is a list of STRINGS, not of nodes.
         const modifiers = (n as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? [];
@@ -21859,14 +21988,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkVariancePositions(n);
         const name = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
         if (name) {
-          // As for a class: a partial of a GENERIC interface would see the
-          // interface's parameters (plan OQ1 A), but its members are not merged
-          // into an application - `I.<uint8>` read the partial's members alone -
-          // so it is reported as unsupported rather than mis-merged.
-          const reopened = (n as { Partial?: boolean }).Partial ? interfaceNodes.get(name) as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined : undefined;
-          if (reopened && reopened !== n && (reopened.TypeParameters?.TypeParameterList?.length ?? 0) > 0) {
-            errors.push(Throw.StaticTypeError('a partial declaration of the generic interface $1 is not supported yet: its members would not reach an application', Value(name)).Value as ObjectValue);
-          }
+          if (IsPartialDeclaration(n)) continue;
           if (((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters') {
             // An interface CASE (phase 5): checked as a refinement of its primary.
             if (interfaceNodes.has(name)) checkInterfaceRefinement(n as ParseNode, interfaceNodes.get(name) as ParseNode, name);
@@ -21874,6 +21996,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             recordInterfaceDeclaration(name, n);
             interfaceNodes.set(name, n);
           }
+        }
+      }
+    }
+    for (const n of list) {
+      if (n.type === 'InterfaceDeclaration') {
+        if (n.Partial) partialContribution(n).Structure();
+        else if (!n.TypeParameters) withPartialStructure(interfaceTypeOfNode(n, [n]));
+      }
+    }
+    if (root.type === 'Module' && moduleCheckInputs.has(root)) {
+      for (const part of list.filter(IsPartialDeclaration)) {
+        const primary = partialPrimaryOf(part);
+        if (!primary) continue;
+        let parent = part.parent;
+        while (parent && parent !== root && parent.type !== 'Block' && parent.type !== 'FunctionBody') parent = parent.parent;
+        if (parent !== root) continue;
+        for (const staticMembers of part.type === 'ClassDeclaration' ? [false, true] : [false]) {
+          const contributions = PublishedPartialContributions(primary, staticMembers);
+          const contribution = partialContribution(part, staticMembers);
+          const prior = contributions.findIndex((entry) => entry.Declaration === part);
+          if (prior === -1) contributions.push(contribution); else contributions[prior] = contribution;
         }
       }
     }
@@ -24481,8 +24624,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const arrow = arg as unknown as { ConciseBody?: ParseNode, ArrowParameters?: readonly ParseNode[] };
             const body = arrow.ConciseBody;
             if (body && body.type !== 'FunctionBody') {
+              const parameters = param.Signatures[0].Parameters;
               pushBlock(() => {
-                param.Signatures[0].Parameters.forEach((pr, pi) => {
+                parameters.forEach((pr, pi) => {
                   const pt = pr.Type;
                   const p = arrow.ArrowParameters?.[pi];
                   if (pt && p && p.type === 'SingleNameBinding' && (p as ParseNode.SingleNameBinding).BindingIdentifier) {
@@ -24500,8 +24644,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // staticTypeIn uses them to build the callback's own type.
         }
         if (mentionsTypeParameter(param)) {
-          // Unbound: nothing to check against until a binding exists.
-          return;
+          // #sec-generics: only parameters owned by this callee are inferable.
+          // An enclosing parameter is fixed throughout the generic body.
+          const inferable = new Set((generic ?? []).map((p) => p.Name));
+          const seen = new Set<object>();
+          const hasFixedParameter = (value: unknown): boolean => {
+            if (!value || typeof value !== 'object' || seen.has(value)) return false;
+            seen.add(value);
+            const record = value as { Kind?: string, Name?: string };
+            if (record.Kind === 'parameter') return !!record.Name && !inferable.has(record.Name) && typeParameterInScope(record.Name);
+            return Object.entries(value).some(([key, child]) => !['Declaration', 'Constructor', 'parent'].includes(key) && hasFixedParameter(child));
+          };
+          if (!hasFixedParameter(param)) return;
+          const pending = new Map((generic ?? []).filter((p) => !bindings.has(p.Name))
+            .map((p) => [p.Name, anyTypeRecord]));
+          if (pending.size) param = substituteTypeParameters(param, pending);
         }
         // #sec-type-annotations: an optional parameter admits undefined,
         // whether the call supplies it explicitly or omits the argument.
@@ -27524,7 +27681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         while (bareTarget?.type === 'ParenthesizedExpression' || bareTarget?.type === 'TypeArgumentsExpression') {
           bareTarget = bareTarget.Expression;
         }
-        const namedInstance = bareTarget?.type === 'IdentifierReference' ? classTypeOf(bareTarget.name) : null;
+        const namedInstance = bareTarget?.type === 'IdentifierReference' ? lexicalClassType(bareTarget) : null;
         if (target) checkInvocation(target, true);
         // A VALUE OF A PRIMITIVE TYPE IS NOT A CONSTRUCTOR, for the reason a
         // value of one is not callable: `new n()` for a `uint8` n was the run
@@ -27583,7 +27740,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
           }).TypeArguments?.TypeArgumentList ?? [];
           const named = inner && (inner as { type?: string }).type === 'IdentifierReference'
-            ? classTypeOf((inner as unknown as { name: string }).name)
+            ? lexicalClassType(inner as ParseNode.IdentifierReference)
             : null;
           const classDecl = named && named.Kind === 'nominal'
             ? (named as unknown as { Declaration?: ParseNode }).Declaration
@@ -27691,21 +27848,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               Return: instance,
             }));
             checkCallArguments({ CallExpression: target, Arguments: ne.Arguments }, { Kind: 'function', Signatures: signatures } as TypeRecord, n);
-            // N1: at the class's own specialization its parameters are FIXED, not
-            // inferable, so an argument meets a parameter typed over them with the
-            // relation a binding or a return uses - `uint16` does not reach `T`,
-            // nor `U` - which the general call check cannot apply, since there a
-            // parameter's `T` is the callee's own, still to be inferred. Positional
-            // arguments against a single signature; the others take the general path.
-            if (own && signatures.length === 1 && Array.isArray(ne.Arguments)
-              && (ne.Arguments as readonly ParseNode[]).every((a) => a.type !== 'AssignmentRestElement' && a.type !== 'NamedArgument')) {
-              const parameters = signatures[0]!.Parameters;
-              (ne.Arguments as readonly ParseNode[]).forEach((arg, i) => {
-                const parameter = parameters[i] as { Type?: Known } | undefined;
-                if (!parameter?.Type || !mentionsTypeParameter(parameter.Type as TypeRecord)) return;
-                withProvenance(arg, () => requireAssignable(argumentStaticType(arg, parameter.Type as Known), parameter.Type as Known));
-              });
-            }
           }
         }
         walk(ne.MemberExpression);
@@ -28437,7 +28579,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // for a bare name in a type position: a constructor's `this.a = a` for
         // `class A<T = uint8> { a: T; constructor(a: T) }` compares a `T` with
         // a `T`, not with a `uint8`.
-        const instanceType: Known = classOverOwnParameters(n);
+        let instanceType: Known = classOverOwnParameters(n);
+        if (IsPartialDeclaration(n)) {
+          const primary = partialPrimaryOf(n);
+          if (primary) {
+            const scope = pushTypeParameterScopeOf(n);
+            try {
+              const own = classOverOwnParameters(primary);
+              if (own?.Kind === 'nominal') {
+                const patterns = n.TypeParameters?.SpecializationEntryList ?? [];
+                instanceType = withPartialStructure({ ...own, Arguments: own.Arguments.map((argument, i) => {
+                  const pattern = patterns[i]?.Pattern;
+                  if (!pattern || (pattern.type === 'TypeReference' && pattern.TypeName.IdentifierReference.name === '_')) return argument;
+                  if (pattern.type === 'CaptureBinding') return { Kind: 'parameter', Name: pattern.BindingIdentifier.name } as TypeRecord;
+                  return resolveType(pattern as ParseNode.Type) ?? argument;
+                }) });
+              }
+            } finally {
+              if (scope) typeParameterScopes.pop();
+            }
+          }
+        }
         if (instanceType) {
           thisTypeFrames.push(instanceType);
         }

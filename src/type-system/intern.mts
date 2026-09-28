@@ -540,6 +540,22 @@ export function isClassTypeObject(value: unknown): boolean {
   return record.Kind === 'nominal' && record.Constructor === value;
 }
 
+/** Existing applications retain identity when a partial interface is loaded. */
+export function NominalRecordsOf(declaration: object): TypeRecord[] {
+  return (internTables.get(surroundingAgent) ?? []).map((object) => object.TypeRecord)
+    .filter((record) => record.Kind === 'nominal' && record.Declaration === declaration);
+}
+
+/** Complete a forward nominal record without replacing an already published type object. */
+function completeNominalRecord(known: TypeRecord, supplied: TypeRecord): void {
+  if (known.Kind !== 'nominal' || supplied.Kind !== 'nominal') return;
+  for (const key of ['Constructor', 'Structure', 'Implements', 'Base', 'InstanceFieldKeys'] as const) {
+    if (known[key] === undefined && supplied[key] !== undefined) {
+      (known as unknown as Record<string, unknown>)[key] = supplied[key];
+    }
+  }
+}
+
 export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { readonly '%Type.prototype%': ObjectValue } }): TypeObject {
   const canonical = CanonicalizeType(t);
   // A bare NON-GENERIC class type IS its constructor.
@@ -571,6 +587,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
         ? own
         : stampedClasses.get(nominal.Declaration as unknown as object);
       if (stamped !== undefined) {
+        completeNominalRecord((stamped as TypeObject).TypeRecord, canonical);
         return stamped as TypeObject;
       }
     }
@@ -601,11 +618,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       // The later, more complete record COMPLETES the earlier one rather than
       // replacing it, so every reference already handed out stays valid - which
       // is what interning is for.
-      const known = existing.TypeRecord as { Constructor?: unknown };
-      const supplied = canonical as { Constructor?: unknown };
-      if (known.Constructor === undefined && supplied.Constructor !== undefined) {
-        known.Constructor = supplied.Constructor;
-      }
+      completeNominalRecord(existing.TypeRecord, canonical);
       return existing;
     }
   }

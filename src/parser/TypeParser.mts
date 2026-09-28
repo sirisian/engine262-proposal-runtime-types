@@ -947,7 +947,7 @@ export abstract class TypeParser extends ExpressionParser {
     // declaration has one primary elsewhere, so its list never declares
     // parameters of its own.
     if (list.ListKind === 'parameters' && context === 'partial') {
-      this.addEarlyError(Throw.SyntaxError('$1', 'a `partial` declaration adds to a family whose primary declares its parameters; its list is a specialization list, which is not supported yet'), list);
+      this.addEarlyError(Throw.SyntaxError('$1', 'a `partial` declaration adds to a family whose primary declares its parameters; its list must be a specialization pattern'), list);
       return;
     }
     if (list.ListKind === 'parameters') {
@@ -987,7 +987,7 @@ export abstract class TypeParser extends ExpressionParser {
     // class expression has no family to join, and a partial class is an
     // additive extension that must not become a replacement (plan 6.3), so both
     // keep the error below.
-    if (context === 'class' || context === 'alias' || context === 'interface') {
+    if (context === 'class' || context === 'alias' || context === 'interface' || context === 'partial') {
       // Whether the case has a primary is known only once its statement list
       // is complete; the orphan-case pass (parse.mts) reports it, with this hint.
       (list as { OrphanHint?: string }).OrphanHint = hint;

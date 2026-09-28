@@ -57,9 +57,9 @@ test('unannotated functions are untouched', () => {
 });
 
 test('tuple rest elements match', () => {
-  expect(evaluated('type T = [uint8, ...string]; ([(1 := uint8), "a", "b"] instanceof T) && !([(1 := uint8), "a", 3] instanceof T) ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type T = [uint8, ...string]; ([(1 := uint8)] instanceof T) ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type T = [uint8, ...string]; !([] instanceof T) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type T = [uint8, ...[].<string>]; ([(1 := uint8), "a", "b"] instanceof T) && !([(1 := uint8), "a", 3] instanceof T) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type T = [uint8, ...[].<string>]; ([(1 := uint8)] instanceof T) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type T = [uint8, ...[].<string>]; !([] instanceof T) ? "ok" : "no";')).toBe('ok');
 });
 
 test('class nominal membership via the prototype chain', () => {

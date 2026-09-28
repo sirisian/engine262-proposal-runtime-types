@@ -274,7 +274,13 @@ export abstract class ModuleParser extends StatementParser {
           break;
         }
         default:
-          if (this.test('let')) {
+          if (surroundingAgent.feature('runtime-types') && this.test('type')) {
+            node.Declaration = this.parseTypeAliasDeclaration();
+            this.scope.declare(node.Declaration, 'export');
+          } else if (surroundingAgent.feature('runtime-types') && this.test('interface')) {
+            node.Declaration = this.parseInterfaceDeclaration();
+            this.scope.declare(node.Declaration, 'export');
+          } else if (this.test('let')) {
             node.Declaration = this.parseLexicalDeclaration();
             this.scope.declare(node.Declaration, 'export');
           } else if (this.test('async') && this.testAhead(Token.FUNCTION) && !this.peekAhead().hadLineTerminatorBefore) {

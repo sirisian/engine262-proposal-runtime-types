@@ -37,10 +37,6 @@ test('an alias case belongs to an alias primary in its own statement list', () =
   expect(evaluated(`${A} "ok";`)).toBe('ok');
 });
 
-test('a pattern the host cannot expose is a diagnostic, not a host crash', () => {
-  // The matcher throws for `Map.<string, const E>`, which names a library
-  // nominal whose arguments no pattern exposes here; static case selection
-  // did not catch it, and the host process crashed.
-  expectThrown('function f<T: type>(): string { return "p"; } function f<Map.<string, const E>>(): string { return "map"; } f.<Map.<string, uint8>>();',
-    '`Map` names no constructor whose arguments a pattern can expose');
+test('a library nominal pattern exposes its declared arguments', () => {
+  expect(evaluated('function f<T: type>(): string { return "p"; } function f<Map.<string, const E>>(): string { return "map"; } f.<Map.<string, uint8>>();')).toBe('map');
 });

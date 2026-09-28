@@ -131,7 +131,7 @@ function declarationInList(items: readonly unknown[], name: string): BindingDecl
         if (FUNCTION_DECLARATIONS.has(item.type) && (item.BindingIdentifier as { name?: string } | null)?.name === name) {
           return { kind: 'function', node: item };
         }
-        if (TYPE_DECLARATIONS.has(item.type) && (item.BindingIdentifier as { name?: string } | null)?.name === name) {
+        if (TYPE_DECLARATIONS.has(item.type) && !item.Partial && (item.BindingIdentifier as { name?: string } | null)?.name === name) {
           return { kind: 'type', node: item };
         }
     }

@@ -1,17 +1,16 @@
 import { test, expect } from 'vitest';
 import {
-  MatchSpecializationList, MatchSpecializationPattern, ValidateSpecializationList,
-  SpecializationPatternError, type PatternSlotParameter,
-} from '../../../../src/type-system/specialization-patterns.mts';
-import {
   type M, prim, app, seq, arr, val, uint8, uint16, uint32, uint64, str, show, param, host, list, bindings,
 } from './specialization-model.mts';
+import {
+  MatchSpecializationList, MatchSpecializationPattern, ValidateSpecializationList,
+  SpecializationPatternError, type PatternSlotParameter,
+} from '#self';
 import type { ParseNode } from '#self';
 
 /**
  * proposal-runtime-types #sec-matching-specialization-lists, exercised
- * directly (plan phase 3, C04-C08, C16). Selection is not implemented, so no
- * program can reach the matcher yet; these tests drive its entry points over
+ * directly; these tests drive its entry points over
  * patterns the real parser produced and subjects of a small model universe.
  *
  * The universe is deliberately not the engine's Type Records: what is under
@@ -23,7 +22,7 @@ import type { ParseNode } from '#self';
 const pairPrimary = [param('A'), param('B')];
 const storePrimary = [param('T')];
 
-test('C03: equivalent nested spellings normalize to one pattern', () => {
+test('equivalent nested spellings normalize to one pattern', () => {
   const spellings = [
     'Map.<string, const E>',
     'Map.<K: string, V: const E>',
@@ -38,7 +37,7 @@ test('C03: equivalent nested spellings normalize to one pattern', () => {
   }
 });
 
-test('C04: a repeated capture is an equality, SameType for types', () => {
+test('a repeated capture is an equality, SameType for types', () => {
   const l = list('const T, T');
   expect(bindings(MatchSpecializationList(l, pairPrimary, [uint8, uint8], host))).toEqual({ T: 'uint8' });
   expect(bindings(MatchSpecializationList(l, pairPrimary, [uint8, uint16], host))).toBe('no-match');
@@ -46,7 +45,7 @@ test('C04: a repeated capture is an equality, SameType for types', () => {
   expect(bindings(MatchSpecializationList(list('const L, const R'), pairPrimary, [uint8, uint16], host))).toEqual({ L: 'uint8', R: 'uint16' });
 });
 
-test('C06: a repeated value capture compares by SameValue', () => {
+test('a repeated value capture compares by SameValue', () => {
   const dims = [param('R', { Domain: uint32 }), param('C', { Domain: uint32 })];
   const l = list('const N, N');
   expect(bindings(MatchSpecializationList(l, dims, [val(4), val(4)], host))).toEqual({ N: '4' });
@@ -55,7 +54,7 @@ test('C06: a repeated value capture compares by SameValue', () => {
   expect(bindings(MatchSpecializationList(l, dims, [val(0), val(-0)], host))).toBe('no-match');
 });
 
-test('C05: a use may precede its declaration, in text and in parameter order', () => {
+test('a use may precede its declaration, in text and in parameter order', () => {
   // K is matched first, so E is bound there and V compared against it.
   const l = list('Map.<V: E, K: const E>');
   expect(bindings(MatchSpecializationList(l, storePrimary, [app('Map', uint8, uint8)], host))).toEqual({ E: 'uint8' });
@@ -88,7 +87,7 @@ test('an omitted entry stands for the default, and `_` for anything', () => {
   expect(bindings(MatchSpecializationList(list('Box.<const T, _>'), storePrimary, [app('Box', uint8, val(8))], host))).toEqual({ T: 'uint8' });
 });
 
-test('C06: packs capture runs, and a repeated pack compares length and elements', () => {
+test('packs capture runs, and a repeated pack compares length and elements', () => {
   const tuples = [app('Tuple', seq(uint8, str)), app('Tuple', seq(uint8, str))];
   const append = list('Tuple.<...const Ts>, Tuple.<...Ts>');
   expect(bindings(MatchSpecializationList(append, pairPrimary, tuples, host))).toEqual({ Ts: '[uint8, string]' });
@@ -108,7 +107,7 @@ test('C06: packs capture runs, and a repeated pack compares length and elements'
     .toThrow(SpecializationPatternError);
 });
 
-test('C08: arrays expose extent and element, and keep fixed apart from dynamic', () => {
+test('arrays expose extent and element, and keep fixed apart from dynamic', () => {
   const fixed = list('[const N].<const E>');
   expect(bindings(MatchSpecializationList(fixed, storePrimary, [arr(val(4), uint8)], host))).toEqual({ N: '4', E: 'uint8' });
   expect(bindings(MatchSpecializationList(fixed, storePrimary, [arr('dynamic', uint8)], host))).toBe('no-match');
@@ -130,7 +129,7 @@ test('C08/C09: forward computations run after structural positions; bounds last'
   expect(bindings(MatchSpecializationList(bounded, pairPrimary, [uint32, str], host))).toBe('no-match');
 });
 
-test('C16: a metadata position binds the metadata of the written meta type', () => {
+test('a metadata position binds the metadata of the written meta type', () => {
   const l = list('Tagged.<const D: Dim>');
   const tagged = app('Tagged', prim('float32', { Dim: val(3) }));
   expect(bindings(MatchSpecializationList(l, storePrimary, [tagged], host))).toEqual({ D: '3' });

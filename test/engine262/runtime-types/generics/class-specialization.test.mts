@@ -42,8 +42,8 @@ test('a case belongs to the primary declared in its own statement list', () => {
   expectThrown('class B<uint8> {}', 'no `class B<...>` in this statement list declares the family it would specialize');
   expectThrown('{ class Box<T: type> {} } class Box<uint32> {}', 'no `class Box<...>` in this statement list');
   expectThrown('class Pair<const T, T> {}', 'a capture, `const T`, belongs to a specialization list');
-  // An additive partial class, and a class expression, may not specialize.
-  expectThrown('partial class Box<boolean> {}', 'has no domain');
+  // A partial requires an existing target; a class expression declares parameters.
+  expectThrown('partial class Box<boolean> {}', 'not defined');
   expectThrown('class Box<T: type> {} const X = class Box<boolean> {};', 'declares parameters only');
 });
 

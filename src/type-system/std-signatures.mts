@@ -275,7 +275,7 @@ export const collectionMethodSignature = (library: string, name: string, args: r
       // here while `union` and `symmetricDifference` cannot.
       //
       // The `other` parameter is bound at `Set.<any>`, the COLLECTION FAMILY
-      // TOP. The design writes `union<U>(other: Set.<U>)`, and this is the
+      // TOP. The design writes `union<U: type>(other: Set.<U>)`, and this is the
       // spelling of "a Set of some element type" - the thing the checker
       // previously had no way to say, so the parameter was left ~any~ and
       // `a.union(1)` type-checked.
@@ -422,8 +422,8 @@ export const promiseMethodSignature = (name: string, resolution: TypeRecord, rej
  * construction is checked against its `constructor` signatures, and a library
  * construction against nothing, so `new Proxy.<P>(target, 5)` reached the run
  * time before anything asked what a handler is. TypeScript reaches the same
- * check through an ordinary declared signature - `new <T extends object>(target:
- * T, handler: ProxyHandler<T>): T` - with no special case anywhere, and that is
+ * check through an ordinary declared signature - `new <T: type extends object>(target:
+ * T, handler: ProxyHandler.<T>): T` - with no special case anywhere, and that is
  * the shape here: one table, read by the construction check, that any library
  * constructor may join.
  *

@@ -23,7 +23,7 @@ import { skipDebugger } from '../evaluator.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { Value } from '../value.mts';
-import { builtinTypeRecord, makePrimitive, type TypeRecord, type MetadataRecord } from './records.mts';
+import { builtinTypeRecord, makePrimitive, CanonicalWidthArgument, substituteTypeParameters, type TypeRecord, type MetadataRecord } from './records.mts';
 import { SameType, IsAssignable } from './relations.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
 import {
@@ -33,6 +33,8 @@ import {
 import type { CallableGroupHost } from './specialization-selection.mts';
 import { MetadataObjectFromType } from './runtime.mts';
 import { CanonicalizeType } from './intern.mts';
+import { libraryTypeParameterNames, orderTypeArguments, typeArgumentNameOf } from './type-argument-order.mts';
+import { intrinsicParameters } from './intrinsic-generics.mts';
 
 type Argument = TypeRecord | number;
 
@@ -196,6 +198,33 @@ export function InstantiateComponentType(
     }
     return resolve(node);
   }
+  if (node.type === 'TypeReference' && node.TypeArguments) {
+    const family = resolve(node.TypeName as unknown as ParseNode);
+    if (family?.Kind === 'nominal') {
+      const parameters = (family.Declaration as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList;
+      const intrinsic = family.LibraryName ? intrinsicParameters(family.LibraryName) : undefined;
+      const names = parameters?.map((p) => p.BindingIdentifier.name)
+        ?? (family.LibraryName ? libraryTypeParameterNames(family.LibraryName) : null);
+      if (names) {
+        const written = node.TypeArguments.TypeArgumentList;
+        const ordered = orderTypeArguments(names, written, written.map(typeArgumentNameOf));
+        if (!ordered.ok) return null;
+        const frame = new Map(bindings);
+        const arguments_: Argument[] = [];
+        for (let i = 0; i < names.length; i += 1) {
+          const argument = ordered.ordered[i] ?? parameters?.[i]?.TypeParameterDefault;
+          const value = argument ? InstantiateComponentType(argument as ParseNode, frame, resolve) : intrinsic?.[i]?.Default;
+          if (value === null || value === undefined) return null;
+          arguments_.push(value);
+          frame.set(names[i], value);
+        }
+        const substitutions = new Map([...frame].map(([name, value]) => [name, typeof value === 'number'
+          ? { Kind: 'literal', Value: Value(value), Base: makePrimitive('number') } as TypeRecord : value]));
+        return { ...family, Arguments: arguments_,
+          Structure: family.Structure ? substituteTypeParameters(family.Structure, substitutions) ?? undefined : undefined };
+      }
+    }
+  }
   if (node.type === 'TypeReference' && node.TypeName.MemberNames.length === 0) {
     const name = node.TypeName.IdentifierReference.name;
     if (!node.TypeArguments && bindings.has(name)) {
@@ -273,7 +302,8 @@ export function PrimitiveSlotParameters(name: string): PatternSlotParameter<Argu
 }
 
 function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownSubjects: ReadonlySet<TypeRecord> = new Set()): SpecializationMatchHost<Argument> {
-  const same = (a: Argument, b: Argument) => (typeof a === 'number' || typeof b === 'number' ? a === b : SameType(a, b));
+  const same = (a: Argument, b: Argument) => (typeof a === 'number' || typeof b === 'number'
+    ? CanonicalWidthArgument(a) === CanonicalWidthArgument(b) : SameType(a, b));
   return {
     resolveFixed: (node) => {
       // An array's EXTENT - `[4]` - is parsed as an expression, a
@@ -297,9 +327,38 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownS
     // one metadata parameter, whose argument is the parameterized type itself.
     constructorOf: (typeName) => {
       const inner = typeName.IdentifierReference.name;
-      if (typeName.MemberNames.length !== 0) {
-        return null;
+      // #sec-matchspecializationpattern: a nominal application exposes the
+      // receiving declaration's parameters, with identity resolved lexically.
+      const nominal = resolve(typeName as unknown as ParseNode);
+      if (nominal?.Kind === 'nominal') {
+        const declared = (nominal.Declaration as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList;
+        const intrinsic = nominal.LibraryName ? intrinsicParameters(nominal.LibraryName) : undefined;
+        const names = declared?.map((p) => p.BindingIdentifier.name)
+          ?? (nominal.LibraryName ? libraryTypeParameterNames(nominal.LibraryName) : null);
+        if (names?.length) {
+          return {
+            Name: inner,
+            Parameters: names.map((Name, i) => ({
+              Name, Variadic: !!declared?.[i]?.IsVariadic,
+              HasDefault: !!declared?.[i]?.TypeParameterDefault || intrinsic?.[i]?.Default !== undefined,
+              Arity: declared?.[i]?.Arity ?? 0,
+              Domain: declared?.[i]?.TypeParameterDomain
+                ? resolve(declared[i].TypeParameterDomain as ParseNode) ?? undefined
+                : makePrimitive(intrinsic?.[i]?.Domain === 'bound' ? 'uint32' : 'type'),
+            })),
+            argumentsOf: (subject: Argument) => typeof subject === 'object' && subject.Kind === 'nominal'
+              && subject.Declaration === nominal.Declaration && subject.LibraryName === nominal.LibraryName
+              ? subject.Arguments.map((a, i) => declared?.[i]?.IsValueParameter || intrinsic?.[i]?.Domain === 'bound'
+                ? CanonicalWidthArgument(a) : a) : null,
+            defaultOf: (i: number, args: readonly Argument[]) => {
+              const written = declared?.[i]?.TypeParameterDefault;
+              return written ? InstantiateComponentType(written as ParseNode,
+                new Map(names.slice(0, i).map((name, j) => [name, args[j]])), resolve) ?? undefined : intrinsic?.[i]?.Default;
+            },
+          };
+        }
       }
+      if (typeName.MemberNames.length !== 0) return null;
       // A primitive that declares parameters - `vector` - exposes them.
       if (PrimitiveDeclaresParameters(inner)) {
         return {
@@ -441,6 +500,7 @@ export function FixedTypeSubtrees(node: ParseNode, names: ReadonlySet<string>): 
       return;
     }
     if (n.type === 'TypeReference' && n.TypeArguments) {
+      out.push(n.TypeName as unknown as ParseNode);
       (n.TypeArguments.TypeArgumentList as unknown as ParseNode[]).forEach(visit);
     }
     // The structural patterns the matcher descends into, so each FIXED leaf

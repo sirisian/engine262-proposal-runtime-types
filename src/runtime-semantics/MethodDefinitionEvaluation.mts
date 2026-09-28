@@ -1,5 +1,5 @@
 import {
-  Value, Descriptor, PrivateName, UndefinedValue, JSStringValue, type PropertyKeyValue, ObjectValue, BooleanValue,
+  Value, Descriptor, PrivateName, UndefinedValue, JSStringValue, type PropertyKeyValue, ObjectValue, BooleanValue, SymbolValue,
 } from '../value.mts';
 import {
   Q, X,
@@ -8,7 +8,7 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { ClassElementDefinitionRecord, DefineMethod, Evaluate_PropertyName } from './all.mts';
-import { surroundingAgent } from '#self';
+import { surroundingAgent, Throw } from '#self';
 import {
   OrdinaryObjectCreate,
   OrdinaryFunctionCreate,
@@ -29,6 +29,23 @@ export function TakeEvaluatedMethodKey(node: ParseNode): Value | PrivateName | u
   const key = evaluatedMethodKeys.get(node);
   evaluatedMethodKeys.delete(node);
   return key;
+}
+
+const partialMemberKeys = new WeakMap<ObjectValue, Set<string | SymbolValue>>();
+
+/** #sec-partial-classes: a contribution may overload itself, but cannot replace prior members. */
+export function BeginPartialMemberAddition(target: ObjectValue, fields: readonly PropertyKeyValue[] = []): () => void {
+  const previous = partialMemberKeys.get(target);
+  const keys = [...target.properties.keys(), ...fields].map((key) => key instanceof JSStringValue ? key.stringValue() : key);
+  partialMemberKeys.set(target, new Set(keys));
+  return () => {
+    if (previous) partialMemberKeys.set(target, previous);
+    else partialMemberKeys.delete(target);
+  };
+}
+
+function partialMemberExists(target: ObjectValue, key: PropertyKeyValue | PrivateName): boolean {
+  return !(key instanceof PrivateName) && !!partialMemberKeys.get(target)?.has(key instanceof JSStringValue ? key.stringValue() : key);
 }
 
 /** https://tc39.es/ecma262/#sec-privateelement-specification-type */
@@ -66,6 +83,7 @@ PrivateElementRecord.prototype.mark = function mark(m: GCMarker): void {
 // +decorator: remove this function
 /** https://tc39.es/ecma262/#sec-definemethodproperty */
 function* DefineMethodProperty(key: PropertyKeyValue | PrivateName, homeObject: ObjectValue, closure: FunctionObject, enumerable: BooleanValue): PlainEvaluator<PrivateElementRecord | undefined> {
+  if (partialMemberExists(homeObject, key)) return Throw.TypeError('$1 is already declared on this class', key as PropertyKeyValue);
   // 1. If key is a Private Name, then
   if (key instanceof PrivateName) {
     // a. Return PrivateElement { [[Key]]: key, [[Kind]]: method, [[Value]]: closure }.
@@ -173,6 +191,7 @@ function* MethodDefinitionEvaluation_MethodDefinition(MethodDefinition: ParseNod
       // 1. Let propKey be the result of evaluating ClassElementName.
       const propKey = Q(yield* Evaluate_PropertyName(ClassElementName));
       evaluatedMethodKeys.set(MethodDefinition, propKey);
+      if (enumerable && partialMemberExists(object, propKey)) return Throw.TypeError('$1 is already declared on this class', propKey as PropertyKeyValue);
       // 3. Let scope be the running execution context's LexicalEnvironment.
       const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
       // 4. Let privateScope be the running execution context's PrivateEnvironment.
@@ -221,6 +240,7 @@ function* MethodDefinitionEvaluation_MethodDefinition(MethodDefinition: ParseNod
       // 1. Let propKey be the result of evaluating ClassElementName.
       const propKey = Q(yield* Evaluate_PropertyName(ClassElementName));
       evaluatedMethodKeys.set(MethodDefinition, propKey);
+      if (enumerable && partialMemberExists(object, propKey)) return Throw.TypeError('$1 is already declared on this class', propKey as PropertyKeyValue);
       // 3. Let scope be the running execution context's LexicalEnvironment.
       const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
       // 4. Let privateScope be the running execution context's PrivateEnvironment.

@@ -92,7 +92,13 @@ function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Decl
     for (const node of nodes) {
       if (resolved.has(node)) continue;
       const completion = EnsureCompletion(yield* TypeNodeToTypeRecord(node as never));
-      if (completion.Type === 'normal') resolved.set(node, completion.Value as unknown as TypeRecord);
+      if (completion.Type === 'normal') {
+        resolved.set(node, completion.Value as unknown as TypeRecord);
+        if (node.type === 'TypeName' && completion.Value.Kind === 'nominal') {
+          const parameters = (completion.Value.Declaration as Declaration).TypeParameters?.TypeParameterList ?? [];
+          Q(yield* resolveAll(parameters.flatMap((p) => [p.TypeParameterDomain, p.TypeParameterDefault].filter(Boolean) as ParseNode[])));
+        }
+      }
     }
   };
   for (const { declaration } of members) {
@@ -109,7 +115,8 @@ function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Decl
       Q(yield* resolveAll((list.TypeParameterList ?? []).flatMap((tp) => [tp.TypeParameterDomain, tp.TypeParameterConstraint, tp.TypeParameterDefault].filter(Boolean) as unknown as ParseNode[])));
       // A capture's `extends` bound as well as its domain: an unresolved bound
       // read as satisfied, so `const T: type extends [].<any>` admitted `string`.
-      Q(yield* resolveAll((list.Captures ?? []).flatMap((c) => [c.TypeParameterDomain, c.TypeParameterConstraint]).filter(Boolean) as unknown as ParseNode[]));
+      const bounds = (list.Captures ?? []).flatMap((c) => [c.TypeParameterDomain, c.TypeParameterConstraint]).filter(Boolean) as ParseNode[];
+      Q(yield* resolveAll(bounds.flatMap((bound) => [...FixedTypeSubtrees(bound, captureNames), bound])));
     }
   }
   const resolve = (node: ParseNode) => resolved.get(node) ?? null;

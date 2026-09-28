@@ -58,11 +58,11 @@ import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import { HasClassCases, MaterializeSpecialization, GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf, RegisterClassTypeEnvironment } from './RuntimeTypesDeclarations.mts';
 import { TakePendingCalleeContext } from '../type-system/runtime.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
-import { TakeEvaluatedMethodKey } from './MethodDefinitionEvaluation.mts';
+import { TakeEvaluatedMethodKey, BeginPartialMemberAddition } from './MethodDefinitionEvaluation.mts';
 import {
   surroundingAgent,
   OrdinaryFunctionCreate,
-  RegisterClassOperator, AddClassOperator,
+  RegisterClassOperator, AddClassOperator, BeginPartialOperatorAddition,
   DeclarativeEnvironmentRecord,
   PrivateEnvironmentRecord,
 
@@ -1709,11 +1709,17 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
   // partial declaration is not that: it is part of how the class is declared,
   // spread across modules, and refusing it would make the two specified
   // features contradict each other. So the merge lifts the freeze for its own
-  // duration and restores it, which leaves nothing observable between the two:
-  // a program cannot run in the gap, since the merge evaluates without calling
-  // user code.
+  // duration and restores it on both normal and abrupt completion.
+  if (!(proto instanceof ObjectValue)) {
+    return Throw.TypeError('$1 cannot be extended by a partial class', F);
+  }
+  const finishInstance = BeginPartialMemberAddition(proto, ((F as { Fields?: readonly { Name: PropertyKeyValue }[] }).Fields ?? []).map((field) => field.Name));
+  const finishStatic = BeginPartialMemberAddition(F);
+  const finishInstanceOperators = BeginPartialOperatorAddition(proto);
+  const finishStaticOperators = BeginPartialOperatorAddition(F);
   const wasFrozen = proto instanceof ObjectValue && (F as { SealInstances?: boolean }).SealInstances === true
     && Q(yield* TestIntegrityLevel(proto, 'frozen'));
+  try {
   if (wasFrozen) {
     (proto as unknown as { Extensible: unknown }).Extensible = Value.true;
     for (const key of Q(yield* (proto as ObjectValue).OwnPropertyKeys())) {
@@ -1799,12 +1805,16 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
     const merged = Q(yield* MethodDefinitionEvaluation(e, target, Value.false));
     Q(yield* decorateMember(merged as unknown as Value));
   }
-  // Restored before the exit. The merge evaluates no user code between the lift
-  // and here, so nothing can observe the prototype unfrozen.
-  if (wasFrozen) {
-    Q(yield* SetIntegrityLevel(proto as ObjectValue, 'frozen'));
-  }
   return undefined;
+  } finally {
+    finishInstance();
+    finishStatic();
+    finishInstanceOperators();
+    finishStaticOperators();
+    if (wasFrozen) {
+      Q(yield* SetIntegrityLevel(proto, 'frozen'));
+    }
+  }
 }
 
 /** https://arai-a.github.io/ecma262-compare/snapshot.html?pr=2417#sec-decoratorevaluation */

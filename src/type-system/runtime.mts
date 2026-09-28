@@ -1,3 +1,4 @@
+import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';
 import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
 import { FamilyCasesOf, SpecializedClassConstructor } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
@@ -57,6 +58,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { MergePartialStructures, RuntimePartialContributions } from './partial-types.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
@@ -4904,7 +4906,14 @@ export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type, expectedArit
 }
 
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
-  const type = Q(yield* TypeNodeToTypeRecordUnchecked(node));
+  let type = Q(yield* TypeNodeToTypeRecordUnchecked(node));
+  if (type.Kind === 'nominal') {
+    let conflict: string | undefined;
+    type = MergePartialStructures(type, RuntimePartialContributions(type.Declaration), (key) => {
+      conflict ??= key;
+    });
+    if (conflict) return Throw.TypeError('$1 is already declared on this interface', Value(conflict));
+  }
   const invalidRest = invalidTupleRest(type);
   if (invalidRest) return Throw.TypeError('$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`));
   if (type.Kind !== 'parameterized') return type;
@@ -4912,6 +4921,24 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
 }
 
 function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
+  // #sec-matchspecializationpattern: expose the constructor without applying
+  // defaults or materializing a specialization merely to inspect a pattern.
+  if ((node as ParseNode).type === 'TypeName') {
+    const name = node as unknown as ParseNode.TypeName;
+    const ref = Q(yield* ResolveTypeName(Value(name.IdentifierReference.name)));
+    let value = Q(yield* GetValue(ref));
+    for (const member of name.MemberNames) {
+      value = Q(yield* Get(value as ObjectValue, Value(member.name)));
+    }
+    const type = isTypeObject(value) ? value : value instanceof ObjectValue ? LookupClassType(value) : undefined;
+    if (type && isTypeObject(type)) return type.TypeRecord;
+    if (name.MemberNames.length === 0) {
+      const library = libraryTypeRecord(name.IdentifierReference.name);
+      if (library && (value === (surroundingAgent.currentRealmRecord.Intrinsics as unknown as Record<string, unknown>)[`%${name.IdentifierReference.name}%`]
+        || Q(yield* UsesIntrinsicDeclaration({ TypeName: name } as ParseNode.TypeReference, name.IdentifierReference.name)))) return library;
+    }
+    return Throw.TypeError('$1 does not expose nominal type arguments', Value(name.IdentifierReference.name));
+  }
   const pendingDeclarationDefault = deferredDeclarationDefault(node, lookupTypeParameter);
   if (pendingDeclarationDefault) {
     return { ...pendingDeclarationDefault, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
@@ -5542,6 +5569,9 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         }
       }
       if (baseRecord) {
+        // #sec-type-references: an alias of a completed application already has
+        // its arguments. A bare alias does not apply the family a second time.
+        if (!node.TypeArguments && baseRecord.Kind === 'nominal' && baseRecord.Arguments.length > 0) return baseRecord;
         // Named type arguments are ordered into PARAMETER order here, at the single
         // attach point, so a class, an interface, and a library nominal honour
         // a name the way a generic alias already does. Ordering runs before the
@@ -7024,5 +7054,3 @@ function* UsesIntrinsicDeclaration(node: ParseNode, name: string): PlainEvaluato
   const value = Q(yield* GetValue(reference));
   return isIntrinsicNamespace(surroundingAgent.currentRealmRecord, name, value);
 }
-
-import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';

@@ -102,3 +102,9 @@ export { isTemporalPlainYearMonthObject, type TemporalPlainYearMonthObject } fro
 export { isTemporalZonedDateTimeObject, type TemporalZonedDateTimeObject } from './intrinsics/Temporal/ZonedDateTime.mts';
 export { isComplexObject, complexToString, type ComplexObject } from './intrinsics/Complex.mts';
 export { isDecimalObject, DecimalToString, type DecimalObject } from './intrinsics/Decimal.mts';
+
+// Pure pattern operations are exported with the engine's compiled dependency graph.
+export { MatchSpecializationList, MatchSpecializationPattern, ValidateSpecializationList, SpecializationPatternError } from './type-system/specialization-patterns.mts';
+export { CompareSpecificity, SelectSpecialization, FindDuplicateCases, AnalyzeCallableGroup } from './type-system/specialization-selection.mts';
+export type { PatternSlotParameter } from './type-system/specialization-patterns.mts';
+export type { CallableGroupHost, CallableDeclaration, SpecializationCase } from './type-system/specialization-selection.mts';
