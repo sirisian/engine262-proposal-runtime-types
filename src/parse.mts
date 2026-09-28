@@ -276,7 +276,7 @@ function ReportOrphanClassCases(root: unknown, p: Parser): void {
     ClassModifiers?: readonly string[] | null };
   const declarationOf = (item: unknown) => ((item as { type?: string })?.type === 'ExportDeclaration'
     ? (item as { Declaration?: unknown }).Declaration : item) as ClassNode | undefined;
-  const isCase = (d: ClassNode | undefined): d is ClassNode => d?.type === 'ClassDeclaration' && !!d.TypeParameters
+  const isCase = (d: ClassNode | undefined): d is ClassNode => (d?.type === 'ClassDeclaration' || d?.type === 'TypeAliasDeclaration') && !!d.TypeParameters
     && d.TypeParameters.ListKind !== 'parameters' && !d.ClassModifiers?.includes('partial');
   const seen = new Set<object>();
   const visit = (v: unknown): void => {
@@ -285,15 +285,17 @@ function ReportOrphanClassCases(root: unknown, p: Parser): void {
     seen.add(v);
     if (Array.isArray(v)) {
       // A statement list: its cases, against the primaries it declares.
+      // A case's primary is of its own kind: a class for a class, an alias for an alias.
       const primaries = new Set(v.map(declarationOf)
-        .filter((d) => d?.type === 'ClassDeclaration' && d.TypeParameters?.ListKind === 'parameters')
-        .map((d) => d!.BindingIdentifier?.name));
+        .filter((d) => (d?.type === 'ClassDeclaration' || d?.type === 'TypeAliasDeclaration') && d.TypeParameters?.ListKind === 'parameters')
+        .map((d) => `${d!.type}:${d!.BindingIdentifier?.name}`));
       for (const item of v) {
         const d = declarationOf(item);
         if (!isCase(d)) continue;
         const name = d.BindingIdentifier?.name ?? '';
-        if (primaries.has(name)) continue;
-        const orphan = `no \`class ${name}<...>\` in this statement list declares the family it would specialize`;
+        if (primaries.has(`${d.type}:${name}`)) continue;
+        const spelled = d.type === 'TypeAliasDeclaration' ? `type ${name}<...>` : `class ${name}<...>`;
+        const orphan = `no \`${spelled}\` in this statement list declares the family it would specialize`;
         const first = (d.TypeParameters as { SpecializationEntryList?: readonly { Pattern?: { type?: string, BindingIdentifier?: { name?: string } } }[] })
           .SpecializationEntryList?.[0]?.Pattern;
         // What the list itself says - a bare name with no domain is an

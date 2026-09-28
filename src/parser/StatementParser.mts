@@ -210,7 +210,10 @@ export abstract class StatementParser extends TypeParser {
     node.WhereClauses = whereClauses.length > 0 ? whereClauses : null;
     this.semicolon();
     const finished = this.finishNode(node, 'TypeAliasDeclaration');
-    this.scope.declare(finished, 'lexical');
+    // An alias CASE (phase 5) joins its family and declares no name.
+    if (!finished.TypeParameters || finished.TypeParameters.ListKind === 'parameters') {
+      this.scope.declare(finished, 'lexical');
+    }
     return finished;
   }
 

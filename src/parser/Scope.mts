@@ -113,9 +113,19 @@ export function getDeclarations(node: ParseNode | readonly ParseNode[]): Declara
       return getDeclarations(node.VariableDeclarationList);
     case 'ClassDeclaration':
       Assert(!!node.BindingIdentifier);
+      // A CASE (phase 5) joins the family its primary declares - and exports -
+      // and declares no name of its own, lexical or exported, as its
+      // BoundNames says.
+      if (node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+        return [];
+      }
       return getDeclarations(node.BindingIdentifier);
     // proposal-runtime-types
     case 'TypeAliasDeclaration':
+      if (node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+        return [];
+      }
+      return getDeclarations(node.BindingIdentifier);
     case 'InterfaceDeclaration':
     case 'EnumDeclaration':
       return getDeclarations(node.BindingIdentifier);

@@ -1,4 +1,5 @@
 import { bindIntrinsicArguments } from '../type-system/intrinsic-generics.mts';
+import { setCaseSpecializationLookup } from '../type-system/layout.mts';
 import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
@@ -156,6 +157,11 @@ function initializationErrorName(value: ObjectValue): string | null {
  */
 export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | ParseNode.EnumDeclaration, rebind = false): PlainEvaluator {
   if (preEvaluatedTypeDeclarations.has(node) && !rebind) {
+    return undefined;
+  }
+  // An alias CASE (phase 5) is inert where it is written; an application of
+  // its family selects it.
+  if (node.type === 'TypeAliasDeclaration' && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
     return undefined;
   }
   const name = StringValue(node.BindingIdentifier);
@@ -2271,7 +2277,7 @@ function ClassCasesOf(declaration: ParseNode.ClassDeclaration): ParseNode.ClassD
   for (const item of siblings) {
     const node = ((item as { type?: string }).type === 'ExportDeclaration' ? (item as { Declaration?: unknown }).Declaration : item) as
       { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string } | null } | undefined;
-    if (node && node !== (declaration as unknown) && node.type === 'ClassDeclaration' && node.BindingIdentifier?.name === name
+    if (node && node !== (declaration as unknown) && node.type === (declaration as { type: string }).type && node.BindingIdentifier?.name === name
       && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
       out.push(node as unknown as ParseNode.ClassDeclaration);
     }
@@ -2348,8 +2354,32 @@ function* SpecializeFromFrame(
     Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
   } as never));
   byArgs.set(cacheKey, ctor);
+  if (body !== declaration) {
+    caseBuiltConstructors.add(ctor as object);
+  }
   return ctor as never;
 }
+
+/**
+ * A class's or an alias's CASES (phase 5): the declarations of the same kind
+ * and name in its own statement list whose list specializes the family.
+ */
+export function FamilyCasesOf(declaration: ParseNode.ClassDeclaration | ParseNode.TypeAliasDeclaration): ParseNode.ClassDeclaration[] {
+  return ClassCasesOf(declaration as ParseNode.ClassDeclaration);
+}
+
+/** Whether a class family has cases (phase 5): its applications' layouts come from the selected body. */
+export function HasClassCases(declaration: unknown): boolean {
+  const d = declaration as ParseNode.ClassDeclaration | undefined;
+  return !!d && d.type === 'ClassDeclaration' && ClassCasesOf(d).length > 0;
+}
+
+/** Constructors built from a CASE body (phase 5); layout reads their own. */
+const caseBuiltConstructors = new WeakSet<object>();
+setCaseSpecializationLookup((declaration, args) => {
+  const ctor = SpecializedClassConstructor(declaration, args);
+  return ctor !== undefined && caseBuiltConstructors.has(ctor as object) ? ctor : undefined;
+});
 
 export function SpecializedClassConstructor(
   declaration: unknown,

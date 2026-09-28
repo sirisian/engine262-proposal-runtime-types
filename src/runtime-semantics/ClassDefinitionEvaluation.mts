@@ -54,7 +54,7 @@ import {
   ClassFieldDefinitionEvaluation_decorator,
 } from './all.mts';
 import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
-import { GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf, RegisterClassTypeEnvironment } from './RuntimeTypesDeclarations.mts';
+import { HasClassCases, MaterializeSpecialization, GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf, RegisterClassTypeEnvironment } from './RuntimeTypesDeclarations.mts';
 import { TakePendingCalleeContext } from '../type-system/runtime.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
 import {
@@ -1641,6 +1641,16 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           type: unbound?.TypeRecord ?? typeObject.TypeRecord,
           controls: fieldControls,
         });
+      }
+      // Phase 5, plan 6.3: layout is derived AFTER selection. A field whose type
+      // applies a family with cases takes its layout from the selected body,
+      // which exists once the application is materialized - so materialize it
+      // before this layout reads it, rather than substitute into the primary's.
+      for (const { type } of laidOut) {
+        const applied = type as { Kind?: string, Declaration?: unknown, Arguments?: readonly (TypeRecord | number)[] } | undefined;
+        if (applied?.Kind === 'nominal' && (applied.Arguments?.length ?? 0) > 0 && HasClassCases(applied.Declaration)) {
+          Q(yield* MaterializeSpecialization(applied.Declaration as never, applied.Arguments!));
+        }
       }
       const computed = complete ? ComputeClassLayout(baseLayout, laidOut, classControls, (ClassTail as { parent?: unknown }).parent) : null;
       if (computed !== null && 'cycle' in computed) {

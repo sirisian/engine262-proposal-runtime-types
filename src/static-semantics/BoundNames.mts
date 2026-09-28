@@ -68,6 +68,10 @@ export function BoundNames(node: ParseNode | readonly ParseNode[]): JSStringValu
       return (node as { Partial?: boolean }).Partial ? [] : BoundNames(node.BindingIdentifier);
     case 'TypeAliasDeclaration':
     case 'EnumDeclaration':
+      // An alias CASE (phase 5) joins its family and binds no name.
+      if (node.type === 'TypeAliasDeclaration' && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
+        return [];
+      }
       return BoundNames(node.BindingIdentifier);
     case 'MetaDeclaration':
     case 'PrimitiveOperatorDeclaration':

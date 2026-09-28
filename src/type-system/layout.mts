@@ -623,6 +623,17 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // already resolved: the substituter is an ordinary function, so the walk
     // stays synchronous and a compile-time constant stays one.
     const args = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
+    // Phase 5, plan 6.3: layout is derived AFTER selection. An application
+    // whose selected body is a case has the case's own fields, not the
+    // primary's with the arguments substituted, so its layout is the one its
+    // own constructor computed from that body.
+    if (args && args.length > 0 && caseSpecializationOf !== null) {
+      const selected = caseSpecializationOf((t as { Declaration?: unknown }).Declaration, args) as
+        { InstanceLayout?: ClassLayout | null } | undefined;
+      if (selected) {
+        return selected.InstanceLayout ?? null;
+      }
+    }
     const inputs = constructor?.LayoutInputs;
     if (!args || args.length === 0 || !inputs || substituteForLayout === null) {
       return declared;
@@ -878,6 +889,15 @@ export function setStaticFieldResolver(fn: typeof staticFieldsOfDeclaration): vo
 let substituteForLayout:
   | ((structure: TypeRecord, declaration: unknown, args: readonly (TypeRecord | number)[]) => TypeRecord)
   | null = null;
+
+/**
+ * The constructor an application of a class family built from a CASE body, or
+ * *undefined* - set by the declaration runtime, which owns the specializations.
+ */
+let caseSpecializationOf: ((declaration: unknown, args: readonly (TypeRecord | number)[]) => unknown) | null = null;
+export function setCaseSpecializationLookup(fn: typeof caseSpecializationOf): void {
+  caseSpecializationOf = fn;
+}
 
 export function setLayoutSubstituter(fn: typeof substituteForLayout): void {
   substituteForLayout = fn;

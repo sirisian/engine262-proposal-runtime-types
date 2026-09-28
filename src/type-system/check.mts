@@ -1,6 +1,6 @@
 import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
+import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
@@ -32,6 +32,7 @@ import {
   builtinTypeRecord, libraryTypeRecord, displayType, makePrimitive, voidType, neverType,
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
+  setAliasApplicationImpl,
   badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType } from './intern.mts';
@@ -6909,6 +6910,102 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
   };
+  /** Phase 5, plan 6.4: an alias family's CASES, in the primary's own statement list. */
+  const aliasCasesOf = (primary: ParseNode): ParseNode[] => {
+    const name = (primary as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
+    let holder = primary as { type?: string, parent?: object };
+    let container = holder.parent as { type?: string, parent?: object } | undefined;
+    if (container?.type === 'ExportDeclaration') {
+      holder = container;
+      container = container.parent as typeof container;
+    }
+    const siblings = container ? Object.values(container).find((v) => Array.isArray(v) && v.includes(holder)) as readonly unknown[] | undefined : undefined;
+    return (siblings ?? []).map((item) => ((item as { type?: string }).type === 'ExportDeclaration' ? (item as { Declaration?: unknown }).Declaration : item) as
+      { type?: string, BindingIdentifier?: { name?: string } | null, TypeParameters?: { ListKind?: string } | null } | undefined)
+      .filter((d) => d !== undefined && d !== (primary as unknown) && d.type === 'TypeAliasDeclaration' && d.BindingIdentifier?.name === name
+        && !!d.TypeParameters && d.TypeParameters.ListKind !== 'parameters') as unknown as ParseNode[];
+  };
+  /**
+   * The case an alias application selects (the function rule), with its
+   * capture bindings; *undefined* when none applies; 'open' when an argument
+   * is not yet known, so the primary's right-hand side must not be assumed.
+   */
+  const aliasCaseSelection = (primary: ParseNode, cases: readonly ParseNode[], name: string, args: readonly (TypeRecord | number)[]):
+    { Declaration: ParseNode, Bindings: Map<string, TypeRecord> } | 'open' | undefined => {
+    if (args.some((a) => typeof a !== 'number' && mentionsTypeParameter(a))) return 'open';
+    type D = ParseNode & { TypeParameters?: ParseNode.TypeParameters | null };
+    const host = CallableGroupHostFor((n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []));
+    const labelOf = (d: D) => `\`${name}${(d.TypeParameters as { sourceText?: string } | null | undefined)?.sourceText ?? ''}\``;
+    const members = ([primary, ...cases] as D[]).map((d) => ({
+      Node: d, List: d.TypeParameters ?? null, Label: labelOf(d),
+      Parameters: d.TypeParameters?.ListKind === 'parameters' ? (d.TypeParameters.TypeParameterList ?? []).map((tp) => ({
+        Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
+        Kind: tp.IsValueParameter ? 'value' : 'type', Binder: tp,
+      })) : undefined,
+    }));
+    let analysis;
+    try {
+      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord));
+    } catch {
+      return undefined;
+    }
+    const owner = analysis.Owners.find((o) => o.Node === primary);
+    if (!owner) return undefined;
+    let result: { Kind: string, Case?: { Declaration: ParseNode }, Bindings?: readonly { Capture: { Name: string }, Value: TypeRecord | number }[], Cases?: readonly { Label: string }[] };
+    try {
+      const attached = analysis.Attached.filter((a) => a.Owner === owner
+        && MatchSpecializationList(a.Case.List! as never, owner.Parameters as never, args as never, host as never) !== 'no-match')
+        .map((a) => ({ List: a.Case.List!, Declaration: a.Case.Node, Label: a.Case.Label }));
+      result = SelectSpecialization(attached as never, owner.Parameters as never, args as never, host as never) as typeof result;
+    } catch (e) {
+      // A pattern the host cannot expose is a diagnostic, never a host crash.
+      if (!(e instanceof SpecializationPatternError)) throw e;
+      errors.push((Throw.StaticTypeError('$1', Value(e.message)) as ThrowCompletion).Value as ObjectValue);
+      return undefined;
+    }
+    if (result.Kind === 'ambiguous') {
+      errors.push((Throw.StaticTypeError('$1', Value(`${(result.Cases ?? []).map((c) => c.Label).join(' and ')} both apply to this application of \`${name}\`, and neither is more specific; declare a case for it`)) as ThrowCompletion).Value as ObjectValue);
+      return undefined;
+    }
+    if (result.Kind !== 'selected' || !result.Case) return undefined;
+    const bindings = new Map<string, TypeRecord>();
+    for (const b of result.Bindings ?? []) {
+      if (typeof b.Value !== 'number') bindings.set(b.Capture.Name, b.Value);
+    }
+    return { Declaration: result.Case.Declaration, Bindings: bindings };
+  };
+  /**
+   * A CLOSED application of an alias family (phase 5, plan 6.4): the selected
+   * case's right-hand side, or the primary's where none applies, resolved with
+   * the parameters and the case's captures in scope and then substituted. A
+   * deferred application reaches here from substitution once its arguments
+   * close.
+   */
+  const resolveClosedAliasApplication = (aliasDecl: ParseNode, args: readonly (TypeRecord | number)[]): Known => {
+    const decl = aliasDecl as unknown as { BindingIdentifier?: { name: string } | null, TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null, Type?: ParseNode.Type | null };
+    const name = decl.BindingIdentifier?.name ?? '';
+    const params = decl.TypeParameters?.TypeParameterList ?? [];
+    const chosen = aliasCaseSelection(aliasDecl, aliasCasesOf(aliasDecl), name, args);
+    if (chosen === 'open' || !decl.Type) return null;
+    const rightHandSide = chosen ? (chosen.Declaration as unknown as { Type: ParseNode.Type }).Type : decl.Type;
+    const bindings = new Map<string, TypeRecord>();
+    params.forEach((param, i) => {
+      const a = args[i];
+      if (a !== undefined && typeof a !== 'number') bindings.set(param.BindingIdentifier.name, a);
+    });
+    const scope = new Map<string, Known | null>();
+    for (const param of params) scope.set(param.BindingIdentifier.name, null);
+    for (const captured of chosen?.Bindings.keys() ?? []) scope.set(captured, null);
+    typeParameterScopes.push(scope);
+    let body: Known = null;
+    try {
+      body = resolveType(rightHandSide);
+    } finally {
+      typeParameterScopes.pop();
+    }
+    return body ? substituteTypeParameters(body, chosen ? new Map([...bindings, ...chosen.Bindings]) : bindings) : null;
+  };
+  setAliasApplicationImpl((alias, operands) => resolveClosedAliasApplication(alias as ParseNode, operands) as TypeRecord | null);
   const classInstanceType = (n: ParseNode): Known => {
     const acc = classMemberWalk(n, 'instance');
     classMemberFolds(acc);
@@ -9714,6 +9811,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             });
             if (bindings.size === aliasParams.length) {
+              // Phase 5, plan 6.4: a family with cases selects its right-hand
+              // side once its arguments are known; before that it is not
+              // decided, and the primary's must not be assumed.
+              let rightHandSide: ParseNode.Type = aliasDecl.Type;
+              let caseBindings: Map<string, TypeRecord> | null = null;
+              const familyCases = aliasCasesOf(aliasDecl as unknown as ParseNode);
+              if (familyCases.length > 0) {
+                const chosen = aliasCaseSelection(aliasDecl as unknown as ParseNode, familyCases, parameterizedName, args as readonly (TypeRecord | number)[]);
+                if (chosen === 'open') {
+                  // Deferred (plan 6.4): which case applies is decided once the
+                  // arguments close, when substitution selects it; until then the
+                  // application relates only to itself, and the primary's
+                  // right-hand side is never assumed.
+                  return { Kind: 'deferred', Operator: aliasDecl as unknown as object, Operands: args } as unknown as Known;
+                }
+                if (chosen) {
+                  rightHandSide = (chosen.Declaration as unknown as { Type: ParseNode.Type }).Type;
+                  caseBindings = chosen.Bindings;
+                }
+              }
               // The body names the alias's OWN parameters, which are not in
               // scope at the use site - `resolveType` answered null for
               // `{ t: T }` without them. A scope is pushed so the names resolve,
@@ -9731,6 +9848,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // `type R<T> = { n: R.<T> }` re-enters this arm through its own
               // body and exhausts the evaluation budget - the same recursion
               // that guard exists to stop, reached by a second path.
+              for (const captured of caseBindings?.keys() ?? []) {
+                scope.set(captured, null);
+              }
               typeParameterScopes.push(scope);
               let body: Known = null;
               const guardName = parameterizedName;
@@ -9739,7 +9859,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 resolvingAliases.add(guardName);
               }
               try {
-                body = alreadyResolving ? null : resolveType(aliasDecl.Type);
+                body = alreadyResolving ? null : resolveType(rightHandSide);
               } finally {
                 if (!alreadyResolving) {
                   resolvingAliases.delete(guardName);
@@ -9748,7 +9868,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               if (body) {
                 checkSpecializedDeclaration(aliasDecl as ParseNode, bindings);
-                return substituteTypeParameters(body, bindings);
+                return substituteTypeParameters(body, caseBindings ? new Map([...bindings, ...caseBindings]) : bindings);
               }
             }
           }
@@ -14532,7 +14652,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const namedValues = valueArguments.some((a) => a.type === 'NamedArgument');
     const selection = SelectCase(analysis, args, names, namedValues ? undefined : valueCount, host,
       (n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []), displayType, name, boundOwners);
-    let step = selection.next();
+    // A pattern the host cannot expose (`Map.<string, const E>` over a library
+    // nominal with no exposed components) is a diagnostic, not a host crash:
+    // the matcher throws SpecializationPatternError, which ends selection here
+    // and is reported with the pattern's own message.
+    let patternError: SpecializationPatternError | undefined;
+    const advance = (admitted?: boolean) => {
+      try {
+        return admitted === undefined ? selection.next() : selection.next(admitted);
+      } catch (e) {
+        if (!(e instanceof SpecializationPatternError)) throw e;
+        patternError = e;
+        return { done: true, value: undefined } as unknown as ReturnType<typeof selection.next>;
+      }
+    };
+    let step = advance();
     while (!step.done) {
       const candidate = step.value;
       let admitted = true;
@@ -14565,7 +14699,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (verdict === false) admitted = false;
         else if (verdict === true) filtersDecided.add(candidate.Declaration as object);
       }
-      step = selection.next(admitted);
+      step = advance(admitted);
+    }
+    if (patternError) {
+      errors.push((Throw.StaticTypeError('$1', Value(patternError.message)) as ThrowCompletion).Value as ObjectValue);
+      return undefined;
     }
     const choice = step.value;
     if (choice.Kind === 'owner') {
@@ -20957,7 +21095,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Names only, as above: the alias's own type is still resolved lazily,
         // so nothing is computed earlier than before - only found.
         const aliasName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        if (aliasName && !aliasNodes.has(aliasName)) {
+        // An alias case (phase 5) joins its family and never names it.
+        const aliasCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
+        if (aliasName && !aliasNodes.has(aliasName) && !aliasCase) {
           aliasNodes.set(aliasName, n);
         }
       }

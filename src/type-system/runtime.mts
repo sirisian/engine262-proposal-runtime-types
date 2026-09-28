@@ -1,5 +1,5 @@
 import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
-import { SpecializedClassConstructor } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { FamilyCasesOf, SpecializedClassConstructor } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
 import { wrappedParse } from '../parse.mts';
@@ -24,7 +24,7 @@ import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryG
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
-import { SelectionOfValue } from '../abstract-ops/callable-selection.mts';
+import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
@@ -1171,13 +1171,30 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
         Value(declaration.BindingIdentifier.name),
       );
     }
+    // Phase 5 (plan 6.4): an application of an alias family with CASES selects
+    // its right-hand side as a class application selects its body - by the
+    // function rule, once its arguments are closed, as they are here - and the
+    // selected case's captures join the frame.
+    let selectedType: ParseNode.Type = declaration.Type;
+    let caseFrame: Map<string, TypeRecord> | undefined;
+    const aliasCases = FamilyCasesOf(declaration);
+    if (aliasCases.length > 0) {
+      const selected = Q(yield* SelectClassCase(declaration as never, aliasCases as never, argRecords));
+      if (selected) {
+        selectedType = (selected.Declaration as unknown as ParseNode.TypeAliasDeclaration).Type;
+        caseFrame = selected.Frame;
+      }
+    }
     const frame = new Map<string, TypeRecord>();
     params.forEach((p, i) => {
       bindTypeParameter(frame, (p as { BindingIdentifier: { name: string } }).BindingIdentifier.name, argRecords[i], p);
     });
+    for (const [captured, record] of caseFrame ?? []) {
+      frame.set(captured, record);
+    }
     typeParameterFrames.push(frame);
     try {
-      const body = Q(yield* TypeNodeToTypeRecord(declaration.Type));
+      const body = Q(yield* TypeNodeToTypeRecord(selectedType));
       // The BACKSTOP. #sec-generic-where:
       // a `where` clause is "checked at each specialization once its parameters
       // are bound. Where the expression is *false* for an application's

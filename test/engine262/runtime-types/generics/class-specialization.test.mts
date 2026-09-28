@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
+import { Agent, Get, ManagedRealm, setSurroundingAgent, Value, X } from '#self';
 
 // Phase 5, slice 1: class specializations (plan 6.3). A CASE - a class
 // declaration whose list specializes its family - supplies a complete body,
@@ -53,4 +54,44 @@ test('a case keeps the primary\'s public contract after substitution', () => {
   expectThrown(`${P} class Box<boolean> { get kind(): string { return "x"; } constructor(v: boolean) {} }`, 'it has no `v`');
   expectThrown(`${P} class Box<boolean> { v: boolean; constructor(v: string) { this.v = true; } get kind(): string { return "x"; } }`,
     'its constructor does not accept (boolean)');
+});
+
+test('an application\'s layout is derived after selection, from the selected body', () => {
+  // Plan 6.3: "do not infer ... size ... from the fallback body when a
+  // replacement can differ". The case adds a uint32, so a field of its
+  // application occupies 1 + 1 + 2 (padding) + 4 bytes, not the primary's 2 -
+  // even when no instance of it exists yet.
+  const S = 'class Cell<T: type> { a: T; b: T; } class Cell<uint8> { a: uint8; b: uint8; c: uint32; } ';
+  expect(evaluated(`${S} class H { g: Cell.<uint8> = new Cell.<uint8>(); } String(H.byteLength);`)).toBe('8');
+  expect(evaluated(`${S} class H { g: Cell.<uint16> = new Cell.<uint16>(); } String(H.byteLength);`)).toBe('4');
+});
+
+test('no program can replace a foreign or intrinsic family: a case needs its primary beside it', () => {
+  // Plan 6.3: replacement is confined to the owning declaration group, so an
+  // intrinsic family, and a family declared in another scope, cannot be given
+  // a case.
+  expectThrown('class Array<boolean> {}', 'no `class Array<...>` in this statement list');
+  expectThrown('class Map<string, uint8> {}', 'no `class Map<...>` in this statement list');
+  expectThrown('type uint8<boolean> = string;', 'no `type uint8<...>` in this statement list');
+  expectThrown('class Box<T: type> {} function f() { class Box<boolean> {} }', 'no `class Box<...>` in this statement list');
+});
+
+test('in a module, a case exports no name of its own, and an imported family takes no case', () => {
+  const compile = (source: string) => {
+    setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+    const realm = new ManagedRealm();
+    const m = realm.compileModule(source, { specifier: 'main.mjs' }) as { Type?: string, Value?: unknown };
+    if (m && m.Type === 'throw') {
+      const pop = (realm as unknown as { pushTopContext?: () => (() => void) }).pushTopContext?.();
+      try {
+        return (X(Get(m.Value as never, Value('message'))) as unknown as { stringValue(): string }).stringValue();
+      } finally {
+        pop?.();
+      }
+    }
+    return 'compiled';
+  };
+  expect(compile('export class Box<T: type> {} export class Box<boolean> {}')).toBe('compiled');
+  expect(compile('export class Box<T: type> {} class Box<boolean> {}')).toBe('compiled');
+  expect(compile('import { Box } from "./box.mjs"; class Box<boolean> {}')).toContain('no `class Box<...>` in this statement list');
 });

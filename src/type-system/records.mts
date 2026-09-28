@@ -852,6 +852,11 @@ export function isCoreOperator(operator: DeferredOperator): operator is 'keyof' 
  * it defers, at specialization, and is not evaluated here.
  */
 let deferredOperatorImpl: ((operator: 'keyof' | 'indexed', operands: readonly TypeRecord[]) => TypeRecord | null) | null = null;
+/** Resolves a closed alias application (phase 5): set by the checker, which owns alias resolution. */
+let aliasApplicationImpl: ((alias: object, operands: readonly (TypeRecord | number)[]) => TypeRecord | null) | null = null;
+export function setAliasApplicationImpl(f: typeof aliasApplicationImpl): void {
+  aliasApplicationImpl = f;
+}
 export function setDeferredOperatorImpl(f: (operator: 'keyof' | 'indexed', operands: readonly TypeRecord[]) => TypeRecord | null): void {
   deferredOperatorImpl = f;
 }
@@ -1772,7 +1777,10 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       if (t.Operator === 'indexed') {
         return `${show(t.Operands[0]!)}[${show(t.Operands[1]!)}]`;
       }
-      const builderName = (t.Operator as { name?: { stringValue?: () => string } } | undefined)
+      // An alias application (phase 5) is named by its alias declaration.
+      const aliasName = (t.Operator as { type?: string, BindingIdentifier?: { name?: string } } | undefined)?.type === 'TypeAliasDeclaration'
+        ? (t.Operator as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name : undefined;
+      const builderName = aliasName ?? (t.Operator as { name?: { stringValue?: () => string } } | undefined)
         ?.name?.stringValue?.() ?? 'a builder';
       return `${builderName}.<${t.Operands.map(show).join(', ')}>`;
     }
@@ -2136,6 +2144,15 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
         ? walk(a as TypeRecord) as TypeRecord
         : a));
     const still = Operands.some((a) => a && typeof a === 'object' && 'Kind' in a && mentionsTypeParameter(a as TypeRecord));
+    // An ALIAS application (phase 5, plan 6.4) - its operator the alias
+    // declaration - selects its right-hand side once its arguments close;
+    // until then it stays deferred, and relates only to itself.
+    if (!still && (t.Operator as { type?: string } | null)?.type === 'TypeAliasDeclaration' && aliasApplicationImpl) {
+      const selected = aliasApplicationImpl(t.Operator as object, Operands as readonly (TypeRecord | number)[]);
+      if (selected) {
+        return selected;
+      }
+    }
     if (!still && isCoreOperator(t.Operator) && deferredOperatorImpl) {
       const evaluated = deferredOperatorImpl(t.Operator, Operands as readonly TypeRecord[]);
       if (evaluated) {
