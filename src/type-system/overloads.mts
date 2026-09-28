@@ -329,7 +329,7 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
         const sameDeclaration = argNominal && paramNominal
           && (argType as { Declaration?: unknown }).Declaration === (paramType as { Declaration?: unknown }).Declaration;
         const refines = argNominal && paramNominal
-          && ClassImplements(argType, (paramType as { Declaration: ParseNode }).Declaration);
+          && ClassImplements(argType, (paramType as { Declaration: ParseNode }).Declaration, paramType);
         return sameDeclaration || refines ? Tier.Exact : Tier.StructuralNominal;
       }
       return Tier.Exact;

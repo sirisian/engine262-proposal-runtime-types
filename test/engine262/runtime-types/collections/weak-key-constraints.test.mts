@@ -50,7 +50,11 @@ for (const lib of WEAK) {
   test(`${lib}: a type argument that can be held weakly is accepted, and runs`, () => {
     for (const K of CAN) {
       const T = V(lib, K);
-      const ctor = lib === 'WeakRef' ? `new ${T}(${K === 'symbol' ? 'Symbol("s")' : '{}'})` : `new ${T}()`;
+      const target = ({
+        '{ a: uint8 }': '{ a: 1 }', '[].<uint8>': '[]', '() => void': '() => {}',
+        'Map.<string, uint8>': 'new Map.<string, uint8>()', 'symbol': 'Symbol("s")',
+      } as Record<string, string>)[K] ?? '{}';
+      const ctor = lib === 'WeakRef' ? `new ${T}(${target})` : `new ${T}()`;
       expect(ok(`const x = ${ctor};`)).toBe(true);
       expect(ok(`type M = ${T};`)).toBe(true);
       expect(ok(`function f(m: ${T}) {}`)).toBe(true);

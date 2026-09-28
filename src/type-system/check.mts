@@ -4,7 +4,7 @@ import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, N
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
-import { StaticIterationContribution } from './iteration-contribution.mts';
+import { StaticIterationContribution, AsyncIterationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
@@ -81,7 +81,7 @@ import {
   awaitedElementType, numericFamilyOf, isRangeFamilyName, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
   libraryConstructParameters,
 } from './std-signatures.mts';
-import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
+import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
 import { R, Throw, wellKnownSymbols } from '#self';
 
 /**
@@ -4628,7 +4628,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Declared member reads use the same contract for String and Symbol keys. */
-  const memberReadType = (receiver: Known, key: string | SymbolValue, forDelete = false): Known => {
+  const memberReadType = (type: Known, key: string | SymbolValue, forDelete = false): Known => {
+    const receiver = operationalType(type);
     const propertyType = (shape: Known): Known => {
       if (shape?.Kind !== 'object') return null;
       const property = shape.Properties.find((candidate) => candidate.key === key);
@@ -4702,7 +4703,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const keys = memberKeys(node);
     const keyType = node.Expression ? staticType(node.Expression) : null;
-    const from = (receiver: Known): TypeRecord[] => {
+    const from = (type: Known): TypeRecord[] => {
+      const receiver = operationalType(type);
       if (receiver?.Kind === 'union') {
         return receiver.Members.flatMap(from);
       }
@@ -4801,7 +4803,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (lhs?.type !== 'MemberExpression') return;
     const m = lhs;
-    const sealedReceiver = staticType(m.MemberExpression);
+    const sealedReceiver = operationalType(staticType(m.MemberExpression));
     const access = indexAccess(m, sealedReceiver);
     if (access?.get && !access.set) {
       const result = operatorResult(access.get, access.arguments, m);
@@ -4886,7 +4888,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (!keys) return;
-    const hasReadonlyMember = (receiver: Known): boolean => {
+    const hasReadonlyMember = (type: Known): boolean => {
+      const receiver = operationalType(type);
       if (receiver?.Kind === 'union') return receiver.Members.some(hasReadonlyMember);
       if (keys.includes('length') && spanElementOfReceiver(receiver)) return true;
       const shape = structureOf(receiver);
@@ -5563,23 +5566,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return [];
     }
     const out: TypeRecord[] = [];
-    for (const q of params) {
-      const pdefault = (q as unknown as { TypeParameterDefault?: ParseNode.Type }).TypeParameterDefault;
-      if (!pdefault) {
-        return [];
+    const bindings = new Map<string, TypeRecord>();
+    const pushed = pushTypeParameterScopeOf(declaration, 'type-only');
+    try {
+      for (const q of params) {
+        const parameter = q as ParseNode.TypeParameter;
+        if (!parameter.TypeParameterDefault) return [];
+        const resolved = resolveType(parameter.TypeParameterDefault);
+        const filled = resolved && substituteTypeParameters(resolved, bindings);
+        if (!filled) return [];
+        bindings.set(parameter.BindingIdentifier.name, filled);
+        out.push(filled.Kind === 'literal' && filled.Value instanceof NumberValue
+          ? R(filled.Value) as unknown as TypeRecord : filled);
       }
-      const resolved = resolveType(pdefault);
-      if (!resolved) {
-        return [];
-      }
-      // A NUMERIC default is the number the annotation path writes for a
-      // numeric argument (`let g: Grid.<8>` carries 8, not a literal record),
-      // so a bare `Grid` and a written `Grid.<4, 4>` compare equal.
-      out.push(resolved.Kind === 'literal' && (resolved as { Value?: unknown }).Value instanceof NumberValue
-        ? R((resolved as { Value: NumberValue }).Value) as unknown as TypeRecord
-        : resolved as TypeRecord);
+      return out;
+    } finally {
+      if (pushed) typeParameterScopes.pop();
     }
-    return out;
   };
 
   const interfaceTypeOf = (name: string): Known => {
@@ -5660,7 +5663,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // meaning of an interface does not depend on the order its declarations
     // load". Taking the first and not overwriting keeps this pass order-
     // independent for the programs that are legal.
-    const declarations = declared ?? [decl];
+    const declarations = declared ? declared.filter((part) => part.parent === node.parent) : [decl];
     // Each member paired with the INDEX of the declaration it came from, so a
     // redeclaration ACROSS declarations can be told from two members written in
     // one.
@@ -7158,7 +7161,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (!record || record.Kind !== 'nominal') return null;
     const structure = (record as unknown as { Structure?: TypeRecord }).Structure;
-    return { ...record, Structure: structure ? substituteTypeParameters(structure, bindings) ?? structure : structure } as unknown as TypeRecord;
+    return { ...record, SpecializationBindings: bindings, Structure: structure ? substituteTypeParameters(structure, bindings) ?? structure : structure } as unknown as TypeRecord;
   };
   /**
    * Plan 6.4: an interface case REFINES its primary. Every member the primary
@@ -7300,60 +7303,54 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // members. Inherited reads and disposal lookup need the same substitution.
     const baseStructure = base && base.Kind === 'nominal' ? structureOf(base) : null;
     const implemented = (cls.ClassTail as { ImplementsClause?: readonly ParseNode[] | null } | null | undefined)?.ImplementsClause ?? [];
+    const resolvedInterfaces: TypeRecord[] = [];
+    const inheritedFields = base?.Kind === 'nominal' ? base.InstanceFieldKeys ?? [] : [];
+    const instanceFieldKeys = [...new Set([...inheritedFields, ...acc.fieldProperties.keys()])];
+    // An inherited own field takes precedence over a derived prototype member.
+    if (baseStructure?.Kind === 'object') {
+      for (const key of inheritedFields) {
+        if (acc.fieldProperties.has(key)) continue;
+        const inherited = baseStructure.Properties.find((property) => property.key === key);
+        const index = Properties.findIndex((property) => property.key === key);
+        if (inherited && index >= 0) Properties[index] = inherited;
+      }
+    }
     for (const ref of implemented) {
-      const iname = (ref as { TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } }).TypeName;
-      const nm = iname?.MemberNames && iname.MemberNames.length > 0 ? undefined : iname?.IdentifierReference?.name;
-      if (typeof nm !== 'string') {
+      const pushed = pushTypeParameterScopeOf(n, 'type-only');
+      let it: Known;
+      try {
+        // #sec-interfaces-semantics: aliases and generic applications have the
+        // same lexical identity and argument binder in every type position.
+        it = resolveType(ref as ParseNode.Type);
+        if (ref.type === 'TypeReference' && !ref.TypeArguments && !ref.TypeName.MemberNames.length) {
+          const declaration = ResolveBindingDeclaration(ref.TypeName.IdentifierReference, ref.TypeName.IdentifierReference.name)?.node;
+          if ((declaration?.type === 'InterfaceDeclaration' || declaration?.type === 'TypeAliasDeclaration')
+              && declaration.TypeParameters?.TypeParameterList.length) {
+            it = resolveType({ ...ref, TypeArguments: { ...ref, type: 'TypeArguments', parent: ref, TypeArgumentList: [] } } as ParseNode.Type);
+          }
+        }
+      } finally {
+        if (pushed) typeParameterScopes.pop();
+      }
+      if (it?.Kind !== 'nominal' || it.Declaration.type !== 'InterfaceDeclaration') {
+        if (it && it.Kind !== 'any' && !mentionsTypeParameter(it)) {
+          errors.push(Throw.StaticTypeError('an implements target must denote an interface').Value as ObjectValue);
+        }
         continue;
       }
-      const it = interfaceTypeOf(nm);
-      const declaredStructure = it && it.Kind === 'nominal'
-        ? (it as unknown as { Structure?: { Kind: string, Properties: readonly { key: string, type: TypeRecord, optional: boolean }[] } }).Structure
-        : null;
-      // A GENERIC interface's members are SUBSTITUTED before the class is
-      // compared against them.
-      //
-      // [[Structure]] holds the members as DECLARED, whose types are still the
-      // interface's own parameters, so `class C implements G.<uint8>` was compared
-      // against `x: T` and refused with "uint.<8>" is not assignable to "T", at the
-      // declaration and before any use. The arguments are on the reference and are
-      // bound to the parameters here, as at any other parameterized use.
-      const ifaceDecl = interfaceNodes.get(nm) as unknown as {
-        TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
-      } | undefined;
-      const ifaceParams = ifaceDecl?.TypeParameters?.TypeParameterList ?? [];
-      const ifaceArgNodes = (ref as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } | null }).TypeArguments?.TypeArgumentList ?? [];
-      // Built once, and used for the operator members below as well as for the
-      // structure: an operator member names the interface's parameters exactly
-      // as a method member does, and `interface Ordered<T> { operator<(other:
-      // T): boolean; }` - the clause's own example - says nothing about the
-      // implementor until `T` is bound to the argument `implements Ordered.<V>`
-      // supplies.
+      resolvedInterfaces.push(it);
+      const ifaceDecl = it.Declaration as ParseNode.InterfaceDeclaration;
+      const nm = ifaceDecl.BindingIdentifier.name;
+      const ifaceParams = ifaceDecl.TypeParameters?.TypeParameterList ?? [];
       const ifaceBindings = new Map<string, TypeRecord>();
       ifaceParams.forEach((prm, k) => {
-        const pname = (prm as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
-        const argType = ifaceArgNodes.length === ifaceParams.length ? resolveType(ifaceArgNodes[k] as ParseNode.Type) : null;
-        if (pname && argType) {
-          ifaceBindings.set(pname, argType as TypeRecord);
-        }
+        const arg = it!.Kind === 'nominal' ? it.Arguments[k] : undefined;
+        if (arg !== undefined) ifaceBindings.set(prm.BindingIdentifier.name, typeof arg === 'number'
+          ? { Kind: 'literal', Value: Value(arg), Base: makePrimitive('number') } : arg);
       });
-      const bound = ifaceParams.length > 0 && ifaceBindings.size === ifaceParams.length;
-      let istruct = declaredStructure;
-      // Phase 5, plan 6.4: implementing an application of an interface family
-      // whose case matches means meeting the case's REFINED contract. The
-      // refined structure is closed, so the substitution below leaves it as is.
-      const implementedCases = ifaceDecl ? aliasCasesOf(ifaceDecl as unknown as ParseNode) : [];
-      if (implementedCases.length > 0 && bound) {
-        const implementedArgs = ifaceParams.map((prm) => ifaceBindings.get((prm as unknown as { BindingIdentifier: { name: string } }).BindingIdentifier.name)!);
-        const chosen = aliasCaseSelection(ifaceDecl as unknown as ParseNode, implementedCases, nm, implementedArgs);
-        if (chosen && chosen !== 'open') {
-          const refined = refinedInterfaceRecord(chosen.Declaration, chosen.Bindings) as unknown as { Structure?: typeof declaredStructure } | null;
-          if (refined?.Structure) istruct = refined.Structure;
-        }
-      }
-      if (istruct && bound) {
-        istruct = substituteTypeParameters(istruct as Known, ifaceBindings) as typeof istruct;
-      }
+      for (const [name, type] of it.SpecializationBindings ?? []) ifaceBindings.set(name, type);
+      const bound = ifaceBindings.size > 0;
+      const istruct = structureOf(it);
       if (istruct && istruct.Kind === 'object') {
         // `implements` is VERIFIED, not merely declared. Every member the
         // interface requires must be declared by the class with an assignable
@@ -7383,6 +7380,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           });
           if (own.type && p.type && !IsAssignable(propertyShape(own), propertyShape(p))) {
             report(own.type, p.type);
+          }
+        }
+        // Index signatures govern own enumerable instance storage, including
+        // inherited fields, but not prototype methods or accessors. Explicit
+        // named members of the interface retain their own contracts.
+        for (const key of instanceFieldKeys) {
+          if (istruct.Properties.some((property) => property.key === key)) continue;
+          const field = acc.fieldProperties.get(key)
+            ?? (baseStructure?.Kind === 'object' ? baseStructure.Properties.find((property) => property.key === key) : undefined);
+          if (!field) continue;
+          for (const signature of istruct.IndexSignatures) {
+            if (keyAdmittedBy(key, signature.Key)) requireAssignable(field.type, signature.Value);
           }
         }
         for (const p of istruct.Properties) {
@@ -7453,7 +7462,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           Return: operator.TypeAnnotation ? resolveType(operator.TypeAnnotation.Type) ?? anyTypeRecord : anyTypeRecord,
         }],
       } as Known);
-      const ifaceDeclarations = interfaceDeclarations.get(nm) ?? (ifaceDecl ? [ifaceDecl as unknown as ParseNode] : []);
+      const ifaceDeclarations = ifaceDecl.TypeParameters?.ListKind && ifaceDecl.TypeParameters.ListKind !== 'parameters'
+        ? [ifaceDecl] : (interfaceDeclarations.get(nm) ?? [ifaceDecl]).filter((part) => part.parent === ifaceDecl.parent);
       for (const declaration of ifaceDeclarations) {
         const members = (declaration as unknown as { InterfaceMemberList?: readonly ParseNode[] }).InterfaceMemberList ?? [];
         for (const member of members) {
@@ -7488,10 +7498,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // which is the whole of what the substitution below then has to work
           // with.
           const pushedIface = pushTypeParameterScopeOf(declaration);
+          typeParameterScopes.push(new Map(ifaceBindings));
           let written: Known;
           try {
             written = operatorSignatureOf(ifaceOperator);
           } finally {
+            typeParameterScopes.pop();
             if (pushedIface) {
               typeParameterScopes.pop();
             }
@@ -7665,6 +7677,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // walk. Nominal, not structural: two unrelated empty classes stay
       // unrelated, which is the point of the classes being nominal at all.
       Base: base ?? undefined,
+      Implements: resolvedInterfaces,
+      InstanceFieldKeys: instanceFieldKeys,
       // The WRITE type of each setter, which a derived class needs to check
       // its own setters against and which the Structure cannot carry: a
       // property has one type there, and a getter already claims it. Carried
@@ -8489,8 +8503,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return resolvedBody ? substituteTypeParameters(resolvedBody, bindings) : null;
   };
 
-  const lookupAlias = (name: string): Known => {
-    for (let i = frames.length - 1; i >= 0; i -= 1) {
+  const lookupAlias = (name: string, declaration?: ParseNode): Known => {
+    for (let i = declaration && declaration !== aliasNodes.get(name) ? -1 : frames.length - 1; i >= 0; i -= 1) {
       const t = frames[i].aliases.get(name);
       if (t) {
         return t;
@@ -8502,7 +8516,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // is resolved from that here, or the parameter would be ~any~ and an
     // alias-typed parameter would accept an out-of-range literal the inline
     // spelling refuses.
-    const node = aliasNodes.get(name);
+    const node = declaration ?? aliasNodes.get(name);
     if (node !== undefined && !resolvingAliases.has(name)) {
       // An alias naming itself would otherwise recur forever; the walk's own
       // registration handles a legitimate recursive type by publishing a
@@ -8888,15 +8902,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && !argumentFails(args[i], slots[k].Type)) === 'unmatched';
   };
 
+  const protocolReceiverFails = (signature: SignatureRecord, receiver: Known): boolean => {
+    const expected = signature.ThisType;
+    return !!expected && !SameType(expected, SelfThisTypeRecord)
+      && protocolArgumentFails(receiver, expected);
+  };
+
   const protocolCallFails = (type: Known, resultFails: (result: Known) => boolean,
-    args?: readonly Known[]): boolean => everyProtocolAlternative(type, (arm) => {
+    args?: readonly Known[], receiver: Known = null): boolean => everyProtocolAlternative(type, (arm) => {
     if (knownNonObject(arm)) return true;
     const fn = effectiveFunctionType(callableForm(arm));
     // Unresolved overloads are conservative: a potentially valid signature
     // prevents a proof. No exploratory signature emits an argument diagnostic.
     return fn?.Kind === 'function' && fn.Signatures.length > 0
-      && fn.Signatures.every((signature) => (args && protocolArgumentsFail(signature.Parameters, args))
-        || resultFails(signature.Return ?? null));
+      && fn.Signatures.every((signature) => protocolReceiverFails(signature, receiver)
+        || (args && protocolArgumentsFail(signature.Parameters, args)) || resultFails(signature.Return ?? null));
   });
 
   // Result predicates describe this conversion's consumer, never the Static
@@ -8916,7 +8936,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Object result. Unlike GetMethod, non-callability is not an error.
             if (knownNonObject(method)) return attempt(i + 1);
             return protocolCallFails(method, (result) => everyProtocolAlternative(result, (value) =>
-              knownObject(value) ? attempt(i + 1) : knownNonObject(value) && resultFails(value)), []);
+              knownObject(value) ? attempt(i + 1) : knownNonObject(value) && resultFails(value)), [], arm);
           });
           outcomes.set(i, failed);
           return failed;
@@ -8926,12 +8946,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const argument: TypeRecord = { Kind: 'literal', Value: Value(hint), Base: makePrimitive('string') };
       return everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.toPrimitive), (hook) =>
         nullishOnly(hook) ? ordinary() : protocolCallFails(hook, (result) => everyProtocolAlternative(result,
-          (value) => knownObject(value) || (knownNonObject(value) && resultFails(value))), [argument]));
+          (value) => knownObject(value) || (knownNonObject(value) && resultFails(value))), [argument], arm));
     });
 
   const hasInstanceFails = (type: Known, argument: Known, ordinaryObject: boolean): boolean => everyProtocolAlternative(type, (arm) =>
     everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.hasInstance), (hook) =>
-      nullishOnly(hook) ? ordinaryObject : protocolCallFails(hook, () => false, [argument])));
+      nullishOnly(hook) ? ordinaryObject : protocolCallFails(hook, () => false, [argument], arm)));
 
   // Await's assimilation call supplies two ordinary function values. Their
   // callable/Object category is known, but they do not publish the arbitrary
@@ -8953,7 +8973,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Unlike GetMethod, assimilation accepts a non-callable then as a value.
       const fn = effectiveFunctionType(callableForm(method));
       return fn?.Kind === 'function' && fn.Signatures.length > 0
-        && fn.Signatures.every((signature) => protocolArgumentsFail(signature.Parameters,
+        && fn.Signatures.every((signature) => protocolReceiverFails(signature, arm) || protocolArgumentsFail(signature.Parameters,
           [resolvingCallback, resolvingCallback], assimilationArgumentFails));
     });
   });
@@ -8985,12 +9005,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               everyProtocolAlternative(asynchronous ? awaitedType(step) : step, (result) => {
                 const done = protocolMember(result, 'done');
                 return done?.Kind === 'literal' && done.Value === Value.false;
-              }), []);
+              }), [], object);
             if (!yields || knownNonObject(protocolMember(object, 'next'))) return false;
           }
           return everyProtocolAlternative(protocolMember(object, 'return'), (ret) =>
-            !nullishOnly(ret) && protocolCallFails(ret, asynchronous ? asyncIteratorResultFails : knownNonObject, []));
-        }), []);
+            !nullishOnly(ret) && protocolCallFails(ret, asynchronous ? asyncIteratorResultFails : knownNonObject, [], object));
+        }), [], arm);
       });
     });
 
@@ -9011,7 +9031,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // iterator likewise does not separately await the value of its step.
         return everyAlternative(step, (raw) => knownNonObject(raw)
           || (asynchronous && knownObject(raw) && awaitAssimilationFails(propertyType(raw, 'value'))));
-      }, stepArguments);
+      }, stepArguments, iterator);
     });
     const at = erasedForJudgment(t);
     if (!at) return false;
@@ -9025,7 +9045,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (skipEntryHook) return false;
     const invalid = (type: Known, fallback: () => boolean, asyncStep: boolean): boolean => everyAlternative(type, (arm) => {
       if (arm.Kind === 'primitive' && ['undefined', 'null'].includes(arm.Name)) return fallback();
-      return callFails(arm, (result) => iteratorFails(result, asyncStep), []);
+      return callFails(arm, (result) => iteratorFails(result, asyncStep), [], at);
     });
     const syncInvalid = () => invalid(propertyType(at, wellKnownSymbols.iterator), () => true, false);
     return asynchronous ? invalid(propertyType(at, wellKnownSymbols.asyncIterator), syncInvalid, true) : syncInvalid();
@@ -9047,8 +9067,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return done?.Kind === 'literal' && done.Value === Value.false
               && awaitAssimilationFails(protocolMember(result, 'value'));
           });
-        }), [undefinedType]);
-      }), []);
+        }), [undefinedType], object);
+      }), [], iterable);
     }));
 
   // Calls, construction and super calls share spread eligibility independently
@@ -9825,7 +9845,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // rather than being contradicted.
           const rawArgList = node.TypeArguments!.TypeArgumentList;
           const appliedName = node.TypeName.IdentifierReference.name;
-          const genericDeclaration = aliasNodes.get(appliedName) ?? interfaceNodes.get(appliedName);
+          const lexicalDeclaration = ResolveBindingDeclaration(node.TypeName.IdentifierReference, appliedName)?.node;
+          const genericDeclaration = lexicalDeclaration?.type === 'TypeAliasDeclaration' || lexicalDeclaration?.type === 'InterfaceDeclaration'
+            ? lexicalDeclaration : aliasNodes.get(appliedName) ?? interfaceNodes.get(appliedName);
           const genericParameters = (genericDeclaration as ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | undefined)?.TypeParameters?.TypeParameterList ?? [];
           if (genericDeclaration && genericParameters.length) {
             // #sec-bindtypearguments: aliases and interfaces share the same
@@ -9867,7 +9889,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 resolvingAliases.delete(appliedName);
               }
             }
-            const declared = interfaceTypeOf(appliedName);
+            const declared = interfaceTypeOfNode(genericDeclaration, interfaceDeclarations.get(appliedName));
             if (declared?.Kind === 'nominal') return CanonicalizeType({ ...declared,
               Arguments: parameters.map((parameter) => bindings.get(parameter.Name)!) });
             return null;
@@ -10323,6 +10345,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A source class named Range (or Map, etc.) denotes that class in its
         // own annotations, just as it does in `new Range()`. The library name
         // must not substitute an unrelated intrinsic type for the parameter.
+        const lexical = ResolveBindingDeclaration(node.TypeName.IdentifierReference, name)?.node;
+        if (lexical?.type === 'InterfaceDeclaration') {
+          return interfaceTypeOfNode(lexical, interfaceDeclarations.get(name));
+        }
+        if (lexical?.type === 'TypeAliasDeclaration') return lookupAlias(name, lexical);
         return refuseBareGeneric(node, classTypeOf(name) ?? lookupAlias(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name)) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
       }
       case 'PredefinedType':
@@ -11076,6 +11103,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * the parameter `T` it was declared as. Memoized per record; a structure with
    * no parameters in it is returned as it is.
    */
+  const operationalType = (t: Known, seen = new Set<TypeRecord>()): Known => {
+    if (t?.Kind !== 'parameter' || !t.Constraint || seen.has(t)) return t;
+    seen.add(t);
+    return operationalType(t.Constraint, seen);
+  };
+
   const structureOf = (t: Known): Known => {
     if (t && t.Kind === 'nominal') {
       const s = (t as unknown as { Structure?: TypeRecord }).Structure;
@@ -16401,6 +16434,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!index?.set) checkPrimitiveConversion(m.Expression, 'string');
           const key = memberKey(m);
           const base = staticType(m.MemberExpression);
+          const bound = operationalType(base);
+          if (bound !== base && key !== undefined) {
+            const read = memberReadType(bound, key);
+            if (read) return read;
+          }
           if (key instanceof SymbolValue) return memberReadType(base, key);
           if (typeof key === 'string') {
             const libraryMember = collectionMemberType(base, key) ?? VectorMaskMethodSignature(base, key);
@@ -17442,8 +17480,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         const leftLit = literalOperand(leftNode) ?? constUse(leftNode);
         const rightLit = literalOperand(rightNode) ?? constUse(rightNode);
-        const leftT = leftLit ? null : staticType(leftNode);
-        const rightT = rightLit ? null : staticType(rightNode);
+        const leftT = leftLit ? null : operationalType(staticType(leftNode));
+        const rightT = rightLit ? null : operationalType(staticType(rightNode));
         // A DEGENERATE LITERAL OPERAND, refused where the checker can see it.
         // #sec-integer-operations states two such rules, and neither was
         // enforced: "It is a type error if the divisor of `/` or `%` is a
@@ -24475,6 +24513,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   let stableIntrinsicSource: boolean | undefined;
+  let stableWeakSource: boolean | undefined;
   let stablePromiseSource: boolean | undefined;
   const promiseExecutorScalarCall = (node: ParseNode): boolean => {
     if (node.type === 'NewExpression' && node.Arguments?.[0] && isFunctionLiteral(node.Arguments[0])) {
@@ -24516,12 +24555,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return type?.Kind === 'primitive' && (isNumericOperandName(type.Name) || ['string', 'boolean', 'undefined', 'null'].includes(type.Name));
     });
   };
-  const intrinsicOrigin = (expression: ParseNode, name: 'Proxy' | 'Map' | 'Set' | 'Promise' | 'WeakMap' | 'WeakSet',
+  const intrinsicOrigin = (expression: ParseNode, name: 'Proxy' | 'Map' | 'Set' | 'Promise' | 'WeakMap' | 'WeakSet' | 'WeakRef' | 'FinalizationRegistry',
     scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
     const realm = surroundingAgent.currentRealmRecord;
+    const weak = name === 'WeakRef' || name === 'FinalizationRegistry';
+    if (weak) stableWeakSource ??= intrinsicSourceIsStable(root, realm,
+      (node) => node.type === 'AssignmentRestElement' && objectSpreadItems(node) !== null);
     if (name === 'Promise') stablePromiseSource ??= intrinsicSourceIsStable(root, realm, promiseExecutorScalarCall);
     else stableIntrinsicSource ??= intrinsicSourceIsStable(root, realm);
-    if (!(name === 'Promise' ? stablePromiseSource : stableIntrinsicSource) || hasDirectEval) return false;
+    if (!(weak ? stableWeakSource : name === 'Promise' ? stablePromiseSource : stableIntrinsicSource) || hasDirectEval) return false;
     const node = patternExpression(expression)!;
     if (node.type === 'TypeArgumentsExpression') return intrinsicOrigin(node.Expression, name, scope, seen);
     if (node.type !== 'IdentifierReference') return false;
@@ -24977,6 +25019,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             checkCallReceiver(view.expression, callee);
             checkInvocation(view.expression, false);
             checkCallArguments(call, callee, node);
+            checkArgumentSpreads(chain.Arguments);
           }
           walk(chain.Arguments);
         }
@@ -25895,7 +25938,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const iterated = enumerating ? makePrimitive('string')
         : source ? iteratedElementType(source, contextuallyTyped) : null;
-      const element = (node as ParseNode).type === 'ForAwaitStatement' ? awaitedType(iterated) : iterated;
+      const element = (node as ParseNode).type === 'ForAwaitStatement' && source
+        ? AsyncIterationContribution(staticType(source), structureOf, awaitedType,
+          (type) => iteratedElementType(source, type)).element : iterated;
       walk(source);
       // The annotation wins as the binding's type - it is declared, where the
       // element type is inferred - and the element type must be assignable to
@@ -26164,7 +26209,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const shape = structureOf(type);
               const disposer = shape?.Kind === 'object'
                 ? shape.Properties.find((property) => property.key === wellKnownSymbols.dispose)?.type : null;
-              return !disposer || (!notCallable(disposer) && !protocolCallFails(disposer, () => false, []));
+              return !disposer || (!notCallable(disposer) && !protocolCallFails(disposer, () => false, [], type));
             })) {
               const completion = Throw.StaticTypeError('a using resource of type $1 has a disposal contract that cannot be called without arguments', Value(displayType(declared))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
@@ -27391,23 +27436,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // which is how a handler is almost always written.
         if (target && !namedInstance && Array.isArray(ne.Arguments)
             && bareTarget?.type === 'IdentifierReference') {
-          const libraryName = (bareTarget as { name: string }).name;
+          let libraryName = (bareTarget as { name: string }).name;
+          if (!['Promise', 'Proxy', 'WeakRef', 'FinalizationRegistry'].includes(libraryName)) {
+            if (intrinsicOrigin(target, 'WeakRef')) libraryName = 'WeakRef';
+            else if (intrinsicOrigin(target, 'FinalizationRegistry')) libraryName = 'FinalizationRegistry';
+          }
           const written = target.type === 'TypeArgumentsExpression'
             ? ((target as unknown as { TypeArguments: { TypeArgumentList: readonly ParseNode[] } })
               .TypeArguments.TypeArgumentList.map((a) => resolveType(a as unknown as ParseNode.Type)))
             : [];
           const typeArgs = written.every((a): a is TypeRecord => a !== null) ? written : [];
-          const params = libraryName !== 'Promise' || intrinsicOrigin(target, 'Promise')
+          const originKnown = libraryName === 'Promise' || libraryName === 'WeakRef' || libraryName === 'FinalizationRegistry'
+            ? intrinsicOrigin(target, libraryName) : true;
+          const params = originKnown
             ? libraryConstructParameters(libraryName, typeArgs) : null;
           if (params) {
-            const argNodes = ne.Arguments.filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
-            argNodes.forEach((arg, i) => {
-              const param = params[i];
-              if (!param) {
-                return;
+            // #sec-library-constructor-contracts: names, spreads and contextual
+            // callbacks use the ordinary argument binder.
+            const Parameters = params.map((p) => parameter(p.Type, p));
+            checkCallArguments({ CallExpression: target, Arguments: ne.Arguments },
+              { Kind: 'function', Signatures: [{ Parameters, Return: null }] }, n);
+            if (libraryName === 'WeakRef') {
+              for (const { node: argument, slot } of mapCallArguments(Parameters, ne.Arguments).certainEntries) {
+                const referent = staticType(argument);
+                if (slot === 0 && referent && !typeCanBeHeldWeakly(widen(referent)!)) {
+                  errors.push(Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly',
+                    Value(displayType(referent)), Value('WeakRef'), Value('target')).Value as ObjectValue);
+                }
               }
-              requireAssignable(argumentStaticType(arg, param.Type as Known), param.Type as Known);
-            });
+            }
           }
         }
         // #sec-type-errors: an origin-preserving alias keeps the constructor
@@ -28252,12 +28309,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const scope = pushTypeParameterScopeOf(cls, 'type-only');
           try {
             for (const element of classBodyOf(cls)) {
+              if ((element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName?.type === 'PrivateIdentifier') continue;
               const kind = memberKind(element);
               const key = classElementKey((element as { ClassElementName?: ParseNode.ClassElementName }).ClassElementName);
               if (!kind || key === undefined) continue;
-              const type = kind === 'field' ? null : declaredMethodType(element as never, element);
+              const type = element.type === 'FieldDefinition'
+                ? element.TypeAnnotation ? resolveType(element.TypeAnnotation.Type) : null
+                : declaredMethodType(element as never, element);
               addMemberContract(members, { key, kind, static: !!(element as { static?: boolean }).static,
                 abstract: element.type === 'AbstractMethodDefinition',
+                readonly: element.type === 'FieldDefinition' && element.readonly,
                 type: type && !mentionsTypeParameter(type) ? type : null });
             }
           } finally {
@@ -28265,6 +28326,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           chain.push(members);
         }
+        const masked = inheritedFieldViolation(chain, instanceType);
+        if (masked !== null) errors.push(Throw.StaticTypeError('field $1 does not preserve its inherited member contract',
+          typeof masked === 'string' ? Value(masked) : masked).Value as ObjectValue);
         const violation = abstractMemberViolation(chain, n.ClassModifiers?.includes('abstract') ?? false);
         if (violation) errors.push(Throw.StaticTypeError(violation.kind === 'signature'
           ? '$1 implements an inherited $2 with a signature the declaration does not accept'

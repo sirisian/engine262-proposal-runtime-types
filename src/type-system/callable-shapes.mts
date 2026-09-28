@@ -49,6 +49,7 @@ export const effectiveFunctionType = (t: Known): Known => {
 export const callableForm = (t: Known, seen = new Set<TypeRecord>()): Known => {
   if (!t || seen.has(t)) return t;
   seen.add(t);
+  if (t.Kind === 'parameter' && t.Constraint) return callableForm(t.Constraint, seen);
   // #sec-isoftype: keyed conjuncts do not erase a value's call contracts.
   // Multiple callable conjuncts use the existing signature selection rules.
   if (t.Kind === 'intersection') {

@@ -4,7 +4,7 @@ import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
-import { SelfThisTypeRecord, PatternLiteralTypeOf } from '../type-system/check.mts';
+import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf } from '../type-system/check.mts';
 import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject } from '../abstract-ops/runtime-types.mts';
@@ -2350,7 +2350,9 @@ function* SpecializeFromFrame(
     return specialized as never;
   }
   const ctor = specialized.Value as Value;
+  const published = PublishedClassTypeOf(body);
   AssociateClassType(ctor, GetTypeObject({
+    ...(published?.Kind === 'nominal' ? published : {}),
     Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
   } as never));
   byArgs.set(cacheKey, ctor);

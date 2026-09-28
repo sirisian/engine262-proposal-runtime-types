@@ -100,6 +100,8 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       // relations the checker decides correctly. Taken from the checker's own
       // record for this declaration rather than rebuilt, since the structure
       // must include inherited members and there must be exactly one builder.
+      Implements: published?.Kind === 'nominal' ? published.Implements : undefined,
+      InstanceFieldKeys: published?.Kind === 'nominal' ? published.InstanceFieldKeys : undefined,
       Base: published?.Kind === 'nominal' ? published.Base : undefined,
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
     });

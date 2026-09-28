@@ -631,6 +631,12 @@ export type TypeRecord =
     // type whose declaration extends ... that type's declaration" is the
     // relation this field holds.
     readonly Base?: TypeRecord,
+    // Resolved interface identities and arguments; aliases do not create a
+    // second nominal declaration. Own field keys distinguish storage from the
+    // prototype when checking index signatures and effective member lookup.
+    readonly Implements?: readonly TypeRecord[],
+    readonly SpecializationBindings?: ReadonlyMap<string, TypeRecord>,
+    readonly InstanceFieldKeys?: readonly (string | SymbolValue)[],
     // The WRITE type of each setter, which a derived class checks its own
     // setters against and which [[Structure]] cannot carry: a property has one
     // type there, and a getter already claims it. Declared beside [[Base]]

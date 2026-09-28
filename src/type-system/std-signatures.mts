@@ -470,6 +470,17 @@ export const libraryConstructParameters = (
       const executor = callable([callable([input], voidType), callable([rejection], voidType)], voidType);
       return [{ Name: 'executor', Type: executor, Optional: false, Rest: false }];
     }
+    case 'WeakRef':
+      return [{ Name: 'target', Type: typeof typeArgs[0] === 'object' ? typeArgs[0] : anyType,
+        Optional: false, Rest: false }];
+    case 'FinalizationRegistry': {
+      if (typeArgs.length === 0) return null;
+      const held = typeof typeArgs[0] === 'object' ? typeArgs[0] : anyType;
+      const callback: TypeRecord = { Kind: 'function', Signatures: [{
+        Parameters: [parameter(held, { Name: 'heldValue' })], Return: voidType,
+      }] };
+      return [{ Name: 'callback', Type: callback, Optional: false, Rest: false }];
+    }
     case 'Proxy': {
       // Only a construction that WROTE a type argument. An untyped proxy is `any`
       // (#sec-reflection-and-declared-types), and the base language admits any

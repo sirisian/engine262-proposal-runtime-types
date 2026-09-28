@@ -42,8 +42,8 @@ import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { anyType } from '../type-system/records.mts';
 import { CreateTokenStream } from '../intrinsics/TokenStream.mts';
 import { TokensOf } from '../parser/TokensOf.mts';
-import { PublishedReturnTypeOf } from '../type-system/check.mts';
-import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, type MemberContract, sameFieldContract, type FieldContract } from '../type-system/member-contracts.mts';
+import { PublishedReturnTypeOf, PublishedClassTypeOf } from '../type-system/check.mts';
+import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from '../type-system/member-contracts.mts';
 import {
   DefineMethod,
   MethodDefinitionEvaluation,
@@ -1471,8 +1471,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const name = field.LayoutName ?? field.Name;
           if (!(name instanceof JSStringValue) && !(name instanceof SymbolValue)) continue;
           const key = name instanceof JSStringValue ? name.stringValue() : name;
-          addMemberContract(own, { key, static: isStatic, kind: 'field', abstract: false, type: null });
           const type = (field.TypeObject as { TypeRecord?: TypeRecord } | undefined)?.TypeRecord;
+          addMemberContract(own, { key, static: isStatic, kind: 'field', abstract: false,
+            type: type ?? null, readonly: !!field.Readonly });
           const prior = slots.get(key);
           const contract = type ? { type, readonly: !!field.Readonly, protected: field.Access === 'protected',
             controls: (field as { LayoutControls?: FieldControls }).LayoutControls ?? {} } : null;
@@ -1489,6 +1490,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         chain.push(memberContracts.get(contractOwner) ?? []);
         contractOwner = Q(yield* contractOwner.GetPrototypeOf());
       }
+      const masked = unspecializedGeneric ? null : inheritedFieldViolation(chain, ClassTail.parent && PublishedClassTypeOf(ClassTail.parent));
+      if (masked !== null) return Throw.TypeError('field $1 does not preserve its inherited member contract',
+        typeof masked === 'string' ? Value(masked) : masked);
       const violation = abstractMemberViolation(chain, modifiers.includes('abstract'));
       if (violation) return Throw.TypeError(violation.kind === 'signature'
         ? '$1 implements an inherited $2 with a signature the declaration does not accept'

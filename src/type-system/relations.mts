@@ -790,20 +790,17 @@ function spanElementOf(t: TypeRecord): TypeRecord | undefined {
  * Walked up [[Base]] as well, because a class implements what its superclass
  * implements.
  */
-export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode): boolean {
+export function ClassImplements(s: TypeRecord, interfaceDeclaration: ParseNode, target?: TypeRecord): boolean {
   let current: TypeRecord | undefined = s;
   const seen = new Set<TypeRecord>();
   while (current && current.Kind === 'nominal' && !seen.has(current)) {
     seen.add(current);
-    const tail = (current.Declaration as { ClassTail?: { ImplementsClause?: readonly ParseNode[] | null } | null } | undefined)?.ClassTail;
-    for (const ref of tail?.ImplementsClause ?? []) {
-      const named = (ref as { TypeName?: { IdentifierReference?: { name?: string } } }).TypeName?.IdentifierReference?.name;
-      const declaredName = (interfaceDeclaration as { BindingIdentifier?: { name?: string } } | undefined)?.BindingIdentifier?.name;
-      if (typeof named === 'string' && named === declaredName) {
-        return true;
-      }
+    for (const implemented of current.Implements ?? []) {
+      const resolved = SubstituteTypeArguments(implemented, current.Declaration, current.Arguments);
+      if (resolved.Kind === 'nominal' && resolved.Declaration === interfaceDeclaration
+          && (!target || IsSubtype(resolved, target, []))) return true;
     }
-    current = current.Base;
+    current = current.Base && SubstituteTypeArguments(current.Base, current.Declaration, current.Arguments);
   }
   return false;
 }
@@ -1521,7 +1518,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
         // that a third-party class could then reach no structural position - is
         // answered by the object-type rule: an object type asks what a value HAS, and a class
         // instance reaches every object-typed position without saying anything.
-        && ClassImplements(s, tn.Declaration)) {
+        && ClassImplements(s, tn.Declaration, tn)) {
         // [[Structure]] is declared on the
         // record, so these read fields rather than hoping for them. The casts
         // were what let a reader believe the relation and its callers agreed.
@@ -1535,11 +1532,14 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           // its `v: uint8` against `v: T` and was refused, so the DECLARED
           // hierarchy `sec-interfaces` promises did not carry a parameterised
           // interface at all.
-          return IsSubtype(
-            sStructure,
-            SubstituteTypeArguments(tStructure, tn.Declaration, tn.Arguments),
-            next,
-          );
+          const target = SubstituteTypeArguments(tStructure, tn.Declaration, tn.Arguments);
+          let source = SubstituteTypeArguments(sStructure, s.Declaration, s.Arguments);
+          if (s.InstanceFieldKeys && source.Kind === 'object' && target.Kind === 'object') {
+            const named = target.Properties;
+            source = { ...source, Properties: source.Properties.filter((property) => s.InstanceFieldKeys!.includes(property.key)
+              || named.some((required) => required.key === property.key)) };
+          }
+          return IsSubtype(source, target, next);
         }
       }
       // [[Base]] is declared on the record

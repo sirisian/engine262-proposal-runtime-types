@@ -73,14 +73,14 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode:
       // The weak collections join Map and Set: seeding one runs the intrinsic
       // adder, whose identity the seed judgment establishes separately, and a
       // weak insertion runs no user code (Round 4, Gap 5).
-      if (['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Uint8Array'].includes(node.name)) return intrinsicName(node.name);
+      if (['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Uint8Array'].includes(node.name)) return intrinsicName(node.name);
       // A const alias is safe only when its initializer also has a known origin.
       const declaration = definitions.get(node.name);
       if (!ambiguous.has(node.name) && !mutated.has(node.name) && declaration?.type === 'LexicalBinding'
           && declaration.parent?.type === 'LexicalDeclaration' && declaration.parent.LetOrConst === 'const'
           && declaration.Initializer) {
         const value = unwrap(declaration.Initializer);
-        return value.type === 'IdentifierReference' && ['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet'].includes(value.name) && intrinsicName(value.name);
+        return value.type === 'IdentifierReference' && ['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry'].includes(value.name) && intrinsicName(value.name);
       }
       return false;
     }
@@ -109,7 +109,7 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode:
       if (write && base.type === 'IdentifierReference' && base.name === 'globalThis' && key !== undefined
           && !definitions.has('globalThis') && !mutated.has('globalThis')
           && intrinsicData(realm.GlobalObject, Value('globalThis')) === realm.GlobalObject
-          && !['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Array', 'globalThis'].includes(key)
+          && !['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Array', 'globalThis'].includes(key)
           && intrinsicData(realm.GlobalObject, Value(key)) !== undefined) continue;
       if (!write && key === 'revocable' && base.type === 'IdentifierReference' && base.name === 'Proxy'
           && parent?.type === 'CallExpression' && parent.CallExpression === node) continue;

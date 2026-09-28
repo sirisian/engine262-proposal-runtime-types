@@ -55,3 +55,54 @@ export function StaticIterationContribution(
   }
   return { element: join(types) };
 }
+
+/** #sec-static-iteration-contribution: for-await awaits steps, not async values. */
+export function AsyncIterationContribution(
+  type: TypeRecord | null,
+  structureOf: (type: TypeRecord | null) => TypeRecord | null,
+  awaitedType: (type: TypeRecord | null) => TypeRecord | null,
+  syncElement: (type: TypeRecord) => TypeRecord | null,
+): IterationContribution {
+  const combine = (parts: readonly IterationContribution[]): IterationContribution => ({
+    element: parts.every((part) => part.element !== null) ? join(parts.map((part) => part.element!)) : null,
+  });
+  if (!type) return unknownContribution;
+  if (type.Kind === 'union') return combine(type.Members.map((arm) => AsyncIterationContribution(arm, structureOf, awaitedType, syncElement)));
+  if (type.Kind === 'nominal' && type.LibraryName === 'AsyncGenerator') {
+    const yielded = type.Arguments[0];
+    return { element: typeof yielded === 'object' ? awaitedType(yielded) : null };
+  }
+  const shape = structureOf(type);
+  const hook = shape?.Kind === 'object' ? shape.Properties.find((property) => property.key === wellKnownSymbols.asyncIterator) : undefined;
+  const fallback = (): IterationContribution => ({ element: awaitedType(syncElement(type)) });
+  if (!hook) return fallback();
+  const stepValue = (result: TypeRecord | null): IterationContribution => {
+    if (!result) return unknownContribution;
+    if (result.Kind === 'union') return combine(result.Members.map(stepValue));
+    const record = structureOf(result);
+    if (record?.Kind !== 'object') return unknownContribution;
+    const done = record.Properties.find((property) => property.key === 'done');
+    if (!done?.optional && done?.type.Kind === 'literal' && done.type.Value === Value.true) {
+      return { element: { Kind: 'union', Members: [] } };
+    }
+    const value = record.Properties.find((property) => property.key === 'value');
+    return value && !value.optional ? { element: value.type } : unknownContribution;
+  };
+  const next = (iterator: TypeRecord | null): IterationContribution => {
+    if (!iterator) return unknownContribution;
+    if (iterator.Kind === 'union') return combine(iterator.Members.map(next));
+    const record = structureOf(iterator);
+    const method = record?.Kind === 'object' ? record.Properties.find((property) => property.key === 'next') : undefined;
+    const fn = method?.type;
+    return !method?.optional && fn?.Kind === 'function' && fn.Signatures.length === 1
+      ? stepValue(awaitedType(fn.Signatures[0]!.Return)) : unknownContribution;
+  };
+  const select = (method: TypeRecord): IterationContribution => {
+    if (method.Kind === 'union') return combine(method.Members.map(select));
+    if (method.Kind === 'primitive' && ['null', 'undefined'].includes(method.Name)) return fallback();
+    return method.Kind === 'function' && method.Signatures.length === 1
+      ? next(method.Signatures[0]!.Return) : unknownContribution;
+  };
+  const selected = select(hook.type);
+  return hook.optional ? combine([selected, fallback()]) : selected;
+}

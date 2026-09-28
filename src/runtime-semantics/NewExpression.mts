@@ -7,12 +7,13 @@ import { SetPendingPromiseTypes } from '../type-system/promise-contracts.mts';
 import { Q } from '../completion.mts';
 import { TargetTypedNewType } from '../type-system/check.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
+import { libraryConstructParameters } from '../type-system/std-signatures.mts';
 import { displayType } from '../type-system/records.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { isArray } from '../utils/language.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { contextualTypeFor, pushContextualType, popContextualType, SetPendingCalleeContext, DefaultValueOf, TypeNodeToTypeRecord } from '../type-system/runtime.mts';
-import { StampTypedCollection, soleSignatureParameterTypes } from '../abstract-ops/runtime-types.mts';
+import { StampTypedCollection, soleSignatureParameterTypes, RequireType } from '../abstract-ops/runtime-types.mts';
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
@@ -57,12 +58,27 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   const ref = Q(yield* Evaluate(constructExpr));
   // 4. Let constructor be ? GetValue(ref).
   const constructor = Q(yield* GetValue(ref as never));
+  let libraryParameters: ReturnType<typeof libraryConstructParameters> = null;
+  if (surroundingAgent.feature('runtime-types')) {
+    const intrinsics = surroundingAgent.currentRealmRecord.Intrinsics;
+    const name = constructor === intrinsics['%WeakRef%'] ? 'WeakRef'
+      : constructor === intrinsics['%FinalizationRegistry%'] ? 'FinalizationRegistry' : null;
+    if (name) {
+      const types: TypeRecord[] = [];
+      if (constructExpr.type === 'TypeArgumentsExpression') {
+        for (const argument of constructExpr.TypeArguments.TypeArgumentList) {
+          types.push(Q(yield* TypeNodeToTypeRecord(argument)));
+        }
+      }
+      libraryParameters = libraryConstructParameters(name, types);
+    }
+  }
   let argList;
   // 5. If arguments is empty, let argList be a new empty List.
   if (args === undefined) {
     argList = [];
   } else if (surroundingAgent.feature('runtime-types') && hasNamedArguments(args)) {
-    argList = Q(yield* ArgumentListEvaluationNamed(args, constructor));
+    argList = Q(yield* ArgumentListEvaluationNamed(args, constructor, libraryParameters ? { Parameters: libraryParameters } : undefined));
   } else { // 6. Else,
     // a. Let argList be ? ArgumentListEvaluation of arguments.
     //
@@ -81,7 +97,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     if (surroundingAgent.feature('runtime-types') && constructor instanceof ObjectValue) {
       const soleParameterTypes = Q(yield* soleSignatureParameterTypes(constructor));
       const firstArgument = ((args as { ArgumentList?: readonly object[] }).ArgumentList ?? [])[0];
-      pushContextualType(soleParameterTypes?.[0] ?? null, firstArgument);
+      pushContextualType(libraryParameters?.[0]?.Type ?? soleParameterTypes?.[0] ?? null, firstArgument);
       try {
         argList = Q(yield* ArgumentListEvaluation(args));
       } finally {
@@ -90,6 +106,13 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     } else {
       argList = Q(yield* ArgumentListEvaluation(args));
     }
+  }
+  if (libraryParameters) {
+    const checked = [...argList];
+    for (const [index, parameter] of libraryParameters.entries()) {
+      checked[index] = Q(yield* RequireType(checked[index] ?? Value.undefined, parameter.Type));
+    }
+    argList = checked;
   }
   // 7. If IsConstructor(constructor) is false, throw a TypeError exception.
   if (!IsConstructor(constructor)) {

@@ -1,7 +1,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { SymbolValue } from '../value.mts';
-import { generatorDeclaredType, type Known } from './records.mts';
-import { IsSubtype, SameType } from './relations.mts';
+import { generatorDeclaredType, mentionsTypeParameter, type Known } from './records.mts';
+import { IsSubtype, IsAssignable, SameType } from './relations.mts';
 
 export type MemberKind = 'method' | 'get' | 'set' | 'field';
 export interface MemberContract {
@@ -10,6 +10,7 @@ export interface MemberContract {
   readonly kind: MemberKind;
   readonly abstract: boolean;
   readonly type: Known;
+  readonly readonly?: boolean;
 }
 
 /** #sec-abstract-classes: placement, property identity and member kind matter. */
@@ -75,4 +76,57 @@ export function sameFieldContract(a: FieldContract, b: FieldContract): boolean {
   return SameType(a.type, b.type) && a.readonly === b.readonly && a.protected === b.protected
     && (!a.controls || !b.controls || (['align', 'offset', 'offsetBit', 'endian'] as const)
       .every((key) => a.controls![key] === b.controls![key]));
+}
+
+/** #sec-typed-classes: an own field must preserve the inherited member's use. */
+export function inheritedFieldViolation(chain: readonly (readonly MemberContract[])[], receiver?: Known): string | SymbolValue | null {
+  if (!(chain[0] ?? []).some((member) => member.kind === 'field' && !member.static && member.type)) return null;
+  // Runtime specialization has resolved the field records even when the
+  // published declaration still names parameters. Rebuild only the read view
+  // needed by an explicit receiver contract; no property is read from a value.
+  const members = chain.flat().filter((member) => !member.static);
+  const keys = new Set(members.map((member) => member.key));
+  const shape: NonNullable<Known> = { Kind: 'object', IndexSignatures: [], Properties: [...keys].map((key) => {
+    const declarations = members.filter((member) => member.key === key);
+    const field = declarations.find((member) => member.kind === 'field');
+    const member = field ?? declarations.find((member) => member.kind !== 'set') ?? declarations[0]!;
+    const type = member.kind === 'get' && member.type?.Kind === 'function'
+      ? member.type.Signatures[0]?.Return : member.type;
+    return { key, type: type ?? { Kind: 'any' }, optional: false,
+      readonly: field ? !!field.readonly : member.kind === 'method' || !declarations.some((part) => part.kind === 'set') };
+  }) };
+  const actual = receiver?.Kind === 'nominal' ? { ...receiver, Structure: shape } : shape;
+  const callable = (type: Known): Known => type?.Kind === 'function' ? { ...type,
+    Signatures: type.Signatures.map((signature) => ({ ...signature,
+      ThisType: signature.ThisType?.Kind === 'nominal' && signature.ThisType.Declaration.type === ('SelfThisMarker' as string)
+        ? undefined : signature.ThisType,
+    })),
+  } : type;
+  for (const field of chain[0] ?? []) {
+    if (field.kind !== 'field' || field.static || !field.type || field.type.Kind === 'any' || mentionsTypeParameter(field.type)) continue;
+    // An inherited own field already masks every prototype descriptor. Its
+    // independent storage redeclaration rule owns this case.
+    if (chain.slice(1).some((level) => level.some((member) => !member.static && member.key === field.key && member.kind === 'field'))) continue;
+    const inherited = chain.slice(1).map((level) => level.filter((member) => !member.static && member.key === field.key))
+      .find((level) => level.length > 0) ?? [];
+    for (const member of inherited) {
+      if (member.abstract || !member.type || member.type.Kind === 'any' || mentionsTypeParameter(member.type)) continue;
+      if (member.kind === 'method') {
+        let supplied = callable(field.type)!;
+        if (supplied.Kind === 'function') supplied = { ...supplied, Signatures: supplied.Signatures
+          .filter((signature) => !signature.ThisType || mentionsTypeParameter(signature.ThisType)
+            || mentionsTypeParameter(actual) || IsAssignable(actual, signature.ThisType))
+          .map((signature) => ({ ...signature, ThisType: undefined })) };
+        if (!IsSubtype(supplied, callable(member.type)!, [])) return field.key;
+      } else if (member.type.Kind === 'function') {
+        for (const signature of member.type.Signatures) {
+          const required = member.kind === 'get' ? signature.Return ?? signature.InferredReturn : signature.Parameters[0]?.Type;
+          if (!required || required.Kind === 'any') continue;
+          if (member.kind === 'get' ? !IsSubtype(field.type, required, [])
+            : field.readonly || !IsSubtype(required, field.type, [])) return field.key;
+        }
+      }
+    }
+  }
+  return null;
 }

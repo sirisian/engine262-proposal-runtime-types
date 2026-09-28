@@ -86,6 +86,8 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       Constructor: value,
       // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
+      Implements: published?.Kind === 'nominal' ? published.Implements : undefined,
+      InstanceFieldKeys: published?.Kind === 'nominal' ? published.InstanceFieldKeys : undefined,
       Base: published?.Kind === 'nominal' ? published.Base : undefined,
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
     });
