@@ -631,3 +631,70 @@ test('a juxtaposed head naming a numeric const is refused with the rule\'s own m
   expect(evaluated('const T = 1; class P { a: uint8 = 1; } function g(v: P) { class T { a: uint8 = 1; } '
     + 'return match (v) { when T { a: let a }: 1; default: 0; }; } String(g(new P()));')).toBe('0');
 });
+
+// ---- round 3 ----------------------------------------------------------------
+
+test('a compound or update store of a number into a string or boolean location is refused (Round 3, Gap 1)', () => {
+  expectStaticTypeError("let s: string = 'a'; s -= 1;");
+  expectStaticTypeError("let s: string = 'a'; s >>>= 1;");
+  expectStaticTypeError("class C { a: string = 'x'; } const c: C = new C(); c.a -= 1;");
+  expectStaticTypeError('function u(o: { a: uint8 } | { a: string }) { o.a -= 1; }');
+  expectStaticTypeError("function u(o: { a: uint8, b: string }, k: 'a' | 'b') { o[k] -= 1; }");
+  expectStaticTypeError('let b: boolean = true; b -= 1;');
+  // `+=` may concatenate; an `any` operand is left to the boundary, whose
+  // string conversion #sec-primitiveconvert specifies.
+  expect(evaluated("let s: string = 'a'; s += 1; s;")).toBe('a1');
+  expect(evaluated("let s: string = 'a'; let n: any = 1; s -= n; s;")).toBe('NaN');
+  expect(evaluated('let u: uint8 = 5; u -= 1; String(u);')).toBe('4');
+  // An UPDATE stores back through the boundary: #sec-unary-operators-for-typed-
+  // values keeps "numeric-to-String conversion on the existing update/store
+  // path" valid, so `++` on a string is legal where `-= 1` is not.
+  expect(evaluated("let s: string = '1'; s++; s;")).toBe('2');
+  expectStaticTypeError('let b: boolean = true; b++;');
+});
+
+test('a capture\'s written domain and position are checked at the declaration (Round 3, Gap 2)', () => {
+  expectStaticTypeError('class Box<T: type> {} class Box<const U: uint8> {}');
+  expectStaticTypeError('class Box<N: uint8> {} class Box<const U: string> {}');
+  expectStaticTypeError('class Box<T: type> {} class Box<Map.<const K: uint8, const V>> {}');
+  expectThrown('type W = uint8; class Box<T: type> {} class Box<W.<const U>> {} let b: Box.<uint8>;', 'names no constructor');
+  expect(ok('class Box<T: type> {} class Box<const U: type> {} String(1);')).toBe(true);
+  expect(ok('class Box<T: type> {} class Box<Map.<const K, const V>> {} String(1);')).toBe(true);
+});
+
+test('a protected member read through destructuring is refused (Round 3, Gap 3)', () => {
+  const C = 'class C { protected x: uint8 = 1; } const c: C = new C(); ';
+  expectStaticTypeError(`${C}const { x } = c;`);
+  expectStaticTypeError(`${C}let x; ({ x } = c);`);
+  expectStaticTypeError('class C { protected x: uint8 = 1; } function u({ x }: C) { return x; }');
+  expect(evaluated('class C { protected x: uint8 = 1; } class D extends C { n(): uint8 { const { x } = this; return x; } } String(new D().n());')).toBe('1');
+});
+
+test('a binding typed void through its pattern\'s annotation is refused (Round 3, Gap 4)', () => {
+  expectThrown('const { a }: { a: void } = { a: undefined };', 'a binding cannot have type void');
+  expectStaticTypeError('let [a]: [void] = [undefined];');
+  expectStaticTypeError('function f({ a }: { a: void }) {}');
+  // Line 1761: each name takes its member's type, and the initializer crosses
+  // the annotation.
+  expectStaticTypeError('let { a }: { a: uint8 } = { a: "x" };');
+  expectStaticTypeError('const { a }: { a: uint8 } = { a: 1 }; let s: string = a;');
+  expect(evaluated('const { a }: { a: uint8 } = { a: 1 }; String(a);')).toBe('1');
+});
+
+test('a logical operand that can never be evaluated is refused whatever settles the test (Round 3, Gap 5)', () => {
+  expectStaticTypeError('const o: {} = {}; const x = o || 1;');
+  expectStaticTypeError('const f = (x: uint8): uint8 => x; const h = f || 1;');
+  expectStaticTypeError('let n: null = null; const y = n && 1;');
+  // The right operand is evaluated in these, so they stay legal.
+  expect(evaluated('const obj: {} = {}; function h(): uint8 { return 1; } String(obj && h());')).toBe('1');
+  expect(evaluated('let n: null = null; String(n || 1);')).toBe('1');
+  expect(evaluated('let u: uint8 = 1; String(u || 2);')).toBe('1');
+});
+
+test('a logical operator is a conditional selection (Round 3, Q3)', () => {
+  const F = 'const f = (x: uint8): uint8 => x; const g = (y: uint8): uint8 => y; ';
+  expectStaticTypeError(`${F}new (f && g)(1);`);
+  expectStaticTypeError(`${F}const h = f && g; new h(1);`);
+  expectStaticTypeError('class K { x: uint8 = 1; } class L { y: uint8 = 1; } const D = K && L; D();');
+  expect(evaluated('function F() {} function G() {} const H = F && G; String(typeof new H());')).toBe('object');
+});

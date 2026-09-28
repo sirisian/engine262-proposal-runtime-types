@@ -4956,6 +4956,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return false;
     }
     const name = (target as { Name?: string }).Name;
+    // Round 3, Gap 1. At a `string` target every arithmetic compound but `+=`
+    // yields a number, and at a `boolean` target none yields a boolean, so each
+    // is refused as its `=` spelling is (the Conversion Rule, #sec-the-conversion-
+    // rule). `+=` at a `string` stays unjudged: it may concatenate, and whether a
+    // typed number may do so is the open question above.
+    if (name === 'string') return operator !== '+=';
+    if (name === 'boolean') return true;
     return name === 'uint' || name === 'int' || name === 'float' || name === 'number'
       || (typeof name === 'string' && (name.startsWith('float') || name.startsWith('decimal')));
   };
@@ -8041,6 +8048,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.type !== 'MemberExpression' || node.PrivateIdentifier) return;
     const keys = memberKeys(node);
     if (!keys) return;
+    checkProtectedKeys(staticType(node.MemberExpression), keys);
+  };
+
+  /**
+   * The protected-access judgment for a receiver and a statically established
+   * set of keys, shared by member access and by an object pattern's property,
+   * which reads the same declaration (Round 3, Q2).
+   */
+  const checkProtectedKeys = (receiverType: Known, keys: readonly (string | SymbolValue)[]): void => {
     const permitted = (owner: ParseNode): boolean => classContext.some((context) => {
       const seen = new Set<ParseNode>();
       for (let cls: ParseNode | undefined = context; cls && !seen.has(cls); cls = heritageClassOf(cls)) {
@@ -8065,7 +8081,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ? Value(property.key) : property.key).Value as ObjectValue);
       }
     };
-    inspect(staticType(node.MemberExpression));
+    inspect(receiverType);
   };
 
   // ---- enums --------------------------------------------------------
@@ -21832,7 +21848,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(pattern, contextual);
   };
 
-  type PatternSource = { type: Known, expression?: ParseNode, typed?: boolean, ordinaryObject?: boolean };
+  // `annotated`: the type came from an enclosing pattern's annotation, which
+  // types each name taken out of it (#sec-type-annotations, line 1761).
+  type PatternSource = { type: Known, expression?: ParseNode, typed?: boolean, ordinaryObject?: boolean, annotated?: boolean };
   type PatternNode = {
     type: string,
     BindingIdentifier?: { name: string }, TypeAnnotation?: ParseNode.TypeAnnotation | null,
@@ -22402,6 +22420,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       errors.push(Throw.StaticTypeError('$1 is not declared by $2', typeof key === 'string' ? Value(key) : key, Value(displayType(source.type!))).Value as ObjectValue);
       return { type: null };
     }
+    // #sec-typed-classes: a pattern property with a statically established
+    // key selects the same declaration a dot access does, so the protected
+    // permission governs it too (Round 3, Q2).
+    checkProtectedKeys(source.type, [key]);
     const expr = patternExpression(source.expression);
     if (expr?.type === 'ArrayLiteral' && typeof key === 'string') {
       if (key === 'length') return { type: makePrimitive('number') };
@@ -22540,6 +22562,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return wanted !== null && exact !== null ? !Object.is(wanted, exact) : rejectsNumeric(destination.Base, null);
       }
       const at = erasedForJudgment(destination);
+      // Not `string`: #sec-unary-operators-for-typed-values keeps
+      // "numeric-to-String conversion on the existing update/store path" valid,
+      // and says this rule "does not replace that boundary with ordinary
+      // assignment checking". A compound assignment has no such carve-out.
       return at?.Kind === 'primitive' && ['boolean', 'symbol', 'null', 'undefined'].includes(at.Name);
     };
     const fails = (type: Known): boolean => {
@@ -22619,10 +22645,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Check each contribution before joining: joining fresh literals
           // first would lose the position's numeric conversion.
           checkIncoming(annotation, source);
-          source = { type: annotation, typed: true };
+          source = { type: annotation, typed: true, annotated: true };
         } else if (!AreDisjoint(source.type, undefinedType)) {
           source = { type: fallback ? joinTypes(present as TypeRecord, fallback) : null,
-            typed: source.typed || operandParticipates(node.Initializer) };
+            typed: source.typed || operandParticipates(node.Initializer), annotated: source.annotated };
         }
       }
     }
@@ -22630,6 +22656,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       checkIncoming(annotation);
     }
     if (node.BindingIdentifier) {
+      // #sec-void-type: a name typed `void` through an enclosing pattern's
+      // annotation is a `void` binding as much as one annotated itself - each
+      // name's type "follows from the annotated type's members" (line 1761).
+      if (declaring && !annotation && source.annotated) requireBindingType(source.type);
       declare(node.BindingIdentifier.name, annotation ?? (infer ? source.type : null), frame);
       let participation = unaryBindingParticipation.get(frame);
       if (!participation) {
@@ -22640,7 +22670,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (node.BindingPattern) {
-      checkPattern(node.BindingPattern, annotation ? { type: annotation } : source, declaring, infer, frame);
+      checkPattern(node.BindingPattern, annotation ? { type: annotation, annotated: true } : source, declaring, infer, frame);
       return;
     }
     if (node.type === 'ArrayLiteral' || node.type === 'ObjectLiteral') {
@@ -22669,7 +22699,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : infer && source.expression && patternExpression(source.expression)?.type !== 'ArrayLiteral'
               ? { type: StaticIterationContribution(source.type, structureOf).element }
               : patternElement(source, index);
-          checkPattern(el, { ...contribution, typed: source.typed }, declaring, infer, frame);
+          checkPattern(el, { ...contribution, typed: source.typed, annotated: source.annotated }, declaring, infer, frame);
         }
       });
       const rest = node.BindingRestElement ?? node.AssignmentRestElement;
@@ -22688,7 +22718,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const element = patternElement(source, elements.length).type;
           collected = { type: element ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null };
         }
-        checkPattern(rest, { ...collected, typed: source.typed }, declaring, infer, frame);
+        checkPattern(rest, { ...collected, typed: source.typed, annotated: source.annotated }, declaring, infer, frame);
       }
       return;
     }
@@ -22705,7 +22735,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           consumed.add(key);
         } else knownExclusions = false;
         checkPattern(p.BindingElement ?? p.AssignmentElement ?? p,
-          { ...patternProperty(source, key), typed: source.typed }, declaring, infer, frame);
+          { ...patternProperty(source, key), typed: source.typed, annotated: source.annotated }, declaring, infer, frame);
       }
       const rest = node.BindingRestProperty ?? node.AssignmentRestProperty;
       if (rest) {
@@ -22720,7 +22750,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && ['IdentifierName', 'StringLiteral', 'NumericLiteral'].includes(property.PropertyName.type)
               && (property.PropertyName as { name?: string, value?: unknown }).name !== '__proto__'
               && (property.PropertyName as { value?: unknown }).value !== '__proto__'));
-        checkPattern(rest, { typed: source.typed, ordinaryObject: true, type: ownData && t?.Kind === 'object'
+        checkPattern(rest, { typed: source.typed, annotated: source.annotated, ordinaryObject: true, type: ownData && t?.Kind === 'object'
           ? { ...t, Properties: t.Properties.filter((p) => !consumed.has(p.key)) } : null }, declaring, infer, frame);
       }
       return;
@@ -24192,9 +24222,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const invocationFact = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>(), budget = { remaining: 256 }): InvocationFact | null => {
     if (budget.remaining-- <= 0) return null;
     const node = patternExpression(expression)!;
-    if (node.type === 'ConditionalExpression') {
-      const left = invocationFact(node.AssignmentExpression_a, scope, new Set(seen), budget);
-      const right = invocationFact(node.AssignmentExpression_b, scope, new Set(seen), budget);
+    // #sec-function-types: a conditional selection is a `?:`, `||`, `&&` or
+    // `??` expression, and its possible origins are the operands it can yield
+    // (Round 3, Q3). Each logical operator yields one of its operands unchanged,
+    // so both are possible origins, as both arms of `?:` are; a falsy value a
+    // `&&` may yield is never a constructor or callable, so it adds nothing.
+    const logicalOperands = node.type === 'LogicalORExpression' ? [node.LogicalORExpression, node.LogicalANDExpression]
+      : node.type === 'LogicalANDExpression' ? [node.LogicalANDExpression, node.BitwiseORExpression]
+        : node.type === 'CoalesceExpression' ? [node.CoalesceExpressionHead, (node as unknown as { BitwiseORExpression: ParseNode }).BitwiseORExpression]
+          : null;
+    if (node.type === 'ConditionalExpression' || logicalOperands) {
+      const [a, b] = logicalOperands ?? [(node as ParseNode.ConditionalExpression).AssignmentExpression_a, (node as ParseNode.ConditionalExpression).AssignmentExpression_b];
+      const left = invocationFact(a as ParseNode, scope, new Set(seen), budget);
+      const right = invocationFact(b as ParseNode, scope, new Set(seen), budget);
       if (!left || !right) return null;
       return { callable: left.callable || right.callable, constructible: left.constructible || right.constructible,
         typed: left.typed && right.typed,
@@ -25997,9 +26037,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // it appears, which is why `??`'s own example in the clause is a value
         // position.
         //
-        // Decidable only where truthiness is a property of the TYPE: a literal,
-        // or a union of literals that agree. A `uint8` settles nothing, since 0
-        // is falsy and every other value is not.
+        // Decidable where truthiness is a property of the TYPE, by the table of
+        // #sec-falsy-and-truthy-parts: a literal by its value; `null` and
+        // `undefined` always falsy; `symbol`, `type`, an object, array, tuple,
+        // function or (non-enum) nominal type always truthy. A `uint8` settles
+        // nothing, since 0 is falsy and every other value is not, and neither
+        // does an enum, whose values are its underlying type's.
         const lg = n as unknown as { LogicalANDExpression?: ParseNode, LogicalORExpression?: ParseNode, BitwiseORExpression?: ParseNode, BitwiseANDExpression?: ParseNode };
         const isOr = n.type === 'LogicalORExpression';
         const leftNode = (isOr ? lg.LogicalORExpression : lg.LogicalANDExpression) as ParseNode | undefined;
@@ -26010,11 +26053,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const members = t.Kind === 'union' ? t.Members : [t];
               let seen: boolean | undefined;
               for (const m of members) {
-                if (m.Kind !== 'literal') {
+                let truthy: boolean;
+                if (m.Kind === 'literal') {
+                  truthy = Boolean((m.Value as { value?: unknown })?.value);
+                } else if (m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')) {
+                  truthy = false;
+                } else if ((m.Kind === 'primitive' && (m.Name === 'symbol' || m.Name === 'type'))
+                  || m.Kind === 'object' || m.Kind === 'array' || m.Kind === 'tuple' || m.Kind === 'function'
+                  || (m.Kind === 'nominal' && (m as { EnumMembers?: unknown }).EnumMembers === undefined)) {
+                  truthy = true;
+                } else {
                   return undefined;
                 }
-                const v = (m.Value as { value?: unknown })?.value;
-                const truthy = Boolean(v);
                 if (seen === undefined) {
                   seen = truthy;
                 } else if (seen !== truthy) {
@@ -26661,8 +26711,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // binding's declared type, taken unwidened for the reason a plain
         // annotation is: it is declared, not inferred from a value.
         if (n.BindingPattern) {
-          const infer = isConstDeclaration && !!n.Initializer && constInitializerParticipates(n.Initializer);
-          checkPattern(n.BindingPattern, { type: n.Initializer ? staticType(n.Initializer) : null, expression: n.Initializer ?? undefined }, true, infer, bindingFrame);
+          // #sec-type-annotations (line 1761): an annotation on the pattern
+          // "annotates the object being destructured, not the names taken out
+          // of it, and each name's type follows from the annotated type's
+          // members". The initializer crosses that annotation, and each name is
+          // declared at its member's type - which is also what lets a `void`
+          // member reach #sec-void-type's rule. The walk ignored the
+          // annotation here, so a mismatch surfaced only at run time and the
+          // names were untyped.
+          const patternAnnotation = (n as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+          const annotatedType = patternAnnotation ? resolveType(patternAnnotation.Type) : null;
+          if (annotatedType) {
+            // The names first, so a `void` member reports the binding rule
+            // rather than the initializer that could never satisfy it.
+            checkPattern(n.BindingPattern, { type: annotatedType, typed: true, annotated: true }, true, true, bindingFrame);
+            if (n.Initializer) requireAssignable(staticTypeIn(n.Initializer, annotatedType), annotatedType);
+          } else {
+            const infer = isConstDeclaration && !!n.Initializer && constInitializerParticipates(n.Initializer);
+            checkPattern(n.BindingPattern, { type: n.Initializer ? staticType(n.Initializer) : null, expression: n.Initializer ?? undefined }, true, infer, bindingFrame);
+          }
         }
         walk(n.Initializer);
         return;
@@ -28320,6 +28387,78 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       };
       findBlocks(root);
+    }
+    // The host a class family's list is validated with. `callableHost` knows a
+    // primitive's components; a class pattern also nests the library generics
+    // (`Map.<const K, const V>`) and the program's generic classes, so their
+    // parameters are supplied here - for validation only: a slot's name, kind
+    // and domain, never the arguments of a value.
+    const primarySlotsOf = (list: ParseNode.TypeParameters) => list.TypeParameterList.map((tp) => {
+      const domain = tp.TypeParameterDomain ? resolveType(tp.TypeParameterDomain) : null;
+      return {
+        Name: tp.BindingIdentifier.name, Variadic: !!tp.IsVariadic, HasDefault: !!tp.TypeParameterDefault,
+        Arity: tp.Arity ?? 0, ...(domain ? { Domain: domain as TypeRecord } : {}),
+      };
+    });
+    const classFamilyHost = {
+      ...callableHost,
+      constructorOf: (typeName: ParseNode.TypeName) => {
+        const known = callableHost.constructorOf(typeName);
+        if (known) return known;
+        const tn = typeName as unknown as { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] };
+        const name = (tn.MemberNames?.length ?? 0) === 0 ? tn.IdentifierReference?.name : undefined;
+        if (!name) return null;
+        const userList = (classNodes.get(name) as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters;
+        const parameters = userList && userList.ListKind !== 'specialization' && userList.TypeParameterList.length > 0
+          ? primarySlotsOf(userList)
+          : (!shadowedByProgram(name) ? libraryTypeParameterNamesShared(name) : null)?.map((parameterName) => ({
+            Name: parameterName, Variadic: false, HasDefault: false, Domain: makePrimitive('type') as TypeRecord,
+          }));
+        if (!parameters || parameters.length === 0) return null;
+        return { Name: name, Parameters: parameters, argumentsOf: () => null, defaultOf: () => undefined };
+      },
+    } as typeof callableHost;
+    // #sec-collectcaptures for a CLASS family's specialization lists (Round 3,
+    // Gap 2): "It is a type error, at the declaration" for a written domain
+    // that is not its position's, for a capture where no constructor exposes a
+    // component, and for a constructor capture in a first-order position. The
+    // validator already makes all three judgments and ran only for a primitive
+    // block's components, so a class specialization was checked at no
+    // declaration - and the no-component case reached the matcher, which
+    // throws, at the family's first use.
+    {
+      const classes: ParseNode.ClassDeclaration[] = [];
+      const seenClasses = new Set<object>();
+      const collectClasses = (value: unknown): void => {
+        if (!value || typeof value !== 'object' || seenClasses.has(value)) return;
+        seenClasses.add(value);
+        if (Array.isArray(value)) {
+          value.forEach(collectClasses);
+          return;
+        }
+        if ((value as { type?: string }).type === 'ClassDeclaration') classes.push(value as ParseNode.ClassDeclaration);
+        for (const [key, child] of Object.entries(value)) {
+          if (key !== 'parent' && key !== 'location') collectClasses(child);
+        }
+      };
+      collectClasses(root);
+      const listOf = (c: ParseNode.ClassDeclaration) => (c as unknown as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters ?? null;
+      const primaries = new Map<string, ParseNode.TypeParameters>();
+      for (const c of classes) {
+        const list = listOf(c);
+        const name = c.BindingIdentifier?.name;
+        if (name && list && list.ListKind !== 'specialization' && list.ListKind !== 'mixed') primaries.set(name, list);
+      }
+      for (const c of classes) {
+        const list = listOf(c);
+        const name = c.BindingIdentifier?.name;
+        const primary = name ? primaries.get(name) : undefined;
+        if (!list || list.ListKind !== 'specialization' || !primary) continue;
+        const slots = primarySlotsOf(primary);
+        for (const diagnostic of ValidateSpecializationList(list, classFamilyHost, slots, (r) => displayType(r as TypeRecord))) {
+          report(diagnostic.message);
+        }
+      }
     }
     // Step 1's static deferral: a direct call into a function group with a case.
     if (groupsWithCases.size > 0) {

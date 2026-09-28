@@ -122,8 +122,10 @@ test('a part that cannot occur contributes nothing, in both directions', () => {
   // value is truthy.
   expectOk('class C {} let c: C = new C(); function f(): uint32 { return 5; } const r: uint32 = c && f();');
   // The dual: the left ALWAYS short-circuits, so the right is never evaluated
-  // and contributes nothing.
-  expectOk('let u: undefined = undefined; const r: undefined = u && 7;');
+  // and contributes nothing - and, being code the program wrote and cannot
+  // reach, is refused (#sec-narrowfrom: "The same reading applies to `||` and
+  // `&&` whose left operand's type settles the test"), as `false && 7` is.
+  expectTypeError('let u: undefined = undefined; const r: undefined = u && 7;');
   expect(value('let u: undefined = undefined; const r: uint32 = u || 7; `${r}`;')).toBe('7');
 });
 
