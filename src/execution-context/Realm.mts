@@ -1,3 +1,4 @@
+import { RememberLibraryOperations } from '../type-system/library-operation-origin.mts';
 import { AddRestrictedFunctionProperties, type Intrinsics } from '../abstract-ops/realms.mts';
 import { RegisterGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { bootstrapAggregateError } from '../intrinsics/AggregateError.mts';
@@ -337,6 +338,7 @@ export function CreateIntrinsics(realmRec: Realm) {
 
   AddRestrictedFunctionProperties(intrinsics['%Function.prototype%'], realmRec);
 
+  RememberLibraryOperations(realmRec);
   return intrinsics;
 }
 

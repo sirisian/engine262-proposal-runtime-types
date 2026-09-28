@@ -21,7 +21,7 @@ import { ArraySpanBackingOf, ArrayViewBackingOf, MakeArraySpan, StampTypedArray 
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { IsCheckElided, PublishedReturnTypeOf } from '../type-system/check.mts';
+import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf } from '../type-system/check.mts';
 import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
@@ -5440,6 +5440,19 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
       ReturnType = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
     }
   }
+  const declaration = (fn as { ECMAScriptCode?: { parent?: { TypeAnnotation?: ParseNode.TypeAnnotation } } }).ECMAScriptCode?.parent;
+  const predicate = resolveAnnotations ? declaration?.TypeAnnotation : undefined;
+  let Narrows: OverloadSignature['Narrows'];
+  if (predicate?.NarrowsTarget && !(computedAsAny && containsComputedType(predicate.Type))) {
+    Narrows = [{ Target: predicate.NarrowsTarget, Type: Q(yield* TypeNodeToTypeRecord(predicate.Type)) }];
+    ReturnType = makePrimitive('boolean');
+  } else if (resolveAnnotations && declaration && !declaration.TypeAnnotation) {
+    const adopted = PublishedNarrowingOf(declaration);
+    if (adopted) {
+      Narrows = adopted.Narrows;
+      ReturnType = adopted.Return ?? undefined;
+    }
+  }
   const code = (fn as { ECMAScriptCode?: { type?: string } }).ECMAScriptCode;
   if (ReturnType && (code?.type === 'GeneratorBody' || code?.type === 'AsyncGeneratorBody')) {
     // #sec-generator-types: the callable returns the protocol, not a yielded value.
@@ -5450,6 +5463,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     Function: fn,
     Untyped: untyped,
     ReturnType,
+    ...(Narrows ? { Narrows } : {}),
     ...(genericTypeParameters && genericTypeParameters.length > 0
       ? { TypeParameters: typeParameterRecordsOf(genericTypeParameters).map((r) => ({ ...r, Parameter: genericFrame?.get(r.Name) })) }
       : {}),

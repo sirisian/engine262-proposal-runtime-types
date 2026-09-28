@@ -1470,7 +1470,7 @@ function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
     // part of a signature's identity, so they belong in the canonical order key.
     // Without them `(...a: [].<uint8>) => void` and `(a: [].<uint8>) => void`
     // produce the same key and intern as ONE Type Object.
-    case 'function': return `function:${t.Signatures.map((g) => `${g.ThisType ? `this:${orderKey(g.ThisType)};` : ''}${g.Narrows?.length ? `narrows:${g.Narrows.map((nw) => `${nw.Target}=${orderKey(nw.Type)}`).join('+')};` : ''}(${g.Parameters.map((p) => `${p.Rest ? '...' : ''}${p.Optional ? '?' : ''}${orderKey(p.Type)}`).join(',')})=>${g.Return ? orderKey(g.Return) : ''}`).join('|')}`;
+    case 'function': return `function:${t.Signatures.map((g) => `${g.ThisType ? `this:${orderKey(g.ThisType)};` : ''}${g.Narrows?.length ? `narrows:${g.Narrows.map((nw) => `${nw.Target}=${orderKey(nw.Type)}`).join('+')};` : ''}(${g.Parameters.map((p) => `${p.Ref ? 'ref ' : ''}${p.Rest ? '...' : ''}${p.Optional ? '?' : ''}${orderKey(p.Type)}`).join(',')})=>${g.Return ? orderKey(g.Return) : ''}`).join('|')}`;
     default: return 'unknown';
   }
 }
@@ -1713,7 +1713,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
         // before the colon showed `(: uint.<32>) => uint.<32>`. The type alone is
         // the spelling the grammar admits for it.
         const params = s.Parameters.map((p) => {
-          const prefix = `${(p as { Reference?: boolean }).Reference ? 'ref ' : ''}${p.Rest ? '...' : ''}`;
+          const prefix = `${p.Ref ? 'ref ' : ''}${p.Rest ? '...' : ''}`;
           return p.Name
             ? `${prefix}${p.Name}${p.Optional ? '?' : ''}: ${displayType(p.Type)}`
             : `${prefix}${displayType(p.Type)}`;

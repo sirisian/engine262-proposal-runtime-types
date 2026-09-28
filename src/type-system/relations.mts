@@ -622,7 +622,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
             // only in a parameter default interned as ONE record - the same
             // collapse the [[Narrows]] comment below describes, one field along.
             // `sameDefault` is the comparison the tuple elements already use.
-            return p.Rest === q.Rest && p.Optional === q.Optional
+            return p.Rest === q.Rest && p.Optional === q.Optional && !!p.Ref === !!q.Ref
               && (!!p.DeclaredDefault || p.Initial !== undefined) === (!!q.DeclaredDefault || q.Initial !== undefined)
               && sameDefault(p.Initial, q.Initial)
               && SameTypeWithAssumptions(p.Type, q.Type, nextG);
@@ -1744,7 +1744,7 @@ function IsFunctionSubtype(s: Extract<TypeRecord, { Kind: 'function' }>, t: Extr
  * (#sec-signature-records "the same up to renaming"): the assumptions extended
  * with a pair per position, or null where the shapes differ.
  */
-function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumptions: readonly Assumption[]): readonly Assumption[] | null {
+function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumptions: readonly Assumption[], subtype = false): readonly Assumption[] | null {
   const ap = a.TypeParameters ?? [];
   const bp = b.TypeParameters ?? [];
   if (ap.length !== bp.length) {
@@ -1771,7 +1771,8 @@ function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumpti
   for (let k = 0; k < ap.length; k += 1) {
     const u = ap[k].Constraint;
     const w = bp[k].Constraint;
-    if (!!u !== !!w || (u && w && !SameTypeWithAssumptions(u, w, out))) return null;
+    if (subtype ? u && (!w || !IsSubtype(w, u, out))
+      : !!u !== !!w || (u && w && !SameTypeStrict(u, w, out))) return null;
   }
   return out;
 }
@@ -1916,9 +1917,10 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
  * consulted, a function type having none, and is checked at the specialization
  * the crossing performs (its interning).
  */
-function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = false): boolean {
+function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = true): boolean {
   if ((sg as { Untyped?: boolean }).Untyped === true
       && (sg as { InferredReturn?: unknown }).InferredReturn === undefined
+      && !(tg.Narrows?.length)
       && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {
     return true;
   }
@@ -1937,21 +1939,31 @@ function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, ass
     if (sg.Return !== null && tg.Return !== null && !matchTypeStructurally(sg.Return, tg.Return, bindings)) {
       return false;
     }
+    // #sec-issignaturesubtype: inference does not discharge the declaration's
+    // bounds. Resolve dependent bounds under the same inferred environment.
+    const byName = new Map<string, TypeRecord>();
+    for (const [pattern, bound] of bindings) {
+      if (pattern.Kind !== 'parameter') continue;
+      const prior = byName.get(pattern.Name);
+      if (prior && !SameTypeWithAssumptions(prior, bound, assumptions)) return false;
+      byName.set(pattern.Name, bound);
+    }
     for (const u of sTP) {
-      if (u.Parameter && !bindings.has(u.Parameter)) {
-        // A parameter the target's shape does not determine cannot be
-        // instantiated by the crossing; the specialization would have to guess.
-        return false;
+      const bound = u.Parameter ? bindings.get(u.Parameter) : byName.get(u.Name);
+      if (!bound) return false;
+      if (u.Constraint) {
+        const constraint = substituteTypeParameters(u.Constraint, byName)!;
+        if (!mentionsTypeParameter(constraint) && !IsAssignable(bound, constraint)) return false;
       }
     }
-    const substituted = substituteParameterRecords({ Kind: 'function', Signatures: [sg] } as TypeRecord, bindings) as Extract<TypeRecord, { Kind: 'function' }>;
+    const substituted = substituteTypeParameters({ Kind: 'function', Signatures: [sg] }, byName) as Extract<TypeRecord, { Kind: 'function' }>;
     return IsSignatureSubtypeCore(substituted.Signatures[0]!, tg, assumptions, preserveReferences);
   }
   if (sTP.length === 0 && tTP.length > 0) {
     return false;
   }
   if (sTP.length > 0) {
-    const identified = identifyTypeParameters(sg, tg, assumptions);
+    const identified = identifyTypeParameters(sg, tg, assumptions, true);
     if (identified === null) {
       return false;
     }
@@ -2026,7 +2038,24 @@ export function IsConstructorSignatureSubtype(source: SignatureRecord, target: S
   return IsSignatureSubtypeCore(source, promised, [], true);
 }
 
-function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = false): boolean {
+/** #sec-declared-narrowing: preserve the advertised continuation facts. */
+export function SignatureNarrowingsSubtype(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[] = []): boolean {
+  // #sec-declared-narrowing: a Boolean guard promises both branches.
+  // Assertions promise only their successful continuation. Parameter names
+  // identify positions locally and need not agree across signatures.
+  const assertion = (signature: SignatureRecord): boolean => !signature.Return || signature.Return.Kind === 'void';
+  const targetPosition = (signature: SignatureRecord, name: string): number | 'this' => name === 'this'
+    ? 'this' : signature.Parameters.findIndex((p) => p.Name === name);
+  return !(tg.Narrows ?? []).some((wanted) => {
+    const position = targetPosition(tg, wanted.Target);
+    if (position === -1 || assertion(sg) !== assertion(tg)) return true;
+    return !(sg.Narrows ?? []).some((actual) => targetPosition(sg, actual.Target) === position
+      && (assertion(tg) ? IsSubtype(actual.Type, wanted.Type, assumptions)
+        : SameTypeWithAssumptions(actual.Type, wanted.Type, assumptions)));
+  });
+}
+
+function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = true): boolean {
     const sg = { ...sgIn, Parameters: expandTupleRests(sgIn.Parameters) } as SignatureRecord;
     const tg = { ...tgIn, Parameters: expandTupleRests(tgIn.Parameters) } as SignatureRecord;
     // #sec-issignaturesubtype step 1: "If a.[[Untyped]] is true, return true."
@@ -2056,9 +2085,11 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     // what step 1 means and what [[Untyped]] alone does not establish.
     if ((sg as { Untyped?: boolean }).Untyped === true
         && (sg as { InferredReturn?: unknown }).InferredReturn === undefined
+        && !(tg.Narrows?.length)
         && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {
       return true;
     }
+    if (!SignatureNarrowingsSubtype(sgIn, tgIn, assumptions)) return false;
     // proposal-runtime-types #sec-this-adoption: a signature's [[ThisType]] "is
     // contravariant, as a parameter is", so the SOURCE's `this` must be the
     // wider one - a body demanding more than the position promises would be
@@ -2092,8 +2123,8 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     // can safely bind an omitted argument.
     const undefinedType = makePrimitive('undefined');
     const hasDefault = (p: ParameterRecord): boolean => !!p.DeclaredDefault || p.Initial !== undefined;
-    const acceptsOmission = (p: ParameterRecord): boolean => p.Rest || p.Optional || hasDefault(p)
-      || parameterAccepts(undefinedType, p.Type, assumptions);
+    const acceptsOmission = (p: ParameterRecord): boolean => p.Rest || (!p.Ref && (p.Optional || hasDefault(p)
+      || parameterAccepts(undefinedType, p.Type, assumptions)));
     const minimumRequired = sg.Parameters.filter((p) => !acceptsOmission(p)).length;
     const minimumSupplied = tg.Parameters.filter((p) => !p.Rest
       && (hasDefault(p) || !acceptsOmission(p))).length;

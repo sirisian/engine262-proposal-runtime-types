@@ -2911,6 +2911,7 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
   const published = F.ECMAScriptCode?.parent ? PublishedReturnTypeOf(F.ECMAScriptCode.parent) : undefined;
   const Signatures = declared.map((o) => ({
     Parameters: o.Parameters,
+    ...(o.Narrows ? { Narrows: o.Narrows } : {}),
     Return: constructedType ?? o.ReturnType ?? (declared!.length === 1 ? published ?? null : null),
     // A class constructor's signature is not the catch-all: its return is
     // determined (the class) whether or not it wrote a parameter type.

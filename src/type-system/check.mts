@@ -20,6 +20,7 @@ import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { ProvenLibraryOperations } from './library-operation-origin.mts';
 import { ProvenArrayCapacityMembers } from './array-capacity-origin.mts';
 import { IsPartialDeclaration, MergePartialStructures, PartialBindings, PublishedPartialContributions, type PartialStructureContribution } from './partial-types.mts';
 import { VectorMaskMethodSignature } from './vector-signatures.mts';
@@ -56,7 +57,7 @@ import {
   typeArgumentNameOf as typeArgumentNameOfShared,
   assignTypeArguments as assignTypeArgumentsShared,
 } from './type-argument-order.mts';
-import { IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
+import { SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
@@ -1097,6 +1098,12 @@ export function TakeStaticCallResolution(node: object): (TypeRecord & { Kind: 'p
  * checker computes it over declarations, before any function object exists.
  */
 const publishedReturnTypes = new WeakMap<object, TypeRecord>();
+const publishedNarrowings = new WeakMap<object, Pick<SignatureRecord, 'Return' | 'Narrows'>>();
+
+/** #sec-contextual-types: a fresh literal may declare its contextual predicate. */
+export function PublishedNarrowingOf(declaration: object): Pick<SignatureRecord, 'Return' | 'Narrows'> | undefined {
+  return publishedNarrowings.get(declaration);
+}
 
 const patternLiteralTypes = new WeakMap<object, TypeRecord>();
 
@@ -3075,6 +3082,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** The RETURN type a function literal's position wants, read by its own arm. */
   const contextualReturnTypes = new Journaled<Known>();
+  const contextualNarrowings = new Journaled<Pick<SignatureRecord, 'Return' | 'Narrows'>>();
+  const setContextualNarrowing = (node: ParseNode, signature: SignatureRecord): void => {
+    const literal = node as { TypeAnnotation?: unknown, ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] };
+    if (literal.TypeAnnotation || !signature.Narrows?.length) return;
+    const formals = literal.ArrowParameters ?? literal.FormalParameters ?? [];
+    const names = formals.map((p) => parameterFromDeclaration(p, anyTypeRecord).Name);
+    const Narrows = signature.Narrows.flatMap((rule) => {
+      const name = rule.Target === 'this' ? 'this' : names[signature.Parameters.findIndex((p) => p.Name === rule.Target)];
+      return name ? [{ ...rule, Target: name }] : [];
+    });
+    if (Narrows.length === signature.Narrows.length) {
+      contextualNarrowings.set(node, { Return: signature.Return ?? voidType, Narrows });
+    }
+  };
 
   /**
    * The RETURN type a METHOD written in an object literal is expected to have,
@@ -3724,6 +3745,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (tp.TypeParameterConstraint) {
         const resolvedConstraint = resolveType(tp.TypeParameterConstraint);
+        if (resolvedConstraint) rememberDeclaredConstraint(tp.TypeParameterConstraint, resolvedConstraint);
         // A COMPUTED constraint - a builder call over an earlier parameter -
         // resolves to nothing at the declaration, where that parameter is not
         // yet bound. `null` would then be indistinguishable from "no constraint
@@ -4882,6 +4904,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (lhs?.type !== 'MemberExpression') return;
+    const descriptor = libraryOperations().members.get(lhs);
+    const descriptorReceiver = descriptor?.kind === 'descriptor' ? staticType(lhs.MemberExpression) : null;
+    const count = descriptorReceiver?.Kind === 'array' && typeof descriptorReceiver.Extent === 'number' ? descriptorReceiver.Extent : descriptor?.count;
+    if (descriptor?.kind === 'descriptor' && operator !== '??='
+        && (operator !== '&&=' || count! > 0) && (operator !== '||=' || count === 0)) {
+      const receiver = descriptorReceiver;
+      if (descriptor.name !== 'capacity' || receiver?.Kind === 'array' || receiver?.Kind === 'tuple') {
+        errors.push(Throw.StaticTypeError('$1 has no setter', Value(descriptor.name)).Value as ObjectValue);
+        return;
+      }
+    }
     const m = lhs;
     const sealedReceiver = operationalType(staticType(m.MemberExpression));
     const access = indexAccess(m, sealedReceiver);
@@ -7908,6 +7941,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (a.length !== b.length || !a.every((q, k) => sameConstructParameter(q.Type ?? null, b[k]?.Type ?? null))) {
               continue;
             }
+            if (a.some((q, k) => !!q.Ref !== !!b[k].Ref) || !SignatureNarrowingsSubtype(sig, base)) {
+              errors.push(Throw.StaticTypeError('$1 changes an inherited reference or narrowing contract', Value(String(own.key))).Value as ObjectValue);
+            }
             // #sec-inferred-return-types: publication supplies the return
             // contract wherever an explicit annotation would be consulted.
             const returned = sig.Return ?? sig.InferredReturn;
@@ -9709,6 +9745,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
+  const checkSharedOperand = (Target: TypeRecord): void => {
+    // #sec-threading-shared-modifier: closed operands obey the runtime
+    // layout predicate. A class without evaluated layout metadata defers.
+    const pendingLayout = (type: TypeRecord, seen = new Set<TypeRecord>()): boolean => {
+      if (seen.has(type)) return false;
+      seen.add(type);
+      if (mentionsTypeParameter(type) || type.Kind === 'deferred') return true;
+      if (type.Kind === 'nominal') {
+        return (!type.LibraryName && !type.Constructor)
+          || type.Arguments.some((arg) => typeof arg !== 'number' && pendingLayout(arg, seen));
+      }
+      if (type.Kind === 'array') return typeof type.Extent === 'number' && pendingLayout(type.Element, seen);
+      if (type.Kind === 'parameterized') return pendingLayout(type.Base, seen);
+      if (type.Kind === 'union' || type.Kind === 'intersection') return type.Members.some((part) => pendingLayout(part, seen));
+      return false;
+    };
+    if (Target.Kind === 'shared' || Target.Kind === 'reference'
+        || (!pendingLayout(Target) && !IsSharableValueType(Target))) {
+      errors.push(Throw.StaticTypeError('$1 is not a valid type', Value(`shared ${displayType(Target)}`)).Value as ObjectValue);
+    }
+  };
+
   const checkedFormationRecords = new WeakSet<object>();
   const checkTypeFormation = (type: Known): void => {
     if (!type || checkedFormationRecords.has(type)) return;
@@ -9727,6 +9785,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkTypeFormation(property.type);
         checkTypeFormation(property.writeType ?? null);
       }
+    } else if (type.Kind === 'shared' || type.Kind === 'reference') {
+      if (type.Kind === 'shared') checkSharedOperand(type.Target);
+      checkTypeFormation(type.Target);
     } else if (type.Kind === 'union' || type.Kind === 'intersection') type.Members.forEach(checkTypeFormation);
     else if (type.Kind === 'array') checkTypeFormation(type.Element);
     else if (type.Kind === 'nominal') {
@@ -10743,25 +10804,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'SharedType': {
         const Target = resolveType(node.Type);
         if (!Target) return null;
-        // #sec-threading-shared-modifier: closed operands obey the runtime
-        // layout predicate. A class without evaluated layout metadata defers.
-        const pendingLayout = (type: TypeRecord, seen = new Set<TypeRecord>()): boolean => {
-          if (seen.has(type)) return false;
-          seen.add(type);
-          if (mentionsTypeParameter(type) || type.Kind === 'deferred') return true;
-          if (type.Kind === 'nominal') {
-            return (!type.LibraryName && !type.Constructor)
-              || type.Arguments.some((arg) => typeof arg !== 'number' && pendingLayout(arg, seen));
-          }
-          if (type.Kind === 'array') return typeof type.Extent === 'number' && pendingLayout(type.Element, seen);
-          if (type.Kind === 'parameterized') return pendingLayout(type.Base, seen);
-          if (type.Kind === 'union' || type.Kind === 'intersection') return type.Members.some((part) => pendingLayout(part, seen));
-          return false;
-        };
-        if (Target.Kind === 'shared' || Target.Kind === 'reference'
-            || (!pendingLayout(Target) && !IsSharableValueType(Target))) {
-          errors.push(Throw.StaticTypeError('$1 is not a valid type', Value(`shared ${displayType(Target)}`)).Value as ObjectValue);
-        }
+        checkSharedOperand(Target);
         return { Kind: 'shared', Target } as Known;
       }
       // The references extension: `ref T` is { Kind: 'reference', Target }.
@@ -13460,6 +13503,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (isFunctionLiteral(node)
       && contextual && contextual.Kind === 'function' && contextual.Signatures.length === 1) {
       setContextualParameters(node, contextual.Signatures[0].Parameters);
+      setContextualNarrowing(node, contextual.Signatures[0]);
       const wanted = contextual.Signatures[0].Return;
       if (wanted && wanted.Kind !== 'void') {
         contextualReturnTypes.set(node, wanted as Known);
@@ -15745,6 +15789,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             Kind: 'function',
             Signatures: [{
               Parameters, Return: Return ?? anyTypeRecord, Untyped: false,
+              ...methodPredicate(literal.TypeAnnotation, Parameters, Return),
+              ...(!literal.TypeAnnotation ? contextualNarrowings.get(node) : {}),
               ...(literal.TypeParameters?.TypeParameterList?.length
                 ? { TypeParameters: typeParameterRecordsOf(literal.TypeParameters.TypeParameterList) } : {}),
               ...(adoptedThis ? { ThisType: adoptedThis } : {}),
@@ -16227,6 +16273,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
 
       case 'CallExpression': {
+        const bound = boundAdapterType(node);
+        if (bound) return bound;
         const vectorResult = vectorCallType(node, false);
         if (vectorResult) return vectorResult;
         const called = patternExpression(node.CallExpression);
@@ -18439,6 +18487,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     fresh: boolean,
     requiresMembers: boolean = fresh,
   ) => {
+    const propertyContract = (key: string | SymbolValue): typeof target.Properties[number] | undefined => {
+      const named = target.Properties.find((property) => property.key === key);
+      if (named) return named;
+      const matching = target.IndexSignatures.filter((signature) => keyAdmittedBy(key, signature.Key));
+      return matching.length ? { key, type: CanonicalizeType({ Kind: 'intersection', Members: matching.map((signature) => signature.Value) }),
+        optional: false, readonly: false } : undefined;
+    };
+
     // A member the TARGET requires and the literal does not supply.
     // #sec-isoftype: "an object that HAS THE MEMBERS satisfies an interface-typed
     // position", and `IsOfType` "walks the members" - which the RUN TIME does,
@@ -18540,7 +18596,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }).ClassElementName;
         const methodKey = methodName?.name ?? methodName?.value;
         if (typeof methodKey === 'string') {
-          const wantedForMethod = target.Properties.find((prop) => prop.key === methodKey);
+          const wantedForMethod = propertyContract(methodKey);
           const sourceShape = objectLiteralShape(node);
           const sourceMethod = sourceShape?.Kind === 'object' ? sourceShape.Properties.find((prop) => prop.key === methodKey)?.type : null;
           if (wantedForMethod && sourceMethod) requireAssignable(sourceMethod, wantedForMethod.type);
@@ -18588,6 +18644,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(member as ParseNode);
         continue;
       }
+      if (member.type === 'IdentifierReference') {
+        const wanted = propertyContract(member.name);
+        if (wanted) requireAssignable(staticType(member), wanted.type);
+      }
       if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
         walk(member as ParseNode);
         continue;
@@ -18621,9 +18681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (lastWriterOf.get(sp.key) !== (member as unknown as object)) {
               continue;
             }
-            const declaredHere = (target.Properties ?? []).find(
-              (q) => (q as unknown as { key?: unknown }).key === sp.key,
-            ) as unknown as { type?: TypeRecord } | undefined;
+            const declaredHere = propertyContract(sp.key);
             if (declaredHere?.type && !IsAssignable(sp.type, declaredHere.type)) {
               errors.push((Throw.StaticTypeError(
                 '$1 is not assignable to $2',
@@ -18669,15 +18727,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // its own type and is enforced with it - and the RAW key is passed, since
       // `keyAdmittedBy` tests `typeof key !== 'string'` for a symbol signature
       // and a stringified key would match the wrong one.
-      const declared = key === undefined
-        ? undefined
-        : target.Properties.find((prop) => prop.key === key)
-          ?? (() => {
-            const admitting = target.IndexSignatures.find((ix) => keyAdmittedBy(key, ix.Key));
-            return admitting
-              ? { key, type: admitting.Value, optional: false, readonly: false } as typeof target.Properties[number]
-              : undefined;
-          })();
+      // #sec-object-types: contextualize once at the simultaneous constraints.
+      const declared = key === undefined ? undefined : propertyContract(key);
       if (declared && def.AssignmentExpression) {
         // A method's [[ThisType]]
         // is the SELF MARKER - "the receiver this method expects" - which has
@@ -21308,6 +21359,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // `number` - where a contextually typed METHOD returned a `uint8`. A `void`
     // context is never recorded, and a type parameter is not a type to enforce, so
     // both keep the inference below.
+    const narrowing = contextualNarrowings.get(fn);
+    if (narrowing) publishedNarrowings.set(fn, narrowing);
     const taken = isEnumeratorInitializer(fn) ? undefined : contextualReturnTypes.get(fn);
     if (taken && taken.Kind !== 'void' && taken.Kind !== 'parameter' && taken.Kind !== 'any') {
       publishedReturnTypes.set(fn as unknown as object, taken as TypeRecord);
@@ -23942,6 +23995,155 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return signature;
   };
 
+  let provenLibraryOperations: ReturnType<typeof ProvenLibraryOperations> | undefined;
+  let provingLibraryOperations = false;
+  const libraryOperations = (): ReturnType<typeof ProvenLibraryOperations> => {
+    if (provenLibraryOperations) return provenLibraryOperations;
+    if (provingLibraryOperations) return { members: new Map(), data: () => null, list: () => null };
+    provingLibraryOperations = true;
+    try {
+      const inert = (type: Known): boolean => !!type && (type.Kind === 'any' || type.Kind === 'void'
+        || (type.Kind === 'primitive' && (knownNonObject(type) || type.Name === 'type'))
+        || (type.Kind === 'shared' && inert(type.Target))
+        || (type.Kind === 'array' && inert(type.Element))
+        || (type.Kind === 'tuple' && type.Elements.every((e) => !e.InitializerNode && inert(e.Type))));
+      provenLibraryOperations = ProvenLibraryOperations(root, surroundingAgent.currentRealmRecord, (annotation) => inert(resolveType(annotation.Type)));
+      return provenLibraryOperations;
+    } finally {
+      provingLibraryOperations = false;
+    }
+  };
+
+  const adapterProjection = (call: ParseNode.CallExpression): { callee: Extract<TypeRecord, { Kind: 'function' }>, args: readonly ParseNode[], receiver?: ParseNode, partial: boolean } | null => {
+    const operation = libraryOperations().members.get(call.CallExpression);
+    if (operation?.kind !== 'adapter') return null;
+    const target = callableForm(staticType(operation.target));
+    if (target?.Kind !== 'function') return null;
+    const written = call.Arguments;
+    let args: readonly ParseNode[];
+    if (operation.name === 'apply') {
+      const entries = written[1] && libraryOperations().list(written[1]);
+      if (!entries) return null;
+      args = entries;
+    } else if (operation.name === 'callThread') {
+      args = written;
+      if (written[0] && libraryOperations().data(written[0])) {
+        // Only an established empty bag whose first-parameter alternatives all
+        // exclude Objects can be removed here. Unknown admission stays dynamic.
+        if (!target.Signatures.every((sig) => !sig.Parameters[0]
+          || knownNonObject(sig.Parameters[0].Type))) return null;
+        args = written.slice(1);
+      }
+    } else args = written.slice(1);
+    // Built-ins consume values. The explicit ref syntax is not forwarded to
+    // the user function (Atomics has a separate first-argument exception).
+    args = args.map((arg) => arg.type === 'RefExpression' ? arg.Expression : arg);
+    const partial = operation.name === 'bind';
+    // A rest split or open specialization needs a richer residual mapping.
+    if (partial && (target.Signatures.length !== 1
+      || target.Signatures.some((sig) => sig.TypeParameters?.length || sig.Parameters.some((p) => p.Rest)))) return null;
+    const callee = partial ? { ...target, Signatures: target.Signatures.map((sig) => ({ ...sig,
+      Parameters: sig.Parameters.map((p, i) => i >= args.length ? { ...p, Optional: true } : p),
+    })) } : target;
+    return { callee, args, receiver: operation.name === 'callThread' ? undefined : written[0], partial };
+  };
+
+  const boundAdapterType = (call: ParseNode.CallExpression): Known => {
+    const projected = adapterProjection(call);
+    if (!projected?.partial) return null;
+    const target = callableForm(staticType((libraryOperations().members.get(call.CallExpression))!.target));
+    if (target?.Kind !== 'function' || target.Signatures.some((sig) => sig.TypeParameters?.length
+      || sig.Parameters.some((p, i) => p.Rest && i !== sig.Parameters.length - 1))) return null;
+    return { ...target, Signatures: target.Signatures.map((sig) => {
+      const parameters = sig.Parameters.filter((p, i) => i >= projected.args.length || p.Rest);
+      return { ...sig, Parameters: parameters, ThisType: null,
+        Narrows: sig.Narrows?.filter((rule) => parameters.some((p) => p.Name === rule.Target)) };
+    }) };
+  };
+
+  const checkLibraryOperation = (call: ParseNode.CallExpression): void => {
+    const proof = libraryOperations();
+    const operation = proof.members.get(call.CallExpression);
+    if (!operation) return;
+    if (operation.kind === 'adapter') {
+      const projected = adapterProjection(call);
+      if (!projected) return;
+      const view = { CallExpression: operation.target, Arguments: projected.args };
+      checkCallArguments(view, projected.callee, call);
+      const expected = checkedCallSignatures.get(view)?.ThisType;
+      if (expected && expected !== SelfThisTypeRecord && !SameType(expected, SelfThisTypeRecord)) {
+        requireAssignable(projected.receiver ? argumentStaticType(projected.receiver, expected) : undefinedType, expected);
+      }
+      return;
+    }
+    const args = call.Arguments;
+    const typedProperty = (object: ParseNode, key: string | SymbolValue): Known => {
+      const data = proof.data(object);
+      // A later duplicate property is the installed descriptor.
+      const property = data?.PropertyDefinitionList.findLast((p) => p.type === 'PropertyDefinition' && memberKeyOf(p.PropertyName) === key);
+      return property?.type === 'PropertyDefinition' && property.TypeAnnotation ? resolveType(property.TypeAnnotation.Type) : null;
+    };
+    if (operation.kind === 'atomic') {
+      const first = args[0];
+      if (!first) return;
+      let target: Known = null;
+      let operand = 1;
+      if (first.type === 'RefExpression') target = locationType(first.Expression);
+      else if (args[1]?.type === 'StringLiteral' && proof.data(first)) {
+        target = typedProperty(first, args[1].value);
+        operand = 2;
+      } else if (knownNonObject(staticType(first))) {
+        errors.push(Throw.StaticTypeError('Atomics requires a reference or typed own data property').Value as ObjectValue);
+        return;
+      }
+      if (target?.Kind === 'shared') target = target.Target;
+      if (!target || target.Kind === 'any' || mentionsTypeParameter(target)) return;
+      const integerOnly = ['and', 'or', 'xor', 'wait', 'waitAsync', 'notify'].includes(operation.name);
+      const invalid = everyProtocolAlternative(target, (arm) => arm.Kind === 'primitive'
+        && !(isIntegerTypeName(arm.Name) || (!integerOnly && isFloatTypeName(arm.Name))));
+      if (invalid) {
+        errors.push(Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(target)),
+          Value(integerOnly ? 'an integer atomic target' : 'a numeric atomic target')).Value as ObjectValue);
+        return;
+      }
+      if (['store', 'exchange', 'compareExchange'].includes(operation.name)) {
+        // compareExchange always converts expected; replacement conversion is
+        // conditional on equality and remains dynamic without a value proof.
+        requireExplicitConversion(args[operand] ? staticType(args[operand]) : undefinedType, target);
+      } else if (['add', 'sub', 'and', 'or', 'xor'].includes(operation.name)) {
+        const value = args[operand] ? staticType(args[operand]) : undefinedType;
+        if (everyProtocolAlternative(value, (arm) => knownNonObject(arm)
+          && !(arm.Kind === 'primitive' && (isIntegerTypeName(arm.Name) || isFloatTypeName(arm.Name) || arm.Name === 'number')))) {
+          errors.push(Throw.StaticTypeError('an atomic arithmetic operand must be numeric').Value as ObjectValue);
+        }
+      }
+      return;
+    }
+    if (operation.kind !== 'write') return;
+    const check = (key: string | SymbolValue, value: ParseNode): void => {
+      const target = typedProperty(operation.target, key);
+      if (!target) return;
+      const declaration = value.type === 'PropertyDefinition' ? value : null;
+      const source = declaration?.TypeAnnotation ? resolveType(declaration.TypeAnnotation.Type)
+        : argumentStaticType(declaration ? declaration.AssignmentExpression : value, target);
+      requireAssignable(source, target);
+    };
+    if (operation.name === 'assign') {
+      for (const source of args.slice(1)) {
+        const data = proof.data(source)!;
+        const final = new Map<string | SymbolValue, ParseNode>();
+        for (const property of data.PropertyDefinitionList) {
+          if (property.type === 'PropertyDefinition') final.set(memberKeyOf(property.PropertyName)!, property);
+        }
+        for (const [key, value] of final) check(key, value);
+      }
+    } else if (args[1]?.type === 'StringLiteral') {
+      const value = operation.name === 'set' ? args[2] : proof.data(args[2])?.PropertyDefinitionList.findLast((p) =>
+        p.type === 'PropertyDefinition' && memberKeyOf(p.PropertyName) === 'value');
+      if (value) check(args[1].value, value);
+    }
+  };
+
   let provenCapacityMembers: ReadonlyMap<ParseNode, TypeRecord> | undefined;
   const capacityContract = (member: ParseNode): Known => {
     if (member.type !== 'MemberExpression' || member.IdentifierName?.name !== 'withCapacity') return null;
@@ -24895,6 +25097,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (param && param.Kind === 'function' && param.Signatures.length === 1
             && isFunctionLiteral(arg)) {
           setContextualParameters(arg, param.Signatures[0].Parameters);
+          setContextualNarrowing(arg, param.Signatures[0]);
           // The position's RETURN as well as its parameters, so that a
           // block-bodied callback's `return` is read at the wanted type:
           // otherwise its literal widens, `h((x) => { return 1; })` at a
@@ -27963,6 +28166,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        checkLibraryOperation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);
         // A builtin STATIC supplies its callback's parameter types the way a
         // declared signature does. Recorded before the arguments are walked, so

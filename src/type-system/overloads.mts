@@ -10,7 +10,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Value } from '../value.mts';
 import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argument.mts';
-import type { ParameterRecord, TypeRecord } from './records.mts';
+import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts';
 import { anyType, restElementType } from './records.mts';
 import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
 import { ClassImplements, IsAssignable, IsSubtype } from './relations.mts';
@@ -43,6 +43,7 @@ export interface OverloadSignature {
    * ranking - so it is carried here and read only by the tie-break below.
    */
   readonly ReturnType?: TypeRecord;
+  readonly Narrows?: readonly NarrowingRecord[];
   /**
    * #sec-overload-resolution: a signature with no annotation anywhere is a
    * CATCH-ALL. It ranks last and, being untyped, is viable for any argument
