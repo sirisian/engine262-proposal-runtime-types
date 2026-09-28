@@ -698,3 +698,61 @@ test('a logical operator is a conditional selection (Round 3, Q3)', () => {
   expectStaticTypeError('class K { x: uint8 = 1; } class L { y: uint8 = 1; } const D = K && L; D();');
   expect(evaluated('function F() {} function G() {} const H = F && G; String(typeof new H());')).toBe('object');
 });
+
+// ---- round 4 ----------------------------------------------------------------
+
+test('an object-literal spread argument is judged as the named arguments it stands for (Round 4, Gap 1)', () => {
+  const G = 'function g(a: uint8): uint8 { return a; } ';
+  expectStaticTypeError(`${G}g(...{ c: 1 });`);
+  expectStaticTypeError(`${G}g(...{ a: 'x' });`);
+  expectStaticTypeError('function h(a: uint8, b: uint8): uint8 { return a; } h(...{ a: 1 });');
+  expectStaticTypeError('class C { constructor(a: uint8) {} } new C(...{ a: \'x\' });');
+  expectStaticTypeError('class B { constructor(a: uint8) {} } class D extends B { constructor() { super(...{ z: 1 }); } }');
+  expect(evaluated(`${G}const a = (5 := uint8); String(g(...{ a }));`)).toBe('5');
+  expect(evaluated('function h(a: uint8, b: uint8): uint8 { return a + b; } String(h(...{ b: 2, a: 1 }));')).toBe('3');
+  expect(evaluated(`${G}String(g(...[(1 := uint8)]));`)).toBe('1');
+  // An overload binds names against the member that declares them.
+  const F = 'function f(a: uint8): uint8 { return 1; } function f(b: string): uint8 { return 2; } ';
+  expectStaticTypeError(`${F}f(...{ c: 1 });`);
+  expect(evaluated(`${F}String(f(b: 'x'));`)).toBe('2');
+  expect(evaluated(`${F}String(f(...{ b: 'x' }));`)).toBe('2');
+});
+
+test('an alias cycle with no member in it is refused in every scope (Round 4, Gap 2)', () => {
+  expectThrown('type R = R;', 'is defined as itself');
+  expectStaticTypeError('type A = B; type B = A;');
+  expectStaticTypeError('type A = B; type B = C; type C = A;');
+  expectStaticTypeError('function u() { type R = (R); }');
+  expect(ok('type A = B; type B = uint8; let a: A = 1; String(a);')).toBe(true);
+  expect(ok('type L = { v: uint8, next: L | null }; String(1);')).toBe(true);
+});
+
+test('a binding typed by a class of untyped fields has no default (Round 4, Gap 3)', () => {
+  expectThrown('class K { a = 1; } let k: K;', 'has no default value');
+  expectStaticTypeError('class K { a = 1; } class H { k: K; }');
+  expectStaticTypeError('class K { a = 1; b = 2; } const k: K;');
+  // A class with no instance field keeps its default (Q2 of the Round 4 doc).
+  expect(evaluated('class K { } let k: K; typeof k;')).toBe('object');
+  expect(evaluated('class K { m(): uint8 { return 1; } } let k: K; typeof k;')).toBe('object');
+  expect(evaluated('class K { x: uint8 = 1; } let k: K; String(k.x);')).toBe('0');
+  expect(evaluated('class B { x: uint8 = 1; } class K extends B { } let k: K; String(k.x);')).toBe('0');
+  expect(evaluated("class K { s: string = 'a'; } let k: K; JSON.stringify(k.s);")).toBe('""');
+});
+
+test('a tuple\'s search methods take the union of its position types (Round 4, Gap 4)', () => {
+  expectStaticTypeError('let t: [uint16, uint16] = [1, 2]; t.includes(70000);');
+  expectStaticTypeError("let t: [uint16, uint16] = [1, 2]; t.indexOf('x');");
+  expectStaticTypeError("let t: [uint8, string] = [1, 'a']; t.includes(true);");
+  expectStaticTypeError('let t: [uint8, ...[].<uint8>] = [1, 2]; t.includes(300);');
+  expect(evaluated('let t: [uint16, uint16] = [1, 2]; String(t.includes(2));')).toBe('true');
+  expect(evaluated('let t: [uint16, uint16] = [1, 2]; String(t.indexOf(2));')).toBe('1');
+  expect(evaluated("let t: [uint8, string] = [1, 'a']; String(t.includes('a'));")).toBe('true');
+});
+
+test('a WeakMap seeded by a literal is checked (Round 4, Gap 5)', () => {
+  expectThrown('new WeakMap.<object, uint8>([[1, 1]]);', 'cannot be held weakly');
+  expectStaticTypeError('const k = {}; new WeakMap.<object, uint8>([[k, 300]]);');
+  expectStaticTypeError("const k = {}; new WeakMap.<object, uint8>([[k, 'x']]);");
+  expect(evaluated('const k = {}; const w = new WeakMap.<object, uint8>([[k, 1]]); String(w.get(k));')).toBe('1');
+  expect(evaluated('const k = {}; const w = new WeakSet.<object>([k]); String(w.has(k));')).toBe('true');
+});

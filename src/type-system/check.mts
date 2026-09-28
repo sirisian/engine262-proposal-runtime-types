@@ -9433,12 +9433,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (hasDeclaredZero) return 'has';
     if (((declaration as unknown as { ClassModifiers?: readonly string[] | null }).ClassModifiers ?? []).includes('reference')) return 'none';
     let verdict: DefaultVerdict = 'has';
+    // #sec-typed-classes: "A class is typed when at least one of its public or
+    // private fields, declared or inherited, carries a type annotation", and
+    // only a typed class can be a value type class; one annotated only on a
+    // method, a getter, a constructor parameter or a static field "is not
+    // typed". A class whose instance fields are all UNTYPED therefore has no
+    // default unless it declares a zero (#sec-defaultvalueof; Round 4, Gap 3),
+    // which is what the run time already answers. A class with NO instance
+    // field keeps its default - "nothing about it lacks a zero", the reading
+    // `reference-field-default` pins and the doc's Q2 leaves open - and a class
+    // mixing annotated and untyped fields stays undecided.
+    let annotatedFields = 0;
+    let untypedFields = 0;
     for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
       const heritage = (at as unknown as { ClassTail?: { ClassHeritage?: unknown } | null }).ClassTail?.ClassHeritage;
       for (const element of classBodyOf(at)) {
         if (element.type !== 'FieldDefinition' || (element as { static?: boolean }).static) continue;
         const annotation = (element as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-        if (!annotation) return 'unknown';
+        if (!annotation) {
+          untypedFields += 1;
+          continue;
+        }
+        annotatedFields += 1;
         const fieldType = resolveType(annotation.Type);
         if (!fieldType || fieldType.Kind === 'any' || mentionsTypeParameter(fieldType)) return 'unknown';
         // A field of a type that is not a value type makes this a reference
@@ -9450,6 +9466,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (heritage && !heritageClassOf(at)) return 'unknown';
     }
+    if (annotatedFields === 0 && untypedFields > 0) return 'none';
+    if (annotatedFields > 0 && untypedFields > 0) return 'unknown';
     return verdict;
   };
   const refuseClassWithoutDefault = (declared: TypeRecord): boolean => {
@@ -16473,6 +16491,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           if (receiver && receiver.Kind === 'tuple') {
             const tupleName = (m.IdentifierName as { name?: string } | undefined)?.name;
+            // #sec-array-defaults-and-stores: the search methods take their
+            // element at *t*, and "for a tuple, *t* is the union of its position
+            // types" (Round 4, Q1) - a rest position contributing its element.
+            // A literal then adopts the union, and an impossible search is
+            // refused as it is for an array.
+            if (tupleName === 'includes' || tupleName === 'indexOf' || tupleName === 'lastIndexOf') {
+              const positionUnion = receiver.Elements.reduce<TypeRecord>((sum, entry) => {
+                const t = entry.Rest && (entry.Type as TypeRecord).Kind === 'array' ? (entry.Type as { Element: TypeRecord }).Element : entry.Type as TypeRecord;
+                return joinTypes(sum, t);
+              }, neverType);
+              const sig = positionUnion.Kind === 'union' && positionUnion.Members.length === 0 ? null : ArrayMethodSignature(tupleName, positionUnion, receiver);
+              if (sig) return sig;
+            }
             if (tupleName === 'length') {
               let tupleReceiverNode = m.MemberExpression as ParseNode | undefined;
               while (tupleReceiverNode && tupleReceiverNode.type === 'ParenthesizedExpression') {
@@ -21823,6 +21854,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // nominal because "a type whose own declaration owns this rule", and an
     // object satisfying `interface I { next?: I }` holds a reference rather than
     // an inline layout.
+    // #sec-type-alias-declarations: "An alias may refer to itself, directly or
+    // through other aliases, provided every cycle passes through a position
+    // that holds a reference ... It is a type error if a cycle never does." A
+    // BARE chain - `type R = R;`, `type A = B; type B = A;` - passes through no
+    // position at all, so the member walk below never meets it: the alias
+    // resolves to nothing and is skipped, and the chain was refused only when
+    // a top-level declaration evaluated, and never in any other scope (Round 4,
+    // Gap 2). Follow each alias's right-hand side while it is itself a bare
+    // reference to an alias, and report a chain that returns to its start.
+    {
+      const bareTarget = (name: string): string | undefined => {
+        let t = (aliasNodes.get(name) as { Type?: ParseNode } | undefined)?.Type as {
+          type?: string, Type?: unknown, TypeArguments?: unknown,
+          TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } | null,
+        } | undefined;
+        while (t?.type === 'ParenthesizedType') t = t.Type as typeof t;
+        if (t?.type !== 'TypeReference' || t.TypeArguments || (t.TypeName?.MemberNames?.length ?? 0) > 0) return undefined;
+        return t.TypeName?.IdentifierReference?.name;
+      };
+      const inReportedCycle = new Set<string>();
+      for (const [aliasName, aliasNode] of aliasNodes) {
+        if ((aliasNode as { TypeParameters?: unknown }).TypeParameters || inReportedCycle.has(aliasName)) continue;
+        const chain = [aliasName];
+        for (let next = bareTarget(aliasName); next !== undefined && aliasNodes.has(next); next = bareTarget(next)) {
+          if (next === aliasName) {
+            chain.forEach((member) => inReportedCycle.add(member));
+            errors.push(Throw.StaticTypeError('$1 is defined as itself, so it denotes no type', Value(aliasName)).Value as ObjectValue);
+            break;
+          }
+          if (chain.includes(next)) break; // a cycle that does not include this alias is reported from its own members
+          chain.push(next);
+        }
+      }
+    }
     for (const [aliasName, aliasNode] of aliasNodes) {
       if ((aliasNode as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters) {
         continue;
@@ -23205,14 +23270,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   type MappedArgument = { node: ParseNode, slot: number, offset: number };
 
-  const mapCallArguments = (params: readonly ParameterRecord[], args: readonly ParseNode[]) => {
-    const named = args.some((a) => a.type === 'NamedArgument');
-    const spread = args.some((a) => a.type === 'AssignmentRestElement');
+  /**
+   * #sec-bindarguments: "A spread of an object ... where the value is an object
+   * with no `Symbol.iterator` method, binds each of the object's own enumerable
+   * String-keyed properties by parameter name, as though each were written as a
+   * named argument", and a named or object-spread call that no signature can
+   * bind is a type error. A fresh object literal of plain String-keyed data
+   * members establishes its keys and its lack of an iterator (while
+   * %Object.prototype% has none), so it is judged as the named arguments it
+   * stands for (Round 4, Gap 1). Anything else keeps its run-time check.
+   */
+  const objectSpreadItems = (arg: ParseNode): ArgumentItem<ParseNode>[] | null => {
+    if (arg.type !== 'AssignmentRestElement') return null;
+    const operand = patternExpression((arg as { AssignmentExpression?: ParseNode }).AssignmentExpression);
+    if (operand?.type !== 'ObjectLiteral') return null;
+    if (intrinsicData(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%'], wellKnownSymbols.iterator) !== undefined) return null;
+    const items: ArgumentItem<ParseNode>[] = [];
+    for (const member of operand.PropertyDefinitionList) {
+      if (member.type === 'IdentifierReference') {
+        items.push({ name: member.name, value: member });
+        continue;
+      }
+      if (member.type !== 'PropertyDefinition' || member.PropertyName?.type === 'PropertyName' || !member.AssignmentExpression) return null;
+      const key = classElementKey(member.PropertyName);
+      if (typeof key !== 'string' || key === '__proto__') return null;
+      items.push({ name: key, value: member.AssignmentExpression as ParseNode });
+    }
+    return items;
+  };
+
+  const mapCallArguments = (params: readonly ParameterRecord[], givenArgs: readonly ParseNode[]) => {
+    const expanded = givenArgs.map((a) => objectSpreadItems(a));
+    const objectSpreads = expanded.some((items) => items !== null);
+    const args = givenArgs;
+    const named = args.some((a) => a.type === 'NamedArgument') || objectSpreads;
+    const spread = args.some((a, i) => a.type === 'AssignmentRestElement' && expanded[i] === null);
     const slots = params.map((pr) => ({
       ...pr, Optional: pr.Optional || pr.Initial !== undefined || (!named && IsAssignable(undefinedType, pr.Type)),
     }));
     let unknownPosition = false;
-    const items = args.flatMap<ArgumentItem<ParseNode>>((arg) => {
+    const items = args.flatMap<ArgumentItem<ParseNode>>((arg, index) => {
+      if (expanded[index]) return expanded[index]!;
       if (arg.type === 'AssignmentRestElement') {
         unknownPosition = true;
         return [];
@@ -23340,7 +23438,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // result inference and argument checking ask the same resolver in the current context.
   const selectCallSignature = (c: object, supplied: readonly ParseNode[], callee: TypeRecord & { Kind: 'function' }, n: ParseNode, diagnose: boolean): SignatureRecord | null => {
     let sig: SignatureRecord | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
-    const namedNames = supplied.filter((a): a is ParseNode.NamedArgument => a.type === 'NamedArgument').map((a) => a.Name);
+    // An object-literal spread supplies names too (#sec-bindarguments; Round 4,
+    // Gap 1), and selects the signature in view by them as written names do.
+    const namedNames = [
+      ...supplied.filter((a): a is ParseNode.NamedArgument => a.type === 'NamedArgument').map((a) => a.Name),
+      ...supplied.flatMap((a) => objectSpreadItems(a)?.map((item) => item.name!) ?? []),
+    ];
     if (namedNames.length > 0) {
       // The signature in view is selected by names, as at the runtime named
       // binding site. Argument values are checked against that signature.
@@ -24413,7 +24516,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return type?.Kind === 'primitive' && (isNumericOperandName(type.Name) || ['string', 'boolean', 'undefined', 'null'].includes(type.Name));
     });
   };
-  const intrinsicOrigin = (expression: ParseNode, name: 'Proxy' | 'Map' | 'Set' | 'Promise',
+  const intrinsicOrigin = (expression: ParseNode, name: 'Proxy' | 'Map' | 'Set' | 'Promise' | 'WeakMap' | 'WeakSet',
     scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
     const realm = surroundingAgent.currentRealmRecord;
     if (name === 'Promise') stablePromiseSource ??= intrinsicSourceIsStable(root, realm, promiseExecutorScalarCall);
@@ -24497,8 +24600,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkedCollectionSeeds = new WeakMap<ParseNode, Set<TypeRecord>>();
   const checkCollectionSeed = (node: ParseNode.NewExpression, target: Known): void => {
-    if (target?.Kind !== 'nominal' || !['Map', 'Set'].includes(target.LibraryName ?? '')) return;
-    const name = target.LibraryName as 'Map' | 'Set';
+    // The weak collections are seeded by the same judgment (Round 4, Gap 5):
+    // #sec-collection-construction checks "an established surviving key, value
+    // or element" for every keyed collection, and a key the weak-holding rule
+    // refuses is one that cannot undergo the conversion to its key type.
+    if (target?.Kind !== 'nominal' || !['Map', 'Set', 'WeakMap', 'WeakSet'].includes(target.LibraryName ?? '')) return;
+    const name = target.LibraryName as 'Map' | 'Set' | 'WeakMap' | 'WeakSet';
+    const mapLike = name === 'Map' || name === 'WeakMap';
     if (!intrinsicOrigin(node.MemberExpression, name)) return;
     const args = node.Arguments ?? [];
     if (args.some((arg) => arg.type === 'AssignmentRestElement' || arg.type === 'NamedArgument')) return;
@@ -24517,8 +24625,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!literalSeed && !typedSeed) return;
     const realm = surroundingAgent.currentRealmRecord;
     const intrinsic = realm.Intrinsics;
-    const adder = name === 'Map' ? 'set' : 'add';
-    if (intrinsicData(intrinsic[`%${name}.prototype%`], Value(adder)) !== (name === 'Map' ? intrinsic['%Map.prototype.set%'] : intrinsic['%Set.prototype.add%'])
+    const adder = mapLike ? 'set' : 'add';
+    if (intrinsicData(intrinsic[`%${name}.prototype%`], Value(adder)) !== intrinsic[`%${name}.prototype.${adder}%` as '%Map.prototype.set%']
         || intrinsicData(intrinsic['%Array.prototype%'], wellKnownSymbols.iterator) !== intrinsic['%Array.prototype.values%']
         || intrinsicData(intrinsic['%ArrayIteratorPrototype%'], Value('next')) !== intrinsic['%ArrayIteratorPrototype.next%']) return;
     const checked = checkedCollectionSeeds.get(node) ?? new Set<TypeRecord>();
@@ -24563,7 +24671,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const refuse = (source: TypeRecord, wanted: TypeRecord | number | undefined): boolean => !!wanted && typeof wanted !== 'number'
         && !mentionsTypeParameter(wanted) && conversionImpossible(source, wanted);
       for (const element of elements) {
-        if (name === 'Set') {
+        if (!mapLike) {
           if (refuse(element, positions[0])) {
             errors.push(Throw.StaticTypeError('a $1 seed element of type $2 cannot be converted to $3', Value(name), Value(displayType(element)), Value(displayType(positions[0] as TypeRecord))).Value as ObjectValue);
             return;
@@ -24587,8 +24695,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         'a final $1 seed entry cannot be converted to $2', Value(name), Value(displayType(wanted)),
       ).Value as ObjectValue);
     };
-    if (name === 'Set') {
+    if (!mapLike) {
       for (const value of seed.ElementList) reject(value, positions[0]);
+      return;
+    }
+    if (name === 'WeakMap') {
+      // A WeakMap's keys are objects, so the primitive-key duplicate proof
+      // below never applies. A key the weak-holding rule refuses cannot undergo
+      // the conversion to its key type, whatever follows it. A value survives
+      // unless a later entry's key may be the same object: one entry has
+      // nothing after it, and fresh allocations are distinct from each other.
+      const pairs: (readonly [ParseNode, ParseNode])[] = [];
+      for (const entry of seed.ElementList) {
+        const pair = patternExpression(entry);
+        if (pair?.type !== 'ArrayLiteral' || pair.ElementList.length !== 2
+            || pair.ElementList.some((el) => !el || el.type === 'SpreadElement')) return;
+        pairs.push([pair.ElementList[0] as ParseNode, pair.ElementList[1] as ParseNode]);
+      }
+      for (const [keyNode] of pairs) {
+        const keyType = staticType(keyNode);
+        if (keyType && keyType.Kind !== 'any' && !typeCanBeHeldWeakly(keyType as TypeRecord)) {
+          errors.push(Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly',
+            Value(displayType(keyType as TypeRecord)), Value('WeakMap'), Value('keys')).Value as ObjectValue);
+          return;
+        }
+      }
+      const fresh = (n: ParseNode): boolean => ['ObjectLiteral', 'ArrayLiteral', 'NewExpression', 'FunctionExpression',
+        'ArrowFunction', 'ClassExpression'].includes(patternExpression(n)?.type ?? '');
+      if (pairs.length === 1 || pairs.every(([keyNode]) => fresh(keyNode))) {
+        for (const [, valueNode] of pairs) reject(valueNode, positions[1]);
+      }
       return;
     }
     // Host Map uses SameValueZero for these primitive payloads too. Restrict

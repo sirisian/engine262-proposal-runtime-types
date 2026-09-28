@@ -103,6 +103,8 @@ export interface Intrinsics extends Intrinsics_Table6 {
   '%Proxy.revocable%': ObjectValue;
   '%Map.prototype.set%': ObjectValue;
   '%Set.prototype.add%': ObjectValue;
+  '%WeakMap.prototype.set%': ObjectValue;
+  '%WeakSet.prototype.add%': ObjectValue;
   '%ArrayIteratorPrototype.next%': ObjectValue;
   '%AbstractModuleSource.prototype%': ObjectValue;
   '%AggregateError.prototype%': ObjectValue;

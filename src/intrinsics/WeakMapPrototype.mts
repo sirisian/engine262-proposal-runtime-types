@@ -2,6 +2,7 @@ import {
   Value,
   type Arguments,
   type FunctionCallContext,
+  type ObjectValue,
 } from '../value.mts';
 import { Q, type ValueEvaluator } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -237,4 +238,7 @@ export function bootstrapWeakMapPrototype(realmRec: Realm) {
   ], realmRec.Intrinsics['%Object.prototype%'], 'WeakMap');
 
   realmRec.Intrinsics['%WeakMap.prototype%'] = proto;
+  // The adder a seeded construction calls, whose identity the static seed
+  // judgment establishes (#sec-collection-construction), as for %Map.prototype.set%.
+  realmRec.Intrinsics['%WeakMap.prototype.set%'] = proto.properties.get(Value('set'))!.Value as ObjectValue;
 }

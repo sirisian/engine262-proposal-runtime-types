@@ -9,7 +9,7 @@ import { isTypeObject } from '../type-system/intern.mts';
 import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
 import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
-import { signatureInView } from './ArgumentListEvaluation.mts';
+import { signatureInView, overloadInView } from './ArgumentListEvaluation.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -161,7 +161,25 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     // position with the interface's default, so `(a, b) => b` receives
     // `('5', 10)`. Without a declared type in view, the callee's own parameter
     // list is read, as before.
-    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func, signature));
+    // An overload set with no declared type in view binds names against the
+    // member whose parameters include them (Round 4, Gap 1); the dispatcher
+    // then resolves the call from the positions that binding produced.
+    const names: string[] = [];
+    for (const a of args as ParseNode.Arguments) {
+      if (a.type === 'NamedArgument') names.push((a as ParseNode.NamedArgument).Name);
+      const spread = a.type === 'AssignmentRestElement' ? (a as ParseNode.AssignmentRestElement).AssignmentExpression : undefined;
+      // The keys an object-literal spread supplies are written in it.
+      if (spread?.type === 'ObjectLiteral') {
+        for (const member of (spread as ParseNode.ObjectLiteral).PropertyDefinitionList) {
+          if (member.type === 'IdentifierReference') names.push(member.name);
+          const key = member.type === 'PropertyDefinition' ? member.PropertyName as { type?: string, name?: string, value?: string } | null : null;
+          if (key?.type === 'IdentifierName' && key.name) names.push(key.name);
+          else if (key?.type === 'StringLiteral' && typeof key.value === 'string') names.push(key.value);
+        }
+      }
+    }
+    const bindingTarget = signature === undefined ? overloadInView(func, names) : func;
+    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, bindingTarget, signature));
   }
   // #sec-this-adoption: enforce a typed call's receiver view even when the
   // function value reached that view through an erased boundary.

@@ -84,7 +84,10 @@ test('an interface is not walked, and that is not an omission', () => {
 test('an alias defined as itself keeps its own diagnostic', () => {
   // A different rule - "there is no structure to be recursive THROUGH" - and it
   // must not be captured by the cycle walk. Forcing resolution here once made
-  // this report a ReferenceError against an unbound name instead.
+  // this report a ReferenceError against an unbound name instead. It is an
+  // Early Error: #sec-type-alias-declarations refuses a cycle that passes
+  // through no reference position, and a bare self-reference passes through
+  // none (Round 4, Gap 2).
   expect(evaluated('try { eval("type L = L;"); "no error"; } catch (e) { e.constructor.name + ": " + e.message; }'))
-    .toBe('TypeError: "L" is defined as itself, so it denotes no type');
+    .toBe('StaticTypeError: "L" is defined as itself, so it denotes no type');
 });

@@ -193,14 +193,6 @@ function earlyError(source: string): string {
   }
 }
 
-/** The constructor name of the error _source_ throws, and its message. */
-function thrown(source: string): string {
-  const realm = makeRealm();
-  const completion = realm.evaluateScriptSkipDebugger(source) as unknown as { Type: string };
-  expect(completion.Type).toBe('throw');
-  return evaluated(`try { ${source} "no error"; } catch (e) { e.constructor.name + ": " + e.message; }`);
-}
-
 test('a recursive alias resolves and its values flow', () => {
   expect(evaluated('type L = { value: uint8, next: L | null };'
     + ' const n: L = { value: 1, next: { value: 2, next: null } };'
@@ -253,8 +245,9 @@ test('a fixed extent lays its elements inline, so it closes a cycle', () => {
 });
 
 test('an alias defined as itself denotes no type', () => {
-  expect(thrown('type L = L;'))
-    .toBe('TypeError: "L" is defined as itself, so it denotes no type');
+  // Refused before the program runs (#sec-type-alias-declarations; Round 4, Gap 2).
+  expect(earlyError('type L = L;'))
+    .toBe('StaticTypeError: "L" is defined as itself, so it denotes no type');
 });
 
 test('a recursive alias is checked, not merely resolved', () => {

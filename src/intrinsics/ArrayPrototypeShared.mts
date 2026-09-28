@@ -8,6 +8,7 @@ import {
   NullValue, NumberValue, ObjectValue, UndefinedValue, Value, type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { sort } from '../host-defined/sort.mts';
+import { CanonicalizeType } from '../type-system/intern.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { assignProps } from './bootstrap.mts';
 import { ValidateTypedArray } from './TypedArray.mts';
@@ -271,7 +272,18 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
     if (!surroundingAgent.feature('runtime-types')) {
       return needle;
     }
-    const element = (O as { TypedElement?: TypeRecord }).TypedElement;
+    let element = (O as { TypedElement?: TypeRecord }).TypedElement;
+    // A typed tuple searches at the union of its position types (a rest
+    // contributing its element), as #sec-array-defaults-and-stores gives a
+    // tuple's search methods (Round 4, Q1): `t.includes(2)` on a
+    // `[uint16, uint16]` then compares a `uint16` against `uint16`s.
+    const tuple = (O as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple;
+    if (element === undefined && tuple !== undefined) {
+      const members = [...tuple.Positions, ...(tuple.Rest ? [tuple.Rest.Kind === 'array' ? tuple.Rest.Element : tuple.Rest] : [])];
+      if (members.length > 0) {
+        element = members.length === 1 ? members[0] : CanonicalizeType({ Kind: 'union', Members: members } as TypeRecord);
+      }
+    }
     if (element === undefined) {
       return needle;
     }

@@ -2,6 +2,7 @@ import {
   Value,
   type Arguments,
   type FunctionCallContext,
+  type ObjectValue,
 } from '../value.mts';
 import { Q, type ValueEvaluator } from '../completion.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -120,4 +121,6 @@ export function bootstrapWeakSetPrototype(realmRec: Realm) {
   ], realmRec.Intrinsics['%Object.prototype%'], 'WeakSet');
 
   realmRec.Intrinsics['%WeakSet.prototype%'] = proto;
+  // As %Set.prototype.add%, for the static seed judgment.
+  realmRec.Intrinsics['%WeakSet.prototype.add%'] = proto.properties.get(Value('add'))!.Value as ObjectValue;
 }

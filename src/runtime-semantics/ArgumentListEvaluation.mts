@@ -296,6 +296,22 @@ function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omit
 }
 
 /** The signature in view for a callee reference, or undefined where its binding declares no callable type. */
+/**
+ * The member of an overload set whose parameter names a named call reads:
+ * #sec-named-arguments selects "the first whose parameters include every named
+ * argument's name, or the first where there is none such", and
+ * #sec-bindarguments binds by "the parameter names ... of the selected
+ * signature". A function that is not an overload set is its own answer.
+ */
+export function overloadInView(func: Value, namedArguments: readonly string[]): Value {
+  const overloads = (func as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
+  if (!overloads || overloads.length < 2 || namedArguments.length === 0) return func;
+  return overloads.find((member) => {
+    const { names } = parameterInfo(member);
+    return namedArguments.every((name) => names.includes(name));
+  }) ?? overloads[0];
+}
+
 export function signatureInView(declaredType: unknown, namedArguments: readonly string[]): SignatureInView | undefined {
   let t = declaredType as { Kind?: string, Structure?: unknown, Signatures?: readonly SignatureInView[] } | undefined;
   if (t && t.Kind === 'nominal') {
