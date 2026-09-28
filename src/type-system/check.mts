@@ -9810,6 +9810,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const bindings = new Map<string, TypeRecord>();
             bindExplicitTypeArguments(parameters, rawArgList, bindings, { complete: true, application: node });
             if (bindings.size !== parameters.length) return null;
+            // Phase 5, plan 6.4: a family with CASES selects before either shape
+            // is assumed - an alias's right-hand side, an interface's contract.
+            // Returning the primary here bypassed case selection entirely.
+            const familyCases = aliasCasesOf(genericDeclaration as unknown as ParseNode);
+            if (familyCases.length > 0) {
+              const familyArgs = parameters.map((parameter) => bindings.get(parameter.Name)!);
+              if (genericDeclaration.type === 'TypeAliasDeclaration') {
+                checkSpecializedDeclaration(genericDeclaration, bindings);
+                if (familyArgs.some((a) => mentionsTypeParameter(a))) {
+                  // Deferred: selected by substitution once the arguments close.
+                  return { Kind: 'deferred', Operator: genericDeclaration as unknown as object, Operands: familyArgs } as unknown as Known;
+                }
+                return resolveClosedAliasApplication(genericDeclaration as unknown as ParseNode, familyArgs);
+              }
+              const chosen = aliasCaseSelection(genericDeclaration as unknown as ParseNode, familyCases, appliedName, familyArgs);
+              if (chosen && chosen !== 'open') {
+                const refined = refinedInterfaceRecord(chosen.Declaration, chosen.Bindings);
+                if (refined) return CanonicalizeType({ ...refined, Arguments: familyArgs } as TypeRecord);
+              }
+            }
             if (genericDeclaration.type === 'TypeAliasDeclaration') {
               if (resolvingAliases.has(appliedName)) return null;
               resolvingAliases.add(appliedName);

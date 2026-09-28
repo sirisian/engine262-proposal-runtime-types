@@ -1,3 +1,4 @@
+import { SelectedDeclarationOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
 import {
@@ -941,6 +942,12 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
         X(CreateDataProperty(genericView, Value('base'), typeObj({ ...nominalT, Arguments: [] })));
         const args = nominalT.Arguments.map((a) => (typeof a === 'number' ? Value(a) : typeObj(a)) as Value);
         X(CreateDataProperty(genericView, Value('arguments'), CreateArrayFromList(args)));
+        // Phase 5 (plan C23): the SELECTED declaration is discoverable - the
+        // case whose complete body this application runs, or the primary.
+        const selected = SelectedDeclarationOf((nominalT as { Constructor?: unknown }).Constructor);
+        if (selected !== undefined) {
+          X(CreateDataProperty(genericView, Value('selected'), Value(selected)));
+        }
         set('generic', genericView);
       }
       break;

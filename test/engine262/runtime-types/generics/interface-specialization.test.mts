@@ -25,3 +25,10 @@ test('an interface case belongs to an interface primary in its own statement lis
   // A case declares no name of its own, so it is no redeclaration.
   expect(evaluated(`${I} "ok";`)).toBe('ok');
 });
+
+test('in a type position, the selected application carries the refined members', () => {
+  // An application in a type position selects its case as `implements` does:
+  // `Store.<boolean>` has `bits(): uint8`. (The binding path for aliases and
+  // interfaces once returned the primary before any case was selected.)
+  expectThrown(`${I} function g(s: Store.<boolean>): string { return s.bits(); }`, '"uint.<8>" is not assignable to "string"');
+});

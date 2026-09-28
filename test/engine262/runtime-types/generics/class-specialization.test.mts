@@ -95,3 +95,11 @@ test('in a module, a case exports no name of its own, and an imported family tak
   expect(compile('export class Box<T: type> {} class Box<boolean> {}')).toBe('compiled');
   expect(compile('import { Box } from "./box.mjs"; class Box<boolean> {}')).toContain('no `class Box<...>` in this statement list');
 });
+
+test('reflection makes the selected declaration discoverable', () => {
+  // Plan C23: an application reports which declaration it selected - the case
+  // whose complete body it runs, or the primary - as written.
+  expect(evaluated(`${P}${PACKED} String(Reflect.getReflection(Box.<boolean>).generic.selected);`)).toBe('Box<boolean>');
+  expect(evaluated(`${P}${PACKED} String(Reflect.getReflection(Box.<uint8>).generic.selected);`)).toBe('Box<T: type>');
+  expect(evaluated('class G<T: type> { a: T; } String(Reflect.getReflection(G.<uint8>).generic.selected);')).toBe('G<T: type>');
+});

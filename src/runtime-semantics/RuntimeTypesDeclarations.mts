@@ -2354,6 +2354,7 @@ function* SpecializeFromFrame(
     Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
   } as never));
   byArgs.set(cacheKey, ctor);
+  selectedDeclarations.set(ctor as object, body);
   if (body !== declaration) {
     caseBuiltConstructors.add(ctor as object);
   }
@@ -2372,6 +2373,20 @@ export function FamilyCasesOf(declaration: ParseNode.ClassDeclaration | ParseNod
 export function HasClassCases(declaration: unknown): boolean {
   const d = declaration as ParseNode.ClassDeclaration | undefined;
   return !!d && d.type === 'ClassDeclaration' && ClassCasesOf(d).length > 0;
+}
+
+/**
+ * The declaration whose body built each application's constructor - a case,
+ * or the primary (phase 5, plan C23: the selected declaration is
+ * discoverable).
+ */
+const selectedDeclarations = new WeakMap<object, ParseNode.ClassDeclaration>();
+/** The selected declaration of an application's constructor, as written: `Box<boolean>`, `Box<T: type>`. */
+export function SelectedDeclarationOf(ctor: unknown): string | undefined {
+  const d = ctor && typeof ctor === 'object' ? selectedDeclarations.get(ctor) : undefined;
+  if (!d) return undefined;
+  const list = (d.TypeParameters as { sourceText?: string } | null | undefined)?.sourceText ?? '';
+  return `${d.BindingIdentifier?.name ?? ''}${list}`;
 }
 
 /** Constructors built from a CASE body (phase 5); layout reads their own. */
