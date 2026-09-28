@@ -68,8 +68,8 @@ test('the signatures an abstract declaration does accept still stand', () => {
     + 'class B extends A { m(...r: [].<uint8>): uint8 { return 1; } }')).toBe(true);
   // A middle class may RE-DECLARE the member, and an implementation below it
   // keeps the middle contract rather than the root's.
-  expect(ok('abstract class A { abstract m(): number; } abstract class B extends A { abstract m(): uint8; } '
-    + 'class C extends B { m(): uint8 { return 1; } }')).toBe(true);
+  expect(ok('abstract class A { abstract m(): number; } abstract class B extends A { abstract m(): 1; } '
+    + 'class C extends B { m(): 1 { return 1; } }')).toBe(true);
 });
 
 test('an unannotated side declares nothing and is left alone', () => {

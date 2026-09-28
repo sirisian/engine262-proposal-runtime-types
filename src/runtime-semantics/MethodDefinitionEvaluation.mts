@@ -23,6 +23,14 @@ import {
   type GCMarker,
 } from '#self';
 
+const evaluatedMethodKeys = new WeakMap<ParseNode, Value | PrivateName>();
+
+export function TakeEvaluatedMethodKey(node: ParseNode): Value | PrivateName | undefined {
+  const key = evaluatedMethodKeys.get(node);
+  evaluatedMethodKeys.delete(node);
+  return key;
+}
+
 /** https://tc39.es/ecma262/#sec-privateelement-specification-type */
 export interface PrivateElementRecord_Value {
   readonly Key: PrivateName;
@@ -145,6 +153,7 @@ function* MethodDefinitionEvaluation_MethodDefinition(MethodDefinition: ParseNod
     case !!MethodDefinition.UniqueFormalParameters: {
       // 1. Let methodDef be ? DefineMethod of MethodDefinition with argument object.
       const methodDef = Q(yield* DefineMethod(MethodDefinition, object));
+      evaluatedMethodKeys.set(MethodDefinition, methodDef.Key);
       // 2. Perform ! SetFunctionName(methodDef.[[Closure]], methodDef.[[Key]]).
       X(SetFunctionName(methodDef.Closure, methodDef.Key));
       // 3. Return ? DefineMethodProperty(methodDef.[[Key]], object, methodDef.[[Closure]], enumerable).
@@ -163,6 +172,7 @@ function* MethodDefinitionEvaluation_MethodDefinition(MethodDefinition: ParseNod
       const { ClassElementName, PropertySetParameterList, FunctionBody } = MethodDefinition;
       // 1. Let propKey be the result of evaluating ClassElementName.
       const propKey = Q(yield* Evaluate_PropertyName(ClassElementName));
+      evaluatedMethodKeys.set(MethodDefinition, propKey);
       // 3. Let scope be the running execution context's LexicalEnvironment.
       const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
       // 4. Let privateScope be the running execution context's PrivateEnvironment.
@@ -210,6 +220,7 @@ function* MethodDefinitionEvaluation_MethodDefinition(MethodDefinition: ParseNod
       const { ClassElementName, FunctionBody } = MethodDefinition;
       // 1. Let propKey be the result of evaluating ClassElementName.
       const propKey = Q(yield* Evaluate_PropertyName(ClassElementName));
+      evaluatedMethodKeys.set(MethodDefinition, propKey);
       // 3. Let scope be the running execution context's LexicalEnvironment.
       const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
       // 4. Let privateScope be the running execution context's PrivateEnvironment.
@@ -270,6 +281,7 @@ function* MethodDefinitionEvaluation_AsyncMethod(AsyncMethod: ParseNode.AsyncMet
   const { ClassElementName, UniqueFormalParameters, AsyncBody } = AsyncMethod;
   // 1. Let propKey be the result of evaluating ClassElementName.
   const propKey = Q(yield* Evaluate_PropertyName(ClassElementName));
+  evaluatedMethodKeys.set(AsyncMethod, propKey);
   // 3. Let scope be the LexicalEnvironment of the running execution context.
   const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   // 4. Let privateScope be the running execution context's PrivateEnvironment.
@@ -305,6 +317,7 @@ function* MethodDefinitionEvaluation_GeneratorMethod(GeneratorMethod: ParseNode.
   // 1. Let propKey be the result of evaluating ClassElementName.
   let propKey = yield* Evaluate_PropertyName(ClassElementName);
   propKey = Q(propKey);
+  evaluatedMethodKeys.set(GeneratorMethod, propKey);
   // 3. Let scope be the LexicalEnvironment of the running execution context.
   const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   // 4. Let privateScope be the running execution context's PrivateEnvironment.
@@ -349,6 +362,7 @@ function* MethodDefinitionEvaluation_AsyncGeneratorMethod(AsyncGeneratorMethod: 
   // 1. Let propKey be the result of evaluating ClassElementName.
   let propKey = yield* Evaluate_PropertyName(ClassElementName);
   propKey = Q(propKey);
+  evaluatedMethodKeys.set(AsyncGeneratorMethod, propKey);
   // 3. Let scope be the LexicalEnvironment of the running execution context.
   const scope = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   // 4. Let privateScope be the running execution context's PrivateEnvironment.

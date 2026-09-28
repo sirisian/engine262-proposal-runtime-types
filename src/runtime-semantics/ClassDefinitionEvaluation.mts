@@ -1,10 +1,9 @@
 import { operatorTableKey } from '../type-system/overloads.mts';
-import { IsSubtype } from '../type-system/relations.mts';
 import { SetIntegrityLevel, TestIntegrityLevel } from '../abstract-ops/all.mts';
 import { currentTypeParameterFrame, RegisterDeclaredZero, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
-import { displayType, typeParameterRecordsOf } from '../type-system/records.mts';
+import { displayType, typeParameterRecordsOf, parameterFromDeclaration } from '../type-system/records.mts';
 import { CallDecorator, OpenDecorationContext, CloseDecorationContext } from '../abstract-ops/runtime-types.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
@@ -43,6 +42,8 @@ import { CreateArrayFromList } from '../abstract-ops/all.mts';
 import { anyType } from '../type-system/records.mts';
 import { CreateTokenStream } from '../intrinsics/TokenStream.mts';
 import { TokensOf } from '../parser/TokensOf.mts';
+import { PublishedReturnTypeOf } from '../type-system/check.mts';
+import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, type MemberContract, sameFieldContract, type FieldContract } from '../type-system/member-contracts.mts';
 import {
   DefineMethod,
   MethodDefinitionEvaluation,
@@ -57,6 +58,7 @@ import { ArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import { HasClassCases, MaterializeSpecialization, GenericClassDeclarationOf, SpecializationForConstruction, DefaultSpecializationOf, RegisterClassTypeEnvironment } from './RuntimeTypesDeclarations.mts';
 import { TakePendingCalleeContext } from '../type-system/runtime.mts';
 import { Evaluate_PropertyName } from './PropertyName.mts';
+import { TakeEvaluatedMethodKey } from './MethodDefinitionEvaluation.mts';
 import {
   surroundingAgent,
   OrdinaryFunctionCreate,
@@ -129,7 +131,9 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
         methodDefinition.Decorators = decorators;
         return methodDefinition;
       } else {
-        const method = yield* MethodDefinitionEvaluation(node, object, enumerable!);
+        const method = Q(yield* MethodDefinitionEvaluation(node, object, enumerable!));
+        const evaluatedKey = TakeEvaluatedMethodKey(node);
+        const key = (evaluatedKey ?? MemberKeyOf(node, method)) as Value;
         if (surroundingAgent.feature('runtime-types')) {
           // decorators.md "Order": "A declaration's sub-targets apply before the
           // declaration itself: parameter decorators in parameter order, then
@@ -141,8 +145,8 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // of that. The first attempt hooked a line inside the decorator
           // guard, so an undecorated method was unreflectable - the same
           // owner-gating shape the sub-target rule keeps meeting.
-          Q(yield* RecordMemberDeclarationFor(node, memberContextKind(node), MemberKeyOf(node, method), object));
-          Q(yield* ApplySubTargetDecorators(node, memberContextKind(node), MemberKeyOf(node, method), object as Value));
+          Q(yield* RecordMemberDeclarationFor(node, memberContextKind(node), key, object));
+          Q(yield* ApplySubTargetDecorators(node, memberContextKind(node), key, object as Value));
         }
         if (surroundingAgent.feature('runtime-types') && node.Decorators) {
           // decorators.md distinguishes a method from an accessor from an
@@ -156,14 +160,14 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           const memberKind = memberContextKind(node);
           const replacement = Q(yield* ApplyDecorators(node.Decorators, Q(yield* ClassMemberDecoratorContext(
             memberKind,
-            MemberKeyOf(node, method),
+            key,
             (node as { static?: boolean }).static === true,
             currentClassName ?? Value.undefined,
             object as Value,
             node,
           )), true));
           if (replacement !== undefined) {
-            const memberKey = MemberKeyOf(node, method);
+            const memberKey = key;
             if (memberKey !== Value.undefined && !(memberKey instanceof PrivateName)) {
               const existing = Q(yield* object.GetOwnProperty(memberKey as PropertyKeyValue));
               const descriptor = memberKind === 'ClassGetter'
@@ -208,11 +212,9 @@ function* ClassElementEvaluation(node: ParseNode.MethodDefinition | ParseNode.Ge
           // Recorded for EVERY field and accessor, decorated or not - the same
           // rule the method arm needed, and the reason an undecorated member
           // was unreflectable when the recording sat inside the decorator
-          // block. The NAME comes from the node: an accessor's record carries
-          // its backing Private Name, and a reflection names what was declared.
-          const declaredKey = (node as ParseNode.FieldDefinition).ClassElementName
-            ? (Q(yield* Evaluate_PropertyName((node as ParseNode.FieldDefinition).ClassElementName)) as Value)
-            : Value.undefined;
+          // block. Reuse the evaluated key; an accessor records its declared
+          // name separately from its private backing slot.
+          const declaredKey = plain.LayoutName ?? plain.Name;
           Q(yield* RecordMemberDeclarationFor(
             node,
             (node as { accessor?: boolean }).accessor === true ? 'ClassAccessor' : 'ClassField',
@@ -1227,7 +1229,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const abstractKind = e.Accessor === 'get'
             ? 'ClassGetter'
             : e.Accessor === 'set' ? 'ClassSetter' : 'ClassMethod';
-          Q(yield* RecordMemberDeclarationFor(e as never, abstractKind, MemberKeyOf(e, undefined), proto as ObjectValue));
+          Q(yield* RecordMemberDeclarationFor(e as never, abstractKind, Q(yield* Evaluate_PropertyName(e.ClassElementName)), proto as ObjectValue));
         }
         // proposal-runtime-types: named operators with bodies register in the
         // class operator table; abstract methods have no runtime behaviour.
@@ -1459,78 +1461,40 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // TypeError when NewTarget is that constructor itself, while super() from a
       // concrete subclass (a concrete NewTarget) runs it as a constructor body.
       (F as { IsAbstract?: boolean }).IsAbstract = modifiers.includes('abstract');
-      // #sec-abstract-classes: "a type
-      // error if a class not declared `abstract` leaves an inherited abstract
-      // method unimplemented". Until now the class declared, constructed, and
-      // reported only when the missing member was CALLED - "h.m is not a
-      // function", which names the symptom rather than the contract.
-      //
-      // Three kinds, because an abstract member may be a method or either
-      // accessor and the walk is kind-filtered: a check written for methods
-      // alone silently passes every accessor.
-      //
-      // AllMemberDeclarationsOf collects innermost-first and guards each insert
-      // with `!collected.has(key)`, so the NEAREST declaration wins. That is
-      // what makes implementing at a middle level satisfy the contract for
-      // everything below it - the question is "is the collected declaration
-      // abstract", not "is any declaration in the chain abstract".
-      // #sec-abstract-classes:
-      // an abstract method's "annotation types the implementations: it is a type
-      // error if a subclass implements an inherited abstract method with a
-      // signature the abstract declaration does not accept".
-      //
-      // The SUBTYPE relation, which is what interface satisfaction already
-      // uses for the same question - `class C implements I { m(): uint8 }` for an
-      // `I` declaring `m(): number` is refused, and an abstract `m(): number`
-      // accepting it was the engine answering one question two ways.
-      //
-      // `uint8` is not a narrower `number` here: the numeric families are
-      // mutually unrelated, no boundary admits the value, and the override that
-      // is accepted today produces a result every `number` position rejects -
-      // refused at the use, having been accepted at the override.
-      //
-      // Own members against INHERITED ones, because the two must be seen apart:
-      // AllMemberDeclarationsOf collapses the chain to the nearest, which is the
-      // implementation itself once there is one.
-      const superConstructor = Q(yield* (F as ObjectValue).GetPrototypeOf());
-      if (superConstructor instanceof ObjectValue) {
-        for (const kind of ['ClassMethod', 'ClassGetter', 'ClassSetter']) {
-          const inheritedMembers = AllMemberDeclarationsOf(superConstructor, kind, false, false);
-          for (const [key, own] of AllMemberDeclarationsOf(F, kind, true, false)) {
-            const inherited = inheritedMembers.get(key);
-            if (own.abstract === true || inherited?.abstract !== true) {
-              continue;
-            }
-            if (own.type !== undefined && inherited.type !== undefined
-                && !IsSubtype(own.type, inherited.type, [])) {
-              return Throw.TypeError(
-                '$1 implements an inherited $2 with a signature the declaration does not accept',
-                Value(typeof classBinding === 'object' && classBinding instanceof JSStringValue ? classBinding.stringValue() : 'the class'),
-                Value(String(key).split('\u0000')[0]),
-              );
-            }
+      // #sec-abstract-classes: resolved keys and the same effective member
+      // contracts used by the static pass, with fields retained as blockers.
+      const own = memberContracts.get(F) ?? [];
+      for (const [fields, isStatic] of [[instanceFields, false], [staticElements, true]] as const) {
+        const slots = new Map<string | SymbolValue, FieldContract>();
+        for (const field of fields) {
+          if (!(field instanceof ClassFieldDefinitionRecord)) continue;
+          const name = field.LayoutName ?? field.Name;
+          if (!(name instanceof JSStringValue) && !(name instanceof SymbolValue)) continue;
+          const key = name instanceof JSStringValue ? name.stringValue() : name;
+          addMemberContract(own, { key, static: isStatic, kind: 'field', abstract: false, type: null });
+          const type = (field.TypeObject as { TypeRecord?: TypeRecord } | undefined)?.TypeRecord;
+          const prior = slots.get(key);
+          const contract = type ? { type, readonly: !!field.Readonly, protected: field.Access === 'protected',
+            controls: (field as { LayoutControls?: FieldControls }).LayoutControls ?? {} } : null;
+          if (contract && prior && !unspecializedGeneric && !sameFieldContract(contract, prior)) {
+            return Throw.TypeError('repeated field $1 has incompatible storage contracts', name);
           }
+          if (contract && !prior) slots.set(key, contract);
         }
       }
-      if (!modifiers.includes('abstract')) {
-        for (const kind of ['ClassMethod', 'ClassGetter', 'ClassSetter']) {
-          // The registry keys on the CONSTRUCTOR - RecordMemberDeclarationFor
-          // derives its owner from the home object via `constructor` - so the
-          // prototype answers empty for every class, concrete or not.
-          for (const [key, declaration] of AllMemberDeclarationsOf(F, kind, false, false)) {
-            if (declaration.abstract === true) {
-              return Throw.TypeError(
-                '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract',
-                Value(typeof classBinding === 'object' && classBinding instanceof JSStringValue ? classBinding.stringValue() : 'the class'),
-                // The storage key carries a kind qualifier after a NUL - see
-                // "the member's name AS DECLARED, the storage key carrying a
-                // static qualifier" - so the message takes the name before it.
-                Value(String(key).split('\u0000')[0]),
-              );
-            }
-          }
-        }
+      memberContracts.set(F, own);
+      const chain: MemberContract[][] = [];
+      let contractOwner: Value = F;
+      while (contractOwner instanceof ObjectValue) {
+        chain.push(memberContracts.get(contractOwner) ?? []);
+        contractOwner = Q(yield* contractOwner.GetPrototypeOf());
       }
+      const violation = abstractMemberViolation(chain, modifiers.includes('abstract'));
+      if (violation) return Throw.TypeError(violation.kind === 'signature'
+        ? '$1 implements an inherited $2 with a signature the declaration does not accept'
+        : '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract',
+      classBinding instanceof JSStringValue ? classBinding : Value('the class'),
+      typeof violation.key === 'string' ? Value(violation.key) : violation.key);
     }
     // 30. For each PrivateElement method of staticPrivateMethods, do
     for (const method of staticPrivateMethods) {
@@ -1600,6 +1564,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       const laidOutUnbound: { key: string | PrivateName, type: TypeRecord, controls?: FieldControls }[] = [];
       let complete = true;
       for (const field of instanceFields) {
+        const ownName = field.LayoutName ?? field.Name;
+        const ownKey = ownName instanceof JSStringValue ? ownName.stringValue() : ownName;
+        if (laidOut.some((previous) => previous.key === ownKey)) continue;
         const typeObject = (field as { TypeObject?: { TypeRecord?: TypeRecord } }).TypeObject;
         const name = (field as { Name?: unknown }).Name;
         if (!typeObject?.TypeRecord) {
@@ -1781,7 +1748,7 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
         const abstractKind = e.Accessor === 'get'
           ? 'ClassGetter'
           : e.Accessor === 'set' ? 'ClassSetter' : 'ClassMethod';
-        Q(yield* RecordMemberDeclarationFor(e as never, abstractKind, MemberKeyOf(e, undefined), (e.static ? F : proto) as ObjectValue));
+        Q(yield* RecordMemberDeclarationFor(e as never, abstractKind, Q(yield* Evaluate_PropertyName(e.ClassElementName)), (e.static ? F : proto) as ObjectValue));
       }
       if (surroundingAgent.feature('runtime-types') && e.type === 'OperatorDefinition') {
         Q(yield* ApplySubTargetDecorators(e as never, 'ClassOperator', Value(operatorTableKey(e)), (e.static ? F : proto) as Value));
@@ -2379,6 +2346,7 @@ export interface MemberDeclaration {
   readonly type?: TypeRecord | undefined;
 }
 const memberDeclarations = new WeakMap<Value, Map<string, MemberDeclaration>>();
+const memberContracts = new WeakMap<Value, MemberContract[]>();
 
 /**
  * proposal-runtime-types: the key a member is stored and looked up under.
@@ -2633,8 +2601,8 @@ export function* ClassDecoratorContext(className: Value, classCtor: Value): Valu
  * reflection reaches the class by - a member context is built with the home
  * object, and for an instance member that is the prototype.
  */
-function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, home: ObjectValue): PlainEvaluator<void> {
-  if (!surroundingAgent.feature('runtime-types') || !(key instanceof JSStringValue)) {
+function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value | PrivateName, home: ObjectValue): PlainEvaluator<void> {
+  if (!surroundingAgent.feature('runtime-types') || (!(key instanceof JSStringValue) && !(key instanceof SymbolValue))) {
     return undefined;
   }
   // A STATIC member's home object IS the constructor; an instance member's is
@@ -2667,6 +2635,14 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value, 
     });
   }
   let declaredType = Q(yield* MemberFunctionTypeRecord(node));
+  const contractKind = memberKind(node);
+  if (contractKind) {
+    const contracts = memberContracts.get(owner) ?? [];
+    addMemberContract(contracts, { key: key instanceof JSStringValue ? key.stringValue() : key,
+      static: n.static === true, kind: contractKind, abstract: node.type === 'AbstractMethodDefinition', type: declaredType ?? null });
+    memberContracts.set(owner, contracts);
+  }
+  if (!(key instanceof JSStringValue)) return undefined;
   // proposal-runtime-types #sec-retrieval-overloaded-targets: an overloaded
   // member is reflected through the `signatures` of its declaration, so the
   // record has to hold every arm. The value side merges arms in
@@ -2818,14 +2794,10 @@ export function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeR
         annotated = true;
       }
     }
-    Parameters.push({
-      Name: binding.BindingIdentifier?.name ?? '',
-      Type: paramType,
-      Optional: false,
-      Rest: false,
-    });
+    Parameters.push(parameterFromDeclaration(formal, paramType));
   }
-  let Return: TypeRecord | null = null;
+  let Return: TypeRecord | null = PublishedReturnTypeOf(node) ?? null;
+  annotated ||= Return !== null;
   if (n.TypeAnnotation?.Type) {
     const t = EnsureCompletion(yield* TypeNodeToTypeRecord(n.TypeAnnotation.Type as never));
     if (t.Type === 'normal') {
@@ -2836,7 +2808,7 @@ export function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeR
   if (!annotated) {
     return undefined;
   }
-  return {
+  return normalizedMemberType(node, {
     Kind: 'function',
     Signatures: [{
       Parameters,
@@ -2845,7 +2817,7 @@ export function* MemberFunctionTypeRecord(node: ParseNode): PlainEvaluator<TypeR
         ? { TypeParameters: typeParameterRecordsOf(methodTypeParameters).map((r) => ({ ...r, Parameter: methodFrame?.get(r.Name) })) }
         : {}),
     }],
-  } as TypeRecord;
+  } as TypeRecord) ?? undefined;
   } finally {
     if (methodFrame) {
       popTypeParameterFrame();

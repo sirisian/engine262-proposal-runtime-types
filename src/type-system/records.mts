@@ -91,6 +91,8 @@ export interface ParameterRecord {
   readonly Ref?: boolean;
   /** The declared default's value, where it is known at check time. */
   readonly Initial?: Value;
+  /** Default presence is known even before its compile-time value is evaluated. */
+  readonly DeclaredDefault?: boolean;
 }
 
 /**
@@ -245,6 +247,7 @@ export function IsReferenceParameter(p: ParameterRecord): boolean {
 export function parameter(Type: TypeRecord, extra?: Partial<Omit<ParameterRecord, 'Type'>>): ParameterRecord {
   return {
     Name: extra?.Name ?? '', Type, Optional: extra?.Optional ?? false, Rest: extra?.Rest ?? false, Ref: extra?.Ref ?? false, ...(extra?.Initial !== undefined ? { Initial: extra.Initial } : {}),
+    ...(extra?.DeclaredDefault ? { DeclaredDefault: true } : {}),
   };
 }
 
@@ -257,6 +260,7 @@ export function parameterFromDeclaration(node: ParseNode, Type: TypeRecord): Par
   return parameter(Type, {
     Name: declaration.BindingIdentifier?.name ?? '',
     Optional: declaration.Optional === true || !!declaration.Initializer,
+    DeclaredDefault: !!declaration.Initializer,
     Rest: node.type === 'BindingRestElement',
     Ref: declaration.Ref === true,
   });

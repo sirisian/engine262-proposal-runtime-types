@@ -967,7 +967,11 @@ export function ComputeClassLayout(
   // shrink the class.
   let furthest = cursor;
   let alignment = controls.packed ? 1 : (baseLayout ? baseLayout.alignment : 1);
+  const ownKeys = new Set<string | PrivateName>();
   for (const field of fields) {
+    // #sec-typed-classes: compatible repeats initialize one physical slot.
+    if (ownKeys.has(field.key)) continue;
+    ownKeys.add(field.key);
     // #sec-layout-finiteness: "a value type class may not contain itself,
     // directly or through a cycle of value type fields", and "the two are one
     // condition" with the layout being defined at all.

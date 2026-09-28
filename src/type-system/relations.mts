@@ -623,6 +623,7 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
             // collapse the [[Narrows]] comment below describes, one field along.
             // `sameDefault` is the comparison the tuple elements already use.
             return p.Rest === q.Rest && p.Optional === q.Optional
+              && (!!p.DeclaredDefault || p.Initial !== undefined) === (!!q.DeclaredDefault || q.Initial !== undefined)
               && sameDefault(p.Initial, q.Initial)
               && SameTypeWithAssumptions(p.Type, q.Type, nextG);
           })
