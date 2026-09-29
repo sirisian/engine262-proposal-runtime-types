@@ -40,10 +40,10 @@ test('range elements: a bigint range, and no mixing', () => {
 const P = 'class P { constructor(v) { this.v = v; } operator<(o) { return this.v < o.v; } } ';
 
 test('range elements: a type declaring operator< is an element type', () => {
-  // The constraint the design states - `RangeBounds<T: Ordered.<T>>` - rather
-  // than the numeric check that stood in for it. `Temporal.Instant` is the
-  // design's own motivating case and is not in this engine, so a class
-  // declaring the one operator `Ordered` requires is the vehicle.
+  // The element type is constrained to be Ordered (#sec-ranges: "a value type class over an ordered
+  // element type"), not merely numeric. `Temporal.Instant` is the motivating ordered, non-numeric
+  // type and is not in this engine, so a class declaring the one operator `Ordered` requires is the
+  // vehicle.
   expect(evaluated(`${P}const r = new P(1)..=new P(5); String(typeof r);`)).toBe('object');
   expect(evaluated(`${P}String((new P(1)..=new P(5)).contains(new P(3)));`)).toBe('true');
   expect(evaluated(`${P}String((new P(1)..=new P(5)).contains(new P(9)));`)).toBe('false');
@@ -83,12 +83,11 @@ test('range elements: NaN is refused for a reason that will survive', () => {
 });
 
 test('a range reports its own type, not the shape of the object carrying it', () => {
-  // #sec-ranges: a range is "a value type class over an ordered element type and
-  // a bound at each endpoint it has", so `Reflect.typeOf` answers
-  // `Range.<T, S, E>`. It used to fall through to the shape branches and report
-  // the literal type of an object with no own properties - `{}` - while
-  // `(0..<5) is Range.<uint8>` answered *true*, which is the two answers
-  // disagreeing that #sec-instanceof-for-type-objects exists to prevent.
+  // #sec-ranges: a range is "a value type class over an ordered element type and a bound at each
+  // endpoint it has", so `Reflect.typeOf` answers `Range.<T, S, E>`. Otherwise it would fall through
+  // to the shape branches and report the literal type of an object with no own properties - `{}` -
+  // while `(0..<5) is Range.<uint8>` answered *true*, the two answers disagreeing that
+  // #sec-instanceof-for-type-objects exists to prevent.
   expect(evaluated('let a: uint8 = 0; let b: uint8 = 5; `${Reflect.typeOf(a..<b)}`;')).toBe('ClosedOpenRange.<uint.<8>>');
   expect(evaluated('let a: uint8 = 0; let b: uint8 = 5; `${Reflect.typeOf(a..=b)}`;')).toBe('ClosedRange.<uint.<8>>');
   // The bounds come from the range's own endpoints, so the answer INTERNS with

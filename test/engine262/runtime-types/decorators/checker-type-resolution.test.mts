@@ -20,8 +20,7 @@ import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 const mismatch = (ty: string) => `function f(x: ${ty}): string { return "s"; } const a: (x: ${ty}) => number = f;`;
 
 test('a bare intrinsic type name is resolved', () => {
-  // `Token` is the name the JSX macro in ecmascript-types/examples/jsx.md
-  // returns, and the one that made the gap visible.
+  // `Token` is the name a JSX-style replacement macro returns.
   expectStaticTypeError(mismatch('Token'));
   expectStaticTypeError(mismatch('ClassMetadata'));
   expectStaticTypeError(mismatch('EnumEnumeratorMetadata'));

@@ -6,36 +6,24 @@ import {
 } from '../harness.mts';
 
 /**
- * proposal-runtime-types (ranges.md "The Lexical Problem" and "Syntax";
- * #sec-range-literals): the range family's LEXICAL contract.
+ * Spec: #sec-range-literals: the range family's LEXICAL contract. The family is six tokens, each
+ * taken whole by longest match: `..`, `..<`, `..=`, `<..`, `<..<`, and `<..=`. Every range that has
+ * an end marks whether it includes it; a start is marked only where it is exclusive. There is no
+ * bare `a..b` and no `..b`. Each is decided by a fixed lookahead, which is what lets them coexist
+ * with everything already spelled from `.` and `<`. At a `.` the SECOND character separates the
+ * type argument list `.<` from the rest of the family and the third separates `...`, `..<`, and
+ * `..=` from `..`; at a `<` the second separates `<=`, `<<`, and `<<=` from the family and the
+ * fourth separates `<..<` and `<..=` from `<..`. So `.<` and `..<` are told apart before a third
+ * character is read and can never compete.
  *
- * The family is six tokens, each taken whole by longest match: `..`, `..<`,
- * `..=`, `<..`, `<..<`, and `<..=`. Every range that has an end marks whether it
- * includes it; a start is marked only where it is exclusive. There is no bare
- * `a..b` and no `..b`.
+ * This file owns what the LEXER decides: that nothing which already lexed has moved, and that the
+ * one base-adjacent change - `?.` is not the optional chaining punctuator before a `.` - does what
+ * it says. The family's own forms, the removed forms, the whitespace edges, precedence, and ASI are
+ * in the parser tests of this directory.
  *
- * Each is decided by a fixed lookahead, which is what lets them coexist with
- * everything already spelled from `.` and `<`. At a `.` the SECOND character
- * separates the type argument list `.<` from the rest of the family and the
- * third separates `...`, `..<`, and `..=` from `..`; at a `<` the second
- * separates `<=`, `<<`, and `<<=` from the family and the fourth separates
- * `<..<` and `<..=` from `<..`. So `.<` and `..<` are told apart before a third
- * character is read and can never compete, which is the correction ranges.md
- * records against an earlier draft that had ruled `..<` out on exactly that
- * supposed collision.
- *
- * This file owns what the LEXER decides. The rows below are the ones observable
- * without the parser knowing the four new tokens: that nothing which already
- * lexed has moved, and that the one base-adjacent change -- `?.` is not the
- * optional chaining punctuator before a `.` -- does what it says. The family's
- * own forms, the removed forms, the whitespace edges, precedence, and ASI land
- * with the parser; they are written out at the foot of this file, skipped, so
- * the contract reads whole and unskipping them is what comes next.
- *
- * Everything is gated on `runtime-types`. Where the base grammar answers
- * differently with the feature off, the flag-off twin is asserted beside it:
- * the extension may give meaning to input that had none, and may not change
- * what an existing program means.
+ * Everything is gated on `runtime-types`. Where the base grammar answers differently with the
+ * feature off, the flag-off twin is asserted beside it: the extension may give meaning to input that
+ * had none, and may not change what an existing program means.
  */
 
 // -- `.<` is untouched: the second character decides ---------------------------

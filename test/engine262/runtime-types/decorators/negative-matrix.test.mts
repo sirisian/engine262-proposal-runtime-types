@@ -2,21 +2,16 @@ import { test, expect } from 'vitest';
 import { evaluated, evaluatedFlagOff, realmWithMacro } from '../harness.mts';
 
 /**
- * The NEGATIVE matrix: "A decoration in a position
- * that admits no decorator, and a context used on the wrong kind of
- * declaration, must be errors. This is the half that keeps the grammar
- * honest."
+ * The NEGATIVE matrix: a decoration in a position that admits no decorator, and a context
+ * used on the wrong kind of declaration, must be errors. This is the half that keeps the
+ * grammar honest.
  *
- * Stages A-G opened roughly thirty-five positions, and every test written for
- * them asserts that a decoration WORKS. A suite of only positive tests passes
- * against an implementation that accepts a decoration anywhere, which is the
- * failure this file exists to catch: the grammar's job is as much refusing the
- * positions the design does not give as admitting the ones it does.
- *
- * Every assertion here was MEASURED before it was written. Where the answer
- * differed from what was predicted it is recorded as such rather than quietly
- * asserted, and the three positions that are accepted and do NOTHING
- * are pinned at the end as gaps rather than left to be discovered.
+ * Most decorator tests assert that a decoration WORKS. A suite of only positive tests passes
+ * against an implementation that accepts a decoration anywhere, which is the failure this file
+ * exists to catch: the grammar's job is as much refusing the positions the specification does
+ * not give (#sec-decorator-contexts) as admitting the ones it does. Every assertion here was
+ * checked against the engine before it was written, and the positions that are accepted and do
+ * NOTHING are pinned at the end as gaps rather than left to be discovered.
  */
 
 /**
@@ -41,19 +36,16 @@ test('positions that admit no decorator are SYNTAX errors', () => {
   expect(rejectionKind('function f(c){} @f type X = uint8;')).toBe('SyntaxError');
   // An interface is a declaration too, and takes none either.
   expect(rejectionKind('function f(c){} @f interface I { a: uint8; }')).toBe('SyntaxError');
-  // `var` is not in the Binding family: decorators.md gives `Reflect.Let` and
-  // `Reflect.Const` and no `Reflect.Var`, and a var binding is hoisted and
-  // function-scoped, so there is no single point at which its declaration is
-  // evaluated for a decorator to run at.
+  // `var` is not in the Binding family: #sec-decorator-contexts gives `Reflect.Let` and
+  // `Reflect.Const` and no `Reflect.Var`, and a var binding is hoisted and function-scoped, so
+  // there is no single point at which its declaration is evaluated for a decorator to run at.
   expect(rejectionKind('function f(c){} @f var v = 1;')).toBe('SyntaxError');
-  // Statements are not declarations. A decorator runs when the declaration it
-  // decorates is evaluated, and these declare nothing.
-  //
-  // The rule is about the decoration's KIND rather than the position, which is
-  // decoratorreplacement.md 7.7's "two tables, not one": syntax replacement is
-  // constrained by GRAMMAR and value replacement by TYPE. A REPLACEMENT
-  // decorator MAY rewrite a statement - see the tests below - so what is refused
-  // here is a RUNTIME decoration of one, which is what `f` is.
+  // Statements are not declarations. A decorator runs when the declaration it decorates is
+  // evaluated (#sec-decorator-application), and these declare nothing. The rule is about the
+  // decoration's KIND rather than the position: value replacement and syntax replacement are
+  // different axes (#sec-replacement-values), and syntax replacement is constrained by GRAMMAR
+  // and value replacement by TYPE. A REPLACEMENT decorator MAY rewrite a statement - see the
+  // tests below - so what is refused here is a RUNTIME decoration of one, which is what `f` is.
   expect(rejectionKind('function f(c){} @f return 1;')).toBe('SyntaxError');
   expect(rejectionKind('function f(c){} @f 1 + 1;')).toBe('SyntaxError');
   expect(rejectionKind('function f(c){} @f import x from "y";')).toBe('SyntaxError');
@@ -123,29 +115,23 @@ test('a reserved layout control is not shadowable by a user binding', () => {
 });
 
 test('the two positions that once parsed and did nothing now FIRE', () => {
-  // Both were once accepted-and-silent; both are now reachable.
-  //
-  // 1. A CONSTRUCTOR is "a `ClassMethod` whose name is *\"constructor\"*", and it
-  // was the one member a decorator could be written on and never fire - it is
-  // filtered out of NonConstructorElements, so it never reached the arm that
-  // applies a member's decorators. The whole body is walked now, so it also
-  // keeps its DOCUMENT POSITION among the members.
+  // 1. A CONSTRUCTOR is "a `ClassMethod` whose name is *\"constructor\"*"
+  // (#sec-decorator-contexts), so a decorator written on it fires, and it keeps its DOCUMENT
+  // POSITION among the members.
   expect(evaluated('let k = "NO"; function f(c) { k = c.kind + "/" + String(c.name); } class A { @f constructor() {} } k;')).toBe('ClassMethod/constructor');
   expect(evaluated('let k = "NO"; function f(c) { k = c.kind + ":" + String(c.index); } class A { constructor(@f p: uint8) {} } k;')).toBe('ClassMethodParameter:0');
   expect(evaluated('const l = []; function t(n, c) { l.push(n); } '
     + 'class A { @t("a") x: uint8 = 1; @t("ctor") constructor() {} @t("b") y: uint8 = 2; } l.join(",");')).toBe('a,ctor,b');
-  // THE CONSTRUCTOR IS IDENTIFIED BY THE FILTER THAT EXCLUDED IT, not by
-  // re-deriving the test - re-deriving missed the forms `PropName` normalizes,
-  // and a missed constructor was DEFINED as an ordinary method, putting a
-  // `constructor` property on the prototype and changing every instance's
-  // structural type. Asserted so the shortcut is not taken again.
+  // A constructor written in a form `PropName` normalizes (`"constructor"() {}`) is still the
+  // constructor and not an ordinary method: defining it as one would put a `constructor`
+  // property on the prototype and change every instance's structural type.
   expect(evaluated('class A { constructor() { this.v = 5; } } String(new A().v);')).toBe('5');
   expect(evaluated('class A { "constructor"() { this.v = 5; } } String(Object.getOwnPropertyNames(A.prototype).length);')).toBe('1');
 
-  // 2. A PARTIAL CLASS body fires its members' decorators and its sub-targets.
-  // Its methods go through MethodDefinitionEvaluation directly and so never
-  // reached that arm either; decorators.md gives a partial body no exception,
-  // and it is where a program adds behaviour to a class it does not own.
+  // 2. A PARTIAL CLASS body fires its members' decorators and its sub-targets, as a class body
+  // does. Unspecified: the specification gives a partial class body neither an exception nor a
+  // rule, and it is where a program adds behaviour to a class it does not own; the tests pin
+  // that its members are decorated.
   const base = 'class A { x: uint8 = 1; } ';
   expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind + "/" + String(c.name); } partial class A { @f m() {} } k;`)).toBe('ClassMethod/m');
   expect(evaluated(`${base} let k = "NO"; function f(c) { k = c.kind + ":" + String(c.index); } partial class A { m(@f p: uint8) {} } k;`)).toBe('ClassMethodParameter:0');
@@ -163,15 +149,11 @@ test('a decoration is refused with the feature off', () => {
 });
 
 // -- The other table: a replacement decorator MAY rewrite a statement -----------
-//
-// decoratorreplacement.md 7.7 keeps the two axes apart, and sec-syntax-replacement
-// says "every decorable position may be syntax-replaced, including the positions
-// that do not admit value replacement". A statement produces no value but has
-// syntax, so a `#[cfg]`-shaped macro over `@m return 1;` is exactly the case the
-// clause has in mind.
-//
-// The grammar cannot tell the two apart - the kind comes from the preprocessor
-// imports - so the parser admits the statement and an early error judges it.
+// #sec-syntax-replacement: "Every decorable position may be syntax-replaced, including the
+// positions that do not admit value replacement". A statement produces no value but has
+// syntax, so a `#[cfg]`-shaped macro over `@m return 1;` is exactly the case the clause has in
+// mind. The grammar cannot tell the two apart - the kind comes from the preprocessor imports -
+// so the parser admits the statement and an early error judges it.
 const NL = String.fromCharCode(10);
 const MODE_PRE = 'import { m } from "./x.js" with { preprocessor: "true" };' + NL;
 

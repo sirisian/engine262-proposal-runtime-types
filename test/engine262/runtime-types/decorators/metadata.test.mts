@@ -4,20 +4,17 @@ import {
 } from '../harness.mts';
 
 /**
- * Spec: #sec-decorator-metadata (Decorator Metadata). Design: decorators.md.
+ * Spec: #sec-decorator-metadata (Decorator Metadata).
  *
- * decorators.md, Metadata Inheritance: "Each member's metadata is inherited
- * through the PROTOTYPE CHAIN ... If B redeclares the field and applies its own
- * decorators, B gets a new metadata object (PROTOTYPICALLY INHERITING FROM A'S)
- * where B's decorators write their values, SHADOWING A'S WITHOUT MUTATING
- * THEM."
- *
- * So a metadata object is an ORDINARY OBJECT whose [[Prototype]] is the base
- * declaration's - which makes "symbol key lookups fall through the prototype"
- * true by construction rather than by a lookup rule written for it. It is also
- * why the metadata channel is a `partial interface` rather than a `partial
- * class`: an instance of a class with a typed field is not extensible and
- * could not be prototypically linked at all.
+ * A metadata object is inherited through the prototype chain: where a derived class does not
+ * redeclare an inherited member, its metadata object is the base's; where it redeclares the
+ * member and decorates it, the metadata object is a new one whose prototype is the base's, so
+ * what the derived class's decorators write SHADOWS the base's WITHOUT MUTATING IT. So a
+ * metadata object is an ORDINARY OBJECT whose [[Prototype]] is the base declaration's, which
+ * makes "symbol key lookups fall through the prototype" true by construction rather than by a
+ * lookup rule written for it. It is also why the metadata channel is a `partial interface`
+ * rather than a `partial class`: an instance of a class with a typed field is not extensible
+ * and could not be prototypically linked at all.
  */
 
 test('a class context carries a metadata object', () => {
@@ -67,8 +64,8 @@ test('a class with no base still has a metadata object', () => {
 });
 
 test('every class-family context carries metadata, and it READS BACK', () => {
-  // decorators.md gives `metadata` to every context of the Class, Function,
-  // Object and Enum families. The class family is wired here.
+  // Every context of the Class, Function, Object and Enum families carries `metadata`
+  // (#sec-decorator-metadata). The class family is exercised here.
   const t = 'let t = "?"; function f(c) { t = typeof c.metadata; } ';
   expect(evaluated(`${t} class A { @f a: uint8 = 1; } t;`)).toBe('object');
   expect(evaluated(`${t} class A { @f m() {} } t;`)).toBe('object');
@@ -99,9 +96,8 @@ test('every class-family context carries metadata, and it READS BACK', () => {
 });
 
 test('the FUNCTION, OBJECT and ENUM families carry metadata too', () => {
-  // decorators.md gives `metadata` to every context of the Class, Function,
-  // Object and Enum families. The class family landed first; these three
-  // complete it.
+  // The Function, Object and Enum families carry `metadata` as the Class family does
+  // (#sec-decorator-metadata).
   const t = 'let t = "?"; function f(c) { t = typeof c.metadata; } ';
   expect(evaluated(`${t} @f function g() {} t;`)).toBe('object');
   expect(evaluated(`${t} const o = { @f a: 1 }; t;`)).toBe('object');
@@ -141,11 +137,11 @@ test('getMetadata serves every class-family MEMBER context', () => {
 });
 
 test('getMetadata reaches the class family only', () => {
-  // The Function, Object and Enum families CARRY metadata and cannot be read
-  // back through `getMetadata` yet: its target type argument names a class, and
-  // a function or an object literal has no such type to name. decorators.md's
-  // signatures for those take an instance rather than a type, which is a
-  // different interception than the one the class family uses.
+  // Divergence from #sec-decorator-metadata: the Function, Object and Enum families CARRY
+  // metadata, but `Reflect.getMetadata` does not read it back in this engine. Its target type
+  // argument names a class, and a function or an object literal has no such type to name;
+  // reading those takes an instance rather than a type, which is a different interception than
+  // the one the class family uses.
   expect(evaluated('const k = Symbol("k"); let seen = "?"; function f(c) { c.metadata[k] = "fn"; seen = String(c.metadata[k]); } '
     + '@f function g() {} seen;')).toBe('fn');
 });
@@ -153,22 +149,15 @@ test('getMetadata reaches the class family only', () => {
 // -- The intrinsic metadata interfaces -------------------------------------------
 
 /**
- * proposal-runtime-types #sec-decorator-metadata: the intrinsic metadata
- * interfaces, `%ClassMetadata%`, `%ClassFieldMetadata%`, and one per
- * metadata-carrying context.
+ * #sec-decorator-metadata: the intrinsic metadata interfaces, `%ClassMetadata%`,
+ * `%ClassFieldMetadata%`, and one per metadata-carrying context. A program adds to one by
+ * declaring a `partial interface` over it whose members are typed and Symbol-keyed, and the
+ * members it adds are the only ones there are: THE INTRINSIC INTERFACES DECLARE NONE.
  *
- * "A program adds to one by declaring a `partial interface` over it whose
- * members are typed and Symbol-keyed, and the members it adds are the only
- * ones there are: THE INTRINSIC INTERFACES DECLARE NONE."
- *
- * The set is decorators.md's, read off the reflection structures: a context
- * has a metadata interface exactly where its reflection carries a `metadata`
- * member - the Class family (twelve), the Function family (three), the Object
- * family (nine), and the Enum family (two). The design says of the rest, in as
- * many words: "No `getMetadata` overloads exist for `Reflect.Let`,
- * `Reflect.Const`, `Reflect.Tuple`, `Reflect.Record`, or block contexts, as
- * their reflection structures do not carry metadata." `Reflect.Type`'s
- * reflection carries none either.
+ * A context has a metadata interface exactly where its reflection carries a `metadata` member:
+ * the Class family (twelve), the Function family (three), the Object family (nine), and the
+ * Enum family (two). The Let, Const, Tuple, Record and block contexts, and `Reflect.Type`, carry
+ * none, so `getMetadata` is not defined for them.
  */
 
 const names = [
@@ -232,10 +221,9 @@ test('a partial over one intrinsic leaves its siblings untouched', () => {
 });
 
 test('the contexts whose reflections carry no metadata have no interface', () => {
-  // decorators.md: Let, Const, Tuple, Record, and the block contexts "do not
-  // carry metadata", and Reflect.Type's reflection has no `metadata` member.
-  // The names must therefore NOT exist - an interface here would be surface
-  // no document declares.
+  // The Binding, Structural and Block contexts and `Reflect.Type` carry no `metadata`
+  // (#sec-decorator-metadata), so the interfaces for them must NOT exist: an interface here
+  // would be surface the specification does not declare.
   const absent = ['TypeMetadata', 'LetMetadata', 'ConstMetadata', 'BlockMetadata', 'TupleMetadata', 'RecordMetadata'];
   const report = absent.map((n) => `(typeof ${n})`).join(' + "," + ');
   expect(evaluated(`${report};`)).toBe(absent.map(() => 'undefined').join(','));
@@ -333,18 +321,13 @@ test('the metadata shape it exists for', () => {
 // -- Symbol-keyed metadata members -----------------------------------------------
 
 /**
- * Symbol-keyed metadata members.
- *
- * decorators.md adds metadata through `partial interface ClassMetadata {
- * [myMetadata]: string }`, and a SYMBOL key is the collision escape hatch the
- * design gives third-party libraries. The member merged and then vanished: the
- * interface member walk took a literal name and dropped everything else, so a
- * computed key never reached the record - even though a Property Type Record's
- * [[Key]] has been "a String or a Symbol" since it was widened.
- *
- * `[k]: T` is a COMPUTED PROPERTY NAME rather than an index signature - an
- * index signature needs an identifier and a `:` INSIDE the brackets - so the
- * key has to be evaluated.
+ * Symbol-keyed metadata members: a program adds metadata through
+ * `partial interface ClassMetadata { [myMetadata]: string }` (#sec-decorator-metadata), and a
+ * SYMBOL key is the collision escape hatch for third-party libraries. A member with a computed
+ * key must reach the interface's record: `[k]: T` is a COMPUTED PROPERTY NAME rather than an
+ * index signature - an index signature needs an identifier and a `:` INSIDE the brackets - so
+ * the key has to be evaluated, and a Property Type Record's [[Key]] is "a String or a
+ * Symbol".
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);

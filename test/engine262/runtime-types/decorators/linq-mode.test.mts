@@ -3,25 +3,24 @@ import { realmWithMacro } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * The `linq` mode: query comprehensions as a replacement decorator, from
- * examples/linq.md in the ecmascript-types repository.
+ * Fixture: examples/linq.md of the ecmascript-types repository.
  *
- * This is the case a scoped mode exists for, and a sharper one than JSX. JSX
- * fails LOUDLY - `<` cannot begin an expression - while a query fails quietly in
- * parts: `from p` is two adjacent identifiers and an error, but
- * `where p.age >= 18` is a valid expression statement, `orderby a, b` is a comma
- * expression, and `x in xs` is a RelationalExpression that already means
- * something else. A grammar admitting queries everywhere would not reject a
- * malformed one; it would read it as something the author did not write.
+ * The `linq` mode: query comprehensions as a replacement decorator (#sec-preprocessor-modules,
+ * #sec-captured-regions). This is the case a scoped mode exists for, and a sharper one than
+ * JSX. JSX fails LOUDLY - `<` cannot begin an expression - while a query fails quietly in
+ * parts: `from p` is two adjacent identifiers and an error, but `where p.age >= 18` is a valid
+ * expression statement, `orderby a, b` is a comma expression, and `x in xs` is a
+ * RelationalExpression that already means something else. A grammar admitting queries
+ * everywhere would not reject a malformed one; it would read it as something the author did
+ * not write.
  *
- * `linq` needs no scanner of its own, which is the finding worth recording: a
- * query is lexically ORDINARY ECMAScript and differs only grammatically, so the
- * mode's whole job is to keep the parser out of the region. A scanner is needed
- * only where the lexical grammar differs too, as JSX's child text does.
+ * `linq` needs no scanner of its own: a query is lexically ORDINARY ECMAScript and differs
+ * only grammatically, so the mode's whole job is to keep the parser out of the region. A
+ * scanner is needed only where the lexical grammar differs too, as JSX's child text does.
  *
- * The macro below is a real implementation - a fold over the clause list - and
- * the tests are its output, so what they check is that the document's examples
- * compile to what the document says they compile to.
+ * The macro below is a real implementation - a fold over the clause list - and the tests are
+ * its output, so what they check is that the example's queries compile to what the example
+ * says they compile to.
  */
 const NL = String.fromCharCode(10);
 // A query is not ECMAScript grammatically, so its region is CAPTURED - which

@@ -2,18 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
- * Spec: #sec-decorator-application (Decorator Application). Design:
- * decorators.md.
+ * Spec: #sec-decorator-application (Decorator Application).
  *
- * The decorator CALL: a decoration finds its function, evaluates and applies
- * it in the specified order, and hands it a context. The shapes those contexts
- * carry are reflection-shapes.test.mts; what is asserted here is the call and
- * its ordering, family by family.
- *
- * Only `ClassField` exists as a context today, so everything here is verified
- * Each family's boundary is asserted rather than assumed: a position that
- * quietly admits more than it claims looks identical to a correct one until
- * something downstream contradicts it.
+ * The decorator CALL: a decoration finds its function, evaluates and applies it in the
+ * specified order, and hands it a context. The shapes those contexts carry are in
+ * reflection-shapes.test.mts; what is asserted here is the call and its ordering, family
+ * by family. Each family's boundary is asserted rather than assumed: a position that
+ * quietly admits more than it claims looks identical to a correct one until something
+ * downstream contradicts it.
  */
 
 test('a decorator on a class field is found and called', () => {
@@ -32,33 +28,27 @@ test('a decorator on a class field is found and called', () => {
   // that CHANGED, and a reader of the old test should find the new answer where
   // the old one was.
   expect(evaluated('const l = []; function g() { return (c) => l.push("factory"); } class B { @g() x: uint8; } l.join(",");')).toBe('');
-  // The context identifies what was decorated. The rest of decorators.md's
-  // ClassFieldReflection - type, static, private, readonly, initial, offset,
-  // metadata - is reflection-shapes.test.mts; `kind` and `name` are what shows
-  // the right declaration reached the right decorator.
+  // The context identifies what was decorated. The rest of the ClassField reflection
+  // (#sec-reflection-shape-class) - type, static, private, readonly, initial, offset,
+  // metadata - is in reflection-shapes.test.mts; `kind` and `name` are what shows the right
+  // declaration reached the right decorator.
   expect(evaluated('let k; function f(c) { k = c.kind; } class A { @f a: uint8; } k;')).toBe('ClassField');
   // Each field's own decoration, in document order.
   expect(evaluated('const log = []; function f(c) { log.push(String(c.name)); } class A { @f a: uint8; @f b: uint8; } log.join(",");')).toBe('a,b');
 });
 
 test('decorators evaluate top-down and apply bottom-up', () => {
-  // decorators.md "Order": "Decorator expressions are evaluated in document
-  // order ... Decorators are applied innermost first, and in reverse source
-  // order." Two phases running in OPPOSITE directions, which is TC39's rule and
-  // Python's `@a @b def f` == `a(b(f))`.
+  // #sec-decorator-application: decorator expressions are evaluated in document order, and
+  // decorators are applied innermost first and in reverse source order. Two phases running
+  // in OPPOSITE directions, which is TC39's rule and Python's `@a @b def f` == `a(b(f))`.
   //
-  // THE ASSERTION THAT MATTERS is one equality on the whole log. A test that
-  // checked membership, or checked each phase separately, would pass with the
-  // phases collapsed into one - which is the mistake the two-phase rule exists
-  // to prevent, since `@a(f()) @b(g()) x` must call `f()` before `g()` while
-  // applying `b` before `a`.
-  //
-  // With the factory gone the two phases are observed where the clause puts
-  // them: phase one evaluates the decorator EXPRESSION, which now includes its
-  // ARGUMENTS, and phase two calls. So an argument with a side effect records
-  // the evaluation order while the decorator body records the application order
-  // - a sharper test than the factory version, because what is being ordered in
-  // phase one is exactly what the clause says is evaluated there.
+  // THE ASSERTION THAT MATTERS is one equality on the whole log. A test that checked
+  // membership, or checked each phase separately, would pass with the phases collapsed into
+  // one - the mistake the two-phase rule exists to prevent, since `@a(f()) @b(g()) x` must
+  // call `f()` before `g()` while applying `b` before `a`. Phase one evaluates the decorator
+  // EXPRESSION, which includes its ARGUMENTS, and phase two calls. So an argument with a side
+  // effect records the evaluation order while the decorator body records the application
+  // order.
   const stacked = 'const log = []; function ev(n) { log.push("eval:" + n); return n; } '
     + 'function tag(n, c) { log.push("apply:" + n); } '
     + 'class A { @tag(ev("outer")) @tag(ev("inner")) a: uint8; } ';
@@ -93,9 +83,9 @@ test('what the decorator call does not open', () => {
 });
 
 test('the class family: contexts exist and carry their declaration', () => {
-  // decorators.md's `ClassReflection` is `name`,
-  // `type`, `abstract`, `metadata`; `ClassFieldReflection` adds `static`,
-  // `private`, `protected`, `readonly`, `initial`, and the layout pair.
+  // #sec-reflection-shape-class: `Class` reflects `name`, `type`, `abstract` and `metadata`;
+  // `ClassField` adds `static`, `private`, `protected`, `readonly`, `initial`, `initializer`,
+  // and the layout pair `offset` and `byteLength`.
   expect(evaluated('[typeof Reflect.Class, typeof Reflect.ClassMethod, typeof Reflect.ClassGetter, typeof Reflect.ClassSetter, typeof Reflect.ClassAccessor, typeof Reflect.ClassOperator].join(",");')).toBe('object,object,object,object,object,object');
 
   // A class decorator sees the class ITSELF, not a description of one.
@@ -115,13 +105,11 @@ test('the class family: contexts exist and carry their declaration', () => {
 });
 
 test('members apply before their container, in document order', () => {
-  // decorators.md "Order": "Members apply before their container, in document
-  // order, and the container's own decorators apply last. A class decorator
-  // sees a FINISHED CLASS, including whatever its fields' and methods'
-  // decorators did."
-  //
-  // One equality on the whole log again: a membership check would pass with the
-  // class running first, which is the arrangement the rule exists to forbid.
+  // #sec-decorator-application: members apply before their container, in document order,
+  // and the container's own decorators apply last, so a class decorator sees a FINISHED
+  // CLASS, including whatever its fields' and methods' decorators did. One equality on the
+  // whole log again: a membership check would pass with the class running first, which is
+  // the arrangement the rule exists to forbid.
   const both = 'const log = []; '
     + 'function cls(c) { log.push("class:" + String(c.name)); } '
     + 'function fld(c) { log.push("field:" + String(c.name) + "@" + String(c.classContext.name)); } '
@@ -136,10 +124,11 @@ test('members apply before their container, in document order', () => {
 });
 
 test('each member position takes its own context', () => {
-  // decorators.md distinguishes a method from a getter from a setter by CONTEXT
-  // TYPE rather than by a `kind` string the decorator has to test - which is
-  // the whole reason the contexts are separate types. So the assertion is that
-  // the POSITION selects the context, not that a decorator can tell them apart.
+  // A method, a getter and a setter have separate context types (`ClassMethod`,
+  // `ClassGetter`, `ClassSetter`: #sec-decorator-contexts), and a decorator whose parameter
+  // is annotated with one is applied only to that position. So the assertion is that the
+  // POSITION selects the context, not that a decorator can tell them apart by testing
+  // `kind`.
   const members = 'const log = []; function tag(c) { log.push(c.kind + ":" + String(c.name)); } '
     + 'class A { @tag m() {} @tag get g() { return 1; } @tag set s(v) {} @tag static st() {} } ';
   expect(evaluated(`${members} log.join(",");`)).toBe('ClassMethod:m,ClassGetter:g,ClassSetter:s,ClassMethod:st');
@@ -225,11 +214,11 @@ test('an operator\'s PARAMETERS and RETURN are decorated, though the operator is
 });
 
 test('an ABSTRACT method\'s parameters and return are decorated too', () => {
-  // An AbstractMethodDefinition is intercepted at the same place and for the
-  // same reason (it has no runtime behaviour to evaluate), so it dropped its
-  // sub-target decorations in exactly the same way. It is a declaration whose
-  // parameters are declared, and decorators.md's `ClassMethodReflection`
-  // carries `abstract` precisely because an abstract method is reflectable.
+  // An AbstractMethodDefinition is intercepted at the same place and for the same reason
+  // (it has no runtime behaviour to evaluate), so its sub-target decorations have to be
+  // applied in exactly the same way. It is a declaration whose parameters are declared, and
+  // `ClassMethod` carries `abstract` (#sec-reflection-shape-class) because an abstract
+  // method is reflectable.
   const am = 'let c; function grab(x) { c = x; } abstract class A { abstract m(@grab p: uint8): uint8; } ';
   expect(evaluated(`${am} c.kind + ':' + String(c.index);`)).toBe('ClassMethodParameter:0');
   expect(evaluated(`${am} String(c.methodContext.name);`)).toBe('m');
@@ -237,14 +226,15 @@ test('an ABSTRACT method\'s parameters and return are decorated too', () => {
 });
 
 test('sub-targets: parameters and returns apply before their declaration', () => {
-  // decorators.md writes the positions as
-  // `d(@f a: uint32): @f uint32` - a decorator before the parameter, and before
-  // the return TYPE. Both need grammar of their own, so this is a
-  // grammar change as much as a semantics one.
+  // A decorator may stand before a parameter and before the return TYPE:
+  // `d(@f a: uint32): @f uint32`. Both need grammar of their own, so this is a grammar change
+  // as much as a semantics one. (A decorator may be written before a type only in a position
+  // with a reflection context of its own, which is a return: #sec-decorator-metadata.)
   //
-  // decorators.md "Order": "A declaration's sub-targets apply before the
-  // declaration itself: parameter decorators in parameter order, then the
-  // return's, then the method's own."
+  // Unspecified: the order among a declaration's own sub-targets. #sec-decorator-application
+  // says only that a declaration's parameters and return apply before the declaration itself.
+  // These tests pin the engine's choice: parameter decorators in parameter order, then the
+  // return's, then the method's own.
   const method = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + (c.index !== undefined ? ":" + c.index : "") + ")"); } '
     + 'class A { @tag("m") d(@tag("p0") a: uint32, @tag("p1") b: uint32): @tag("ret") uint32 { return a; } } ';
   expect(evaluated(`${method} log.join(",");`)).toBe('p0(ClassMethodParameter:0),p1(ClassMethodParameter:1),ret(ClassMethodReturn),m(ClassMethod)');
@@ -254,9 +244,9 @@ test('sub-targets: parameters and returns apply before their declaration', () =>
   // why the index assertion above matters: `p0` before `p1` and both before the
   // return is the only arrangement consistent with "in parameter order".
 
-  // An accessor's sub-targets take their own contexts: a getter has a return
-  // and no parameter, a setter a parameter and no return worth naming, which is
-  // why decorators.md gives a ClassSetterParameter and no ClassSetterReturn.
+  // An accessor's sub-targets take their own contexts (#sec-decorator-contexts): a getter has
+  // a return and no parameter, a setter a parameter and no return worth naming, which is why
+  // the contexts include a `ClassSetterParameter` and no `ClassSetterReturn`.
   const accessors = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ")"); } '
     + 'class A { @tag("g") get g(): @tag("gret") uint8 { return 1; } @tag("s") set s(@tag("sp") v: uint8) {} } ';
   expect(evaluated(`${accessors} log.join(",");`)).toBe('gret(ClassGetterReturn),g(ClassGetter),sp(ClassSetterParameter),s(ClassSetter)');
@@ -267,14 +257,11 @@ test('sub-targets: parameters and returns apply before their declaration', () =>
 });
 
 test('the whole ordering rule composes across every level', () => {
-  // The whole rule in one assertion, for the class family: one program
-  // decorating every position it legally can, one array, ONE EQUALITY on the
-  // joined log.
-  //
-  // A membership check would pass with any of these four levels reordered,
-  // which is the whole failure mode the ordering rule exists to prevent. The
-  // sequence below is the one a reader of decorators.md's "Order" section would
-  // predict, and if it ever stops reading that way the ORDER is wrong rather
+  // The whole rule in one assertion, for the class family: one program decorating every
+  // position it legally can, one array, ONE EQUALITY on the joined log. A membership check
+  // would pass with any of these four levels reordered, which is the whole failure mode the
+  // ordering rule of #sec-decorator-application exists to prevent. The sequence below is the
+  // one that clause predicts, and if it ever stops reading that way the ORDER is wrong rather
   // than the test.
   const everything = 'const log = []; function t(n, c) { log.push(n); } '
     + '@t("C2") @t("C1") '
@@ -311,17 +298,17 @@ test('the function family and bindings', () => {
 });
 
 test('a decorated function declaration DOES NOT HOIST', () => {
-  // decorators.md: "A decorated function declaration does not hoist.
-  // `@dec function f() {}` behaves as `var f = @dec function () {};` - the
-  // value is not available above its declaration. Hoisting it would mean either
-  // evaluating the decorator expressions before the bindings they reference
-  // exist, or evaluating them out of document order, and both break the rule
-  // above."
+  // Unspecified: whether a decorated function declaration hoists. These tests pin the
+  // engine's choice, that it does not: `@dec function f() {}` behaves as
+  // `var f = @dec function () {};` and the value is not available above its declaration.
+  // Hoisting it would mean evaluating the decorator expressions before the bindings they
+  // reference exist, or out of document order, and either breaks the document-order rule of
+  // #sec-decorator-application.
   //
-  // So the NAME is declared at hoist time, var-like and *undefined*, and the
-  // VALUE is installed by the declaration's own evaluation at its written
-  // position. `typeof` above it is "undefined" rather than a ReferenceError,
-  // which is what distinguishes `var` semantics from `let`.
+  // So the NAME is declared at hoist time, var-like and *undefined*, and the VALUE is installed
+  // by the declaration's own evaluation at its written position. `typeof` above it is
+  // "undefined" rather than a ReferenceError, which is what distinguishes `var` semantics
+  // from `let`.
   expect(evaluated('function d(c) {} let r; try { r = String(h()); } catch (e) { r = e.constructor.name; } '
     + '@d function h() { return 1; } r;')).toBe('TypeError');
   expect(evaluated('function d(c) {} let r; try { r = String(typeof h); } catch (e) { r = "threw"; } '
@@ -376,15 +363,14 @@ test('the object family mirrors the class family', () => {
 });
 
 test('block decorators fire on entry, every entry', () => {
-  // decorators.md "Order": "Block, `let`, and
-  // `const` decorators are on the other timeline: they fire when the STATEMENT
-  // EXECUTES rather than when a declaration is evaluated. A block decorator on
-  // a loop body therefore fires ONCE PER ITERATION, which makes block
-  // decorators the only ones that can run more than once."
+  // #sec-decorator-application: a block decorator runs on every entry to its block rather than
+  // once where the block was written, so a block on a loop body fires ONCE PER ITERATION and
+  // block decorators are the only ones that can run more than once. That asymmetry is the
+  // feature and not an accident: a decorator observing a block is observing an execution
+  // rather than a declaration. So the counting assertion is the point of this test.
   //
-  // That asymmetry is the feature and not an accident: a decorator observing a
-  // block is observing an execution rather than a declaration. So the counting
-  // assertion is the point of the stage.
+  // Unspecified: when a `let` or `const` decorator fires. The tests pin that it fires when the
+  // statement executes, as a block's does.
   expect(evaluated('let n = 0; function f(c) { n += 1; } @f { let a = 1; } String(n);')).toBe('1');
   expect(evaluated('let n = 0; function f(c) { n += 1; } for (let i = 0; i < 3; ++i) @f { let b = i; } String(n);')).toBe('3');
   expect(evaluated('let n = 0; function f(c) { n += 1; } let i = 0; while (i < 4) { i += 1; @f { let b = i; } } String(n);')).toBe('4');
@@ -398,15 +384,10 @@ test('block decorators fire on entry, every entry', () => {
     + 'for (const k in {}) @f { let g = 1; } for (const v of []) @f { let h = 1; } "all parse";')).toBe('all parse');
 });
 
-test('a block reflection carries its BLOCK as tokens - the deferral is closed', () => {
-  // This test previously asserted that the AST-valued fields were ABSENT, and
-  // quoted decorators.md's reason: "That `Expression` is not defined here. Macro
-  // AST is out of scope. The Expression is a placeholder."
-  //
-  // decoratorreplacement.md defines `Expression` as a TokenStream, so the
-  // placeholder has a meaning and the fields are present. The test is kept
-  // rather than deleted because it is where a reader looking for the deferral
-  // will arrive.
+test('a block reflection carries its BLOCK as tokens', () => {
+  // A block reflection carries `label` and `block`, the tokens the block delimits
+  // (#sec-reflection-shape-block). The field holds a TokenStream (#sec-tokenstream-objects),
+  // not a syntax tree.
   expect(evaluated('let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } @g { let x = 1; } f;'))
     .toBe('kind,label,block');
   expect(evaluated('let t = ""; function g(c) { t = c.block.toString(); } @g { let x = 1; } t;'))
@@ -416,10 +397,9 @@ test('a block reflection carries its BLOCK as tokens - the deferral is closed', 
   expect(evaluated('let h = ""; function g(c) { h = String("condition" in c); } @g { 1; } h;')).toBe('false');
 });
 test('the enum family: enumerators before their enum', () => {
-  // decorators.md writes `@f enum Count { @f
-  // Zero, ... }`, and the ordering rule applies to a third container kind
-  // exactly as it does to a class and an object literal: members first, in
-  // document order, container last.
+  // The ordering rule of #sec-decorator-application applies to a third container kind exactly
+  // as it does to a class and an object literal: members first, in document order, container
+  // last (`@f enum Count { @f Zero, ... }`).
   const e = 'const log = []; function tag(n, c) { log.push(n + "(" + c.kind + ":" + String(c.name) + ")"); } '
     + '@tag("E") enum Count { @tag("z") Zero, @tag("o") One, Two } ';
   expect(evaluated(`${e} log.join(",");`)).toBe('z(EnumEnumerator:Zero),o(EnumEnumerator:One),E(Enum:Count)');
@@ -431,17 +411,12 @@ test('the enum family: enumerators before their enum', () => {
 });
 
 test('the Tuple and Record contexts FIRE, on a decorated expression', () => {
-  // decorators.md: `const e = @f Composite([0]); // Reflect.Tuple` and
-  // `const d = @f Composite({ a: 1 }); // Reflect.Record`.
+  // A decorator on an ordinary expression: `const e = @f Composite([0]); // Reflect.Tuple`
+  // and `const d = @f Composite({ a: 1 }); // Reflect.Record` (#sec-reflection-shape-structural).
   //
-  // These were pinned as blocked on composites, then - once composites landed -
-  // on the EXPRESSION position, since `@f Composite([0])` was a SyntaxError and
-  // so was `@f ({})`: the gap was the position, not anything composite-specific.
-  // A decorator on an ordinary expression closes both.
-  //
-  // WHICH CONTEXT FIRES IS DECIDED BY THE VALUE, not by the syntax - and the
-  // array/object split is exactly the one a composite's KIND already makes,
-  // which is why the intern key carries it.
+  // WHICH CONTEXT FIRES IS DECIDED BY THE VALUE, not by the syntax - and the array/object split
+  // is exactly the one a composite's KIND already makes, which is why the intern key carries
+  // it.
   expect(evaluated('(() => { let k = "NO"; function f(c) { k = c.kind; } const e = @f Composite([0]); return k; })();')).toBe('Tuple');
   expect(evaluated('(() => { let k = "NO"; function f(c) { k = c.kind; } const d = @f Composite({ a: 1 }); return k; })();')).toBe('Record');
   // The decorated expression still EVALUATES to its value.

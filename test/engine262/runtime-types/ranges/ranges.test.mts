@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * Spec: #sec-ranges (Ranges). Design: ranges.md.
+ * Spec: #sec-ranges (Ranges) and #sec-range-literals.
  *
  * Range literals as values that iterate.
  *
@@ -45,8 +45,8 @@ test('an inclusive literal has its endpoints', () => {
 });
 
 test('an open start is a distinct value from a closed one', () => {
-  // ranges.md "Types": a bound per endpoint, so `a<..` and `a..` are different
-  // ranges and the four two-endpoint intervals are the four pairs.
+  // #sec-ranges: a bound per endpoint, so `a<..` and `a..` are different ranges and the four
+  // two-endpoint intervals are the four pairs.
   expect(evaluated('(1<..<6).start;')).toBe('1');
   expect(evaluated('(1<..=6).end;')).toBe('6');
   expect(evaluated('(5<..).start;')).toBe('5');
@@ -108,9 +108,9 @@ test('containment tests each endpoint by its own bound', () => {
 });
 
 test('an open start begins iteration one step in', () => {
-  // ranges.md and #sec-ranges fix the nth value as start + n * step but were
-  // written before an open start had a literal, so neither states the first
-  // index. An open start excludes its own endpoint, so it must be n >= 1.
+  // #sec-ranges fixes the nth value as start + n * step. An open start excludes its own endpoint,
+  // so the first index is n = 1 (#sec-range-literals: the first element is "the start plus one
+  // where the start is open").
   expect(evaluated('let a = [...0<..<4]; a.join(",");')).toBe('1,2,3');
   expect(evaluated('let a = [...0<..=4]; a.join(",");')).toBe('1,2,3,4');
   expect(evaluated('let a = [...(0<..<1).step(0.25)]; a.join(",");')).toBe('0.25,0.5,0.75');
@@ -261,13 +261,12 @@ test('a product bound is exclusive only where EVERY attaining product is', () =>
   // inclusive endpoints, so zero is REACHED and the low bound is closed even
   // though `0 * 2` touches an exclusive one.
   expect(evaluated('String((0..=1) * (0..<2) |> %.startBound === Range.Bound.Closed);')).toBe('true');
-  // The greatest is two, attained only by `1 * 2`, and 2 is never reached, so
-  // the high bound is open.
+  // The greatest is two, attained only by `1 * 2`, and 2 is never reached, so the high bound is
+  // open and the result is `0..<2`.
   //
-  // FEEDBACK: ranges.md states this example's result as `0..=2`. That is wrong:
-  // the supremum needs the right operand to REACH 2, which it never does, so the
-  // result is `0..<2`. The rule the sentence states is right; the interval it
-  // writes out contradicts it.
+  // Unspecified: the specification states no arithmetic over ranges (`+`, `-`, unary `-`, `*`, `/`).
+  // These tests pin the engine's, which computes the point-set result: a result bound is exclusive
+  // only where every product attaining it involves an exclusive source bound.
   expect(evaluated('String((0..=1) * (0..<2) |> %.endBound === Range.Bound.Open);')).toBe('true');
   expect(evaluated('const r = (0..=1) * (0..<2); r.start + "," + r.end;')).toBe('0,2');
 });
@@ -389,9 +388,9 @@ test('the range operator does not exist with the feature off', () => {
 });
 
 test('a range case label matches by containment', () => {
-  // ranges.md: "when a case label is a range, the clause matches if the range
-  // contains the discriminant", which is the containment `is` already performed
-  // on a range pattern -- the two spellings now agree by construction.
+  // #sec-ranges: a `case` whose label is a range matches where the range contains the discriminant,
+  // which is the containment `is` already performs on a range pattern - the two spellings agree by
+  // construction.
   const f = 'const f = (c) => { switch (c) { case 200..<300: return "Ok"; case 400..<500: return "ClientError"; case 500..<600: return "ServerError"; default: return "Unknown"; } };';
   expect(evaluated(`${f} f(204) + "," + f(404) + "," + f(503) + "," + f(302);`))
     .toBe('Ok,ClientError,ServerError,Unknown');

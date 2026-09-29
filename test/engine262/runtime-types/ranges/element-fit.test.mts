@@ -27,8 +27,9 @@ test('a range whose elements are all values of the type fits', () => {
 });
 
 test('an EMPTY range fits any type', () => {
-  // ranges.md: descending ranges "are empty, not reversed", and an open bound
-  // at equal endpoints excludes the only value the range could hold.
+  // #sec-ranges: a descending range is empty rather than reversed (an empty intersection is
+  // "descending and therefore empty"), and an open bound at equal endpoints excludes the only
+  // value the range could hold.
   for (const src of at('10..<0')) expect(ok(src)).toBe(true);
   for (const src of at('5..<5')) expect(ok(src)).toBe(true);
 });

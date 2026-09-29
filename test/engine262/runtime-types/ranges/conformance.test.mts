@@ -4,31 +4,25 @@ import {
 } from '../harness.mts';
 
 /**
- * proposal-runtime-types: RANGE CONFORMANCE.
- *
- * Every test here is named by the SENTENCE of the specification it checks, not
- * by the feature it exercises. That is the whole point of the file: a suite
- * organized by feature answers "was this built?", and a suite organized by
- * clause answers "does the engine say what the specification says?". The second
- * question is the one that catches drift, and the first cannot. `interval`
- * returning a string passed a feature-shaped audit for three stages while
+ * RANGE CONFORMANCE. Every test here is named by the SENTENCE of the specification it checks,
+ * not by the feature it exercises. That is the whole point of the file: a suite organized by
+ * feature answers "was this built?", and a suite organized by clause answers "does the engine
+ * say what the specification says?". The second question is the one that catches drift, and the
+ * first cannot. An `interval` that returned a string would pass a feature-shaped audit while
  * failing the clause that says a range exposes an `Interval`.
  *
- * A claim the engine does not yet satisfy is NOT skipped. It gets a test that
- * asserts TODAY'S behaviour, with the clause quoted and the divergence named in
- * a DIVERGENCE comment. A skipped test is invisible in a green run, which is
- * exactly how the gaps below survived. When a later stage makes a claim true,
- * it rewrites that test to assert the claim and deletes the comment, and the
- * diff of this file is the evidence the stage is done.
+ * A claim the engine does not yet satisfy is NOT skipped. It gets a test that asserts TODAY'S
+ * behaviour, with the clause quoted and the divergence named in a DIVERGENCE comment. A skipped
+ * test is invisible in a green run, which is exactly how such gaps survive. When the engine
+ * makes the claim true, the test is rewritten to assert the claim and the comment is deleted,
+ * and the diff of this file is the evidence.
  *
- * The suite is keyed to spec.emu rather than to ranges.md, because the
- * specification is normative and the design document is where a claim is
- * argued. Where the two disagree, both are recorded, so a design-side error
- * surfaces as a third state rather than being resolved silently in the engine's
- * favour.
+ * The suite is keyed to spec.emu because the specification is normative. Behaviour the engine
+ * has that the specification does not state is marked "Unspecified:" and pins the engine's
+ * choice.
  *
- * Clauses covered: #sec-range-literals, #sec-ranges, #sec-matchrange, and the
- * Range row of #table-metadata-values in #sec-metadata-decomposition.
+ * Clauses covered: #sec-range-literals, #sec-ranges, #sec-matchrange, and the Range row of
+ * #table-metadata-values in #sec-metadata-decomposition.
  */
 
 // =============================================================================
@@ -206,7 +200,7 @@ test('sec-ranges: an annotation naming an interval admits only that interval', (
   expect(evaluated('let r: RangeBounds.<any> = 0..<10; "ok";')).toBe('ok');
 });
 
-test('ranges.md: the four aliases name the four intervals', () => {
+test('the four aliases name the four intervals', () => {
   // "the aliases, so no annotation is forced through the three-argument
   //  spelling", each sharing the `Interval` enum's names so the language has one
   //  vocabulary for the four intervals rather than two.
@@ -220,7 +214,7 @@ test('ranges.md: the four aliases name the four intervals', () => {
   expectThrown('let r: ClosedRange.<uint8> = 0..<10; "ok";');
 });
 
-test('ranges.md: a range and its type print as they were written', () => {
+test('a range and its type print as they were written', () => {
   // "A diagnostic should prefer them: `ClosedRange.<uint8>` ... reads where
   //  `Range.<uint8, Bound.Closed, Bound.Closed>` does not." And a range VALUE
   //  named "[object Object]" told a reader nothing about the one thing wrong.
@@ -228,9 +222,8 @@ test('ranges.md: a range and its type print as they were written', () => {
     const c = run(src) as { Value?: { HostDefinedMessageString?: string } };
     return c.Value?.HostDefinedMessageString ?? '';
   };
-  // A range VALUE names itself in a runtime diagnostic - the cast path, which
-  // an annotation no longer takes now that the wrong interval is caught at
-  // check time.
+  // A range VALUE names itself in a runtime diagnostic - the cast path (an annotation with the
+  // wrong interval is caught at check time and never reaches it).
   expect(message('const r = ((0..<10) := RangeFrom.<number>);')).toContain('0..<10');
   // And a range TYPE names itself by its alias in a check-time diagnostic.
   expect(message('let r: ClosedRange.<uint8> = 0..<10;')).toContain('ClosedOpenRange');
@@ -444,19 +437,18 @@ test('sec-ranges: `reverse` iterates the same members in the opposite order', ()
   expectThrown('(5..).reverse();');
 });
 
-test('sec-ranges: DIVERGENCE - `Range.of` is declared by the design and absent from the engine', () => {
-  // ranges.md declares `static of<T, S: Bound, E: Bound>(start, end)`, which is
-  // the only way to construct a range in code generic over its bounds.
-  //
-  // DIVERGENCE: not implemented. Blocked on `Range.Bound`.
+test('sec-ranges: Unspecified - `Range.of` has no clause and the engine has none', () => {
+  // Unspecified: the specification declares no `Range.of`, which would be the only way to
+  // construct a range in code generic over its bounds. The engine has none either, so this
+  // asserts that it is absent.
   expect(evaluated('String(typeof Range.of);')).toBe('undefined');
 });
 
-// =============================================================================
-// random.md - the range form of Math.random
-// =============================================================================
+// The range form of Math.random. Unspecified: the random extension is deferred
+// (#sec-coverage-of-the-design-documents), so the specification states none of this; the tests
+// below pin the engine's behaviour.
 
-test('random.md: a range bound is consumed rather than ignored', () => {
+test('Math.random: a range bound is consumed rather than ignored', () => {
   // Falling through to the ordinary `Math.random()`, which takes none, would
   // DROP a written bound and answer with a draw from [0, 1). Silently wrong is
   // worse than unimplemented, which is why this row exists even though the form
@@ -464,7 +456,7 @@ test('random.md: a range bound is consumed rather than ignored', () => {
   expect(evaluated('let ok = true; for (let i = 0; i < 400; i += 1) { const v = Number(Math.random.<uint8>(1..=6)); if (v < 1 || v > 6) ok = false; } String(ok);')).toBe('true');
 });
 
-test('random.md: each of the four intervals is a different draw', () => {
+test('Math.random: each of the four intervals is a different draw', () => {
   // "A die. 1 through 6" -- both endpoints attainable.
   expect(evaluated('let lo = 99, hi = -1; for (let i = 0; i < 400; i += 1) { const v = Number(Math.random.<uint8>(1..=6)); if (v < lo) lo = v; if (v > hi) hi = v; } lo + "," + hi;')).toBe('1,6');
   // "0 through 99" -- the end is excluded.
@@ -477,19 +469,19 @@ test('random.md: each of the four intervals is a different draw', () => {
   expect(evaluated('let bad = 0; for (let i = 0; i < 20000; i += 1) { const v = Number(Math.random.<float16>(0<..<1)); if (v <= 0 || v >= 1) bad += 1; } String(bad);')).toBe('0');
 });
 
-test('random.md: an open-ended range takes its missing endpoint from T', () => {
+test('Math.random: an open-ended range takes its missing endpoint from T', () => {
   expect(evaluated('let ok = true; for (let i = 0; i < 600; i += 1) { const v = Number(Math.random.<uint8>(..)); if (v < 0 || v > 255) ok = false; } String(ok);')).toBe('true');
   expect(evaluated('let ok = true; for (let i = 0; i < 300; i += 1) { if (Number(Math.random.<int32>(0..)) < 0) ok = false; } String(ok);')).toBe('true');
 });
 
-test('random.md: an empty range produces no value', () => {
+test('Math.random: an empty range produces no value', () => {
   // "a RangeError when the call is made".
   expect(evaluated('let k = "no"; try { Math.random.<uint8>(5..<5); } catch (e) { k = e.constructor.name; } k;')).toBe('RangeError');
   // "5, the only value the range contains".
   expect(evaluated('String(Number(Math.random.<uint8>(5..=5)));')).toBe('5');
 });
 
-test('random.md: the no-argument form is unchanged', () => {
+test('Math.random: the no-argument form takes no range', () => {
   expect(evaluated('let ok = true; for (let i = 0; i < 200; i += 1) { const v = Number(Math.random.<float32>()); if (v < 0 || v >= 1) ok = false; } String(ok);')).toBe('true');
   expect(evaluated('let ok = true; for (let i = 0; i < 200; i += 1) { const v = Math.random(); if (v < 0 || v >= 1) ok = false; } String(ok);')).toBe('true');
 });
@@ -498,8 +490,8 @@ test('random.md: the no-argument form is unchanged', () => {
 // #sec-metadata-narrowing
 // =============================================================================
 
-// A meta type that narrows, written as primitivemetadata.md writes it: each
-// comparison is a one-sided range and narrowing is intersection.
+// A meta type that narrows (#sec-metadata-narrowing): each comparison is a one-sided range and
+// narrowing is intersection.
 const NARROWS = `type NBn = { bounds?: RangeBounds.<any> };
 meta NBn { default = {};
   subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }
@@ -619,16 +611,15 @@ test('sec-metadata-narrowing: a program that narrows nothing is untouched', () =
   expectThrown('const x: uint8 = 300; "ok";');
 });
 
-test('ranges.md: DIVERGENCE - the range index operator awaits the view substrate', () => {
-  // "`array[a..<b]` and `array.window(a, b)` are the same operation, and the
-  //  range form should be the one people write" - and it produces a VIEW, which
-  //  is the whole of why it is an operator rather than a method.
+test('sec-ranges: Unspecified - the range index operator awaits the view substrate', () => {
+  // Unspecified: slicing an array by a range (`array[a..<b]`) is deferred
+  // (#sec-coverage-of-the-design-documents). The intent is that it and `array.window(a, b)` are one
+  // operation producing a VIEW, which is why it is an operator rather than a method.
   //
-  // DIVERGENCE: neither `window` nor any view type exists, so the
-  // operator cannot. What it must NOT do meanwhile is what it did: a range
-  // coerced to a property key is a string no object has, so `a[1..<3]` answered
-  // *undefined* - a quiet non-answer to a question the language will answer.
-  // It refuses now, which says the same thing without the silence.
+  // DIVERGENCE: neither `window` nor any view type exists, so the operator cannot. What it must NOT
+  // do meanwhile is answer *undefined*: a range coerced to a property key is a string no object has,
+  // a quiet non-answer to a question the language will answer. It refuses instead, which says the
+  // same thing without the silence.
   expectThrown('let a: [].<uint8> = [1,2,3,4,5]; a[1..<3];');
   expectThrown('const a = [1,2,3]; a[0..<2];');
   // Ordinary keys are untouched, which is what keeps the refusal narrow.
@@ -701,7 +692,11 @@ test('sec-ranges: an infinite endpoint is not the same as an absent one', () => 
   expectThrown('[...(0.5..<2.5)];');
 });
 
-test('ranges.md: a range carries the iterator helpers, delegating to a fresh iterator', () => {
+// Unspecified: the specification does not state the iterator helpers of a range
+// (#sec-coverage-of-the-design-documents lists ranges as partially specified). The tests below pin
+// the engine's behaviour: a range carries the helpers, each delegating to a fresh iterator, and
+// the ones that stay closed over ranges (`take`, `drop`) return ranges.
+test('iterator helpers: a range carries them, delegating to a fresh iterator', () => {
   // The nine that LEAVE the family, each forwarding to the built-in method on a
   // freshly constructed iterator.
   expect(evaluated('(0..<5).map(v => v * 2).toArray().join(",");')).toBe('0,2,4,6,8');
@@ -715,7 +710,7 @@ test('ranges.md: a range carries the iterator helpers, delegating to a fresh ite
   expect(evaluated('String((0..<9).find(v => v > 4));')).toBe('5');
 });
 
-test('ranges.md: delegating keeps a range a VALUE, which is the whole design', () => {
+test('iterator helpers: delegating keeps a range a VALUE', () => {
   // A fresh iterator per call, so a range is traversable twice where an iterator
   // is not - and still answers `contains` afterwards. Making a range BE an
   // iterator would make `[...r]` consume it.
@@ -726,7 +721,7 @@ test('ranges.md: delegating keeps a range a VALUE, which is the whole design', (
   expect(evaluated('let n = 0; const r = 0..<1000; String(r.map(v => { n += 1; return v; }).take(3).toArray().length) + "/" + String(n);')).toBe('3/3');
 });
 
-test('ranges.md: `take` and `drop` stay in the family, because they are CLOSED', () => {
+test('iterator helpers: `take` and `drop` stay in the family, because they are CLOSED', () => {
   // The first n values of a contiguous range are a contiguous range, and so are
   // the rest - the same test `intersect` passes and `step` fails. So these two
   // return a `Range` where `map` returns an `Iterator`: closure, not uniformity.
@@ -752,7 +747,7 @@ test('ranges.md: `take` and `drop` stay in the family, because they are CLOSED',
   expectThrown('(..<5).take(2);');
 });
 
-test('ranges.md: a helper that must consume every value refuses a range with no end', () => {
+test('iterator helpers: a helper that must consume every value refuses a range with no end', () => {
   // `toArray`, `reduce`, and `forEach` each read the WHOLE sequence, so on `0..`
   // they would not return. Refusing says so, in the way #sec-ranges already
   // makes a range with no START not iterable - the mirror rule.
@@ -779,7 +774,7 @@ test('ranges.md: a helper that must consume every value refuses a range with no 
   expect(evaluated('(0..<4).toArray().join(",") + "/" + String((1..=4).reduce((a, b) => a + b, 0));')).toBe('0,1,2,3/10');
 });
 
-test('ranges.md: a range helper answers exactly as the iterator it delegates to', () => {
+test('iterator helpers: a range helper answers exactly as the iterator it delegates to', () => {
   // The claim delegation actually makes. Testing that `filter` filters would
   // pass for a reimplementation; testing that it agrees with
   // `Iterator.from(r).filter` is what pins it to the built-in.
@@ -801,7 +796,7 @@ test('ranges.md: a range helper answers exactly as the iterator it delegates to'
   expectThrown('Range.prototype.map.call(5, v => v);');
 });
 
-test('ranges.md: helper chains compose, and keep the element type', () => {
+test('iterator helpers: chains compose, and keep the element type', () => {
   // `map` changes the element type and the chain carries it with no annotation
   // at any step - the type comes from the range literal and flows.
   expect(evaluated('const a = (0..<3).map(v => String(v)).toArray(); String(a.length) + "/" + a.join("");')).toBe('3/012');
@@ -827,7 +822,8 @@ test('sec-matchrange: a range pattern matches by containment', () => {
 });
 
 test('sec-matchrange: a range `case` label matches by containment', () => {
-  // ranges.md's own example, which fell through to `default` before.
+  // A range label matches by containment, so a status-code `switch` reaches its `case`s and not
+  // the `default` (#sec-range-literals).
   const f = 'const f = (c) => { switch (c) { case 200..<300: return "Ok"; case 400..<500: return "ClientError"; case 500..<600: return "ServerError"; default: return "Unknown"; } };';
   expect(evaluated(`${f} f(204) + "," + f(404) + "," + f(503) + "," + f(302);`))
     .toBe('Ok,ClientError,ServerError,Unknown');
@@ -944,8 +940,8 @@ test('sec-meta-declarations: a meta default may hold a range, and a pattern', ()
   // identical reason.
   expect(evaluated('type X = { bounds: RangeBounds.<any> }; meta X { default = { bounds: .. }; subtype(a,b){return true;} } "ok";')).toBe('ok');
   expect(evaluated('type X = { p: RegExp }; meta X { default = { p: /x/ }; subtype(a,b){return true;} } "ok";')).toBe('ok');
-  // primitivemetadata.md's own total default, the one adopted so that no hook
-  // tests for absence.
+  // A total default for a metadata type that bounds a number (#sec-primitive-metadata): every hook
+  // can assume the key is present, so none tests for absence.
   expect(evaluated('type NB = { bounds?: RangeBounds.<any>, nonZero?: boolean }; meta NB { default = { bounds: .., nonZero: false }; subtype(a,b){return true;} validate(v,c){return true;} } "ok";')).toBe('ok');
   // And a hook receives the default's range as a range.
   expect(evaluated('type NB = { bounds?: RangeBounds.<any> }; meta NB { default = { bounds: .. }; subtype(a,b){return true;} validate(v,c){ return c.bounds.isFull; } } type A = float64.<{ }>; "ok";')).toBe('ok');

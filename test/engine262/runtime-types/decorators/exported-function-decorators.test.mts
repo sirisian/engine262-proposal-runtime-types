@@ -5,21 +5,12 @@ import {
 } from '#self';
 
 /**
- * A decorated EXPORTED function declaration reached an assertion that a
- * decorated export is always a class:
- *
- *   Assert(Declaration.type === 'ClassDeclaration' && !Declaration.Decorators);
- *
- * so `@dec export function f() {}` was refused outright while `@dec function
- * f() {}` worked - for every decorator and every author. Found trying to
- * decorate a builder in the standard kit, where each one is an exported
- * function, so none of them could carry a decorator at all.
- *
- * The decorators sit on the EXPORT node rather than on the declaration, which is
- * why the function evaluator could not find them on its own. It is handed them
- * instead of reimplementing the application, so decorators.md's rules - a
- * decorated declaration does not hoist, sub-targets are applied, a replacement
- * is written back through the binding - stay in the one place that owns them.
+ * A decorated EXPORTED function declaration is decorated like an unexported one:
+ * `@dec export function f() {}` behaves as `@dec function f() {}` does, for every decorator.
+ * The decorators sit on the EXPORT node rather than on the declaration, so the export
+ * evaluator hands them to the function evaluator instead of reimplementing the application;
+ * that keeps the rules of #sec-decorator-application - sub-targets are applied and a
+ * replacement is written back through the binding - in the one place that owns them.
  */
 
 const NL = String.fromCharCode(10);

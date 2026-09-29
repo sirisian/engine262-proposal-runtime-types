@@ -13,7 +13,7 @@ import { evaluated } from '../harness.mts';
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 test('Reflect.Class reads the class back', () => {
-  // decorators.md's `ClassReflection`: `name`, `type`, `abstract`, `metadata`.
+  // #sec-reflection-shape-class: `Class` reflects `name`, `type`, `abstract` and `metadata`.
   expect(evaluated('class A {} Object.getOwnPropertyNames(Reflect.getReflection.<Reflect.Class, A>()).join(",");')).toBe('kind,name,type,abstract,metadata');
   expect(evaluated('class Named {} String(Reflect.getReflection.<Reflect.Class, Named>().name);')).toBe('Named');
   // `type` is the CONSTRUCTOR, asserted by identity - a fresh function would
@@ -68,12 +68,10 @@ test('an ACCESSOR reads back too', () => {
 });
 
 test('the ENUMERATING forms, and `{ own: true }`', () => {
-  // decorators.md's signature returns "{ [name]: Reflection }" - an object
-  // keyed by member name, not a list.
-  //
-  // `constructor` is among them: a constructor is a `ClassMethod` of that name
-  // (#table-reflection-contexts), and a class always has one, the default being
-  // what `new` calls where none is written.
+  // #sec-reflection-retrieval: reflecting a set of members answers an object keyed by member
+  // name, not a list. `constructor` is among them: a constructor is a `ClassMethod` of that
+  // name (#table-reflection-contexts), and a class always has one, the default being what
+  // `new` calls where none is written.
   expect(evaluated('class A { m() {} n() {} } Object.keys(Reflect.getReflection.<Reflect.ClassMethod, A>()).sort().join(",");')).toBe('constructor,m,n');
   // "Reflection includes inherited members BY DEFAULT."
   expect(evaluated('class B { base() {} } class D extends B { own() {} } '
@@ -115,24 +113,24 @@ test('the two FIELD paths are merged into one read', () => {
 });
 
 test('getReflectionByIndex returns a member\'s PARAMETERS, indexed', () => {
-  // decorators.md declares it only for the
-  // PARAMETER contexts, and it returns a LIST indexed by position - which is
-  // what separates it from the enumerating forms, whose result is keyed by
-  // name.
+  // `Reflect.getReflectionByIndex` (#sec-reflection-retrieval) answers the same reflections as a
+  // LIST in declaration order, which is what separates it from the enumerating forms, whose
+  // result is keyed by name. It exists for the positions a name does not order: a parameter
+  // list is read by position.
   const m = 'class A { m(a: uint8, b: uint8) {} } ';
   expect(evaluated(`${m} const p = Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m"); `
     + 'String(p.length) + "/" + p[0].name + "/" + p[1].name;')).toBe('2/a/b');
   expect(evaluated(`${m} String(Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m")[1].index);`)).toBe('1');
-  // `initial` and `initializer`, the pair a field and an accessor already
-  // carry. `initial` is "a typed field's zero value, or a constant
-  // initializer", so an annotated parameter with no default reports the zero of
-  // its type rather than *undefined* - which is why the presence of a default
-  // is read from `initializer` and not from `initial` being absent. A `hasDefault` Boolean stood here on the reasoning that a default is
-  // "an expression evaluated PER CALL, so what can be reported is whether one
-  // was written" - true of a NON-CONSTANT default, and decorators.md ~330 adds
-  // the branch it leaves out: `initial` captures constant values only, and
-  // `initializer` carries the declaration either way. `hasDefault` was then
-  // `initializer !== undefined`, a third field reporting what a second implies.
+  // `initial` and `initializer`, the pair a field and an accessor also carry
+  // (#sec-reflection-shape-rules): `initial` holds a declared default only where that default is
+  // a constant, and `initializer` holds the declaration as a TokenStream either way. The
+  // presence of a default is therefore read from `initializer`, and a separate `hasDefault`
+  // field is not part of the shape: it would be `initializer !== undefined`, a third field
+  // reporting what a second implies, and the fields a family lists are all of a reflection's
+  // properties.
+  //
+  // Unspecified: whether `initial` reports the zero of an annotated parameter that has no
+  // default. The tests pin that it does, so `initial` being absent is not the signal.
   expect(evaluated('class A { m(a: uint8, b: uint8 = 2) {} } '
     + 'const p = Reflect.getReflectionByIndex.<Reflect.ClassMethodParameter, A>("m"); '
     + 'String(p[0].initial) + "/" + String(p[1].initial);')).toBe('0/2');
@@ -155,10 +153,9 @@ test('getReflectionByIndex returns a member\'s PARAMETERS, indexed', () => {
 // -- The field layout context ----------------------------------------------------
 
 /**
- * `offset` and `byteLength` on a field's decorator context.
- *
- * decorators.md: "Layout, present when the declaring class has one. A STATIC
- * field is not part of an instance's layout, so both are undefined for it."
+ * `offset` and `byteLength` on a field's decorator context (#sec-reflection-shape-class):
+ * *undefined* rather than absent where a field has no laid-out placement. A STATIC field is
+ * not part of an instance's layout, so both are undefined for it.
  */
 
 const GRAB = 'let ctx; function g(c) { ctx = c; } ';
@@ -198,19 +195,16 @@ test('THE ORDERING RULE these are accessors for', () => {
 // -- The method context type -----------------------------------------------------
 
 /**
- * `type` on `ClassMethodReflection`.
- *
- * decorators.md gives a method's context its declared RETURN type. The builder
- * took no NODE at all, which is why it could not report one - it was handed a
- * kind, a key and a flag, none of which knows the declaration.
+ * `type` on `ClassMethod` (#sec-reflection-shape-class): a method's context reports the
+ * member's FUNCTION type, as a getter's reports "the getter's function type". The context
+ * must be built from the declaration's NODE, since a kind, a key and a flag cannot know the
+ * declaration.
  */
 
 test('a method context reports its FUNCTION type', () => {
-  // decorators.md: `ClassMethodReflection<T extends (...args) => any>` has
-  // `type: T`, and `ClassGetterReflection` has `type: () => T`. BOTH ARE THE
-  // MEMBER'S FUNCTION TYPE, not its return type. Reporting the return instead
-  // would make a getter's `type` indistinguishable from its RETURN
-  // sub-target's.
+  // A method's `type` is the member's FUNCTION type, and a getter's is `() => T`; NEITHER is
+  // its return type. Reporting the return instead would make a getter's `type` indistinguishable
+  // from its RETURN sub-target's.
   expect(evaluated('type F = (x: uint32) => uint8; let r; function g(c) { r = String(c.type === (type F)); } '
     + 'class A { @g m(x: uint32): uint8 { return uint8(1); } } r;')).toBe('true');
   // The discriminating assertion: it is NOT the return type.
@@ -239,10 +233,8 @@ test('the rest of the method context is unchanged', () => {
 });
 
 test('`signatures` is present, and length 1', () => {
-  // decorators.md: "Length 1 when not overloaded." A CLASS METHOD is never
-  // overloaded in this engine - a second declaration of one name REPLACES the
-  // first, unlike a function declaration, which does form an overload group -
-  // so this is always the one declaration the context was handed.
+  // #sec-reflection-shape-class: `signatures` has length 1 where the method is not overloaded,
+  // and this method is not, so it is the one declaration the context was handed.
   expect(evaluated('(() => { let s; function g(c) { s = c.signatures.length; } '
     + 'class A { @g m(): uint8 { return uint8(1); } } return String(s); })();')).toBe('1');
 });
@@ -250,21 +242,17 @@ test('`signatures` is present, and length 1', () => {
 // -- Method signatures -----------------------------------------------------------
 
 /**
- * `signatures` on `ClassMethodReflection`.
- *
- * decorators.md: "signatures: [].<FunctionSignatureReflection> - Length 1 when
- * not overloaded", where a `FunctionSignatureReflection` is
- * `{ parameters, return }`.
+ * `signatures` on `ClassMethod` (#sec-reflection-shape-class): a List of signature reflections
+ * in declaration order, each `{ parameters, return }`, of length 1 where the method is not
+ * overloaded.
  */
 
 test('a method reports one signature per overload arm', () => {
-  // "Length 1 when not overloaded". This once read that a class method is NEVER
-  // overloaded, a second declaration REPLACING the first - which described a
-  // defect rather than a rule: the same two declarations dispatched correctly
-  // as functions, so the divergence was "a property of the position" only
-  // because a class body discarded the earlier arm before resolution saw it.
+  // "Length 1 when not overloaded" (#sec-reflection-shape-class), and a method that IS
+  // overloaded reports one signature per arm: a class method dispatches over its arms as the
+  // function beneath it does.
   expect(evaluated(`${GRAB} class A { @g m(): uint8 { return uint8(1); } } String(ctx.signatures.length);`)).toBe('1');
-  // a method now dispatches over its arms, as the function beneath it always did
+  // a method dispatches over its arms, as the function beneath it does
   expect(evaluated('class A { m(x: uint8) { return 1; } m(x: string) { return 2; } } '
     + 'const a = new A(); String(a.m(uint8(1)));')).toBe('1');
   expect(evaluated('class A { m(x: uint8) { return 1; } m(x: string) { return 2; } } '
@@ -313,12 +301,10 @@ test('the signature agrees with the PARAMETER CONTEXT about one declaration', ()
 // -- The parameter context -------------------------------------------------------
 
 /**
- * `ClassMethodParameterReflection`'s `type`, `name` and `initial`.
- *
- * decorators.md gives a parameter's context `type`, `name`, `index`, `initial`
- * and `metadata`. The builder took no NODE, so it could report only what its
- * arguments carried - the same gap the method context had, and the parameter
- * node was sitting in the loop that calls it.
+ * `ClassMethodParameter`'s `type`, `name` and `initial` (#sec-reflection-shape-class): a
+ * parameter's context reports `type`, `name`, `index`, `initial`, `initializer` and
+ * `metadata`. It must be built from the parameter's declaration NODE, so that it reports what
+ * the declaration says and not only what its arguments carry.
  */
 
 test('a parameter context reports its NAME and declared TYPE', () => {
@@ -362,9 +348,9 @@ test('the rest of the sub-target family is unchanged', () => {
 });
 
 test('a parameter carries METADATA, keyed by method AND position', () => {
-  // decorators.md's `ClassMethodParameterMetadata`. A parameter is identified
-  // by its method and index, so the key names both - which is what makes the
-  // next three assertions come out the way they do.
+  // `ClassMethodParameter` metadata (#sec-decorator-metadata). A parameter is identified by its
+  // method and index, so the key names both - which is what makes the next three assertions come
+  // out the way they do.
   expect(evaluated('(() => { let p; function g(c) { p = c; } '
     + 'class A { m(@g x: uint32) {} } return typeof p.metadata; })();')).toBe('object');
   expect(evaluated('(() => { let p; function g(c) { p = c; } '
@@ -395,13 +381,9 @@ test('a parameter\'s metadata PROTOTYPE-LINKS to the base class\'s', () => {
 // -- The read path agrees with the decorator context -----------------------------
 
 /**
- * The READ PATH reports a member's `type`, and reports the SAME type the
- * decorator context does.
- *
- * decorators.md gives a member reflection a `type`. The read path had none while
- * the context did - **two reflections of one declaration disagreeing**, which is
- * the failure this area has met more often than any other. Both now answer from
- * one recorded type, derived by one operation.
+ * The READ PATH reports a member's `type`, and reports the SAME type the decorator context
+ * does (#sec-reflection-shape-class). Two reflections of one declaration must not disagree, so
+ * both answer from one recorded type, derived by one operation.
  */
 
 test('a member READ reports its declared FUNCTION type', () => {
@@ -464,14 +446,11 @@ test('the layout reflection says which field it describes', () => {
 });
 
 test('a binding reflection reports `initial`, not `value`', () => {
-  // The binding above is unannotated, so it reports no `type` - a member that
-  // annotates nothing reports nothing rather than a type of `any`, which is how
-  // the field and method contexts already read an absent annotation.
-  //
-  // decorators.md's LetReflection and ConstReflection both name this `initial`,
-  // and the name is the accurate one: a decorator sees what the binding was
-  // DECLARED with, not a live view. `value` implied a liveness the object never
-  // had - a `let` reassigned later still reports what it started with.
+  // #sec-reflection-shape-binding: a binding reflection names `initial`, the value the binding
+  // was DECLARED with, not a live view - a `let` reassigned later still reports what it started
+  // with. The binding above is unannotated, so it reports no `type`: a member that annotates
+  // nothing reports nothing rather than a type of `any`, as the field and method contexts read
+  // an absent annotation.
   expect(evaluated('let f = ""; function g(c) { f = Object.getOwnPropertyNames(c).join(","); } @g let x = 41; f;')).toBe('kind,name,initializer,initial');
   expect(evaluated('let v; function g(c) { v = c.initial; } @g let x = 41; String(Number(v));')).toBe('41');
   expect(evaluated('let v; function g(c) { v = c.initial; } @g const y = 7; String(Number(v));')).toBe('7');
@@ -603,11 +582,10 @@ test('a getter and setter carry no `signatures`', () => {
 });
 
 test('the declaration and the layout are two contexts, not one', () => {
-  // #sec-reflection-shape-class-field-layout. One
-  // retrieval expression used to answer two shapes: memorylayout.md reached a
-  // field's placement through Reflect.ClassField and decorators.md named its
-  // decorator context by the same expression, so which shape a reader got
-  // depended on which document was open.
+  // #sec-reflection-shape-class-field-layout: a field's placement is its own context,
+  // `Reflect.ClassFieldLayout`, separate from the `ClassField` reflection of what it was
+  // declared as. The two answer different questions, so one retrieval expression must not answer
+  // both shapes.
   const V = 'class V { x: uint32 = 1; y: uint8 = 2; } ';
   // The declaration view: what the field WAS DECLARED as.
   expect(evaluated(`${V} Reflect.getReflection.<Reflect.ClassField, V>('x').kind;`)).toBe('ClassField');

@@ -18,10 +18,10 @@ test('a block reflection reports its LABEL', () => {
 });
 
 test('the label may name the OWNING statement', () => {
-  // `outer: while (c) { ... }` labels the loop and the decorated block is its
-  // body. decorators.md gives `WhileBlock` and its siblings a `label`, and the
-  // label those forms have is the owning statement's - so it propagates one
-  // level in, and no further: anything deeper is a different block.
+  // `outer: while (c) { ... }` labels the loop and the decorated block is its body.
+  // #sec-reflection-shape-block gives `WhileBlock` and its siblings a `label`, and the label
+  // those forms have is the owning statement's - so it propagates one level in, and no further:
+  // anything deeper is a different block.
   expect(label('let n = 0; outer: while (n < 1) @g { n += 1; }')).toBe('outer');
   expect(label('outer: for (let i = 0; i < 1; i++) @g { 1; }')).toBe('outer');
   expect(label('outer: for (const x of [1]) @g { 1; }')).toBe('outer');

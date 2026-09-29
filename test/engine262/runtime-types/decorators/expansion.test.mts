@@ -261,17 +261,12 @@ test('a GROUP prints its delimiters around its contents', () => {
 });
 
 // -- A decoration's own arguments ------------------------------------------------
-//
-// decoratorreplacement.md 4.2: "The trailing arguments are the decorator's own,
-// and they are tokens like everything else - `@derive(Serialize)` passes the
-// identifier token `Serialize`, never an eval."
-//
-// An argumented decoration was never collected as an expansion site at all, so
-// the macro was not called AND the decoration survived into the output, where it
-// later means something else. It was silent rather than an error. The cause was
-// reading [[MemberExpression]]: `@m` puts an IdentifierReference there, but
-// `@m(X)` puts a CallExpression in the decoration's own [[CallExpression]] field
-// and leaves [[MemberExpression]] empty.
+// #sec-replacement-decorators: a replacement decorator's arguments are Token Records and are
+// not evaluated - `@derive(Serialize)` passes the identifier token `Serialize`, never an eval.
+// An argumented decoration is collected as an expansion site, so the macro is called AND the
+// decoration does not survive into the output. The argumented form puts its name in the
+// decoration's own [[CallExpression]] field and leaves [[MemberExpression]] empty, where `@m`
+// puts an IdentifierReference in [[MemberExpression]]; collecting sites has to read both.
 /**
  * Like expandPrinted, but answers the whole expanded body. The helper above
  * slices from `class`, which suits a macro that returns one; these macros report

@@ -179,17 +179,11 @@ test('declaring a mode does not require every use to take a region', () => {
 
 
 // -- An ARGUMENTED moded decoration ---------------------------------------------
-//
-// `@jsx(...)` resolves its name through a different node than `@jsx` does:
-// decoratorreplacement.md's argumented form puts the identifier in
-// [[CallExpression]].[[CallExpression]] and leaves [[MemberExpression]] empty.
-// Reading only the latter is why an argumented decoration was once never
-// collected for expansion at all - and, measured, why every argumented MODED
-// decoration failed to find its mode and fell through to being lexed as
-// ECMAScript, so `@jsx(1) { <div/> }` stopped at the `<`.
-//
-// The same shape twice, in two places, years apart. These tests exist so it is
-// not three.
+// `@jsx(...)` resolves its name through a different node than `@jsx` does: the argumented
+// form puts the identifier in [[CallExpression]].[[CallExpression]] and leaves
+// [[MemberExpression]] empty. Both have to be read, or an argumented MODED decoration fails
+// to find its mode and is lexed as ECMAScript, so `@jsx(1) { <div/> }` would stop at the `<`.
+// It is the same shape as the argumented expansion site in expansion.test.mts.
 const both = (source: string) => expandWith('jsx', JSX_IMPORT + source, withJsxGrammar(
   '(function (t, c, a) {'
   + ' var s = t[0] ? t[0].span : undefined;'

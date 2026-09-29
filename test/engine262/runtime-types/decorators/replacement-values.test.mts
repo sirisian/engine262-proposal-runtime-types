@@ -2,18 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * Spec: #sec-replacement-values (Replacement Values). Design: decorators.md.
+ * Spec: #sec-replacement-values (Replacement Values). A decorator may return a value that
+ * replaces what it decorated; returning `undefined` replaces nothing, so a decorator that only
+ * reads or writes metadata returns nothing and is done.
  *
- * decorators.md: "Decorators can optionally return a replacement for the
- * decorated target. If a decorator returns `void` (or `undefined`), no
- * replacement occurs. If it returns a value, that value replaces the original
- * target."
- *
- * The table is CLOSED, and the closing sentence is as much of the feature as
- * the table: "Decorators that describe sub-targets (parameters, returns) or
- * structural positions (blocks, enums, tuples, records, let, const) do not
- * support return replacement." A returned value in those positions is
- * discarded, not applied somewhere plausible.
+ * The table of replaceable contexts is CLOSED, and its closing sentence is as much of the
+ * feature as the table: every other context - the sub-target contexts (parameters, returns),
+ * the structural and binding contexts, and the blocks other than a `do`'s - admits no
+ * replacement, and a decorator on one that returns a value other than *undefined* is a
+ * *TypeError*.
  */
 
 test('a method is replaced by what its decorator returns', () => {
@@ -64,22 +61,36 @@ test('replacements CHAIN, innermost first', () => {
 });
 
 test('the positions the table EXCLUDES do not replace', () => {
-  // "Decorators that describe sub-targets (parameters, returns) or structural
-  // positions ... do not support return replacement." A returned value is
-  // discarded rather than applied somewhere plausible - which is the failure
-  // mode a permissive implementation would have.
+  // Divergence from #sec-replacement-values: a value returned from a context that admits no
+  // replacement is a *TypeError*, and the engine discards it instead. These assertions pin what
+  // the engine does today - the value is discarded rather than applied somewhere plausible,
+  // which is the failure mode a permissive implementation would have - and the specified
+  // TypeError is asserted as an expected failure after this test.
   expect(evaluated('function rep(c) { return 99; } class A { m(@rep p: uint8) { return "original"; } } (new A()).m(1);')).toBe('original');
   expect(evaluated('function rep(c) { return 99; } class A { m(p: uint8): @rep uint8 { return 1; } } String((new A()).m(1));')).toBe('1');
   expect(evaluated('let n = 0; function rep(c) { return 99; } @rep let x = 5; String(x);')).toBe('5');
   expect(evaluated('function rep(c) { return 99; } @rep { let a = 1; } "block ran";')).toBe('block ran');
 });
 
+// Pinned as `test.fails`: #sec-replacement-values makes a value returned from a context that
+// admits no replacement a TypeError, and the engine discards it. Flips to `test` when the
+// TypeError is raised.
+test.fails('a value returned from a context that admits no replacement is a TypeError', () => {
+  const outcome = (source: string) => evaluated(
+    `function rep(c) { return 99; } try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`,
+  );
+  expect(outcome('class A { m(@rep p: uint8) {} }')).toBe('TypeError');
+  expect(outcome('class A { m(p: uint8): @rep uint8 { return 1; } }')).toBe('TypeError');
+  expect(outcome('@rep let x = 5;')).toBe('TypeError');
+  expect(outcome('@rep { let a = 1; }')).toBe('TypeError');
+});
+
 test('the FIELD row: the return is the initial VALUE, not an initializer', () => {
-  // decorators.md's table: a `Reflect.ClassField` decorator's return replaces
-  // "the field's INITIAL VALUE", of type T. THIS DIFFERS FROM TC39, where a
-  // field decorator returns an initializer FUNCTION - and the difference is
-  // visible: a decorator runs once at class definition while an initializer
-  // runs per instance, so the value is captured once and used for every one.
+  // #sec-replacement-values: a `Reflect.ClassField` decorator's return replaces "the field's
+  // initial value", of the field's type. THIS DIFFERS FROM TC39, where a field decorator returns
+  // an initializer FUNCTION - and the difference is visible: a decorator runs once at class
+  // definition while an initializer runs per instance, so the value is captured once and used for
+  // every one.
   expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } String(new A().a);')).toBe('99');
   expect(evaluated('function rep(c) { return 99; } class A { @rep a: uint8 = 1; } '
     + 'const x = new A(), y = new A(); String(x.a) + "/" + String(y.a);')).toBe('99/99');

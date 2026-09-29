@@ -89,24 +89,15 @@ function rejectionKind(source: string): string {
 }
 
 /**
- * proposal-runtime-types #sec-decorator-application: "A decorator is an
- * ordinary function whose LAST PARAMETER IS ANNOTATED WITH A REFLECTION
- * CONTEXT."
- *
- * That form threw. Annotating a decorator's parameter with its context - the
- * form the clause defines, the form every example in decorators.md is written
- * in, and the form the clause's own dispatch rule reads to select among
- * declarations - failed with a ReferenceError as soon as the decorator ran. So
- * only an UNTYPED parameter worked, which is why every decorator test written
- * for stages A-G is written that way.
- *
- * THE CAUSE was one branch reached in the wrong order. A reflection context is
- * a ~nominal~ type carrying a [[LibraryName]], and the library branch of
- * IsOfType resolves a [[LibraryName]] as a GLOBAL BINDING - which is right for
- * `Map` and `Error`, whose values are instances of a global constructor, and a
- * ReferenceError for `Reflect.ClassField`, whose name is dotted and names no
- * binding at all. The contexts had resolved as values and as type ARGUMENTS
- * for four cycles; type-annotation position was the one that reached this.
+ * #sec-decorator-application: "A decorator is an ordinary function whose LAST PARAMETER IS
+ * ANNOTATED WITH A REFLECTION CONTEXT." So a decorator may annotate its parameter with its
+ * context (`c: Reflect.ClassField`), and the clause's own dispatch rule reads that annotation
+ * to select among declarations. The annotation has to resolve where the decorator runs: a
+ * reflection context is a ~nominal~ type carrying a [[LibraryName]], and the library branch of
+ * IsOfType must not resolve a dotted name such as `Reflect.ClassField` as a GLOBAL BINDING.
+ * That is right for `Map` and `Error`, whose values are instances of a global constructor,
+ * and wrong for a name that denotes no binding at all. A context must resolve as a value, as
+ * a type ARGUMENT, and in type-annotation position.
  */
 
 test('a decorator parameter annotated with its context works, at every family', () => {
@@ -136,11 +127,10 @@ test('the WRONG context is refused, and by the kind that says why', () => {
 });
 
 test('a reflection context is a STRUCTURAL type, as the design writes it', () => {
-  // decorators.md writes every context as an object shape - `type
-  // ClassFieldReflection = { ... }`, with `Reflect.ClassField` an interface
-  // extending it - so membership reads the value's own discriminant rather
-  // than a brand. `kind` is what every reflection object this engine builds
-  // sets, and it is what the tests of stages A-G already read.
+  // A context is an object shape - `type ClassFieldReflection = { ... }`, with
+  // `Reflect.ClassField` an interface extending it (#sec-reflection-shape-rules) - so membership
+  // reads the value's own discriminant rather than a brand. `kind` is what every reflection
+  // object this engine builds sets.
   expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.ClassField); } class A { @f a: uint8; } r;')).toBe('true');
   expect(evaluated('let r = "?"; function f(c) { r = String(c is Reflect.Class); } class A { @f a: uint8; } r;')).toBe('false');
   // An object of the wrong shape is not of the type, so the judgment is doing
@@ -256,9 +246,9 @@ test('a CLASS and a FUNCTION select their own contexts', () => {
     + 'function f(c: Reflect.ClassField) { l.push("field"); } ';
   expect(evaluated(`${decls} @f class A {} l.join(",");`)).toBe('class');
   expect(evaluated(`${decls} @f function h() {} l.join(",");`)).toBe('function');
-  // A decorated class whose FIELD is also decorated fires both, members first -
-  // decorators.md's ordering rule, asserted through context selection rather
-  // than through a shared counter.
+  // A decorated class whose FIELD is also decorated fires both, members first
+  // (#sec-decorator-application), asserted through context selection rather than through a
+  // shared counter.
   expect(evaluated(`${decls} @f class A { @f a: uint8 = 1; } l.join(",");`)).toBe('field,class');
 });
 

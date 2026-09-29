@@ -2,18 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * Spec: #sec-addinitializer (AddInitializer). Design: decorators.md.
+ * Spec: #sec-addinitializer (addInitializer). Only the contexts of the clause's table have
+ * an `addInitializer`, the declaration sites where initialization logic can be injected, and
+ * the callbacks run AFTER EVERY DECORATOR of that declaration has been applied, in the order
+ * they were added.
  *
- * decorators.md gives it to the contexts that "represent declaration sites
- * where initialization logic can be injected", and rule 4 of its ordering
- * section says when the callbacks run: "`addInitializer` callbacks run AFTER
- * EVERY DECORATOR of that declaration has been applied, in the order they were
- * added."
- *
- * THE TABLE IS CLOSED AND NOT DERIVABLE FROM THE POSITION, which is why it is
- * read off the context's own `kind` in one place rather than decided at each
- * call site: `Reflect.Function` has return replacement and NO addInitializer,
- * while `Reflect.ObjectField` has neither though `Reflect.ClassField` has both.
+ * THE TABLE IS CLOSED AND NOT DERIVABLE FROM THE POSITION, which is why it is read off the
+ * context's own `kind` in one place rather than decided at each call site: `Reflect.Function`
+ * has return replacement and NO addInitializer, while `Reflect.ObjectField` has neither though
+ * `Reflect.ClassField` has both.
  */
 
 test('the contexts that have it', () => {

@@ -181,15 +181,13 @@ test('the two phases, now that arguments are part of phase one', () => {
 });
 
 test('a reflection object REPORTS its context, and a hand-made one does not', () => {
-  // The stamp is what selection reads. It is deliberately narrower than
-  // membership: an object with the right shape SATISFIES the context (cycle
-  // 129, structural, which is how decorators.md writes them), but only an
-  // object this engine built as a reflection REPORTS it. Reading `kind` in
-  // RuntimeTypeOf instead would make every `{ kind: "Class" }` in an unrelated
-  // program report a nominal type and stop being assignable to the object types
-  // it is assignable to today.
-  // Type Objects are INTERNED, so the report is checked by identity against the
-  // context itself rather than by rendering a name.
+  // The stamp is what selection reads. It is deliberately narrower than membership: an object
+  // with the right shape SATISFIES the context (a context is an object shape,
+  // #sec-reflection-shape-rules), but only an object this engine built as a reflection REPORTS
+  // it. Reading `kind` in RuntimeTypeOf instead would make every `{ kind: "Class" }` in an
+  // unrelated program report a nominal type and stop being assignable to the object types it is
+  // assignable to today. Type Objects are INTERNED, so the report is checked by identity against
+  // the context itself rather than by rendering a name.
   expect(evaluated('let r = "never"; function f(c) { r = String(Reflect.typeOf(c) === Reflect.ClassField); } class A { @f a: uint8; } r;')).toBe('true');
   expect(evaluated('String(Reflect.typeOf({ kind: "ClassField" }) === Reflect.ClassField);')).toBe('false');
   // The hand-made object still satisfies the type, which is the half that did

@@ -19,9 +19,9 @@ function check(source: string): string {
 
 test('a macro that computes over its tokens is evaluable', () => {
   expect(check('export function d(i) { return i.map((t) => t); }')).toBe('evaluable');
-  // LOCAL mutation is fine - typeprogramming.md is explicit that a Set of seen
-  // keys or an accumulator is evaluable and only SHARED module-level mutable
-  // state is not. A macro must still be able to compute.
+  // LOCAL mutation is fine: a Set of seen keys or an accumulator is evaluable, and only SHARED
+  // module-level mutable state is not (#sec-compile-time-evaluability). A macro must still be
+  // able to compute.
   expect(check('export function d(i) { const s = new Set(); return i.filter((t) => !s.has(t)); }')).toBe('evaluable');
   expect(check('export function d(i) { let n = 0; for (const t of i) { n += 1; } return n; }')).toBe('evaluable');
 });
