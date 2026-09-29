@@ -21,7 +21,8 @@ import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExp
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { MissingLiteralSymbol, OrdinaryPrototypeLacks } from './literal-prototype.mts';
-import { ProvenLibraryOperations } from './library-operation-origin.mts';
+import { ProvenLibraryBoundaries } from './library-boundary-origin.mts';
+import { OriginalLibraryFunction, ProvenLibraryOperations } from './library-operation-origin.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
 import { ProvenStaticLibraryOperations } from './static-library-origin.mts';
 import { ProvenArrayCapacityMembers } from './array-capacity-origin.mts';
@@ -44,14 +45,14 @@ import {
   setAliasApplicationImpl,
   badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
-import { CanonicalizeType } from './intern.mts';
+import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
 import {
-  IsSharableValueType, SoAColumnsOf, LayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
+  IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
   ComputeClassLayout, type ClassLayout,
 } from './layout.mts';
 import {
@@ -2801,6 +2802,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const genericDefaults: GenericDefaultCheck[] = [];
   const whereChecks = new Map<object, GenericWhereCheck>();
   const signatureDeclarations = new WeakMap<object, ParseNode>();
+  const formalPatternBindings = new WeakMap<object, ReadonlyMap<string, TypeRecord>>();
 
   // The outermost frame is the session's where there is one, so a console entry
   // sees what earlier entries declared. It is already a copy (see
@@ -4906,6 +4908,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
+  const fixedLayoutProperty = (member: ParseNode.MemberExpression): { key: string, value: number } | undefined => {
+    const base = patternExpression(member.MemberExpression)!;
+    const key = memberKey(member);
+    if (typeof key !== 'string' || !['bitLength', 'byteLength', 'alignment'].includes(key)) return undefined;
+    let type = establishedTypeObjectTarget(base)
+      ?? (base.type === 'IdentifierReference' ? lexicalClassType(base) : null);
+    if (base.type === 'TypeOperatorExpression') type = resolveType(base.Type);
+    if (base.type === 'TypeArgumentsExpression' && base.Expression.type === 'ArrayLiteral'
+        && base.TypeArguments.TypeArgumentList.length === 1) {
+      const element = resolveType(base.TypeArguments.TypeArgumentList[0]);
+      const extent = base.Expression.ElementList;
+      if (element && extent.length === 1 && extent[0].type === 'NumericLiteral' && typeof extent[0].value === 'number') {
+        type = { Kind: 'array', Element: element, Extent: extent[0].value };
+      }
+    }
+    if (!type || mentionsTypeParameter(type)) return undefined;
+    const declaration = classDeclarationOf(type) as ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined;
+    if (declaration && firstUnreadableControl(declaration.Decorators)) return undefined;
+    let layout = ReportedLayoutOf(type);
+    if (!layout && declaration && !declaration.ClassTail.ClassHeritage && !IsReferenceClass(type) && !declaration.ClassModifiers?.includes('dynamic')
+        && !classBodyOf(declaration).some((field) => firstUnreadableControl((field as { Decorators?: readonly ParseNode.Decorator[] }).Decorators))) {
+      const declared = staticClassLayoutOf(declaration);
+      if (declared && 'fields' in declared && declared.fields.length > 0) layout = declared;
+    }
+    const value = layout?.[key as 'bitLength' | 'byteLength' | 'alignment'];
+    return value === undefined ? undefined : { key, value };
+  };
+
   const requireWritableMember = (expression: ParseNode | null | undefined, operator = '=') => {
     const lhs = patternExpression(expression ?? undefined);
     if (lhs?.type === 'IdentifierReference') {
@@ -4928,6 +4958,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (lhs?.type !== 'MemberExpression') return;
+    const layout = fixedLayoutProperty(lhs);
+    if (layout && operator !== '??=' && (operator !== '&&=' || layout.value !== 0) && (operator !== '||=' || layout.value === 0)) {
+      errors.push(Throw.StaticTypeError('$1 is a fixed readonly type layout member', Value(layout.key)).Value as ObjectValue);
+      return;
+    }
     const descriptor = libraryOperations().members.get(lhs);
     const descriptorReceiver = descriptor?.kind === 'descriptor' ? staticType(lhs.MemberExpression) : null;
     const count = descriptorReceiver?.Kind === 'array' && typeof descriptorReceiver.Extent === 'number' ? descriptorReceiver.Extent : descriptor?.count;
@@ -5051,6 +5086,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const stores: ReferenceLocation[] = locationWriteTypes(source).filter((type) => type.Kind !== 'any')
       .map((writeType) => ({ writeType }));
     if (expression?.type !== 'MemberExpression') return stores;
+    const fixed = fixedLayoutProperty(expression);
+    if (fixed) return [...stores, { key: fixed.key }];
     const keys = memberKeys(expression);
     if (!keys) return stores;
     const collect = (receiver: Known, key: string | SymbolValue): ReferenceLocation[] => {
@@ -6555,6 +6592,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         node,
       });
       signatureDeclarations.set(signature, node);
+      rememberFormalPatterns(node);
     } finally {
       if (scope) typeParameterScopes.pop();
     }
@@ -8971,7 +9009,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     seen.add(nameNode);
     const binding = ResolveBindingDeclaration(nameNode, name);
     if (binding?.kind === 'const') {
-      if (application || !binding.initializer || (binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
+      const annotation = (binding.node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+      const declared = annotation ? resolveType(annotation.Type) : null;
+      if (application || !binding.initializer || (annotation && !(declared?.Kind === 'primitive' && declared.Name === 'type'))
         || (binding.node as { Ref?: boolean }).Ref) return null;
       return typeObjectTarget(binding.initializer, seen);
     }
@@ -8991,6 +9031,72 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       parent: application ?? nameNode,
     } as unknown as ParseNode.Type);
     return target && classDeclarationOf(target) !== undefined ? null : target;
+  };
+
+  const inertScalarAnnotations = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.every(inertScalarAnnotations);
+    if (!value || typeof value !== 'object' || !('type' in value)) return true;
+    const candidate = value as ParseNode;
+    if (candidate.type === 'TypeAnnotation') {
+      const contract = resolveType(candidate.Type);
+      return !!contract && (contract.Kind === 'any' || contract.Kind === 'void'
+        || (contract.Kind === 'primitive' && (knownNonObject(contract) || contract.Name === 'type')));
+    }
+    return Object.entries(candidate).every(([key, child]) => ['parent', 'location', 'sourceText'].includes(key) || inertScalarAnnotations(child));
+  };
+
+  /** Immutable type declarations and established value origins retain capabilities. */
+  const establishedTypeObjectTarget = (expression: ParseNode, seen = new Set<ParseNode>()): Known => {
+    const node = patternExpression(expression)!;
+    if (node.type === 'TypeOperatorExpression') {
+      const type = resolveType(node.Type);
+      return type && !classDeclarationOf(type) ? type : null;
+    }
+    if (seen.has(node) || seen.size >= 256 || hasDirectEval) return null;
+    seen.add(node);
+    const base = node.type === 'TypeArgumentsExpression' ? patternExpression(node.Expression)! : node;
+    if (base.type !== 'IdentifierReference') return null;
+    const binding = ResolveBindingDeclaration(base, base.name);
+    if (binding?.kind === 'const') {
+      const annotation = (binding.node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+      const declared = annotation ? resolveType(annotation.Type) : null;
+      if (annotation && !(declared?.Kind === 'primitive' && declared.Name === 'type')) return null;
+      return binding.initializer ? establishedTypeObjectTarget(binding.initializer, seen) : null;
+    }
+    const type = typeObjectTarget(node);
+    if (!type || mentionsTypeParameter(type)) return null;
+    if (binding?.kind === 'type') return type;
+    if (binding || assignedNames.has(base.name) || assignedGlobalProperties.has(base.name)) return null;
+    for (let parent = base.parent; parent; parent = parent.parent) if (/Function|Arrow|Method|Class/.test(parent.type)) return null;
+    const realm = surroundingAgent.currentRealmRecord;
+    if (realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(base.name))) return null;
+    const actual = intrinsicData(realm.GlobalObject, Value(base.name));
+    const intrinsic = (realm.Intrinsics as unknown as Record<string, Value>)[`%${base.name}%`];
+    const builtin = builtinTypeRecord(base.name);
+    const unboundBuiltin = actual === undefined && OrdinaryPrototypeLacks(realm.GlobalObject, Value(base.name));
+    if (!unboundBuiltin && !(actual && builtin && isTypeObject(actual) && SameType(actual.TypeRecord, builtin))
+        && !(base.name === 'Composite' && actual === intrinsic)) return null;
+    const safe = (candidate: ParseNode): boolean => {
+      if (candidate.type === 'IdentifierReference' && typeObjectTarget(candidate)) return true;
+      if (candidate.type === 'MemberExpression' && ['bitLength', 'byteLength', 'alignment'].includes(String(memberKey(candidate)))
+          && typeObjectTarget(candidate.MemberExpression)) return true;
+      if (candidate.type === 'TypeArgumentsExpression' && typeObjectTarget(candidate)) return true;
+      if (candidate.type === 'NewExpression' && typeObjectTarget(candidate.MemberExpression)) return true;
+      if (candidate.type === 'UpdateExpression') {
+        const target = patternExpression(candidate.LeftHandSideExpression ?? candidate.UnaryExpression ?? undefined);
+        if (target?.type === 'MemberExpression' && typeObjectTarget(target.MemberExpression)
+            && ['bitLength', 'byteLength', 'alignment'].includes(String(memberKey(target)))) return true;
+      }
+      if (candidate.type === 'MemberExpression' && candidate.MemberExpression.type === 'IdentifierReference'
+          && candidate.MemberExpression.name === 'Reflect' && candidate.IdentifierName?.name === 'construct'
+          && !ResolveBindingDeclaration(candidate.MemberExpression, 'Reflect') && !assignedGlobalProperties.has('Reflect')
+          && intrinsicData(realm.GlobalObject, Value('Reflect')) === realm.Intrinsics['%Reflect%']
+          && OriginalLibraryFunction(realm, '%Reflect%', 'construct')
+          && candidate.parent?.type === 'CallExpression' && candidate.parent.Arguments[0]?.type === 'IdentifierReference'
+          && candidate.parent.Arguments[0].name === base.name) return true;
+      return false;
+    };
+    return inertScalarAnnotations(root) && intrinsicSourceIsStable(root, realm, safe) ? type : null;
   };
 
   /**
@@ -15847,6 +15953,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const genericScope = pushTypeParameterScopeOf(node);
         try {
           const params = literal.ArrowParameters ?? literal.FormalParameters ?? [];
+          rememberFormalPatterns(node);
           const types = params.map((prm, i) => {
             const annotation = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
             return annotation ? resolveType(annotation.Type) : contextual[i] ?? null;
@@ -15894,7 +16001,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // An unknown result must not erase explicit parameter contracts.
           // Completely untyped literals can still leave their result unknown.
           if (!Return && !literal.TypeAnnotation && types.every((type) => !type)
-              && !params.some((prm) => (prm as { Ref?: boolean }).Ref)) return null;
+              && !typedInvocationSignature(node)) return null;
           const adoptedThis = contextualThisTypes.get(node);
           return {
             Kind: 'function',
@@ -16283,10 +16390,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             whereChecks.set(node, { declaration, clauses, bindings });
           }
           const substituted = substituteTypeParameters({ Kind: 'function', Signatures: [signature] }, bindings);
-          return [{ ...(substituted as typeof base).Signatures[0]!,
+          const specialized = { ...(substituted as typeof base).Signatures[0]!,
             InferredReturn: (signature as SignatureRecord & { InferredReturn?: TypeRecord }).InferredReturn
               ? substituteTypeParameters((signature as SignatureRecord & { InferredReturn: TypeRecord }).InferredReturn, bindings) ?? undefined : undefined,
-            TypeParameters: undefined }];
+            TypeParameters: undefined };
+          if (declaration) signatureDeclarations.set(specialized, declaration);
+          formalPatternBindings.set(specialized, bindings);
+          return [specialized];
         });
         if (Signatures.length === 0 && rejected.length) errors.push(rejected[0]);
         return { ...base, Signatures };
@@ -23639,6 +23749,194 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // #sec-typed-destructuring: nested formal annotations are obligations of
+  // binding, not a closed object signature or inferred iterator element type.
+  const formalPatternTypes = new WeakMap<ParseNode.TypeAnnotation, Known>();
+  const formalPatternDefaults = new WeakMap<object, PatternSource>();
+  const formalsOf = (node: ParseNode): readonly ParseNode[] => {
+    const fn = node as { FormalParameters?: readonly ParseNode[], ArrowParameters?: readonly ParseNode[], UniqueFormalParameters?: readonly ParseNode[] };
+    return fn.FormalParameters ?? fn.ArrowParameters ?? fn.UniqueFormalParameters ?? [];
+  };
+  const rememberFormalPatterns = (declaration: ParseNode): void => {
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (!value || typeof value !== 'object' || !('type' in value)) return;
+      const node = value as PatternNode;
+      if (node.TypeAnnotation && !formalPatternTypes.has(node.TypeAnnotation)) formalPatternTypes.set(node.TypeAnnotation, resolveType(node.TypeAnnotation.Type));
+      if (node.Initializer && !formalPatternDefaults.has(node)) {
+        const literal = (n: ParseNode): boolean => ['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(n.type)
+          || (n.type === 'ObjectLiteral' && n.PropertyDefinitionList.every((p) => p.type === 'PropertyDefinition'
+            && p.PropertyName?.type !== 'PropertyName' && !!p.AssignmentExpression && literal(p.AssignmentExpression)))
+          || (n.type === 'ArrayLiteral' && n.ElementList.every(literal));
+        formalPatternDefaults.set(node, { type: staticType(node.Initializer), expression: literal(node.Initializer) ? node.Initializer : undefined });
+      }
+      for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText', 'Initializer', 'TypeAnnotation'].includes(key)) visit(child);
+    };
+    formalsOf(declaration).forEach(visit);
+  };
+  let patternEffectsStable: boolean | undefined;
+  const patternProtocolStable = (site: ParseNode): boolean => {
+    for (let p = site.parent; p; p = p.parent) if (/Function|Arrow|Method|Class/.test(p.type)) return false;
+    const realm = surroundingAgent.currentRealmRecord;
+    const literalInput = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
+      const node = patternExpression(expression)!;
+      if (seen.has(node) || seen.size >= 256) return false;
+      seen.add(node);
+      if (['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(node.type)) return true;
+      if (node.type === 'IdentifierReference') {
+        if (node.name === 'undefined' && !ResolveBindingDeclaration(node, node.name)) return true;
+        const declaration = ResolveBindingDeclaration(node, node.name);
+        return declaration?.kind === 'const' && !!declaration.initializer && literalInput(declaration.initializer, seen);
+      }
+      if (node.type === 'ArrayLiteral') return node.ElementList.every((entry) => literalInput(entry, new Set(seen)));
+      if (node.type === 'ObjectLiteral') return node.PropertyDefinitionList.every((property) => property.type === 'PropertyDefinition'
+        && !!property.AssignmentExpression && property.PropertyName?.type === 'IdentifierName'
+        && property.PropertyName.name !== '__proto__' && literalInput(property.AssignmentExpression, new Set(seen)));
+      if (node.type === 'CallExpression') return typeObjectTarget(node.CallExpression)?.Kind === 'primitive'
+        && node.Arguments.every((argument) => literalInput(argument, new Set(seen)));
+      return false;
+    };
+    const implicitEffectsAbsent = (value: unknown): boolean => {
+      if (Array.isArray(value)) return value.every(implicitEffectsAbsent);
+      if (!value || typeof value !== 'object' || !('type' in value)) return true;
+      const node = value as ParseNode;
+      if (node.type === 'CallExpression' && !node.Arguments.every((argument) => literalInput(argument))) return false;
+      if (node.type === 'TypeAnnotation') {
+        const type = resolveType(node.Type);
+        if (type && !knownNonObject(type) && type.Kind !== 'any') return false;
+      }
+      return Object.entries(node).every(([key, child]) => ['parent', 'location', 'sourceText'].includes(key) || implicitEffectsAbsent(child));
+    };
+    patternEffectsStable ??= implicitEffectsAbsent(root) && intrinsicSourceIsStable(root, realm, (node) =>
+      node.type === 'ObjectBindingPattern' || node.type === 'ArrayBindingPattern'
+      || (node.type === 'IdentifierReference' && !!typeObjectTarget(node))
+      || (node.type === 'CallExpression' && typeObjectTarget(node.CallExpression)?.Kind === 'primitive'
+        && node.Arguments.every((arg) => ['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'ArrayLiteral'].includes(arg.type))));
+    return patternEffectsStable;
+  };
+  const patternIterationStable = (site: ParseNode): boolean => {
+    const realm = surroundingAgent.currentRealmRecord;
+    const containsObjectPattern = (value: unknown): boolean => {
+      if (Array.isArray(value)) return value.some(containsObjectPattern);
+      if (!value || typeof value !== 'object' || !('type' in value)) return false;
+      if ((value as ParseNode).type === 'ObjectBindingPattern') return true;
+      return Object.entries(value).some(([key, child]) => !['parent', 'location', 'sourceText'].includes(key) && containsObjectPattern(child));
+    };
+    return patternProtocolStable(site) && !containsObjectPattern(root)
+      && intrinsicData(realm.Intrinsics['%Array.prototype%'], wellKnownSymbols.iterator) === realm.Intrinsics['%Array.prototype.values%']
+      && intrinsicData(realm.Intrinsics['%ArrayIteratorPrototype%'], Value('next')) === realm.Intrinsics['%ArrayIteratorPrototype.next%'];
+  };
+  const checkFormalPattern = (node: PatternNode, incoming: PatternSource, site: ParseNode,
+    bindings?: ReadonlyMap<string, TypeRecord>, skipDefault = false): void => {
+    let source = incoming;
+    const written = node.TypeAnnotation ? formalPatternTypes.get(node.TypeAnnotation) : null;
+    const annotation = written && bindings ? substituteTypeParameters(written, bindings) : written;
+    if (!skipDefault && node.Initializer && source.type && !AreDisjoint(source.type, undefinedType)) {
+      const present = NarrowFrom(source.type, undefinedType);
+      if (present !== empty) checkFormalPattern(node, { type: present as TypeRecord }, site, bindings, true);
+      const fallback = formalPatternDefaults.get(node);
+      if (fallback) checkFormalPattern(node, fallback, site, bindings, true);
+      return;
+    }
+    if (annotation) {
+      const target = node.Optional ? joinTypes(annotation, undefinedType) : annotation;
+      requireAssignable(source.expression ? argumentStaticType(source.expression, target) : source.type, target);
+      source = { type: target, annotated: true };
+    }
+    if (node.BindingIdentifier) return;
+    if (node.BindingPattern) return checkFormalPattern(node.BindingPattern, source, site, bindings);
+    if (node.type === 'ObjectBindingPattern') {
+      if (nullishOnly(source.type)) errors.push(Throw.StaticTypeError('an object pattern cannot destructure a nullish source').Value as ObjectValue);
+      const consumed = new Set<string | SymbolValue>();
+      let knownExclusions = true;
+      for (const property of node.BindingPropertyList ?? []) {
+        const name = property.BindingIdentifier?.name ?? patternKey(property.PropertyName);
+        if (name === null) {
+          knownExclusions = false;
+          continue;
+        }
+        consumed.add(name);
+        let contribution = patternProperty(source, name);
+        const literal = patternExpression(source.expression);
+        if (literal?.type === 'ObjectLiteral' && contribution.type === undefinedType
+            && (!patternProtocolStable(site) || !OrdinaryPrototypeLacks(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%'],
+              typeof name === 'string' ? Value(name) : name))) contribution = { type: null };
+        checkFormalPattern(property.BindingElement ?? property, contribution, site, bindings);
+      }
+      if (node.BindingRestProperty) {
+        const literal = patternExpression(source.expression);
+        const ownData = knownExclusions && literal?.type === 'ObjectLiteral'
+          && literal.PropertyDefinitionList.every((property) => property.type === 'PropertyDefinition'
+            && property.PropertyName && ['IdentifierName', 'StringLiteral', 'NumericLiteral'].includes(property.PropertyName.type)
+            && patternKey(property.PropertyName) !== '__proto__' && !!property.AssignmentExpression);
+        const shape = structureOf(source.type);
+        const collected = ownData ? { ...literal, PropertyDefinitionList: literal.PropertyDefinitionList.filter((property) =>
+          !consumed.has(patternKey((property as ParseNode.PropertyDefinition).PropertyName)!)) } : undefined;
+        checkFormalPattern(node.BindingRestProperty, { ordinaryObject: true, expression: collected,
+          type: ownData && shape?.Kind === 'object' ? { ...shape, Properties: shape.Properties.filter((p) => !consumed.has(p.key)) } : null }, site, bindings);
+      }
+      return;
+    }
+    if (node.type === 'ArrayBindingPattern') {
+      if (notIterable(source.type)) errors.push(Throw.StaticTypeError('a formal array pattern requires an iterable source').Value as ObjectValue);
+      const contribution = StaticIterationContribution(source.type, structureOf);
+      const literal = patternExpression(source.expression);
+      const positional = patternIterationStable(site);
+      (node.BindingElementList ?? []).forEach((element, index) => {
+        if (element.type === 'Elision') return;
+        const input = positional && literal?.type === 'ArrayLiteral' && !literal.ElementList.some((e) => e.type === 'SpreadElement')
+          ? patternElement(source, index)
+          : { type: positional && contribution.positions ? contribution.positions[index] ?? undefinedType : contribution.element };
+        checkFormalPattern(element, input, site, bindings);
+      });
+      if (node.BindingRestElement) {
+        const count = node.BindingElementList?.length ?? 0;
+        let collected: PatternSource = { type: contribution.element ? { Kind: 'array', Element: contribution.element, Extent: 'dynamic' } : null };
+        if (positional && literal?.type === 'ArrayLiteral' && !literal.ElementList.some((e) => e.type === 'SpreadElement')) {
+          const tail = { ...literal, ElementList: literal.ElementList.slice(count) };
+          collected = { type: staticType(tail), expression: tail };
+        } else if (positional && contribution.positions) {
+          collected = { type: { Kind: 'tuple', Elements: contribution.positions.slice(count).map((Type) => ({ Type, Rest: false, Initial: 'none' })) } };
+        }
+        checkFormalPattern(node.BindingRestElement, collected, site, bindings);
+      }
+    }
+  };
+  const checkCallPatterns = (call: { CallExpression?: ParseNode }, signature: SignatureRecord,
+    mapped: ReturnType<typeof mapCallArguments>, site: ParseNode, bindings?: ReadonlyMap<string, TypeRecord>): void => {
+    if (!call.CallExpression || hasDirectEval) return;
+    const origin = (expression: ParseNode, seen = new Set<ParseNode>()): ParseNode | null => {
+      const node = patternExpression(expression)!;
+      if (seen.has(node) || seen.size >= 256) return null;
+      seen.add(node);
+      if (node.type === 'TypeArgumentsExpression') return origin(node.Expression, seen);
+      if (isFunctionLiteral(node)) return node;
+      if (node.type !== 'IdentifierReference' || assignedNames.has(node.name) || assignedGlobalProperties.has(node.name)) return null;
+      const declared = ResolveBindingDeclaration(node, node.name);
+      if (declared?.kind === 'function') return declared.node;
+      if (declared?.kind === 'const' && declared.initializer && !(declared.node as { TypeAnnotation?: unknown }).TypeAnnotation) return origin(declared.initializer, seen);
+      return null;
+    };
+    const declaration = origin(call.CallExpression);
+    if (!declaration) return;
+    const captured = formalPatternBindings.get(signature);
+    if (captured) bindings = new Map([...captured, ...(bindings ?? [])]);
+    const original = signatureDeclarations.get(signature);
+    if (original && original !== declaration) return;
+    formalsOf(declaration).forEach((formal, index) => {
+      const pattern = formal as PatternNode;
+      if (!pattern.BindingPattern) return;
+      const entries = mapped.certainEntries.filter((entry) => entry.slot === index);
+      if (formal.type === 'BindingRestElement') {
+        if (mapped.spread) return;
+        const list = { type: 'ArrayLiteral', ElementList: entries.map((entry) => entry.node), parent: site } as unknown as ParseNode.ArrayLiteral;
+        checkFormalPattern(pattern, { type: staticType(list), expression: list }, site, bindings);
+      } else if (entries.length === 1) {
+        checkFormalPattern(pattern, { type: argumentStaticType(entries[0].node), expression: entries[0].node }, site, bindings);
+      } else if (!mapped.spread) checkFormalPattern(pattern, { type: undefinedType }, site, bindings);
+    });
+  };
+
   const walkBindingElement = (b: ParseNode.SingleNameBinding | ParseNode.BindingElement, contextual: Known = null, record?: ParameterRecord) => {
     if (b.type === 'SingleNameBinding' && b.BindingIdentifier) {
       const declared = b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : contextual;
@@ -23683,6 +23981,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         requireAssignable(staticTypeIn(b.Initializer, contextual), contextual);
       }
       checkPattern(b, { type: b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : contextual }, true, !!b.TypeAnnotation || !!contextual);
+      if (!b.TypeAnnotation && b.Initializer) {
+        const fallback = formalPatternDefaults.get(b);
+        if (fallback) checkFormalPattern(b, fallback, b, undefined, true);
+      }
     }
   };
 
@@ -24185,10 +24487,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || (type.Kind === 'shared' && inert(type.Target))
         || (type.Kind === 'array' && inert(type.Element))
         || (type.Kind === 'tuple' && type.Elements.every((e) => !e.InitializerNode && inert(e.Type))));
-      provenLibraryOperations = ProvenLibraryOperations(root, surroundingAgent.currentRealmRecord, (annotation) => inert(resolveType(annotation.Type)));
+      provenLibraryOperations = ProvenLibraryOperations(root, surroundingAgent.currentRealmRecord,
+        (annotation) => inert(resolveType(annotation.Type)), (node) => !!establishedTypeObjectTarget(node));
       return provenLibraryOperations;
     } finally {
       provingLibraryOperations = false;
+    }
+  };
+
+  let provenLibraryBoundaries: ReturnType<typeof ProvenLibraryBoundaries> | undefined;
+  let provingLibraryBoundaries = false;
+  const checkLibraryBoundary = (call: ParseNode.CallExpression): void => {
+    if (provingLibraryBoundaries) return;
+    if (!provenLibraryBoundaries) {
+      provingLibraryBoundaries = true;
+      try {
+        const inert = (type: Known): boolean => !!type && (type.Kind === 'any' || type.Kind === 'void'
+          || (type.Kind === 'primitive' && knownNonObject(type)) || (type.Kind === 'literal' && inert(type.Base))
+          || (type.Kind === 'array' && inert(type.Element)));
+        provenLibraryBoundaries = ProvenLibraryBoundaries(root, surroundingAgent.currentRealmRecord,
+          (annotation) => resolveType(annotation.Type), inert);
+      } finally {
+        provingLibraryBoundaries = false;
+      }
+    }
+    const operation = provenLibraryBoundaries.get(call);
+    if (!operation) return;
+    if (operation.kind === 'prototype') {
+      if (operandParticipates(operation.operand) && everyProtocolAlternative(staticType(operation.operand),
+        (type) => knownNonObject(type) && !SameType(type, makePrimitive('null')))) {
+        errors.push(Throw.StaticTypeError('an intrinsic prototype argument must be an Object or null').Value as ObjectValue);
+      }
+    } else if (operation.kind === 'stringConversion') {
+      checkImplicitString(operation.operand);
+    } else if (operation.kind === 'replacement') {
+      const literal = (text: string): TypeRecord => ({ Kind: 'literal', Base: makePrimitive('string'), Value: Value(text) });
+      const callback = staticType(operation.callback);
+      if (protocolCallFails(callback, () => false, [literal(operation.match),
+        { Kind: 'literal', Base: makePrimitive('number'), Value: Value(operation.position) }, literal(operation.whole)], undefinedType)) {
+        errors.push(Throw.StaticTypeError('the replacement callback cannot bind the supplied match arguments').Value as ObjectValue);
+      }
+    } else if (operation.kind === 'copy') {
+      for (const entry of operation.entries) requireAssignable(argumentStaticType(entry, operation.element), operation.element);
     }
   };
 
@@ -24205,7 +24545,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || (type.Kind === 'array' && inert(type.Element))
         || (type.Kind === 'tuple' && type.Elements.every((e) => !e.InitializerNode && inert(e.Type))));
       provenStaticLibraryOperations = ProvenStaticLibraryOperations(root, surroundingAgent.currentRealmRecord,
-        (annotation) => inert(resolveType(annotation.Type)), (node, length) => {
+        (annotation) => {
+          const type = resolveType(annotation.Type);
+          if (inert(type)) return true;
+          const declaration = annotation.parent;
+          const call = declaration?.type === 'LexicalBinding' ? patternExpression(declaration.Initializer ?? undefined) : null;
+          const member = call?.type === 'CallExpression' ? patternExpression(call.CallExpression) : null;
+          if (member?.type !== 'MemberExpression' || memberKey(member) !== 'groupBy') return false;
+          // A proved grouping creates fresh own data and fresh element arrays.
+          // These destination checks cannot call a getter or metadata hook.
+          return !!type && ((type.Kind === 'nominal' && type.LibraryName === 'Map'
+            && type.Arguments.every((arg) => typeof arg === 'object' && inert(arg)))
+            || (type.Kind === 'object' && type.Properties.every((p) => inert(p.type))
+              && type.IndexSignatures.every((ix) => inert(ix.Key) && inert(ix.Value))));
+        }, (node, length) => {
           const shape = resolveType(node);
           return shape?.Kind === 'tuple' && shape.Elements.length === length
             && shape.Elements.every((e) => !e.Rest && !e.DeclaredDefault && !e.InitializerNode
@@ -24220,7 +24573,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** #sec-proved-library-operations: the same origin proof supplies inputs and results. */
   const staticLibraryResult = (call: ParseNode.CallExpression): Known => {
     const operation = staticLibraryOperations().get(call);
-    if (operation?.owner !== 'Array' || operation.name !== 'from' || !operation.positions) return null;
+    if (!operation?.positions || !((operation.owner === 'Array' && operation.name === 'from')
+      || (['Map', 'Object'].includes(operation.owner) && operation.name === 'groupBy'))) return null;
     const contribution = StaticIterationContribution(staticType(call.Arguments[0]), structureOf);
     let element: Known = contribution.element;
     const mapper = call.Arguments[1] ? staticType(call.Arguments[1]) : undefinedType;
@@ -24229,6 +24583,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (callback?.Kind !== 'function' || !callback.Signatures.length
           || callback.Signatures.some((signature) => !signature.Return || signature.Return.Kind === 'any')) return null;
       element = callback.Signatures.reduce<Known>((joined, signature) => joined ? joinTypes(joined, signature.Return!) : signature.Return, null);
+    }
+    if (operation.name === 'groupBy') {
+      const value = contribution.element;
+      if (!value || value.Kind === 'any' || !element || element.Kind === 'any') return null;
+      const groups: TypeRecord = { Kind: 'array', Element: value, Extent: 'dynamic' };
+      if (operation.owner === 'Map') return libraryTypeRecord('Map', [element, groups]);
+      // Object grouping converts the callback result to a property key. Keep
+      // that result domain separate from the callback's return contract.
+      const key = (type: TypeRecord): Known => {
+        if (type.Kind === 'union') {
+          const members = type.Members.map(key);
+          return members.every((m) => m !== null) ? CanonicalizeType({ Kind: 'union', Members: members as TypeRecord[] }) : null;
+        }
+        const base = type.Kind === 'literal' ? type.Base : type;
+        return knownNonObject(base) ? makePrimitive(base.Kind === 'primitive' && base.Name === 'symbol' ? 'symbol' : 'string') : null;
+      };
+      const domain = key(element);
+      return domain ? { Kind: 'object', Properties: [], IndexSignatures: [{ Key: domain, Value: groups }] } : null;
     }
     return element && element.Kind !== 'any' ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null;
   };
@@ -24427,6 +24799,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (property.type === 'PropertyDefinition') final.set(memberKeyOf(property.PropertyName)!, property);
         }
         for (const [key, value] of final) check(key, value);
+      }
+    } else if (operation.name === 'defineProperties') {
+      const descriptors = patternExpression(args[1]);
+      if (descriptors?.type !== 'ObjectLiteral') return;
+      const final = new Map<string | SymbolValue, ParseNode>();
+      for (const property of descriptors.PropertyDefinitionList) {
+        if (property.type === 'PropertyDefinition') final.set(memberKeyOf(property.PropertyName)!, property.AssignmentExpression!);
+      }
+      for (const [key, descriptor] of final) {
+        const value = proof.data(descriptor)?.PropertyDefinitionList.findLast((p) =>
+          p.type === 'PropertyDefinition' && memberKeyOf(p.PropertyName) === 'value');
+        if (value) check(key, value);
       }
     } else if (args[1]?.type === 'StringLiteral') {
       const value = operation.name === 'set' ? args[2] : proof.data(args[2])?.PropertyDefinitionList.findLast((p) =>
@@ -25602,6 +25986,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? (substituteTypeParameters({ Kind: 'function', Signatures: [chosen] }, effectiveBindings) as Extract<TypeRecord, { Kind: 'function' }>).Signatures[0]
         : chosen;
       checkedCallSignatures.set(c, effective);
+      checkCallPatterns(c, chosen, mapped, n, effectiveBindings ?? bindings);
       // #sec-this-adoption: an explicit receiver contract is independent of
       // the self marker used by ordinary method syntax.
       const names = supplied.filter((arg) => arg.type === 'NamedArgument').map((arg) => arg.Name);
@@ -25672,6 +26057,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         typed: left.typed && right.typed,
         ...(left.classTargets && right.classTargets ? { classTargets: [...left.classTargets, ...right.classTargets] } : {}) };
     }
+    // #sec-function-types: conversion callability does not supply [[Construct]].
+    const denoted = establishedTypeObjectTarget(node);
+    if (denoted && !mentionsTypeParameter(denoted) && denoted.Kind !== 'any') {
+      return { callable: true, constructible: false, typed: true };
+    }
     if (node.type === 'IdentifierReference') {
       for (let i = scope; i >= 0; i -= 1) {
         const frame = frames[i];
@@ -25720,7 +26110,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   let stableWeakSource: boolean | undefined;
   let stablePromiseSource: boolean | undefined;
   const promiseExecutorScalarCall = (node: ParseNode): boolean => {
-    if (node.type === 'NewExpression' && node.Arguments?.[0] && isFunctionLiteral(node.Arguments[0])) {
+    if (node.type === 'NewExpression') {
+      const executor = node.Arguments?.[0];
+      if (!executor || !isFunctionLiteral(executor)) {
+        // #sec-typed-promise-executors: invalid scalar inputs do not erase the
+        // constructor's identity. Future invocations need a separate proof.
+        for (let p = node.parent; p; p = p.parent) if (/Function|Arrow|Method|Class/.test(p.type)) return false;
+        if (executor && !knownNonObject(staticType(executor))) return false;
+        if (!inertScalarAnnotations(root)) return false;
+      }
       let target: ParseNode = node.MemberExpression;
       while (target.type === 'TypeArgumentsExpression' || target.type === 'ParenthesizedExpression') target = target.Expression;
       return target.type === 'IdentifierReference' && target.name === 'Promise' && !ResolveBindingDeclaration(target, 'Promise');
@@ -28634,6 +29032,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         checkLibraryOperation(n as ParseNode.CallExpression);
         checkStaticLibraryCall(n as ParseNode.CallExpression);
+        checkLibraryBoundary(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
         checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);
@@ -28686,7 +29085,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bareTarget = bareTarget.Expression;
         }
         const namedInstance = bareTarget?.type === 'IdentifierReference' ? lexicalClassType(bareTarget) : null;
-        if (target) checkInvocation(target, true);
+        if (target && !ne.PlacementArguments) checkInvocation(target, true);
         // A VALUE OF A PRIMITIVE TYPE IS NOT A CONSTRUCTOR, for the reason a
         // value of one is not callable: `new n()` for a `uint8` n was the run
         // time's "1 (typed) is not a constructor", and the type is written at
@@ -28716,7 +29115,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // reached - its Static Type is a ~function~, which is what `new C()`
             // needs.
             const innerC = structureOf(at);
-            return at.Kind === 'primitive' || at.Kind === 'void'
+            return (at.Kind === 'primitive' && at.Name !== 'type') || at.Kind === 'void'
               || (!!innerC && innerC.Kind === 'object') || at.Kind === 'nominal';
           };
           const constructee = callableForm(staticType(target));

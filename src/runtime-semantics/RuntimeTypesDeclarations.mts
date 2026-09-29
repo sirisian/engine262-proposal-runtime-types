@@ -1,3 +1,4 @@
+import { InstallTypeLayoutProperties } from '../type-system/layout-properties.mts';
 import { RememberArrayCapacity } from '../type-system/array-capacity-origin.mts';
 import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions } from '../type-system/partial-types.mts';
 import { FixedTypeSubtrees } from '../type-system/component-patterns.mts';
@@ -1875,6 +1876,7 @@ function* ArrayTypeConstructorFor(node: ParseNode.TypeArgumentsExpression): Valu
   // in its own right, which is the same shape the design already gives a class:
   // "a class's type object is its constructor".
   (ctor as unknown as { TypeRecord?: unknown }).TypeRecord = record;
+  X(InstallTypeLayoutProperties(ctor, record));
   // README "Capacity": the static `[].<T>.withCapacity(n)` builds an EMPTY array
   // of T with room for at least n. It belongs here because this is the object
   // the design writes it on - an earlier attempt attached it at GetTypeObject,
@@ -2516,6 +2518,7 @@ function* SpecializeFromFrame(
     conflict ??= key;
   });
   if (conflict) return Throw.TypeError('$1 is already declared on this class', Value(conflict));
+  Q(yield* InstallTypeLayoutProperties(ctor as ObjectValue, record));
   AssociateClassType(ctor, GetTypeObject(record));
   byArgs.set(cacheKey, ctor);
   for (const extension of partialClassExtensions.get(declaration) ?? []) {

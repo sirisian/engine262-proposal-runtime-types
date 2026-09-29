@@ -109,7 +109,7 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
     }).TypeRecord?.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
     if (genericParameters === 0) {
       (value as unknown as { TypeRecord?: unknown }).TypeRecord = (typeObject as unknown as { TypeRecord: unknown }).TypeRecord;
-      InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue);
+      Q(yield* InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue));
       AssociateClassType(value, value);
       RegisterStampedClass((typeObject as unknown as { TypeRecord: { Declaration: object } }).TypeRecord.Declaration, value as unknown as ObjectValue);
     } else {

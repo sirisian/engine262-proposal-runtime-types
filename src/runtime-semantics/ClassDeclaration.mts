@@ -125,7 +125,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
     }).TypeRecord?.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
     if (genericParameters === 0) {
       (value as unknown as { TypeRecord?: unknown }).TypeRecord = (typeObject as unknown as { TypeRecord: unknown }).TypeRecord;
-      InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue);
+      Q(yield* InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue));
       AssociateClassType(value, value);
       // #sec-provenance: a class type carried NO origin, while an alias, an
       // interface and an enum all do - so a tool could say where every other

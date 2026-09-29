@@ -131,6 +131,10 @@ export function ProvenStaticLibraryOperations(
       && (!node.Arguments[1] || callback(node.Arguments[1])) && (!node.Arguments[2] || scalar(node.Arguments[2]));
   };
   if (nodes.some((node) => (node.type === 'TypeAnnotation' && !inertAnnotation(node))
+      || (node.type === 'LexicalBinding' && !!node.TypeAnnotation && !!node.Initializer
+        && !literalData(initializer(node.Initializer)) && !safe(initializer(node.Initializer)))
+      || (node.type === 'AssignmentExpression' && unwrap(node.LeftHandSideExpression).type === 'IdentifierReference'
+        && !scalar(node.AssignmentExpression))
       || (node.type === 'CallExpression' && !safe(node)) || node.type === 'NewExpression'
       || (node.type === 'AssignmentExpression' && node.LeftHandSideExpression.type === 'MemberExpression'
         && ['Array', 'Object', 'Map', 'Promise', 'Composite'].includes(node.LeftHandSideExpression.IdentifierName?.name

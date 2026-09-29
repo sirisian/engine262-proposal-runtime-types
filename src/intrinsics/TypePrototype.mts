@@ -1,3 +1,4 @@
+import { InstallTypeLayoutProperties } from '../type-system/layout-properties.mts';
 import { EnsureCompletion, Q } from '../completion.mts';
 import { Value, JSStringValue, NumberValue, TypedNumberValue, INDEX_TYPE, ObjectValue, Descriptor, type Arguments, type FunctionCallContext, type NativeSteps } from '../value.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
@@ -841,7 +842,8 @@ function TypeProto_toString(this: unknown, _args: Arguments, { thisValue }: Func
  * constructor's prototype IS its base constructor and statics inherit, so a
  * subclass left unstamped would report the BASE's layout.
  */
-export function InstallTypeObjectSurface(realmRec: Realm, target: ObjectValue): void {
+export function* InstallTypeObjectSurface(realmRec: Realm, target: ObjectValue): ValueEvaluator {
+  Q(yield* InstallTypeLayoutProperties(target, (target as ObjectValue & { TypeRecord: TypeRecord }).TypeRecord));
   const members: [string, NativeSteps][] = [
     ['byteLength', TypeProto_byteLengthGetter],
     ['bitLength', TypeProto_bitLengthGetter],
@@ -851,11 +853,13 @@ export function InstallTypeObjectSurface(realmRec: Realm, target: ObjectValue): 
     ['family', TypeProto_familyGetter],
   ];
   for (const [name, steps] of members) {
+    if (['bitLength', 'byteLength', 'alignment'].includes(name) && target.properties.has(Value(name))) continue;
     const getter = CreateBuiltinFunction(steps, 0, Value(name), [], realmRec, undefined, Value('get'));
     X(target.DefineOwnProperty(Value(name), Descriptor({
       Getter: getter, Setter: Value.undefined, Enumerable: Value.false, Configurable: Value.true,
     })));
   }
+  return Value.undefined;
 }
 
 export function bootstrapTypePrototype(realmRec: Realm) {

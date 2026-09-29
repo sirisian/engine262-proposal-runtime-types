@@ -6,12 +6,15 @@ import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 const groups = {
   '%Function.prototype%': ['call', 'apply', 'bind', 'callThread'],
   '%Atomics%': ['load', 'store', 'exchange', 'compareExchange', 'add', 'sub', 'and', 'or', 'xor', 'wait', 'waitAsync', 'notify'],
-  '%Object%': ['assign', 'defineProperty', 'keys', 'values', 'entries', 'groupBy'],
+  '%Object%': ['create', 'setPrototypeOf', 'assign', 'defineProperty', 'defineProperties', 'keys', 'values', 'entries', 'groupBy'],
   '%Array%': ['from', 'fromAsync', 'of'],
   '%Map%': ['groupBy'],
   '%Promise%': ['all', 'race', 'any', 'allSettled', 'resolve'],
-  '%Reflect%': ['set', 'apply', 'construct'],
-  '%TypedArrayLike.prototype%': ['capacity'],
+  '%Reflect%': ['set', 'defineProperty', 'apply', 'construct'],
+  '%TypedArrayLike.prototype%': ['capacity', 'set', 'window'],
+  '%Span.prototype%': ['set'],
+  '%String.prototype%': ['replace', 'replaceAll', 'includes'],
+  '%Array.prototype%': ['join'],
   '%Map.prototype%': ['size'],
   '%Set.prototype%': ['size'],
 };
@@ -49,7 +52,8 @@ export interface LibraryOperation {
  * never execute source or rely on a future identity guard. This intentionally
  * small source subset has fresh data, stable local functions and scalar inputs.
  */
-export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnnotation: (node: ParseNode.TypeAnnotation) => boolean): {
+export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnnotation: (node: ParseNode.TypeAnnotation) => boolean,
+  typeObjectTarget: (node: ParseNode) => boolean = () => false): {
   members: ReadonlyMap<ParseNode, LibraryOperation>,
   data: (node: ParseNode) => ParseNode.ObjectLiteral | null,
   list: (node: ParseNode) => readonly ParseNode[] | null,
@@ -145,7 +149,7 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
   };
   const localTarget = (expression: ParseNode): boolean => {
     const node = initializer(expression, new Set());
-    if (['ArrowFunction', 'FunctionExpression', 'ClassExpression'].includes(node.type)) return true;
+    if (['ArrowFunction', 'FunctionExpression', 'ClassExpression'].includes(node.type) || typeObjectTarget(node)) return true;
     const declarations = node.type === 'IdentifierReference' && !mutated.has(node.name) ? definitions.get(node.name) : undefined;
     return !!declarations?.length && declarations.every((d) => ['FunctionDeclaration', 'ClassDeclaration'].includes(d.type) && topLevel(d));
   };
@@ -198,7 +202,8 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
       candidates.set(node, { kind: 'atomic', name, target });
     }
     if (call && target.type === 'IdentifierReference' && global(target.name)
-        && ((target.name === 'Object' && ['assign', 'defineProperty'].includes(name)) || (target.name === 'Reflect' && name === 'set'))
+        && ((target.name === 'Object' && ['assign', 'defineProperty', 'defineProperties'].includes(name))
+          || (target.name === 'Reflect' && ['set', 'defineProperty'].includes(name)))
         && original(`%${target.name}%`, name)) {
       const args = call.Arguments;
       const destination = args[0] && data(args[0]);
@@ -213,11 +218,25 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
         });
       });
       if (name === 'set') suitable = args.length === 3 && args[1]?.type === 'StringLiteral' && own.has(args[1].value) && scalar(args[2]);
+      const pureDescriptor = (expression: ParseNode): boolean => {
+        const descriptor = data(expression);
+        return !!descriptor && descriptor.PropertyDefinitionList.every((p) =>
+          ['value', 'writable', 'configurable', 'enumerable'].includes(propertyKey(p as ParseNode.PropertyDefinition)!))
+          && ['get', 'set', 'value', 'writable', 'configurable', 'enumerable'].every((key) => !realm.Intrinsics['%Object.prototype%'].properties.has(Value(key)));
+      };
       if (name === 'defineProperty') {
         const descriptor = args[2] && data(args[2]);
-        suitable = args.length === 3 && args[1]?.type === 'StringLiteral' && own.has(args[1].value) && !!descriptor
-          && descriptor.PropertyDefinitionList.every((p) => ['value', 'writable', 'configurable', 'enumerable'].includes(propertyKey(p as ParseNode.PropertyDefinition)!))
-          && ['get', 'set', 'value', 'writable', 'configurable', 'enumerable'].every((key) => !realm.Intrinsics['%Object.prototype%'].properties.has(Value(key)));
+        suitable = args.length === 3 && args[1]?.type === 'StringLiteral' && own.has(args[1].value)
+          && !!descriptor && pureDescriptor(args[2]);
+      }
+      if (name === 'defineProperties') {
+        const descriptors = args[1] && unwrap(args[1]);
+        // ObjectDefineProperties converts the complete descriptor list before
+        // attempting a write. A malformed or effectful descriptor defeats this
+        // proof even if a different entry would have an incompatible value.
+        suitable = args.length === 2 && descriptors?.type === 'ObjectLiteral'
+          && descriptors.PropertyDefinitionList.every((p) => p.type === 'PropertyDefinition'
+            && own.has(propertyKey(p)) && !!p.AssignmentExpression && pureDescriptor(p.AssignmentExpression));
       }
       if (suitable) candidates.set(node, { kind: 'write', name, target: args[0] });
     }
@@ -244,12 +263,19 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
     return bound.type === 'CallExpression' && candidates.get(bound.CallExpression)?.name === 'bind';
   };
   const safe = (node: ParseNode): boolean => candidates.has(node) || boundCall(node)
+    || ((node.type === 'IdentifierReference' || node.type === 'TypeArgumentsExpression') && typeObjectTarget(node))
     || (node.type === 'CallExpression' && candidates.has(node.CallExpression))
     || (node.type === 'UpdateExpression' && candidates.get(unwrap(node.LeftHandSideExpression ?? node.UnaryExpression!))?.kind === 'descriptor');
   // Unknown calls, even into local code, may construct/convert values whose
   // effects are not modeled here. Only established adapters may enter bodies.
   let stable = !nodes.some((node) => {
     if (node.type === 'TypeAnnotation') return !inertAnnotation(node);
+    if (node.type === 'LexicalBinding' && node.TypeAnnotation && node.Initializer) {
+      const source = initializer(node.Initializer, new Set());
+      if (!scalar(source) && !freshArray(source) && !data(source) && !localTarget(source) && !safe(source)) return true;
+    }
+    if (node.type === 'AssignmentExpression' && unwrap(node.LeftHandSideExpression).type === 'IdentifierReference'
+        && !scalar(node.AssignmentExpression)) return true;
     if ((node.type === 'ClassDeclaration' || node.type === 'ClassExpression') && node.ClassTail.ClassHeritage) return true;
     if (node.type === 'AssignmentExpression' && node.LeftHandSideExpression.type === 'MemberExpression') {
       const member = node.LeftHandSideExpression;

@@ -11,11 +11,12 @@ import { isFloat128Object } from '../intrinsics/Float128.mts';
 import { isRationalObject } from '../intrinsics/Rational.mts';
 import { CreateDecimalValue, ParseDecimalDigits, DecimalFromDouble, RoundDecimalToWidth, isDecimalObject, DecimalPartsInRange, RoundPartsToWidth, ReduceDecimal, DecimalFromRational, CreateDecimalSpecial } from '../intrinsics/Decimal.mts';
 import { NumberValue, BigIntValue, isTypedNumber } from '../value.mts';
+import { InstallTypeLayoutProperties } from './layout-properties.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey, propertiesInKeyOrder, displayType, CanonicalWidthArgument } from './records.mts';
 import { CountConstructedTypeRecord } from './budget.mts';
 import { AreDisjoint, IsSubtype, SameTypeStructural } from './relations.mts';
-import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value, R } from '#self';
+import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value, R, X } from '#self';
 import { RequireType } from '#self';
 
 /**
@@ -588,6 +589,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
         : stampedClasses.get(nominal.Declaration as unknown as object);
       if (stamped !== undefined) {
         completeNominalRecord((stamped as TypeObject).TypeRecord, canonical);
+        X(InstallTypeLayoutProperties(stamped, (stamped as TypeObject).TypeRecord));
         return stamped as TypeObject;
       }
     }
@@ -619,6 +621,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       // replacing it, so every reference already handed out stays valid - which
       // is what interning is for.
       completeNominalRecord(existing.TypeRecord, canonical);
+      X(InstallTypeLayoutProperties(existing, existing.TypeRecord));
       return existing;
     }
   }
@@ -789,6 +792,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     return Q(yield* ConvertValue(arg, record));
   };
   table.push(obj);
+  X(InstallTypeLayoutProperties(obj, canonical));
   return obj;
 }
 
