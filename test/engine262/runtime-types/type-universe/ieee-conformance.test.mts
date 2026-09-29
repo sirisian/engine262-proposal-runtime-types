@@ -456,10 +456,9 @@ test('every shift is performed at the type\'s own width', () => {
       const expected = dist >= bits
         ? '0'
         : BigInt.asUintN(bits, 1n << BigInt(dist)).toString();
-      // The distance is read from a `let`: a converted literal distance at or
-      // above the width is the Early Error of #sec-integer-operations now
-      // that the shift rule reads a conversion as the divisor rule does
-      // (early-error survey 1, Q2).
+      // The distance is read from a `let`: a converted literal distance at or above the width
+      // is the Early Error of #sec-integer-operations, since the shift rule reads a conversion
+      // as the divisor rule does.
       expect(
         evaluated(`let d: uint.<${bits}> = ${dist}; String((1 := uint.<${bits}>) << d);`),
         `uint.<${bits}> 1 << ${dist}`,

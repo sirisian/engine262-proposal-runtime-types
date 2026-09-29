@@ -4,16 +4,15 @@ import { evaluated, expectThrown } from '../harness.mts';
 const G = 'class G<T: type> { x: uint8; } ';
 
 test('a specialized instance is a member of its own type', () => {
-  // OUTSTANDING item N. A generic class APPLICATION is a distinct constructor
-  // with its own prototype, and an instance of it sits on THAT chain - but an
-  // annotation's Type Record carried the DECLARATION's constructor, so
-  // membership tested against a prototype the instance is never on.
+  // A generic class APPLICATION is a distinct constructor with its own prototype, and an
+  // instance of it sits on THAT chain, so an annotation's Type Record must carry the
+  // application's constructor: membership is tested against the prototype the instance is
+  // on.
   //
-  // The two chains are disjoint, measured: the specialization's prototype does
-  // not inherit from the declaration's, so no prototype walk reaches it either.
-  // The record had to carry the right constructor.
+  // The two chains are disjoint: the specialization's prototype does not inherit from the
+  // declaration's, so no prototype walk from one reaches the other.
   expect(evaluated(`${G} String(new G.<uint8>() is G.<uint8>);`)).toBe('true');
-  // The intermediate binding the item was filed on.
+  // The same through an intermediate binding.
   expect(evaluated(`${G} const i = new G.<uint8>(); let b: G.<uint8> = i; String(b.x);`)).toBe('0');
 });
 

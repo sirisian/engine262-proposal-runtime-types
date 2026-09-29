@@ -4,20 +4,15 @@ import {
 } from '../harness.mts';
 
 /**
- * proposal-runtime-types `#sec-typed-bindings`: the `const`-needs-an-
- * initializer early error is AMENDED, not preserved.
+ * Spec: #sec-typed-bindings. The `const`-needs-an-initializer early error is AMENDED,
+ * not preserved:
  *
- * "A `const` declaration without an |Initializer| is a Syntax Error where the
- * binding carries no |TypeAnnotation|, as it is in ECMA-262: the Early Errors of
+ * "A `const` declaration without an |Initializer| is a Syntax Error where the binding
+ * carries no |TypeAnnotation|, as it is in ECMA-262: the Early Errors of
  * |LexicalDeclaration| are amended so that the rule … does not apply to a
- * |LexicalBinding| whose |BindingIdentifier| carries one. Such a binding is
- * initialized to the default value of its type, exactly as a `let` binding of
- * that type is, and it is a type error where that type has no default."
- *
- * This went untested. `annotations.test.mts` asserted the UNAMENDED rule -
- * `expectParseError('const k: uint8;'); // const still requires an initializer` -
- * and failed for the whole life of that assertion, so the amendment was covered
- * by a test that contradicted it and by nothing else.
+ * |LexicalBinding| whose |BindingIdentifier| carries one. Such a binding is initialized
+ * to the default value of its type, exactly as a `let` binding of that type is, and it
+ * is a type error where that type has no default."
  */
 
 test('an annotated `const` may omit its initializer', () => {

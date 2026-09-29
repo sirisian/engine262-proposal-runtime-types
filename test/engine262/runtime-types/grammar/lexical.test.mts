@@ -118,19 +118,18 @@ test('BigInt is unaffected', () => {
 // A StatementListItem under this feature is checked for the declaration forms
 // introduced by a contextual keyword (`type`, `interface`, `partial interface`,
 // `meta`, `primitive`), which needs the token AFTER the current one. Reading it
-// where the current token opens a template literal runs the lexer over the
-// template's BODY, and the template scanner reads raw source from the lexer
-// position rather than from the token stream - so it then starts past its own
-// opening backtick and the statement does not parse. Every position other than
-// the start of a StatementListItem was unaffected, which is why a suite with no
-// template in statement position saw nothing.
+// where the current token opens a template literal must not disturb the template
+// scanner, which reads raw source from the lexer position rather than from the token
+// stream: a template literal at the start of a statement must still parse. Every
+// other position is unaffected, so the cases cover the start of a StatementListItem
+// in each context.
 test('a template literal parses at the start of a statement', () => {
   expect(evaluated('`plain`;')).toBe('plain');
   expect(evaluated('`a${1}b`;')).toBe('a1b');
   // The same inside a block, which is the other StatementListItem position.
   expect(evaluated('{ `x`; }')).toBe('x');
-  // And the positions that always worked, so a fix that traded one for another
-  // fails here.
+  // The positions that do not start a StatementListItem, so a change that fixed one
+  // position at the cost of another fails here.
   expect(evaluated('const s = `x`; s;')).toBe('x');
   expect(evaluated('(`x`);')).toBe('x');
   expect(evaluated('function tag(s) { return s[0]; } tag `hi`;')).toBe('hi');

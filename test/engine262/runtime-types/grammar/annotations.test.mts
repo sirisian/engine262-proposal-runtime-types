@@ -80,11 +80,10 @@ test('lexical and variable declarations take annotations and typed initializers'
   expect(firstStatement('var w := 4;')).toMatchObject({
     VariableDeclarationList: [{ TypedInitializer: { type: 'TypedInitializer' } }],
   });
-  // `const` without an initializer is a Syntax Error only where the binding
-  // carries NO annotation. #sec-typed-bindings amends ECMA-262's early
-  // error so it "does not apply to a LexicalBinding whose BindingIdentifier
-  // carries one": such a binding takes the default value of its type, as a `let`
-  // of that type does. This assertion read the unamended rule.
+  // `const` without an initializer is a Syntax Error only where the binding carries NO
+  // annotation. #sec-typed-bindings amends ECMA-262's early error so that it "does not
+  // apply to a LexicalBinding whose BindingIdentifier carries one": such a binding takes
+  // the default value of its type, as a `let` of that type does.
   expectParseError('const k;');
   expect(firstStatement('const k: uint8;')).toMatchObject({
     type: 'LexicalDeclaration',
@@ -230,31 +229,25 @@ test('feature off: annotation syntax stays an error, conditionals unaffected', (
 });
 
 test('a destructured binding may carry a type annotation', () => {
-  // OUTSTANDING item H. #sec-type-annotations, as amended:
+  // #sec-type-annotations, as amended:
   //   BindingElement : BindingPattern TypeAnnotation? Initializer?
   //
-  // The rest form already admitted `...{ a, b }: T` and the non-rest form did
-  // not - a distinction the grammar drew and nothing else did. It was the
-  // largest single cause of syntax errors in the design corpus, 24 blocks, 19 of
-  // them in `decorators.md`.
+  // A destructuring pattern may carry an annotation in the non-rest form as it does in
+  // the rest form (`...{ a, b }: T`), so `{ a, b }: T` is accepted in a declaration and
+  // in a parameter.
   const Point = 'type Point = { a: uint8, b: uint8 }; ';
   const obj = 'let o = {}; o.a = (1 := uint8); o.b = (2 := uint8); ';
   expect(evaluated(`${Point} ${obj} const { a }: Point = o; String(a);`)).toBe('1');
   expect(ok(`${Point} function f({ a, b }: Point) { return a; }`)).toBe(true);
-  // The annotation types the value BEING destructured, so it is enforced before
-  // the pattern takes names out of it - at the declaration site and at the
-  // parameter site both. Parsing without enforcing would be the failure the
-  // `where` work already met: written and silently ignored is worse than the
-  // Syntax Error it replaced.
+  // The annotation types the value BEING destructured, so it is enforced before the
+  // pattern takes names out of it - at the declaration site and at the parameter site
+  // both. An annotation that parsed but was not enforced would be silently ignored.
   expectThrown(`${Point} let bad = {}; bad.a = "no"; const { a }: Point = bad;`);
   expectThrown(`${Point} function f({ a }: Point) { return a; } let w = {}; w.a = "no"; f(w);`);
-  // The rest form is untouched - spelled as a rest annotation has to be. A
-  // rest's annotation is "the type of what it collects, an ~array~ or ~tuple~
-  // type rather than an element type" (#sec-type-annotations), so the row here
-  // used to write `...{ a }: Point` and assert it was accepted; the rest rule
-  // refuses that at the declaration, and correctly. The destructuring pattern on
-  // a rest is what this row is about, and it parses and types with the array
-  // spelling.
+  // A rest's annotation is "the type of what it collects, an ~array~ or ~tuple~ type
+  // rather than an element type" (#sec-type-annotations), so a destructuring pattern on
+  // a rest is annotated with the array spelling, and `...{ a }: Point` (an element
+  // type) is refused at the declaration.
   expect(ok(`${Point} function g(...{ a }: [].<Point>) { return a; }`)).toBe(true);
   expect(ok(`${Point} function g(...{ a }: Point) { return a; }`)).toBe(false);
 });

@@ -4,16 +4,14 @@ import {
 } from '../harness.mts';
 
 /**
- * Early errors the specification states and the checker did not raise, found
- * by the first round of the early-error coverage survey: a rule-by-rule walk of
- * every "it is a type error if" and "is a Syntax Error" sentence in spec.emu,
- * each probed against the built engine. Five gaps, one group each, plus the
- * open questions the survey settled in the direction recorded beside each.
+ * Early errors the specification states: each test pins one "it is a type error if" or
+ * "is a Syntax Error" sentence of spec.emu that the checker raises before the source
+ * runs, grouped by the clause that states it.
  */
 
-// ---- Gap 1: #sec-integer-operations, a zero divisor in either spelling ----
+// ---- #sec-integer-operations: a zero divisor in either spelling ----
 
-test('a zero divisor written as a call-form conversion is refused (survey 1, Gap 1)', () => {
+test('a zero divisor written as a call-form conversion is refused', () => {
   // "It is a type error if the divisor of `/` or `%` is a literal zero, or an
   // explicit conversion of one to an integer type"; #sec-explicit-conversion:
   // `uint8(v)` and `v := uint8` "are the same operation".
@@ -26,16 +24,15 @@ test('a zero divisor written as a call-form conversion is refused (survey 1, Gap
   expectThrownKind('let a: uint8 = 4; let z: uint8 = 0; a / z;', 'RangeError');
 });
 
-test('a zero divisor named by a constant of the operand type is refused (survey 1, Q2)', () => {
-  // Q2's direction C: the divisor and shift rules read one constant - a
-  // literal, a `const` chain, an explicit conversion of either, or a `const`
-  // of an integer value type.
+test('a zero divisor named by a constant of the operand type is refused', () => {
+  // The divisor and shift rules read one constant: a literal, a `const` chain, an explicit
+  // conversion of either, or a `const` of an integer value type.
   expectStaticTypeError('let a: uint8 = 4; const Z: uint8 = 0; let b = a / Z;');
   expectStaticTypeError('let a: uint8 = 4; const Z = 0; let b = a % Z;');
   expect(evaluated('let a: uint8 = 4; const D: uint8 = 2; String(a / D);')).toBe('2');
 });
 
-test('a shift distance follows the divisor rule through conversions and typed constants (survey 1, Q2)', () => {
+test('a shift distance follows the divisor rule through conversions and typed constants', () => {
   expectStaticTypeError('let a: uint8 = 4; let b = a << uint8(8);');
   expectStaticTypeError('let a: uint8 = 4; let b = a << (8 := uint8);');
   expectStaticTypeError('let a: uint8 = 4; let b = a >> (-1 := int8);');
@@ -47,9 +44,9 @@ test('a shift distance follows the divisor rule through conversions and typed co
   expectStaticTypeError('let a: uint8 = 4; let b = a << (-1 := uint8);');
 });
 
-// ---- Gap 2: #sec-match-exhaustiveness, the catch-all half -----------------
+// ---- #sec-match-exhaustiveness: the catch-all half -----------------------------
 
-test('a match over a subject with no atoms needs a catch-all (survey 1, Gap 2)', () => {
+test('a match over a subject with no atoms needs a catch-all', () => {
   // "A `match` is exhaustive when it has a catch-all clause, or when the atoms
   // of its subject's Static Type are not ~none~ and every atom is covered by
   // some clause. It is a type error for a `match` not to be exhaustive."
@@ -67,7 +64,7 @@ test('a match over a subject with no atoms needs a catch-all (survey 1, Gap 2)',
   expect(ok('let x: uint8 = 2; let r = match (x) { when let v: uint8: v; };')).toBe(true);
 });
 
-test('coverage established by narrowing satisfies the rule too (survey 1, Gap 2)', () => {
+test('coverage established by narrowing satisfies the rule too', () => {
   // A literal subject a literal pattern names, and a subject the unguarded
   // patterns leave nothing of, hold no value without a clause; the spec's
   // sentence names atoms only, and this is its companion reading.
@@ -79,7 +76,7 @@ test('coverage established by narrowing satisfies the rule too (survey 1, Gap 2)
   expectStaticTypeError('let r = match (99) { when 1: "a"; when 2: "b"; };');
 });
 
-test('each catch-all form the clause names satisfies the rule (survey 1, Gap 2)', () => {
+test('each catch-all form the clause names satisfies the rule', () => {
   expect(evaluated('let x: uint8 = 2; String(match (x) { when 1: 0; default: 9; });')).toBe('9');
   expect(evaluated('let x: uint8 = 2; String(match (x) { when 1: 0; when _: 9; });')).toBe('9');
   expect(evaluated('let x: uint8 = 2; String(match (x) { when 1: 0; when let v: v; });')).toBe('2');
@@ -88,9 +85,9 @@ test('each catch-all form the clause names satisfies the rule (survey 1, Gap 2)'
   expect(evaluated('let x: uint8 = 2; String(match (x) { when let a and let b: a; });')).toBe('2');
 });
 
-test('the catch-all rule leaves untyped subjects, `match all`, and atom-bearing subjects alone (survey 1, Q1)', () => {
-  // Q1's direction B: an ~any~ subject keeps the run time's TypeError as its
-  // backstop, which the clause's note already claims for "an untyped subject".
+test('the catch-all rule leaves untyped subjects, `match all`, and atom-bearing subjects alone', () => {
+  // An ~any~ subject keeps the run time's TypeError as its backstop, as the clause's note
+  // says for "an untyped subject".
   expect(evaluated('let x = 5; String(match (x) { when 5: 0; });')).toBe('0');
   expectThrownKind('let x = 6; match (x) { when 5: 0; };', 'TypeError');
   expect(ok('let x: uint8 = 2; let r = match all (x) { when 1: 0; };')).toBe(true);
@@ -99,28 +96,28 @@ test('the catch-all rule leaves untyped subjects, `match all`, and atom-bearing 
   expect(ok('function f<T: type>(v: T): uint8 { return match (v) { when let n: uint8: n; default: 0; }; }')).toBe(true);
 });
 
-// ---- Gap 3: #sec-function-types, the parenthesized-type cover -------------
+// ---- #sec-function-types: the parenthesized-type cover ------------------------
 
-test('the parenthesized-type cover refuses an initializer and admits a reference type (survey 1, Gap 3)', () => {
+test('the parenthesized-type cover refuses an initializer and admits a reference type', () => {
   // "it is a type error if the cover does not match that refinement": a
   // FunctionTypeParameter's Initializer is not part of a Type.
   expectEarlyError('let x: (uint8 = 1);', 'SyntaxError');
   expectEarlyError('let x: (a: uint8 = 1);', 'SyntaxError');
   expect(ok('type F = (uint8 = 1) => void;')).toBe(true);
   expect(evaluated('let x: (uint8) = 1; String(x);')).toBe('1');
-  // `ref` PrimaryType is a ReferenceType, itself a PrimaryType, so
-  // `(ref uint8)` is a well-formed `( Type )` that the cover used to refuse.
+  // `ref` PrimaryType is a ReferenceType, itself a PrimaryType, so `(ref uint8)` is a
+  // well-formed `( Type )` that the cover admits.
   expect(ok('type R = (ref uint8);')).toBe(true);
   expect(evaluated('let r: (ref uint8) | null = null; String(r);')).toBe('null');
   expect(ok('type F = ((ref uint8)) => void;')).toBe(true);
 });
 
-// ---- Gap 4: #sec-user-defined-conversions, ambiguity at the use site -------
+// ---- #sec-user-defined-conversions: ambiguity at the use site --------------------
 
-test('two applicable conversions of one form with no more specific one are refused (survey 1, Gap 4)', () => {
-  // "It is a type error if two conversions of the same form apply and neither
-  // is more specific." The direct `new T(c)` already reported this through
-  // ResolveOverload; the implicit boundary reached the run time instead.
+test('two applicable conversions of one form with no more specific one are refused', () => {
+  // "It is a type error if two conversions of the same form apply and neither is more
+  // specific." The direct `new T(c)` reports this through ResolveOverload, and the
+  // implicit boundary reports it too.
   const shapes = 'interface I1 { a: uint8 } interface I2 { b: uint8 } class C implements I1, I2 { a: uint8 = 1; b: uint8 = 2; } ';
   const operators = 'class T { operator T(v: I1) { return new T(); } operator T(v: I2) { return new T(); } } ';
   const constructors = 'class T { constructor(v: I1) {} constructor(v: I2) {} } ';
@@ -130,22 +127,21 @@ test('two applicable conversions of one form with no more specific one are refus
   expectStaticTypeError(`${shapes}${operators}function g(c: C): T { return c; }`);
 });
 
-test('a more specific conversion, or one of each form, resolves (survey 1, Gap 4)', () => {
+test('a more specific conversion, or one of each form, resolves', () => {
   expect(ok('class A { x: uint8 = 1; } class B extends A {} class T { operator T(v: A) { return new T(); } operator T(v: B) { return new T(); } } let b: B = new B(); let t: T = b;')).toBe(true);
-  // Statically one of two operators applies; the run time's own selection of
-  // it is a separate matter (the survey's deferred list records that it
-  // currently picks by declaration order), so only the judgment is asserted.
+  // Statically one of two operators applies; which one the run time selects is a separate
+  // matter (it currently picks by declaration order), so only the judgment is asserted.
   expect(ok('class A { x: uint8 = 1; } class T { operator T(v: A) { return new T(); } operator T(v: string) { return new T(); } } function g(a: A): T { return a; }')).toBe(true);
   // "When both a converting constructor and a declared conversion could apply
   // to the same pair, the constructor is preferred": two forms, no ambiguity.
   expect(ok('class S { x: uint8 = 1; } class T { constructor(v?: S) {} operator T(v: S) { return new T(); } } let s: S = new S(); let t: T = s;')).toBe(true);
 });
 
-// ---- Gap 5: the intrinsic-origin effect screen's reach ---------------------
+// ---- #sec-proved-library-operations: the intrinsic-origin effect screen's reach ----
 
-test('the seed judgment survives ordinary typed code around the construction (survey 1, Gap 5)', () => {
-  // Before Q4's directions B and C, any `+`, `.length`, `++` or unknown call
-  // anywhere in the source stood every intrinsic-origin proof down.
+test('the seed judgment survives ordinary typed code around the construction', () => {
+  // Ordinary typed code around the construction - `+`, `.length`, `++`, a call of a known
+  // function - does not stand an intrinsic-origin proof down (#sec-proved-library-operations).
   expectStaticTypeError('let q: uint8 = 1; let w = q + q; const s = new Set.<uint8>(["a"]);');
   expectStaticTypeError('let xs: [].<uint8> = []; let n = xs.length; let e = xs[0]; const s = new Set.<uint8>(["a"]);');
   expectStaticTypeError('let q: uint8 = 1; String(q); const s = new Set.<uint8>(["a"]);');
@@ -155,7 +151,7 @@ test('the seed judgment survives ordinary typed code around the construction (su
   expectStaticTypeError('let p = new Promise.<uint8>((resolve) => resolve("a")); let q: uint8 = 1; let w = q * 2;');
 });
 
-test('an effect that cannot run before the construction does not count (survey 1, Q4 direction B)', () => {
+test('an effect that cannot run before the construction does not count', () => {
   // A function declared but never named on the prefix, and a call after the
   // construction, cannot replace the intrinsic before it runs.
   expectStaticTypeError('function later() { let o = {}; let w = o + 1; } const s = new Set.<uint8>(["a"]);');
@@ -163,7 +159,7 @@ test('an effect that cannot run before the construction does not count (survey 1
   expectStaticTypeError('function g() { Set.prototype.add = function () {}; } const s = new Set.<uint8>(["a"]); g();');
 });
 
-test('an effect that can run before the construction still stands the proof down (survey 1, Q4)', () => {
+test('an effect that can run before the construction still stands the proof down', () => {
   // The proof stays sound: user code reachable before the site, directly or
   // through another local function, and an operation over an operand of
   // unknown type, each retain the run-time check.

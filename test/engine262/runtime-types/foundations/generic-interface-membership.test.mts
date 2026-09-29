@@ -5,22 +5,22 @@ const P = 'interface P<T: type> { x: T; } ';
 const o = 'let o = {}; o.x = (1 := uint8); ';
 
 test('a generic interface discriminates its type arguments', () => {
-  // OUTSTANDING item O. A generic interface's [[Structure]] was built ONCE, at
-  // the declaration, with its parameters resolved to ~any~ - there is no
-  // argument to resolve them to yet - so membership compared every application
-  // against `{ x: any }` and admitted them all.
+  // A generic interface's [[Structure]] is built once, at the declaration, with its
+  // parameters resolved to ~any~ - there is no argument to resolve them to yet - so
+  // membership must be judged against the application's own structure, not against
+  // `{ x: any }`, which would admit every application.
   //
-  // #sec-issubtype requires invariance: "a generic class is invariant in its
-  // arguments". The type RELATION already obeyed it; membership did not.
+  // #sec-issubtype requires invariance: "a generic class is invariant in its arguments".
+  // Membership obeys it as the type relation does.
   expect(evaluated(`${P} ${o} String(o is P.<uint8>);`)).toBe('true');
   expect(evaluated(`${P} ${o} String(o is P.<string>);`)).toBe('false');
 });
 
 test('the wrong argument is refused at every boundary, not just `is`', () => {
-  // The hole was not confined to the operator. A value crossed at a parameter
-  // and at an annotation, and could then be READ at a type it did not have -
-  // a `uint8` returned from a function declared `: string`. That is the only
-  // SOUNDNESS defect this cycle found; every other was a wrong refusal.
+  // The refusal is not confined to the operator. A value crossing a parameter or an
+  // annotation must not later be READ at a type it does not have - a `uint8` returned from
+  // a function declared `: string` - which makes this a soundness property and not only a
+  // matter of which application is refused.
   expectThrown(`${P} ${o} function f(p: P.<string>) { return 1; } f(o);`);
   expectThrown(`${P} ${o} let q: P.<string> = o;`);
   expectThrown(`${P} ${o} function f(p: P.<string>): string { return p.x; } f(o);`);

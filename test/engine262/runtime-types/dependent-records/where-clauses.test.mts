@@ -4,16 +4,19 @@ import {
 } from '../harness.mts';
 
 /**
- * Extension coverage - dependentrecordtypes.md, `where` clauses.
+ * Spec: #sec-dependent-record-types and #sec-where-clauses.
  *
- * A record type may carry `where` clauses stating cross-field dependencies. A
- * value is of the type only when every predicate holds, evaluated with `this`
- * bound to the value. The check runs at typed boundaries (construction, function
- * calls, object assignment, and the `is` operator), not on independent field
- * assignment, so an object may be momentarily invalid between boundaries. The
- * plain predicate form and the `if (test) { ... } else { ... }` form are covered;
- * `where match`, class `where` clauses, and narrowing-based check elision are
- * deferred.
+ * A type alias may carry `where` clauses stating cross-field dependencies. A value is
+ * of the type only when every predicate holds, evaluated with `this` bound to the
+ * value. The check runs at typed boundaries (construction, function calls, object
+ * assignment, and the `is` operator), not on independent field assignment, so an
+ * object may be momentarily invalid between boundaries.
+ *
+ * This file covers the plain predicate form, the `if (test) { ... } else { ... }`
+ * form, conjunction, identity, and the `where` clauses of a function declaration.
+ * `where match` is in where-match.test.mts, `is` in is-operator.test.mts, the relation
+ * to the base type in declaration-identity.test.mts, and narrowing through a
+ * refinement in refinement-narrowing.test.mts.
  */
 
 // -- The plain predicate form is enforced --------------------------------------
@@ -108,41 +111,30 @@ test('where: with the feature off, a where clause is a syntax error', () => {
 // -- where on a function declaration ---------------------------------------------
 
 /**
- * Spec: #sec-where-clauses (Where Clauses) on a function declaration: "A
- * function declaration may
- * carry `where` clauses, the WhereClauses of #sec-where-clauses, between its
- * return annotation and its body. On an ordinary function they are the
- * compile-time bound over its generic parameters."
- *
- * And #sec-where-clauses: "a compile-time-evaluable Boolean expression over its
- * parameters, checked at each specialization once its parameters are bound.
- * Where the expression is false for an application's bindings, that application
- * is a type error."
- *
- * The clause was implemented for dependent record types and nowhere else, so
- * this form - the one #sec-check-elision names, and the one README's own
- * `where U <= Unit.Hour` uses - was a Syntax Error.
+ * Spec: #sec-checked-contracts and #sec-generic-where. A function declaration may
+ * carry `where` clauses between its return annotation and its body. On an ordinary
+ * function they are the compile-time bound over its generic parameters: each is a
+ * compile-time-evaluable Boolean expression over the parameters, checked at each
+ * specialization once they are bound, and where it is false for an application's
+ * bindings that application is a type error.
  */
 
 test('a function declaration may carry where clauses', () => {
   expect(evaluated('function t<U: uint32>(x: uint32): uint32 where U < 4 { return x; } String(Number(t.<2>(7)));')).toBe('7');
-  // README's own example, which could not be written before.
+  // A clause comparing a type parameter with an enum member: `where U <= Unit.Hour`.
   expect(evaluated('enum Unit: string { Second = "second", Hour = "hour", Day = "day" }; function total<U: Unit>(u: U): float64 where U <= Unit.Hour { return 1.0; } "ok";')).toBe('ok');
   // More than one clause, all of which must hold.
   expect(evaluated('function t<U: uint32>(x: uint32): uint32 where U < 8 where U > 2 { return x; } String(Number(t.<4>(7)));')).toBe('7');
 });
 
 test('a where clause is checked at each specialization', () => {
-  // "Where the expression is false for an application's bindings, that
-  // application is a type error, reported against the clause's source." A type
-  // error is an Early Error (#sec-type-errors), and an explicit `t.<9>` binds
-  // its parameter in the source, so the checking pass evaluates the clause and
-  // refuses the application before the body runs. These used to expect a
-  // catchable TypeError from the specialization at run time - the form
-  // #sec-type-errors reserves for a check that "cannot be resolved statically"
-  // - and the pass now resolves this one. Parsing the clause without checking
-  // it would let the constraint be written and silently ignored, which is worse
-  // than the Syntax Error it replaced.
+  // "Where the expression is false for an application's bindings, that application is
+  // a type error, reported against the clause's source." A type error is an Early Error
+  // (#sec-type-errors), and an explicit `t.<9>` binds its parameter in the source, so
+  // the checking pass evaluates the clause and refuses the application before the body
+  // runs. The thrown-TypeError form that #sec-type-errors reserves for a check that
+  // "cannot be resolved statically" does not apply. A clause that was parsed but not
+  // checked would let the constraint be written and silently ignored.
   expectStaticTypeError('function t<U: uint32>(x: uint32): uint32 where U < 4 { return x; } t.<9>(7);');
   // The boundary: `U < 4` excludes 4.
   expectStaticTypeError('function t<U: uint32>(x: uint32): uint32 where U < 4 { return x; } t.<4>(7);');
@@ -153,7 +145,7 @@ test('a where clause is checked at each specialization', () => {
 test('functions without where clauses are unaffected', () => {
   expect(evaluated('function t<U: uint32>(x: uint32): uint32 { return x; } String(Number(t.<9>(7)));')).toBe('7');
   expect(evaluated('function f(x) { return x + 1; } String(f(1));')).toBe('2');
-  // The dependent-record-type form, which already worked, still does.
+  // The dependent-record-type form of `where` is unaffected by a function's clauses.
   expect(evaluated('type R = { a?: uint32, b?: uint32 } where (this.a != null) == (this.b != null); "ok";')).toBe('ok');
 });
 
@@ -174,4 +166,3 @@ test('dependent records: the where predicate is enforced at a boundary', () => {
   expectThrown('type Pos = { a: uint8 } where this.a > 0; let p: Pos = { a: (0 := uint8) }; p.a;');
 });
 
-// -- Temporal: not exposed here ------------------------------------------------

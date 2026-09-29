@@ -744,53 +744,43 @@ test('a meta hook is bounded by the evaluation budget', { timeout: 300000 }, () 
 });
 
 test('the built-in StringPattern meta type validates a string against its pattern', () => {
-  // OUTSTANDING item G, and the coverage gap that let it hide. `StringPattern`
-  // is bootstrapped into every realm (`Realm.mts`), claims the `pattern` key,
-  // registers a type default and a validate hook - and NOTHING tested it, so a
-  // wrong constructor in its shape helper made the whole intrinsic unreachable
-  // without a single failure.
+  // `StringPattern` is bootstrapped into every realm: it claims the `pattern` key and
+  // registers a type default and a validate hook (#sec-meta-declarations). It must be
+  // reachable from the interning of a program's own `{ pattern: any }`, so that the
+  // metadata a program writes finds it.
   //
-  // The bug: `stringPatternShape()` built its property with
-  // `makePrimitive('any')` - `{ Kind: 'primitive', Name: 'any' }` - where `any`
-  // is its OWN kind. The meta type it registered was structurally different from
-  // the one a program's `{ pattern: any }` interns to, so every lookup missed.
-  //
-  // The hook reads `pattern.source` and `pattern.flags`, so the metadata value
-  // is a REGEXP. A string there fails the hook's own guard, which is what made
-  // the intrinsic look broken after the interning was fixed.
+  // The hook reads `pattern.source` and `pattern.flags`, so the metadata value is a
+  // RegExp; a string there fails the hook's own guard.
   expect(evaluated('String(("aaa" := string.<{ pattern: /^a+$/ }>));')).toBe('aaa');
   expectThrown('("bbb" := string.<{ pattern: /^a+$/ }>);');
-  // The registered DEFAULT is now FINDABLE, which is item G's own subject. The
-  // binding is still refused, but for a different and later reason - the
-  // registered default is `undefined`, and `{ pattern: any }` has a
-  // non-optional property, so `undefined is not assignable to "{ pattern: any }"`
-  // where before it was `"{ pattern: any }" has no default value`.
+  // The registered default is findable. The binding is still refused, for a later reason:
+  // the registered default is `undefined`, and `{ pattern: any }` has a non-optional
+  // property, so `undefined is not assignable to "{ pattern: any }"`.
   //
-  // Recorded rather than asserted as correct: whether an intrinsic should
-  // register a default its own constraint shape rejects is a question for
-  // `#sec-defaultvalueof`, not something to settle in a test.
+  // Recorded rather than asserted as correct: whether an intrinsic should register a
+  // default its own constraint shape rejects is a question for `#sec-defaultvalueof`, not
+  // something to settle in a test.
   expectThrown('let s: { pattern: any };');
 });
 
 test('a meta hook written in the wrong FORM says so', () => {
-  // OUTSTANDING item D, and its mirror. #sec-meta-declarations gives a MetaHook
-  // exactly two forms:
+  // #sec-meta-declarations gives a MetaHook exactly two forms:
   //
   //   MetaHook : `default` `=` AssignmentExpression `;`
   //            | MethodDefinition
   //
-  // so a table name in the other form is ungrammatical, and the clause makes it
-  // an early error: "a method of any other name is an early error".
+  // so a table name in the other form is ungrammatical, and the clause makes it an early
+  // error: "a method of any other name is an early error".
   const M = 'type M = { m?: number }; ';
   const D = 'default = { m: 0 }; ';
   const S = 'subtype(a, b) { return true; } ';
-  // Item D as filed: `default` IS in the table, so "Invalid meta hook name" was
-  // false. It is an assignment, the only table row with no parameter list.
+  // `default` is in the table but is an assignment, the only table row with no parameter
+  // list, so writing it as a method is refused for its form and not for its name.
   expect(errorMessage(`${M} meta M { default(a, b) { return { m: 0 }; } ${S} }`))
     .toMatch(/"default" is an assignment, not a method/);
-  // The mirror, which item D did not report and which was the worse half: this
-  // was ACCEPTED, and the meta type was then inert - `sawSubtype` is set from
-  // the NAME ALONE, so the missing-hook check was satisfied too.
+  // The mirror: a hook that is a method, written as an assignment, is refused as well.
+  // Were it accepted the meta type would be inert, its hook absent while its name was
+  // present.
   expect(errorMessage(`${M} meta M { ${D} subtype = 5; }`))
     .toMatch(/"subtype" is a method, not an assignment/);
   // An OPTIONAL hook in the wrong form is exactly as ungrammatical: the grammar

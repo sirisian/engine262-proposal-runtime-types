@@ -2,14 +2,12 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown, run } from '../harness.mts';
 
 /**
- * Extension coverage - generics.md.
+ * Spec: #sec-generics.
  *
- * Generics are substantially implemented and are exercised throughout the ported
- * type-challenges corpus. Generic type aliases and interfaces with argument
- * substitution work; generic CLASSES and FUNCTIONS now parse and run (fixed this
- * session). Full monomorphization/specialization semantics and variance are the
- * deeper parts of the extension; the surface here verifies declaration,
- * application, and substitution.
+ * Generic type aliases and interfaces with argument substitution, and generic classes
+ * and functions, at the surface: declaration, application and substitution. The
+ * specialization rules and variance have their own files in this directory, and the
+ * type-challenges corpus exercises generics throughout.
  */
 
 // -- Generic type aliases ------------------------------------------------------

@@ -2,24 +2,22 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * proposal-runtime-types `#sec-type-names`, the host boundaries.
+ * Spec: #sec-type-names, the host boundaries.
  *
- * The clause makes ADMITS TYPE NAMES a property of the source text, so every place
- * a new source text comes into being needs an answer, and the clause gives one
- * rather than leaving it to implementations: "Code passed to `eval` or the
- * `Function` constructor is a source text of its own and admits on its own terms;
- * a direct `eval` ALSO admits where the text it runs inside does. An indirect
- * `eval` and the `Function` constructor take only their own, since there is no
- * enclosing text they run inside."
+ * The clause makes ADMITS TYPE NAMES a property of the source text, so every place a
+ * new source text comes into being needs an answer, and the clause gives one rather
+ * than leaving it to implementations: "Code passed to `eval` or the `Function`
+ * constructor is a source text of its own and admits on its own terms; a direct `eval`
+ * ALSO admits where the text it runs inside does. An indirect `eval` and the `Function`
+ * constructor take only their own, since there is no enclosing text they run inside."
  *
- * Each of the three was wrong at some point while this was built, in a different
- * way, which is why all three are pinned here rather than sampled.
+ * All three cases are pinned rather than sampled, because each can be wrong
+ * independently of the others.
  */
 
 test('a direct eval admits on its own terms', () => {
-  // The eval'd text carries type syntax of its own, and the caller has none. An
-  // earlier draft read this as pure inheritance and denied it on the caller's
-  // behalf.
+  // The eval'd text carries type syntax of its own, and the caller has none: the text
+  // admits on its own terms, and is not denied on the caller's behalf.
   expect(evaluated(`String(eval('let a: uint8 = 1; typeof uint8'));`)).toBe('object');
   expect(evaluated(`String(eval('uint64.byteLength'));`)).toBe('8');
 });

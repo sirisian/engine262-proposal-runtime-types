@@ -207,8 +207,8 @@ test('a union containing bigint does not capture an integer literal', () => {
 });
 
 test('the corrupted value no longer escapes into untyped code', () => {
-  // The severity of item S was that the wrong value LEFT the typed world: it
-  // reached ordinary JavaScript, where a BigInt does not mix with a Number.
+  // The wrong value must not LEAVE the typed world: it would reach ordinary JavaScript,
+  // where a BigInt does not mix with a Number.
   expect(evaluated('let x: number | bigint = 5; String(x + 1);')).toBe('6');
   expect(evaluated('let x: number | bigint = 5; let y = x; String(typeof y);')).toBe('number');
   expect(evaluated('let x: number | bigint = 5; JSON.stringify({ v: x });')).toBe('{"v":5}');

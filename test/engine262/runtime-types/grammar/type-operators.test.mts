@@ -2,12 +2,11 @@ import { test } from 'vitest';
 import { expectBuilderTrue } from '../corpus/type-challenges/harness.mts';
 
 /**
- * Spec: #sec-keytypesof (KeyTypesOf) under #sec-type-expressions - `keyof` -
- * and generic type application via the disambiguated `.<T>` syntax.
+ * Spec: #sec-keytypesof (KeyTypesOf) under #sec-type-expressions - `keyof` - and
+ * generic type application via the disambiguated `.<T>` syntax.
  *
- * These are the two type operators the type-challenges corpus leans on
- * hardest (KeyTypesOf lives in type-system/runtime.mts); the corpus items at
- * the end are the identities keyof unlocks. All assertions are type
+ * These are the two type operators the type-challenges corpus leans on hardest; the
+ * corpus items at the end are the identities keyof unlocks. All assertions are type
  * identities via interning, checked alias-to-alias with the corpus harness.
  */
 
@@ -154,9 +153,9 @@ test('medium 3 - Omit (key-set identity via keyof)', () => {
 });
 
 // 10 - Tuple to Union - the union of a tuple's element types. The identity it
-// establishes (a union of the element literal types) is expressible now; the
-// builder form needs the `type` operator and the kit's union()/elementTypes
-// (#annex-standard-kit).
+// establishes (a union of the element literal types) is expressible with these
+// operators; the builder form needs the `type` operator and the kit's
+// union()/elementTypes (#annex-standard-kit).
 test('medium 10 - Tuple to Union (identity)', () => {
   expectBuilderTrue(`
     type Result = 123 | '456' | true;

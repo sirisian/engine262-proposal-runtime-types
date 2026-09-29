@@ -423,30 +423,25 @@ test('soa: the three open questions, resolved', () => {
 });
 
 test('a boolean SoA column is written and read as a boolean', () => {
-  // OUTSTANDING P and Q, which were ONE function a stack frame apart: a `ref`
-  // write and a scatter both reach `writeColumnElement`, where `RequireType`
-  // answers a BooleanValue and the unwrapping handled only a TypedNumberValue.
-  // The `as NumberValue` cast then told the type system a boolean was a Number
-  // on the way into SetValueInBuffer, which asserts exactly that - so the
-  // engine CRASHED rather than refusing.
+  // A `ref` write and a scatter both reach the column writer, which must store a boolean
+  // as a boolean: `RequireType` answers a BooleanValue for a `boolean` column, and the
+  // writer must not treat it as a Number on the way into the buffer.
   const R = 'class R { x: float32; id: uint32; alive: boolean; } ';
   const s = `${R} const s = new SoA.<R, 4>(); `;
-  // P: a `ref` write.
+  // A `ref` write.
   expect(evaluated(`${s} const ref p = s[0]; p.alive = true; String(s[0].alive);`)).toBe('true');
-  // Q: a scatter, through the same function one frame down.
+  // A scatter, through the same column writer.
   expect(evaluated(`${s} const v = new R(); v.x = (3.5 := float32); s[0] = v; String(s[0].x);`)).toBe('3.5');
-  // The scatter above asserts the FLOAT field, which only shows the write did
-  // not crash. The crash happened while scattering the BOOLEAN, so the
-  // value that landed there is what the fix has to be judged on - a scatter
-  // that stored 1 rather than `true` would pass the line above and fail this.
+  // The scatter above asserts the float field, which shows only that the write did not
+  // crash. The value that lands in the BOOLEAN column is what matters: a scatter that
+  // stored 1 rather than `true` would pass the line above and fail this one.
   expect(evaluated(`${s} const v = new R(); v.alive = true; s[0] = v; `
     + 'String(s[0].alive) + "/" + String(typeof s[0].alive);')).toBe('true/boolean');
-  // The FALSY case, which a careless fix passes without fixing: writing `true`
-  // and reading `1` satisfies a sloppy String() comparison, and writing `false`
-  // and reading `0` is indistinguishable from the unfixed behaviour.
+  // The FALSY case: writing `true` and reading `1` satisfies a sloppy String()
+  // comparison, and writing `false` and reading `0` is indistinguishable from an
+  // unconverted store.
   expect(evaluated(`${s} const ref q = s[1]; q.alive = false; String(s[1].alive);`)).toBe('false');
-  // The READ half, which was never filed and is the worse of the three: a crash
-  // stops the program, a wrong type propagates. This read `0`, typeof "number".
+  // The READ half: a column read yields a boolean, not the underlying Number 0 or 1.
   expect(evaluated(`${s} String(typeof s[2].alive);`)).toBe('boolean');
   expect(evaluated(`${s} String(s[2].alive);`)).toBe('false');
 });

@@ -81,10 +81,9 @@ test('the type operator', () => {
   expect(statements('const t = type Point.<uint8>;')[0]).toMatchObject({
     BindingList: [{ Initializer: { type: 'TypeOperatorExpression', Type: { TypeArguments: { type: 'TypeArguments' } } } }],
   });
-  // `(` is class 2 - ambiguous but resolvable by the token after `)` - and is
-  // left to the call form until the cover grammar of
-  // #sec-types-in-expression-position is built, so a call on an identifier
-  // named `type` keeps working.
+  // `(` is class 2 - ambiguous but resolvable by the token after `)`. It stays a call
+  // unless the refinement below applies, so a call on an identifier named `type`
+  // keeps working.
   expect(statements('type(1);')[0]).toMatchObject({ Expression: { type: 'CallExpression' } });
   // `[` is class 3: ambiguous with NO lookahead that separates the readings,
   // since `type [0]` is a complete tuple type and a complete member access that
@@ -106,12 +105,8 @@ test('the type operator', () => {
   expect(statements('type [4].<uint8>;')[0]).toMatchObject({
     Expression: { type: 'TypeOperatorExpression', Type: { type: 'ArrayType' } },
   });
-  // An empty bracket pair is the EMPTY TUPLE. It used to be the array form, and
-  // this assertion is the one that pinned it - it moved because `[]` in bound
-  // position was written zero times across
-  // every design document while `[]` meaning the empty tuple was written about
-  // thirty, and the empty tuple had no spelling at all. The array form keeps
-  // `[].<T>`, and the family bound `[]` used to spell is now `[].<any>`.
+  // An empty bracket pair is the EMPTY TUPLE. The array form is `[].<T>`, and the
+  // family bound is `[].<any>`.
   expect(statements('type [];')[0]).toMatchObject({
     Expression: { type: 'TypeOperatorExpression', Type: { type: 'TupleType' } },
   });
@@ -152,10 +147,9 @@ test('the type operator: `(` is refined by the token after the `)`', () => {
 });
 
 test('the type operator: `-` is the other class 3 token', () => {
-  // `-` was already decided in the operator's favour - `LiteralType : `-`
-  // NumericLiteral` requires it - but nothing pinned that, which is how the
-  // engine came to answer the two class 3 tokens differently. Both directions
-  // are recorded here so the rule is visible rather than accidental.
+  // `-` is decided in the operator's favour - `LiteralType : `-` NumericLiteral`
+  // requires it - as `[` is by the clause, so both class 3 tokens are read the same
+  // way. Both are recorded here so the rule is visible rather than accidental.
   expect(statements('type -1;')[0]).toMatchObject({
     Expression: { type: 'TypeOperatorExpression', Type: { type: 'LiteralType' } },
   });
@@ -197,7 +191,7 @@ test('placement new', () => {
   expect(two.Expression?.PlacementArguments).toHaveLength(2);
   const three = statements('new (a, b, c) C(x);')[0] as { Expression?: { PlacementArguments?: readonly unknown[] } };
   expect(three.Expression?.PlacementArguments).toHaveLength(3);
-  // Today's readings stay intact.
+  // A parenthesized constructor expression is not a placement argument list.
   expect(statements('new (Foo)(1);')[0]).toMatchObject({
     Expression: { type: 'NewExpression', PlacementArguments: null, MemberExpression: { type: 'ParenthesizedExpression' } },
   });
@@ -210,14 +204,11 @@ test('placement new', () => {
 
 test('expression evaluation', () => {
   expect(evaluated('const v = ("s" := string); v;').stringValue()).toBe('s');
-  // A specialization evaluates and calls as the function it specializes. The
-  // callee is GENERIC: #sec-type-arguments-and-placement-new-in-expression-position
-  // says "the value must be generic: a generic function, a generic class, or a
-  // parameterized type", and "where the expression's Static Type shows a value
-  // that is not generic it is a type error". This assertion used to write a
-  // non-generic `f` and expect 'seven', which the engine refuses as the clause
-  // says; the refusal is pinned below and the evaluation is asserted here over
-  // the form the clause admits.
+  // A specialization evaluates and calls as the function it specializes. The callee is
+  // GENERIC: #sec-type-arguments-and-placement-new-in-expression-position says "the
+  // value must be generic: a generic function, a generic class, or a parameterized
+  // type", and "where the expression's Static Type shows a value that is not generic
+  // it is a type error"; that refusal is pinned in the next test.
   expect(evaluated('function f<T: type>() { return "seven"; } f.<uint8>();').stringValue()).toBe('seven');
   expect(evaluated('((3 := uint8) is uint8) === true && (3 is uint8) === false && ("s" is uint8) === false ? "ok" : "no";').stringValue()).toBe('ok');
   // A method's specialization is receiver-independent and a call supplies

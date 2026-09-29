@@ -2,18 +2,17 @@ import { test, expect } from 'vitest';
 import { ok, evaluated } from './harness.mts';
 
 /**
- * A spot check of the specification's coverage table against the engine.
+ * A spot check of the specification's coverage table (#sec-coverage-of-the-design-documents)
+ * against the engine.
  *
- * The table claims a state per design document, and the SIMD work found one row
- * claiming "Specified" for a document with eleven sections of which two were
- * covered. That was found by checking the claim against the clauses rather than
- * by any test failing, so this file checks the remaining rows the same way:
- * one representative construction per extension, chosen from the design's own
- * spelling rather than a plausible one.
+ * The table claims a state per design document. A row claiming "Specified" for a
+ * document whose sections are only partly covered is found by checking the claim against
+ * the clauses, not by any test failing, so this file checks the rows the same way: one
+ * representative construction per extension, chosen from the design's own spelling rather
+ * than a plausible one.
  *
- * These are not thorough tests of each extension - each has its own file. They
- * exist so that a row silently ceasing to be true is a failure rather than a
- * discovery, which is what happened with simd.md.
+ * These are not thorough tests of each extension - each has its own file. They exist so
+ * that a row silently ceasing to be true is a failure rather than a discovery.
  */
 
 test('the parameterized numeric extensions resolve in an annotation', () => {
@@ -25,20 +24,19 @@ test('the parameterized numeric extensions resolve in an annotation', () => {
 });
 
 test('a bare parameterized primitive is not a value, and an applied one is', () => {
-  // Every probe sits in a text that ADMITS TYPE NAMES: `#sec-type-names` excepts
-  // `typeof` from admitting, so without the annotation each line answers
-  // 'undefined' and the test would pass while measuring nothing.
+  // Every probe sits in a text that ADMITS TYPE NAMES: `#sec-type-names` excepts `typeof`
+  // from admitting, so without the annotation each line answers 'undefined' and the test
+  // would pass while measuring nothing.
   //
-  // The convention that makes `vector.preferredLanes` unreachable, which
-  // #sec-vector-widths now records as an unsettled spelling. Asserted across the
-  // family so a change to it is deliberate.
+  // A bare parameterized primitive is not a value, which is the convention that makes
+  // `vector.preferredLanes` unreachable and that #sec-vector-widths records as an unsettled
+  // spelling. It is asserted across the family so that a change to it is deliberate.
   expect(evaluated('type _ = uint8; String(typeof uint);')).toBe('undefined');
   expect(evaluated('type _ = uint8; String(typeof int);')).toBe('undefined');
   expect(evaluated('type _ = uint8; String(typeof vector);')).toBe('undefined');
-  // An APPLIED name is a value, and a width shorthand is an application:
-  // `uint8` is `uint.<8>` and `complex64` is `complex.<float32>`, so it belongs
-  // in this group rather than beside the bare names above. It read as undefined
-  // only while the name did not exist at all.
+  // An APPLIED name is a value, and a width shorthand is an application: `uint8` is
+  // `uint.<8>` and `complex64` is `complex.<float32>`, so it belongs in this group rather
+  // than beside the bare names above.
   expect(evaluated('type _ = uint8; String(typeof uint8);')).toBe('object');
   expect(evaluated('type _ = uint8; String(typeof float32x4);')).toBe('object');
   expect(evaluated('type _ = uint8; String(typeof complex64);')).toBe('object');
@@ -54,7 +52,7 @@ test('a bare parameterized primitive is not a value, and an applied one is', () 
   expect(evaluated('String((type complex) === (type complex.<number>));')).toBe('true');
 });
 
-test('the extensions this session did not touch still construct', () => {
+test('a representative construction of each remaining extension resolves', () => {
   expect(ok('class P { @offset(0) x: uint8; }')).toBe(true);
   expect(ok('class V { operator+(o: V): V { return this; } }')).toBe(true);
   expect(ok('function d(t) { return t; } class C { @d m() {} }')).toBe(true);
@@ -70,9 +68,9 @@ test('primitive metadata refuses an unclaimed key', () => {
   expect(ok('function f(x: float32.<{ unit: "m" }>) {}')).toBe(false);
 });
 
-test("this session's own surfaces hold end to end", () => {
-  // Higher-kinded parameters, the unified iteration types, and the SIMD lane
-  // operations - one construction each, as a guard against a later change
+test('higher-kinded parameters, the iteration types, SIMD lanes and return-type overloading hold end to end', () => {
+  // Higher-kinded parameters, the unified iteration types, the SIMD lane operations and
+  // overloading on return type - one construction each, as a guard against a later change
   // quietly undoing one.
   expect(ok('type Identity<T: type> = T; class B<W<_>: type> { v: W.<uint8>; } const b: B.<Identity> = new B.<Identity>();')).toBe(true);
   expect(ok('class B<W<_>: type> {} const b: B.<uint8> = null;')).toBe(false);

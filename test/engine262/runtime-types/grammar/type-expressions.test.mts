@@ -78,12 +78,12 @@ function evaluated(source: string): string {
 
 test('a prefix takes a CALL operand, which is a PrimaryType like any other', () => {
   // The lookahead that decides whether `keyof` is an operator or an ordinary type
-  // reference has to admit whatever begins a PrimaryType, or `keyof` reads as a
-  // NAME and what follows is unexpected.
+  // reference has to admit whatever begins a PrimaryType, or `keyof` reads as a NAME and
+  // what follows is unexpected.
   //
-  // `Reflect.typeOf(x)` is the type query (typeprogramming.md 4.1) and parses as
-  // a ComputedType, so it is the operand this exercises the lookahead with. It is
-  // also the spelling an enum's enumerator names are reached by.
+  // `Reflect.typeOf(x)` is the type query (#sec-reflect-typeof) and parses as a
+  // ComputedType, so it is the operand this exercises the lookahead with. It is also the
+  // spelling an enum's enumerator names are reached by.
   expect(parseType('keyof Reflect.typeOf(E)')).toMatchObject({
     type: 'KeyOfType', Type: { type: 'ComputedType' },
   });
@@ -121,8 +121,8 @@ test('array types, dynamic and fixed extent', () => {
     ArrayExtent: null,
     TypeArguments: { TypeArgumentList: [{ type: 'TypeReference' }] },
   });
-  // Bare `[]` is the EMPTY TUPLE. `[].<T>` is still an array,
-  // and `[].<any>` is the family bound that `[]` used to spell.
+  // Bare `[]` is the EMPTY TUPLE. `[].<T>` is an array, and `[].<any>` is the family
+  // bound.
   expect(parseType('[]')).toMatchObject({ type: 'TupleType', TupleElementList: [] });
   expect(parseType('[].<any>')).toMatchObject({ type: 'ArrayType', ArrayExtent: null });
   expect(parseType('[4].<float32>')).toMatchObject({
@@ -224,11 +224,10 @@ test('computed types are call-shaped', () => {
 });
 
 test('type parameters with constraint and default', () => {
-  // Reordered so the defaulted parameter comes last. A parameter carrying a
-  // default may not precede one that does not - an application supplying fewer
-  // arguments fills from the end - and the rule is enforced now where it was
-  // only stated before. The ordering was incidental to this test, which is
-  // about parsing a constraint and a default together.
+  // A parameter carrying a default may not precede one that does not - an application
+  // supplying fewer arguments fills from the end - so the defaulted parameter comes
+  // last. The ordering is incidental to this test, which is about parsing a
+  // constraint and a default together.
   const p = makeParser('<U: type extends A.B, T: Comparable = uint8>');
   const params = p.parseTypeParameters();
   expect(TokenNames[p.peek().type]).toBe('EOS');
@@ -267,20 +266,21 @@ test('rejected forms', () => {
   expectTypeError('(a, b)'); // a parameter list is not a parenthesized type
   expectTypeError('{ a }'); // type members need an annotation or method signature
   expectTypeError('.<uint8>'); // type arguments need a reference
-  // `[1, 2].<uint8>` is NO LONGER a parse error. It once was, because the only
-  // production carrying |TypeArguments| onto a bracketed form was
-  // `[` ArrayExtent `]` TypeArguments and an extent is a single expression.
-  // |ParameterizedType| now applies |TypeArguments| to any |PostfixType|, so
-  // `[1, 2]` parses as a TUPLE and the arguments parameterize it. The form is
-  // rejected one stage later instead, the tuple taking a metadata record where
-  // a type was written - which is a better error than a parse failure was.
+  // |ParameterizedType| applies |TypeArguments| to any |PostfixType|, so `[1, 2].<uint8>`
+  // is not a parse error: `[1, 2]` parses as a TUPLE and the arguments parameterize
+  // it. The form is rejected one stage later, the tuple taking a metadata record where
+  // a type was written (see the next test).
+});
+
+test('a bracketed form with type arguments parses and is rejected one stage later', () => {
+  expect(parseType('[1, 2].<uint8>')).toMatchObject({ type: 'ParameterizedType' });
+  expect(evaluated('try { eval("type T = [1, 2].<uint8>;"); "ran"; } catch (e) { e.constructor.name; }')).toBe('StaticTypeError');
 });
 
 // -- What `keyof` answers where there is nothing to answer with -----------------
 test('keyof a type with no keys is the empty type, not an error', () => {
-  // A type with no keys has an empty key set - a definite answer, not an unknown
-  // one. An empty object type already answered that way, so `keyof {}` and
-  // `keyof uint8` disagreed for no reason a reader could give.
+  // A type with no keys has an empty key set - a definite answer, not an unknown one -
+  // so `keyof {}` and `keyof uint8` agree.
   expect(evaluated('type A = keyof uint8; type B = keyof { }; String(A === B);')).toBe('true');
   expect(evaluated('type K = keyof string; String("a" is K);')).toBe('false');
   expect(evaluated('enum C { Zero } type K = keyof C; String("Zero" is K);')).toBe('false');
@@ -290,17 +290,13 @@ test('keyof a type with no keys is the empty type, not an error', () => {
 });
 
 test('a keyless member of an intersection contributes nothing, rather than voiding it', () => {
-  // A behaviour CHANGE, not a simplification: while a sentinel stood for "no
-  // keys", one keyless member made the whole intersection keyless. An
-  // intersection has every key its members have, so `keyof (A & { })` is
-  // `keyof A`.
+  // An intersection has every key its members have, so `keyof (A & { })` is
+  // `keyof A`: a keyless member does not make the whole intersection keyless.
   //
-  // The keyless member is `{ }` rather than the `uint8` this pinned before.
-  // #sec-aredisjoint makes an object type and a primitive DISJOINT - the fact
-  // #sec-narrowto already stated - so `A & uint8` is now `never`, and `keyof`
-  // over the empty type is the empty type rather than an intersection with a
-  // keyless member. `{ }` is keyless and NOT disjoint from `A`, so it exercises
-  // the rule this test is about on a type that still has values.
+  // The keyless member is `{ }` and not a primitive. #sec-aredisjoint makes an object
+  // type and a primitive DISJOINT - the fact #sec-narrowto already states - so
+  // `A & uint8` is `never`. `{ }` is keyless and NOT disjoint from `A`, so it
+  // exercises this rule on a type that still has values.
   expect(evaluated('type A = { a: uint8 }; type X = keyof (A & { }); type Y = keyof A; '
     + 'String(X === Y);')).toBe('true');
   // A union is the other way round - its keys are those COMMON to every member -
@@ -312,12 +308,10 @@ test('a keyless member of an intersection contributes nothing, rather than voidi
 
 // -- keyof over a class ---------------------------------------------------------
 test('a class type answers with its declared instance members', () => {
-  // An interface answered already, because its Type Record carries a structure
-  // this operation reads; a class type carries none, so `keyof C` reported a type
-  // with no keys while `keyof I` for the same shape answered. The keys are
-  // derived from the declaration rather than by giving a class a structure -
-  // that structure is what makes an INTERFACE parameter structural in overload
-  // resolution, and a class must stay nominal by declaration.
+  // The keys of a class are derived from its declaration rather than from a
+  // structure on its Type Record: that structure is what makes an INTERFACE parameter
+  // structural in overload resolution, and a class must stay nominal by declaration.
+  // So `keyof C` answers as `keyof I` does for an interface of the same shape.
   const C = 'class C { a: uint8 = 1; b: string = "x"; m(): void {} static s = 1; #p = 2; } ';
   expect(evaluated(`${C}type K = keyof C; String(("a" is K) && ("b" is K));`)).toBe('true');
   // Methods are keys, as they are for an interface.
@@ -326,8 +320,7 @@ test('a class type answers with its declared instance members', () => {
   expect(evaluated(`${C}type K = keyof C; String("s" is K);`)).toBe('false');
   // A private name is not a property key and cannot be written as one.
   expect(evaluated(`${C}type K = keyof C; String("p" is K);`)).toBe('false');
-  // A class and an interface of one shape agree, which is the comparison that
-  // made the old behaviour hard to defend.
+  // A class and an interface of one shape agree.
   expect(evaluated('interface I { a: uint8, m(): void } class D { a: uint8 = 1; m(): void {} } '
     + 'type KI = keyof I; type KD = keyof D; String(KI === KD);')).toBe('true');
 });

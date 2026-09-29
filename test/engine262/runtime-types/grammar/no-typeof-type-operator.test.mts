@@ -5,17 +5,15 @@ import { evaluated, expectError } from '../harness.mts';
  * `typeof` is not a type operator.
  *
  * JavaScript's `typeof` reports the underlying language type as a string and is
- * unchanged by this proposal (`#sec-runtimetypeof`: "`typeof` is unchanged by
- * this proposal ... RuntimeTypeOf is what reports the type of this proposal").
- * The type query is `Reflect.typeOf(x)` (#sec-reflect-typeof), which needs no
- * operator of its own: types are values, so `Reflect.typeOf(x)` in type
- * position is the type query.
+ * unchanged by this proposal (`#sec-runtimetypeof`: "`typeof` is unchanged by this
+ * proposal ... RuntimeTypeOf is what reports the type of this proposal"). The type
+ * query is `Reflect.typeOf(x)` (#sec-reflect-typeof), which needs no operator of its
+ * own: types are values, so `Reflect.typeOf(x)` in type position is the type query.
  *
- * A `TypeQueryType` node existed in the engine from 2026-07-22 and in neither the
- * specification nor the design, giving two spellings for one query whose names
- * mean different things in the two positions they appear in. This pins the
- * removal, since a grammar production is easy to re-add and nothing else would
- * notice.
+ * The grammar therefore has no type-query production: a second spelling of one query,
+ * whose name means different things in the two positions it appears in, would be a
+ * hazard. A grammar production is easy to add back and nothing else would notice, so
+ * its absence is pinned here.
  */
 
 test('`typeof` is not a type operator', () => {
@@ -25,8 +23,8 @@ test('`typeof` is not a type operator', () => {
 });
 
 test('the type query is written `Reflect.typeOf`', () => {
-  // Each row is the replacement for a row above, and the whole reason the
-  // operator could go: nothing is lost by removing it.
+  // Each row is the `Reflect.typeOf` replacement for a row above: nothing is lost by
+  // the operator's absence.
   expect(evaluated('const q: uint8 = 1; let v: Reflect.typeOf(q) = 2; "ok";')).toBe('ok');
   // The binding is `const`: a type position is compile-time evaluable, and a
   // read of a `let` is not (#sec-iscompiletimeevaluable).
@@ -40,19 +38,19 @@ test('the type query is written `Reflect.typeOf`', () => {
 });
 
 test('JavaScript\'s `typeof` is untouched', () => {
-  // The operator this removal is protecting: it still reports a string, and
-  // still reports *"number"* for a numeric type, which is the whole reason two
-  // spellings of one name were a hazard.
+  // The operator itself is unchanged: it still reports a string, and still reports
+  // *"number"* for a numeric type, which is why two spellings of one name would be a
+  // hazard.
   expect(evaluated('typeof 5;')).toBe('number');
   expect(evaluated('const q: uint8 = 1; typeof q;')).toBe('number');
   expect(evaluated('typeof "s";')).toBe('string');
 });
 
 test('`keyof` of the NAME is not the same type, which is why the replacement is `Reflect.typeOf`', () => {
-  // The migration trap. An enum name denotes the enum type, whose values are its
-  // enumerators; `Reflect.typeOf(C)` denotes the type of the enum OBJECT, whose
-  // keys are the enumerator names. A migration that reached for `keyof C`
-  // instead would compile and mean something else.
+  // An easy confusion. An enum name denotes the enum type, whose values are its
+  // enumerators; `Reflect.typeOf(C)` denotes the type of the enum OBJECT, whose keys are
+  // the enumerator names. Reaching for `keyof C` instead would compile and mean
+  // something else.
   const C = 'enum C { Zero } ';
   expect(evaluated(`${C}String("Zero" is (keyof Reflect.typeOf(C)));`)).toBe('true');
   expect(evaluated(`${C}String("Zero" is (keyof C));`)).toBe('false');

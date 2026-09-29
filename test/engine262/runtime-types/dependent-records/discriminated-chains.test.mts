@@ -179,22 +179,21 @@ test('the union is a CHECKING artifact and touches no identity', () => {
     + 'String(Reflect.getReflection.<Reflect.Type>(Reflect.typeOf(a)).kind);')).toBe('object');
   // Assignability still compares against the declared type.
   expect(evaluated(`${T}const a: A = { s: 'x', c: 'US', p: 'M' }; String(a is A);`)).toBe('true');
-  // NOT asserted: that `Reflect.typeOf(a) === (type A)`. It is *false*, because
+  // Not asserted: that `Reflect.typeOf(a) === (type A)`. That is false, because
   // `typeOf` of a VALUE reports its structural type rather than the binding's
-  // declared one - pre-existing, independent of this work, and measured rather
-  // than assumed after a first draft asserted it and failed.
+  // declared one.
 });
 
 // -- Exhaustiveness over a chain -------------------------------------------------
 
 /**
- * Spec: #sec-discriminated-where-chains (Discriminated Where Chains) -
- * exhaustiveness over a chain. Design: dependentrecordtypes.md.
+ * Spec: #sec-discriminated-where-chains (Discriminated Where Chains) - exhaustiveness
+ * over a chain, with #sec-match-exhaustiveness.
  *
- * dependentrecordtypes.md: pattern matching "checks a `match` over an `Address`
- * exhaustive from one arm per country with no `default`, and adding `'MX'` to
- * `country` becomes a compile-time error at every such `match` instead of
- * silently routing through a default clause."
+ * A `match` over a value whose type is a qualifying chain is exhaustive from one arm
+ * per constant of the discriminant, with no `default`, and adding a constant to that
+ * union makes every such `match` a compile-time error instead of silently routing
+ * through a default clause.
  */
 
 function outcome(source: string): string {
@@ -216,7 +215,8 @@ test('a qualifying chain makes a match EXHAUSTIVE without a default', () => {
 });
 
 test('a MISSING arm is refused', () => {
-  // The whole point: this compiled before, and silently.
+  // A `match` that omits a constant of the discriminant is refused before the
+  // source runs; it does not fall through silently.
   expect(outcome(`${AD}function f(a: Ad) { return match (a) { when { c: 'US' }: 1; }; } ${VAL}`))
     .toBe('StaticTypeError');
 });
@@ -235,8 +235,8 @@ test('a GUARDED arm proves nothing', () => {
 });
 
 test('adding a constant breaks every such match - the stated payoff', () => {
-  // "adding `'MX'` to `country` becomes a compile-time error at every such
-  // `match`". A two-arm match that was exhaustive stops being so.
+  // Adding a constant to the discriminant's union makes every such `match` a
+  // compile-time error: a two-arm match that was exhaustive stops being so.
   const AD3 = "type Ad3 = { s: string, c: 'US'|'CA'|'MX' } "
     + "where if (this.c == 'US') { this is { p: string } } else { this is { p: string } }; ";
   expect(outcome(`${AD3}function f(a: Ad3) { return match (a) { when { c: 'US' }: 1; when { c: 'CA' }: 2; }; } f({ s: 'x', c: 'US', p: 'M' });`))
@@ -245,31 +245,31 @@ test('adding a constant breaks every such match - the stated payoff', () => {
     .toBe('ACCEPTED');
 });
 
-test('a NON-qualifying chain requires a default, as before', () => {
+test('a NON-qualifying chain requires a default', () => {
   // "A chain that does not qualify ... denotes nothing but itself and its
   // `match` writes a `default`."
-  // NOTE the argument: a plain `1` is not a `uint8` at runtime, so an invalid
-  // call raises a TypeError of its own and would read as an exhaustiveness
-  // failure. Measured earlier in this project and easy to re-trip.
+  // The call's argument must be a real value of the type: a plain `1` is not a
+  // `uint8` at run time, so an invalid call would raise a TypeError of its own and
+  // read as an exhaustiveness failure.
   const ORD = "type Ord = { n: string } where if (this.n > 'a') { this is { p: string } } else { this is { p: string } }; ";
-  // "Writes a `default`" is the rule, not a courtesy: the chain denotes no
-  // atoms, so the catch-all half of #sec-match-exhaustiveness asks for one
-  // (early-error survey 1, Gap 2).
+  // "Writes a `default`" is the rule, not a courtesy: the chain denotes no atoms,
+  // so the catch-all half of #sec-match-exhaustiveness asks for one.
   expect(outcome(`${ORD}function f(a: Ord) { return match (a) { when { n: 'b' }: 1; default: 0; }; } f({ n: 'b', p: 'x' });`))
     .toBe('ACCEPTED');
   expect(outcome(`${ORD}function f(a: Ord) { return match (a) { when { n: 'b' }: 1; }; } f({ n: 'b', p: 'x' });`))
     .toBe('StaticTypeError');
 });
 
-test('the two pre-existing sources still work, through the same operation', () => {
-  // Both now source their atoms from `Atoms`, so these are the regression
-  // surface for the refactor as well as their own check.
+test('a match over an enum and over a sealed hierarchy is unaffected by the chain rule', () => {
+  // A `match` over an enum and over a sealed hierarchy takes its atoms through the
+  // same operation as a chain does, so these check that the chain rule did not
+  // disturb them.
   const E = 'enum E { A, B } ';
   expect(outcome(`${E}function f(e: E) { return match (e) { when E.A: 1; }; } f(E.A);`)).toBe('StaticTypeError');
   expect(outcome(`${E}function f(e: E) { return match (e) { when E.A: 1; when E.B: 2; }; } f(E.A);`)).toBe('ACCEPTED');
   const S = 'sealed class S {} class T extends S {} class U extends S {} ';
   expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; }; } f(new T());`)).toBe('StaticTypeError');
-  // The subclass arms alone no longer suffice for a PLAIN `sealed` base, which
+  // The subclass arms alone do not suffice for a PLAIN `sealed` base, which
   // #sec-match-exhaustiveness counts among the atoms "where instantiable";
   // covering it as well is what makes this exhaustive.
   expect(outcome(`${S}function f(s: S) { return match (s) { when T: 1; when U: 2; }; } f(new T());`)).toBe('StaticTypeError');
