@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-object-types.
@@ -20,29 +20,30 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  */
 
 test('a member default that is not a literal fills', () => {
-  expect(evaluated('type T = { m?: any = new Map() }; let t: T = {}; String(t.m instanceof Map);')).toBe('true');
   expect(evaluated('type T = { m?: uint8 = Math.max(1, 2) }; let t: T = {}; String(t.m);')).toBe('2');
-  expect(evaluated('type T = { m?: any = {} }; let t: T = {}; typeof t.m;')).toBe('object');
-  expect(evaluated('type T = { m?: any = [] }; let t: T = {}; String(t.m.length);')).toBe('0');
-  expect(evaluated('type T = { m?: Map.<string, uint8> = new Map() }; let t: T = {}; String(t.m instanceof Map);')).toBe('true');
+  expect(evaluated('type T = { m?: string = String(1 + 2) }; let t: T = {}; t.m;')).toBe('3');
 });
 
 test('the spelling of the type does not matter', () => {
   // An interface member and the same member written in an object type "are one
   // thing", and an inline annotation is the third spelling.
-  expect(evaluated('interface I { m?: any = new Map() } let t: I = {}; String(t.m instanceof Map);')).toBe('true');
-  expect(evaluated('let t: { m?: any = new Map() } = {}; String(t.m instanceof Map);')).toBe('true');
+  expect(evaluated('interface I { m?: uint8 = Math.max(1, 2) } let t: I = {}; String(t.m);')).toBe('2');
+  expect(evaluated('let t: { m?: uint8 = Math.max(1, 2) } = {}; String(t.m);')).toBe('2');
 });
 
-test('a default is a constant of the program, not a fresh value per literal', () => {
-  // It is evaluated in the compile-time-evaluable fragment, and the value it
-  // produces is shared - which is what a tuple position and a composite already
-  // do, so filling a fresh one here would have made this the one spelling that
-  // differed.
-  expect(evaluated('type T = { m?: any = new Map() }; let a: T = {}; let b: T = {}; String(a.m === b.m);')).toBe('true');
-  expect(evaluated('type T = [any = new Map()]; let a: T = []; let b: T = []; String(a[0] === b[0]);')).toBe('true');
-  expect(evaluated('interface I { m?: any = new Map() } '
-    + 'let a = Composite.<I>({}); let b = Composite.<I>({}); String(a.m === b.m);')).toBe('true');
+// #sec-array-and-tuple-types, #sec-object-types: a default is a constant of the
+// program, interned with its type, so "a default that allocated would hand
+// every value of the type the same object". These once filled, and the last
+// two showed exactly that sharing: `a.m === b.m`. A default's value must copy,
+// so an allocating one is refused at the type, in every spelling.
+test('an allocating default is refused where it is written', () => {
+  expectStaticTypeError('type T = { m?: any = new Map() };');
+  expectStaticTypeError('type T = { m?: any = {} };');
+  expectStaticTypeError('type T = { m?: any = [] };');
+  expectStaticTypeError('type T = { m?: Map.<string, uint8> = new Map() };');
+  expectStaticTypeError('interface I { m?: any = new Map() }');
+  expectStaticTypeError('let t: { m?: any = new Map() } = {};');
+  expectStaticTypeError('type T = [any = new Map()];');
 });
 
 test('what filled before still fills, and a supplied value still wins', () => {
@@ -50,7 +51,7 @@ test('what filled before still fills, and a supplied value still wins', () => {
   expect(evaluated('type T = { m?: uint8 = 5 }; let t: T = { m: 9 }; String(t.m);')).toBe('9');
   // "AFTER the members, so a supplied value always wins and a default only
   // fills what the literal left out."
-  expect(evaluated('type T = { m?: any = new Map() }; let t: T = { m: 1 }; String(t.m);')).toBe('1');
+  expect(evaluated('type T = { m?: uint8 = Math.max(1, 2) }; let t: T = { m: 1 }; String(t.m);')).toBe('1');
 });
 
 test('a member with no default is still absent', () => {
@@ -62,5 +63,7 @@ test('a default outside the fragment is still refused', () => {
   // The fill evaluates, so the library half of #annex-evaluable-fragment
   // reaches it: an excluded built-in is refused at the call, wherever the call
   // came from.
-  expectThrownKind('type T = { m?: any = new Date() }; let t: T = {};', 'TypeError');
+  expectThrownKind('type T = { m?: number = Date.now() }; let t: T = {};', 'TypeError');
+  // An allocating one is refused sooner, at the type, by the value rule.
+  expectStaticTypeError('type T = { m?: any = new Date() }; let t: T = {};');
 });

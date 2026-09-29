@@ -6,15 +6,15 @@ import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicDat
 const groups = {
   '%Function.prototype%': ['call', 'apply', 'bind', 'callThread'],
   '%Atomics%': ['load', 'store', 'exchange', 'compareExchange', 'add', 'sub', 'and', 'or', 'xor', 'wait', 'waitAsync', 'notify'],
-  '%Object%': ['create', 'setPrototypeOf', 'assign', 'defineProperty', 'defineProperties', 'keys', 'values', 'entries', 'groupBy'],
+  '%Object%': ['create', 'setPrototypeOf', 'is', 'assign', 'defineProperty', 'defineProperties', 'keys', 'values', 'entries', 'groupBy'],
   '%Array%': ['from', 'fromAsync', 'of'],
   '%Map%': ['groupBy'],
   '%Promise%': ['all', 'race', 'any', 'allSettled', 'resolve'],
   '%Reflect%': ['set', 'defineProperty', 'apply', 'construct'],
   '%TypedArrayLike.prototype%': ['capacity', 'set', 'window'],
   '%Span.prototype%': ['set'],
-  '%String.prototype%': ['replace', 'replaceAll', 'includes'],
-  '%Array.prototype%': ['join'],
+  '%String.prototype%': ['replace', 'replaceAll', 'includes', 'startsWith', 'endsWith', 'indexOf', 'lastIndexOf', 'localeCompare', 'concat', 'padStart', 'padEnd'],
+  '%Array.prototype%': ['join', 'toString'],
   '%Map.prototype%': ['size'],
   '%Set.prototype%': ['size'],
 };

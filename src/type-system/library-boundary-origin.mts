@@ -8,6 +8,12 @@ import { OriginalLibraryFunction } from './library-operation-origin.mts';
 export type LibraryBoundary =
   | { kind: 'replacement', callback: ParseNode, match: string, whole: string, position: number }
   | { kind: 'stringConversion' | 'prototype', operand: ParseNode }
+  // Several operands converted in order, each at an established stage.
+  | { kind: 'stringConversions', operands: readonly ParseNode[] }
+  // Every element of a fresh receiver converted with ToString, as `join` does.
+  | { kind: 'elementStringConversion', receiver: ParseNode, method: string }
+  // A SameValue test between two operands, `Object.is`.
+  | { kind: 'sameValueTest', operands: readonly [ParseNode, ParseNode] }
   | { kind: 'copy', target: ParseNode, element: TypeRecord, entries: readonly ParseNode[], offset: number };
 
 /** #sec-proved-library-operations: establish selected operations and their reached stages. */
@@ -131,7 +137,22 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
     return { ...origin, length, window: true };
   };
   const results = new Map<ParseNode, LibraryBoundary>();
+  // A global function is proved where its binding is the realm's own: not
+  // declared or assigned by the program, and the global property still the
+  // intrinsic, as `undefined` is proved above.
+  const originalGlobal = (name: string): boolean => global(name)
+    && intrinsicData(realm.GlobalObject, Value(name)) === (realm.Intrinsics as unknown as Record<string, unknown>)[`%${name}%`];
+  // Each converts its first argument with ToString before anything else it
+  // does (#sec-proved-library-operations: an established implicit ToString stage).
+  const convertingGlobals = ['parseInt', 'parseFloat', 'encodeURI', 'encodeURIComponent', 'decodeURI', 'decodeURIComponent'];
   for (const node of nodes) {
+    if (node.type === 'CallExpression' && topLevel(node) && node.CallExpression.type === 'IdentifierReference'
+        && convertingGlobals.includes(node.CallExpression.name) && node.Arguments.length >= 1
+        && node.Arguments.every(scalar) && originalGlobal(node.CallExpression.name)) {
+      results.set(node, { kind: 'stringConversion', operand: node.Arguments[0] });
+      selected.add(node);
+      continue;
+    }
     if (node.type !== 'CallExpression' || !topLevel(node) || node.CallExpression.type !== 'MemberExpression') continue;
     const member = node.CallExpression;
     const name = member.IdentifierName?.name ?? (member.Expression?.type === 'StringLiteral' ? member.Expression.value : null);
@@ -151,8 +172,20 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
     }
     const string = initializer(receiver);
     if (string.type === 'StringLiteral' && name && OriginalLibraryFunction(realm, '%String.prototype%', name)) {
-      if (name === 'includes' && args.length >= 1 && args.length <= 2 && args.every(scalar)) {
+      // The receiver is a String, so ToString of it is established, and each
+      // of these converts its search operand next.
+      if (['includes', 'startsWith', 'endsWith', 'indexOf', 'lastIndexOf', 'localeCompare'].includes(name)
+          && args.length >= 1 && args.length <= 2 && args.every(scalar)) {
         operation = { kind: 'stringConversion', operand: args[0] };
+      }
+      if (name === 'concat' && args.length >= 1 && args.every(scalar)) {
+        operation = { kind: 'stringConversions', operands: args };
+      }
+      // StringPaddingBuiltinsImpl converts the filler only where the target
+      // length exceeds the receiver's; otherwise that stage is never reached.
+      if (['padStart', 'padEnd'].includes(name) && args.length === 2 && args.every(scalar)) {
+        const length = numeric(args[0]);
+        if (length !== null && toLength(length) > string.value.length) operation = { kind: 'stringConversion', operand: args[1] };
       }
       if (['replace', 'replaceAll'].includes(name) && args.length === 2) {
         const search = initializer(args[0]);
@@ -168,6 +201,17 @@ export function ProvenLibraryBoundaries(root: ParseNode, realm: Realm,
     }
     if (name === 'join' && array(receiver) && args.length === 1 && scalar(args[0])
         && OriginalLibraryFunction(realm, '%Array.prototype%', name)) operation = { kind: 'stringConversion', operand: args[0] };
+    // The ELEMENT stage: `join` and `toString` convert every element after the
+    // separator. Whether an element is known to exist is the checker's
+    // judgment, read from the receiver's type; here only the call is proved.
+    if (!operation && ((name === 'join' && args.length <= 1 && args.every(scalar)) || (name === 'toString' && args.length === 0))
+        && array(receiver) && OriginalLibraryFunction(realm, '%Array.prototype%', name)) {
+      operation = { kind: 'elementStringConversion', receiver, method: name };
+    }
+    if (receiver.type === 'IdentifierReference' && receiver.name === 'Object' && global('Object') && name === 'is'
+        && args.length === 2 && args.every(scalar) && OriginalLibraryFunction(realm, '%Object%', 'is')) {
+      operation = { kind: 'sameValueTest', operands: [args[0], args[1]] };
+    }
     if (name === 'set' && args.length >= 1 && args.length <= 2) {
       const target = typedArray(receiver);
       const entries = list(args[0]);

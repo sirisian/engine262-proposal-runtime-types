@@ -53,7 +53,7 @@ import {
 } from './iteration-types.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
-  ComputeClassLayout, type ClassLayout,
+  ComputeClassLayout, type ClassLayout, IsValueType,
 } from './layout.mts';
 import {
   libraryTypeParameterNames as libraryTypeParameterNamesShared,
@@ -4327,6 +4327,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * type the checker does not know is ~any~, which narrows to itself in both
    * directions and so never reports.
    */
+  /**
+   * Whether a value of the literal type _value_ could never be a value of
+   * _holder_: the literal is judged as a store of it would be, so it adopts
+   * where it fits (`200` for a `uint8`) and is refused where it does not
+   * (`300`, `-1`, `1.5`, `'a'`). Judged speculatively: only the verdict is kept.
+   */
+  const cannotHoldValue = (holder: TypeRecord, value: TypeRecord): boolean => {
+    if (holder.Kind === 'any' || value.Kind !== 'literal' || mentionsTypeParameter(holder)) return false;
+    // A comparison adopts the literal at the BASE of a parameterized type, as
+    // `(2 := M) == 2` does for `M = float32.<{ m: 1 }>`: metadata narrows a
+    // value's type, and never makes a literal of its base unreachable.
+    const base = (t: TypeRecord): TypeRecord => t.Kind === 'parameterized' ? base(t.Base as TypeRecord)
+      : t.Kind === 'union' ? { ...t, Members: t.Members.map(base) } as TypeRecord : t;
+    holder = base(holder);
+    const before = errors.length;
+    requireAssignable(value, holder);
+    const refused = errors.length > before;
+    errors.length = before;
+    return refused;
+  };
+
   const reportImpossibleTest = (s: TypeRecord, t: TypeRecord, form: string, isGuard: boolean) => {
     // The specification states this rule about the BRANCHES a narrowing form
     // decides: a test that can never succeed, or can never fail, leaves a branch
@@ -10089,10 +10110,72 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /**
+   * #sec-array-and-tuple-types, #sec-object-types, #sec-function-types: a type
+   * default is interned with its type, so "a default that allocated would hand
+   * every value of the type the same object". Evaluability cannot rule that
+   * out - #sec-iscompiletimeevaluable admits a call of a compile-time-evaluable
+   * function, which "may create local state", so `mk()` returning `[]` is
+   * evaluable - and the rule is therefore stated on the VALUE: a default is a
+   * type error where its value is an Object and the position's type is not a
+   * value type, whose values copy (a fixed array of `uint8` does; `any` does
+   * not).
+   */
+  const checkCopyingDefault = (initializer: ParseNode, position: Known): void => {
+    if (position && position.Kind !== 'any' && !mentionsTypeParameter(position) && IsValueType(position as TypeRecord)) return;
+    // An allocation is often visible before any type is: `[]` and `{}` have no
+    // Static Type without a context, and neither has a call of a function
+    // that returns one. Such a call allocates where every `return` it makes
+    // does, which is what makes the verdict certain.
+    const allocatingForm = (node: ParseNode | null | undefined): boolean => {
+      const n = node ? patternExpression(node) : null;
+      return !!n && ['ArrayLiteral', 'ObjectLiteral', 'NewExpression', 'RegularExpressionLiteral', 'ClassExpression',
+        'FunctionExpression', 'ArrowFunction', 'AsyncFunctionExpression', 'AsyncArrowFunction',
+        'GeneratorExpression', 'AsyncGeneratorExpression'].includes(n.type);
+    };
+    const returnsOnlyAllocations = (call: ParseNode): boolean => {
+      const callee = call.type === 'CallExpression' ? patternExpression((call as ParseNode.CallExpression).CallExpression) : null;
+      if (callee?.type !== 'IdentifierReference') return false;
+      const binding = ResolveBindingDeclaration(callee, callee.name);
+      const fn = binding?.node as ParseNode | undefined;
+      if (fn?.type !== 'FunctionDeclaration') return false;
+      const returns: (ParseNode | null)[] = [];
+      const visit = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+          node.forEach(visit);
+          return;
+        }
+        const n = node as ParseNode & Record<string, unknown>;
+        if (typeof n.type !== 'string') return;
+        if (n !== fn && ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunction', 'AsyncArrowFunction', 'AsyncFunctionDeclaration',
+          'AsyncFunctionExpression', 'GeneratorDeclaration', 'GeneratorExpression', 'AsyncGeneratorDeclaration', 'AsyncGeneratorExpression',
+          'ClassDeclaration', 'ClassExpression', 'MethodDefinition'].includes(n.type)) return;
+        if (n.type === 'ReturnStatement') returns.push((n as { Expression?: ParseNode | null }).Expression ?? null);
+        for (const key of Object.keys(n)) if (!['parent', 'location', 'sourceText', 'strict'].includes(key)) visit(n[key]);
+      };
+      visit((fn as { FunctionBody?: unknown }).FunctionBody);
+      return returns.length > 0 && returns.every((r) => allocatingForm(r));
+    };
+    if (allocatingForm(initializer) || returnsOnlyAllocations(patternExpression(initializer)!)) {
+      errors.push(Throw.StaticTypeError('$1', Value(`a type default is shared by every use of its type, so its value must copy - a value type, a string or an enumerator - and \`${initializer.sourceText}\` allocates an Object; build it where the value is constructed`)).Value as ObjectValue);
+      return;
+    }
+    const value = staticType(initializer);
+    if (!value || mentionsTypeParameter(value)) return;
+    const allocates = value.Kind === 'object' || value.Kind === 'array' || value.Kind === 'tuple' || value.Kind === 'function'
+      || (value.Kind === 'primitive' && (value as { Name?: string }).Name === 'object')
+      || (value.Kind === 'nominal' && !IsValueType(value as TypeRecord));
+    if (allocates) {
+      errors.push(Throw.StaticTypeError('$1', Value(`a type default is shared by every use of its type, so its value must copy - a value type, a string or an enumerator - and ${displayType(value as TypeRecord)} is an Object; build it where the value is constructed`)).Value as ObjectValue);
+    }
+  };
+
   const checkMemberDefault = (member: ParseNode.TypeMember): void => {
     if (!member.Initializer) return;
     if (!member.Optional) errors.push(Throw.StaticTypeError('a member with a default must be optional').Value as ObjectValue);
     checkDefaultEvaluability(member.Initializer);
+    checkCopyingDefault(member.Initializer, member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null);
   };
 
   const checkFilledDefault = (type: TypeRecord, initializer?: ParseNode, value?: Value): void => {
@@ -10403,6 +10486,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const initializer = p.Initializer;
         if (initializer && !mentionsTypeParameter(r)) {
           checkDefaultEvaluability(initializer);
+          checkCopyingDefault(initializer, r);
           defaultConversions.push({ type: r, initializer, checked: false });
         }
         const initial = initializer ? staticType(initializer) : null;
@@ -11745,6 +11829,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (e.Initializer) {
             sawDefault = true;
             checkDefaultEvaluability(e.Initializer);
+            checkCopyingDefault(e.Initializer, resolveType(e.Type));
           }
           if (e.Rest) {
             sawRest = true;
@@ -24980,7 +25065,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       try {
         const inert = (type: Known): boolean => !!type && (type.Kind === 'any' || type.Kind === 'void'
           || (type.Kind === 'primitive' && knownNonObject(type)) || (type.Kind === 'literal' && inert(type.Base))
-          || (type.Kind === 'array' && inert(type.Element)));
+          || (type.Kind === 'array' && inert(type.Element))
+          // A tuple of inert elements with no defaults runs no user code at its
+          // boundary, as the proved-operation pass above already holds.
+          || (type.Kind === 'tuple' && type.Elements.every((e) => !e.InitializerNode && inert(e.Type))));
         provenLibraryBoundaries = ProvenLibraryBoundaries(root, surroundingAgent.currentRealmRecord,
           (annotation) => resolveType(annotation.Type), inert);
       } finally {
@@ -24996,6 +25084,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     } else if (operation.kind === 'stringConversion') {
       checkImplicitString(operation.operand);
+    } else if (operation.kind === 'stringConversions') {
+      // Converted in order: a failing operand ends the operation, so the ones
+      // after it are not reached.
+      for (const operand of operation.operands) if (checkImplicitString(operand)) break;
+    } else if (operation.kind === 'elementStringConversion') {
+      // #sec-proved-library-operations: the element stage is established only
+      // where an element is known to exist, so the receiver's type must fix a
+      // length of at least one - a tuple, or an array of fixed extent - and
+      // every element must be only Symbols. A growable array may be empty.
+      const onlySymbols = (t: TypeRecord): boolean => (t.Kind === 'primitive' && t.Name === 'symbol')
+        || (t.Kind === 'literal' && onlySymbols(t.Base as TypeRecord))
+        || (t.Kind === 'union' && t.Members.length > 0 && t.Members.every(onlySymbols));
+      const receiverType = operandParticipates(operation.receiver) ? staticType(operation.receiver) : null;
+      const elements = receiverType?.Kind === 'tuple' && !receiverType.Elements.some((e) => e.Rest)
+        ? receiverType.Elements.map((e) => e.Type)
+        : receiverType?.Kind === 'array' && typeof receiverType.Extent === 'number' && receiverType.Extent >= 1
+          ? [receiverType.Element]
+          : null;
+      if (elements && elements.length > 0 && elements.every(onlySymbols)) {
+        errors.push(Throw.StaticTypeError('$1', Value(`every element of ${displayType(receiverType as TypeRecord)} is a Symbol, and \`${operation.method}\` converts each element with ToString, which a Symbol cannot undergo`)).Value as ObjectValue);
+      }
+    } else if (operation.kind === 'sameValueTest') {
+      // #sec-proved-library-operations: `Object.is` is a search-style test,
+      // refused where one operand's type can never hold the other's value, as
+      // `includes` is. It does not narrow: SameValue parts from `===` exactly
+      // where a literal type would have to say which zero or cohort member.
+      const [a, b] = operation.operands;
+      if (operandParticipates(a) || operandParticipates(b)) {
+        const ta = staticType(a) as TypeRecord | null;
+        const tb = staticType(b) as TypeRecord | null;
+        const never = !!ta && !!tb && ta.Kind !== 'any' && tb.Kind !== 'any'
+          && (ta.Kind === 'literal' && tb.Kind === 'literal' ? false
+            : ta.Kind === 'literal' ? cannotHoldValue(tb, ta)
+            : tb.Kind === 'literal' ? cannotHoldValue(ta, tb)
+            : !mentionsTypeParameter(ta) && !mentionsTypeParameter(tb) && AreDisjoint(ta, tb));
+        if (never) {
+          errors.push(Throw.StaticTypeError('$1', Value(`\`Object.is\` can never be true here: ${displayType(ta!)} and ${displayType(tb!)} share no value, so the test is dead code`)).Value as ObjectValue);
+        }
+      }
     } else if (operation.kind === 'replacement') {
       const literal = (text: string): TypeRecord => ({ Kind: 'literal', Base: makePrimitive('string'), Value: Value(text) });
       const callback = staticType(operation.callback);
@@ -29051,6 +29178,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // literal cannot become a `uint8`, so the exemption let through the
             // very case this check's comment names: `case "s"` for a `uint8`. The
             // literal's BASE is what it would have to become.
+            // #sec-narrowing: a `case e` is the `v === e` row, so a literal
+            // label the discriminant's type can never hold is a test that can
+            // never succeed (#sec-narrowfrom), judged as `x === 300` is. An
+            // enum discriminant has its own rule, that a label be one of its
+            // enumerators (#sec-enums), and is left to it.
+            // Only a NUMERIC literal is judged here: the path below widened
+            // it to `number` and dropped it, while a string or boolean literal
+            // is widened to its base and judged there as disjoint.
+            const numericLiteral = labelType?.Kind === 'literal'
+              && ((labelType as { Base?: TypeRecord }).Base as { Kind?: string, Name?: string } | undefined)?.Kind === 'primitive'
+              && ((labelType as { Base?: TypeRecord }).Base as { Name?: string }).Name === 'number';
+            if (labelType && numericLiteral
+                && (subject as { Declaration?: { type?: string } }).Declaration?.type !== 'EnumDeclaration'
+                && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
+              errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord))).Value as ObjectValue);
+              continue;
+            }
             if (labelType && labelType.Kind === 'literal') {
               const literalBase = (labelType as { Base?: TypeRecord }).Base;
               labelType = literalBase && !(literalBase.Kind === 'primitive' && literalBase.Name === 'number')
