@@ -2,27 +2,17 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
- * Spec: #sec-memory-layout (Memory Layout) - layout participation. Design:
- * README.md.
+ * Spec: #sec-memory-layout (Memory Layout) - layout participation.
  *
- * Whether an `accessor` occupies a layout slot is contested, because README says
- * both things twenty lines apart - the backing field "participates in the
- * memory layout", and "a field occupies a slot in the base's memory layout and
- * an accessor doesn't". A third sentence settles it, and it is the one neither
- * side of the contradiction quotes:
+ * An `accessor` occupies a layout slot. Its backing field participates in the memory layout, and
+ * private fields participate in the memory layout EXACTLY AS PUBLIC FIELDS DO, which is why the value
+ * type rule counts both. An `accessor` desugars to a private typed field, private fields are laid out,
+ * therefore the backing is laid out. What has no storage is a hand-written `get`/`set` PAIR, which is a
+ * different declaration.
  *
- *   "Private fields participate in the memory layout EXACTLY AS PUBLIC FIELDS
- *   DO, which is why the value type rule counts both."
- *
- * An `accessor` desugars to a private typed field, private fields are laid out,
- * therefore the backing is laid out. The "an accessor doesn't" sentence is
- * about a `get`/`set` PAIR, which genuinely has no storage, in a section about
- * accessors in general.
- *
- * SO THIS IS NOT AN ACCESSOR FEATURE. The rule is that a PRIVATE TYPED FIELD
- * is laid out as a public one is - treating it as untyped gives its whole
- * class no layout, and every offset and byteLength on it throws. The accessor
- * follows for free, because the desugaring is real and the general rule
+ * SO THIS IS NOT AN ACCESSOR FEATURE. The rule is that a PRIVATE TYPED FIELD is laid out as a public
+ * one is - treating it as untyped gives its whole class no layout, and every offset and byteLength on
+ * it throws. The accessor follows for free, because the desugaring is real and the general rule
  * carries it.
  */
 
@@ -46,11 +36,10 @@ test('a private typed field is laid out exactly as a public one', () => {
 });
 
 test('a private field is laid out and still invisible to reflection', () => {
-  // README's other half: "a `#` field is a runtime-hard boundary ... invisible
-  // to bracket access and reflection". The slot is real and the NAME is not
-  // reachable - which is why the layout key stays the Private Name rather than
-  // becoming its description: every reflection lookup compares against a
-  // string, so a Private Name occupies its slot and answers no lookup.
+  // A `#` field is a runtime-hard boundary, invisible to bracket access and reflection. The slot is real
+  // and the NAME is not reachable - which is why the layout key stays the Private Name rather than
+  // becoming its description: every reflection lookup compares against a string, so a Private Name
+  // occupies its slot and answers no lookup.
   expectThrownKind('class A { a: uint8; #b: uint32; } Reflect.getReflection.<Reflect.ClassField, A>("#b");', 'TypeError');
   expectThrownKind('class A { a: uint8; #b: uint32; } Reflect.getReflection.<Reflect.ClassField, A>("b");', 'TypeError');
   // A base and a derived class may each declare `#x`, and they are distinct
@@ -88,12 +77,12 @@ test('an SoA over a class with a private slot is REFUSED', () => {
 // -- The layout slot reports the declared name -----------------------------------
 
 test('an accessor\'s layout slot reports the DECLARED name', () => {
-  // README says an accessor "participates in the memory layout exactly as
-  // a field does". Reflecting it as one is the consistent completion: its
-  // backing is an unnameable Private Name, and a slot no program can name
-  // leaves a hole in a layout walk - a serializer would see bytes it could not
-  // label. Not C#'s answer, whose generated `<a>k__BackingField` leaks a
-  // compiler artifact into every reflective enumeration.
+  // An accessor participates in the memory layout exactly as a field does, so reflecting it as one is
+  // the consistent completion: its backing is an unnameable Private Name, and a slot no program can name
+  // leaves a hole in a layout walk - a serializer would see bytes it could not label
+  // (#sec-reflection-shape-class-field-layout: an accessor reports the name it was declared under). This
+  // is not C#'s answer, whose generated `<a>k__BackingField` leaks a compiler artifact into every
+  // reflective enumeration.
   const cls = 'class A { a: uint8; accessor b: uint32 = 0; c: uint8; } ';
   expect(evaluated(`${cls} String(Reflect.getReflection.<Reflect.ClassFieldLayout, A>("b").offset);`)).toBe('4');
   // The name is read through the context that NAMES an accessor.

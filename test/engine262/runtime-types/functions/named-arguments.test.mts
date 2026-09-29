@@ -2,20 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * Named arguments and object-spread arguments at the call site.
- *
- * A named argument `name: expr` selects a parameter by name rather than by
- * position, a compact way to supply a later parameter while omitting earlier ones
- * that have defaults (README "Named Parameters"). Named arguments may be written
- * in any order, and a parameter not supplied by position or by name takes its
- * default where it has one; a required parameter left unfilled, or a name that
- * matches no parameter, is a type error. A spread of an object literal
- * `...{ a: 1, b: 2 }` binds each property by parameter name, while a spread of an
- * iterable, `...arr` or `...[1, 2]`, still fills positions in order.
- *
- * The syntax is new: a bare `identifier:` at the top of a call argument is a
- * syntax error today, so a named-argument call means nothing in an existing
- * program, and with runtime types disabled it remains a syntax error.
+ * Named arguments and object-spread arguments at the call site (#sec-named-arguments). A named
+ * argument `name: expr` selects a parameter by name rather than by position, a compact way to supply
+ * a later parameter while omitting earlier ones that have defaults. Named arguments may be written in
+ * any order, and a parameter not supplied by position or by name takes its default where it has one; a
+ * required parameter left unfilled, or a name that matches no parameter, is a type error. A spread of
+ * an object literal `...{ a: 1, b: 2 }` binds each property by parameter name, while a spread of an
+ * iterable, `...arr` or `...[1, 2]`, still fills positions in order. The syntax is new: a bare
+ * `identifier:` at the top of a call argument is a syntax error today, so a named-argument call means
+ * nothing in an existing program, and with runtime types disabled it remains a syntax error.
  */
 
 // -- Named arguments select by name --------------------------------------------

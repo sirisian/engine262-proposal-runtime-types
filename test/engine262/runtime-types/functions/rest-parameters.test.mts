@@ -3,21 +3,16 @@ import {
   evaluated, ok, expectThrown, expectErrorFlagOff, evaluatedFlagOff, expectStaticTypeError, run } from '../harness.mts';
 
 /**
- * Spec: #sec-type-annotations (Type Annotations) - rest parameters, and
- * #sec-bindarguments (BindArguments) for the binding half below.
+ * Spec: #sec-type-annotations (Type Annotations) - rest parameters, and #sec-bindarguments
+ * (BindArguments) for the binding half below.
  *
- * The design's rest parameters section (README) writes three things the base
- * grammar does not admit: a rest carrying a type, a rest followed by further
- * parameters, and more than one rest in a list. #sec-type-annotations
- * restates
- * BindingRestElement to carry a TypeAnnotation and FormalParameters so that a
- * rest is an ordinary element of the list.
- *
- * The first half of this file is about PARSING only - which run each rest
- * takes is SequenceAssignment's question - so the calls in it are written so
- * that the assignment is unambiguous under any rule. What they pin is that the
- * forms PARSE, that they parse in every position a parameter list appears, and
- * that the base language is untouched with the feature off.
+ * The base grammar does not admit three things a rest parameter may be here: a rest carrying a type,
+ * a rest followed by further parameters, and more than one rest in a list. #sec-type-annotations
+ * restates BindingRestElement to carry a TypeAnnotation and FormalParameters so that a rest is an
+ * ordinary element of the list. The first half of this file is about PARSING only - which run each
+ * rest takes is SequenceAssignment's question - so the calls in it are written so that the assignment
+ * is unambiguous under any rule. What they pin is that the forms PARSE, that they parse in every
+ * position a parameter list appears, and that the base language is untouched with the feature off.
  */
 
 test('a rest parameter carries a type', () => {
@@ -33,13 +28,12 @@ test('a rest may be followed by further parameters', () => {
 });
 
 test('a parameter list may hold more than one rest', () => {
-  // The design's own example, README "Rest Parameters".
+  // A list with more than one rest, typed, and a fixed parameter after them.
   expect(ok('function f(a: string, ...args: [].<uint32>, ...args2: [].<string>, callback: () => void) {}')).toBe(true);
   // Its worked one, whose binding SequenceAssignment settles.
   expect(ok('function f(...a: [].<uint32>, ...b: [].<uint32>, c: uint32): void {}')).toBe(true);
-  // Untyped rests separated by typed parameters, also from that section. No
-  // early error refuses these: under leftmost-greedy matching every list has a
-  // determined assignment, so a list the design calls confusing is allowed and
+  // Untyped rests separated by typed parameters. No early error refuses these: under leftmost-greedy
+  // matching every list has a determined assignment, so a list that reads as confusing is allowed and
   // discouraged rather than rejected.
   expect(ok('function f(...args1, callback1: () => void, ...args2, callback2: () => void) {}')).toBe(true);
 });
@@ -92,27 +86,22 @@ test('a call-site spread is unaffected by the parameter forms', () => {
 // -- Binding a call ------------------------------------------------------------
 
 /*
- * Binding a call: #sec-bindarguments.
+ * Binding a call: #sec-bindarguments. The forms parse and SequenceAssignment supplies the matcher;
+ * this binds a call through it, on both sides:
  *
- * The forms parse and SequenceAssignment supplies the matcher; this binds a
- * call through it, on both sides:
+ *   - the CHECKER, where viability is an arity count that must not assume one trailing rest
+ *     (#sec-resolveoverload), and
+ *   - the RUN TIME, where FunctionDeclarationInstantiation walks the argument iterator binding each
+ *     parameter in turn, so a rest that is not last takes as many arguments as the assignment gives
+ *     it and not a single one (#sec-bindarguments).
  *
- * - the CHECKER, where viability was an arity count that assumed one trailing
- *   rest (#sec-resolveoverload), and
- * - the RUN TIME, where FunctionDeclarationInstantiation walks the argument
- *   iterator binding each parameter in turn, so a rest that is not last took a
- *   single argument like any other parameter (#sec-bindarguments).
- *
- * The runtime assignment runs over RUN-TIME types rather than the checker's
- * static ones, which is what a call arriving through `apply` or a spread of
- * unknown length needs; for a call the checker has accepted, the two agree.
- *
- * The design's three worked examples are the acceptance tests: they are what
- * the README prints, and an engine that does not reproduce them is wrong
- * whatever else it does.
+ * The runtime assignment runs over RUN-TIME types rather than the checker's static ones, which is what
+ * a call arriving through `apply` or a spread of unknown length needs; for a call the checker has
+ * accepted, the two agree. The three worked examples are the acceptance tests: an engine that does not
+ * reproduce them is wrong whatever else it does.
  */
 
-test('the README\'s worked binding, exactly', () => {
+test('the worked binding, exactly', () => {
   // `f(...a, ...b, c)` called `f(0, 1, 2)` binds a to [0, 1], b to [], c to 2.
   // The first rest takes all three, the tail cannot be satisfied, it gives one
   // back, the second rest takes the remaining one and `c` cannot be satisfied,

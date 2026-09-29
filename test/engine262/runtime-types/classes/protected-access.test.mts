@@ -2,20 +2,18 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * README: "A member marked `protected` is accessible within its declaring class
- * and its subclasses, and nowhere else."
- *
- * The rule is checked IN THE WALK rather than in `staticType`, which runs ON
- * DEMAND - a bare `b.a;` statement's type is never demanded, so a rule written
- * there fires only where something happens to ask. **A rule checked where
- * nothing asks is no rule at all**, which is the same shape the class member
- * walk was fixed for.
+ * #sec-typed-classes: a member marked `protected` is accessible only within its declaring class and
+ * subclasses of that class, and it is a type error to select a statically known protected declaration
+ * outside that scope. The rule is checked IN THE WALK rather than in `staticType`, which runs ON DEMAND -
+ * a bare `b.a;` statement's type is never demanded, so a rule written there fires only where something
+ * happens to ask. **A rule checked where nothing asks is no rule at all**, which is the same shape the
+ * class member walk needs.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 test('an OUTSIDE read is refused', () => {
-  // The README's own example: `// a.balance; // TypeError: balance is protected`.
+  // An access to a `protected` member from outside its class is a type error.
   expect(outcome('class B { protected a: uint8 = 1; } const b: B = new B(); b.a;')).toBe('StaticTypeError');
   expect(outcome('class B { protected a: uint8 = 1; } function f(x: B) { return x.a; }')).toBe('StaticTypeError');
   // An UNRELATED class is outside too - being in *a* class is not being in

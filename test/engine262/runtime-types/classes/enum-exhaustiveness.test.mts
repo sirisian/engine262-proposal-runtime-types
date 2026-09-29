@@ -2,19 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Enum switch exhaustiveness.
- *
- * When a switch discriminant is an enumerator of an enum, the switch is checked
- * at compile time (#sec-enums; README "Control Structures"): every case label
- * must be an enumerator of that enum, and a switch with no `default` must list
- * every enumerator. A missing enumerator or a label that is not an enumerator of
- * the enum is a type error, raised as an early error before the program runs. A
- * switch with a `default` need not be exhaustive, and a switch whose discriminant
- * is not enum-typed is the ordinary switch, unaffected.
- *
- * The discriminant is recognized as enum-typed when it is a binding known to hold
- * an enumerator: a variable initialized from an enum member, or a parameter or
- * variable annotated with the enum type.
+ * Enum switch exhaustiveness (#sec-enums). When a switch discriminant is an enumerator of an enum, the
+ * switch is checked at compile time: every case label must be an enumerator of that enum, and a switch
+ * with no `default` must list every enumerator. A missing enumerator or a label that is not an
+ * enumerator of the enum is a type error, raised as an early error before the program runs. A switch
+ * with a `default` need not be exhaustive, and a switch whose discriminant is not enum-typed is the
+ * ordinary switch, unaffected. The discriminant is recognized as enum-typed when it is a binding known
+ * to hold an enumerator: a variable initialized from an enum member, or a parameter or variable
+ * annotated with the enum type.
  */
 
 // -- Exhaustiveness ------------------------------------------------------------
@@ -71,13 +66,11 @@ test('a switch whose discriminant is not enum-typed is unaffected', () => {
 });
 
 /**
- * The enumeration surface: %Enum.prototype%.
- *
- * README "Enums": "enumeration objects share a common prototype, written here
- * as %Enum.prototype%". Five members are normative here - `toString(value)`,
- * `keys()`, `values()`, `entries()`, and `@@iterator` - plus the design's index
- * operator. `forEach`, `filter`, and `map` are DECLINED as compositions:
- * `entries()` composes with the Array methods to give all three.
+ * The enumeration surface: %Enum.prototype% (#sec-enums). An enum's Type Object has %Enum.prototype%
+ * as its prototype, which has %Type.prototype% as its own. Five members are normative - `toString(value)`,
+ * `keys()`, `values()`, `entries()`, and `@@iterator` - plus the index operator. `forEach`, `filter`,
+ * and `map` are DECLINED as compositions: `entries()` composes with the Array methods to give all
+ * three.
  */
 test('an enumeration answers its keys, values, and entries', () => {
   const e = 'enum Count: uint8 { Zero, One, Two } ';

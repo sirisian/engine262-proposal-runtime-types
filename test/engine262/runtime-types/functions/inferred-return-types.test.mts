@@ -276,10 +276,8 @@ test('yield* contributes conservatively', () => {
 });
 
 test('an async declaration reads its declared return type', () => {
-  // Not an inference fix: an `AsyncFunctionDeclaration` was admitted by neither
-  // arm of the declaration pass, so it got no signature at all and a call of it
-  // was ~any~ even where the program wrote the annotation the design uses
-  // throughout - `async function f(): Promise.<uint8, Error>`.
+  // An `AsyncFunctionDeclaration` reads its declared return type: a call of
+  // `async function f(): Promise.<uint8, Error>` has that type and not ~any~.
   expectEarly('async function af(a: uint32): Promise.<string, any> { return "s"; } const n: number = af(1);', 'Promise.<string, any>');
   expectOk('async function af(a: uint32): Promise.<string, any> { return "s"; } const p: Promise.<string, any> = af(1);');
 });

@@ -2,17 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * `structuredClone(value)` and its typed signature.
+ * `structuredClone(value)` and its typed signature `structuredClone<T>(value: T): T`.
  *
- * It is defined by HTML rather than by
- * ECMAScript and this engine did not provide it, so the signature
- * `standardlibrary.md` states - `structuredClone<T>(value: T): T` - could not be
- * given: a signature is a claim that the function EXISTS.
- *
- * Implemented here because a structured clone is HOW a program moves a typed
- * value across a boundary, and the identity signature exists so the type
- * survives the crossing. Scoped to the ECMAScript-shaped subset: HTML's
- * transferables and `SharedArrayBuffer` mean nothing in a bare engine.
+ * Unspecified: it is defined by HTML rather than by ECMAScript, and the specification does not state
+ * it. A typed signature is a claim that the function EXISTS, so the engine provides it: a structured
+ * clone is HOW a program moves a typed value across a boundary, and the identity signature exists so
+ * the type survives the crossing. Scoped to the ECMAScript-shaped subset: HTML's transferables and
+ * `SharedArrayBuffer` mean nothing in a bare engine.
  */
 
 test('the clone is deep, and independent of its source', () => {

@@ -10,25 +10,21 @@ import { evaluated } from '../harness.mts';
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 /**
- * Design: README.md; judged through #sec-typed-classes.
+ * Judged through #sec-typed-classes. Unspecified: the specification states the accessor-pair
+ * declaration rule ("the setter must accept every value of the getter's effective return type",
+ * #sec-typed-classes) but no variance rule for an accessor OVERRIDE; these tests pin the design's.
  *
- * The first rule: AN ACCESSOR OVERRIDE IS INVARIANT.
+ * The first rule: AN ACCESSOR OVERRIDE IS INVARIANT. It falls out of two variance rules meeting on ONE
+ * declaration. A hand-written pair may refine its halves separately - a derived getter may refine its
+ * type covariantly, a derived setter is contravariant - but an `accessor` generates both halves from a
+ * single annotation, so narrowing it breaks the setter (the base accepted more) and widening it breaks
+ * the getter (the base promised less). Both directions refused leaves equality.
  *
- * README does not say this, and it falls out of the two variance rules that it
- * does say meeting on ONE declaration. A hand-written pair may refine its
- * halves separately - "a derived getter may refine its type covariantly", "a
- * derived setter is contravariant" - but an `accessor` generates both halves
- * from a single annotation, so narrowing it breaks the setter (the base
- * accepted more) and widening it breaks the getter (the base promised less).
- * Both directions refused leaves equality.
- *
- * THE PREREQUISITE WAS NOT A RULE AT ALL. The checker's class member walk is
- * where a class's own declarations are judged, and it had been reached only ON
- * DEMAND - when something asked for the class's type. A class nothing
- * referenced was never walked, so a rule checked there fired only if the
- * program happened to mention the class elsewhere. The walk is now forced once
- * per class; `instanceTypeOf` memoizes, so a later demand is a cache hit and
- * each error is reported once.
+ * The rule is checked in the class member walk, where a class's own declarations are judged. That walk
+ * must run once per class whether or not anything asks for the class's type: a class nothing
+ * referenced would otherwise never be judged, and a rule checked there would fire only if the program
+ * happened to mention the class elsewhere. `instanceTypeOf` memoizes, so a later demand is a cache hit
+ * and each error is reported once.
  */
 
 test('an accessor override must be invariant', () => {
@@ -68,9 +64,9 @@ test('a class NOTHING REFERENCES is checked, which is the infrastructure', () =>
 });
 
 test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', () => {
-  // README: "the derived setter must also accept everything the derived getter
-  // can return." A property whose getter yields a value its own setter would
-  // refuse cannot round-trip - `o.x = o.x` does not type.
+  // The derived setter must also accept everything the derived getter can return (#sec-typed-classes).
+  // A property whose getter yields a value its own setter would refuse cannot round-trip - `o.x = o.x`
+  // does not type.
   const A = 'class Animal {} class Dog extends Animal {} ';
   // A WIDER setter is legal: every Dog the getter yields is an Animal.
   expect(outcome(`${A} class C { get x(): Dog { return new Dog(); } set x(v: Animal) {} }`)).toBe('ACCEPTED');
@@ -78,12 +74,9 @@ test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', ()
   // A NARROWER setter is not: the getter can yield an Animal that is no Dog.
   expect(outcome(`${A} class C { get x(): Animal { return new Animal(); } set x(v: Dog) {} }`)).toBe('StaticTypeError');
 
-  // TWO DIFFERING NUMERIC TYPES ARE ALSO AN ERROR, and this is the assertion
-  // two earlier cycles got backwards. Both treated this as a legal pair the
-  // rule would wrongly refuse, and held the rule back on that basis. README is
-  // explicit: "A value of one value type never implicitly becomes a value of
-  // another. `uint8` does not widen to `uint16`" - the rule Rust, Swift, and Go
-  // use. So the pair genuinely does not round-trip.
+  // TWO DIFFERING NUMERIC TYPES ARE ALSO AN ERROR. A value of one value type never implicitly becomes a
+  // value of another - `uint8` does not widen to `uint16`, the rule Rust, Swift and Go use - so the pair
+  // genuinely does not round-trip.
   expect(outcome('class C { get x(): uint8 { return 1; } set x(v: uint32) {} }')).toBe('StaticTypeError');
   expect(outcome('class C { get x(): uint8 { return 1; } set x(v: uint8) {} }')).toBe('ACCEPTED');
 
@@ -94,10 +87,9 @@ test('the WITHIN-CLASS rule: a setter accepts everything its getter returns', ()
 });
 
 test('a derived setter must be CONTRAVARIANT', () => {
-  // README: "A derived setter is contravariant: it must accept every value the
-  // base setter accepts, and may accept more." The direction is the REVERSE of
-  // the getter rule, so a rule that had copied that one would accept a widening
-  // and a narrowing both - which is why both are asserted.
+  // A derived setter is contravariant: it must accept every value the base setter accepts, and may
+  // accept more. The direction is the REVERSE of the getter rule, so a rule that copied the getter's
+  // would accept a widening and a narrowing both - which is why both are asserted.
   const A = 'class Animal {} class Dog extends Animal {} ';
   expect(outcome(`${A} class S { set r(v: Dog) {} } class K extends S { set r(v: Animal) {} }`)).toBe('ACCEPTED');
   expect(outcome(`${A} class S { set r(v: Animal) {} } class K extends S { set r(v: Animal) {} }`)).toBe('ACCEPTED');
@@ -110,15 +102,15 @@ test('a derived setter must be CONTRAVARIANT', () => {
   expect(outcome('class S { set r(v: uint32) {} } class K extends S { set r(v: uint8) {} }')).toBe('StaticTypeError');
 });
 
-test('README\'s worked Shelter/Kennel example, both directions', () => {
+test('the worked Shelter/Kennel example, both directions', () => {
   // The design's own illustration, which exercises the getter and setter rules
   // together on ONE property - the case a rule checked in isolation can pass
   // while the pair still does not hold.
   const decl = 'class Animal {} class Dog extends Animal {} '
     + 'class Shelter { get resident(): Animal { return new Animal(); } set resident(value: Animal) {} } ';
   expect(outcome(`${decl} class Kennel extends Shelter { get resident(): Dog { return new Dog(); } set resident(value: Animal) {} }`)).toBe('ACCEPTED');
-  // README's own commented-out line: "// set resident(value: Dog) {} //
-  // TypeError: the base setter accepts any Animal".
+  // The narrowing case: `set resident(value: Dog) {}` over a base setter that accepts any Animal is
+  // refused.
   expect(outcome(`${decl} class Kennel extends Shelter { set resident(value: Dog) {} }`)).toBe('StaticTypeError');
 });
 
@@ -158,9 +150,8 @@ test('NOMINAL SUBTYPING: a class is a subtype of the class it extends', () => {
 });
 
 test('a derived getter must refine COVARIANTLY', () => {
-  // README: "A derived getter may refine its type covariantly under the same
-  // conversion free rule that governs method returns." Every caller of the
-  // base's getter must still receive what the base promised.
+  // A derived getter may refine its type covariantly under the same conversion-free rule that governs
+  // method returns. Every caller of the base's getter must still receive what the base promised.
   const A = 'class Animal {} class Dog extends Animal {} ';
   expect(outcome(`${A} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): Dog { return new Dog(); } }`)).toBe('ACCEPTED');
   expect(outcome(`${A} class S { get r(): Animal { return new Animal(); } } class K extends S { get r(): Animal { return new Animal(); } }`)).toBe('ACCEPTED');

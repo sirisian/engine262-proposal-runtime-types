@@ -2,19 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff, expectStaticTypeError, ok } from '../harness.mts';
 
 /**
- * The `readonly` class-field modifier.
- *
- * A field declared `readonly` may be assigned only in its own initializer and in
- * a constructor of the declaring class; every other assignment is a TypeError,
- * including one from a method the constructor calls, from a subclass, through a
- * reference, or through reflection (README "Readonly Fields", spec
- * #sec-typed-classes). `readonly` is shallow: the field binding is fixed, not the
- * object it refers to. `Object.freeze` on an instance of a typed class makes every
- * field `readonly`, so a write after freezing is a TypeError in every mode.
- *
- * `readonly` is a field modifier written before the field name, after `static`
- * where both appear. It is new syntax under the runtime types feature; with the
- * feature off, `readonly x` does not parse as a modified field.
+ * The `readonly` class-field modifier (#sec-typed-classes). A field declared `readonly` may be
+ * assigned only in its own initializer and in a constructor of the declaring class; every other
+ * assignment is a TypeError, including one from a method the constructor calls, from a subclass,
+ * through a reference, or through reflection. `readonly` is shallow: the field binding is fixed, not
+ * the object it refers to. `Object.freeze` on an instance of a typed class makes every field
+ * `readonly`, so a write after freezing is a TypeError in every mode. `readonly` is a field modifier
+ * written before the field name, after `static` where both appear. It is new syntax under the runtime
+ * types feature; with the feature off, `readonly x` does not parse as a modified field.
  */
 
 // -- Permitted assignments -----------------------------------------------------

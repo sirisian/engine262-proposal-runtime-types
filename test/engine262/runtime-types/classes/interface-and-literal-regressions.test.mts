@@ -278,8 +278,7 @@ test('an object type is a subtype of an index-signature type it satisfies', () =
   expect(evaluated('type F = { x: uint8 }; type T = { [k: string]: any }; String(Reflect.isAssignable((type F), (type T)));')).toBe('true');
   expect(evaluated('type F = { x: uint8 }; type T = { [k: string]: int32 }; String(Reflect.isAssignable((type F), (type T)));')).toBe('false');
 
-  // The design's own worked pattern: a TYPED value reaching an index-signature
-  // position, which `dependentrecordtypes.md` calls the principal use.
+  // A TYPED value reaching an index-signature position, the principal use of a dependent record type.
   expect(accepts('function f(data: { [key: string]: any }) { return 1; } let o: { a: uint8 } = { a: (1 := uint8) }; f(o);')).toBe(true);
   expect(accepts('function g(): { [key: string]: any } { let o: { a: uint8 } = { a: (1 := uint8) }; return o; }')).toBe(true);
   // ...and the same defect seen through an intersection.

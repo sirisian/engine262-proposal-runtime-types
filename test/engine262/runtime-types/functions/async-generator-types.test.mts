@@ -139,9 +139,8 @@ test('the asymmetry with the generator shorthand is deliberate', () => {
 });
 
 test('every function form enforces its parameter', () => {
-  // An earlier form list named three and there are seven. These four were the
-  // additions, and `sec-annotations-on-the-remaining-function-forms` names "typed
-  // generator methods" explicitly as a form the design writes throughout.
+  // Seven function forms enforce their parameters, and #sec-annotations-on-the-remaining-function-forms
+  // names "typed generator methods" explicitly among them.
   expectThrown('class C { *m(a: uint8) { yield a; } } function h(x) { return new C().m(x).next(); } h("nope");');
   expectThrown('class C { async *m(a: uint8) { yield a; } } function h(x) { return new C().m(x); } h("nope");');
   expectThrown('const o = { async m(a: uint8) { return a; } }; function h(x) { return o.m(x); } h("nope");');

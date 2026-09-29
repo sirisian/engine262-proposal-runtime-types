@@ -31,9 +31,8 @@ test('6.5 a rest-carrying signature competes with a fixed one', () => {
 });
 
 test('6.6 a named argument may open a rest', () => {
-  // The design's example, README "Rest Parameters" and #sec-named-arguments:
-  // `f(8, args: 'a', 'b')` binds a to 8, leaves b its default, and gives args
-  // both strings - the positionals following a named rest join that rest.
+  // The worked example (#sec-named-arguments): `f(8, args: 'a', 'b')` binds a to 8, leaves b its
+  // default, and gives args both strings - the positionals following a named rest join that rest.
   expect(evaluated(`
     function f(a: number, b: string = "", ...args: [].<string>) { return a + ":" + args.length; }
     f(8, args: "a", "b");
@@ -77,10 +76,8 @@ test('6.7 an accessor still refuses a rest', () => {
 });
 
 test('6.8 a decorator may sit on a rest parameter', () => {
-  // decorators.md's dependency-injection example walks a method's parameters,
-  // and a rest IS a parameter. The decorators were read inside the non-rest
-  // branch of the parameter parser, so `@d ...a` was a Syntax Error while
-  // `@d a` was not - a gap older than the rest positions of this feature.
+  // A decorator that walks a method's parameters (dependency injection) meets a rest, and a rest IS a
+  // parameter, so a decorator on a rest must parse: `@d ...a` is accepted as `@d a` is.
   expect(evaluated(`
     function d(c: Reflect.ClassMethodParameter) {}
     class C { m(@d ...a: [].<number>, @d b: string) { return b; } }

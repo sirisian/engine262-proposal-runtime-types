@@ -60,10 +60,9 @@ test('a rest parameter in a function type keeps its declared type', () => {
 });
 
 test('a parameter\'s name does not affect identity', () => {
-  // #sec-signature-records: "A parameter's name is carried because the design's
-  // named arguments select by it, and is not part of the signature's identity."
-  // The record now carries [[Name]], so this is worth pinning: carrying it must
-  // not have made two spellings of one signature into two types.
+  // #sec-signature-records: "A parameter's name is carried because the design's named arguments select
+  // by it, and is not part of the signature's identity." The record carries [[Name]], and carrying it
+  // must not make two spellings of one signature into two types.
   expect(evaluated(`
     type A = (a: uint8) => void;
     type B = (b: uint8) => void;
@@ -99,8 +98,8 @@ test('existing signature behaviour is unchanged by the model change', () => {
 });
 
 test('a rest parameter is reported by reflection', () => {
-  // typeprogramming.md asks for `rest` on a parameter record; the record model
-  // is what gives the reflection write path something to report it from.
+  // The parameter record carries `rest`: the record model is what gives the reflection write path
+  // something to report it from.
   expect(evaluated(`
     type A = (...[].<uint8>) => void;
     const node = Reflect.getReflection.<Reflect.Type>(A);
@@ -116,16 +115,12 @@ test('a rest parameter is reported by reflection', () => {
 // -- SequenceAssignment --------------------------------------------------------
 
 /*
- * SequenceAssignment: #sec-sequenceassignment.
- *
- * The operation the parameter-matching rules rest on, tested directly at the
- * module rather than through a script. That is deliberate: the clause's
- * acceptance criterion is a property of the ALGORITHM (the assignment returned
- * is the lexicographically greatest count list), and a property is easier to
- * pin at the module than through the two callers that will consume it.
- *
- * The design's worked examples are the cases that matter, since they are what
- * the README prints and what a reader will check the engine against.
+ * SequenceAssignment: #sec-sequenceassignment. The operation the parameter-matching rules rest on,
+ * tested directly at the module rather than through a script. That is deliberate: the clause's
+ * acceptance criterion is a property of the ALGORITHM (the assignment returned is the
+ * lexicographically greatest count list), and a property is easier to pin at the module than through
+ * the two callers that consume it. The worked examples are the cases that matter, since a reader will
+ * check the engine against them.
  */
 
 const fixed: Slot = { Rest: false, Optional: false };

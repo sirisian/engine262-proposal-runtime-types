@@ -2,28 +2,22 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectStaticTypeError, evaluatedSequence } from '../harness.mts';
 
 /**
- * TYPED SIGNATURES FOR THE STANDARD LIBRARY'S GENERIC STATICS.
+ * TYPED SIGNATURES FOR THE STANDARD LIBRARY'S GENERIC STATICS (#sec-typed-standard-library-statics).
+ * The listings are "signature listings rather than new features": every function already exists, and
+ * the signatures state how element and key types flow through, so fully typed call sites infer their
+ * callbacks and engines can specialize the loops.
  *
- * `standardlibrary.md` states four typed signatures for the standard library's
- * generic statics and calls them "signature listings rather than new features:
- * every method here already exists, and the signatures state how element and key
- * types flow through, so fully typed call sites infer their callbacks and
- * engines can specialize the loops."
+ *   function Map.groupBy<K, T>(
+ *     items: Iterable.<T>, callback: (value: T, index: uint64) => K
+ *   ): Map.<K, [].<T>>;
  *
- *     function Map.groupBy<K, T>(
- *         items: Iterable.<T>,
- *         callback: (value: T, index: uint32) => K
- *     ): Map.<K, [].<T>>;
+ * An instance method is found through its RECEIVER's type; a static has no typed receiver, since
+ * `Reflect.typeOf(Map)` is not `Map`. So a static is dispatched BY NAME, which is the mechanism
+ * `Composite(…)` and `uint8.parse` already use.
  *
- * NONE of the four were typed, and this is the first. An instance method is
- * found through its RECEIVER's type; a static has no typed receiver, since
- * `Reflect.typeOf(Map)` is not `Map`. So it is dispatched BY NAME, which is the
- * mechanism `Composite(…)` and `uint8.parse` already use.
- *
- * Every assertion is written BOTH WAYS. A refusal alone proves that something
- * was checked, never that the right thing was inferred - a survey of this area
- * once read six capabilities as working on the strength of refusals, and four of
- * them refused every annotation.
+ * Every assertion is written BOTH WAYS. A refusal alone proves that something was checked, never that
+ * the right thing was inferred: an audit that counted refusals would read a capability as working
+ * when it refused every annotation.
  */
 
 const A = 'const a: [].<uint32> = [1, 2, 1]; ';
@@ -36,8 +30,8 @@ test('the result carries the key type and the grouped element type', () => {
 });
 
 test('the callback\'s parameter is typed from the source, which is the point', () => {
-  // "so fully typed call sites infer their callbacks" - the design's own reason
-  // for stating these signatures at all.
+  // "so fully typed call sites infer their callbacks" - the reason these signatures are stated at all
+  // (#sec-typed-standard-library-statics).
   expect(ok(`${A} Map.groupBy(a, (n) => { let s: uint32 = n; return "k"; });`)).toBe(true);
   expectStaticTypeError(`${A} Map.groupBy(a, (n) => { let s: string = n; return "k"; });`);
   // A BLOCK-bodied callback binds its key type as a concise one does, which
@@ -47,8 +41,8 @@ test('the callback\'s parameter is typed from the source, which is the point', (
 });
 
 test('the key type comes from the callback, including a COMPOSITE key', () => {
-  // The idiom `composites.md` names for grouping on more than one field, and the
-  // one that gets nothing from an untyped `groupBy`.
+  // A composite key groups on more than one field (#sec-composites), the idiom that gets nothing from
+  // an untyped `groupBy`.
   expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.size);')).toBe('2');
   // `Map.groupBy` gives a TYPED map, so `get` answers `V | undefined` and a
   // member read goes through `?.` - the narrowing rule refuses it otherwise.
@@ -87,8 +81,8 @@ test('the run time is unchanged in every case', () => {
 // ---------------------------------------------------------------------------
 
 test('Object.groupBy publishes an index-signature result', () => {
-  // `standardlibrary.md`: "function Object.groupBy<K extends string | symbol, T>(
-  // items, callback): { [key: K]: [].<T> }".
+  // #sec-typed-standard-library-statics: `Object.groupBy(items: Iterable.<T>, callback: (value: T,
+  // index: uint64) => K): { [key: K]: [].<T> }`, where K is a property key type.
   expect(ok(`${A} let o: { [key: string]: [].<uint32> } = Object.groupBy(a, (n) => "k");`)).toBe(true);
   expectStaticTypeError(`${A} let o: uint8 = Object.groupBy(a, (n) => "k");`);
   // The callback's parameter is typed from the source, as `Map.groupBy`'s is.
@@ -161,13 +155,9 @@ test('the items may be any ITERABLE, not only an array', () => {
 });
 
 test('the callback\'s INDEX parameter is the index type', () => {
-  // `#index-type`: one type describes every count a container reports or
-  // accepts, "an index used to read or write an element" among them. A
-  // callback's index is such a count, so it is `uint64`.
-  //
-  // `standardlibrary.md` writes `uint32` for it, which predates that dfn;
-  // `sec-typed-standard-library-statics` states `uint64` and the design is the
-  // side that should move.
+  // #index-type: one type describes every count a container reports or accepts, "an index used to read
+  // or write an element" among them. A callback's index is such a count, so it is `uint64`
+  // (#sec-typed-standard-library-statics).
   expect(ok(`${A} Map.groupBy(a, (n, i) => { let x: uint64 = i; return "k"; });`)).toBe(true);
   expectStaticTypeError(`${A} Map.groupBy(a, (n, i) => { let x: string = i; return "k"; });`);
 });
@@ -379,9 +369,9 @@ test('Family A leaves the arithmetic and the methods alone', () => {
 // ---------------------------------------------------------------------------
 
 test('Array.from carries the element type through', () => {
-  // `standardlibrary.md`, "Building From an Iterable". The first parameter is
-  // the same `Iterable.<T>` the grouping functions take, so a typed array and a
-  // COLLECTION both reach it by the interface they declare.
+  // `Array.from` and `Iterator.from` (#sec-typed-standard-library-statics). The first parameter is the
+  // same `Iterable.<T>` the grouping functions take, so a typed array and a COLLECTION both reach it by
+  // the interface they declare.
   expect(ok(`${A} let b: [].<uint32> = Array.from(a);`)).toBe(true);
   expectStaticTypeError(`${A} let b: [].<string> = Array.from(a);`);
   expect(ok('let s: Set.<uint8> = new Set(); let b: [].<uint8> = Array.from(s);')).toBe(true);
@@ -434,13 +424,12 @@ test('Group B preserves participation and the run time', () => {
 const PS = 'let ps: [].<Promise.<uint8, Error>> = []; ';
 
 test('the combinators differ only in what they resolve with', () => {
-  // `standardlibrary.md`, "Promise Statics". Each takes
-  // `Iterable.<Promise.<R, E>>`, so R and E come from the ELEMENT's own
-  // arguments - a nominal carrying two, which the checker already bound.
-  //
-  //   all  -> Promise.<[].<R>, E>            every value, or the first failure
-  //   race -> Promise.<R, E>                 whichever settles first
-  //   any  -> Promise.<R, AggregateError>    one value, or every failure
+  // #sec-typed-standard-library-statics, the Promise combinators. Each takes
+  // `Iterable.<Promise.<R, E>>`, so R and E come from the ELEMENT's own arguments - a nominal carrying
+  // two, which the checker already binds.
+  //   all  -> Promise.<[].<R>, E>              every value, or the first failure
+  //   race -> Promise.<R, E>                   whichever settles first
+  //   any  -> Promise.<R, AggregateError>      one value, or every failure
   expect(ok(`${PS} let p: Promise.<[].<uint8>, Error> = Promise.all(ps);`)).toBe(true);
   expectStaticTypeError(`${PS} let p: Promise.<[].<string>, Error> = Promise.all(ps);`);
   // `all` resolves with an ARRAY, which is the whole difference from `race`.
@@ -458,13 +447,10 @@ test('Promise.resolve carries its value', () => {
 });
 
 test('allSettled reports every outcome and NEVER REJECTS', () => {
-  // Its element is `PromiseSettledResult.<R, E>`, which was not a type this
-  // engine declared - so the row waited, a signature naming a type the program
-  // cannot write being worse than none. It is declared now, structurally and
-  // beside `IteratorResult` rather than among the library nominals, because
-  // `standardlibrary.md` states it as a `type ... = { ... }`.
-  // Guarded: what is asserted is the STATIC answer, and the run time would meet
-  // an unrelated boundary.
+  // Its element is `PromiseSettledResult.<R, E>`, which is `{ status: string, value?: R, reason?: E }`
+  // (#sec-typed-standard-library-statics): structural rather than among the library nominals, so a
+  // program may write the shape. Guarded: what is asserted is the STATIC answer, and the run time would
+  // meet an unrelated boundary.
   expect(ok(`if (false) { ${PS} let p: Promise.<[].<PromiseSettledResult.<uint8, Error>>, undefined> = Promise.allSettled(ps); } 1;`)).toBe(true);
   expectStaticTypeError(`${PS} let p: Promise.<[].<PromiseSettledResult.<string, Error>>, undefined> = Promise.allSettled(ps);`);
   // The rejection is `undefined`, not the elements' E: every outcome is reported
@@ -486,18 +472,16 @@ const TUP = 'let t: [Promise.<uint8, Error>, Promise.<string, Error>] = '
   + '[Promise.resolve(1), Promise.resolve("a")]; ';
 
 test('a TUPLE of differently typed promises resolves positionally', () => {
-  // `standardlibrary.md`: "Over a tuple of differently typed promises the
-  // combinators return tuples instead: `Promise.all` of `[Promise.<uint8,
-  // Error>, Promise.<string, Error>]` resolves to `[uint8, string]`."
-  //
-  // Read per POSITION rather than through the element derivation, which answers
-  // the UNION of a tuple's positions - and a union of two `Promise` nominals is
-  // not a `Promise`, so a tuple argument reached the combinator with no element
-  // and the call had no type at all.
+  // Over a tuple of differently typed promises the combinators return tuples instead
+  // (#sec-typed-standard-library-statics): `Promise.all` of `[Promise.<uint8, Error>, Promise.<string,
+  // Error>]` resolves to `[uint8, string]`. Read per POSITION rather than through the element
+  // derivation, which answers the UNION of a tuple's positions - and a union of two `Promise` nominals
+  // is not a `Promise`, so a tuple argument would reach the combinator with no element and the call
+  // would have no type at all.
   expect(ok(`${TUP} let p: Promise.<[uint8, string], Error> = Promise.all(t);`)).toBe(true);
   expectStaticTypeError(`${TUP} let p: Promise.<[string, uint8], Error> = Promise.all(t);`);
-  // A tuple resolves to a TUPLE, not to an array of the union - which is the
-  // whole point of the design's sentence.
+  // A tuple resolves to a TUPLE, not to an array of the union - which is the whole point of the
+  // positional rule.
   expectStaticTypeError(`${TUP} let p: Promise.<[].<uint8 | string>, Error> = Promise.all(t);`);
   // An ARRAY argument still resolves to an array.
   expect(ok('let ps: [].<Promise.<uint8, Error>> = []; let p: Promise.<[].<uint8>, Error> = Promise.all(ps);')).toBe(true);
@@ -534,10 +518,10 @@ test('race and any over a tuple resolve with the union of its positions', () => 
 });
 
 test('Promise.try takes its value from the callback, and FLATTENS', () => {
-  // `standardlibrary.md`: `try<R, E>(callback: (...args) => R | Promise.<R, E>,
-  // ...args): Promise.<R, E>`. R is the callback's RETURN - the same read
-  // `groupBy`'s key uses - and where the callback itself answers a promise, R is
-  // what THAT resolves with, because `try` flattens as `then` does.
+  // #sec-typed-standard-library-statics: `Promise.try(callback: () => R | Promise.<R, E>, ...args):
+  // Promise.<R, E>`. R is the callback's RETURN - the same read `groupBy`'s key uses - and where the
+  // callback itself answers a promise, R is what THAT resolves with, because `try` flattens as `then`
+  // does.
   expect(ok('let p: Promise.<uint8, any> = Promise.try(() => (1 := uint8));')).toBe(true);
   expectStaticTypeError('let p: Promise.<string, any> = Promise.try(() => (1 := uint8));');
   // A block-bodied callback works, which needed the callback-inference groundwork.
@@ -619,11 +603,10 @@ test('Promise.reject carries its reason', () => {
 // ---------------------------------------------------------------------------
 
 test('values and entries read V from an index signature OR the properties', () => {
-  // `standardlibrary.md`, "Reading an Object's Own Properties". V comes from an
-  // index signature where the argument has one, and from the JOIN of the
-  // declared property types otherwise - which is what an index signature over
-  // that object already means, and what lets the ORDINARY spelling reach the
-  // signature at all.
+  // #sec-typed-standard-library-statics, `Object.values` and `Object.entries`: V comes from an index
+  // signature where the argument has one, and from the JOIN of the declared property types otherwise -
+  // which is what an index signature over that object already means, and what lets the ORDINARY
+  // spelling reach the signature at all.
   const IX = 'let o: { [key: string]: uint8 } = {}; ';
   const OB = 'let o: { a: uint8, b: uint8 } = { a: 1, b: 2 }; ';
   expect(ok(`${IX} let n: [].<uint8> = Object.values(o);`)).toBe(true);
@@ -666,17 +649,16 @@ const FA = 'const a: [].<uint8> = [1, 2]; ';
 const FP = 'let ps: [].<Promise.<uint8, Error>> = []; ';
 
 test('fromAsync AWAITS its elements', () => {
-  // `standardlibrary.md` writes the parameter as
-  // `AsyncIterable.<T> | Iterable.<T | Promise.<T, any>>`. A promise-valued
-  // element contributes what it RESOLVES with, which is the one thing this
-  // signature needs that no other does.
+  // `Array.fromAsync` takes `Iterable.<T | Promise.<T, any>>` (#sec-typed-standard-library-statics): a
+  // promise-valued element contributes what it RESOLVES with, which is the one thing this signature
+  // needs that no other does.
   expect(ok(`${FA} let p: Promise.<[].<uint8>, any> = Array.fromAsync(a);`)).toBe(true);
   expectStaticTypeError(`${FA} let p: Promise.<[].<string>, any> = Array.fromAsync(a);`);
   expect(ok(`${FP} let p: Promise.<[].<uint8>, any> = Array.fromAsync(ps);`)).toBe(true);
   // The promise is UNWRAPPED, so the result is not an array of promises.
   expectStaticTypeError(`${FP} let p: Promise.<[].<Promise.<uint8, Error>>, any> = Array.fromAsync(ps);`);
-  // A source MIXING bare values and promises - the union arm the design writes -
-  // contributes T from both.
+  // A source MIXING bare values and promises - the union arm the signature names - contributes T from
+  // both.
   expect(ok('let m: [].<uint8 | Promise.<uint8, Error>> = []; let p: Promise.<[].<uint8>, any> = Array.fromAsync(m);')).toBe(true);
 });
 
@@ -828,13 +810,10 @@ test('a rest annotation must RESOLVE to an array or tuple type', () => {
 });
 
 test('a type PARAMETER rest is judged by its CONSTRAINT', () => {
-  // The whole reason this is a resolution-time rule and not an Early Error: a
-  // parameter's form is not knowable from the text, and `resolveType` answers
-  // the parameter record, whose BOUND says whether the rest is well formed.
-  //
-  // An unconstrained parameter is refused, which is the rule asking for
-  // `<C extends [].<any>>` - the form `regexp.md` and `typechallenges.md`
-  // already write.
+  // The whole reason this is a resolution-time rule and not an Early Error: a parameter's form is not
+  // knowable from the text, and `resolveType` answers the parameter record, whose BOUND says whether the
+  // rest is well formed. An unconstrained parameter is refused, which is the rule asking for
+  // `<C extends [].<any>>`.
   expect(ok('if (false) { function f<C: type extends [].<any>>(...a: C) { return 1; } } 1;')).toBe(true);
   expect(ok('if (false) { function f<C: type extends [].<uint32>>(...a: C) { return 1; } } 1;')).toBe(true);
   expectStaticTypeError('function f<C: type>(...a: C) { return 1; }');

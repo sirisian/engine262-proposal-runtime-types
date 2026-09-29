@@ -2,22 +2,18 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * Spec: #sec-decorator-contexts (Decorator Contexts) - `Reflect.ClassAccessor`,
- * and the `protected` modifier it reports. Design: README.md, decorators.md.
- *
- * `Reflect.ClassAccessor` is the last of the class family of contexts, and the
- * one that needs a whole declaration form built to reach.
+ * Spec: #sec-decorator-contexts (Decorator Contexts) - `Reflect.ClassAccessor`, and the `protected`
+ * modifier it reports. `Reflect.ClassAccessor` is a decorator context reached only through the
+ * `accessor` declaration form (see accessors.test.mts).
  */
 
 test('a decorated accessor receives ClassAccessor, once', () => {
   const one = 'let k = "NO"; function f(c) { k = c.kind; } ';
   expect(evaluated(`${one} class A { @f accessor a: uint32 = 5; } k;`)).toBe('ClassAccessor');
-  // It fires ONCE, not as a ClassGetter and a ClassSetter. decorators.md is
-  // explicit that the declaration form fixes the context - "Accessor is
-  // required so that all decorators see the same context ... `signal` runs
-  // before `validate` and both see an accessor" - and a desugaring-first
-  // implementation would naturally have produced the pair, so the COUNT is
-  // asserted and not only the kind.
+  // It fires ONCE, not as a ClassGetter and a ClassSetter. The declaration form fixes the context - an
+  // accessor is required so that all decorators see the same context, whatever they do with it - and a
+  // desugaring-first implementation would naturally produce the pair, so the COUNT is asserted and not
+  // only the kind.
   expect(evaluated('let n = 0; function f(c) { n += 1; } class A { @f accessor a: uint32 = 5; } String(n);')).toBe('1');
   // A plain field is undisturbed, which is what says the two were parted rather
   // than one renamed.
@@ -30,8 +26,9 @@ test('a decorated accessor receives ClassAccessor, once', () => {
 });
 
 test('the context carries ClassAccessorReflection\'s shape', () => {
-  // decorators.md: `type`, `name`, `static`, `private`, `protected`, `initial`,
-  // `metadata`, and `readonly` - see the `readonly accessor` test below.
+  // `Reflect.ClassAccessor` reflects `type`, `name`, `static`, `private`, `protected`, `readonly`,
+  // `initial`, `initializer`, `access` and `metadata` (#sec-reflection-shape-class) - see the
+  // `readonly accessor` test below.
   const grab = 'let c; function f(x) { c = x; } ';
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.name);`)).toBe('a');
   expect(evaluated(`${grab} class A { @f static accessor a: uint32 = 5; } String(c.static);`)).toBe('true');
@@ -52,14 +49,12 @@ test('the context carries ClassAccessorReflection\'s shape', () => {
 });
 
 test('PROTECTED parses, reports, and does not move the layout', () => {
-  // README: "Like `readonly` and `static` it is a modifier on an ordinary
-  // member, in the public layout slot." It had not parsed at all - `protected`
-  // is a FutureReservedWord in strict mode and a class body is always strict,
-  // so it needed its own test rather than falling out of the identifier path
-  // the way `readonly` and `accessor` do.
-  // Read from INSIDE the class, since the access rule now refuses an outside
-  // read - these assertions are about the member EXISTING and being reachable
-  // where it should be, not about the rule.
+  // `protected` is a modifier on an ordinary member, in the public layout slot, like `readonly` and
+  // `static`. It needed its own parse test: `protected` is a FutureReservedWord in strict mode and a
+  // class body is always strict, so it does not fall out of the identifier path the way `readonly` and
+  // `accessor` do. Read from INSIDE the class, since the access rule refuses an outside read - these
+  // assertions are about the member EXISTING and being reachable where it should be, not about the
+  // rule.
   expect(evaluated('class A { protected a: uint8 = 1; read() { return this.a; } } String(new A().read());')).toBe('1');
   expect(evaluated('class A { protected readonly a: uint8 = 1; read() { return this.a; } } String(new A().read());')).toBe('1');
   expect(evaluated('class A { static protected a: uint8 = 1; static read() { return A.a; } } String(A.read());')).toBe('1');
@@ -93,11 +88,9 @@ test('what the accessor context does and does not carry', () => {
   // declared default, which the field context carries as well - one derivation
   // across both rather than an accessor-specific one.
   const grab = 'let c; function f(x) { c = x; } ';
-  // `initial` is on both contexts.
-  // decorators.md gives it on `ClassAccessorReflection` as well as
-  // `ClassFieldReflection`, and the two describe the same declaration - so ONE
-  // derivation serves both rather than two that can drift, which is the shape
-  // this project has repeatedly been bitten by.
+  // `initial` is on both contexts (#sec-reflection-shape-class gives it on `ClassAccessor` as well as
+  // `ClassField`), and the two describe the same declaration - so ONE derivation serves both rather than
+  // two that can drift.
   expect(evaluated(`${grab} class A { @f accessor a: uint32 = 5; } String(c.initial);`)).toBe('5');
   // A typed accessor with no initializer reports its type's ZERO VALUE.
   expect(evaluated(`${grab} class A { @f accessor a: uint32; } String(c.initial);`)).toBe('0');
@@ -106,9 +99,10 @@ test('what the accessor context does and does not carry', () => {
   // the point of sharing one: a field and an accessor describe the same
   // declaration and cannot disagree about its declared default.
   expect(evaluated(`${grab} class A { @f a: uint32 = 5; } String(c.initial);`)).toBe('5');
-  // The `protected` ACCESS RULE is not enforced: README makes it "an access rule
-  // checked where the static type is known", and nothing checks it yet. The
-  // modifier parses, lays out, and reflects.
+  // The `protected` access rule (#sec-typed-classes) is covered in protected-access.test.mts; here the
+  // modifier parses, lays out, and reflects. This reads it from a subclass. Reading it from outside
+  // through a `const` bound to a construction is refused as the protected access it is, so the last
+  // assertion goes through a `let` the checker does not type: it is about the accessor's VALUE.
   expect(evaluated('class B { protected a: uint8 = 1; } class D extends B { read() { return this.a; } } String(new D().read());')).toBe('1');
   // Through a `let`: a `const` bound to a construction is now typed, so
   // `o.a` from outside the class is refused as the protected access it is.
@@ -142,10 +136,11 @@ test('a method, getter, and setter context report `protected`', () => {
 // -- access over the accessor's own slot -----------------------------------------
 
 test('the accessor context carries `access` over its own slot', () => {
-  // decorators.md's replacement for `Reflect.ClassAccessor` is a `{ get, set }`
-  // pair. A replacement that cannot reach the ORIGINAL storage has to close
-  // over storage of its own, orphaning the layout slot the backing occupies -
-  // so the context now hands the pair over, as TC39's `context.access` does.
+  // The replacement for `Reflect.ClassAccessor` is a `{ get, set }` pair (#sec-replacement-values). A
+  // replacement that cannot reach the ORIGINAL storage has to close over storage of its own, orphaning
+  // the layout slot the backing occupies - so the context hands the pair `access`, as TC39's
+  // `context.access` does (#sec-reflection-shape-class: `access`, an object with `get` and `set`
+  // methods).
   expect(evaluated('let t = "?"; function f(c) { t = typeof c.access + "/" + typeof c.access.get + "/" + typeof c.access.set; } '
     + 'class A { @f accessor a: uint8 = 1; } t;')).toBe('object/function/function');
   // THE ASSERTION THAT MATTERS is that it reaches the REAL storage, both ways -

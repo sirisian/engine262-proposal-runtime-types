@@ -46,9 +46,7 @@ test('overloading on parameters resolves', () => {
 });
 
 test('two signatures differing only in return are declared', () => {
-  // They parse and both are registered - the design writes two full bodies
-  // rather than TypeScript-style declarations, which is what an earlier
-  // measurement of this feature got wrong.
+  // They parse and both are registered: two full bodies, not TypeScript-style declarations.
   expect(ok('function f(): uint32 { return 10; } function f(): string { return "10"; }')).toBe(true);
 });
 

@@ -2,19 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * The `partial class` extension.
- *
- * A `partial class` re-opens a class that is already declared, in the same
- * program or as an intrinsic, to add methods and operators to it (README "Class
- * Extension"). The `partial` keyword is required: it declares no new binding and
- * merges its members into the existing class, so a program cannot fork a class's
- * behaviour by an accidental re-declaration, which remains an error. Adding
- * behaviour this way is available even on a sealed class, since it introduces no
- * new subclass or case; only a mixin that would subclass a sealed class from
- * outside its module is refused.
- *
- * `partial` is a class modifier, written before `class` like `abstract`, `sealed`,
- * and `dynamic`. It is available only under the runtime types feature.
+ * The `partial class` extension (#sec-partial-classes). A `partial class` re-opens a class that is
+ * already declared, in the same program or as an intrinsic, to add methods and operators to it. The
+ * `partial` keyword is required: it declares no new binding and merges its members into the existing
+ * class, so a program cannot fork a class's behaviour by an accidental re-declaration, which remains
+ * an error. Adding behaviour this way is available even on a sealed class, since it introduces no new
+ * subclass or case; only a mixin that would subclass a sealed class from outside its module is
+ * refused. `partial` is a class modifier, written before `class` like `abstract`, `sealed`, and
+ * `dynamic`. It is available only under the runtime types feature.
  */
 
 // -- Adding members ------------------------------------------------------------

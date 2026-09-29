@@ -2,35 +2,32 @@ import { test, expect } from 'vitest';
 import { evaluated, evaluatedFlagOff, expectThrownKind, ok } from '../harness.mts';
 
 /**
- * Design: README.md; the declarations are judged through #sec-typed-classes
- * and laid out through #sec-memory-layout.
+ * Unspecified: the specification defines the `ClassAccessor` reflection
+ * (#sec-reflection-shape-class) and its replacement (#sec-replacement-values), but no clause for the
+ * `accessor` field declaration itself. These tests pin the design's declaration, judged through
+ * #sec-typed-classes and laid out through #sec-memory-layout.
  *
- * README.md: "An `accessor` field declares a typed field together with a getter
- * and setter over it. It desugars to a private typed field and the matching
- * pair, so the backing field participates in the memory layout, and an
- * undecorated accessor is inlined to a direct field access."
+ * An `accessor` field declares a typed field together with a getter and setter over it. It desugars
+ * to a private typed field and the matching pair, so the backing field participates in the memory
+ * layout, and an undecorated accessor is inlined to a direct field access.
  *
- * This file covers the declaration end to end: the grammar, the desugaring it
- * stands for, and the commitment that the inlining README promises stays
- * unobservable. Each form is asserted by its RESULT rather than by parsing
- * alone, because a declaration that parses and does nothing reads as support
- * while reflecting as `ClassField` and occupying the wrong kind of slot.
+ * This file covers the declaration end to end: the grammar, the desugaring it stands for, and the
+ * commitment that the inlining stays unobservable. Each form is asserted by its RESULT rather than by
+ * parsing alone, because a declaration that parses and does nothing reads as support while
+ * reflecting as `ClassField` and occupying the wrong kind of slot.
  *
- * THE GRAMMAR IS THIS PROPOSAL'S, NOT TC39'S. The `decorators` feature is
- * mutually exclusive with `runtime-types` and is never enabled here. What the
- * two share is the DISAMBIGUATION - `accessor` is not a reserved word, so it is
- * the modifier only when a property name follows on the same line - and that is
- * pure syntax, kept in one place because a rule written twice drifts.
+ * THE GRAMMAR IS THIS PROPOSAL'S, NOT TC39'S. The `decorators` feature is mutually exclusive with
+ * `runtime-types` and is never enabled here. What the two share is the DISAMBIGUATION - `accessor` is
+ * not a reserved word, so it is the modifier only when a property name follows on the same line - and
+ * that is pure syntax, kept in one place because a rule written twice drifts.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 test('every form of the declaration parses and works', () => {
-  // All four forms of README's grammar, plus the two the shape implies: an
-  // accessor need not be typed, and need not be initialized. Each is asserted
-  // by its RESULT - a
-  // parse-only assertion would now pass against a declaration that parsed and
-  // did nothing.
+  // All four forms of the accessor grammar, plus the two the shape implies: an accessor need not be
+  // typed, and need not be initialized. Each is asserted by its RESULT - a parse-only assertion would
+  // pass against a declaration that parsed and did nothing.
   expect(evaluated('class A { accessor a: uint32 = 5; } String(new A().a);')).toBe('5');
   expect(evaluated('class A { static accessor count: uint32 = 3; } String(A.count);')).toBe('3');
   expect(evaluated('class A { accessor a = 5; } String(new A().a);')).toBe('5');
@@ -48,11 +45,9 @@ test('the positions the design refuses stay refused', () => {
   // context, and an accessor's annotation is a FIELD's, not a return's. The
   // accessor grammar must not reopen it.
   expect(outcome('function f(c) {} class A { accessor a: @f uint32 = 5; }')).toBe('SyntaxError');
-  // README: abstract fields and accessors "are not part of the proposal". An
-  // abstract FIELD is already a SyntaxError, and the accessor inherits it
-  // rather than needing a rule of its own - asserted so that a later stage
-  // making abstract fields legal does not silently make abstract accessors
-  // legal with them.
+  // Abstract fields and accessors are not part of the proposal. An abstract FIELD is already a
+  // SyntaxError, and the accessor inherits it rather than needing a rule of its own - asserted so that
+  // making abstract fields legal would not silently make abstract accessors legal with them.
   expect(outcome('abstract class A { abstract accessor a: uint32; }')).toBe('SyntaxError');
   expect(outcome('abstract class A { abstract a: uint32; }')).toBe('SyntaxError');
 });
@@ -149,22 +144,15 @@ test('`accessor` is an ordinary identifier and must stay one', () => {
 // -- The desugaring --------------------------------------------------------------
 
 /*
- * The desugaring.
+ * The desugaring. An `accessor` desugars to a private typed field and the matching pair, so the
+ * backing field participates in the memory layout.
  *
- * README.md: "It desugars to a private typed field and the matching pair, so
- * the backing field participates in the memory layout, and an undecorated
- * accessor is inlined to a direct field access."
- *
- * THE DESUGARING IS REAL RATHER THAN SPECIAL-CASED, and that is what made it
- * small. The backing is an ordinary field record whose [[Name]] is a Private
- * Name, so `DefineField` initializes it per instance, applies the declared
- * type's DEFAULT where no initializer is written, and hangs the TypeObject on
- * the Private Name - which is what makes `PrivateSet` enforce the type. The
- * setter checks its argument because the field underneath it does, not because
- * this feature added a check.
- *
- * Built on `[[Fields]]` and `ClassFieldDefinitionRecord` throughout: the TC39
- * accessor's records are a reference that was read and never reached.
+ * THE DESUGARING IS REAL RATHER THAN SPECIAL-CASED, and that is what makes it small. The backing is an
+ * ordinary field record whose [[Name]] is a Private Name, so `DefineField` initializes it per instance,
+ * applies the declared type's DEFAULT where no initializer is written, and hangs the TypeObject on the
+ * Private Name - which is what makes `PrivateSet` enforce the type. The setter checks its argument
+ * because the field underneath it does, not because this feature added a check. It is built on
+ * `[[Fields]]` and `ClassFieldDefinitionRecord` throughout.
  */
 
 test('an accessor round-trips, per instance', () => {
@@ -235,10 +223,8 @@ test('what the desugaring does not settle', () => {
   // accessors-decorator-context.test.mts owns the assertions.
   expect(evaluated('let k = "NO"; function f(c) { k = c.kind; } class A { @f accessor a: uint32 = 5; } k;')).toBe('ClassAccessor');
 
-  // Nothing here asserts LAYOUT. README says the backing "participates in the
-  // memory layout" and, twenty lines later, that "an accessor doesn't" occupy
-  // one; accessors-layout.test.mts settles that. The backing is a private
-  // field, so whatever a private field does is what it does.
+  // Nothing here asserts LAYOUT: the backing is a private field, so whatever a private field does is
+  // what it does. accessors-layout.test.mts covers whether an accessor occupies a layout slot.
 });
 
 
@@ -270,35 +256,26 @@ test('a PRIVATE accessor desugars to a backing field AND a private pair', () => 
 // -- Inlining --------------------------------------------------------------------
 
 /*
- * Inlining: what an accessor's inlining may be observed to do.
+ * Inlining: what an accessor's inlining may be observed to do. An undecorated accessor is inlined to
+ * a direct field access. Two readings differ in what a program can SEE:
  *
- * README: "an undecorated accessor is INLINED TO A DIRECT FIELD ACCESS". Two
- * readings, both with textual support, and they differ in what a program can
- * SEE:
+ * 1. An OPTIMIZATION. The pair is always installed and always observable; an engine may expand the
+ *    call, and `get a() { return this.#backing; }` expanded IS a direct field access. Operators,
+ *    accessors and small numeric kernels are among the things called directly and only directly,
+ *    which is the property that makes them inlinable.
  *
- *   1. An OPTIMIZATION. The pair is always installed and always observable; an
- *      engine may expand the call, and `get a() { return this.#backing; }`
- *      expanded IS a direct field access. README lists "operators, accessors,
- *      and small numeric kernels" among the things "called directly and only
- *      directly", which is the property that makes them inlinable.
- *   2. A SEMANTIC. An undecorated accessor installs no pair at all and is a
- *      data property; a decorated one installs the pair the decorator returned.
- *      README's `inline` section supports this reading too: an `inline`
- *      function's value cannot be taken, and "reading it as a property is a
- *      TypeError".
+ * 2. A SEMANTIC. An undecorated accessor installs no pair at all and is a data property; a decorated
+ *    one installs the pair the decorator returned. The `inline` function rule supports this reading
+ *    too: an `inline` function's value cannot be taken, and reading it as a property is a TypeError.
  *
- * READING 1 HOLDS, and the deciding argument is what reading 2 costs:
- * DECORATING WOULD CHANGE THE CLASS'S OBSERVABLE SHAPE. The same declaration
- * would yield a data property or an accessor pair depending on whether a
- * decorator ran - different `getOwnPropertyDescriptor`, different own-property
- * enumeration, different `Object.keys`. decorators.md requires the `accessor`
- * keyword precisely so that "all decorators see the same context", which is a
- * stability argument; making the SHAPE unstable cuts against the same instinct.
- *
- * So the inlining is unobservable BY CONSTRUCTION, and what this file pins is
- * the commitment that makes it so: the shape does not depend on decoration.
- * The desugaring already works this way; what this section adds is that the
- * decision is guarded rather than implicit.
+ * READING 1 HOLDS, and the deciding argument is what reading 2 costs: DECORATING WOULD CHANGE THE
+ * CLASS'S OBSERVABLE SHAPE. The same declaration would yield a data property or an accessor pair
+ * depending on whether a decorator ran - different `getOwnPropertyDescriptor`, different own-property
+ * enumeration, different `Object.keys`. The `accessor` keyword is required so that all decorators see
+ * the same context, which is a stability argument; making the SHAPE unstable cuts against the same
+ * instinct. So the inlining is unobservable BY CONSTRUCTION, and what this file pins is the commitment
+ * that makes it so: the shape does not depend on decoration. The desugaring already works this way;
+ * what this section adds is that the decision is guarded rather than implicit.
  */
 
 test('the observable shape does NOT depend on decoration', () => {
@@ -331,12 +308,10 @@ test('an accessor is observably an ACCESSOR, not a field', () => {
 });
 
 test('the pair is reachable, which reading 2 would have forbidden', () => {
-  // README's `inline` rule is that an inline function's value cannot be taken -
-  // "storing it, passing it as a callback, or reading it as a property is a
-  // TypeError". An accessor's generated pair is NOT marked `inline` and is not
-  // subject to that: the getter can be read off the descriptor and called.
-  // Pinned because it is the sharpest observable difference between the two
-  // readings of section 2.4.
+  // The `inline` rule is that an inline function's value cannot be taken - storing it, passing it as a
+  // callback, or reading it as a property is a TypeError. An accessor's generated pair is NOT marked
+  // `inline` and is not subject to that: the getter can be read off the descriptor and called. Pinned
+  // because it is the sharpest observable difference between the two readings above.
   expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); o.a = 7; '
     + 'const g = Object.getOwnPropertyDescriptor(A.prototype, "a").get; String(g.call(o));')).toBe('7');
   expect(evaluated('class A { accessor a: uint32 = 5; } const o = new A(); '
@@ -344,11 +319,10 @@ test('the pair is reachable, which reading 2 would have forbidden', () => {
 });
 
 test('PINNED: `inline` itself is not implemented', () => {
-  // The keyword README defines - "a contextual keyword placed before
-  // `function`, a method name, or `operator`" - does not parse, and neither
-  // does the `@inline` decorator it says sets the same property. So the
-  // GUARANTEE side of inlining is unbuilt; what is settled here is only what
-  // an accessor's inlining may and may not be observed to do.
+  // Unspecified: the `inline` keyword - a contextual keyword placed before `function`, a method name, or
+  // `operator` - is not in the specification, and it does not parse in this engine, nor does the
+  // `@inline` decorator that sets the same property. So the GUARANTEE side of inlining is unbuilt; what
+  // is settled here is only what an accessor's inlining may and may not be observed to do.
   const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   expect(outcome('class A { inline m() { return 1; } }')).toBe('SyntaxError');
   expect(outcome('inline function f() { return 1; }')).toBe('SyntaxError');
