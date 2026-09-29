@@ -657,25 +657,25 @@ test('concat preserves its joined element contract', () => {
 });
 
 test('push, unshift and splice check their element', () => {
-  // All three were ABSENT from `arrayMethodSignature`, so a foreign
-  // element raised no static error - `a.push("s")` on a `[].<uint8>`
-  // type-checked. The RUN TIME refused every one, and these entries are copied
-  // from it.
-  expect(accepts('let a: [].<uint8> = []; a.push("s");')).toBe(false);
-  expect(accepts('let a: [].<uint8> = []; a.unshift("s");')).toBe(false);
-  expect(accepts('let a: [].<uint8> = []; a.splice(0, 0, "s");')).toBe(false);
+  // #sec-intrinsic-array-contracts: a fresh, stable origin establishes the
+  // intrinsic. A mutable receiver retains its runtime store checks.
+  const A = 'const a: [].<uint8> = []; ';
+  for (const call of ['a.push("s");', 'a.unshift("s");', 'a.splice(0, 0, "s");',
+    'a.push(1, "s");', 'a.unshift(1, "s");', 'a.splice(0, 0, 1, "s");']) {
+    expect(accepts(`${A}${call}`)).toBe(false);
+    expect(accepts(`let a: [].<uint8> = []; ${call}`)).toBe(true);
+    expect(rejects(`let a: [].<uint8> = []; ${call}`)).toBe(true);
+  }
 
-  // The element parameter is a REST - all three are variadic.
-  expect(accepts('let a: [].<uint8> = []; a.push((1 := uint8));')).toBe(true);
-  expect(accepts('let a: [].<uint8> = []; a.push((1 := uint8), (2 := uint8));')).toBe(true);
-  expect(accepts('let a: [].<uint8> = []; a.splice(0, 1);')).toBe(true);
+  // Each inserted value receives the element context; empty rests are valid.
+  for (const call of ['a.push();', 'a.unshift();', 'a.push(1, 2);', 'a.unshift(1, 2);',
+    'a.splice(0, 0, 1, 2);', 'a.splice(0, 1);']) {
+    expect(accepts(`${A}${call}`)).toBe(true);
+  }
 
-  // `splice`'s RETURN is the receiver, as `slice`'s is. Building a fresh array
-  // record gave `Extent: undefined` and refused this row - which MATCHES the run
-  // time, and the run time is wrong there: it reports
-  // `"[undefined].<uint.<8>>" is not assignable to "[].<uint.<8>>"`. Copying an
-  // error is not agreement.
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.splice(0, 1);')).toBe(true);
+  // Splice creates a growable result; it does not return its receiver.
+  expect(accepts(`${A}let b: [].<uint8> = a.splice(0, 1);`)).toBe(true);
+  expect(accepts(`${A}let b: [].<string> = a.splice(0, 1);`)).toBe(false);
 });
 
 test('a returned value type class instance is copied', () => {

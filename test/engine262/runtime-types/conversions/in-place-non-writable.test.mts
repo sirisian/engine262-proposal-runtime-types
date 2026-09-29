@@ -87,7 +87,8 @@ test('a conversion that was never needed is still not attempted', () => {
     + ' function f(x: I) { return 1; } String(f(o));')).toBe('1');
   expect(evaluated('interface I { s: string } const o: any = Object.freeze({ s: "a" });'
     + ' function f(x: I) { return 1; } String(f(o));')).toBe('1');
-  expect(evaluated('interface I { n: uint32 } const o = { get n() { return (1 := uint32); } };'
+  // #sec-isobjectsubtype: a known getter-only source needs a readonly view.
+  expect(evaluated('interface I { readonly n: uint32 } const o = { get n() { return (1 := uint32); } };'
     + ' function f(x: I) { return 1; } String(f(o));')).toBe('1');
 });
 

@@ -17234,7 +17234,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // as a `number`, since the checker cannot tell `[1, 'a']` written
           // inline from a declared tuple and the run time answers a Number there.
           if (receiver && (receiver.Kind === 'array' || receiver.Kind === 'tuple') && m.IdentifierName
-              && ['with', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat'].includes(m.IdentifierName.name)) {
+              && ['with', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'unshift'].includes(m.IdentifierName.name)) {
             return arrayContract(node, receiver, m.IdentifierName.name);
           }
           if (receiver && receiver.Kind === 'tuple') {

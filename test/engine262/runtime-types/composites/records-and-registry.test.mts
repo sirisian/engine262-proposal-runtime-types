@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
  * Spec: #sec-composites (Composites) - record composites and the registry.
@@ -65,7 +65,10 @@ test('the object a composite is: frozen, null-prototyped, not constructible', ()
   expect(evaluated('String(Object.isFrozen(Composite({ x: 1 })));')).toBe('true');
   expect(evaluated('String(Object.getPrototypeOf(Composite({ x: 1 })));')).toBe('null');
   expect(evaluated('String(typeof Composite({ x: 1 }));')).toBe('object');
-  expect(outcome('new Composite({});')).toBe('TypeError');
+  // #sec-function-types: proved conversion-only Type Objects are rejected early.
+  expect(outcome('new Composite({});')).toBe('StaticTypeError');
+  expectStaticTypeError('if (false) { new Composite({}); }');
+  expectThrownKind('const C: any = Composite; new C({});', 'TypeError');
   expect(outcome('Composite(null);')).toBe('TypeError');
   expect(outcome('Composite(1);')).toBe('TypeError');
   // Own data properties, enumerable, in sorted order.

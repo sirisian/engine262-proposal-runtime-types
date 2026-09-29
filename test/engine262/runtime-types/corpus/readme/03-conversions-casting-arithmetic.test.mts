@@ -46,8 +46,10 @@ test('Conversions: a checked boundary reports range and type failures differentl
   expectThrownKind('function g(){return 0-1;} let a: uint8 = g();', 'RangeError');
   // a value that would have to be truncated to fit is unrepresentable too
   expectThrownKind('function g(){return 1.5;} let a: uint8 = g();', 'RangeError');
-  // a typed value narrowing to a width that cannot hold it
-  expectThrownKind('function g(): any {return (300 := uint16);} let a: uint8 = g();', 'RangeError');
+  // #sec-requiretype: any preserves a sized numeric value's type. A distinct
+  // target requires an explicit conversion, even when the value would fit.
+  expectThrownKind('function g(): any {return (300 := uint16);} let a: uint8 = g();', 'TypeError');
+  expectThrownKind('function g(): any {return (1 := uint16);} let a: uint8 = g();', 'TypeError');
   // a finite value that a float width could only represent as an infinity is
   // unrepresentable, rather than silently becoming that infinity
   expectThrownKind('function g(){return 1e300;} let a: float32 = g();', 'RangeError');

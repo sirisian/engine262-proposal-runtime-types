@@ -254,11 +254,11 @@ export const collectionMethodSignature = (library: string, name: string, args: r
    * is the same nominal, not a look-alike.
    */
   const setOfAny = { ...(receiver as object), Arguments: [{ Kind: 'any' }] } as unknown as TypeRecord;
-  /** `(value, key, collection) => void`, the shape both forEach callbacks take. */
+  /** #sec-keyed-collections: forEach supplies all three callback arguments. */
   const forEachCallback = (first: TypeRecord, second: TypeRecord) => ({
     Kind: 'function',
     Signatures: [{
-      Parameters: [first, second, receiver].map((t, i) => parameter(t, { Name: `a${i}`, Optional: i > 0 })),
+      Parameters: [first, second, receiver].map((t, i) => parameter(t, { Name: `a${i}` })),
       Return: voidType,
       Untyped: false,
     }],
