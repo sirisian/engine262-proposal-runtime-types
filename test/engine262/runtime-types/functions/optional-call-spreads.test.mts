@@ -27,5 +27,6 @@ test("accepts optional spread null", () => {
 });
 
 test("accepts optional spread string", () => {
-  expect(ok("function unused(f:(x:uint8)=>void,x:string){f?.(...x);}")).toBe(true);
+  // A string is iterable; the parameter takes what it yields.
+  expect(ok("function unused(f:(x:string)=>void,x:string){f?.(...x);}")).toBe(true);
 });

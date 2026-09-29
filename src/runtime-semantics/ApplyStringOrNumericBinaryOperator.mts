@@ -91,7 +91,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         EnterOperatorBody();
         let raw;
         try {
-          raw = Q(yield* vectorBinaryOperator(WithoutMetadata(lval), opText, WithoutMetadata(dispatched.operand ?? rval)));
+          raw = Q(yield* vectorBinaryOperator(WithoutMetadata(lval), opText, WithoutMetadata(dispatched.operand ?? rval), literals));
         } finally {
           LeaveOperatorBody();
         }
@@ -101,7 +101,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
         return dispatched;
       }
     }
-    return Q(yield* vectorBinaryOperator(lval, opText, rval));
+    return Q(yield* vectorBinaryOperator(lval, opText, rval, literals));
   }
   // proposal-runtime-types (ranges.md "Types"): interval arithmetic. The bounds
   // of a computed value are the arithmetic of the bounds it was computed from,

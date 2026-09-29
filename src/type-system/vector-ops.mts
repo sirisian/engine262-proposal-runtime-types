@@ -427,6 +427,7 @@ export function* vectorBinaryOperator(
   lval: Value,
   opText: string,
   rval: Value,
+  literals?: { left: boolean, right: boolean },
 ): PlainEvaluator<Value> {
   const leftShape = lval.type === 'Vector' ? vectorShape(lval as VectorValue) : null;
   const rightShape = rval.type === 'Vector' ? vectorShape(rval as VectorValue) : null;
@@ -443,11 +444,15 @@ export function* vectorBinaryOperator(
     )) as Value;
   }
   const carrier = (leftShape ? lval : rval) as VectorValue;
+  // #sec-operator-results: a literal scalar adopts the lane type, as it adopts
+  // a scalar operand's type, so each lane's operation is told which side the
+  // literal was on. A lane of the vector is never a literal.
+  const laneLiterals = literals && { left: !leftShape && literals.left, right: !rightShape && literals.right };
   const lanes: Value[] = [];
   for (let i = 0; i < shape.laneCount; i += 1) {
     const left = leftShape ? (lval as VectorValue).lanes[i] as Value : lval;
     const right = rightShape ? (rval as VectorValue).lanes[i] as Value : rval;
-    lanes.push(Q(yield* ApplyStringOrNumericBinaryOperator(left, opText as never, right)) as Value);
+    lanes.push(Q(yield* ApplyStringOrNumericBinaryOperator(left, opText as never, right, laneLiterals)) as Value);
   }
   return new VectorValue(lanes, carrier.TypeRecord);
 }

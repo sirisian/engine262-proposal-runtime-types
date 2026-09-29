@@ -481,6 +481,12 @@ export function* Evaluate_AssignmentExpression({
       // silent wrap: the plain conversion took `a += 300` at a `uint8` to 44,
       // which is the truncation the design refuses everywhere else.
       operand = Q(yield* CheckedConvertValue(rval, (lval as { TypeRecord: unknown }).TypeRecord as never));
+    } else if (lval.type === 'Vector' && rval instanceof NumberValue && !(rval instanceof TypedNumberValue)) {
+      // #sec-operator-results, #sec-vector-lanes: beside a vector, the literal
+      // the desugaring propagates takes the LANE type, and the lane-typed
+      // scalar then broadcasts - so `v *= 2` means what `v = v * 2` does.
+      const lane = ((lval as unknown as { TypeRecord?: { Arguments?: readonly unknown[] } }).TypeRecord?.Arguments ?? [])[0];
+      if (lane && typeof lane === 'object') operand = Q(yield* CheckedConvertValue(rval, lane as never));
     } else if (rval instanceof TypedNumberValue && lval instanceof NumberValue && !(lval instanceof TypedNumberValue)) {
       // The mirror, for an operator whose left operand is the untyped one. A
       // compound assignment's target is the left operand, so this arises only
