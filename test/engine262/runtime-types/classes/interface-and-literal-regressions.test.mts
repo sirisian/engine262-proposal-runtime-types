@@ -645,9 +645,10 @@ test('concat preserves its joined element contract', () => {
   expect(accepts(`${A}let b: [].<uint8|string> = a.concat(["s"]);`)).toBe(true);
   expect(accepts(`${A}const b: [].<uint8> = [2]; let c: [].<uint8> = a.concat(b);`)).toBe(true);
 
-  // An unresolved receiver origin keeps its runtime conversion boundary.
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(true);
-  expect(rejects('let a: [].<uint8> = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(true);
+  // An unresolved receiver origin keeps its runtime conversion boundary; a
+  // reassigned `let` is unresolved (#sec-function-types).
+  expect(accepts('let a: [].<uint8> = []; a = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(true);
+  expect(rejects('let a: [].<uint8> = []; a = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(true);
 
   expect(accepts(`${A}let b: [].<string> = a.slice();`)).toBe(false);
   expect(accepts(`${A}let b: [].<uint8> = a.slice();`)).toBe(true);
@@ -663,8 +664,8 @@ test('push, unshift and splice check their element', () => {
   for (const call of ['a.push("s");', 'a.unshift("s");', 'a.splice(0, 0, "s");',
     'a.push(1, "s");', 'a.unshift(1, "s");', 'a.splice(0, 0, 1, "s");']) {
     expect(accepts(`${A}${call}`)).toBe(false);
-    expect(accepts(`let a: [].<uint8> = []; ${call}`)).toBe(true);
-    expect(rejects(`let a: [].<uint8> = []; ${call}`)).toBe(true);
+    expect(accepts(`let a: [].<uint8> = []; a = []; ${call}`)).toBe(true);
+    expect(rejects(`let a: [].<uint8> = []; a = []; ${call}`)).toBe(true);
   }
 
   // Each inserted value receives the element context; empty rests are valid.

@@ -74,7 +74,7 @@ import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeri
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
 import { eraseMetadata, literalFitsNumericType, keyAdmittedBy } from './literal-fit.mts';
-import { joinTypes, logicalResultType } from './logical-types.mts';
+import { falsyPartOf, joinTypes, logicalResultType } from './logical-types.mts';
 import {
   effectiveFunctionType, callableForm, sameConstructParameter, selectConstructSignature,
 } from './callable-shapes.mts';
@@ -2610,6 +2610,24 @@ export function InferredConstTypeOf(binding: object): TypeRecord | undefined {
 
 export function HasDeferredGuardChecks(root: object): boolean {
   return deferredGuardChecks.has(root);
+}
+
+/**
+ * proposal-runtime-types #sec-type-errors: the source text a dynamically
+ * constructed function is built from is checked when CreateDynamicFunction
+ * enforces its early errors, over the very nodes the function will run. It is
+ * a source text of its own, in the global scope, as #sec-typed-strict-mode
+ * already treats it; the root here stands in for the Script it is not.
+ *
+ * Where the walk recorded a narrowing request it ran without the narrowing, and
+ * a script's later checking pass is what reports; a dynamic function has no
+ * such pass, so it stays silent rather than report what may not hold.
+ */
+export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
+  const statement = { type: 'ExpressionStatement', Expression: expression } as unknown as ParseNode;
+  const root = { type: 'Script', ScriptBody: { type: 'ScriptBody', StatementList: [statement] } } as unknown as ParseNode.Script;
+  const errors = checkInTwoPasses([statement] as never, root, CreateCheckSession());
+  return errors.length > 0 && TakeNarrowingRequests(root).length > 0 ? [] : errors;
 }
 
 export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = false): ObjectValue[] {
@@ -24659,6 +24677,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return signature;
   };
 
+  /**
+   * #sec-proved-library-operations: "account for ... implicit conversions and
+   * other effects that could invalidate a dependency." An annotation's
+   * boundary is such an effect only where it can run user code, and that
+   * depends on what reaches it. Beyond the types whose checks run nothing, three
+   * boundaries only check a value that has no user code of its own: a typed
+   * class over a construction of that same class (a brand check), a `Map` or
+   * `Set` of inert arguments over a fresh empty one, and an object type of inert
+   * members over a literal of plain scalar data. Whether the initializer itself
+   * runs user code is the screen's own question.
+   */
+  const boundaryRunsNoUserCode = (annotation: ParseNode.TypeAnnotation, inert: (type: Known) => boolean): boolean => {
+    const type = resolveType(annotation.Type);
+    if (inert(type)) return true;
+    const declaration = annotation.parent;
+    if (!type || declaration?.type !== 'LexicalBinding' || !declaration.Initializer) return false;
+    const source = patternExpression(declaration.Initializer);
+    if (source?.type === 'NewExpression' && type.Kind === 'nominal') {
+      let callee = patternExpression(source.MemberExpression);
+      if (callee?.type === 'TypeArgumentsExpression') callee = patternExpression(callee.Expression);
+      if (callee?.type !== 'IdentifierReference') return false;
+      const bound = ResolveBindingDeclaration(callee, callee.name);
+      const library = (type as { LibraryName?: string }).LibraryName;
+      if (library !== undefined) {
+        return ['Map', 'Set'].includes(library) && library === callee.name && !bound && !source.Arguments?.length
+          && type.Arguments.every((argument) => typeof argument === 'object' && inert(argument));
+      }
+      return !!bound && bound.node === type.Declaration;
+    }
+    if (source?.type === 'ObjectLiteral' && type.Kind === 'object') {
+      const scalarLiteral = (node: ParseNode | null | undefined): boolean => !!node
+        && (['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral', 'BigIntLiteral'].includes(node.type)
+          || (node.type === 'UnaryExpression' && ['+', '-'].includes(node.operator) && node.UnaryExpression.type === 'NumericLiteral'));
+      return type.Properties.every((p) => inert(p.type))
+        && type.IndexSignatures.every((ix) => inert(ix.Key) && inert(ix.Value))
+        && source.PropertyDefinitionList.every((p) => p.type === 'PropertyDefinition'
+          && (p.PropertyName?.type === 'IdentifierName' || p.PropertyName?.type === 'StringLiteral' || p.PropertyName?.type === 'NumericLiteral')
+          && scalarLiteral(p.AssignmentExpression));
+    }
+    return false;
+  };
+
   let provenLibraryOperations: ReturnType<typeof ProvenLibraryOperations> | undefined;
   let provingLibraryOperations = false;
   const libraryOperations = (): ReturnType<typeof ProvenLibraryOperations> => {
@@ -24672,7 +24732,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || (type.Kind === 'array' && inert(type.Element))
         || (type.Kind === 'tuple' && type.Elements.every((e) => !e.InitializerNode && inert(e.Type))));
       provenLibraryOperations = ProvenLibraryOperations(root, surroundingAgent.currentRealmRecord,
-        (annotation) => inert(resolveType(annotation.Type)), (node) => !!establishedTypeObjectTarget(node));
+        (annotation) => boundaryRunsNoUserCode(annotation, inert), (node) => !!establishedTypeObjectTarget(node));
       return provenLibraryOperations;
     } finally {
       provingLibraryOperations = false;
@@ -24730,8 +24790,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || (type.Kind === 'tuple' && type.Elements.every((e) => !e.InitializerNode && inert(e.Type))));
       provenStaticLibraryOperations = ProvenStaticLibraryOperations(root, surroundingAgent.currentRealmRecord,
         (annotation) => {
+          if (boundaryRunsNoUserCode(annotation, inert)) return true;
           const type = resolveType(annotation.Type);
-          if (inert(type)) return true;
           const declaration = annotation.parent;
           const call = declaration?.type === 'LexicalBinding' ? patternExpression(declaration.Initializer ?? undefined) : null;
           const member = call?.type === 'CallExpression' ? patternExpression(call.CallExpression) : null;
@@ -25024,11 +25084,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     provenArrayMembers ??= ProvenArrayMembers(root, surroundingAgent.currentRealmRecord);
     if (!provenArrayMembers.has(member)) return;
     const receiver = staticType(member.MemberExpression);
-    if (receiver?.Kind !== 'array' || typeof receiver.Extent !== 'number'
-        || receiver.Element.Kind !== 'primitive' || !knownNonObject(receiver.Element)) return;
-    const length = receiver.Extent;
+    // A tuple with neither a rest nor a defaulted position has exactly one
+    // permitted length, as a stated-extent array has one extent
+    // (#sec-array-and-tuple-types). A tuple with a rest keeps the dynamic
+    // check: its current length is not established here.
+    const tuple = receiver?.Kind === 'tuple' && !receiver.Elements.some((entry) => entry.Rest || entry.InitializerNode
+      || entry.Type.Kind !== 'primitive' || !knownNonObject(entry.Type));
+    if (!tuple && (receiver?.Kind !== 'array' || typeof receiver.Extent !== 'number'
+        || receiver.Element.Kind !== 'primitive' || !knownNonObject(receiver.Element))) return;
+    const length = receiver.Kind === 'tuple' ? receiver.Elements.length : receiver.Extent as number;
     const args = call.Arguments;
-    let changes = ['push', 'unshift'].includes(name) ? args.length > 0 : length > 0;
+    // A spread argument supplies an unknown count, which may be zero.
+    if (args.some((arg) => arg.type === 'AssignmentRestElement')) return;
+    let resulting = ['push', 'unshift'].includes(name) ? length + args.length : Math.max(length - 1, 0);
     if (name === 'splice') {
       const integer = (node: ParseNode | undefined): number | undefined => {
         if (!node) return undefined;
@@ -25046,9 +25114,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const count = args.length === 1 ? length - from : integer(args[1]);
       if (count === undefined) return;
       const removed = Math.min(Math.max(count, 0), length - from);
-      changes = Math.max(args.length - 2, 0) !== removed;
+      resulting = length - removed + Math.max(args.length - 2, 0);
     }
-    if (changes) errors.push(Throw.StaticTypeError('this intrinsic mutation changes a fixed array extent').Value as ObjectValue);
+    if (resulting === length) return;
+    errors.push((tuple
+      ? Throw.StaticTypeError('a tuple of $1 positions cannot be given a length of $2', Value(String(length)), Value(String(resulting)))
+      : Throw.StaticTypeError('this intrinsic mutation changes a fixed array extent')).Value as ObjectValue);
   };
 
   /** #sec-intrinsic-array-contracts: simulate only established destination stores. */
@@ -26220,21 +26291,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     abstractClass?: string, ordinaryObject?: boolean,
     classTargets?: readonly { declaration: ParseNode.ClassDeclaration | ParseNode.ClassExpression, arguments?: ParseNode.TypeArguments }[],
   };
+  /**
+   * #sec-function-types, #sec-falsy-and-truthy-parts: the value `a && b` yields
+   * from its LEFT operand is a falsy value of that operand's Static Type. A
+   * falsy part made only of primitive types is known to be neither a
+   * constructor nor callable, and needs no participation of its own; one that
+   * may hold an Object - `any`, an open parameter, a host value - is an unknown
+   * alternative and prevents the negative proof.
+   */
+  const falsyAlternativeFact = (operand: ParseNode): InvocationFact | null => {
+    const type = staticType(operand);
+    if (!type) return null;
+    const part = falsyPartOf(type);
+    const members = part === empty ? [] : part.Kind === 'union' ? (part as { Members: readonly TypeRecord[] }).Members : [part];
+    return members.every((m) => m.Kind === 'literal' || m.Kind === 'primitive')
+      ? { callable: false, constructible: false, typed: true } : null;
+  };
   const invocationFact = (expression: ParseNode, scope = frames.length - 1, seen = new Set<InvocationOrigin>(), budget = { remaining: 256 }): InvocationFact | null => {
     if (budget.remaining-- <= 0) return null;
     const node = patternExpression(expression)!;
     // #sec-function-types: a conditional selection is a `?:`, `||`, `&&` or
     // `??` expression, and its possible origins are the operands it can yield.
     // Each logical operator yields one of its operands unchanged,
-    // so both are possible origins, as both arms of `?:` are; a falsy value a
-    // `&&` may yield is never a constructor or callable, so it adds nothing.
+    // so both are possible origins, as both arms of `?:` are.
     const logicalOperands = node.type === 'LogicalORExpression' ? [node.LogicalORExpression, node.LogicalANDExpression]
       : node.type === 'LogicalANDExpression' ? [node.LogicalANDExpression, node.BitwiseORExpression]
         : node.type === 'CoalesceExpression' ? [node.CoalesceExpressionHead, (node as unknown as { BitwiseORExpression: ParseNode }).BitwiseORExpression]
           : null;
     if (node.type === 'ConditionalExpression' || logicalOperands) {
       const [a, b] = logicalOperands ?? [(node as ParseNode.ConditionalExpression).AssignmentExpression_a, (node as ParseNode.ConditionalExpression).AssignmentExpression_b];
-      const left = invocationFact(a as ParseNode, scope, new Set(seen), budget);
+      // `&&` yields its left operand only when it is falsy, so that operand
+      // contributes the falsy part of its Static Type rather than itself. An
+      // operand with an invocation origin - a function, a class, an object
+      // literal - is an Object written in the source, so it is truthy and
+      // contributes nothing.
+      const left = node.type === 'LogicalANDExpression'
+        ? falsyAlternativeFact(a as ParseNode)
+          ?? (invocationFact(a as ParseNode, scope, new Set(seen), budget) ? { callable: false, constructible: false, typed: true } : null)
+        : invocationFact(a as ParseNode, scope, new Set(seen), budget);
       const right = invocationFact(b as ParseNode, scope, new Set(seen), budget);
       if (!left || !right) return null;
       return { callable: left.callable || right.callable, constructible: left.constructible || right.constructible,

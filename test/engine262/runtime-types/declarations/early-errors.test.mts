@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectEarlyError, expectStaticTypeError, expectThrown, ok } from '../harness.mts';
+import { evaluated, expectEarlyError, expectStaticTypeError, expectThrown, expectThrownKind, ok } from '../harness.mts';
 
 /**
  * Early errors the specification states with "it is a type error if".
@@ -705,6 +705,22 @@ test('a logical operator is a conditional selection', () => {
   expectStaticTypeError(`${F}const h = f && g; new h(1);`);
   expectStaticTypeError('class K { x: uint8 = 1; } class L { y: uint8 = 1; } const D = K && L; D();');
   expect(evaluated('function F() {} function G() {} const H = F && G; String(typeof new H());')).toBe('object');
+});
+
+test('an && selection whose left operand can yield only a primitive falsy value is judged', () => {
+  // #sec-falsy-and-truthy-parts: the left operand contributes the falsy part
+  // of its Static Type; a part made only of primitives is neither a
+  // constructor nor callable, and needs no participation of its own.
+  const F = 'const f = (x: uint8): uint8 => x; ';
+  expectStaticTypeError(`${F}let b: boolean = true; new (b && f)(1);`);
+  expectStaticTypeError(`${F}new (true && f)(1);`);
+  expectStaticTypeError(`${F}let n: uint8 = 1; new (n && f)(1);`);
+  expectStaticTypeError('class C { x: uint8 = 1; } let b: boolean = true; (b && C)();');
+  // A truthy left operand is never yielded: only `f` can be constructed here.
+  expectStaticTypeError(`class K { x: uint8 = 1; } ${F}new (K && f)(1);`);
+  // A falsy part that may hold an Object is an unknown alternative.
+  expectThrownKind(`${F}let x: any = 1; new (x && f)(1);`, 'TypeError');
+  expect(evaluated('function F() {} let b: boolean = true; String(typeof new (b && F)());')).toBe('object');
 });
 
 // ---- #sec-bindarguments: object-literal spreads -------------------------

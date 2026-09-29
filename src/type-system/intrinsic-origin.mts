@@ -379,3 +379,101 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode:
   }
   return true;
 }
+
+/**
+ * #sec-function-types: "a mutable origin is usable only while replacement is
+ * excluded; assignments, including assignment patterns and captured writes,
+ * and direct eval withdraw an otherwise unproved origin." The names _node_
+ * writes, whether plainly, by update, through a destructuring assignment
+ * pattern or as a `for`-`in`/`of` target. A pattern contributes every name in
+ * it, which over-approximates and so only withdraws origins.
+ */
+export function AddWrittenNames(node: ParseNode, into: Set<string>): void {
+  const unwrap = (n: ParseNode): ParseNode => (n.type === 'ParenthesizedExpression' ? unwrap(n.Expression) : n);
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
+    }
+    if (!value || typeof value !== 'object' || !('type' in value)) return;
+    const n = value as ParseNode;
+    if (n.type === 'IdentifierReference') into.add(n.name);
+    for (const [key, child] of Object.entries(n)) {
+      if (!['parent', 'location', 'sourceText'].includes(key)) collect(child);
+    }
+  };
+  let target: ParseNode | null | undefined = null;
+  if (node.type === 'AssignmentExpression') target = unwrap(node.LeftHandSideExpression);
+  else if (node.type === 'UpdateExpression') target = unwrap(node.LeftHandSideExpression ?? node.UnaryExpression!);
+  else if (node.type === 'ForInStatement' || node.type === 'ForOfStatement' || node.type === 'ForAwaitStatement') {
+    target = (node as { LeftHandSideExpression?: ParseNode }).LeftHandSideExpression;
+  }
+  if (!target) return;
+  if (target.type === 'IdentifierReference') into.add(target.name);
+  else if (target.type === 'ArrayLiteral' || target.type === 'ObjectLiteral') collect(target);
+}
+
+/** A direct `eval` call, which may write any binding in scope. */
+export function IsDirectEvalCall(node: ParseNode): boolean {
+  return node.type === 'CallExpression' && node.CallExpression.type === 'IdentifierReference'
+    && node.CallExpression.name === 'eval';
+}
+
+/** Predefined types whose default value is a primitive, created without user code. */
+const PRIMITIVE_DEFAULT_TYPES = new Set(['number', 'string', 'boolean', 'bigint',
+  'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
+  'float16', 'float32', 'float64', 'float128', 'decimal32', 'decimal64', 'decimal128']);
+
+/**
+ * #sec-proved-library-operations: whether evaluating the `new` expression _node_
+ * runs no user code, so a proof may stand after it. Two constructions qualify:
+ *
+ * - An intrinsic `Map` or `Set` constructed with no arguments, whose binding is
+ *   the realm's original (_isGlobalIntrinsic_): with no iterable it looks up
+ *   no adder and calls nothing.
+ * - A class declared in the source (_declarationOf_ yields its one, unwritten
+ *   declaration) that has no type parameters, heritage, decorators or
+ *   constructor, and whose instance fields are initialized by a scalar or take
+ *   a primitive default, constructed with scalar arguments. Its methods do not
+ *   run, and what its static elements or computed keys run is screened where
+ *   they are written.
+ *
+ * Anything else - a function constructor, a class with a body of its own - is
+ * treated as able to run user code.
+ */
+export function EffectFreeConstruction(
+  node: ParseNode,
+  declarationOf: (name: string) => ParseNode | null | undefined,
+  isGlobalIntrinsic: (name: string) => boolean,
+  scalar: (argument: ParseNode) => boolean,
+): boolean {
+  if (node.type !== 'NewExpression') return false;
+  const args = (node.Arguments ?? []) as readonly ParseNode[];
+  let callee = node.MemberExpression as ParseNode;
+  while (callee.type === 'ParenthesizedExpression') callee = callee.Expression;
+  if (callee.type === 'TypeArgumentsExpression') callee = callee.Expression;
+  if (callee.type !== 'IdentifierReference') return false;
+  // *undefined*: nothing in the source declares the name; *null*: it is
+  // declared, but more than once or written, so it is neither kind here.
+  const declaration = declarationOf(callee.name);
+  if (declaration === null) return false;
+  if (declaration === undefined) return ['Map', 'Set'].includes(callee.name) && args.length === 0 && isGlobalIntrinsic(callee.name);
+  if (declaration.type !== 'ClassDeclaration' || declaration.Decorators?.length || declaration.TypeParameters
+      || declaration.ClassTail.ClassHeritage || !args.every(scalar)) return false;
+  return (declaration.ClassTail.ClassBody ?? []).every((element) => {
+    const named = element as ParseNode & { ClassElementName?: ParseNode, static?: boolean };
+    if (element.type !== 'FieldDefinition') {
+      // A method, accessor or static block does not run at construction; the
+      // constructor does, so a class declaring one is not screened here.
+      return !(named.ClassElementName?.type === 'IdentifierName' && named.ClassElementName.name === 'constructor' && !named.static);
+    }
+    const field = element as ParseNode.FieldDefinition;
+    if (field.static) return true;
+    if (field.Decorators?.length || field.ClassElementName.type === 'PropertyName') return false;
+    if (field.Initializer) return scalar(field.Initializer as unknown as ParseNode);
+    const annotated = field.TypeAnnotation?.Type;
+    return !annotated || (annotated.type === 'TypeReference' && !annotated.TypeArguments
+      && annotated.TypeName.MemberNames.length === 0 && PRIMITIVE_DEFAULT_TYPES.has(annotated.TypeName.IdentifierReference.name)
+      && declarationOf(annotated.TypeName.IdentifierReference.name) === undefined);
+  });
+}

@@ -8,6 +8,7 @@ import {
 import { __ts_cast__, isArray } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FunctionKind } from '../parser/FunctionParser.mts';
+import { CheckDynamicFunction } from '../type-system/check.mts';
 import {
   HostEnsureCanCompileStrings,
   surroundingAgent,
@@ -135,6 +136,16 @@ export function* CreateDynamicFunction(constructor: FunctionObject, newTarget: F
     if (Array.isArray(expr)) {
       Parser.decorateSyntaxErrorWithScriptId(expr[0], scriptId);
       return ThrowCompletion(expr[0]);
+    }
+    // proposal-runtime-types #sec-type-errors: the combined source is checked
+    // here, where its other early errors are enforced, and a type error is
+    // thrown at construction as they are.
+    if (surroundingAgent.feature('runtime-types')) {
+      const typeErrors = CheckDynamicFunction(expr);
+      if (typeErrors.length > 0) {
+        Parser.decorateSyntaxErrorWithScriptId(typeErrors[0], scriptId);
+        return ThrowCompletion(typeErrors[0]);
+      }
     }
     // The combined parse establishes strictness from annotations in either the
     // parameters or body. The isolated parses only validate their delimiters;

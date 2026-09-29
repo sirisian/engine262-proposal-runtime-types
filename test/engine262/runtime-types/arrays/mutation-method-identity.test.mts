@@ -7,11 +7,14 @@ for (const name of ['push', 'unshift']) {
     expectStaticTypeError(`if (false) { const a:[].<uint8>=[]; a.${name}(1, "bad"); }`);
     expect(ok(`const a:[].<uint8>=[]; a.${name}(1, 2);`)).toBe(true);
     expect(ok(`const a:[].<uint8>=[]; a.${name}();`)).toBe(true);
+    // #sec-function-types: an unassigned `let` is an origin as a `const` is.
+    expectStaticTypeError(`if (false) { let a:[].<uint8>=[]; a.${name}(1, "bad"); }`);
   });
 
   test(`${name} leaves unresolved receivers to the runtime store boundary`, () => {
-    expect(ok(`if (false) { let a:[].<uint8>=[]; a.${name}("bad"); }`)).toBe(true);
-    expectThrownKind(`let a:[].<uint8>=[]; a.${name}("bad");`, 'TypeError');
+    // A reassigned `let` is not an origin (#sec-function-types), so its receiver is unresolved.
+    expect(ok(`if (false) { let a:[].<uint8>=[]; a = []; a.${name}("bad"); }`)).toBe(true);
+    expectThrownKind(`let a:[].<uint8>=[]; a = []; a.${name}("bad");`, 'TypeError');
   });
 
   test(`${name} does not impose an intrinsic signature on a replacement`, () => {

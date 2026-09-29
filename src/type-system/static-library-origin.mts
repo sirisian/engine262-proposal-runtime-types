@@ -1,7 +1,7 @@
 import { ObjectValue, Value, wellKnownSymbols } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Realm } from '../execution-context/Realm.mts';
-import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
+import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 import { OriginalLibraryFunction } from './library-operation-origin.mts';
 
 export interface StaticLibraryOperation {
@@ -25,6 +25,7 @@ export function ProvenStaticLibraryOperations(
   const nodes: ParseNode[] = [];
   const definitions = new Map<string, ParseNode[]>();
   const mutated = new Set<string>();
+  let directEval = false;
   const unwrap = (node: ParseNode): ParseNode => node.type === 'ParenthesizedExpression' ? unwrap(node.Expression) : node;
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) return value.forEach(visit);
@@ -32,9 +33,8 @@ export function ProvenStaticLibraryOperations(
     const node = value as ParseNode;
     nodes.push(node);
     if (node.type === 'BindingIdentifier' && node.parent) definitions.set(node.name, [...(definitions.get(node.name) ?? []), node.parent]);
-    const target = node.type === 'AssignmentExpression' ? unwrap(node.LeftHandSideExpression)
-      : node.type === 'UpdateExpression' ? unwrap(node.LeftHandSideExpression ?? node.UnaryExpression!) : null;
-    if (target?.type === 'IdentifierReference') mutated.add(target.name);
+    AddWrittenNames(node, mutated);
+    if (IsDirectEvalCall(node)) directEval = true;
     for (const [key, child] of Object.entries(node)) if (!['parent', 'location', 'sourceText'].includes(key)) visit(child);
   };
   visit(root);
@@ -52,7 +52,7 @@ export function ProvenStaticLibraryOperations(
     const declarations = definitions.get(node.name);
     const declaration = declarations?.length === 1 ? declarations[0] : undefined;
     return declaration?.type === 'LexicalBinding' && declaration.parent?.type === 'LexicalDeclaration'
-      && declaration.parent.LetOrConst === 'const' && declaration.Initializer && topLevel(declaration)
+      && (declaration.parent.LetOrConst === 'const' || !directEval) && declaration.Initializer && topLevel(declaration)
       && !(preserveAnnotations && declaration.TypeAnnotation)
       ? initializer(declaration.Initializer, seen, preserveAnnotations) : node;
   };
@@ -130,12 +130,19 @@ export function ProvenStaticLibraryOperations(
       && composite(node.Arguments[0]) !== undefined
       && (!node.Arguments[1] || callback(node.Arguments[1])) && (!node.Arguments[2] || scalar(node.Arguments[2]));
   };
+  const declarationOf = (name: string): ParseNode | null | undefined => {
+    const declarations = definitions.get(name);
+    if (!declarations) return undefined;
+    return declarations.length === 1 && !mutated.has(name) ? declarations[0] : null;
+  };
+  const effectFreeNew = (node: ParseNode): boolean => EffectFreeConstruction(node, declarationOf, global, scalar);
   if (nodes.some((node) => (node.type === 'TypeAnnotation' && !inertAnnotation(node))
       || (node.type === 'LexicalBinding' && !!node.TypeAnnotation && !!node.Initializer
-        && !literalData(initializer(node.Initializer)) && !safe(initializer(node.Initializer)))
+        && !literalData(initializer(node.Initializer)) && !safe(initializer(node.Initializer))
+        && !effectFreeNew(initializer(node.Initializer)))
       || (node.type === 'AssignmentExpression' && unwrap(node.LeftHandSideExpression).type === 'IdentifierReference'
         && !scalar(node.AssignmentExpression))
-      || (node.type === 'CallExpression' && !safe(node)) || node.type === 'NewExpression'
+      || (node.type === 'CallExpression' && !safe(node)) || (node.type === 'NewExpression' && !effectFreeNew(node))
       || (node.type === 'AssignmentExpression' && node.LeftHandSideExpression.type === 'MemberExpression'
         && ['Array', 'Object', 'Map', 'Promise', 'Composite'].includes(node.LeftHandSideExpression.IdentifierName?.name
           ?? (node.LeftHandSideExpression.Expression?.type === 'StringLiteral' ? node.LeftHandSideExpression.Expression.value : ''))))

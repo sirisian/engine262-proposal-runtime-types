@@ -1,7 +1,7 @@
 import { ObjectValue, Value, wellKnownSymbols, type Descriptor } from '../value.mts';
 import type { Realm } from '../execution-context/Realm.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
+import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 
 const methods = new Set(['with', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'pop', 'shift', 'unshift', 'reverse', 'copyWithin', 'fill']);
 const originals = new WeakMap<Realm, Map<string, Value>>();
@@ -26,6 +26,8 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
   const result = new Set<ParseNode>();
   const definitions = new Map<string, ParseNode>();
   const ambiguous = new Set<string>();
+  const written = new Set<string>();
+  let directEval = false;
   const nodes: ParseNode[] = [];
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
@@ -35,6 +37,8 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
     if (!value || typeof value !== 'object' || !('type' in value)) return;
     const node = value as ParseNode;
     nodes.push(node);
+    AddWrittenNames(node, written);
+    if (IsDirectEvalCall(node)) directEval = true;
     if (node.type === 'BindingIdentifier' && node.parent) {
       if (definitions.has(node.name)) ambiguous.add(node.name);
       definitions.set(node.name, node.parent);
@@ -56,6 +60,10 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
     while (node.type === 'ParenthesizedExpression') node = node.Expression;
     return node;
   };
+  // #sec-function-types: a `let` is an origin while nothing replaces it - no
+  // assignment, pattern, captured write or direct eval.
+  const stableBinding = (declaration: ParseNode.LexicalDeclaration, name: string): boolean => declaration.LetOrConst === 'const'
+    || (!written.has(name) && !directEval);
   const literalInput = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
     const node = unwrap(expression);
     if (seen.has(node)) return false;
@@ -67,7 +75,7 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
     const declaration = definitions.get(node.name);
     if (!declaration) return node.name === 'undefined' && intrinsicData(realm.GlobalObject, Value('undefined')) === Value.undefined;
     return declaration.type === 'LexicalBinding' && declaration.parent?.type === 'LexicalDeclaration'
-      && declaration.parent.LetOrConst === 'const' && !!declaration.Initializer && literalInput(declaration.Initializer, seen);
+      && stableBinding(declaration.parent, node.name) && !!declaration.Initializer && literalInput(declaration.Initializer, seen);
   };
   const fresh = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
     if (seen.has(expression)) return false;
@@ -83,9 +91,15 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
     }
     if (node.type !== 'IdentifierReference' || ambiguous.has(node.name)) return false;
     const declaration = definitions.get(node.name);
-    return declaration?.type === 'LexicalBinding' && declaration.parent?.type === 'LexicalDeclaration'
-      && declaration.parent.LetOrConst === 'const' && !!declaration.Initializer
-      && fresh(declaration.Initializer, seen);
+    if (declaration?.type !== 'LexicalBinding' || declaration.parent?.type !== 'LexicalDeclaration'
+        || !stableBinding(declaration.parent, node.name)) return false;
+    // A declaration without an initializer holds its type's default, and the
+    // default of a stated-extent array is a new array (#sec-defaultvalueof).
+    if (!declaration.Initializer) {
+      const annotated = declaration.TypeAnnotation?.Type;
+      return annotated?.type === 'ArrayType' && !!annotated.ArrayExtent;
+    }
+    return fresh(declaration.Initializer, seen);
   };
   const prototype = realm.Intrinsics['%Array.prototype%'];
   const typedPrototype = realm.Intrinsics['%TypedArrayLike.prototype%'];
@@ -122,8 +136,16 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
   // Constructors and other calls can invoke iterators or conversions whose
   // effects are absent from this syntax. Admit only this method subset and
   // primitive String conversions; callback bodies are screened separately.
+  const declarationOf = (name: string): ParseNode | null | undefined => {
+    if (!definitions.has(name)) return undefined;
+    return ambiguous.has(name) || written.has(name) ? null : definitions.get(name);
+  };
+  const isGlobalIntrinsic = (name: string): boolean => !definitions.has(name) && !written.has(name)
+    && !realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(name))
+    && intrinsicData(realm.GlobalObject, Value(name)) === (realm.Intrinsics as unknown as Record<string, Value>)[`%${name}%`];
+  const scalarInput = (argument: ParseNode): boolean => literalInput(argument) && unwrap(argument).type !== 'ArrayLiteral';
   for (const node of nodes) {
-    if (node.type === 'NewExpression') return result;
+    if (node.type === 'NewExpression' && !EffectFreeConstruction(node, declarationOf, isGlobalIntrinsic, scalarInput)) return result;
     if (node.type !== 'CallExpression' || safe(node)) continue;
     if (node.CallExpression.type !== 'MemberExpression' || !safe(node.CallExpression)) return result;
     if (!node.Arguments.every((argument) => literalInput(argument)

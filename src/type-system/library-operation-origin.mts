@@ -1,7 +1,7 @@
 import { ObjectValue, Value, type Descriptor } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Realm } from '../execution-context/Realm.mts';
-import { intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
+import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 
 const groups = {
   '%Function.prototype%': ['call', 'apply', 'bind', 'callThread'],
@@ -61,6 +61,7 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
   const nodes: ParseNode[] = [];
   const definitions = new Map<string, ParseNode[]>();
   const mutated = new Set<string>();
+  let directEval = false;
   const unwrap = (node: ParseNode): ParseNode => node.type === 'ParenthesizedExpression' ? unwrap(node.Expression) : node;
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
@@ -73,9 +74,8 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
     if (node.type === 'BindingIdentifier' && node.parent) {
       definitions.set(node.name, [...(definitions.get(node.name) ?? []), node.parent]);
     }
-    const target = node.type === 'AssignmentExpression' ? unwrap(node.LeftHandSideExpression)
-      : node.type === 'UpdateExpression' ? unwrap(node.LeftHandSideExpression ?? node.UnaryExpression!) : null;
-    if (target?.type === 'IdentifierReference') mutated.add(target.name);
+    AddWrittenNames(node, mutated);
+    if (IsDirectEvalCall(node)) directEval = true;
     for (const [key, child] of Object.entries(node)) {
       if (!['parent', 'location', 'sourceText'].includes(key)) visit(child);
     }
@@ -104,6 +104,8 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
     const declarations = definitions.get(node.name);
     const declaration = declarations?.length === 1 ? declarations[0] : undefined;
     if (declaration?.type !== 'LexicalBinding' || !declaration.Initializer || !topLevel(declaration)) return node;
+    // A direct eval may replace a `let` (#sec-function-types); a `const` it cannot.
+    if (directEval && declaration.parent?.type === 'LexicalDeclaration' && declaration.parent.LetOrConst !== 'const') return node;
     return initializer(declaration.Initializer, seen);
   };
   const scalar = (expression: ParseNode, seen = new Set<ParseNode>()): boolean => {
@@ -266,13 +268,20 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
     || ((node.type === 'IdentifierReference' || node.type === 'TypeArgumentsExpression') && typeObjectTarget(node))
     || (node.type === 'CallExpression' && candidates.has(node.CallExpression))
     || (node.type === 'UpdateExpression' && candidates.get(unwrap(node.LeftHandSideExpression ?? node.UnaryExpression!))?.kind === 'descriptor');
+  const declarationOf = (name: string): ParseNode | null | undefined => {
+    const declarations = definitions.get(name);
+    if (!declarations) return undefined;
+    return declarations.length === 1 && !mutated.has(name) ? declarations[0] : null;
+  };
+  const effectFreeNew = (node: ParseNode): boolean => EffectFreeConstruction(node, declarationOf, global, (argument) => scalar(argument));
   // Unknown calls, even into local code, may construct/convert values whose
   // effects are not modeled here. Only established adapters may enter bodies.
   let stable = !nodes.some((node) => {
     if (node.type === 'TypeAnnotation') return !inertAnnotation(node);
     if (node.type === 'LexicalBinding' && node.TypeAnnotation && node.Initializer) {
       const source = initializer(node.Initializer, new Set());
-      if (!scalar(source) && !freshArray(source) && !data(source) && !localTarget(source) && !safe(source)) return true;
+      if (!scalar(source) && !freshArray(source) && !data(source) && !localTarget(source) && !safe(source)
+        && !effectFreeNew(source)) return true;
     }
     if (node.type === 'AssignmentExpression' && unwrap(node.LeftHandSideExpression).type === 'IdentifierReference'
         && !scalar(node.AssignmentExpression)) return true;
@@ -285,10 +294,7 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
       if (candidates.get(member)?.kind === 'descriptor' && !scalar(node.AssignmentExpression)) return true;
     }
     if (node.type === 'CallExpression') return !safe(node);
-    if (node.type !== 'NewExpression') return false;
-    let ctor = node.MemberExpression;
-    if (ctor.type === 'TypeArgumentsExpression') ctor = ctor.Expression;
-    return ctor.type !== 'IdentifierReference' || !['Map', 'Set'].includes(ctor.name) || !global(ctor.name) || !!node.Arguments?.length;
+    return node.type === 'NewExpression' && !effectFreeNew(node);
   });
   stable &&= intrinsicSourceIsStable(root, realm, safe);
   return { members: stable ? candidates : new Map(), data, list };
