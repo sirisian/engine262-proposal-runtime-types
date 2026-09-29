@@ -2,18 +2,14 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * A window over a BUFFER refused every element access on a class element -
- * `an element of this type cannot be viewed in a buffer` - while a window over
- * an owned ARRAY read the same element correctly. One type stood for two
- * behaviours at the same operation.
+ * Spec: #sec-array-views and #sec-soa-references. A window over a BUFFER reads a class element
+ * correctly, as a window over an owned ARRAY does: one type stands for one behaviour at the same
+ * operation. A class element reads through a placement-backed instance - a placement `new` lands a
+ * class on existing bytes, and an SoA column builds the same object for a nested field.
  *
- * The machinery already existed: a placement `new` lands a class on existing
- * bytes, and an SoA column builds the same object for a nested field. A class
- * element now reads through that placement-backed instance.
- *
- * The COPY/ALIAS split is the README's, unchanged: `const ref e = view[i]`
- * aliases the buffer, and a plain `const e = view[i]` copies, because the copy
- * happens where the binding is made rather than at the element read.
+ * The COPY/ALIAS split: `const ref e = view[i]` aliases the buffer, and a plain `const e = view[i]`
+ * copies, because the copy happens where the binding is made rather than at the element read
+ * (#sec-reference-values).
  */
 const V = 'class V { x: uint8 = 0; y: uint8 = 0; } ';
 
@@ -35,7 +31,7 @@ test('an element lands at its own stride', () => {
 });
 
 test('a plain read copies and a ref read aliases', () => {
-  // The distinction the README draws twice over, once in each form.
+  // The copy/alias distinction, once in each form.
   expect(evaluated(`${V}const b = new ArrayBuffer(8); const s = Span.<V>(b);
     const e = s[0]; e.x = 7; String(new Uint8Array(b)[0]);`)).toBe('0');
   expect(evaluated(`${V}const b = new ArrayBuffer(8); const s = Span.<V>(b);
@@ -105,8 +101,8 @@ test('a field round-trips through its own order', () => {
 });
 
 test('one class may mix orders, which is what a wire format needs', () => {
-  // memorylayout.md: "a struct can mix native fields with big-endian network
-  // fields in one declaration".
+  // A class may mix native fields with big-endian network fields in one declaration
+  // (#sec-layout-control: `endian`), which is what a wire format needs.
   expect(evaluated(`class P { @endian('big') a: uint16 = 0; b: uint16 = 0; }
     const b = new ArrayBuffer(8); const s = Span.<P>(b); const ref e = s[0]; e.a = 258; e.b = 258;
     const r = new Uint8Array(b); r[0] + '/' + r[1] + ' ' + r[2] + '/' + r[3];`)).toBe('1/2 2/1');
@@ -118,14 +114,11 @@ test('placement new honours it on the same path', () => {
     const r = new Uint8Array(b); r[0] + '/' + r[1];`)).toBe('1/2');
 });
 
-test('the README\u2019s own worked example runs', () => {
-  // `const ref header = Span.<Header>(buffer)[0]; header.c.a = 10; buffer[3]`
-  // is documented with the answer 10, and needed three things that were each
-  // missing: a class element in a buffer-backed view, a nested class field
-  // through a placement, and a byte-backed source. The first two are now here;
-  // the third is why `buffer` is a `Uint8Array` rather than the `[100].<uint8>`
-  // the README writes - an owned array's bytes are "specified but not
-  // implemented in this engine", which is a separate gap.
+test('the worked example runs', () => {
+  // `const ref header = Span.<Header>(buffer)[0]; header.c.a = 10; buffer[3]` yields 10. It needs a
+  // class element in a buffer-backed view, a nested class field through a placement, and a byte-backed
+  // source. `buffer` is a `Uint8Array` rather than a `[100].<uint8>`: Divergence - the bytes of an owned
+  // array are specified (#sec-array-views) but not reachable in this engine, which is a separate gap.
   expect(evaluated(`
     @packed class HeaderSection { a: uint8 = 0; b: uint32 = 0; }
     @packed class Header { a: uint8 = 0; b: uint16 = 0; c: HeaderSection; }

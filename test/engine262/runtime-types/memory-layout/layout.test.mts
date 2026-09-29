@@ -3,13 +3,11 @@ import { evaluated, expectStaticTypeError, expectThrown, expectThrownKind } from
 
 /**
  * Spec: #sec-memory-layout (Memory Layout), #sec-natural-alignment,
- * #sec-type-arguments-and-placement-new-in-expression-position. Design:
- * memorylayout.md.
+ * #sec-type-arguments-and-placement-new-in-expression-position.
  *
- * What a laid-out type reports about itself - size, bit width, alignment - the
- * reserved layout controls that place a class and its fields, sub-byte fields
- * and the shift-and-mask rule that reads them, and placement over bytes that
- * already exist.
+ * What a laid-out type reports about itself - size, bit width, alignment - the reserved layout
+ * controls that place a class and its fields, sub-byte fields and the shift-and-mask rule that reads
+ * them, and placement over bytes that already exist.
  */
 
 test('memory layout: the reserved layout controls place a class and its fields', () => {
@@ -57,7 +55,7 @@ test('memory layout: a type reports its own byteLength', () => {
 // -- soa: structure of arrays --------------------------------------------------
 
 test('memory layout: a laid out type reports its size, bit width, and alignment', () => {
-  // memorylayout.md's own examples
+  // The size, bit width and alignment of the scalar types and of `uint.<4>`.
   expect(evaluated('String(uint8.byteLength);')).toBe('1');
   expect(evaluated('String(uint8.bitLength);')).toBe('8');
   expect(evaluated('type U = uint.<4>; String(U.bitLength);')).toBe('4');
@@ -357,7 +355,7 @@ test('`hasLayout` answers the question the other three assert', () => {
   expectThrown('string.byteLength;', 'this type has no layout');
   expect(evaluated('String(string.hasLayout);')).toBe('false');
 
-  // The rows of memorylayout.md's own table, in its order.
+  // The rows of #table-layout-by-type, in its order.
   expect(evaluated('String(uint8.hasLayout);')).toBe('true');
   expect(evaluated('String(boolean.hasLayout);')).toBe('true');
   expect(evaluated('enum E: uint8 { A = 1 } String(E.hasLayout);')).toBe('true');

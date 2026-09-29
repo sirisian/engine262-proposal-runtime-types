@@ -1,11 +1,10 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// README "Capacity" writes `out.capacity;` as a READ, and its prose says
-// "`capacity` reads it, `reserve(n)` grows it" - the language of a property
-// beside a verb. It was registered as a METHOD, so `a.capacity` yielded the
-// function object: truthy, so `if (a.capacity > 1000)` misbehaved silently
-// rather than throwing, which is the worse failure of the two.
+// `capacity` is a READ and not a call (#sec-capacity-operations: "An accessor and not a method"):
+// `out.capacity;` reads the count and `reserve(n)` grows it - a property beside a verb. Registered as
+// a method, `a.capacity` would yield the function object: truthy, so `if (a.capacity > 1000)` would
+// misbehave silently rather than throwing, which is the worse failure of the two.
 
 test('capacity reads as a property', () => {
   expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');
@@ -14,7 +13,7 @@ test('capacity reads as a property', () => {
   expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity >= 64);')).toBe('true');
 });
 
-test('the capacity rules the design states', () => {
+test('the capacity rules', () => {
   // `reserve(n)` grows the allocation without changing the length.
   expect(evaluated('let a: [].<uint32> = [1, 2]; a.reserve(64); String(a.length) + "/" + String(a.capacity);')).toBe('2/64');
   // Capacity never shrinks implicitly.

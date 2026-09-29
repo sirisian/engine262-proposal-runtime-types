@@ -4,22 +4,15 @@ import {
 } from '../harness.mts';
 
 /**
- * #sec-span-type: `Span.<T>` is a fixed-length WINDOW over a run of elements of
- * T that it does not own.
+ * #sec-span-type: `Span.<T>` is a fixed-length WINDOW over a run of elements of T that it does not own.
+ * The array types say what is known about an EXTENT - `[N].<T>` states one and `[].<T>` states that
+ * it varies. Ownership is a separate question, and this is the type that answers it, which is why it
+ * lives in a name rather than inside the brackets: a bracket slot carrying both would make `[].<T>`
+ * differ from `[N].<T>` on one axis and from a window on another. An array view over a buffer is a
+ * window, and an `SoA` column projection is a window.
  *
- * The array types say what is known about an EXTENT - `[N].<T>` states one and
- * `[].<T>` states that it varies. Ownership is a separate question, and this is
- * the type that answers it, which is why it lives in a name rather than inside
- * the brackets: a bracket slot carrying both would have made `[].<T>` differ
- * from `[N].<T>` on one axis and from a window on another.
- *
- * The type was already latent in the design and had no name. An array view over
- * a buffer is a window, and an `SoA` column projection is a window; both had to
- * invent the concept locally and neither could say what it was returning.
- *
- * This file covers what has landed: the type, its coercions in both directions,
- * membership, and the receiver surface. The materialised window value and the
- * respelled view constructor are not here yet.
+ * This file covers the type, its coercions in both directions, membership, and the receiver surface.
+ * The materialised window value and the respelled view constructor are not covered here.
  */
 
 // -- coercion: owned to window, never the reverse -----------------------------
@@ -884,10 +877,9 @@ test('both live on an array with an element type, and on no other array', () => 
 // -- window() -----------------------------------------------------------------
 
 test('window takes a window over part of an array, aliasing it', () => {
-  // Documented in the design and absent from the engine until now. It is
-  // `subarray` under the name the design uses, and it aliases - a copy would
-  // break the example the README is built around, which writes through the
-  // window and expects the original to change.
+  // Unspecified: `window` is not in the specification. It is `subarray` under another name, and it
+  // aliases - a copy would defeat its purpose, which is to write through the window and see the
+  // original change.
   const a = 'let a: [].<uint8> = [1, 2, 3, 4]; ';
   expect(evaluated(`${a}String(a.window(0, 2).length);`)).toBe('2');
   expect(bool(`${a}String(a.window(0, 2) is Span.<uint8>);`)).toBe(true);
@@ -899,20 +891,17 @@ test('window takes a window over part of an array, aliasing it', () => {
 });
 
 test('window.<N> returns a window of exactly N and checks once that it fits', () => {
-  // The overload the design's Bounds Checks section is about: the length is in
-  // the TYPE, so an index the checker can prove is below N needs no
-  // per-element check, and `window(start, start + N)` cannot say that.
-  //
-  // The bounds check belongs to this form rather than to plain `window`, which
-  // CLAMPS the way `subarray` does - clamping is right for a range and wrong
-  // for a promise of exactly N elements.
+  // Unspecified: `window.<N>` is not in the specification. The length is in the TYPE, so an index the
+  // checker can prove is below N needs no per-element check, and `window(start, start + N)` cannot say
+  // that. The bounds check belongs to this form rather than to plain `window`, which CLAMPS the way
+  // `subarray` does - clamping is right for a range and wrong for a promise of exactly N elements.
   const rows = 'const rows: [64].<uint32> = new [64].<uint32>(); ';
   expect(evaluated(`${rows}String(rows.window.<8>(0).length);`)).toBe('8');
   expect(evaluated(`${rows}String(rows.window.<8>(16).length);`)).toBe('8');
   expectThrownKind(`${rows}rows.window.<8>(60);`, 'RangeError');
 });
 
-test('the design README example works as written', () => {
+test('the window example works as written', () => {
   // `row[0] = 1; rows[entityIndex * 8]` reading 1 back is the whole claim: the
   // window is the same storage, not a copy of it.
   expect(evaluated('const rows: [64].<uint32> = new [64].<uint32>();'

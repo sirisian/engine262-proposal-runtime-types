@@ -2,17 +2,12 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Spec: #sec-memory-layout (the `min` and `max` members). Design: ranges.md.
+ * Spec: #sec-memory-layout (the `min` and `max` members). The least and greatest value a type admits
+ * - the question a range check asks and a saturating operation obeys. The specification orders the
+ * sources: `bounds` metadata first, then the width.
  *
- * The least and greatest value a type admits - the question a range check asks
- * and a saturating operation obeys. The engine computed both and exposed
- * neither, so a program was told "300 is not in the range of uint.<8>" about a
- * bound it could not read, and every reader that wanted one kept a table of
- * widths of its own.
- *
- * The specification orders the sources: `bounds` metadata first, then the
- * width. Only the width case is implemented here, the `bounds` meta type
- * belonging to the ranges extension.
+ * Divergence: only the width case is implemented. The engine does not accept `bounds` metadata on an
+ * integer type (that carrier belongs to the ranges extension), so the first step cannot be reached.
  */
 
 test('bounds: an integer type reports what its width admits', () => {

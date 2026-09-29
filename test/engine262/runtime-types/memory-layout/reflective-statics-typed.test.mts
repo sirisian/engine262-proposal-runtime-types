@@ -46,7 +46,7 @@ test('a narrower counter still writes the conversion', () => {
   const M = 'class Vertex { x: float32 = 0; y: float32 = 0; z: float32 = 0; } const mesh: [120].<uint8>; ';
   expectThrown(`${M}const count: uint8 = 2; Span.<uint8>(mesh).slice(0, count * Vertex.byteLength);`,
     'different numeric types');
-  // memorylayout.md's example, as corrected.
+  // The explicit conversion the previous assertion demands:
   expect(evaluated(`${M}const count: uint8 = 2;
     String(Span.<uint8>(mesh).slice(0, (count := uint64) * Vertex.byteLength).length);`)).toBe('24');
 });

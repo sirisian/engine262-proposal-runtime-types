@@ -38,11 +38,10 @@ test('a window may now be taken over owned storage', () => {
     const buf: [8].<uint8>; const s = Span.<V>(buf.buffer); String(s.length);`)).toBe('4');
 });
 
-test('the design\u2019s worked example runs over an owned array', () => {
-  // README: `const ref header = Span.<Header>(buffer)[0]; header.c.a = 10;`
-  // with `buffer` a `[100].<uint8>`, documented as leaving `buffer[3]` at 10.
-  // `.buffer` is still written explicitly here - the reinterpreting COERCION
-  // `const s: Span.<Header> = buffer` remains a separate question.
+test('the worked example runs over an owned array', () => {
+  // `const ref header = Span.<Header>(buffer)[0]; header.c.a = 10;` with `buffer` a `[100].<uint8>`
+  // leaves `buffer[3]` at 10. `.buffer` is written explicitly here - the reinterpreting COERCION
+  // `const s: Span.<Header> = buffer` is a separate question.
   expect(evaluated(`
     @packed class HeaderSection { a: uint8 = 0; b: uint32 = 0; }
     @packed class Header { a: uint8 = 0; b: uint16 = 0; c: HeaderSection; }

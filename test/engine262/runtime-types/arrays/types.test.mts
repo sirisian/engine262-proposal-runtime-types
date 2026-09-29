@@ -2,21 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, expectThrownFlagOff, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * Spec: #sec-array-and-tuple-types (Array and Tuple Types), #sec-issubtype.
- *
- * `[].<any>` is the top of the array family.
- *
- * Arrays are invariant in their element, so without a top an array whose
- * element type is written `any` is a type nothing inhabits - no array is
- * declared that way - and the bound the design writes over the family,
- * `T extends [].<any>`, is satisfied by nothing at all. `any` is already the type of which every
- * value is a value; this is that reading carried to the array types.
- *
- * What makes it admissible where a general covariance would not be is that a
- * store to an element is checked against the ARRAY's own element type at run
- * time, so a write through the wider view is refused whatever the static type
- * permitted - the last test below. A language with invariant containers and
- * unchecked elements supplies a wildcard and forbids writing through it.
+ * Spec: #sec-array-and-tuple-types (Array and Tuple Types), #sec-issubtype. `[].<any>` is the top of
+ * the array family. Arrays are invariant in their element, so without a top an array whose element
+ * type is written `any` is a type nothing inhabits - no array is declared that way - and the bound
+ * written over the family, `T extends [].<any>`, is satisfied by nothing at all. `any` is already the
+ * type of which every value is a value; this is that reading carried to the array types. What makes it
+ * admissible where a general covariance would not be is that a store to an element is checked against
+ * the ARRAY's own element type at run time, so a write through the wider view is refused whatever the
+ * static type permitted - the last test below. A language with invariant containers and unchecked
+ * elements supplies a wildcard and forbids writing through it.
  */
 
 test('every array and tuple satisfies the array-family bound', () => {
@@ -25,7 +19,7 @@ test('every array and tuple satisfies the array-family bound', () => {
   expect(evaluated(`${G}const a: [4].<uint8> = [1, 2, 3, 4]; g(a);`)).toBe('ok');
   expect(evaluated(`${G}const t: [number, string] = [1, 'a']; g(t);`)).toBe('ok');
   expect(evaluated(`${G}g([1, 'a']);`)).toBe('ok');
-  // the other spelling the design documents use
+  // the other spelling of the family bound
   expect(evaluated("function g<T: type extends [].<any>>(v: T): string { return 'ok'; }"
     + ' const a: [].<number> = [1]; g(a);')).toBe('ok');
 });
@@ -68,9 +62,8 @@ test('the bound composes with the rest of the array work', () => {
     + ' let ref r = b[0]; r = 5; String(a[0]);')).toBe('5');
   // and a borrow into a fixed-extent array still writes it
   expect(evaluated('const a: [4].<uint8> = [1, 2, 3, 4]; let ref b = a[0]; b = 9; String(a[0]);')).toBe('9');
-  // an SoA is not an array and is still refused, as soa.md requires - STATICALLY
-  // now, so there is no run-time throw for a `catch` to name. The judgment is the
-  // same one this asserted; the checker reaches it first.
+  // an SoA is not an array and is still refused (#sec-structure-of-arrays) - STATICALLY, so there is no
+  // run-time throw for a `catch` to name.
   expectStaticTypeError('class P { x: uint8; } const s = new SoA.<P>();'
     + " function p(v: [].<any>): string { return 'ok'; } p(s);");
 });
@@ -167,19 +160,13 @@ test('the runtime type handles the awkward array shapes', () => {
 // -- An array type in expression position ----------------------------------------
 
 /*
- * An array type written where an EXPRESSION is expected
- * (#sec-array-and-tuple-types).
- *
- * `new [100].<uint8>()` constructs one and `class G extends [16].<uint8> { }`
- * derives from one - both forms the design writes (README "Multidimensional and
- * Jagged Array Support Via User-defined Index Operators", and the view form
- * beside it). The bracketed text is an array LITERAL where an expression is
- * expected, so before this the type arguments were evaluated and discarded and
- * both forms reported "[object Array] is not a constructor".
- *
- * An instance is an Array carrying its element type, which is what a typed
- * array is everywhere else here: the element store check, `length`, and the
- * methods of Array.prototype all apply to one without a second kind of object.
+ * An array type written where an EXPRESSION is expected (#sec-array-and-tuple-types). `new
+ * [100].<uint8>()` constructs one and `class G extends [16].<uint8> { }` derives from one. The
+ * bracketed text is an array LITERAL where an expression is expected, so the type arguments must be
+ * taken as the type and not evaluated and discarded, or both forms report "[object Array] is not a
+ * constructor". An instance is an Array carrying its element type, which is what a typed array is
+ * everywhere else here: the element store check, `length`, and the methods of Array.prototype all
+ * apply to one without a second kind of object.
  */
 
 test('an array type constructs', () => {
@@ -236,9 +223,9 @@ test('an ordinary array literal is untouched', () => {
   expect(evaluated('const a = []; a.push(1); String(a.length);')).toBe('1');
 });
 
-test('the design\'s grid shape composes with the index accessor forms', () => {
-  // an array-typed base, a two-index accessor, and a `ref` read direction
-  // serving the write - the design's GridArray without its generic parameters
+test('the grid shape composes with the index accessor forms', () => {
+  // an array-typed base, a two-index accessor, and a `ref` read direction serving the write - a grid
+  // array without its generic parameters
   expect(evaluated('class G extends [16].<uint8> {'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * 4 + x]; } }'
     + ' const g = new G(); g[2, 1] = 10; String(g[2, 1]);')).toBe('10');

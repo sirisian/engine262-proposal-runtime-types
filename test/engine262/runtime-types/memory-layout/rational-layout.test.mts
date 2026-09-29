@@ -2,21 +2,18 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * A RATIONAL HAS A LAYOUT. rational.md: "`rational.<N>` is a value type holding
- * two `int.<N>` fields, a numerator and a denominator ... It occupies `2N` bits
- * with the alignment of `int.<N>`. The bare name `rational` is `rational.<64>` -
- * two `int64`, sixteen bytes." And: "Being a value type, a `rational` copies on
- * assignment, lives inline in a `[].<rational64>` as interleaved
- * numerator/denominator pairs, and splits into numerator and denominator columns
- * under structure of arrays."
+ * A RATIONAL HAS A LAYOUT. #table-layout-by-type gives a numeric type a layout, and a `rational` is
+ * one.
  *
- * It had none, so none of that worked: a `rational` field and a `[N].<rational64>`
- * both answered "this type has no layout", and the type the document describes
- * as living inline could not be placed anywhere at all.
- *
- * The shape is `complex`'s, for the same reason - a pair of components laid out
- * as two of them, aligned as ONE component rather than as the whole width, which
- * is what makes the buffer interleaved rather than a sequence of padded records.
+ * Unspecified: the specification does not state a rational's components. These tests pin the
+ * design's: `rational.<N>` is a value type holding two `int.<N>` fields, a numerator and a
+ * denominator, occupying `2N` bits with the alignment of `int.<N>`, and the bare name `rational` is
+ * `rational.<64>` - two `int64`, sixteen bytes. Being a value type, a `rational` copies on
+ * assignment, lives inline in a `[].<rational64>` as interleaved numerator/denominator pairs, and
+ * splits into numerator and denominator columns under structure of arrays. So a `rational` field and
+ * a `[N].<rational64>` can be placed. The shape is `complex`'s: a pair of components laid out as two
+ * of them, aligned as ONE component rather than as the whole width, which is what makes the buffer
+ * interleaved rather than a sequence of padded records.
  */
 
 test('a rational reports its width and alignment', () => {

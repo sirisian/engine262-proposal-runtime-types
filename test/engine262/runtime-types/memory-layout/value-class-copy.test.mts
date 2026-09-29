@@ -189,16 +189,13 @@ test('a binary operator can read the other operand\'s private field', () => {
 });
 
 test('a GENERIC class keeps its private field through a copy', () => {
-  // Found by running the design documents' examples: `fixedstring.md` stores a
-  // `FixedString.<32>` in a class field and reads it back, and that did not work.
-  //
-  // A generic class is evaluated once per APPLICATION as well as at its
-  // declaration - measured, `class G<N> {} new G.<4>(); new G.<8>();` runs
-  // ClassDefinitionEvaluation three times where a non-generic class runs it once
-  // - and each evaluation mints its own Private Names and its own prototype. The
-  // copy took its prototype from the TYPE's constructor while its private
-  // elements came from the VALUE, so the copy's getter resolved `this.#b` to one
-  // name while the element sat under another.
+  // A value type class copy resolves its private elements as its instance does. A generic class is
+  // evaluated once per APPLICATION as well as at its declaration (`class G<N> {} new G.<4>(); new
+  // G.<8>();` runs ClassDefinitionEvaluation three times where a non-generic class runs it once), and
+  // each evaluation mints its own Private Names and its own prototype. A copy that took its prototype
+  // from the TYPE's constructor while its private elements came from the VALUE would resolve `this.#b`
+  // to one name while the element sat under another, and the copy's getter would fail: a
+  // `FixedString.<32>` stored in a class field must read back.
   const G = 'class G<N: uint32> { #b: [N].<uint8>; get first(): uint8 { return this.#b[0]; } } ';
   expect(evaluated(`${G} class H { g: G.<4> = new G.<4>(); } String(Number(new H().g.first));`)).toBe('0');
   // The private field's TYPE is not what mattered - a scalar fails the same way,

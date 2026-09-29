@@ -2,15 +2,12 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
- * proposal-runtime-types #sec-memory-layout: a parameterization refines which
- * values its base admits and does not change how one is represented, so it has
- * its base's layout - the reading the enum row already takes.
- *
- * These pin the brand case, which is the one the design documents reach for:
- * `brand(uint32, 'NodeIndex')` reported no layout, so a field of a branded type
- * took its containing class's layout away and `[1024].<Node>` would not
- * allocate - while typeprogramming.md recommends the pattern and states that
- * "an array of them has the base's footprint".
+ * #sec-memory-layout (#table-layout-by-type): a parameterization refines which values its base
+ * admits and does not change how one is represented, so it has its base's layout - the reading the
+ * enum row already takes. These pin the brand case: a branded scalar (`brand(uint32, 'NodeIndex')`)
+ * must report a layout, since otherwise a field of a branded type would take its containing class's
+ * layout away and `[1024].<Node>` would not allocate. An array of branded values has the base's
+ * footprint.
  */
 const BRAND = `function brand(T: type, tag: string): type {
   return Reflect.makeType({ kind: 'parameterized', base: T, metadata: { brand: tag } });

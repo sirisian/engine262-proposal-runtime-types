@@ -4,38 +4,20 @@ import {
 } from '../harness.mts';
 
 /**
- * `capacity`, `reserve`, and `withCapacity` belong to a TYPED array. The spec
- * scopes them to `[].<T>` in one sentence (#sec-reference-liveness):
+ * `capacity`, `reserve` and `withCapacity` belong to a TYPED array. #sec-capacity-operations defines
+ * them on an array with an element type and says that on an array without one they are absent, and
+ * #sec-reference-liveness scopes them to `[].<T>`: "A growable `[].<T>` ... has a backing allocation
+ * whose capacity is distinct from its length, reported by `capacity` and grown by `reserve`".
  *
- *   "A growable `[].<T>` ... has a backing allocation whose capacity is
- *    distinct from its length, reported by `capacity` and grown by `reserve`"
+ * The members are therefore not on %Array.prototype% at all: an untyped array has no `capacity` and no
+ * `reserve`, rather than members that exist only to throw at call time. These tests state the
+ * placement and the fixed-extent semantics directly, so a regression in either shows up as a failure
+ * here rather than as a snapshot diff in the inspector suite.
  *
- * and README "Capacity" writes every example on `[].<T>`. Nothing in either
- * document puts them on an untyped array.
- *
- * The engine installed both on %Array.prototype% and guarded them at CALL time
- * on [[TypedElement]], which is a different thing: it makes them members of
- * every array that exist only to throw, and it left the FIXED-extent case
- * unguarded entirely, because the guard asked the wrong question.
- *
- * These tests state the placement and the fixed-extent semantics directly, so
- * a regression in either shows up as a failure here rather than as a snapshot
- * diff in the inspector suite, which is where it surfaced the first time.
- *
- * TWO GROUPS, AND THEY ARE NOT EQUALLY SETTLED:
- *
- *   - The PLACEMENT group below encodes a decision that is still open. It is
- *     written for the reading in which the members do not exist on an untyped
- *     array at all. #sec-array-and-tuple-types currently says a typed array
- *     "is an Array ... and the methods of `Array.prototype` apply", which does
- *     not obviously leave room for a distinct prototype, so this reading needs
- *     spec text before it is true. If the other reading is taken - the members
- *     stay on %Array.prototype% and refuse a receiver with no element type -
- *     the two tests marked PLACEMENT DECISION invert and the rest stand.
- *
- *   - The FIXED-EXTENT group is not open. A fixed `[N].<T>` cannot grow, and
- *     references.md states that it never moves, so a `reserve` past its extent
- *     is a bug under either placement.
+ * Two groups:
+ * - The PLACEMENT group encodes the placement above.
+ * - The FIXED-EXTENT group: a fixed `[N].<T>` cannot grow and never moves, so a `reserve` past its
+ *   extent is refused.
  */
 
 // -- element access is typed --------------------------------------------------
@@ -101,10 +83,9 @@ test('a growable array does not get the static bound', () => {
 // -- shrinkToFit: the only thing that releases capacity ----------------------
 
 test('nothing but shrinkToFit releases capacity', () => {
-  // The README claimed a `length =` released it. It does not: shortening an
-  // array changes the length and leaves the allocation where it is, which is
-  // the same fact the liveness rules state when they say a shrink moves
-  // nothing. Before `shrinkToFit` there was no way to give capacity back.
+  // Shortening an array changes the length and leaves the allocation where it is: `length =` does not
+  // release capacity, which is the fact the liveness rules state when they say a shrink moves nothing
+  // (#sec-reference-liveness). `shrinkToFit` is how capacity is given back.
   expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.length = 0; String(a.capacity);')).toBe('64');
   expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.pop(); String(a.capacity);')).toBe('64');
   expect(evaluated('let a: [].<uint32> = [1, 2, 3]; a.reserve(64); a.shrinkToFit(); String(a.capacity);')).toBe('3');
@@ -187,13 +168,11 @@ test('a loop over a capacity needs a typed counter, as one over a length does', 
 // -- the index type: capacity and reserve are typed, not `any` ---------------
 
 test('capacity has the index type rather than any', () => {
-  // `capacity` had no entry in the array member table at all, so a read fell
-  // through to ~any~ and `let n: string = a.capacity` type-checked - a member
-  // that silently defeats the checker, on a proposal whose subject is types.
-  //
-  // #index-type: one type describes every count an array reports or accepts,
-  // so `capacity` carries whatever `length` carries. The invariant the design
-  // states, that a capacity is at least a length, is unstateable otherwise.
+  // `capacity` has an entry in the array member table. #index-type: one type describes every count an
+  // array reports or accepts, so `capacity` carries whatever `length` carries. Without an entry a read
+  // would fall through to ~any~ and `let n: string = a.capacity` would type-check - a member that
+  // silently defeats the checker, on a proposal whose subject is types - and the invariant that a
+  // capacity is at least a length is unstateable unless the two are one type.
   expectStaticTypeError('let a: [].<uint32> = [1]; let n: string = a.capacity;');
   expectStaticTypeError('let a: [].<uint32> = [1]; let b: boolean = a.capacity;');
   expect(evaluated('let a: [].<uint32> = [1]; let n: uint64 = a.capacity; String(n);')).toBe('1');
@@ -259,13 +238,11 @@ test('an ordinary reserve is unaffected by the ceiling', () => {
 // -- array type arity ---------------------------------------------------------
 
 test('an array type takes exactly one type argument', () => {
-  // A second argument was read as the length type in an early draft of the
-  // design and never wired to anything, so `[4].<uint8, uint64>` type-checked,
-  // enforced `uint8` on elements, and yielded a plain `uint32` length with the
-  // second argument DISCARDED. A three-argument form parsed too. Silently
-  // ignoring them made a typo indistinguishable from a feature.
-  // A STATIC rejection, not a catchable throw: the checker refuses the
-  // annotation before evaluation, so a `try` around it cannot swallow it.
+  // An array type takes ONE type argument, its element (#index-type): there is no per-array spelling
+  // that varies the counts' type. So `[4].<uint8, uint64>` and a three-argument form are rejected, since
+  // silently ignoring the extra arguments would make a typo indistinguishable from a feature. A STATIC
+  // rejection, not a catchable throw: the checker refuses the annotation before evaluation, so a `try`
+  // around it cannot swallow it.
   expectStaticTypeError('let a: [4].<uint8, uint64> = [1, 2, 3, 4];');
   expectStaticTypeError('let a: [4].<uint8, uint64, uint32> = [1, 2, 3, 4];');
   expectStaticTypeError('let a: [].<uint32, uint64> = [];');
@@ -279,8 +256,6 @@ test('the one-argument and bare array forms still resolve', () => {
 });
 
 // -- placement: an untyped array has no capacity surface ----------------------
-// PLACEMENT DECISION: the two tests in this section assert the members are
-// ABSENT from an untyped array. Invert them if the receiver-check reading wins.
 
 test('an untyped array does not have the capacity members at all', () => {
   // Not "throws when called" - ABSENT. An untyped array has no allocation
@@ -292,9 +267,8 @@ test('an untyped array does not have the capacity members at all', () => {
 });
 
 test('the capacity members are not own properties of %Array.prototype%', () => {
-  // The regression that reached the inspector snapshots: both appeared in
-  // Array.prototype's property listing, so DevTools showed `capacity` and
-  // `reserve` on every plain array in the inspector.
+  // Neither appears in Array.prototype's property listing, so DevTools does not show `capacity` and
+  // `reserve` on every array.
   expect(bool('String(Object.getOwnPropertyNames(Array.prototype).includes("capacity"));')).toBe(false);
   expect(bool('String(Object.getOwnPropertyNames(Array.prototype).includes("reserve"));')).toBe(false);
 });
@@ -361,16 +335,11 @@ test('a reserve within a fixed extent is a no-op rather than an error', () => {
 // -- fixed extent: storage that never moves never invalidates a borrow --------
 
 test('a borrow into a fixed-extent array survives a reserve', () => {
-  // references.md: "A fixed-length `[N].<T>` and a placement-`new` allocation
-  // never move, so references into them are never invalidated."
-  //
-  // Because `reserve` bumped [[TypedGeneration]] unconditionally, a reserve on
-  // a FIXED array invalidated every live borrow into storage the specification
-  // guarantees never relocates - the borrow then threw "this reference is into
-  // an array that has since grown" for an array that cannot grow.
-  //
-  // Once `reserve` refuses on a fixed array this cannot arise through `reserve`;
-  // the test is kept as the statement of the underlying rule.
+  // #sec-reference-liveness: a fixed-length `[N].<T>` and a placement-`new` allocation never move, so
+  // references into them are never invalidated. Were `reserve` to bump the generation on a FIXED array
+  // it would invalidate every live borrow into storage that cannot relocate, and the borrow would throw
+  // "this reference is into an array that has since grown" for an array that cannot grow. `reserve`
+  // refuses on a fixed array, so this cannot arise through it; the test states the underlying rule.
   expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let ref b = a[0]; a.reserve(4); String(b);')).toBe('1');
   expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4]; let ref b = a[0]; b = 9; String(a[0]);')).toBe('9');
 });
@@ -385,7 +354,7 @@ test('a growable array still invalidates a borrow on real growth', () => {
 // -- withCapacity -------------------------------------------------------------
 
 test('withCapacity is on the array type object, not on Array', () => {
-  // README "Capacity": the static is `[].<T>.withCapacity(n)`.
+  // #sec-array-type-withcapacity: the static is `[].<T>.withCapacity(n)`.
   expect(evaluated('typeof [].<uint32>.withCapacity;')).toBe('function');
   expect(evaluated('typeof Array.withCapacity;')).toBe('undefined');
 });
@@ -411,9 +380,9 @@ test('withCapacity is defined per element type', () => {
   expect(evaluated('const o = [].<float32>.withCapacity(4); o.push(1.5); String(o[0]);')).toBe('1.5');
 });
 
-// -- the capacity rules the design states (kept green through the move) -------
+// -- the capacity rules -------------------------------------------------------
 
-test('the existing capacity rules still hold after the move', () => {
+test('the capacity rules of a typed array', () => {
   // Carried from arrays/capacity.test.mts so a regression in the MOVE shows up
   // beside the placement assertions rather than only in the other file.
   expect(evaluated('let a: [].<uint32> = []; a.reserve(64); String(a.capacity);')).toBe('64');

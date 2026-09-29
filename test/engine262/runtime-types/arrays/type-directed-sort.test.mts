@@ -77,11 +77,11 @@ test('a 64-bit integral type compares at its own precision', () => {
 });
 
 test('a string enum sorts by declaration position', () => {
-  // The design's own motivating case: "a sequence of named steps like time
-  // units or severities is meant to compare in the order it's written, not
-  // alphabetically". Sorting it alphabetically inverted the rule the design
-  // promises, which makes this the strongest case for type-directed ordering -
-  // the type does not merely know a faster order, it knows a DIFFERENT one.
+  // A sequence of named steps like time units or severities is meant to compare in the order it is
+  // written, not alphabetically (#sec-ordered-element-types: an enum over a `string` underlying type
+  // orders by DECLARATION POSITION). Sorting it alphabetically would invert that rule, which makes this
+  // the strongest case for type-directed ordering - the type does not merely know a faster order, it
+  // knows a DIFFERENT one.
   const T = 'enum T: string { Low = "low", Medium = "medium", High = "high" } ';
   expect(evaluated(`${T}let a: [].<T> = [T.High, T.Low, T.Medium]; a.sort(); a.join(",");`)).toBe('low,medium,high');
   // Values chosen so declaration order is the REVERSE of alphabetical.

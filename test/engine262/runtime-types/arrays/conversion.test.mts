@@ -7,16 +7,14 @@ import {
  * Spec: #sec-array-and-tuple-types (Array and Tuple Types),
  * #sec-contextual-types.
  *
- * A plain array in a TUPLE position converts position-wise, as one in an array
- * position converts element-wise.
+ * A plain array in a TUPLE position converts position-wise, as one in an array position converts
+ * element-wise.
  *
- * Only the array form converted, so a tuple of value types could not be written
- * from a literal at all: `const a: [uint8] = [1]` was refused where `const a:
- * [1].<uint8> = [1]` was accepted, and the design's "a tuple of value types is
- * itself a value type laid out contiguously" had no way to be built. A boundary
- * converts everywhere in this proposal except a `ref` binding, which checks
- * because converting a borrow would rewrite the caller's storage; a tuple
- * literal builds a new array, so there is nothing to protect.
+ * So a tuple of value types can be written from a literal: `const a: [uint8] = [1]` is accepted as
+ * `const a: [1].<uint8> = [1]` is, and a tuple of value types is itself a value type laid out
+ * contiguously. A boundary converts everywhere in this proposal except a `ref` binding, which checks
+ * because converting a borrow would rewrite the caller's storage; a tuple literal builds a new array,
+ * so there is nothing to protect.
  */
 
 test('a tuple position converts its value', () => {
@@ -71,8 +69,7 @@ test('every position a tuple may occupy converts', () => {
 
 // -- a trailing position may carry a default ---------------------------------
 test('an unsupplied trailing position takes its default', () => {
-  // the design's purpose for the feature: a shorter array satisfies a longer
-  // tuple. The default was parsed and discarded, so this was refused outright.
+  // A shorter array satisfies a longer tuple where the extra positions carry defaults.
   expect(evaluated("const a: [uint8, string = 'z'] = [1];"
     + " String(a.length) + ',' + String(a[1]);")).toBe('2,z');
   expect(evaluated("const a: [uint8, string = 'z'] = [1, 'x']; String(a[1]);")).toBe('x');
@@ -84,7 +81,7 @@ test('an unsupplied trailing position takes its default', () => {
   expect(evaluated('const a: [uint8 = 5] = []; String(a[0]);')).toBe('5');
   // and a default is converted to its position's type as a supplied value is
   expect(evaluated("const a: [string, uint8 = 200] = ['x']; String(a[1] is uint8);")).toBe('true');
-  // and it works in a return position, which is the design's example
+  // and it works in a return position
   expect(evaluated("function f(): [uint8, string = 'z'] { return [1]; }"
     + " const r = f(); String(r.length) + ',' + String(r[1]);")).toBe('2,z');
 });
@@ -125,17 +122,13 @@ test('a default does not disturb the types around it', () => {
 // -- Element-wise propagation ----------------------------------------------------
 
 /*
- * Typed array propagation: a plain array literal in a `[].<T>` position takes the
- * element type.
- *
- * A plain array assigned to a `[].<T>` binding is converted element by element to
- * T at the binding boundary (#sec-contextual-types; README "Typed Array
- * Propagation"). Each element becomes a value of T, so `let a: [].<uint8>
- * = [1, 2, 3]` yields an array whose elements are uint8 values and whose stores
- * wrap like a Uint8Array. The conversion is the same checked conversion the scalar
- * boundary uses, so an out-of-range element is a TypeError, and it is recursive,
- * so a nested `[].<[].<T>>` propagates through. A fixed extent `[N].<T>` requires
- * the literal to have length N.
+ * Typed array propagation: a plain array literal in a `[].<T>` position takes the element type
+ * (#sec-array-literal-static-type). A plain array assigned to a `[].<T>` binding is converted element
+ * by element to T at the binding boundary (#sec-contextual-types). Each element becomes a value of T,
+ * so `let a: [].<uint8> = [1, 2, 3]` yields an array whose elements are uint8 values and whose
+ * stores wrap like a Uint8Array. The conversion is the same checked conversion the scalar boundary
+ * uses, so an out-of-range element is a TypeError, and it is recursive, so a nested `[].<[].<T>>`
+ * propagates through. A fixed extent `[N].<T>` requires the literal to have length N.
  */
 
 // -- Element type propagation --------------------------------------------------

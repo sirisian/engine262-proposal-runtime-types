@@ -1,24 +1,19 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// `[].<T>` in expression position evaluates to a CONSTRUCTOR, not to the interned
-// Type Object it is keyed on, so `isTypeObject` - which is `'TypeRecord' in
-// value` - answered false and `Reflect.getReflection([].<uint32>)` threw "is not
-// a type" while every other type reflected.
-//
-// The constructor now carries the record, which is the same shape the design
-// already gives a class: "a class's type object is its constructor". That also
-// gives `[].<T>.withCapacity(n)` somewhere to live - an earlier attempt attached
-// it at `GetTypeObject`, which never sees an array type, and silently did
-// nothing.
+// `[].<T>` in expression position evaluates to a CONSTRUCTOR that carries the interned Type Object's
+// record, so `isTypeObject` (`'TypeRecord' in value`) answers true and
+// `Reflect.getReflection([].<uint32>)` reflects it as it does every other type. This is the shape a
+// class already has: a class's type object is its constructor. It also gives
+// `[].<T>.withCapacity(n)` somewhere to live.
 
 test('an array type reflects', () => {
   expect(evaluated('String(Reflect.getReflection([].<uint32>).kind);')).toBe('array');
   expect(evaluated('String(Reflect.getReflection([3].<uint8>).kind);')).toBe('array');
 });
 
-test('withCapacity, as the design writes it', () => {
-  // README "Capacity", verbatim apart from the binding.
+test('withCapacity is read on the array type object', () => {
+  // The capacity example (#sec-array-type-withcapacity), apart from the binding.
   expect(evaluated('const out = [].<uint32>.withCapacity(1024); out.push(7); String(out.length) + "/" + String(out.capacity >= 1024);')).toBe('1/true');
   expect(evaluated('String([].<uint32>.withCapacity(16).length);')).toBe('0');
   expect(evaluated('String([].<uint32>.withCapacity(16).capacity >= 16);')).toBe('true');
