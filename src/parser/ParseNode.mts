@@ -473,7 +473,7 @@ export namespace ParseNode {
   // MemberExpression (partial) :
   //   `new` MemberExpression Arguments
   /**
-   * proposal-runtime-types sec-new-expressions: `new` `.` Arguments - TARGET-TYPED
+   * proposal-runtime-types sec-type-arguments-and-placement-new-in-expression-position: `new` `.` Arguments - TARGET-TYPED
    * CONSTRUCTION, constructing the type its position requires. Told from
    * `new.target` by the token after the dot.
    */

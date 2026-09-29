@@ -46,7 +46,7 @@ test('shared: admits the value types', () => {
   expect(evaluated('type S = shared [4].<uint8>; Reflect.getReflection(S).kind;')).toBe('shared');
 });
 
-// The three refusals are EARLY errors. #sec-shared-types states each as "it is
+// The three refusals are EARLY errors. #sec-threading-shared-modifier states each as "it is
 // a type error if", and #sec-type-errors fixes what that phrase means: "This
 // specification realizes such a violation as an Early Error, and reserves a
 // thrown *TypeError* for" a check that "cannot be resolved statically, because

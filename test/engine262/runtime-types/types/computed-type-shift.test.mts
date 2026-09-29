@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
- * Spec: #sec-type-arguments. "A shift operator inside a type argument list must
+ * Spec: #sec-input-element-type. "A shift operator inside a type argument list must
  * be PARENTHESIZED, which is only relevant to a value argument, since a shift
  * cannot otherwise appear in a type."
  *

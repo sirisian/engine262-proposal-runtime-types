@@ -514,7 +514,7 @@ test('a selected case\'s value binder keeps its declared type', () => {
 
 // A type parameter applied as a conversion, `T(v)`.
 test('a type parameter converts as its Type Object does, with no this value', () => {
-  // #sec-type-objects: "a type may be applied to an argument as `T(v)`"; the
+  // #sec-type-object-opacity: "a type may be applied to an argument as `T(v)`"; the
   // reference names no Environment Record, and EvaluateCall asserted one.
   expect(evaluated(`function f<T: type extends uint.<_> = uint16>(v: uint32): string { return String(Reflect.typeOf(T(v))); }
     f.<uint16>(3) + '|' + f(3);`)).toBe('uint.<16>|uint.<16>');

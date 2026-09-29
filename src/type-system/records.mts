@@ -82,7 +82,7 @@ export interface ParameterRecord {
   readonly Optional: boolean;
   readonly Rest: boolean;
   /**
-   * proposal-runtime-types #sec-reference-parameters: the parameter is declared
+   * proposal-runtime-types #sec-reference-parameters-and-arguments: the parameter is declared
    * `ref`, so the call must supply a reference and the callee writes through to
    * the caller's location. A call's `ref` and a declaration's must agree, and
    * both are written down, so the record has to carry it for the checker to
@@ -192,7 +192,7 @@ export function generatorDeclaredType(annotation: TypeRecord | null, isAsync: bo
     return annotation;
   }
   const [Y, R, N] = iterationArguments(annotation ? [annotation] : []);
-  // #sec-inferred-result-type: "_R_ is the join of its return contributions",
+  // #sec-inference-and-function-forms: "_R_ is the join of its return contributions",
   // said in the same breath as "_N_ is not inferred, being the type of what a
   // caller sends IN". So _R_ WAS meant to be inferred where an annotation does
   // not supply it, and this defaulted it to `void` instead - which refused
@@ -1195,7 +1195,7 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
     // imaginary literal have the type `complex` at all.
     case 'complex':
       return makePrimitive('complex', args.length > 0 ? args : [makePrimitive('number')]);
-    // #sec-primitives names `rational` a parameterized PRIMITIVE beside `uint`,
+    // #sec-intrinsic-type-parameters names `rational` a parameterized PRIMITIVE beside `uint`,
     // `int` and `vector`. Without a case here it fell through to a NOMINAL
     // record, and every numeric-literal path is keyed on `Kind === 'primitive'`,
     // so no literal reached any rational form.
@@ -2087,7 +2087,7 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
  * `function first<T>(a: [].<T>): T {}` called as `first.<uint32>([1])` is a
  * `uint32`, and an assignment of it is checked.
  *
- * TWO OBLIGATIONS ARE THE CALLER'S, and #sec-substitutetype gives both to the
+ * TWO OBLIGATIONS ARE THE CALLER'S, and #sec-generic-specialization gives both to the
  * operation itself:
  *
  *   1. CANONICALIZE the result. The clause's last step is

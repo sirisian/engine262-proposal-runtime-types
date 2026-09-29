@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * Spec: #sec-check-elision, #sec-shallow-function-checks.
+ * Spec: #sec-check-elision, #sec-elision-stability.
  *
  * A check is elided where "the value is ALREADY of the target type". That
  * premise is read off a Static Type, and a Static Type can be a lie about the

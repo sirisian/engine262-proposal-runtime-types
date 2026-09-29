@@ -46,7 +46,7 @@ test('the other families are unchanged', () => {
   // A decimal keeps its cohort member through negation.
   expect(evaluated("String(-decimal64.parse('1.50'));")).toBe('-1.50');
   expect(evaluated('String(-(5 := int64));')).toBe('-5');
-  // Unsigned negation wraps, per #sec-unary-operators.
+  // Unsigned negation wraps, per #sec-unary-operators-for-typed-values.
   expect(evaluated('String(-(5 := uint8));')).toBe('251');
   expect(evaluated('String(-5n);')).toBe('-5');
 });

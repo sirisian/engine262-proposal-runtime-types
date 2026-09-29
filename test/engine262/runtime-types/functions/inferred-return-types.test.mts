@@ -501,7 +501,7 @@ test('the multi-arm widening, pinned', () => {
 });
 
 test('a constructor contributes nothing to inference', () => {
-  // #sec-published-return-types: "A setter declares no return type, and a
+  // #sec-inference-and-function-forms: "A setter declares no return type, and a
   // constructor has none to infer." The constructor now reflects a SIGNATURE,
   // which is a different thing - its parameters are known and its result is
   // fixed by rule, so nothing is inferred. The absence of the `return` slot is what says so.

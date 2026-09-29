@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// Spec: sec-new-expressions, `new` `.` Arguments.
+// Spec: sec-type-arguments-and-placement-new-in-expression-position, `new` `.` Arguments.
 //
 // Target-typed construction: it constructs the type its POSITION requires, so
 // the type is not named. The checker resolves the contextual type and records
@@ -52,7 +52,7 @@ test('an argument position carries a contextual type', () => {
 });
 
 test('the target may be any CONSTRUCTIBLE type, not only a class', () => {
-  // #sec-new-expressions: "It is a type error where the contextual type is not
+  // #sec-type-arguments-and-placement-new-in-expression-position: "It is a type error where the contextual type is not
   // CONSTRUCTIBLE, as in `let n: uint8 = new.(1)`" - constructible, not nominal.
   // The form was class-only, and the design's own examples build an array and a
   // vector this way: "Since this works for any type the following works as

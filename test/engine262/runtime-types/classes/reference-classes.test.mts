@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
- * ecmascript-types README, Reference Classes: a class declared `reference`,
+ * proposal-runtime-types #sec-reference-classes: a class declared `reference`,
  * `sealed` or `abstract` is a REFERENCE TYPE. Its instances are held and passed
  * by reference, `===` compares references, a field of its type is a pointer,
  * and it closes a recursive cycle.

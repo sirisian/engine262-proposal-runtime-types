@@ -14,7 +14,7 @@ import {
 
 /** https://tc39.es/ecma262/#sec-evaluate-expression-key-property-access */
 export function* EvaluatePropertyAccessWithExpressionKey(baseValue: Value, expression: ParseNode.Expression, strict: boolean): ReferenceEvaluator {
-  // proposal-runtime-types #sec-class-operators: a computed access may supply
+  // proposal-runtime-types #sec-user-defined-operators: a computed access may supply
   // SEVERAL indices, `grid[x, y]`, which an index accessor of that many
   // parameters receives as its argument list.
   //
@@ -36,7 +36,7 @@ export function* EvaluatePropertyAccessWithExpressionKey(baseValue: Value, expre
   // The key an ordinary access uses is the last operand's value, which is what
   // the comma expression produced before.
   const propertyNameValue = indexValues[indexValues.length - 1]!;
-  // proposal-runtime-types (spec sec-class-operators): a computed access `m[i]`
+  // proposal-runtime-types (spec sec-user-defined-operators): a computed access `m[i]`
   // whose base declares an index operator and whose key is a numeric index
   // dispatches to the operator rather than performing an ordinary property access.
   // A non-numeric key, such as a string method name, is left to ordinary access so

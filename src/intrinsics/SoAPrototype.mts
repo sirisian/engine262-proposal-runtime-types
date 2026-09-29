@@ -13,7 +13,7 @@ import {
  * on the container: a field named `length` or `push` then collides with
  * nothing.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 export function bootstrapSoAPrototype(realmRec: Realm) {
   const proto = bootstrapPrototype(realmRec, [

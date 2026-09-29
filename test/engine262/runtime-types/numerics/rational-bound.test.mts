@@ -20,7 +20,7 @@ const i64 = (digits: string) => `(BigInt('${digits}') := int64)`;
 const MAX = '9223372036854775807';
 
 test('conversion refuses a value that does not fit', () => {
-  // A LITERAL out of range is refused before the program runs - #sec-literal-types:
+  // A LITERAL out of range is refused before the program runs - #sec-literal-propagation:
   // "a literal whose value that type cannot represent is a type error rather
   // than a silent truncation" (#sec-literal-propagation).
   for (const src of ['1e308 := rational64;', '5e-324 := rational64;', 'rational64(1e308);', 'let r: rational64 = 1e30;']) {

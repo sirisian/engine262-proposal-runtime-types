@@ -245,7 +245,7 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
 
 /**
  * Whether `value` is a value of a numeric type of this proposal - the set the
- * unary `+` rule names. #sec-numeric-types gives the families: "Each integer,
+ * unary `+` rule names. #sec-numeric-types-of-this-proposal gives the families: "Each integer,
  * binary floating-point, decimal floating-point, rational, complex, and vector
  * type is a numeric type". One predicate for the whole set, one family per line
  * against that list, so a family missing from it can be seen: the inline guard

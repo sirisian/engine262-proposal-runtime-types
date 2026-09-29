@@ -72,7 +72,7 @@ test('primitive metadata: a parameterization over `number` defaults as one over 
   // membership test failed at its base check.
   //
   // #sec-defaultvalueof step 2 returns "the value of _t_ representing 0", and
-  // #sec-value-types says ECMAScript "defines Number and BigInt that way"
+  // #sec-numeric-types-of-this-proposal says ECMAScript "defines Number and BigInt that way"
   // already; the value of the Number type representing 0 is the Number +0.
   const bounds = 'type B = { lo: number }; '
     + 'meta B { default = { lo: -Infinity }; subtype(a, b) { return a.lo >= b.lo; } validate(v, c) { return Number(v) >= c.lo; } } ';

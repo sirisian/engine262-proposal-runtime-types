@@ -191,7 +191,7 @@ test('a derived parameter carries its name and `any`; a declared one its type', 
 });
 
 test('no constructor signature carries a `return` slot', () => {
-  // #sec-published-return-types: "a constructor has none to infer", and none
+  // #sec-inference-and-function-forms: "a constructor has none to infer", and none
   // can be written either. Asserted across every shape above so a
   // later change that starts synthesising one has to fail here.
   for (const decl of [

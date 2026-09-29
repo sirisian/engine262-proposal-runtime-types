@@ -22,7 +22,7 @@ import { canonicalTypeText } from '../type-system/records.mts';
  * Object. Its %Symbol.hasInstance% method makes `value instanceof T` the
  * IsOfType membership test.
  */
-/** https://sirisian.github.io/ecmascript-types/#sec-isoftype */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-isoftype */
 function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }: FunctionCallContext) {
   if (!isTypeObject(thisValue)) {
     return Throw.TypeError('$1 is not a type', thisValue);
@@ -32,7 +32,7 @@ function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }:
 }
 
 /**
- * proposal-runtime-types (spec sec-parse-for-numeric-types): a numeric Type
+ * proposal-runtime-types (spec sec-parsing): a numeric Type
  * Object has a `parse` method. `uint8.parse('1')` returns the enumerator's
  * value as that type. The accepted input is exactly a literal of the type, with
  * optional surrounding whitespace and an optional sign; numeric separators are
@@ -57,7 +57,7 @@ function* TypeProto_approximate(args: Arguments, { thisValue }: FunctionCallCont
   return Q(yield* RationalApproximateAt(args, t));
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-parsing */
 /**
  * The string form of a complex, as the imaginary literal writes it: an optional
  * real part, an optional signed imaginary part suffixed `i`, or either alone.
@@ -124,7 +124,7 @@ export function ReadComplexLiteral(text: string, component: unknown): { real: nu
   return parsed;
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-parsing */
 function* TypeProto_parse([S = Value.undefined, radix = Value.undefined]: Arguments, { thisValue }: FunctionCallContext) {
   if (!isTypeObject(thisValue)) {
     return Throw.TypeError('$1 is not a type', thisValue);
@@ -478,7 +478,7 @@ function isSyntaxErrorCompletion(thrown: Value): boolean {
   return false;
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-parse-for-numeric-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-parsing */
 function* TypeProto_tryParse([S = Value.undefined, radix = Value.undefined]: Arguments, context: FunctionCallContext): ValueEvaluator {
   const { thisValue } = context;
   if (!isTypeObject(thisValue)) {
@@ -580,7 +580,7 @@ function layoutOfThis(thisValue: Value, which: 'bitLength' | 'byteLength' | 'ali
  *
  * Only an SoA has one, since only an SoA has columns.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-type-layout
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* TypeProto_elementByteLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   if (!isTypeObject(thisValue)) {
@@ -605,17 +605,17 @@ function* TypeProto_elementByteLengthGetter(_args: Arguments, { thisValue }: Fun
   return Value(total);
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-type-layout */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_bitLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return layoutOfThis(thisValue, 'bitLength');
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-type-layout */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_byteLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return layoutOfThis(thisValue, 'byteLength');
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-type-layout */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-layout-properties */
 function* TypeProto_alignmentGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   return layoutOfThis(thisValue, 'alignment');
 }
@@ -811,7 +811,7 @@ function* TypeProto_epsilonGetter(_args: Arguments, { thisValue }: FunctionCallC
 }
 
 /**
- * https://sirisian.github.io/ecmascript-types/#sec-types-and-type-objects
+ * https://sirisian.github.io/proposal-runtime-types/#sec-types-and-type-objects
  *
  * `Type.prototype.toString` - the canonical source form of the type.
  *

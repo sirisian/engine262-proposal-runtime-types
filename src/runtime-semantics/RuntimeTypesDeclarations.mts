@@ -98,7 +98,7 @@ export const preEvaluatedTypeDeclarations = new WeakSet<ParseNode>();
  * `interface Node { next: Node | undefined; }` gives the same for `"Node"`.
  * Nothing in the completion separates them, so the NAME is compared against
  * this set instead: a type declaration's own name is the recursive case and is
- * exempt; anything else is a value binding, which #sec-type-references makes a
+ * exempt; anything else is a value binding, which #sec-type-names makes a
  * TypeError - "`q` IS bound; it simply does not denote a type".
  */
 export const typeDeclarationNamesInPass = new Set<string>();
@@ -118,7 +118,7 @@ export const typeDeclarationNamesInPass = new Set<string>();
  * Both are reported identically - `"q" cannot be used before initialization` and
  * `"Node" cannot be used before initialization`, from the same site - so the
  * NAME decides. A name this pass is defining is the recursive case and is
- * exempt; anything else is a value binding, which #sec-type-references makes a
+ * exempt; anything else is a value binding, which #sec-type-names makes a
  * TypeError: "`q` IS bound; it simply does not denote a type".
  */
 function isRecursiveTypeReference(value: ObjectValue): boolean {
@@ -740,7 +740,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       }
       Properties.push({ key, type: resolved, optional: !!m.Optional, readonly: !!m.Readonly, initial });
     }
-    // proposal-runtime-types decorators.md, #sec-metadata-objects: a `partial
+    // proposal-runtime-types decorators.md, #sec-partial-classes: a `partial
     // interface` EXTENDS an interface someone else declared, and its members
     // join that interface's. It may contribute FIELDS where a partial class may
     // not, and the reason is the whole of why this is an interface: an
@@ -1534,7 +1534,7 @@ export function* Evaluate_TypeOperatorExpression({ Type }: ParseNode.TypeOperato
   return GetTypeObject(record);
 }
 /**
- * proposal-runtime-types #sec-meta-hooks: evaluate the `default` hook and
+ * proposal-runtime-types #sec-meta-declarations: evaluate the `default` hook and
  * register it against the named type's interned Type Object.
  */
 /** The meta declaration each Type Object carries, for the one-per-type rule. */
@@ -1581,7 +1581,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   const aliasDeclaration = shape && shape.Kind === 'nominal'
     ? (shape as { Declaration?: ParseNode.TypeAliasDeclaration }).Declaration
     : undefined;
-  // #sec-meta-declarations: it is an early
+  // #sec-metadata-decomposition: it is an early
   // error "for its constraint shape to take a number of type parameters other
   // than the number the declaration takes". The parameter names the BASE and is
   // threaded into the shape, so a shape that takes a different number has

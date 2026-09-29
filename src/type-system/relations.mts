@@ -183,7 +183,7 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
 /**
  * Whether two types are the SAME type: mutual subtyping.
  *
- * sec-type-relations defined this by an algorithm carrying three steps keyed on
+ * sec-sametype defined this by an algorithm carrying three steps keyed on
  * _s_ alone - for an enum, a literal, and a parameterized type - with no mirror
  * for _t_, which made the relation ASYMMETRIC: `SameType("a", string)` answered
  * *true* where `SameType(string, "a")` answered *false*. A relation named for
@@ -1426,7 +1426,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       // declares no variance behaves exactly as it did, which is the default the
       // clause calls conservative.
       // A BARE `RegExp` is the SUPERTYPE of every parameterization.
-      // #sec-regexp: "A bare `RegExp`, the raw library type, is the supertype of
+      // #sec-typed-regular-expressions: "A bare `RegExp`, the raw library type, is the supertype of
       // every such parameterization, so it holds a literal of any shape while a
       // written parameterization does not hold a value of another."
       //
@@ -1548,7 +1548,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           // - the way every other arm that reads an interface structure
           // already does. Without it `class C implements Box.<uint8>` compared
           // its `v: uint8` against `v: T` and was refused, so the DECLARED
-          // hierarchy `sec-interfaces` promises did not carry a parameterised
+          // hierarchy `sec-interfaces-semantics` promises did not carry a parameterised
           // interface at all.
           const target = SubstituteTypeArguments(tStructure, tn.Declaration, tn.Arguments);
           let source = SubstituteTypeArguments(sStructure, s.Declaration, s.Arguments);
@@ -2318,7 +2318,7 @@ export function IsAssignable(s: TypeRecord, t: TypeRecord): boolean {
  * The one case that is easy to get wrong, and that the brand design depends on,
  * is ~parameterized~: two parameterizations of ONE base SHARE values, which is
  * what makes `string.<{ brand: 'E' }> & string.<{ pattern: /@/ }>` the layered
- * type of #sec-brands rather than an empty one. Disjointness is decided on the
+ * type of #sec-aredisjoint rather than an empty one. Disjointness is decided on the
  * BASE, never on the metadata. `ConvertValue` already carries the same rule as a
  * hand-written guard ("an intersection whose members are ALL parameterizations
  * of ONE base"), and this is that rule stated once.

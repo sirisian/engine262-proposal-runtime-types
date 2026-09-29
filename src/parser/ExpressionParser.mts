@@ -1670,7 +1670,7 @@ export abstract class ExpressionParser extends FunctionParser {
   parseNewExpression(): ParseNode.NewExpressionOrHigher {
     const node = this.startNode<ParseNode.NewTarget | ParseNode.NewExpression>();
     this.expect(Token.NEW);
-    // sec-new-expressions: `new` `.` Arguments constructs the type its POSITION
+    // sec-type-arguments-and-placement-new-in-expression-position: `new` `.` Arguments constructs the type its POSITION
     // requires. Checked before `new.target`, whose branch is gated on being
     // inside a function while this form is legal anywhere; the token after the
     // dot tells them apart.
@@ -2367,7 +2367,7 @@ export abstract class ExpressionParser extends FunctionParser {
     if (ClassModifiers && ClassModifiers.includes('sealed') && ClassModifiers.includes('dynamic')) {
       this.raise(Throw.SyntaxError('A class cannot be both sealed and dynamic'));
     }
-    // ecmascript-types README, Reference Classes: `reference` with `abstract`,
+    // proposal-runtime-types #sec-reference-classes: `reference` with `abstract`,
     // `sealed` or `dynamic` is REDUNDANT rather than an error - each of those is
     // already a reference type - so nothing is raised for the combination. The
     // one pairing that IS contradictory is `reference dynamic`, and it is
@@ -2431,7 +2431,7 @@ export abstract class ExpressionParser extends FunctionParser {
   // ClassTail : ClassHeritage? `{` ClassBody? `}`
   // ClassHeritage : `extends` LeftHandSideExpression
   /**
-   * proposal-runtime-types #sec-class-operators: does this read direction yield
+   * proposal-runtime-types #sec-user-defined-operators: does this read direction yield
    * a REFERENCE?
    *
    * Either spelling counts, because the design uses both: an explicit return
@@ -2644,7 +2644,7 @@ export abstract class ExpressionParser extends FunctionParser {
             // proposal-runtime-types: operators have no ClassElementName and
             // take no part in the name bookkeeping below.
             //
-            // #sec-class-operators: an index accessor whose read direction
+            // #sec-user-defined-operators: an index accessor whose read direction
             // yields a REFERENCE already denotes the place a write goes, so a
             // write direction for the same number of indices would give the
             // write two meanings. Declaring both is refused here rather than
@@ -4251,7 +4251,7 @@ export abstract class ExpressionParser extends FunctionParser {
         || this.test(Token.RBRACE)
         || this.test(Token.COLON)
         || this.test(Token.ASSIGN));
-    // proposal-runtime-types #sec-class-operators: an ACCESSOR may not declare
+    // proposal-runtime-types #sec-user-defined-operators: an ACCESSOR may not declare
     // type parameters. A getter is never written as a call and takes no
     // arguments, so a parameter it declared could be neither supplied nor
     // inferred; a setter could infer one from the assigned value, but

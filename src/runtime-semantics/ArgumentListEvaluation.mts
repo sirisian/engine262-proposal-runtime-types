@@ -263,7 +263,7 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
 
 /**
  * The same, read off a SIGNATURE in view rather than the callee's own parameter
- * list. #sec-call-argument-binding: a call is bound "to the parameters of the
+ * list. #sec-named-arguments: a call is bound "to the parameters of the
  * selected signature"; where the callee is reached through a binding whose
  * declared type is a function type or an interface of call signatures, that type's
  * signature is the declaration the call site reads - the callee's own names are

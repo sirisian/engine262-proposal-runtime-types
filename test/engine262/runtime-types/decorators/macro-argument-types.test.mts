@@ -6,7 +6,7 @@ import { Agent, setSurroundingAgent } from '#self';
  * A macro's arguments carry their NOMINAL types.
  *
  * `#sec-syntax-replacement` says a replacement decorator "RECEIVES a TokenStream"
- * and `#sec-reflection-contexts` names the context it takes. Both were true of
+ * and `#sec-decorator-contexts` names the context it takes. Both were true of
  * the values and false of their TYPES: `RuntimeTypeOf` answered `array` for the
  * stream and `object` for the context, so nothing that selects on argument types
  * could see what they were.

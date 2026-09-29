@@ -37,7 +37,7 @@ export function* Evaluate_ObjectLiteral(node: ParseNode.ObjectLiteral): ValueEva
   // proposal-runtime-types #sec-object-types: "an object literal written AT the
   // position is fresh and is being built there, so the type supplies what the
   // literal omits". The checker marked this literal with the object type it is
-  // being built at, and only when that type declares a default (#sec-check-pass).
+  // being built at, and only when that type declares a default (#sec-object-types).
   //
   // AFTER the members, so a supplied value always wins and a default only fills
   // what the literal left out - the same order a typed composite creation uses.

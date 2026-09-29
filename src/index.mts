@@ -9,7 +9,7 @@ export * from './execution-context/all.mts';
 export * from './static-semantics/all.mts';
 export * from './runtime-semantics/all.mts';
 export * from './value.mts';
-// Test hook for the bounds proof (sec-bounds-checks), which is otherwise
+// Test hook for the bounds proof (sec-check-elision), which is otherwise
 // unreachable: the elision is unobservable and the set is keyed on a root.
 export { BoundsProvenCountForLastCheck } from './type-system/check.mts';
 // The inspector renders a Type

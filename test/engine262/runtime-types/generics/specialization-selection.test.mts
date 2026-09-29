@@ -10,7 +10,7 @@ import type { PatternSlotParameter } from '#self';
 import { Agent, ManagedRealm, setSurroundingAgent, Parser } from '#self';
 
 /**
- * #sec-selectspecialization: specificity, selection, and callable groups,
+ * #sec-matching-specialization-lists: specificity, selection, and callable groups,
  * exercised directly over real parse nodes and a small model universe.
  */
 

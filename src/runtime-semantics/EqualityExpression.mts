@@ -46,7 +46,7 @@ export function* Evaluate_EqualityExpression(node: ParseNode.EqualityExpression)
       lval = adopted.left; rval = adopted.right;
     }
   }
-  // proposal-runtime-types (spec sec-class-operators): the equality operators are
+  // proposal-runtime-types (spec sec-equality-and-comparison): the equality operators are
   // overloadable. When the left operand is an Object whose class declares
   // `operator==`, `==` dispatches to it (receiver is the left operand, parameter
   // the right) and `!=` returns its negation. Strict equality `===`/`!==` keeps

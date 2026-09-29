@@ -5,7 +5,7 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  * Spec: #sec-unary-operators-for-typed-values. "Unary `+` returns its operand
  * unchanged when the operand is a value of a numeric type of this proposal. It
  * continues to throw a TypeError for a BigInt, and continues to apply ToNumber
- * otherwise." #sec-numeric-types names the families: "Each integer, binary
+ * otherwise." #sec-numeric-types-of-this-proposal names the families: "Each integer, binary
  * floating-point, decimal floating-point, rational, complex, and vector type".
  *
  * The guard named four families and left out complex, so `+c` reached ToNumber

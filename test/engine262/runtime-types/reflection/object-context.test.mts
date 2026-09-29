@@ -71,7 +71,7 @@ test('a member of the wrong kind is refused', () => {
 
 // The parameter and return contexts complete the family. They name a member AND
 // a parameter within it, so they take two names where the member contexts take
-// one, and they honour the general rule in sec-reflection-contexts: "a context
+// one, and they honour the general rule in sec-decorator-contexts: "a context
 // that names a set of members has two signatures: one taking no name, returning
 // an object keyed by name".
 //

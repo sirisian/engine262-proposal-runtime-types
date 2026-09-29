@@ -58,7 +58,7 @@ function requireEnum(thisValue: Value, method: string) {
  * rather than a method on an enumerator: an enumerator is a value of the
  * underlying type and has no method of its own to call.
  */
-/** https://sirisian.github.io/ecmascript-types/#sec-enums */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-enums */
 function EnumProto_toString([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
   const entries = requireEnum(thisValue, 'toString');
   if (!('names' in entries)) {
@@ -76,7 +76,7 @@ function EnumProto_toString([value = Value.undefined]: Arguments, { thisValue }:
 }
 
 /** The string keys, in declaration order. */
-/** https://sirisian.github.io/ecmascript-types/#sec-enums */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-enums */
 function EnumProto_keys(_args: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
   const entries = requireEnum(thisValue, 'keys');
   if (!('names' in entries)) {
@@ -91,7 +91,7 @@ function EnumProto_keys(_args: Arguments, { thisValue }: FunctionCallContext): V
 }
 
 /** The values, in declaration order. */
-/** https://sirisian.github.io/ecmascript-types/#sec-enums */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-enums */
 function EnumProto_values(_args: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
   const entries = requireEnum(thisValue, 'values');
   if (!('names' in entries)) {
@@ -102,7 +102,7 @@ function EnumProto_values(_args: Arguments, { thisValue }: FunctionCallContext):
 }
 
 /** [key, value] pairs, in declaration order. */
-/** https://sirisian.github.io/ecmascript-types/#sec-enums */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-enums */
 function EnumProto_entries(_args: Arguments, { thisValue }: FunctionCallContext): ValueCompletion {
   const entries = requireEnum(thisValue, 'entries');
   if (!('names' in entries)) {

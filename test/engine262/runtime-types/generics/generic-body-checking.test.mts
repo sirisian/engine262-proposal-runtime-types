@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectError, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
- * proposal-runtime-types `#sec-type-expressions`: "A type-position expression
+ * proposal-runtime-types `#sec-compile-time-evaluability`: "A type-position expression
  * inside a generic declaration evaluates at each specialization, once every
  * generic parameter it reads is bound."
  *

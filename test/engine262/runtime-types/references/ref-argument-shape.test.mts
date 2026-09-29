@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { expectThrown, ok } from '../harness.mts';
 
 /**
- * Spec: #sec-reference-parameters with #sec-type-errors. A `ref` parameter is
+ * Spec: #sec-reference-parameters-and-arguments with #sec-type-errors. A `ref` parameter is
  * bound to the caller's LOCATION and written through, so the call has to name
  * one. Whether the call writes `ref` is syntax and whether the parameter
  * declares it is syntax, so neither operand's VALUE is involved - and the run

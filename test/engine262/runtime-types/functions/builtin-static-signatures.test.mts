@@ -927,7 +927,7 @@ test('the handler rule leaves the neighbouring receivers alone', () => {
 const SUB = 'class A { x: uint8 = (0 := uint8); } class B extends A { y: uint8 = (0 := uint8); } ';
 
 test('a COVARIANT position uses ASSIGNABILITY, not subtyping', () => {
-  // #sec-generic-variance: "A position declared covariant admits an argument the
+  // #sec-issubtype: "A position declared covariant admits an argument the
   // position's own type is ASSIGNABLE FROM, not merely a subtype of."
   //
   // The two differ for `any`, which is assignable both ways while being a

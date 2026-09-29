@@ -444,7 +444,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // which needs an evaluator. `Reflect.typeOf` takes the same step for the
         // same reason, and its comment says so; this is a generator, so it can.
         //
-        // sec-reflection-contexts: "a context that names a set of members has
+        // sec-decorator-contexts: "a context that names a set of members has
         // two signatures: one taking no name, returning an object keyed by
         // name". A parameter context names a set, so the member-only call
         // returns every parameter.
@@ -542,7 +542,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const getReflection = Q(yield* Get(reflectObj, Value('getReflection')));
     if (SameValue(func, getReflection)) {
       const contextRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
-      // #sec-reflection-contexts: `Reflect.getReflection.<Reflect.Type, T>()`
+      // #sec-decorator-contexts: `Reflect.getReflection.<Reflect.Type, T>()`
       // reflects T's own structure. The reflection itself is the one
       // `Reflect.getReflection(`_T_`)` already produces over a type object; this
       // is the CONTEXT form of the same request, which is how the specification
@@ -573,7 +573,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // The names live on the DECLARATION's EnumMemberList; [[EnumMembers]]
       // carries only the values, so the two are read together and stay aligned
       // by index.
-      // sec-reflection-contexts, the Structural family: `Tuple` and `Record`
+      // sec-decorator-contexts, the Structural family: `Tuple` and `Record`
       // reflect "a tuple or record declaration", so they take the TYPE as the
       // second type argument - the Class family's spelling, not the Object
       // family's instance one.
@@ -920,7 +920,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // class, which the rule makes true by refusing any other `return`. So the
         // signature is DERIVED, not guessed.
         //
-        // No `return` slot, which #sec-published-return-types requires: "a
+        // No `return` slot, which #sec-inference-and-function-forms requires: "a
         // constructor has none to infer", and none can be
         // written either.
         //

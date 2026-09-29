@@ -866,7 +866,7 @@ export function* BindTypeArgumentRecords(
       //
       // This twin checked one only on its variadic path, so `<T: uint8>` was
       // enforced for `f.<string>(x)` and not here. A constraint that binds in
-      // one position and not another is not a constraint: #sec-generics has a
+      // one position and not another is not a constraint: #sec-issubtype has a
       // parameter "a subtype of itself and of its constraint" inside the
       // declaration, and that reading is sound only where applications honour
       // it.
@@ -2540,7 +2540,7 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   if (claimed !== undefined) {
     return claimed;
   }
-  // proposal-runtime-types #sec-decimal-types and #sec-complex-numbers: these
+  // proposal-runtime-types #sec-decimal-floating-point-types and #sec-complex-numbers: these
   // are VALUE TYPES, and a value of one reports its own type. Both fell through
   // to the shape branches below and answered the literal type of an object with
   // no own properties, so `Reflect.typeOf(decimal32("1"))` and
@@ -3061,7 +3061,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         // against `inBase= true` over float64.)
         //
         // #sec-defaultvalueof step 2 is "if _t_ is a numeric type, return the
-        // value of _t_ representing 0", and #sec-value-types is explicit that
+        // value of _t_ representing 0", and #sec-numeric-types-of-this-proposal is explicit that
         // ECMAScript "defines Number and BigInt that way" ALREADY, the new
         // types being numeric "in that sense". The value of the Number type
         // representing 0 is the Number +0. `bigint` below was always plain for
@@ -3714,7 +3714,7 @@ export function SubstituteTypeArguments(
     // why `interface B<T> { n: [].<T> }` was satisfied by nothing while the
     // ALIAS spelling of the same thing worked.
     //
-    // [[Extent]] is "a non-negative integer or ~dynamic~" per #sec-type-records
+    // [[Extent]] is "a non-negative integer or ~dynamic~" per #sec-types-and-type-objects
     // and may also be a Type Record for a VALUE parameter, which the alias
     // walk already reads that way - so it is walked rather than assumed numeric.
     if (r.Kind === 'array') {
@@ -4265,7 +4265,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         return false;
       }
-      // proposal-runtime-types #sec-reflection-contexts: a REFLECTION CONTEXT
+      // proposal-runtime-types #sec-decorator-contexts: a REFLECTION CONTEXT
       // is a nominal type whose values are the reflection objects that context
       // names - what `Reflect.getReflection` returns and what a decoration
       // supplies as its last argument. decorators.md writes each one as an
@@ -5378,7 +5378,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             Metadata: MetadataObjectFromType(metadataRecord, base),
             ...(namedMetaType === undefined ? {} : { MetaType: namedMetaType }),
           } as TypeRecord;
-          // #sec-meta-declarations: "A metadata object whose own key no meta type
+          // #sec-metadata-decomposition: "A metadata object whose own key no meta type
           // claims is a type error at the parameterization that writes it."
           //
           // The CHECKER enforced this and the runtime did not, so
@@ -5976,7 +5976,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // constraint admits - `f.<4, 2>` over `<N: uint32, I: uint32>` binds a
           // `uint32` 4, not a Number 4, and the two are never SameValue under
           // this proposal - so requiring a plain Number rejected `[N].<T>` with
-          // a value-generic extent, which is the very shape #sec-bounds-checks
+          // a value-generic extent, which is the very shape #sec-check-elision
           // is written about. The unwrap admits both spellings of one number,
           // as the array membership rule already does for a length.
           const numeric = v instanceof NumberValue ? R(v)
@@ -6826,7 +6826,7 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
     // 10]`), and converted at the parameter's type so the value a call receives
     // for a skipped position is of that type. It is what a named-argument call
     // through a value of this type fills the skipped position with
-    // (#sec-call-argument-binding, reading the signature in view). A parameter
+    // (#sec-named-arguments, reading the signature in view). A parameter
     // with a default may be omitted.
     let Initial: Value | undefined;
     const initializer = (p as { Initializer?: ParseNode.Expression | null }).Initializer;

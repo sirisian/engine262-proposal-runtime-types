@@ -224,7 +224,7 @@ function* Reflect_setPrototypeOf([target = Value.undefined, proto = Value.undefi
   return Q(yield* target.SetPrototypeOf(proto));
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-reflect.typeof */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-reflect-typeof */
 /**
  * `Reflect.declareInverse(context, inverse)` - the primitive the
  * kit's `inverse` decorator calls. It accepts only a LIVE `Reflect.Function`
@@ -881,7 +881,7 @@ function metadataToValue(metadata: unknown, realm: Realm): Value {
 }
 
 /**
- * The structure of a type as the `Type` context of #sec-reflection-contexts describes
+ * The structure of a type as the `Type` context of #sec-decorator-contexts describes
  * it, discriminated by `kind`. Exported so the context form of
  * `Reflect.getReflection` can ask for the same thing the value form does.
  */
@@ -1344,7 +1344,7 @@ export function bootstrapReflect(realmRec: Realm) {
  * than from the type, because it belongs to the field".
  */
 /**
- * proposal-runtime-types #sec-reflection-contexts: `Reflect.Type` reflects a
+ * proposal-runtime-types #sec-decorator-contexts: `Reflect.Type` reflects a
  * type's own structure, and the table there says of it: "This is the ONE
  * CONTEXT THIS SPECIFICATION DEFINES; the rest are the decorators extension's."
  *

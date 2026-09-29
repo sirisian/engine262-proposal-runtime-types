@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { expectThrown } from '../harness.mts';
 
 /**
- * #sec-shared-types: `shared T` is a marker over its target, so a
+ * #sec-threading-shared-modifier: `shared T` is a marker over its target, so a
  * `shared uint8` is a `uint8` for every question about what the VALUE can do -
  * whether it mixes with an `int32`, whether it can be called, whether it can be
  * iterated.

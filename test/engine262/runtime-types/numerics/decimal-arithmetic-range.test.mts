@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
- * #sec-numeric-types, on how the families differ when a result does not fit:
+ * #sec-checked-and-saturating-arithmetic, on how the families differ when a result does not fit:
  * "A float already saturates, to an infinity, and a decimal already raises a
  * *RangeError*, since a decimal's range is a property of the type rather than
  * of the format."

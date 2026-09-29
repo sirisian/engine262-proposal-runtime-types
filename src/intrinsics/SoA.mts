@@ -105,7 +105,7 @@ export function SetPendingSoATypeArguments(args: readonly TypeRecord[] | undefin
  * An allocation is ZERO-FILLED, as every allocation in this specification is:
  * a fixed `SoA.<T, N>` holds N zero-filled elements from construction, which is
  * the same rule that makes `let d: [10].<A>` hold ten of them.
-  * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+  * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAConstructor(args: Arguments, { NewTarget }: FunctionCallContext): ValueEvaluator {
   if (NewTarget === Value.undefined) {
@@ -157,7 +157,7 @@ function requireStorage(thisValue: Value) {
 /**
  * soa.md: "particles.length; // The ELEMENT COUNT, not a column length."
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -171,7 +171,7 @@ function* SoAProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallCon
 /**
  * soa.md: "capacity — Growable arrays; the allocation backing every column."
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_capacityGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -184,7 +184,7 @@ function* SoAProto_capacityGetter(_args: Arguments, { thisValue }: FunctionCallC
 /**
  * The instance's byteLength: the allocation the columns occupy.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_byteLengthGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -204,7 +204,7 @@ function* SoAProto_byteLengthGetter(_args: Arguments, { thisValue }: FunctionCal
  * computed from the capacity. That is the same fact soa.md gives as the reason
  * only a fixed SoA is viewable, and the reason a live reference into a growable
  * one is invalidated by growth.
-  * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+  * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_reserve([n = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -243,7 +243,7 @@ function* SoAProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Func
   return Value.undefined;
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays */
 export function bootstrapSoA(realmRec: Realm) {
   if (!surroundingAgent.feature('runtime-types')) {
     return;
@@ -501,7 +501,7 @@ export function* SoAScatter(storage: SoAStorage, index: number, value: Value): P
  * `push`, `pop`, and `reserve` "are already absent from an `SoA.<T, N>` as they
  * are from a `[N].<T>`".
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_push([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -527,7 +527,7 @@ function* SoAProto_push([value = Value.undefined]: Arguments, { thisValue }: Fun
 /**
  * `pop()` — the last element, or *undefined* where there is none.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -548,7 +548,7 @@ function* SoAProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): Va
 /**
  * `fill(value)` — every element, returning the SoA.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_fill([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -567,7 +567,7 @@ function* SoAProto_fill([value = Value.undefined]: Arguments, { thisValue }: Fun
  * soa.md: "`SoA.<T>` and `[].<T>` are distinct types with distinct layouts, and
  * neither is assignable to the other. Conversion is explicit and copies."
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_toArray(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);
@@ -828,7 +828,7 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
  * comes from the array's own, so the caller does not restate it — and an
  * untyped array has none, which is refused rather than guessed at.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoA_from([values = Value.undefined]: Arguments): ValueEvaluator {
   if (!(values instanceof ObjectValue)) {
@@ -874,7 +874,7 @@ function* SoA_from([values = Value.undefined]: Arguments): ValueEvaluator {
  * is no value to infer it from; the call is intercepted where the type
  * arguments are in scope.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 export function* SoAWithCapacity(element: TypeRecord, n: number): ValueEvaluator {
   const columns = SoAColumnsOf(element);
@@ -918,7 +918,7 @@ export { SoA_from };
  * reallocates describes memory the SoA no longer uses - the same hazard a `ref`
  * has, and refused the same way rather than silently reading stale bytes.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-structure-of-arrays
+ * https://sirisian.github.io/proposal-runtime-types/#sec-structure-of-arrays
  */
 function* SoAProto_fieldsGetter(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const storage = requireStorage(thisValue);

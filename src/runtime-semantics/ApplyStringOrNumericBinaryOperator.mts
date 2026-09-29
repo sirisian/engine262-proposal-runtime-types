@@ -121,7 +121,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   if (surroundingAgent.feature('runtime-types') && lval instanceof ObjectValue) {
     const opFn = LookupClassOperator(lval, opText);
     if (opFn) {
-      // proposal-runtime-types (spec sec-class-operators): a class operator's
+      // proposal-runtime-types (spec sec-user-defined-operators): a class operator's
       // receiver is the left operand and the declaration's single parameter is
       // the right operand. Dispatch with this = lval and arguments = [rval].
       EnterOperatorBody();
@@ -315,7 +315,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     }
     const realmRec = surroundingAgent.currentRealmRecord;
     // A result outside the width's exponent range is a *RangeError*, which is
-    // how a decimal differs from a float: #sec-numeric-types says "a float
+    // how a decimal differs from a float: #sec-checked-and-saturating-arithmetic says "a float
     // already saturates, to an infinity, and a decimal already raises a
     // *RangeError*, since a decimal's range is a property of the type rather
     // than of the format".

@@ -946,7 +946,7 @@ function nextAfter(v: number, dir: number): number {
  * adjacent doubles either side of the true value, the true 1/sqrt(x) is below
  * their midpoint _m_ exactly when _m_^2 * x > 1, and that comparison is done in
  * rationals of BigInts.
- * https://sirisian.github.io/ecmascript-types/#sec-numeric-library
+ * https://sirisian.github.io/proposal-runtime-types/#sec-numeric-library
  */
 function* Math_rsqrt([x = Value.undefined]: Arguments): ValueEvaluator {
   const n = Q(yield* ToNumber(x));
@@ -1006,7 +1006,7 @@ function correctlyRoundedRsqrt(v: number): number {
   return midN * midN * vf.n > midD * midD * vf.d ? below : c;
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-numeric-library */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-numeric-library */
 function* Math_fma([x = Value.undefined, y = Value.undefined, z = Value.undefined]: Arguments): ValueEvaluator {
   const a = Q(yield* ToNumber(x));
   const b = Q(yield* ToNumber(y));
@@ -1062,7 +1062,7 @@ function* Math_sumPrecise([items = Value.undefined]: Arguments): ValueEvaluator 
       }
       let element = next;
       // proposal-runtime-types: float128 elements are summed EXACTLY and the
-      // total rounded once - #sec-overloading-of-the-existing-functions, "the
+      // total rounded once - #sec-overloading-of-the-standard-library, "the
       // exact sum, rounded once to T". An iterable mixing a float128 with a
       // Number or another numeric type is the mixing error.
       if (surroundingAgent.feature('runtime-types') && isFloat128Object(element)) {
@@ -1513,7 +1513,7 @@ function checkedIntegerResult(result: number, t: TypeRecord & { Kind: 'primitive
   return new TypedNumberValue(result === 0 ? 0 : result, t);
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-counting-leading-zeros */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-counting-leading-zeros */
 function* Math_clz([x = Value.undefined]: Arguments): ValueEvaluator {
   // The wrapper evaluates the typed rows. Reaching the native steps means the
   // argument carried no numeric type, and `clz` has no untyped signature: the
@@ -1678,7 +1678,7 @@ function integerRange(t: TypeRecord & { Kind: 'primitive' }): { low: bigint, hig
  * Each takes its width from the operand's type, which is what makes it well
  * defined - a population count is over a type's bits - so like `clz` they have
  * no untyped signature.
- * https://sirisian.github.io/ecmascript-types/#sec-integer-operations
+ * https://sirisian.github.io/proposal-runtime-types/#sec-integer-operations
  */
 function* Math_popcount([x = Value.undefined]: Arguments): ValueEvaluator {
   if (!isTypedNumber(x)) {
@@ -1699,7 +1699,7 @@ function* Math_popcount([x = Value.undefined]: Arguments): ValueEvaluator {
   return F(count);
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-integer-operations */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-integer-operations */
 function* Math_mulHigh([x = Value.undefined, y = Value.undefined]: Arguments): ValueEvaluator {
   const o = Q(yield* resolveIntegerOperands([x, y] as Arguments, 'mulHigh'));
   const width = integerWidth(o.t);
@@ -1710,7 +1710,7 @@ function* Math_mulHigh([x = Value.undefined, y = Value.undefined]: Arguments): V
   return new TypedNumberValue(Number(fitted), o.t);
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-integer-operations */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-integer-operations */
 function* Math_average([x = Value.undefined, y = Value.undefined]: Arguments): ValueEvaluator {
   const o = Q(yield* resolveIntegerOperands([x, y] as Arguments, 'average'));
   // Rounded away from zero, as `pavgb` and `urhadd` round, and summed in BigInt
@@ -1731,7 +1731,7 @@ function* Math_average([x = Value.undefined, y = Value.undefined]: Arguments): V
  * The bound is a relative error of at most 2**-12, which both instructions meet.
  * An implementation may return any value within it; this one returns the
  * correctly rounded result, which is within it trivially.
- * https://sirisian.github.io/ecmascript-types/#sec-numeric-library
+ * https://sirisian.github.io/proposal-runtime-types/#sec-numeric-library
  */
 function* Math_rsqrtApprox([x = Value.undefined]: Arguments): ValueEvaluator {
   return yield* Math_rsqrt([x] as Arguments);
@@ -1871,7 +1871,7 @@ function namedArithmetic(functionName: string, mode: OverflowMode, combine: (a: 
     return settleInteger(exact, operands.t, mode);
   };
   Object.defineProperty(steps, 'name', { value: `Math_${functionName}`, configurable: true });
-  steps.section = 'https://sirisian.github.io/ecmascript-types/#sec-checked-and-saturating-arithmetic';
+  steps.section = 'https://sirisian.github.io/proposal-runtime-types/#sec-checked-and-saturating-arithmetic';
   return steps;
 }
 
@@ -1917,7 +1917,7 @@ function plainFloored(args: Arguments, which: 'divFloor' | 'mod'): ValueEvaluato
   }());
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-floored-division */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-floored-division */
 function* Math_divFloor(args: Arguments): ValueEvaluator {
   if (!args.some((arg) => arg !== undefined && isTypedNumber(arg))) {
     return Q(yield* plainFloored(args, 'divFloor'));
@@ -1931,7 +1931,7 @@ function* Math_divFloor(args: Arguments): ValueEvaluator {
   return settleInteger(flooredQuotient(a, b), t, OverflowMode.Checked);
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-floored-division */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-floored-division */
 function* Math_mod(args: Arguments): ValueEvaluator {
   if (!args.some((arg) => arg !== undefined && isTypedNumber(arg))) {
     return Q(yield* plainFloored(args, 'mod'));
@@ -2078,7 +2078,7 @@ function Float128Math(name: string, args: readonly (Value | undefined)[]): Value
     }
     // The exact route where there is one, exp(y ln x) correctly rounded where not.
     case 'pow': return done(T128.pow(x, xs[1] ?? Float128Nan));
-    // #sec-overloading-of-the-existing-functions: "the value rounded through
+    // #sec-overloading-of-the-standard-library: "the value rounded through
     // binary32 or binary16, a value of T" - a float128, holding that value.
     case 'fround': return Float128FromNumber(Float128ToBinaryFloat(x, 32), surroundingAgent.currentRealmRecord);
     case 'f16round': return Float128FromNumber(Float128ToBinaryFloat(x, 16), surroundingAgent.currentRealmRecord);

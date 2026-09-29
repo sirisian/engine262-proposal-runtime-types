@@ -139,7 +139,7 @@ export function* Evaluate_RelationalExpression(expr: ParseNode.RelationalExpress
       lval = adopted.left; rval = adopted.right;
     }
   }
-  // proposal-runtime-types (spec sec-class-operators): the relational operators
+  // proposal-runtime-types (spec sec-user-defined-operators): the relational operators
   // are overloadable. When the left operand is an Object whose class declares the
   // operator, dispatch to it with the receiver being the left operand and the
   // declaration's parameter the right, in place of the abstract comparison. The

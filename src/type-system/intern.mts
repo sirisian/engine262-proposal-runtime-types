@@ -157,7 +157,7 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     // of that type is monomorphic instead of a two-arm union an engine would tag.
     //
     // Disjointness is decided on the BASE (AreDisjoint), so the layered brands of
-    // #sec-brands - two parameterizations of ONE primitive - are untouched.
+    // #sec-aredisjoint - two parameterizations of ONE primitive - are untouched.
     if (t.Kind === 'intersection'
       && members.some((m, i) => members.some((other, j) => i !== j && AreDisjoint(m.canonical, other.canonical)))) {
       return neverType;
@@ -872,7 +872,7 @@ export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: str
   // reduced where it fits and rounded to the width's digits where it does not,
   // DecimalFromDouble's rule applied to 113 bits instead of 53.
   if (isFloat128Object(arg)) {
-    // A float128 NaN or infinity is the decimal's: #sec-numeric-conversions,
+    // A float128 NaN or infinity is the decimal's: #sec-explicit-conversion,
     // "The source's exact value if it is representable" - and NaN and the
     // infinities are values of every decimal type.
     if (arg.Float128Class === 'nan') {

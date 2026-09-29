@@ -4,7 +4,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 /**
  * A rational VALUE is a member of a rational type.
  *
- * `rational` is a parameterized primitive (#sec-primitives names it beside
+ * `rational` is a parameterized primitive (#sec-intrinsic-type-parameters names it beside
  * `uint`, `int` and `vector`), and once its type records were built as primitives
  * the type had no members at all: `IsOfType` had an arm for a decimal object and
  * none for a rational one, so

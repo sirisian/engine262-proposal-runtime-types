@@ -1457,7 +1457,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // and `dynamic` still disqualifies either way.
       const baseIsTyped = (constructorParent as { SealInstances?: boolean } | undefined)?.SealInstances === true;
       (F as { SealInstances?: boolean }).SealInstances = (hasTypedInstanceField || baseIsTyped) && !isDynamic;
-      // ecmascript-types README, Reference Classes: a `reference`, `sealed` or
+      // proposal-runtime-types #sec-reference-classes: a `reference`, `sealed` or
       // `abstract` class is a REFERENCE TYPE, so its instances have identity.
       // [[SealInstances]] alone cannot say so - it is *true* for every typed
       // class, which is what makes an instance unholdable weakly - and a
@@ -2103,7 +2103,7 @@ export const ClassElementDefinitionRecord = (function ClassElementDefinitionReco
 };
 
 /**
- * proposal-runtime-types #sec-applying-a-decorator: the context a `ClassField`
+ * proposal-runtime-types #sec-decorator-application: the context a `ClassField`
  * decoration supplies as its last argument.
  *
  * decorators.md's `ClassFieldReflection` is larger than this — `type`, `static`,

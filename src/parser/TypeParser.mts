@@ -482,7 +482,7 @@ export abstract class TypeParser extends ExpressionParser {
       // lets a nested type argument list close - `Box.<Box.<uint8>>` - must not
       // reach them.
       //
-      // #sec-type-arguments provides the escape: "A shift operator inside a type
+      // #sec-input-element-type provides the escape: "A shift operator inside a type
       // argument list MUST BE PARENTHESIZED, which is only relevant to a value
       // argument, since a shift cannot otherwise appear in a type." The escape
       // did not work. `noFuseGT` stayed raised through the argument list, so
@@ -1491,7 +1491,7 @@ export abstract class TypeParser extends ExpressionParser {
       this.next();
     }
     this.expect('operator');
-    // proposal-runtime-types (spec sec-class-operators): the index accessors are
+    // proposal-runtime-types (spec sec-user-defined-operators): the index accessors are
     // overloadable. `operator[]` names the index accessor; the `[` `]` pair is the
     // operator name, followed by the parameter list (one or more index
     // parameters). A `get`/`set` prefix is handled by the class-element parser.

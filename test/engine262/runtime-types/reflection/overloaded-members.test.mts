@@ -124,7 +124,7 @@ test('overloads: annotating nothing is not annotating as any', () => {
   // The distinction the absence protects, and the reason `signatures` is absent
   // rather than synthesised as all-`any`: `m(a)` and `m(a: any)` mean different
   // things, and a reflection that reported one arm for both would delete the
-  // difference. #sec-typed-declarations puts it generally - "an unannotated
+  // difference. #sec-typed-initializers-semantics puts it generally - "an unannotated
   // binding remaining `any` is what keeps an untyped program untyped" - and
   // this is that rule at a member.
   const sigs = (decl: string) => `class A { ${decl} }`
@@ -173,7 +173,7 @@ test('overloads: an unannotated METHOD has no signatures; a constructor always d
   expect(evaluated(has('m(a: uint8) {}', 'm'))).toBe('1');
   expect(evaluated(has('constructor(a: uint8) {}', 'constructor'))).toBe('1');
   // the derived arm carries the parameter's NAME and `any` for its type, and no
-  // `return` slot - #sec-published-return-types: "a constructor has none to
+  // `return` slot - #sec-inference-and-function-forms: "a constructor has none to
   // infer", and none can be written either
   expect(evaluated("class A { constructor(a) {} }"
     + " const s = Reflect.getReflection.<Reflect.ClassMethod, A>('constructor').signatures[0];"

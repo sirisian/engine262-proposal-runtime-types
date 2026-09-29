@@ -143,12 +143,12 @@ export abstract class FunctionParser extends IdentifierParser {
         node.TypeAnnotation = this.parseTypeAnnotation(true);
       }
 
-      // proposal-runtime-types #sec-function-declarations: "A function
+      // proposal-runtime-types #sec-checked-contracts: "A function
       // declaration may carry `where` clauses ... between its return annotation
       // and its body. On an ordinary function they are the compile-time bound
       // over its generic parameters." The clause was implemented for dependent
       // record types and nowhere else, so this form - the one
-      // #sec-bounds-checks names, and the one README's own
+      // #sec-check-elision names, and the one README's own
       // `where U <= Unit.Hour` uses - was a Syntax Error.
       if (surroundingAgent.feature('runtime-types') && this.test('where')) {
         (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
@@ -291,7 +291,7 @@ export abstract class FunctionParser extends IdentifierParser {
         // Reported as a Syntax Error until that refinement exists. This rejects
         // exactly the programs that already failed - the crash was a rejection
         // too - and says why, which the RangeError did not. The form is legal
-        // per sec-function-annotations, so this is an interim, not a rule.
+        // per sec-annotations-on-the-remaining-function-forms, so this is an interim, not a rule.
         const candidate = (node as unknown as { TypeCandidate?: ParseNode.Type }).TypeCandidate;
         if (!candidate) {
           // The text after the colon was not a type, so this was a genuine

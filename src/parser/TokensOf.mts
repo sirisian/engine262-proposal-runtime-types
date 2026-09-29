@@ -12,7 +12,7 @@ import type { ParseNode } from './ParseNode.mts';
  * syntactic grammar, so a token vocabulary can be exposed without inventing one.
  */
 
-/** `sec-source-reference-record`: which buffer a token's text lives in. */
+/** `#source-reference-record`: which buffer a token's text lives in. */
 export interface SourceRefRecord {
   /** The module's URL, for a token that was written. */
   readonly URL: string | undefined;
@@ -32,7 +32,7 @@ export interface SourceRefRecord {
   readonly Text: string;
 }
 
-/** `sec-span-record`: where a token came from. */
+/** `#span-record`: where a token came from. */
 export interface SpanRecord {
   readonly Source: SourceRefRecord;
   readonly Start: number;

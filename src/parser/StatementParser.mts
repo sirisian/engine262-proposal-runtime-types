@@ -153,7 +153,7 @@ export abstract class StatementParser extends TypeParser {
               // same one classes use and it means the same thing - "extend a
               // declaration deliberately" - but on a declaration kind that adds
               // NO INSTANCE STATE, which is what lets it do what a partial class
-              // may not: contribute fields. See #sec-metadata-objects.
+              // may not: contribute fields. See #sec-partial-classes.
               if (this.test('partial') && this.testAhead('interface')) {
                 this.next();
                 return this.parseInterfaceDeclaration(true);
@@ -311,7 +311,7 @@ export abstract class StatementParser extends TypeParser {
     // declaration was the only one in this file that did not take parameters,
     // though #sec-meta-declarations gives it `TypeParameters?`.
     node.TypeParameters = this.test(Token.LT) ? this.parseTypeParameters(false, 'meta') : null;
-    // #sec-meta-declarations: a
+    // #sec-metadata-decomposition: a
     // meta declaration "may instead name a PRIMITIVE type rather than an object
     // type, declaring a base-form meta type". A primitive has no parameter to
     // bind, so `meta uint8<T> { … }` states something the language cannot mean.
@@ -320,7 +320,7 @@ export abstract class StatementParser extends TypeParser {
     // `TypeParameters?` after ANY TypeName - and refused now rather than
     // accepted-and-ignored, since a program that writes it would have no way to
     // discover the parameter did nothing, and refusing it later would break.
-    // #sec-meta-declarations: "It is an
+    // #sec-metadata-decomposition: "It is an
     // early error for a |MetaDeclaration| to declare more than one type
     // parameter". The parameter is not an ordinary generic one - it "is bound to
     // the base at each parameterization the meta type governs … the name of what
@@ -338,7 +338,7 @@ export abstract class StatementParser extends TypeParser {
         && named !== undefined && named !== null && named.Kind === 'primitive') {
       this.addEarlyError(Throw.SyntaxError('a base-form meta type has no type parameters to bind'), node.TypeParameters);
     }
-    // #sec-meta-hooks: at most one meta declaration per type.
+    // #sec-meta-declarations: at most one meta declaration per type.
     const typeKey = node.TypeName.IdentifierReference.name + node.TypeName.MemberNames.map((m) => `.${m.name}`).join('');
     if (!this.declaredMetaTypes) {
       this.declaredMetaTypes = new Set();
@@ -361,7 +361,7 @@ export abstract class StatementParser extends TypeParser {
       } else {
         const hook = this.parseClassElement();
         // The table of permitted hook names; a method hook must use one.
-        // #sec-meta-hooks: a method hook must use a name from the table.
+        // #sec-meta-declarations: a method hook must use a name from the table.
         // Missing required hooks and signature checks join a later pass.
         const hookName = (hook as { ClassElementName?: { name?: string } }).ClassElementName?.name;
         const hookArity: Record<string, number> = {

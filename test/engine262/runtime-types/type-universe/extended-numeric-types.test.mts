@@ -661,7 +661,7 @@ test('a wide value reads the same however it is looked at', () => {
 });
 
 test('numeric types: the complex type names', () => {
-  // #sec-type-names: the width-named shorthands "count total bits rather than
+  // #sec-complex-types: the width-named shorthands "count total bits rather than
   // component bits, following the convention of NumPy and Go, so `complex64` is
   // a pair of `float32` and not a pair of `float64`".
   expect(evaluated('String((type complex64) === (type complex.<float32>));')).toBe('true');

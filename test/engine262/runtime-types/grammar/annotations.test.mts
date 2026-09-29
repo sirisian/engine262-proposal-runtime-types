@@ -81,7 +81,7 @@ test('lexical and variable declarations take annotations and typed initializers'
     VariableDeclarationList: [{ TypedInitializer: { type: 'TypedInitializer' } }],
   });
   // `const` without an initializer is a Syntax Error only where the binding
-  // carries NO annotation. #sec-lexical-declarations amends ECMA-262's early
+  // carries NO annotation. #sec-typed-bindings amends ECMA-262's early
   // error so it "does not apply to a LexicalBinding whose BindingIdentifier
   // carries one": such a binding takes the default value of its type, as a `let`
   // of that type does. This assertion read the unamended rule.

@@ -241,7 +241,7 @@ test('meta: a metadata key no meta type claims is a type error at the parameteri
 // They PARSED before this and were then silently dropped, and since interning
 // compares what survives, two parameterizations with different nested metadata
 // reduced to the same empty record and were ONE TYPE.
-// #sec-meta-declarations: "A metadata object whose own key no meta type claims
+// #sec-metadata-decomposition: "A metadata object whose own key no meta type claims
 // is a type error at the parameterization that writes it." The tests below write
 // keys of their own to exercise metadata COMPARISON, so each declares a meta type
 // claiming them. They did not, and passed because the runtime did not enforce the
@@ -479,7 +479,7 @@ test('a meta declaration may be generic', () => {
 });
 
 test('a base-form meta type has no type parameters to bind', () => {
-  // #sec-meta-declarations: a meta declaration "may instead name a PRIMITIVE
+  // #sec-metadata-decomposition: a meta declaration "may instead name a PRIMITIVE
   // type rather than an object type, declaring a base-form meta type" - and a
   // primitive has no parameter to bind. The production allows `TypeParameters?`
   // after any TypeName, so this is an early error rather than a parse failure,

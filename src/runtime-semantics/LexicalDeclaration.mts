@@ -214,7 +214,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
   } else {
     // 1. Let lhs be ResolveBinding(StringValue of BindingIdentifier).
     const lhs = yield* ResolveBinding(StringValue(BindingIdentifier!), undefined, strict);
-    // proposal-runtime-types #sec-meta-hooks: an annotated binding without an
+    // proposal-runtime-types #sec-meta-declarations: an annotated binding without an
     // initializer takes the type's registered default.
     let initial: Value = Value.undefined;
     if (TypeAnnotation) {
@@ -230,7 +230,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
         // The default crosses the same conversion boundary as an initializer.
         initial = Q(yield* EnforceAnnotation(TypeAnnotation, dflt));
       } else if (record.Kind !== 'parameter') {
-      // #sec-defaultvalueof: "It is a type error to declare a binding or a field
+      // #sec-default-values: "It is a type error to declare a binding or a field
       // with a type _t_ and no initializer when DefaultValueOf(_t_) is ~none~."
       // The engine held *undefined* instead, which is not a value of the type,
       // so the binding's own invariant was broken from the start.

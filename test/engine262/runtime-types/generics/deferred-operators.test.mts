@@ -11,7 +11,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * opaque name that carried no operands, so a call that bound `T` and `K` had
  * nothing to substitute into. Both are now deferred records carrying their
  * operands, evaluated once substitution closes them - the treatment
- * #sec-substitutetype already gives a deferred ~application~.
+ * #sec-generic-specialization already gives a deferred ~application~.
  */
 
 const P = 'type P = { a: uint8, b: string }; ';

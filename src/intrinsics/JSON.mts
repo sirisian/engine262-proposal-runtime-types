@@ -592,7 +592,7 @@ function* CoerceJSON(value: Value, t: TypeRecord, path: string): ValueEvaluator 
         // A FLOAT token is rounded to the width before it is tagged.
         //
         // The integer case above validates rather than converts, and
-        // #sec-composite-types gives the reason: "Converting first and
+        // #sec-composite-json gives the reason: "Converting first and
         // validating never would let a `uint8` member wrap `300` to `44` and
         // intern the wrong document silently." Rounding a float is not that
         // kind of change - it is what storing a decimal in a float means, and

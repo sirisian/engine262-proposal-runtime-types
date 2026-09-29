@@ -545,7 +545,7 @@ export function bootstrapRationalPrototype(realmRec: Realm): void {
  * A rational has no Number to be, so coercing one is refused rather than
  * answered.
  *
- * #sec-numeric-types states Math over a rational exactly - "For a rational type
+ * #sec-overloading-of-the-standard-library states Math over a rational exactly - "For a rational type
  * the result is exact, and a fixed-width result whose lowest-terms numerator or
  * denominator does not fit its int.<N> throws a RangeError exception" - and
  * none of that is implemented. Without a valueOf, the ordinary coercion found

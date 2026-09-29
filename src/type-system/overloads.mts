@@ -702,7 +702,7 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
 
 export function operatorTableKey(e: ParseNode.OperatorDefinition): string {
   const name = e.OperatorName ?? '';
-  // proposal-runtime-types #sec-class-operators: an index accessor is keyed by
+  // proposal-runtime-types #sec-user-defined-operators: an index accessor is keyed by
   // its INDEX COUNT as well as its name. A class may declare more than one -
   // the design's grid declares `[i]` and `[x, y]` together - and a table keyed
   // by name alone let the second overwrite the first, so only one of them was

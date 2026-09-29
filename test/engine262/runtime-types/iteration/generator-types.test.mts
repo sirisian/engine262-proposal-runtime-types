@@ -118,7 +118,7 @@ test('generators still run', () => {
 });
 
 test('an unannotated generator INFERS its return type', () => {
-  // #sec-inferred-result-type: "_R_ is the join of its return contributions",
+  // #sec-inference-and-function-forms: "_R_ is the join of its return contributions",
   // said in the same breath as "_N_ is not inferred, being the type of what a
   // caller sends IN". So _R_ was meant to be inferred where no annotation
   // supplies it, and it was defaulted to `void` BEFORE the body was walked -

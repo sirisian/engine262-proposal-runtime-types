@@ -523,7 +523,7 @@ export function* RequireIdentityType(value: Value, t: TypeRecord): ValueEvaluato
 }
 
 /**
- * #sec-runtime-type-checks (step 3, as amended): the run time applies the
+ * #sec-conversions: the run time applies the
  * checker's rule to a value's actual type. A TYPED number - a value of a
  * numeric type this proposal adds - never implicitly becomes another numeric
  * type, statically or at run time: the checker refuses even `uint8` to
@@ -964,7 +964,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // and the choice is visible; decimal to binary has one answer and rounds to
   // it, as every narrowing conversion does.
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(value)) {
-    // #sec-numeric-conversions: "decimal -> integer of width M: The source
+    // #sec-explicit-conversion: "decimal -> integer of width M: The source
     // truncated toward zero, then modulo 2**M" - and "decimal ->
     // `bigint`: the source truncated toward zero". The `:=` spelling refused the
     // first, which the call spelling already ran, and crashed on the second.
@@ -1473,7 +1473,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
           if (isFloatTypeName(t.Name)) {
             return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
           }
-          // The row #sec-numeric-conversions gained, "the exact quotient truncated toward
+          // The row #sec-explicit-conversion gained, "the exact quotient truncated toward
           // zero, then modulo 2**M" - the bigint row's modulo, exactly, at any
           // width. It truncated and then REFUSED what did not fit, where every
           // sibling row to a fixed-width integer wraps.
@@ -2365,7 +2365,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
             // calls lossy and visible.
             return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
           }
-          // The row #sec-numeric-conversions gained, "the exact quotient truncated toward
+          // The row #sec-explicit-conversion gained, "the exact quotient truncated toward
           // zero, then modulo 2**M" - the bigint row's modulo, exactly, at any
           // width. It truncated and then REFUSED what did not fit, where every
           // sibling row to a fixed-width integer wraps.
@@ -3067,7 +3067,7 @@ export function RightOperandDeclaresOperator(lval: Value, rval: Value, opText: s
     && LookupClassOperator(rval, opText) !== null;
 }
 
-// proposal-runtime-types #sec-meta-hooks: the `default` hook. A meta
+// proposal-runtime-types #sec-meta-declarations: the `default` hook. A meta
 // declaration registers the type's default, and an annotated binding without
 // an initializer takes it. The method hooks (subtype, validate, narrow,
 // conversionFactor) parse and are name-checked; their judgments join later.
@@ -3295,7 +3295,7 @@ export function MetaTypeGoverns(metadata: MetadataRecord, metaType: object): boo
   return !SameMetadata(MetadataPortion(metadata, metaType), snapshot);
 }
 
-// proposal-runtime-types #sec-meta-hooks: the meta-type method hooks are
+// proposal-runtime-types #sec-meta-declarations: the meta-type method hooks are
 // user closures registered per Type Object. `validate` is the meta type's half
 // of the validation judgment, consulted from the ~parameterized~ arm of
 // IsOfType; the remaining hooks register here for their consumers.
@@ -4433,7 +4433,7 @@ export function* EnforceGeneratorNextArgument(generator: Value, value: Value): V
 /**
  * Checks a yielded value against the enclosing generator's declared YIELD type.
  *
- * `sec-function-annotations`: "a
+ * `sec-generator-types`: "a
  * generator's annotation types the values the iterator YIELDS". Nothing checked
  * them - `function* g(): uint8 { yield 'nope'; }` ran and `.next().value` was
  * the String.
@@ -4535,7 +4535,7 @@ export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
  */
 /**
  * The `where` clauses of a function's declaration, which
- * #sec-function-declarations places "between its return annotation and its
+ * #sec-checked-contracts places "between its return annotation and its
  * body" and #sec-where-clauses has checked "at each specialization once its
  * parameters are bound".
  */
@@ -4903,7 +4903,7 @@ export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(
     // an assignment in the body is checked as one to a `let` is; before this
     // `a = g()` in `function f(a: uint8)` with an untyped `g` was enforced
     // nowhere at run time. The declared type is also what a CALL through the
-    // parameter reads as the signature in view (#sec-call-argument-binding).
+    // parameter reads as the signature in view (#sec-named-arguments).
     // A type that cannot resolve here - a generic parameter whose substitution
     // is not in scope - leaves the binding unstamped, as it was.
     const stamp = function* (): PlainEvaluator {

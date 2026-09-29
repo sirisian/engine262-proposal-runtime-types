@@ -321,7 +321,7 @@ export function* Evaluate_NewExpression(node: ParseNode.NewExpression): ValueEva
 }
 
 /**
- * proposal-runtime-types sec-new-expressions: `new` `.` Arguments - target-typed
+ * proposal-runtime-types sec-type-arguments-and-placement-new-in-expression-position: `new` `.` Arguments - target-typed
  * construction.
  *
  * The checker recorded the position's contextual type against this node, because

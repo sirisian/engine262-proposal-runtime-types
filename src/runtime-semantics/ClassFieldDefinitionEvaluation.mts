@@ -57,7 +57,7 @@ export interface ClassFieldDefinitionRecord {
   readonly Initializer: ECMAScriptFunctionObject | undefined;
   // proposal-runtime-types: the field's type annotation, if any, so a field
   // declared without an initializer can take its type's default (spec
-  // sec-typed-classes: "a typed field takes its type's default").
+  // sec-typed-bindings: "a typed field takes its type's default").
   readonly TypeAnnotation?: ParseNode.TypeAnnotation | null;
   // proposal-runtime-types: the annotation RESOLVED, at class definition time,
   // where the class's lexical environment is still the running one. Resolving

@@ -628,7 +628,7 @@ export function TakeUnclaimedKeyChecks(root: object): readonly UnclaimedKeyCheck
 /**
  * A binding declared with a type and NO initializer, held for the pass.
  *
- * #sec-defaultvalueof: "It is a type error to
+ * #sec-default-values: "It is a type error to
  * declare a binding or a field with a type _t_ and no initializer when
  * DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
  * determinable before the text runs an Early Error. The engine reported it at
@@ -800,7 +800,7 @@ export function IsCheckElided(annotation: object): boolean {
 /**
  * TEST HOOK: how many element accesses the most recent check proved in bounds.
  *
- * #sec-bounds-checks: the index of a read or write of a fixed-length `[N].<T>`
+ * #sec-check-elision: the index of a read or write of a fixed-length `[N].<T>`
  * is known to be below _N_ where _N_ is a compile-time constant and the index
  * is a value generic, a `where`-constrained parameter, or the counter of a
  * `for` over a range with that bound; the bound is proven statically and no
@@ -2360,7 +2360,7 @@ function writtenAnnotationAbove(node: object): boolean {
 const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
   const numberType = makePrimitive('number');
-  // sec-array-types: the index type is `uint64`, and `length` is of it. An
+  // sec-array-and-tuple-types: the index type is `uint64`, and `length` is of it. An
   // entry taking `number` instead refuses an array's own length - `a.at(a.length)`
   // - and refuses the index a callback receives, which is already this type.
   const indexTypeForArray = indexTypeRecord();
@@ -3282,7 +3282,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * Whether a name is bound by the PROGRAM, and so shadows anything the engine
    * would otherwise resolve it to.
    *
-   * `#sec-type-name-resolution`: a built-in type name resolves "through the
+   * `#sec-type-names`: a built-in type name resolves "through the
    * ordinary scope chain first and through the built-in table only where no user
    * binding of the name exists". The rule is there for compatibility - `string`,
    * `object` and their kin are among the most common identifiers in existing
@@ -3449,7 +3449,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * binding, because `g()` is - and the string reached `n` unreported. That is
    * the runtime guarantee failing in fully annotated code, and it does not need
    * inference to reach it. The assignment to `f` is admitted by the shallow
-   * function check, which #sec-shallow-function-checks says is the one place a
+   * function check, which #sec-elision-stability says is the one place a
    * type violation is knowingly permitted to go unreported; what this operation
    * prevents is that admission being compounded by an elision that assumes it
    * never happens.
@@ -5279,7 +5279,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * them. With `interface P { n: int32 }` and `partial interface P { u: string
    * }`, `{ n: "s", u: "s" }` is refused because `n` is in the structure.
    *
-   * #sec-partial-declarations: "A `partial` declaration over an INTERFACE may
+   * #sec-partial-classes: "A `partial` declaration over an INTERFACE may
    * add members", and a `partial` "re-opens ... and adds". The RUN TIME merges
    * the same way (RuntimeTypesDeclarations.mts, Evaluate_RuntimeTypesBindingDeclaration).
    */
@@ -5901,7 +5901,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * A generic declaration's parameter DEFAULTS, as an argument list, or an empty
    * list where any parameter has none.
    *
-   * A bare generic name takes its defaults - #sec-type-arguments - and the
+   * A bare generic name takes its defaults - #sec-parameterized-types - and the
    * comparison arms already substitute [[Arguments]] into a [[Structure]], so
    * supplying them here is the whole of the rule for an interface and a class.
    */
@@ -5966,7 +5966,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // dropped leaves the checker and the run time nothing to enforce.
     const IndexSignatures: { Key: TypeRecord, Value: TypeRecord }[] = [];
     // A bare generic INTERFACE takes its parameters' DEFAULTS as its arguments.
-    // #sec-type-arguments: "Each parameter takes, in order: its positional
+    // #sec-type-references: "Each parameter takes, in order: its positional
     // argument where one was supplied, otherwise the named argument bearing its
     // name, otherwise its |TypeParameterDefault|."
     //
@@ -6005,7 +6005,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // as `RuntimeTypesDeclarations.mts:600` already does for the run time.
     //
     // A member ALREADY DECLARED is left to the run time, which reports
-    // "`n` is already declared on this interface" - #sec-partial-declarations
+    // "`n` is already declared on this interface" - #sec-partial-classes
     // makes a redeclaration "a *TypeError* rather than an override, so the
     // meaning of an interface does not depend on the order its declarations
     // load". Taking the first and not overwriting keeps this pass order-
@@ -6015,7 +6015,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // redeclaration ACROSS declarations can be told from two members written in
     // one.
     //
-    // #sec-partial-declarations: "A member already declared on the interface is
+    // #sec-partial-classes: "A member already declared on the interface is
     // a *TypeError* rather than an override, so the meaning of an interface does
     // not depend on the order its declarations load." The RUN TIME reports it -
     // "`n` is already declared on this interface" - and the checker accepted it
@@ -6091,7 +6091,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         //
         // A SAME-type duplicate is harmless today - inhabitable, both halves
         // agreeing - and is refused here too. That is a deliberate tightening
-        // rather than a fix: `sec-partial-declarations` already makes a
+        // rather than a fix: `sec-partial-classes` already makes a
         // redeclaration ACROSS declarations "a *TypeError* rather than an
         // override", and a duplicate is a mistake wherever it is written.
         const declaredAt = declaredIn.get(key);
@@ -6671,7 +6671,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * #sec-resolveoverload: "Two signatures declared for one name must not be
+   * #sec-overload-resolution: "Two signatures declared for one name must not be
    * ambiguous for any argument list", and declaring one "viable for the same
    * argument list as an existing one at the same rank, after specificity and
    * declared return discrimination leave them tied" is a type error at the
@@ -8123,13 +8123,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Declaration: n,
       // A bare generic CLASS takes its parameters' DEFAULTS as its arguments
       //, the way a bare generic interface does one registration over.
-      // #sec-type-arguments: a name supplying no argument takes "its
+      // #sec-type-references: a name supplying no argument takes "its
       // |TypeParameterDefault|" - so `class C<T = uint8> {}` written as `C` is
       // `C.<uint8>`, and `let c: C = new C.<uint8>()` stopped being an
       // argument-count mismatch.
       //
       // An empty list where any parameter lacks a default, which keeps the
-      // existing refusal: `sec-type-arguments` makes that "a type error where a
+      // existing refusal: `sec-parameterized-types` makes that "a type error where a
       // parameter has none".
       Arguments: defaultArgumentsOf(n as unknown as ParseNode),
       Structure: { Kind: 'object', Properties: merged, IndexSignatures: [] },
@@ -9240,7 +9240,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The type a judgment about a VALUE should read, with the markers that do not
    * change what the value is removed.
    *
-   * #sec-shared-types: `shared T` is a marker over its target, so a
+   * #sec-threading-shared-modifier: `shared T` is a marker over its target, so a
    * `shared uint8` is a `uint8` for every question about what the value can DO -
    * whether it mixes with an `int32`, whether it can be called, whether it can
    * be iterated. `SameTypeWithAssumptions` and `AreDisjoint` look through it
@@ -11058,7 +11058,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // between the two resolvers, and building a different one here is the
       // mistake an earlier attempt made with `Token`.
       //
-      // #sec-shared-types: `shared T` is a marker over its target. Resolving it
+      // #sec-threading-shared-modifier: `shared T` is a marker over its target. Resolving it
       // once made `let s: shared uint8 = 1;` an early error, because a numeric
       // literal reaches `uint8` by CONVERSION and that path did not look through
       // the marker; `literalFitsNumericType` now does, so the annotation can be
@@ -11602,7 +11602,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // A duplicate |PropertyName| in ONE object type is a TypeError
           //, matching the interface path and
-          // `sec-partial-declarations`' rule that a redeclaration is "a
+          // `sec-partial-classes`' rule that a redeclaration is "a
           // *TypeError* rather than an override".
           //
           // Were both members to survive into the record, the two halves would
@@ -13852,7 +13852,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         adoptedReceiverTypes.set(node, wantedThis);
       }
     }
-    // sec-new-expressions: `new.(...)` constructs the type its POSITION requires.
+    // sec-type-arguments-and-placement-new-in-expression-position: `new.(...)` constructs the type its POSITION requires.
     // This operation is where a node meets its contextual type, so it is where
     // the type is recorded for evaluation to read - the runtime has no
     // contextual type of its own.
@@ -13877,7 +13877,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return null;
       }
-      // #sec-new-expressions: "It is a type error where the contextual type is
+      // #sec-type-arguments-and-placement-new-in-expression-position: "It is a type error where the contextual type is
       // not CONSTRUCTIBLE, as in `let n: uint8 = new.(1)`" - constructible, not
       // nominal. A class is one, and so is an array type and a vector type, both
       // of which the design's own examples build this way: "Since this works for
@@ -14747,7 +14747,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const digits = ParseDecimalDigits(text.replace(/_/g, ''));
         if (digits) {
           rationalLiterals.set(node, { sig: digits.significand, exp: digits.exponent, type: contextual });
-          // #sec-literal-types: "a literal whose value that type cannot represent
+          // #sec-literal-propagation: "a literal whose value that type cannot represent
           // is a type error rather than a silent truncation" - at every width,
           // `rational.<1>`, which has no values, included.
           const num = digits.exponent >= 0 ? digits.significand * 10n ** BigInt(digits.exponent) : digits.significand;
@@ -16050,7 +16050,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (expressionViewTypes.has(node)) {
       return expressionViewTypes.get(node)!;
     }
-    // #sec-reference-types: an explicit borrow retains its location contract.
+    // #sec-references-and-borrowing: an explicit borrow retains its location contract.
     if ((node as { type: string }).type === 'RefExpression') {
       const target = locationType((node as unknown as { Expression: ParseNode }).Expression);
       return target && target.Kind !== 'any' ? { Kind: 'reference', Target: target } : null;
@@ -16536,7 +16536,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'ObjectLiteral':
         // An object literal HAS a type. #table-type-record-kinds, quoted
-        // in `sec-interfaces`: "an object literal's type is ~object~".
+        // in `sec-object-types`: "an object literal's type is ~object~".
         //
         // Without an arm `let n: uint8 = {}` reaches `requireAssignable` with a
         // null source - whose first line is `if (!source || !target) return;`
@@ -16656,7 +16656,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Deriving an ordinary object type for the call instead would refuse
         // `let c: Composite = Composite({x: 1})` while the runtime knows the
         // value's type.
-        // proposal-runtime-types #sec-type-prototype: `T.parse` and `T.tryParse`
+        // proposal-runtime-types #sec-parsing: `T.parse` and `T.tryParse`
         // answer a value OF T, so `let a: string = uint8.parse("1")` is refused
         // and a generator yielding one infers `uint8` for its element type.
         const parseCallee = (node as { CallExpression?: ParseNode }).CallExpression as {
@@ -18725,7 +18725,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // less any of them that carry defaults.
     const restIndex = target.Elements.findIndex((p) => p.Rest);
     const fixed = restIndex === -1 ? target.Elements : target.Elements.slice(0, restIndex);
-    // #sec-array-and-tuple-types: "A tuple's length is a RANGE rather than a
+    // #sec-array-membership: "A tuple's length is a RANGE rather than a
     // number because a trailing position may carry a default... `[uint8,
     // uint32 = 10]` accepts a one-element and a two-element array". The minimum
     // is the positions less the TRAILING defaults; a default further forward
@@ -18862,7 +18862,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
 
     // A member the TARGET requires and the literal does not supply.
-    // #sec-isoftype: "an object that HAS THE MEMBERS satisfies an interface-typed
+    // #sec-interfaces-semantics: "an object that HAS THE MEMBERS satisfies an interface-typed
     // position", and `IsOfType` "walks the members" - which the RUN TIME does,
     // throwing on every row this admitted. The loop below walks the LITERAL's
     // members, so one that is absent was never visited and nothing reported it.
@@ -19720,7 +19720,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? wantedMember
         : widen(memberType) as TypeRecord;
       // `readonly` is SET, not left absent. A Property Type Record has a
-      // [[Readonly]] field (#sec-type-records), and `relations.mts`'s exact-match
+      // [[Readonly]] field (#sec-types-and-type-objects), and `relations.mts`'s exact-match
       // arm compares it with `===` - so a record omitting it would carry
       // `undefined` where a written type carries `false`, and two structurally
       // identical objects would not be `SameType`. An inner `{ x: int32 }`
@@ -22486,7 +22486,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // An ASYNC declaration was admitted by neither test, so it got no
       // signature at all and a call of it was ~any~ even where the program
       // wrote `async function f(): Promise.<uint8, Error>` - the spelling the
-      // design uses throughout (#sec-function-declarations). That is a gap in
+      // design uses throughout (#sec-annotations-on-the-remaining-function-forms). That is a gap in
       // the DECLARED path rather than an inference one, and it is fixed here so
       // that the annotation a program already writes is read.
       const isAsyncFunction = n.type === 'AsyncFunctionDeclaration';
@@ -24254,7 +24254,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ? ((generatorType as { Arguments?: readonly TypeRecord[] }).Arguments?.[1] ?? null)
       : null;
     // An ASYNC function's annotation
-    // types the PROMISE the call returns (sec-function-annotations), so a
+    // types the PROMISE the call returns (sec-annotations-on-the-remaining-function-forms), so a
     // `return` inside it produces the promise's RESOLUTION type - the first
     // argument of `Promise.<T, E>` - not the annotation itself. The same shape
     // as for a generator one form over: pushing the raw annotation would compare
@@ -24374,7 +24374,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // and the static check is the only one there can be.
           //
           // The `void` exception here is the contextual-return rule, not a hole: a CONTEXTUAL `void`
-          // requires nothing of the body - #sec-issubtype's "a `void` return is
+          // requires nothing of the body - #sec-issignaturesubtype's "a `void` return is
           // required of nothing" - while an arrow's OWN `: void` still refuses,
           // which is what this arm is for.
           const conciseIsContextual = returnContextIsContextual[returnContextIsContextual.length - 1] === true;
@@ -25562,8 +25562,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // has already answered, and where no arm accepts the count it
       // reports "no declared signature accepts an argument of type ...",
       // which is the better diagnostic for a set.
-      // A CALL'S `ref` AND A DECLARATION'S MUST AGREE. #sec-reference-
-      // parameters: a `ref` parameter is bound to the caller's LOCATION
+      // A CALL'S `ref` AND A DECLARATION'S MUST AGREE. #sec-reference-parameters-and-arguments:
+      // a `ref` parameter is bound to the caller's LOCATION
       // and written through, so the call has to name one. Whether the
       // call writes `ref` is syntax and whether the parameter declares it
       // is syntax, so neither operand's value is involved - the run time
@@ -25871,7 +25871,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             bindings,
           );
         }
-        // #sec-generic-type-inference: computed formals may still bind through
+        // #sec-inference-through-results: computed formals may still bind through
         // an inverse or finite trial. Missing static inference is not proof
         // that those later rungs leave a parameter undetermined.
         let declaration: ParseNode | undefined = generic[0]?.Declaration;
@@ -26140,7 +26140,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // #sec-type-annotations: an optional parameter admits undefined,
         // whether the call supplies it explicitly or omits the argument.
-        // #sec-reference-parameters: an ordinary parameter receives the value
+        // #sec-reference-parameters-and-arguments: an ordinary parameter receives the value
         // read from an explicit reference argument. Ref parameters were checked
         // against the exact location type above.
         if (slot?.Ref) return;
@@ -26992,7 +26992,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         scan(first.TypeAnnotation.Type);
         roles = [...named].sort().join(',');
-        // #sec-operator-declarations: "An operator that the operand's type
+        // #sec-user-defined-operators: "An operator that the operand's type
         // already defines ... may not be redeclared for that type, so a
         // program cannot redefine `uint8` addition." A definition WITH A BODY
         // replaces the operation for its pair, so one whose operand is the
@@ -27881,7 +27881,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
-    // #sec-bounds-checks: a computed index into a fixed-length `[N].<T>` whose
+    // #sec-check-elision: a computed index into a fixed-length `[N].<T>` whose
     // key is a range counter proven below _N_.
     if (!Array.isArray(node) && (node as ParseNode).type === 'MemberExpression') {
       const m = node as unknown as {
@@ -28439,14 +28439,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // because a nominal whose declaration is an alias is not a type.
           //
           // Where every parameter has a DEFAULT the resolved body rides along as
-          // [[Structure]]. #sec-type-arguments: the bare name "takes ...
+          // [[Structure]]. #sec-type-references: the bare name "takes ...
           // its |TypeParameterDefault|", so `type G<T = float64> = { t: T }`
           // written as `G` IS a type - while [[Declaration]] STAYS on the
           // record, or `interface I<W<_> = G>` loses the constructor it binds.
           // One record, both positions.
           //
           // A parameter with NO default keeps the bare nominal and its refusal:
-          // nothing binds it, which `sec-type-arguments` makes "a type error
+          // nothing binds it, which `sec-parameterized-types` makes "a type error
           // where a parameter has none".
           const aliasDefaultsBody = defaultedAliasBody(n as unknown as ParseNode);
           frames[frames.length - 1].aliases.set(
@@ -29679,7 +29679,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           walk(a.AssignmentExpression);
           return;
         }
-        // #sec-ref-rest-parameters: a `ref` rest "binds no array", and its name
+        // #sec-type-annotations: a `ref` rest "binds no array", and its name
         // is usable in exactly three forms - spread into another `ref` rest,
         // `name[k]` with a constant `k`, and `name.length` - "and any other use
         // is the escape error". The checker "refuses every other form where it
@@ -29838,7 +29838,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (asyncReturns.at(-1)) checkAwaitAssimilation(expr);
         const context = returnTypes[returnTypes.length - 1] ?? null;
         if (expr) {
-          // A `void` RETURN admits *undefined*. #sec-void makes
+          // A `void` RETURN admits *undefined*. #sec-void-type makes
           // `void` "the type with no values", so no BINDING may hold one - and
           // its very next sentence says "a call of a function whose return type
           // is `void` evaluates to *undefined*". The same word, two positions,
@@ -30356,7 +30356,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // the wrong one finds nothing, the walk never descends, and no
           // `return` inside an async function is checked.
           //
-          // #sec-inferred-result-type: "_R_ is the join of its return
+          // #sec-inference-and-function-forms: "_R_ is the join of its return
           // contributions". Where no annotation supplies _R_, it must not be
           // defaulted to `void` BEFORE the body is walked, or every `return`
           // is checked against `void` and `function* g() { yield 1; return

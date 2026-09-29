@@ -679,7 +679,7 @@ export function MetadataCapturesOf(declaration: {
 }
 
 /**
- * #sec-primitives: whether the predefined primitive _name_ declares type
+ * #sec-intrinsic-type-parameters: whether the predefined primitive _name_ declares type
  * parameters, and so takes its components in the first `.<...>` applied to it
  * (#sec-type-references): `complex` its component type, `rational`, `int` and
  * `uint` a width, and `vector` its element and lane count. Every other

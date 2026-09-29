@@ -79,7 +79,7 @@ test('an unnamed parameter prints as its type alone', () => {
 //   f((a, b) => b);
 //
 // Two existing rules, applied to the signature the TYPE supplies. Named
-// arguments bind against "the selected signature" (#sec-call-argument-binding)
+// arguments bind against "the selected signature" (#sec-named-arguments)
 // and are "a compact way to skip default parameters" (README); a type-level
 // position may carry a default, as a tuple element does (`[uint8, uint32 =
 // 10]`). Where the callee is reached through a binding whose declared type is a

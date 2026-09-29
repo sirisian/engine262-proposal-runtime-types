@@ -4,7 +4,7 @@ import {
 } from '../harness.mts';
 
 /**
- * proposal-runtime-types `#sec-lexical-declarations`: the `const`-needs-an-
+ * proposal-runtime-types `#sec-typed-bindings`: the `const`-needs-an-
  * initializer early error is AMENDED, not preserved.
  *
  * "A `const` declaration without an |Initializer| is a Syntax Error where the

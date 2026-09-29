@@ -114,7 +114,7 @@ test('a numeric literal at a rational position IS a rational; a string is not', 
   // as it gives `complex` one. So `rational` denotes a type wherever it is
   // written - the width itself is deferred with the rest of `rational.<N>` -
   // and a literal in that position is representable exactly.
-  // #sec-literal-types: "The mathematical value of a literal is exact ... `0.1`
+  // #sec-literalvalueintype: "The mathematical value of a literal is exact ... `0.1`
   // ... in a `rational` position is 1/10." An integer is the same rule at a
   // unit denominator.
   expect(evaluated('let r: rational64 = 5; r.toString();')).toBe('5');

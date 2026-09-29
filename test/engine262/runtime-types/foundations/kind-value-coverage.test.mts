@@ -13,7 +13,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * So this file is not a thorough test of any kind - each has its own file. It
  * exists so that a kind reaching the runtime untested is a failure rather than a
  * discovery, which is what `~intersection~` was. A kind added to
- * sec-type-records without a row here is the next one.
+ * #table-type-record-kinds without a row here is the next one.
  */
 
 const META = 'type B = { m: number }; meta B { default = { m: 0 }; subtype(a, b) { return a.m === b.m; } validate(v, c) { return true; } } '

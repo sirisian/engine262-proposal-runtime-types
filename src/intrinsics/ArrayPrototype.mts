@@ -330,9 +330,9 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
  * liveness rules that exists because a reserve changes capacity while leaving
  * length alone, which no length comparison could detect.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
+ * https://sirisian.github.io/proposal-runtime-types/#sec-reference-liveness
  */
-/** https://sirisian.github.io/ecmascript-types/#sec-array.prototype.reserve */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-array.prototype.reserve */
 function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number, TypedGeneration?: number };
   if (O.TypedElement === undefined) {
@@ -415,9 +415,9 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
  * length is its extent, so it is always already at fit and the no-op below
  * covers it.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
+ * https://sirisian.github.io/proposal-runtime-types/#sec-reference-liveness
  */
-/** https://sirisian.github.io/ecmascript-types/#sec-array.prototype.shrinktofit */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-array.prototype.shrinktofit */
 function* ArrayProto_shrinkToFit(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number, TypedGeneration?: number };
   if (O.TypedElement === undefined) {
@@ -438,7 +438,7 @@ function* ArrayProto_shrinkToFit(_args: Arguments, { thisValue }: FunctionCallCo
  * proposal-runtime-types (README "Capacity"): the allocation backing a typed
  * array, counted in elements, which is at least its length.
  *
- * https://sirisian.github.io/ecmascript-types/#sec-reference-liveness
+ * https://sirisian.github.io/proposal-runtime-types/#sec-reference-liveness
  */
 /**
  * proposal-runtime-types #sec-array-views: `buffer`, `byteOffset`, and
@@ -450,7 +450,7 @@ function* ArrayProto_shrinkToFit(_args: Arguments, { thisValue }: FunctionCallCo
  * what made the failure silent: `new Uint8Array(v.buffer)` reads it as a length
  * and constructs an empty array.
  */
-/** https://sirisian.github.io/ecmascript-types/#sec-array-views-buffer */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-array-views */
 function* ArrayProto_buffer(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue));
   const buffer = ArrayViewBufferOf(O as unknown as object);
@@ -466,7 +466,7 @@ function* ArrayProto_buffer(_args: Arguments, { thisValue }: FunctionCallContext
   return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-array-views-byteoffset */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-array-views */
 function* ArrayProto_byteOffset(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue));
   const offset = ArrayViewByteOffsetOf(O as unknown as object);
@@ -479,7 +479,7 @@ function* ArrayProto_byteOffset(_args: Arguments, { thisValue }: FunctionCallCon
   return Throw.TypeError('the bytes beneath this array are specified but not implemented in this engine');
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-array-views-bytelength */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-array-views */
 function* ArrayProto_byteLength(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown };
   const byteLength = ArrayViewByteLengthOf(O as unknown as object);
@@ -579,7 +579,7 @@ function* ArrayProto_window(args: Arguments, { thisValue }: FunctionCallContext)
   return yield* ArrayProto_subarray(args, { thisValue } as FunctionCallContext);
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-capacity-operations */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-capacity-operations */
 function* ArrayProto_capacity(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue)) as ObjectValue & { TypedElement?: unknown, TypedExtent?: number, TypedCapacity?: number };
   if (O.TypedElement === undefined) {

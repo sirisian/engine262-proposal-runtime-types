@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * `#sec-type-name-resolution`: a built-in type name resolves "through the ordinary
+ * `#sec-type-names`: a built-in type name resolves "through the ordinary
  * scope chain first and through the built-in table only where no user binding of
  * the name exists".
  *

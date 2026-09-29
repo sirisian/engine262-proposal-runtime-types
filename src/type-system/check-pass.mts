@@ -34,7 +34,7 @@ import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, 
  * The names the compile-time-evaluable fragment guarantees.
  *
  * #annex-evaluable-fragment, "The Library Surface": the floor is "the type
- * operations of #sec-type-objects, Type Object identity and `toString`, regular
+ * operations of #sec-types-and-type-objects, Type Object identity and `toString`, regular
  * expression construction and matching, `Map` and `Set`, whose keys Type Objects
  * serve as by interned identity, `Symbol` and its registry, and the pure methods
  * and functions of String, Number, BigInt, Math, Array, Object, and JSON."
@@ -51,7 +51,7 @@ import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, 
 /**
  * Is _name_ the base of a numeric type a bare numeric literal can reach?
  *
- * #sec-numeric-types: "Each integer, binary floating-point, decimal
+ * #sec-numeric-types-of-this-proposal: "Each integer, binary floating-point, decimal
  * floating-point, rational, complex, and vector type is a numeric type in that
  * sense." A VECTOR is left out here on purpose: #sec-literal-propagation states
  * its rule over "a position whose contextual type is a numeric VALUE type", and
@@ -976,7 +976,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       return Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
     }
   }
-  // #sec-defaultvalueof: "It is a type error to
+  // #sec-default-values: "It is a type error to
   // declare a binding or a field with a type _t_ and no initializer when
   // DefaultValueOf(_t_) is ~none~", and #sec-type-errors makes a type error
   // determinable before the text runs an Early Error - so a source text

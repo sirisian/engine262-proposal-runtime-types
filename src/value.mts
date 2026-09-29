@@ -1482,14 +1482,14 @@ export class ReferenceRecord {
 
   readonly ThisValue: Value | undefined;
 
-  // proposal-runtime-types (spec sec-class-operators): set when this reference is
+  // proposal-runtime-types (spec sec-user-defined-operators): set when this reference is
   // a computed index access `m[i]` whose base is a typed-class instance with a
   // declared index operator, so GetValue/PutValue dispatch to that operator in
   // place of the ordinary property [[Get]]/[[Set]]. The value is the index
   // operator function.
   readonly IndexOperator?: Value;
 
-  // proposal-runtime-types #sec-class-operators: the indices a computed access
+  // proposal-runtime-types #sec-user-defined-operators: the indices a computed access
   // supplied, where an index accessor applies. `m[x, y]` reaches a two-index
   // accessor with both, and the single-index case carries a list of one.
   readonly IndexArguments?: readonly Value[];

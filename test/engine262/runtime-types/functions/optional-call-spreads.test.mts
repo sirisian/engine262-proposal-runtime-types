@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { expectStaticTypeError, ok } from '../harness.mts';
 
-// #sec-call-argument-binding
+// #sec-named-arguments
 test("rejects optional spread primitive", () => {
   expectStaticTypeError("function unused(f: () => void, x: uint8) {\n  f?.(...x);\n}");
 });

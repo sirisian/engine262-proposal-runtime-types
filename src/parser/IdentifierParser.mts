@@ -40,7 +40,7 @@ export abstract class IdentifierParser extends BaseParser {
   };
 
   // Supplied by TypeParser further down the chain; declared here so a function
-  // declaration can take the  clauses #sec-function-declarations gives it.
+  // declaration can take the  clauses #sec-checked-contracts gives it.
   protected abstract parseWhereClauses(): ParseNode.WhereClause[];
 
   // IdentifierName

@@ -47,7 +47,7 @@ function stringPatternShape(): TypeRecord {
   } as TypeRecord;
 }
 
-/** https://sirisian.github.io/ecmascript-types/#sec-parameterized-types */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-parameterized-types */
 function* StringPattern_validate([v = Value.undefined, metadata = Value.undefined]: Arguments): ValueEvaluator {
   // A pattern constrains Strings. Anything else is not of the base it refines,
   // and answering false here rather than throwing keeps the judgment total.
@@ -80,7 +80,7 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
  * reason the `never` Type Object does: a Type Object needs that prototype.
  */
 /**
- * `subtype(a, b)` - #sec-primitive-metadata: the judgment "holds only of patterns whose
+ * `subtype(a, b)` - #sec-parameterized-types: the judgment "holds only of patterns whose
  * `source` and `flags` are identical, which structural equivalence already makes
  * one type, so the floor is reflexivity and the conservatism is intentional."
  *
@@ -92,14 +92,14 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
  * answer, and pairs beyond the bound get the syntactic one."
  *
  * A missing pattern on either side is not this judgment's business. The hook is
- * never asked about a default (#sec-metadata-subtype-judgment skips
+ * never asked about a default (#metadata-subtype-judgment skips
  * `subtype(default, default)`), and a crossing that carries a pattern one way
  * only is decided by the branding rule above it.
  */
 /**
  * The size bound for the exact tier, summed over both patterns.
  *
- * #sec-primitive-metadata leaves it open: "the size constant is among the design's open
+ * #sec-parameterized-types leaves it open: "the size constant is among the design's open
  * budget numbers". Chosen by measuring what real patterns cost, in node counts
  * under this construction:
  *

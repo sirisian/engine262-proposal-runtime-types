@@ -40,7 +40,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     } else {
       // i. Let refEnv be ref.[[Base]].
       const refEnv = ref.Base;
-      // proposal-runtime-types #sec-type-objects: "a type may be applied to an
+      // proposal-runtime-types #sec-type-object-opacity: "a type may be applied to an
       // argument as `T(v)`", and a type parameter is "a compile-time constant
       // whose value is a type". Its reference names no Environment Record, so
       // the call has no this value: undefined, as for a non-Reference callee
@@ -153,7 +153,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     return Throw.TypeError('$1 is not a function', func);
   }
   if (argsIsNamed && !evaluatedArguments) {
-    // #sec-call-argument-binding: a named call binds against the SIGNATURE IN
+    // #sec-named-arguments: a named call binds against the SIGNATURE IN
     // VIEW. Where the callee was reached through a reference to a binding whose
     // declared type is a function type or a callable interface, that type's
     // signature is the declaration the call reads - `a(named: 10)` for

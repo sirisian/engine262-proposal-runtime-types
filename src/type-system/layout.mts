@@ -163,7 +163,7 @@ function isNullOrUndefinedPrimitive(t: { Kind?: string, Name?: string }): boolea
 }
 
 /**
- * ecmascript-types README, Reference Classes: a class is a REFERENCE TYPE when
+ * proposal-runtime-types #sec-reference-classes: a class is a REFERENCE TYPE when
  * it is declared `reference`, `sealed` or `abstract`. Its instances are held and
  * passed by reference, so a field of its type is a pointer rather than inline
  * storage, assigning one aliases rather than copies, and it closes a recursive

@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, ok, run } from '../harness.mts';
 
 /**
- * Spec: #sec-literal-freshness, #sec-type-membership, #sec-partial-declarations,
+ * Spec: #sec-literal-freshness, #sec-type-membership, #sec-partial-classes,
  * #sec-type-references, #sec-composite-types.
  *
  * Regression rows for the object-literal and interface defects closed here.
@@ -1312,7 +1312,7 @@ test('concat accepts an element or an array of them', () => {
 });
 
 test('an array method takes the index type, not `number`', () => {
-  // sec-array-types defines the index type as `uint64` and says `length` is of
+  // sec-array-and-tuple-types defines the index type as `uint64` and says `length` is of
   // it, and the callback a method passes an index to receives that type.
   //
   // An entry taking `number` instead refuses an array's own length, and refuses

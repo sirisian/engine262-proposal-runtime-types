@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Spec: #sec-reflection-contexts; design: decorators.md ~747.
+ * Spec: #sec-decorator-contexts; design: decorators.md ~747.
  *
  * `getReflection` decided whether a call was a member read by testing the
  * context against a literal list of six, and every parameter and return context

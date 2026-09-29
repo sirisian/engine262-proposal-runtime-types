@@ -166,7 +166,7 @@ function IsReplacementDecorator(
 function TakesARegionContext(macro: ObjectValue): boolean {
   // EVERY overload, not the one `OverloadSignatureOf` picks.
   //
-  // `#sec-syntax-replacement`: "A name denotes one REPLACEMENT decorator ... A
+  // `#sec-replacement-decorators`: "A name denotes one REPLACEMENT decorator ... A
   // name may nonetheless carry an ORDINARY decorator as well, since the two are
   // told apart by their signatures rather than by their arguments." So a name
   // may be `jsx` twice - once taking a TokenStream, once taking a class - and
@@ -567,8 +567,8 @@ function ParseModuleInRealm(sourceText: string, realm: Realm, hostDefined: Modul
   // is the GATE on the expansion phase, and it is computed here because this is
   // where the parsed module first exists and where the checker is about to run.
   //
-  // **The ordering below is normative, not incidental.** `sec-decorator-
-  // replacement` fixes expand-then-check: the checker must never see an
+  // **The ordering below is normative, not incidental.** `sec-when-expansion-happens`
+  // fixes expand-then-check: the checker must never see an
   // unexpanded decoration, and an implementation that checked first would reject
   // syntax a replacement decorator was about to produce. So the phase belongs
   // between the parse above and the `CheckModule` below - which is also why

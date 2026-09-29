@@ -192,7 +192,7 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
     const exprRef = Q(yield* Evaluate(AssignmentExpression));
     // 2. Let value be ? GetValue(exprRef).
     let value = Q(yield* GetValue(exprRef));
-    // sec-function-annotations: "a
+    // sec-generator-types: "a
     // generator's annotation types the values the iterator YIELDS". Nothing
     // checked them, so `function* g(): uint8 { yield 'nope'; }` ran and
     // `.next().value` was the String.

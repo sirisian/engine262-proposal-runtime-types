@@ -280,7 +280,7 @@ test('the neighbouring reporters are unaffected', () => {
 });
 
 test('a BARE `RegExp` is the supertype of every parameterization', () => {
-  // #sec-regexp: "A bare `RegExp`, the raw library type, is the supertype of
+  // #sec-typed-regular-expressions: "A bare `RegExp`, the raw library type, is the supertype of
   // every such parameterization, so it holds a literal of any shape while a
   // written parameterization does not hold a value of another."
   //

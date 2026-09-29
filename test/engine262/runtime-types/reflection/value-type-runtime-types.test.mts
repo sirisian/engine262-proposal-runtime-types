@@ -4,7 +4,7 @@ import { evaluated } from '../harness.mts';
 /**
  * WHAT A VALUE OF A VALUE TYPE REPORTS.
  *
- * #sec-decimal-types and #sec-complex-numbers make these value types, so
+ * #sec-decimal-floating-point-types and #sec-complex-numbers make these value types, so
  * `Reflect.typeOf` must answer the type and not the shape of the object that
  * carries it. Both fell through to the shape branches and answered the literal
  * type of an object with no own properties, so every decimal - whatever its

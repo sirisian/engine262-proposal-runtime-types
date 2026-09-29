@@ -174,7 +174,7 @@ test('a generic interface is NOT satisfied by a class that never declared it', (
   //
   // INVERTED. This asserted `expectOk` and passed only because a
   // parameterised interface resolved to NULL and nothing was compared - so it
-  // recorded the absence of a check rather than a rule. `sec-interfaces` gives
+  // recorded the absence of a check rather than a rule. `sec-interfaces-semantics` gives
   // two routes and a class instance is in one: "a class that implements it is a
   // subtype of it ... which follows the declared hierarchy. An interface may
   // also type an object, an array, or a function structurally."

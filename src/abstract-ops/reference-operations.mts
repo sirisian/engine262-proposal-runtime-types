@@ -183,11 +183,11 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
   // 3. If IsPropertyReference(V) is true, then
   if (IsPropertyReference(V) === Value.true) {
     __ts_cast__<PropertyReference>(V);
-    // proposal-runtime-types (spec sec-class-operators): a computed index access
+    // proposal-runtime-types (spec sec-user-defined-operators): a computed index access
     // whose base declares an index operator reads through the operator, called
     // with the index as its argument, rather than through the ordinary [[Get]].
     if (V.IndexOperator !== undefined) {
-      // #sec-class-operators: the accessor receives every index the access
+      // #sec-user-defined-operators: the accessor receives every index the access
       // supplied, which for a single-index access is a list of one.
       let operatorResult: Value;
       SetPendingCalleeContext(V.IndexContext);
@@ -328,7 +328,7 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
     Q(yield* Call(V.IndexSetOperator, V.Base as Value, [...(V.IndexArguments ?? [V.ReferencedName as Value]), W] as Value[]));
     return undefined;
   }
-  // proposal-runtime-types #sec-class-operators: where the class declares only
+  // proposal-runtime-types #sec-user-defined-operators: where the class declares only
   // a read direction and that direction returns a BORROW, the borrow is the
   // location and the write stores through it - the design's `get operator[]() {
   // return ref this[...]; }`, which is written without a setter because a

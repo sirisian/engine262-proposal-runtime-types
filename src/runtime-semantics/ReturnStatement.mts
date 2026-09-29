@@ -21,7 +21,7 @@ export function* Evaluate_ReturnStatement({ Expression }: ParseNode.ReturnStatem
     return new Completion({ Type: 'return', Value: Value.undefined, Target: undefined });
   }
   // 1. Let exprRef be the result of evaluating Expression.
-  // proposal-runtime-types #sec-contextual-types: "the operand of a `return`
+  // proposal-runtime-types #sec-check-insertion: "the operand of a `return`
   // in a function with a declared return type" takes that type. The body's
   // declared return is on the stack (EvaluateBody pushed it for the body);
   // it is re-pushed here FOR THE OPERAND, which is the position.

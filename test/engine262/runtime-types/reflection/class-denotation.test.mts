@@ -11,7 +11,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 // tests. A class is the one denotation whose shape is fixed by another
 // specification, so the association is resolved at the reflection site instead.
 //
-// Every other type object reports typeof "object", which sec-type-objects
+// Every other type object reports typeof "object", which sec-type-object-opacity
 // requires: "This does not make a Type Object a function to `typeof`".
 
 test('a class reflects through its constructor', () => {

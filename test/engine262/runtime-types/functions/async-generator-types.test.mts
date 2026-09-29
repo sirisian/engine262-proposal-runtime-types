@@ -51,7 +51,7 @@ test('a correct argument still passes on every form', () => {
 });
 
 test('a yield is checked against the declared yield type', () => {
-  // sec-function-annotations: "a generator's annotation types the values the
+  // sec-generator-types: "a generator's annotation types the values the
   // iterator YIELDS". Nothing checked them, so `.next().value` was the String.
   //
   // The declared type is read from the RUNNING function, because a `yield` is
@@ -140,7 +140,7 @@ test('the asymmetry with the generator shorthand is deliberate', () => {
 
 test('every function form enforces its parameter', () => {
   // An earlier form list named three and there are seven. These four were the
-  // additions, and `sec-function-annotations` names "typed
+  // additions, and `sec-annotations-on-the-remaining-function-forms` names "typed
   // generator methods" explicitly as a form the design writes throughout.
   expectThrown('class C { *m(a: uint8) { yield a; } } function h(x) { return new C().m(x).next(); } h("nope");');
   expectThrown('class C { async *m(a: uint8) { yield a; } } function h(x) { return new C().m(x); } h("nope");');
@@ -194,7 +194,7 @@ test('a `void` return admits *undefined* and nothing else', () => {
   // CONTEXT - `if (!(context.Kind === 'void'))` - so it skipped the check
   // WHOLESALE and a `void` function could return anything.
   //
-  // #sec-void: "`void` is the type with no values", and "the `void` type is the
+  // #sec-void-type: "`void` is the type with no values", and "the `void` type is the
   // statement that a program must not depend on that result". A function must
   // therefore not RETURN one.
   expectStaticTypeError('function f(): void { return (1 := uint8); }');

@@ -391,7 +391,7 @@ test('meta declarations that are distinct, base-form, or generic stand', () => {
   // Two shapes with different members are two types.
   expect(ok('type A = { k: uint8 }; type B = { j: uint8 }; '
     + 'meta A { default = { k: 0 }; subtype(a, b) { return true; } } meta B { default = { j: 0 }; subtype(a, b) { return true; } } String(1);')).toBe(true);
-  // The base-form of #sec-meta-declarations: a meta over a PRIMITIVE, "a meta
+  // The base-form of #sec-metadata-decomposition: a meta over a PRIMITIVE, "a meta
   // type that constrains a base without naming any field of it".
   expect(ok('meta uint8 { subtype(a, b) { return true; } default = 0; validate(v, c) { return true; } } String(1);')).toBe(true);
   // A member type declared in the same list, still resolving during the

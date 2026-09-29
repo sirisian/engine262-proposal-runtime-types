@@ -642,7 +642,7 @@ test('an identity-compared enumerator reports its enum, and stays itself', () =>
 test('claiming a value changes what the ORIGINAL binding reports', () => {
   // The surprising consequence, asserted rather than left to be discovered.
   // Because the enumerator IS `k`, declaring the enum makes `k` an enumerator of
-  // it - so #sec-runtimetypeof's "the most specific type of which it is a value"
+  // it - so #sec-enums's "the most specific type of which it is a value"
   // answers with the enum for the binding the program already had. Nothing was
   // copied or replaced; the same value simply has a more specific type than it
   // did on the line above.

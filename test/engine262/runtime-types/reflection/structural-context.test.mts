@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// sec-reflection-contexts, the Structural family: `Tuple` and `Record` reflect
+// sec-decorator-contexts, the Structural family: `Tuple` and `Record` reflect
 // "a tuple or record declaration", so they take the TYPE as the second type
 // argument - the Class family's spelling, not the Object family's instance one.
 //

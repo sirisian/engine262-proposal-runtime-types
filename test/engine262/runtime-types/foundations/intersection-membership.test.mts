@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// sec-type-membership: "An intersection type. A value belongs to it if it
+// sec-types-and-type-objects: "An intersection type. A value belongs to it if it
 // belongs to every member."
 //
 // `CheckedConvertValue` had a `union` branch and no `intersection` one, so an

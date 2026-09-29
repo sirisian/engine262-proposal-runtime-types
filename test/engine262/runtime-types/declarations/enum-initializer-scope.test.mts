@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
- * Spec: #sec-enums and #sec-compile-time-evaluation.
+ * Spec: #sec-enums and #sec-compile-time-evaluability.
  *
  * `enum E: uint8 { A = 1, B = A + 1 }` was a *ReferenceError* - "A is not
  * defined" - though every neighbouring form worked: literals, arithmetic over

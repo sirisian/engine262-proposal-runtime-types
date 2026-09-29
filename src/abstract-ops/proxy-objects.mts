@@ -736,7 +736,7 @@ export function ProxyCreate(target: Value, handler: Value): ValueCompletion<Prox
   if (!(handler instanceof ObjectValue)) {
     return Throw.TypeError('Cannot create a proxy with a $1 as $2', 'non-object', 'handler');
   }
-  // proposal-runtime-types (spec sec-proxy-and-typed-objects): constructing a
+  // proposal-runtime-types (spec sec-reflection-and-declared-types): constructing a
   // Proxy whose target is an instance of a typed class throws a TypeError - such a
   // value is backed by a layout rather than a property table, a field access does
   // not consult a handler, and there is no point at which a trap could correctly
