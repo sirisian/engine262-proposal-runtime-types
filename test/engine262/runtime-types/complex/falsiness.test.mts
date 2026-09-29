@@ -2,14 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * complex.md: "`complex(0, 0)` is falsy on the same zero-is-falsy rule the other
- * numeric types follow; every other complex value is truthy."
+ * Spec: #sec-complex-numbers. ToBoolean of a complex is false where both components
+ * are zero and true otherwise, so `complex(0, 0)` is falsy as every other numeric
+ * zero is.
  *
- * A complex is carried as an object, and ToBoolean over an object is otherwise
- * always true - so the origin was truthy where every other numeric zero is
- * falsy. This is the same exception ToBoolean already makes for a typed number,
- * for the same reason: the value is numeric even though its representation is
- * not a Number.
+ * A complex is carried as an object, and ToBoolean of an object is otherwise always
+ * true, so the rule is stated rather than inherited: without it the origin would be
+ * the one numeric zero that is truthy. It is the same exception ToBoolean already
+ * makes for a typed number, for the same reason - the value is numeric even though
+ * its representation is not a Number.
  */
 
 const truth = (expr: string) => `String(${expr} ? "truthy" : "falsy");`;

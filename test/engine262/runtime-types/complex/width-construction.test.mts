@@ -2,21 +2,20 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * A COMPLEX AT A NAMED WIDTH IS CONSTRUCTED FROM ITS PAIR, as the bare name is.
+ * Spec: #sec-type-names. The clause lists `complex64(1, 2)` beside
+ * `decimal128("1.0")` and `float32x4(1, 2, 3, 4)` as how those values are created, so
+ * a complex at a named width is CONSTRUCTED FROM ITS PAIR, as the bare name
+ * `complex(1, 2)` is.
  *
- * `sec-type-names` lists `complex64(1, 2)` beside `decimal128.parse("1.0")` and
- * `float32x4(1, 2, 3, 4)` as "how those values are CREATED".
- *
- * Only the bare `complex` was bound to the pair constructor. A width name is
- * bound to its Type Object, whose call is a CONVERSION and reads one argument,
- * so `complex128(1, 2)` returned **`1+0i`** - a well-formed complex with the
- * wrong value, no error and no warning - while `complex(1, 2)` and
- * `complex128.parse('1+2i')` both gave `1+2i`. Two ways of building one value
- * disagreed, and the quiet one was wrong.
+ * A width name is bound to its Type Object, whose call elsewhere is a CONVERSION
+ * reading one argument, so the pair constructor has to be reached through the width
+ * names as well. Otherwise `complex128(1, 2)` would give `1+0i` - a well-formed
+ * complex with the wrong value, no error and no warning - while `complex(1, 2)` and
+ * `complex128.parse('1+2i')` give `1+2i`.
  *
  * That silence is why this is pinned at both widths and on the imaginary part
- * directly: a test that only checked `complex128(1, 2)` prints as `1+0i` would
- * have passed a wrong value as readily as a right one.
+ * directly: a test that only checked that the result is a complex would pass a wrong
+ * value as readily as a right one.
  */
 
 test('a pair at a named width keeps both parts', () => {

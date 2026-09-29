@@ -2,15 +2,17 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
- * A complex has no Number value. complex.md: "Conversions are explicit in both
- * directions: `complex(x)` lifts a real onto the plane, `.real` projects back
- * off it" - and "silently comparing real parts or magnitudes would hide the
- * mistake".
+ * Spec: #sec-explicit-conversion, #sec-numeric-predicates and
+ * #sec-equality-and-comparison.
  *
- * With no `valueOf` of its own, a complex reached ToNumber through its text:
- * "3+0i" parsed as NaN. So every Number context gave a silent wrong answer -
- * `Number(c)` NaN, `isNaN(c)` true for the complex number 3, `c == 3` false.
- * It now refuses, as a `decimal` and a `rational` do.
+ * A complex has no Number value. ToNumber of one throws a TypeError, and a complex has
+ * no conversion row to the Number type, so it reaches no Number context: `Number(c)`,
+ * `Math.floor(c)` and `Math.max(c, 1)` all throw. The conversions are explicit in both
+ * directions - `complex(x)` lifts a real onto the plane and `.real` projects back off
+ * it - so a complex is never silently compared or combined as a real.
+ *
+ * The Number contexts with a real answer are the classification predicates, which a
+ * complex answers by its components.
  */
 
 const C = 'const c = (3 := complex64); ';
@@ -27,10 +29,10 @@ test('every Number context refuses a complex', () => {
 
 test('`==` compares a complex with a real by value, and `===` sees the type', () => {
   // Not a Number context: `==` asks a question across two value types and answers
-  // it by mathematical value, as `1 == 1n` does and as it now does for a decimal
-  // and a rational (#sec-equality-and-comparison).
-  // A complex equals a real when its imaginary part is zero and its real part is
-  // that value; against a LITERAL the literal takes the complex's type, as before.
+  // it by mathematical value, as `1 == 1n` does and as it does for a decimal and a
+  // rational (#sec-equality-and-comparison). A complex equals a real when its
+  // imaginary part is zero and its real part is that value; against a LITERAL the
+  // literal takes the complex's type.
   expect(evaluated(`${C}let n = 3; String(c == n);`)).toBe('true');
   expect(evaluated(`${C}let n = 4; String(c == n);`)).toBe('false');
   expect(evaluated(`${Z}let n = 1; String(z == n);`)).toBe('false');

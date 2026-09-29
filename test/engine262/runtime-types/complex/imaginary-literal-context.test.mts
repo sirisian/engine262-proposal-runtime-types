@@ -2,31 +2,28 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * AN IMAGINARY LITERAL TAKES ITS COMPONENT FROM ITS CONTEXT.
+ * Spec: #sec-complex-numbers, #sec-imaginary-literals and #sec-literal-types.
  *
- * #sec-complex-numbers gives an imaginary literal "the type `complex`", and the
- * checker's note on that arm adds that literal propagation "is what puts a `4i`
- * in a `complex64` position at `complex64`". It did not. The literal was built
- * with no component, so it was a `complex.<number>`, and
- * `const c: complex128 = 4i` was refused - by the CHECKER, before the value was
- * ever built.
+ * AN IMAGINARY LITERAL TAKES ITS COMPONENT FROM ITS CONTEXT. An imaginary literal
+ * has the type `complex`, with the literal's value as its imaginary component and
+ * zero as its real one, and literal propagation applies to it as to any numeric
+ * literal, so a `4i` in a `complex64` position is a `complex64` and
+ * `const c: complex128 = 4i` is accepted.
  *
- * Two halves were needed and the first alone did nothing: the literal must
- * REPORT the contextual type (or the declaration is refused before evaluation)
- * and must be BUILT at its component (or the value that reaches the store is of
- * the wrong type). Recording the component without returning it left every case
- * failing exactly as before, which is what made the missing half hard to see.
+ * Both halves are needed: the literal must REPORT the contextual type (or the
+ * declaration is refused before evaluation) and must be BUILT at its component (or
+ * the value that reaches the store has the wrong type).
  *
- * The VALUE rows are unaffected and should stay that way: `complex.<number>` and
+ * VALUES are not literals and are not adopted: `complex.<number>` and
  * `complex.<float64>` are distinct types that convert explicitly, exactly as
  * `number` and `float64` do.
  */
 
-test('the additive spelling works, which is the one the documents use', () => {
-  // `1 + 2i` is #sec-complex-numbers' own spelling throughout its prose. The
-  // context has to reach THROUGH the `+` to the imaginary literal: without that
-  // the bare `4i` adopted its component and `1 + 2i` did not, so the two
-  // spellings of one value disagreed.
+test('an imaginary literal beside a real one takes its component from context', () => {
+  // `1 + 2i` is the spelling #sec-complex-numbers uses throughout its prose. The
+  // context has to reach THROUGH the `+` to the imaginary literal, so that `1 + 2i`
+  // and the bare `4i` take their component the same way and the two spellings of one
+  // value agree.
   expect(evaluated('const c: complex128 = 1 + 2i; String(c);')).toBe('1+2i');
   expect(evaluated('const c: complex128 = 1 + 2i; String(Reflect.typeOf(c));')).toBe('complex128');
   expect(evaluated('const c: complex64 = 1 + 2i; String(Reflect.typeOf(c));')).toBe('complex64');
@@ -66,13 +63,11 @@ test('a complex VALUE still converts explicitly, as number and float64 do', () =
 });
 
 test('a complex with no written component reports complex.<number>', () => {
-  // `table-type-name-shorthands`: "`complex` is `complex.<number>`" - the bare
-  // name IS the application, so there is no complex without a component, only
-  // one whose component was never written down.
-  //
-  // Such a value reported no type record at all and rendered as `{}` - an empty
-  // object type. It made the defects around it harder to diagnose than they
-  // needed to be, since the type a value carried could not be read off it.
+  // #sec-type-names: `complex` declares the default `T = number`, so the bare name
+  // denotes `complex.<number>` - the bare name IS the application. There is
+  // therefore no complex without a component, only one whose component was never
+  // written down, and such a value reports its type (`complex`) rather than an empty
+  // object type.
   expect(evaluated('String(Reflect.typeOf(1 + 2i));')).toBe('complex');
   expect(evaluated('String(Reflect.typeOf(4i));')).toBe('complex');
   expect(evaluated('String(Reflect.typeOf(complex(1, 2)));')).toBe('complex');

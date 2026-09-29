@@ -4,7 +4,9 @@ import {
 } from '#self';
 
 /**
- * Extension coverage - threading.md, #sec-threading-synchronization.
+ * Spec: #sec-threading-synchronization - #sec-lock-objects (hold, acquire,
+ * asyncHold), #sec-condition-objects (wait, asyncWait, notify, notifyAll,
+ * cancellation) and #sec-threadlocal-objects.
  *
  * WHAT IS SIMULATED. An agent of the simulated cluster does not block: a job runs
  * to completion before the driver runs anything else, so a blocking acquire would
@@ -13,7 +15,6 @@ import {
  * Condition.wait always - which is a divergence of the simulation and not of the
  * clause. The uncontended fast paths of hold and acquire do run, since they never
  * wait, and the async forms run in full.
- *
  */
 
 function makeCluster(setup: string) {
@@ -167,6 +168,58 @@ test('Condition: notifyAll wakes every waiter', () => {
   expect(h.log()).toContain('woke 2 waiters');
 });
 
+// -- Cancellation ----------------------------------------------------------------
+
+test('Condition: an abort wakes an asyncWait parked in a thread, holding the Lock again', () => {
+  // #sec-condition-cancellation: an abort delivered while a waiter is parked wakes
+  // it, and the wait completes abruptly with the abort reason - after reacquiring
+  // the Lock, so that the unwinding runs with the invariant the waiter was holding.
+  // The waiter can therefore release the Lock it was holding, and the main thread
+  // can then take it.
+  const h = makeCluster(`
+    globalThis.c = new AbortController();
+    globalThis.lock = new Lock();
+    globalThis.cond = new Condition();
+    async function park() {
+      const release = await lock.asyncHold();
+      try { await cond.asyncWait(lock); log.push('woke normally'); }
+      catch (e) { log.push('abort: ' + e); release(); log.push('released by its owner'); }
+    }
+    park.callThread({ signal: c.signal });
+  `);
+  h.cluster.runUntilIdle();
+  h.evaluate('c.abort("stop");');
+  h.cluster.runUntilIdle();
+  expect(h.log()).toBe('abort: stop | released by its owner');
+  expect(h.evaluate('lock.hold(() => "held")')).toBe('held');
+});
+
+// #sec-condition-cancellation: "A Lock acquisition is a checkpoint on the same
+// terms" as a wait, so an abort delivered while an `asyncHold` is queued behind a
+// held Lock wakes it and the acquisition completes abruptly with the abort reason.
+//
+// Pinned as `test.fails`: the engine delivers an abort to a parked `asyncWait` and
+// to `Atomics.waitAsync` but not to a queued `asyncHold`, which stays pending
+// and leaves the thread waiting. Flips to `test` when the acquisition is a
+// checkpoint.
+test.fails('Lock: an abort wakes an asyncHold queued behind a held Lock', () => {
+  const h = makeCluster(`
+    globalThis.c = new AbortController();
+    globalThis.lock = new Lock();
+    globalThis.guard = lock.acquire();
+    async function want() {
+      log.push('asking');
+      try { const release = await lock.asyncHold(); log.push('acquired'); release(); }
+      catch (e) { log.push('abort: ' + e); }
+    }
+    want.callThread({ signal: c.signal });
+  `);
+  h.cluster.runUntilIdle();
+  h.evaluate('c.abort("stop");');
+  h.cluster.runUntilIdle();
+  expect(h.log()).toBe('asking | abort: stop');
+});
+
 // -- The blocking forms where an agent cannot block ------------------------------
 test('the blocking forms throw rather than becoming their async counterparts', () => {
   // "an operation returning T on one thread and Promise.<T> on another would have
@@ -190,8 +243,8 @@ test('ThreadLocal: reads the default until written, then the agent\'s own value'
 
 test('ThreadLocal: the default comes from T', () => {
   // #sec-threadlocal-objects: "An agent that has not written the storage reads
-  // DefaultValueOf(_T_)." Written through the type rather than an explicit
-  // initial value, which is what this file's header used to say was impossible.
+  // DefaultValueOf(_T_)." The default is reached through the type rather than
+  // through an explicit initial value.
   const h = makeCluster('var t = new ThreadLocal.<uint32>(); log.push(t.value); log.push(t.value is uint32);');
   expect(h.log()).toBe('0 | true');
   // Not only the numerics: the default is DefaultValueOf(T) for every T, so it

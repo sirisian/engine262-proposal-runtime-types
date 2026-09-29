@@ -2,18 +2,16 @@ import { expect, test } from 'vitest';
 import { expectThrown } from '../harness.mts';
 
 /**
- * #sec-threading-shared-modifier: `shared T` is a marker over its target, so a
+ * Spec: #sec-threading-shared-modifier. Between a `shared` type and one that is
+ * not, the modifier is transparent because it is not observable in the value, so a
  * `shared uint8` is a `uint8` for every question about what the VALUE can do -
  * whether it mixes with an `int32`, whether it can be called, whether it can be
  * iterated.
  *
- * `SameTypeWithAssumptions` and `AreDisjoint` look through the marker already.
- * The judgments added for those three questions did not: each reached a plain
- * `uint8` and a `type A = uint8` alias and stopped at `shared uint8`, so the
- * run time answered there and nowhere else.
- *
- * Found by asking every rule the same question through three wrappers rather
- * than by probing a feature: an alias, `shared`, and a brand.
+ * Each question is asked through more than one wrapper of the same target - a plain
+ * type, an alias of it, and `shared` - so that a judgment which sees through one
+ * wrapper but stops at another is caught, rather than probing one feature at a
+ * time.
  */
 
 const dead = (source: string) => `function __never() { ${source} }`;
@@ -45,6 +43,7 @@ test('an ALIAS reached these all along, and still does', () => {
 
 test('a shared value still does what a shared value does', () => {
   expect(true).toBe(true);
-  // Same type on both sides is ordinary, marker or not.
+  // Assignability is still judged against the target: a `shared uint8` is not
+  // assignable to `string`.
   expectThrown(dead('let a: shared uint8 = uint8(1); let s: string = a;'), 'not assignable');
 });

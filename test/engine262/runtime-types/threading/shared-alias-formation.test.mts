@@ -1,8 +1,14 @@
 import { expect, test } from 'vitest';
 import { expectStaticTypeError, ok } from '../harness.mts';
 
-// #sec-threading-shared-modifier
+// Spec: #sec-threading-shared-modifier. "An open operand retains this formation
+// obligation": once an alias or a generic closes the operand of `shared`, the same
+// requirements as for a written `shared T` apply - a value type, not a reference,
+// not itself `shared` - in an unused signature and in nested type positions (an
+// array element, a function parameter, an object member). A resolved violation is a
+// type error before the source runs; an open or valid operand is accepted.
 
+// Closed operands that violate the obligation: refused.
 test.each([
   [
     "closed shared signature operand",
@@ -32,6 +38,7 @@ test.each([
   expectStaticTypeError(source);
 });
 
+// Valid closed operands, and open aliases that defer the check: accepted.
 test.each([
   [
     "shared generic good",

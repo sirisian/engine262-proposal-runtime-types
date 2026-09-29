@@ -2,56 +2,35 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrownKind } from '../harness.mts';
 
 /**
- * Extension coverage - threading.md, #sec-threading-atomics.
+ * Spec: #sec-threading-atomics (Atomics on Typed Values), with
+ * #sec-atomics-reference-arguments, #sec-validateatomictarget,
+ * #sec-atomics-typed-operations, #sec-atomics-float-arithmetic,
+ * #sec-atomics-compare-exchange-predicate and #sec-atomics-typed-wait.
  *
- * WHAT THESE TESTS ARE FOR. In this engine a job runs to completion before any
- * other agent runs, so every operation here is trivially atomic and the seq-cst
- * ordering costs nothing. Nothing below demonstrates atomicity and nothing below
- * could: a simulation with no interleaving beneath a job boundary has no race to
- * exclude. What is checked is the SURFACE the clause specifies, which a real
- * implementation has to get right anyway - which targets are admitted, which
- * types each operation restricts itself to, and the two properties that made
- * SameValueZero the comparison for compareExchange.
+ * Beyond a TypedArray, an `Atomics` operation takes two further targets: a typed
+ * binding reached through a `ref` argument, and a typed own data property named by
+ * an object and a key. These tests check the surface those clauses specify - which
+ * targets are admitted, which types each operation restricts itself to, and the two
+ * properties that make SameValueZero the comparison for compareExchange (NaN matches
+ * NaN, and -0 matches 0).
  *
- * IMPLEMENTED: the reference target shape, `Atomics.<op>(ref binding, ...)`.
- *
- * IMPLEMENTED: the reference and typed-own-data-property target shapes, and
- * waitAsync and notify over a WaiterList.
- *
- * NOT IMPLEMENTED, and so not tested:
- * - The TypedArray shape, which needs the TypedArray Atomics of the pinned
- *   edition; this engine has none.
+ * WHAT THESE TESTS CANNOT SHOW. In this engine a job runs to completion before any
+ * other agent runs, so every operation is trivially atomic and the seq-cst ordering
+ * costs nothing. Nothing below demonstrates atomicity, and nothing could: a
+ * simulation with no interleaving beneath a job boundary has no race to exclude.
+ * Two parts of the clauses are out of reach:
+ * - The TypedArray target of the pinned edition, which this engine does not provide.
  * - Blocking `Atomics.wait`. An agent of the simulated cluster does not block: a
- *   job runs to completion before the driver runs anything else, so a blocking
- *   wait would stop the cluster rather than one thread of it. It therefore
- *   throws here in every case, which is a divergence of the SIMULATION and not
- *   of the clause. waitAsync is the form this engine can honour, and the form a
+ *   blocking wait would stop the cluster rather than one thread of it, so it throws
+ *   here in every case. That is a divergence of the simulation and not of the
+ *   clause. `Atomics.waitAsync` is the form this engine can honour, and the form a
  *   thread that may not block has to use anyway.
- *
- * KNOWN ENGINE GAP, not a divergence of this clause: a LEXICAL BINDING has no
- * run-time typed-storage boundary. A class field, a parameter, and an array
- * element each refuse a wrongly-typed value at run time; a `let a: uint8` does
- * not - `let a: uint8 = 0; var v = ["x"][0]; a = v;` leaves a string in a uint8,
- * with no reference and no Atomics anywhere. Only the static checker guards a
- * binding, and only where it can fold the value, so the literal `a = 300` is
- * refused and the unfoldable `a = v` is not. A write through a `ref` inherits
- * its referent's storage, so `ref` to a field or an element enforces and `ref`
- * to a binding does not, which is where this was first noticed.
- *
- * The store operations below inherit it and cannot be more correct than the
- * storage beneath them; #sec-atomics-typed-operations says a stored value passes
- * the typed-storage boundary, and the two tests marked below become meaningful
- * once a binding has one. It also bears on the specification's own argument:
- * #sec-shared-stability says a cross-thread race on unmarked storage costs a
- * stale narrowing and never a wrongly-typed value BECAUSE every write passes
- * that boundary, and for a lexical binding here the boundary is absent - of a
- * binding, not of the clause.
  */
 
 // -- The reference target shape -------------------------------------------------
 test('Atomics: add operates on a typed binding through a reference', () => {
-  // The design's opening example: a binding, updated atomically, with no byte
-  // buffer arranged for it first.
+  // The clause's motivating case (#sec-threading-atomics): a binding updated
+  // atomically, with no byte buffer arranged for it first.
   expect(evaluated('let a: uint32 = 5; Atomics.add(ref a, 3); String(a);')).toBe('8');
 });
 
@@ -119,13 +98,12 @@ test('compareExchange: -0 matches 0, the forgiving direction for a sentinel', ()
 });
 
 test('Atomics: an operation preserves the target\'s type, so a second one works', () => {
-  // A write goes through the typed-storage boundary, and the arithmetic
-  // operations convert their result to the target's type before storing it.
-  // Without that the write put a plain Number in the slot - which a lexical
-  // binding accepts, having no run-time boundary of its own - and the binding
-  // silently stopped being a uint32, so the FIRST add succeeded and the second
-  // threw "number is not a value type Atomics operates on". An operation must not
-  // destroy the type it is operating on.
+  // An operation stores its result through the typed-storage boundary
+  // (#sec-atomics-typed-operations), so the target keeps its declared type and a
+  // second operation on it is still valid. A store that left a plain Number in the
+  // slot would leave a target Atomics no longer operates on: the first add would
+  // succeed and the second would throw "number is not a value type Atomics
+  // operates on".
   expect(ok('let a: uint32 = 0; Atomics.add(ref a, 5); Reflect.typeOf(a) === uint32;')).toBe(true);
   expect(evaluated('let a: uint32 = 0; Atomics.add(ref a, 5); Atomics.add(ref a, 5); String(a);')).toBe('10');
   expect(evaluated('let a: uint32 = 0; Atomics.store(ref a, 3); Atomics.add(ref a, 1); String(a);')).toBe('4');
@@ -135,8 +113,8 @@ test('Atomics: an operation preserves the target\'s type, so a second one works'
 });
 
 test('Atomics: repeated operations on a shared binding behave the same', () => {
-  // Again, now over more than one operation: the modifier is not consulted, so
-  // marked and unmarked storage accumulate identically.
+  // The modifier is not consulted (#sec-validateatomictarget), so marked and
+  // unmarked storage accumulate identically over repeated operations.
   expect(evaluated('let a: shared uint32 = 0; Atomics.add(ref a, 5); Atomics.add(ref a, 5); String(a);')).toBe('10');
 });
 

@@ -2,22 +2,24 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * complex.md: "The transcendental `Math` functions are overloaded for `complex`
- * and return a `complex`, so the same name does the real thing on a real and the
- * complex thing on a complex - `Math.sqrt` of a `complex` reaches the
- * negative-argument answer a real `Math.sqrt` cannot."
+ * Spec: #sec-numeric-library. `Math.abs` of a `complex.<T>` is the real magnitude, a
+ * value of T; `Math.conj` and `Math.arg` are the complex family's additions; and the
+ * transcendental functions the family names return values of its types. So the same
+ * name does the real thing on a real and the complex thing on a complex - `Math.sqrt`
+ * of a complex reaches the negative-argument answer a real `Math.sqrt` cannot.
  *
- * `abs`, `conj`, and `arg` already had complex branches; `sqrt`, `exp`, `log`,
- * `sin`, `cos`, and `tan` answered NaN, since ToNumber of a complex is NaN.
+ * Unspecified: no clause lists which transcendental functions the family names. These
+ * tests pin `sqrt`, `exp`, `log`, `sin`, `cos` and `tan`, beside `abs`, `conj` and
+ * `arg`, which the specification does name.
  *
- * Where the mathematics is transcendental these assert a TOLERANCE: `-1 +
- * 1.22e-16i` is the right answer to Euler's identity in floating point, and an
- * exact string comparison would read as a failure.
+ * Where the mathematics is transcendental these assert a TOLERANCE: `-1 + 1.22e-16i` is
+ * the right answer to Euler's identity in floating point, and an exact string
+ * comparison would read as a failure.
  */
 
 const parts = (expr: string) => `const z = ${expr}; String(z.real) + "," + String(z.imaginary);`;
 
-test('complex Math: the document\'s own examples', () => {
+test('complex Math: sqrt(-1) and Euler\'s identity, which the real overload cannot give', () => {
   expect(evaluated(parts('Math.sqrt(complex(-1, 0))'))).toBe('0,1');
   expect(evaluated('const z = Math.exp(complex(0, Math.PI));'
     + ' String(z.real) + "," + String(Math.abs(z.imaginary) < 1e-15);')).toBe('-1,true');

@@ -2,7 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrownKind } from '../harness.mts';
 
 /**
- * Extension coverage - threading.md, #sec-threading-parallel-iteration.
+ * Spec: #sec-threading-parallel-iteration, with #sec-thread-partition,
+ * #sec-thread.parallelfor, #sec-thread.parallelreduce, #sec-thread-parallel-errors
+ * and #sec-thread-pool.
+ *
+ * `Thread.parallelFor` and `Thread.parallelReduce` cut a range of integers into
+ * slices, run them, combine the partials in ascending slice order, and report the
+ * failure of the lowest-numbered failing slice.
  *
  * WHAT IS SIMULATED. Every slice runs on the calling agent, in ascending slice
  * order. That is not a shortcut around the tests: #sec-thread.parallelfor makes
@@ -13,7 +19,8 @@ import { evaluated, expectThrownKind } from '../harness.mts';
  * fully testable here, and none of it is weakened by the absence of parallelism.
  *
  * What is NOT testable here is that the work is spread over agents at all. That
- * needs the pool, and the pool is where a real implementation earns the operation.
+ * needs the pool (#sec-thread-pool), and the pool is where a real implementation
+ * earns the operation.
  */
 
 // -- parallelFor ----------------------------------------------------------------
@@ -96,6 +103,26 @@ test('errors: parallelReduce follows the same rule', () => {
 
 test('errors: a throwing combine propagates', () => {
   expectThrownKind('Thread.parallelReduce(0, 100, 0, (a, i) => a + i, () => { throw new TypeError("combine"); });', 'TypeError');
+});
+
+// -- References held by a slice --------------------------------------------------
+test('a slice that holds a reference into an array may not change its length', () => {
+  // #sec-thread.parallelfor: it is a TypeError to change the length of an array a
+  // slice holds a reference into, for the duration of the call.
+  expectThrownKind(`
+    let a: [].<uint32> = [1, 2, 3, 4];
+    Thread.parallelFor(0, 4, (i) => { for (let ref p of a) { if (i === 0) { a.push(9); } } });
+  `, 'TypeError');
+});
+
+test('without a held reference the same resize is allowed', () => {
+  // The control for the test above: the refusal comes from the reference, not from
+  // resizing inside a slice.
+  expect(evaluated(`
+    let a: [].<uint32> = [1, 2, 3, 4];
+    Thread.parallelFor(0, 4, (i) => { if (i === 0) { a.push(9); } });
+    String(a.length);
+  `)).toBe('5');
 });
 
 // -- It does not block -----------------------------------------------------------

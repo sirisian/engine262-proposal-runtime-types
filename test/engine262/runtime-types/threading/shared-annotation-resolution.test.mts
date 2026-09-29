@@ -2,18 +2,14 @@ import { expect, test } from 'vitest';
 import { evaluated, expectError } from '../harness.mts';
 
 /**
- * The `SharedType` resolution gap — closed.
+ * Spec: #sec-threading-shared-modifier (RequireType enforces a `shared` type by
+ * enforcing its target) and #sec-type-annotations.
  *
- * `shared T` is a marker over its target, and the CHECKER used to leave the
- * annotation unresolved on purpose. Resolving it made `let s: shared uint8 = 1;`
- * an early error: `IsSubtype` looks through the marker, but a numeric literal
- * reaches `uint8` by CONVERSION rather than by subtyping, and the conversion path
- * did not. So the annotation was left unreadable to avoid a false refusal, which
- * bought silence at the price of the whole annotation going unchecked.
- *
- * `literalFitsNumericType` now looks through the marker, so the annotation is
- * resolved AND judged. Both halves matter: closing the gap is only worth
- * something if the second one holds.
+ * A `shared T` annotation is resolved and judged exactly as `T` is. A numeric
+ * literal reaches `shared uint8` by conversion, as it reaches `uint8`, so
+ * `let s: shared uint8 = 1;` is accepted, while a string or an out-of-range literal
+ * is refused before the source runs. An annotation the checker cannot read refuses
+ * nothing, so the refusals are asserted as well as the acceptances.
  */
 
 test('a shared annotation admits what the runtime admits', () => {
@@ -23,14 +19,16 @@ test('a shared annotation admits what the runtime admits', () => {
 });
 
 test('and refuses what it should, which is why resolving it was worth doing', () => {
-  // Unreadable annotations refuse nothing. These are the errors the gap cost.
+  // An annotation the checker cannot read refuses nothing, so these refusals show
+  // that it is read.
   expectError('let s: shared uint8 = "x";');
   expectError('let s: shared uint8 = 300;');
 });
 
 test('the marker does not leak into the target relation', () => {
-  // `shared uint8` and `uint8` relate through the marker, which `IsSubtype`
-  // already handled - this asserts the conversion change did not disturb it.
+  // `shared uint8` and `uint8` relate through the marker in both directions
+  // (#sec-threading-shared-modifier), and a literal's conversion does not disturb
+  // that.
   expect(evaluated('let s: shared uint8 = 1; let p: uint8 = s; String(p);')).toBe('1');
   expect(evaluated('let p: uint8 = 1; let s: shared uint8 = p; String(s);')).toBe('1');
 });

@@ -2,22 +2,19 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
+ * Spec: #sec-which-operations-each-family-defines (a complex defines `exponentiate`).
+ *
  * AN INTEGER EXPONENT IS REPEATED MULTIPLICATION, not a trip through polar form.
  *
- * `complex.md` writes `(0 + 1i) ** 2; // -1 + 0i` with no rounding caveat -
- * unlike its Euler line, which says "within rounding" - and squaring `i` is
- * exact in the algebraic form: (a+bi)² is (a²-b²) + 2abi.
+ * Unspecified: the specification gives a complex `exponentiate` but does not say how
+ * exact it is. These tests pin the engine's choice. Squaring `i` is exact in the
+ * algebraic form, (a+bi)^2 = (a^2-b^2) + 2abi, so `(0 + 1i) ** 2` is `-1 + 0i` with no
+ * rounding caveat; through `exp(y*log x)` it would be `-1 + 1.2246467991473532e-16i`,
+ * and a purely real `(2 + 0i) ** 3` would be `7.999999999999998` rather than `8`.
  *
- * Through `exp(y·log x)` it was not. Before this, `i ** 2` gave
- * `-1 + 1.2246467991473532e-16i`, `i ** 3` gave `-1.8369701987210297e-16 - 1i`,
- * and `(2 + 0i) ** 3` - a purely real value at an integer power - gave
- * `7.999999999999998`.
- *
- * Multiplication was exact throughout, so the two spellings of a square
- * disagreed: `(1+1i) * (1+1i)` was `2i` while `(1+1i) ** 2` was
- * `1.2246467991473532e-16 + 2i`. That disagreement is the sharpest form of the
- * defect, and the test below pins the two together rather than pinning a
- * literal.
+ * Multiplication is exact, so the two spellings of a square must agree:
+ * `(1+1i) * (1+1i)` and `(1+1i) ** 2` are one value, and the test pins the two
+ * together rather than pinning a literal.
  */
 const RI = (e: string) => `const z = ${e}; String(z.real) + ' , ' + String(z.imaginary);`;
 
@@ -46,6 +43,7 @@ test('zero, one and a negative exponent', () => {
 
 test('a non-integer or complex exponent still goes through polar form', () => {
   expect(evaluated(RI('(1 + 0i) ** 0.5'))).toBe('1 , 0');
-  // complex.md's Euler line, which says "within rounding" and is unaffected.
+  // Euler's identity is transcendental and exact only within rounding; a non-integer
+  // exponent is unaffected by the integer rule.
   expect(evaluated('String(Math.exp(complex(0, Math.PI)));')).toBe('-1+1.2246467991473532e-16i');
 });

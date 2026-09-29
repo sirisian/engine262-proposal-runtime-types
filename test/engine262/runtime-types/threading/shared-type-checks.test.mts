@@ -1,15 +1,22 @@
 import { expect, test } from 'vitest';
 import { expectEarlyError, expectStaticTypeError, ok } from '../harness.mts';
 
+/**
+ * Spec: #sec-threading-shared-modifier. The operand of `shared` must be a value
+ * type, must not itself be `shared`, and must not be a `ref`. A resolved violation
+ * is a type error before the source runs, in an unused signature as much as in a
+ * used one.
+ */
 test.each(['string', 'any', '(n: uint8) => uint8', '[].<uint8>', 'shared uint8'])('shared rejects the closed invalid operand %s', (operand) => {
   expectStaticTypeError(`function unused(n: shared (${operand})) {}`);
 });
 
 test('a shared operand that is a parenthesized ref annotation is the type error the clause names', () => {
-  // `ref` PrimaryType is a ReferenceType and a ParenthesizedType is a
-  // PrimaryType, so `shared (ref uint8)` parses and #sec-threading's "It is a
-  // type error to declare `shared ref T`" is what refuses it. The cover used
-  // to reject `(ref uint8)` outright (early-error survey 1, Gap 3).
+  // `ref` PrimaryType is a ReferenceType and a ParenthesizedType is a PrimaryType,
+  // so `shared (ref uint8)` parses. #sec-threading-shared-modifier then refuses it:
+  // it is a type error if the operand is ~reference~, since `ref` denotes a
+  // location rather than a value. The parenthesized and unparenthesized spellings
+  // are refused alike.
   expectEarlyError('function unused(n: shared (ref uint8)) {}', 'StaticTypeError');
   expectEarlyError('function unused(n: shared ref uint8) {}', 'StaticTypeError');
 });

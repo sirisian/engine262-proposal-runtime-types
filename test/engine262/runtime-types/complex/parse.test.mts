@@ -2,16 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Spec: "for the binary floating-point, decimal, rational, and complex types it
- * is `parse(_string_)`." Design: complex.md names `complex.parse('3-2i')`
- * beside the literal as a construction form.
+ * Spec: #sec-parsing. Each numeric type has a `parse` function, and for the binary
+ * floating-point, decimal, rational and complex types its signature is
+ * `parse(_string_)`. `parse` lives on %Type.prototype%, so every Type Object inherits
+ * it, a complex's included.
  *
- * `parse` lives on %Type.prototype%, so every Type Object inherits it - but the
- * operation dispatched on integer, float, and decimal only, and answered
- * "parse is not defined" for a complex.
- *
- * The grammar is the one the literal writes: an optional real part, an optional
- * SIGNED imaginary part suffixed `i`, or either alone.
+ * Unspecified: the accepted input is "the grammar of a literal of that type", and a
+ * complex has no literal of its own beyond the imaginary literal, so the specification
+ * does not say what its `parse` accepts. These tests pin the engine's grammar: an
+ * optional real part, an optional SIGNED imaginary part suffixed `i`, or either alone.
  */
 
 const C = 'type C = complex.<number>; ';

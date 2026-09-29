@@ -4,27 +4,27 @@ import {
 } from '#self';
 
 /**
- * Extension coverage - threading.md, the execution model.
+ * Spec: #sec-threading-agent-cluster, #sec-threading-scheduling,
+ * #sec-threading-callthread (with #sec-classifythreadarguments and
+ * #sec-createthread) and #sec-thread-cancellation.
  *
- * Covers #sec-threading-agent-cluster, #sec-threading-scheduling, and
- * #sec-threading-callthread as implemented here: a simulated cluster whose
- * agents share one realm and take turns a job at a time.
+ * Threads are agents of one agent cluster that share a heap. These tests run a
+ * simulated cluster whose agents share one realm and take turns a job at a time.
  *
  * The point of a simulation is that it can answer WHERE something ran, which is
  * exactly what these clauses constrain. It cannot answer anything whose content is
  * a race - nothing interleaves below a job boundary here, so a torn value-type
- * copy never happens and is not tested.
+ * copy never happens and is not tested (#sec-threading-memory-model).
  *
  * AbortSignal is WHATWG rather than 262, so #sec-thread-cancellation refers to it
  * instead of defining it. src/intrinsics/AbortController.mts supplies the minimum
  * a host needs for these rules to run: aborted state, a reason, and wakers. It is
  * not the DOM object - no EventTarget, no addEventListener, no throwIfAborted.
  *
- * Known divergences from the specification, to be closed later:
- * - The Lock and Condition wait checkpoints do not exist yet, those primitives
- *   being unimplemented. Every other checkpoint is covered below: thread start,
- *   job dequeue (which subsumes await resumption, a resumption being a job of
- *   the thread's own queue), and the Atomics wait.
+ * Cancellation checkpoints exercised here: thread start, taking a job from the
+ * thread's queue (which subsumes the resumption of an `await`, a resumption being
+ * a job of the thread's own queue), and `Atomics.waitAsync`. The Lock and
+ * Condition waits are exercised in synchronization.test.mts.
  */
 
 interface Harness {
@@ -122,6 +122,49 @@ test('callThread: arguments are forwarded', () => {
   `);
   h.cluster.runUntilIdle();
   expect(h.evaluate('log.join(",")')).toBe('sum 5');
+});
+
+// -- The intern table and the Composite Registry are shared ----------------------
+
+// #sec-types-across-agents: the threads of a cluster share a heap, and the intern
+// table of #sec-canonicalizetype is a property of that heap, as the Composite
+// Registry is. "A type constructed on one thread is the same Type Object on every
+// other", so `===` answers on any thread what it answers on the thread that built
+// the type.
+//
+// Pinned as `test.fails`: the engine keeps one intern table and one registry per
+// Agent, so a type or composite built on a thread is a different object from the
+// same one built on the main thread. Each flips to `test` when the tables are
+// shared across a cluster.
+test.fails('a type built on a thread is the same Type Object on the main thread', () => {
+  const h = makeCluster(`
+    globalThis.mainSide = (type [].<uint8>);
+    function build() { return (type [].<uint8>); }
+    build.callThread().then((t) => { log.push('identical: ' + String(t === mainSide)); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(" | ")')).toBe('identical: true');
+});
+
+test.fails('a composite built on a thread is the same object as the one built on the main thread', () => {
+  const h = makeCluster(`
+    globalThis.mainSide = Composite([1, 2]);
+    function build() { return Composite([1, 2]); }
+    build.callThread().then((c) => { log.push('identical: ' + String(c === mainSide)); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(" | ")')).toBe('identical: true');
+});
+
+test('a type is the same Type Object wherever on one thread it is built', () => {
+  // The control for the two tests above: within one thread the table already
+  // answers as the clause says.
+  const h = makeCluster(`
+    function inThread() { return (type [].<uint8>) === (type [].<uint8>); }
+    inThread.callThread().then((same) => { log.push('identical: ' + String(same)); });
+  `);
+  h.cluster.runUntilIdle();
+  expect(h.evaluate('log.join(" | ")')).toBe('identical: true');
 });
 
 // -- A reaction runs on the thread that created it -------------------------------
@@ -228,10 +271,12 @@ test('lifetime: the thread is still removed once an adopted result settles', () 
 });
 
 test('cancellation: an abort wakes a wait parked inside an async thread', () => {
-  // The last checkpoint of #sec-thread-cancellation, and the one that needed both
-  // the adoption above (so the thread is still alive to be woken) and the
-  // ordering that lets a delivered abort unwind rather than abandoning the
-  // thread. The reason is thrown FROM the wait, so the catch runs.
+  // A wait is a cancellation checkpoint (#sec-thread-cancellation): an abort
+  // delivered while the thread is parked in `Atomics.waitAsync` wakes it, and the
+  // wait completes abruptly with the abort reason, thrown FROM the wait so the
+  // thread's own `catch` runs. That needs the thread to still be alive when the
+  // abort arrives, which is why an async thread function is adopted rather than
+  // ended when it first suspends (#sec-createthread).
   const h = makeCluster(`
     globalThis.c = new AbortController();
     let a: shared int32 = 0;

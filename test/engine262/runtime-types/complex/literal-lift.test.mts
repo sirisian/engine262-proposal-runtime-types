@@ -2,14 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Spec: #sec-literal-propagation, the complex step. A numeric literal in a
- * complex position "takes the complex type, with the literal as its real
- * component and zero as its imaginary one", so `let r: complex = 5` is
- * `complex(5, 0)`.
+ * Spec: #sec-complex-numbers and #sec-literalvalueintype (the complex step). A numeric
+ * literal in a complex position takes the complex type, with the literal as its real
+ * component and zero as its imaginary one, so `let r: complex = 5` is `complex(5, 0)`.
  *
- * A real VALUE does not convert: `z + x` for a complex `z` and a `number` `x`
- * is a TypeError, which is the no-implicit-widening rule that holds between any
- * two numeric types here.
+ * A real VALUE does not convert: `z + x` for a complex `z` and a `number` `x` is a
+ * TypeError, which is the no-implicit-widening rule that holds between any two numeric
+ * types here.
  */
 
 const parts = (src: string) => `${src} String(z.real) + "," + String(z.imaginary);`;
@@ -19,7 +18,8 @@ test('complex lift: a literal in a declaration', () => {
   expect(evaluated(parts('let z: complex = 0;'))).toBe('0,0');
   expect(evaluated(parts('let z: complex = -3;'))).toBe('-3,0');
   expect(evaluated(parts('let z: complex = 2.5;'))).toBe('2.5,0');
-  // the Mandelbrot example's first line, which this is what unblocks
+  // the first line of an escape-time (Mandelbrot) loop: a complex accumulator that
+  // starts at a literal zero
   expect(evaluated('function escapeTime(c: complex, limit: uint32): uint32 {'
     + ' let z: complex = 0; return 0; } String(escapeTime(complex(0, 0), 10));')).toBe('0');
 });
@@ -34,8 +34,8 @@ test('complex lift: a literal beside a complex operand', () => {
 });
 
 test('complex lift: the component type decides representability', () => {
-  // the literal's representability is the COMPONENT's, inherited rather than
-  // stated: a literal no `float32` holds is no `complex.<float32>` either
+  // the literal's representability is the COMPONENT's (#sec-complex-numbers): a
+  // literal no `float32` holds is no `complex.<float32>` either
   expect(evaluated('type C = complex.<float32>; let z: C = 5; String(z.real);')).toBe('5');
   expectThrown('type C = complex.<float32>; let z: C = 1e300;');
   expect(evaluated('type C = complex.<float64>; let z: C = 1e300; String(z.real);')).toBe('1e+300');

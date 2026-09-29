@@ -4,16 +4,14 @@ import {
 } from '../harness.mts';
 
 /**
- * Spec: #sec-threading-shared-modifier (The Shared Modifier). Design:
- * threading.md.
+ * Spec: #sec-threading-shared-modifier (The Shared Modifier).
  *
  * The `shared` MODIFIER at the type level: `shared T` parses to a ~shared~ Type
- * Record, interns, is invariant in its target, reflects, and enforces its
- * admission rule (value types only; not a nested `shared`, not a `ref`).
+ * Record, interns, is invariant in its target, reflects, and enforces its admission
+ * rule (value types only; not a nested `shared`, not a `ref`).
  *
- * The narrowing regimes are half-covered here - the `shared` half is a
- * type-level fact this file can assert; the unmarked half needs a second thread
- * to be observable at all, and lives in execution.test.mts.
+ * The stability and narrowing regimes of #sec-shared-stability are not exercised by
+ * this file.
  */
 
 // -- The shared modifier: Type Record, interning, relations --------------------
@@ -46,18 +44,15 @@ test('shared: admits the value types', () => {
   expect(evaluated('type S = shared [4].<uint8>; Reflect.getReflection(S).kind;')).toBe('shared');
 });
 
-// The three refusals are EARLY errors. #sec-threading-shared-modifier states each as "it is
-// a type error if", and #sec-type-errors fixes what that phrase means: "This
-// specification realizes such a violation as an Early Error, and reserves a
-// thrown *TypeError* for" a check that "cannot be resolved statically, because
-// a value reaches a typed position only as the ~any~ type". A written `shared
-// string` is resolved statically by construction - the operand is right there
-// in the source - so it is the checking pass that refuses it, before the body
-// runs. These assertions used to expect a catchable TypeError raised where the
-// type expression is evaluated, with a note that whether they belonged in the
-// checking pass was open; the pass covers them now, and the specification says
-// it should. The evaluation-time refusal still stands behind it, for the
-// deferred case the clause reserves the thrown form for.
+// The three refusals are EARLY errors. #sec-threading-shared-modifier states each
+// as "it is a type error if", and #sec-type-errors fixes what that phrase means:
+// "This specification realizes such a violation as an Early Error, and reserves a
+// thrown *TypeError* for" a check that "cannot be resolved statically, because a
+// value reaches a typed position only as the ~any~ type". A written `shared
+// string` is resolved statically by construction - the operand is right there in
+// the source - so the checking pass refuses it before the body runs. The
+// evaluation-time refusal remains behind it for the deferred case, where the
+// operand is only known when the type expression is evaluated.
 test('shared: a non-value type is refused', () => {
   // An object is ALREADY shared - one heap - so the modifier would claim of it
   // nothing that is not already true, and `shared Map` would falsely suggest a
@@ -94,16 +89,19 @@ test('shared: shared storage holds its declared type across a write', () => {
 
 // -- Threads, and what the shared modifier does not reach ------------------------
 
-test('threading: shared class does not parse (documents the gap)', () => {
-  // Target (threading.md): `shared class` places instances in the shared heap.
+test('shared: a class is not marked shared, an object needing no modifier', () => {
+  // An object needs no modifier (#sec-threading-shared-modifier): there is one
+  // heap, so a thread that can reach a reference reaches the object it denotes.
+  // `shared` is a prefix of a type (PrimaryType : `shared` PrimaryType) and not a
+  // class modifier, so `shared class` is not a form of the grammar.
   expectThrown('shared class A { x: uint8; } typeof A;');
 });
 
 test('threading: Thread carries the two range operations', () => {
-  // WAS a gap pin. #sec-threading-parallel-iteration is implemented, so the
-  // namespace exists and both operations are on it.
+  // The `Thread` namespace object carries `parallelFor` and `parallelReduce`
+  // (#sec-threading-parallel-iteration). Their behavior is tested in
+  // parallel-iteration.test.mts.
   expect(evaluated('typeof Thread;')).toBe('object');
   expect(evaluated('typeof Thread.parallelFor + "/" + typeof Thread.parallelReduce;')).toBe('function/function');
 });
 
-// -- decorators: the @ syntax under the feature --------------------------------
