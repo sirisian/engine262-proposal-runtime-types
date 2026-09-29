@@ -886,3 +886,42 @@ test('a constructor returning an established non-callable object cannot meet a c
   expect(ok(`${F}class C implements F { constructor() { return (x: uint8): uint8 => x; } } String(1);`)).toBe(true);
   expect(ok(`${F}class C implements F { constructor(f: any) { return f; } } String(1);`)).toBe(true);
 });
+
+// ---- round 8 ----------------------------------------------------------------
+
+test('a rest annotation in an object type method must denote an array or tuple (Round 8, Gap 1)', () => {
+  expectStaticTypeError('type O = { m(...xs: uint8): void };');
+  expectStaticTypeError('type U = uint8; type O = { m(...xs: U): void };');
+  expectStaticTypeError('function g(o: { m(...xs: uint8): void }) {}');
+  expectStaticTypeError('type O = { m<T: type>(...xs: T): void };');
+  expect(ok('type O = { m(...xs: [].<uint8>): void }; String(1);')).toBe(true);
+  expect(ok('type O = { m<T: type extends [].<uint8>>(...xs: T): void }; String(1);')).toBe(true);
+});
+
+test('a flatMap callback returning a conditional of primitives is refused (Round 8, Gap 2)', () => {
+  const C = 'const c: boolean = Math.random() > 2; ';
+  expectStaticTypeError(`${C}Iterator.from([1]).flatMap((x) => { return c ? 1 : 'a'; });`);
+  expectStaticTypeError(`${C}Iterator.from([1]).flatMap(function (x) { return c ? 1 : 'a'; });`);
+  expectStaticTypeError(`${C}Iterator.from([1]).flatMap((x) => { if (x) { return c ? 1 : 'a'; } return null; });`);
+  expect(evaluated(`${C}String([...Iterator.from([1]).flatMap((x) => { return c ? 1 : [x]; })].length);`)).toBe('1');
+  expect(evaluated(`${C}String([...Iterator.from([1]).flatMap((x) => { const g = () => c ? 1 : 'a'; return [x]; })].length);`)).toBe('1');
+});
+
+test('a constructor returning an instance of an ordinary class cannot meet a callable interface (Round 8, Gap 3)', () => {
+  const F = 'interface F { (x: uint8): uint8; } ';
+  expectStaticTypeError(`${F}class O { } class C implements F { constructor() { return new O(); } }`);
+  expectStaticTypeError(`${F}const O = class { }; class C implements F { constructor() { return new O(); } }`);
+  expect(ok(`${F}class Fn { constructor() { return (x: uint8): uint8 => x; } } class C implements F { constructor() { return new Fn(); } } String(1);`)).toBe(true);
+  expect(ok(`${F}class P { constructor(f: any) { return f; } } class C implements F { constructor() { return new P(1); } } String(1);`)).toBe(true);
+});
+
+test('an operator on a class-expression instance is refused as on a declared one (Round 8, Gap 4)', () => {
+  const K = 'const K = class { x: uint8 = 1; }; const k = new K(); ';
+  expectStaticTypeError(`${K}k + 1;`);
+  expectStaticTypeError(`${K}1 - k;`);
+  expectStaticTypeError(`${K}-k;`);
+  expectStaticTypeError('new (class { x: uint8 = 1; })() + 1;');
+  expect(evaluated('const K = class { x: uint8 = 1; valueOf() { return 1; } }; const k = new K(); String(k + 1);')).toBe('2');
+  expect(evaluated('const K = class { }; const k = new K(); String(k + 1);')).toBe('[object Object]1');
+  expect(evaluated(`${K}String(k.x + 1);`)).toBe('2');
+});

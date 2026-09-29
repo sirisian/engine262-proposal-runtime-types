@@ -7583,8 +7583,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // has none either - so construction is proved non-callable (Round 7,
       // Gap 5). Any other replacement object, a parameter, or a heritage whose
       // fall-through depends on the base still needs a stronger proof.
-      const establishedNonCallable = (e: ParseNode): boolean =>
-        ['ObjectLiteral', 'ArrayLiteral', 'ThisExpression'].includes(patternExpression(e)?.type ?? '');
+      // A `new K(...)` of a class whose own construction is proved non-callable
+      // by this same judgment is as established (Round 8, Gap 3): the rule's own
+      // example is "an ordinary class with default non-callable construction".
+      const establishedNonCallable = (e: ParseNode): boolean => {
+        const x = patternExpression(e);
+        if (['ObjectLiteral', 'ArrayLiteral', 'ThisExpression'].includes(x?.type ?? '')) return true;
+        if (x?.type !== 'NewExpression') return false;
+        const callee = patternExpression((x as { MemberExpression?: ParseNode }).MemberExpression);
+        const origin = callee?.type === 'IdentifierReference' ? stableClassOrigin(callee) : undefined;
+        return !!origin && classCallCapability(origin.declaration, seen) === 'noncallable';
+      };
       if (!cls.ClassTail.ClassHeritage && returns.every(establishedNonCallable)) return 'noncallable';
       return null;
     }
@@ -11459,7 +11468,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 };
                 // As above: the name, and the three flags that decide whether a
                 // call must supply anything for this parameter.
-                Parameters.push(parameter((mp.TypeAnnotation ? resolveType(mp.TypeAnnotation.Type) : null) ?? anyTypeRecord, {
+                // #sec-function-types: the collected-container rule "applies to
+                // every annotated rest in ... method signature", an object
+                // type's as an interface's (Round 8, Gap 1).
+                const resolvedParam = mp.TypeAnnotation ? resolveType(mp.TypeAnnotation.Type) : null;
+                if (mp.Rest) {
+                  // A type parameter is judged by its constraint, so the
+                  // method's own parameters are in scope for the check.
+                  const pushedMethodScope = pushTypeParameterScopeOf(asMethod as unknown as ParseNode);
+                  try {
+                    checkRestAnnotation(mp.TypeAnnotation, mp.TypeAnnotation ? resolveType(mp.TypeAnnotation.Type) : resolvedParam);
+                  } finally {
+                    if (pushedMethodScope) typeParameterScopes.pop();
+                  }
+                }
+                Parameters.push(parameter(resolvedParam ?? anyTypeRecord, {
                   Name: mp.BindingIdentifier?.name ?? '',
                   Optional: mp.Optional === true || !!mp.Initializer, DeclaredDefault: !!mp.Initializer,
                   Rest: mp.Rest === true,
@@ -17468,6 +17491,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the expression's type - which is what lets `new C().x` be read at the
         // field's declared type.
         const target = patternExpression((node as { MemberExpression?: ParseNode }).MemberExpression);
+        // A class expression written inline where it is constructed is an
+        // established class, and `new` of it has its instance type
+        // (#sec-typed-classes; Round 6's Q2, reached here for Round 8, Gap 4).
+        if (target?.type === 'ClassExpression'
+            && !((target as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length)) {
+          return instanceTypeOf(target);
+        }
         if (target && target.type === 'IdentifierReference') {
           const targetName = (target as { name: string }).name;
           // A class expression bound immutably constructs its own instance type
@@ -23014,7 +23044,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const typedClassDeclarationOf = (type: Known): ParseNode | undefined => {
     const t = type?.Kind === 'reference' ? type.Target as TypeRecord : type;
     if (!t || t.Kind !== 'nominal' || t.EnumMembers !== undefined) return undefined;
-    const declaration = classDeclarationOf(t) as ParseNode | undefined;
+    // A class EXPRESSION is an established class too (#sec-typed-classes, Round
+    // 6's Q2), so the operator rules that read a typed class through here reach
+    // its instances as a declaration's (Round 8, Gap 4).
+    const written = (t as { Declaration?: ParseNode }).Declaration;
+    const declaration = (classDeclarationOf(t) ?? (written?.type === 'ClassExpression' ? written : undefined)) as ParseNode | undefined;
     if (!declaration) return undefined;
     for (let at: ParseNode | undefined = declaration; at; at = heritageClassOf(at)) {
       if (classBodyOf(at).some((e) => e.type === 'FieldDefinition' && (e as { TypeAnnotation?: unknown }).TypeAnnotation)) return declaration;
@@ -24075,10 +24109,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return [...(conditionalArms(c.AssignmentExpression_a) ?? [c.AssignmentExpression_a]),
           ...(conditionalArms(c.AssignmentExpression_b) ?? [c.AssignmentExpression_b])];
       };
-      const arrow = patternExpression(callbackArgument) as { type?: string, TypeAnnotation?: unknown, ConciseBody?: { type?: string, ExpressionBody?: ParseNode } } | undefined;
+      const arrow = patternExpression(callbackArgument) as { type?: string, TypeAnnotation?: unknown, ConciseBody?: { type?: string, ExpressionBody?: ParseNode, FunctionStatementList?: readonly ParseNode[] }, FunctionBody?: { FunctionStatementList?: readonly ParseNode[] } } | undefined;
+      // A block body's alternatives are its `return` expressions, and a
+      // conditional among them has one alternative per arm, as a concise
+      // conditional body does (Round 8, Gap 2). A path that falls through
+      // returns *undefined*, which fails the protocol too.
+      const blockStatements = !arrow || arrow.TypeAnnotation ? undefined
+        : arrow.type === 'ArrowFunction' && arrow.ConciseBody?.type === 'FunctionBody' ? arrow.ConciseBody.FunctionStatementList
+          : arrow.type === 'FunctionExpression' ? arrow.FunctionBody?.FunctionStatementList : undefined;
+      const blockReturns: ParseNode[] = [];
+      const collectReturns = (at: ParseNode): void => {
+        if (at.type === 'ReturnStatement') {
+          const value = (at as { Expression?: ParseNode | null }).Expression;
+          if (value) blockReturns.push(value);
+          return;
+        }
+        if (isFunctionLiteral(at) || ['FunctionDeclaration', 'ClassDeclaration', 'ClassExpression', 'MethodDefinition'].includes(at.type)) return;
+        for (const [key, value] of Object.entries(at)) {
+          if (key === 'parent' || key === 'location' || key === 'sourceText') continue;
+          for (const child of Array.isArray(value) ? value : [value]) {
+            if (child && typeof child === 'object' && 'type' in child) collectReturns(child as ParseNode);
+          }
+        }
+      };
+      blockStatements?.forEach(collectReturns);
       const arms = arrow?.type === 'ArrowFunction' && !arrow.TypeAnnotation && arrow.ConciseBody?.type === 'ConciseBody'
         ? conditionalArms((arrow.ConciseBody.ExpressionBody as { AssignmentExpression?: ParseNode } | undefined)?.AssignmentExpression
-          ?? arrow.ConciseBody.ExpressionBody) : null;
+          ?? arrow.ConciseBody.ExpressionBody)
+        : blockReturns.length > 0 && blockReturns.some((r) => conditionalArms(r) !== null)
+          ? blockReturns.flatMap((r) => conditionalArms(r) ?? [r]) : null;
       const everyArmFails = !!arms && arms.every((arm) => {
         const armType = staticType(arm);
         return !!armType && armType.Kind !== 'any' && flatteningResultFails(armType);
