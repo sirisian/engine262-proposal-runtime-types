@@ -2390,6 +2390,8 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
     // its second the index at the index type, its third the array itself. Writing
     // that as a function type is what lets the call site push those types
     // into the literal's parameters.
+    // #sec-isfunctionsubtype: all three arguments are supplied. A callback
+    // may omit unused parameters without making the supplied arguments optional.
     case 'forEach':
     case 'map':
     case 'find':
@@ -2401,7 +2403,7 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
       const callback = {
         Kind: 'function',
         Signatures: [{
-          Parameters: shapes([element, builtinTypeRecord('uint', [64])! ?? numberType, receiver], 1),
+          Parameters: shapes([element, builtinTypeRecord('uint', [64])! ?? numberType, receiver], 3),
           Return: anyType,
           Untyped: false,
         }],
@@ -2416,7 +2418,7 @@ const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeR
       const callback = {
         Kind: 'function',
         Signatures: [{
-          Parameters: shapes([element, builtinTypeRecord('uint', [64])! ?? numberType, receiver], 1),
+          Parameters: shapes([element, builtinTypeRecord('uint', [64])! ?? numberType, receiver], 3),
           Return: anyType,
           Untyped: false,
         }],
@@ -9913,6 +9915,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const checkedFormationRecords = new WeakSet<object>();
+  const formingNominals = new WeakMap<object, TypeRecord[]>();
   const checkTypeFormation = (type: Known): void => {
     if (!type || checkedFormationRecords.has(type)) return;
     checkedFormationRecords.add(type);
@@ -9951,17 +9954,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } else if (type.Kind === 'union' || type.Kind === 'intersection') type.Members.forEach(checkTypeFormation);
     else if (type.Kind === 'array') checkTypeFormation(type.Element);
     else if (type.Kind === 'nominal') {
-      for (const argument of type.Arguments) if (typeof argument === 'object') checkTypeFormation(argument);
-      checkClosedCaseContract(type);
-      const declaration = type.Declaration as ParseNode.ClassDeclaration;
-      const parameters = declaration?.TypeParameters?.TypeParameterList ?? [];
-      if (parameters.length === type.Arguments.length && parameters.length) {
-        checkOverrideArgumentObligations(declaration, new Map(parameters.map((parameter, i) => [parameter.BindingIdentifier.name,
-          typeof type.Arguments[i] === 'number'
-            ? { Kind: 'literal', Value: Value(type.Arguments[i]), Base: makePrimitive('number') } as TypeRecord
-            : type.Arguments[i] as TypeRecord])));
+      // #sec-type-references: expanding a recursive specialization may create
+      // another record for the same declaration and arguments. Only an active
+      // expansion closes a cycle; later structures still need their checks.
+      const active = formingNominals.get(type.Declaration) ?? [];
+      if (active.some((instance) => SameType(instance, type))) return;
+      active.push(type);
+      formingNominals.set(type.Declaration, active);
+      try {
+        for (const argument of type.Arguments) if (typeof argument === 'object') checkTypeFormation(argument);
+        checkClosedCaseContract(type);
+        const declaration = type.Declaration as ParseNode.ClassDeclaration;
+        const parameters = declaration?.TypeParameters?.TypeParameterList ?? [];
+        if (parameters.length === type.Arguments.length && parameters.length) {
+          checkOverrideArgumentObligations(declaration, new Map(parameters.map((parameter, i) => [parameter.BindingIdentifier.name,
+            typeof type.Arguments[i] === 'number'
+              ? { Kind: 'literal', Value: Value(type.Arguments[i]), Base: makePrimitive('number') } as TypeRecord
+              : type.Arguments[i] as TypeRecord])));
+        }
+        checkTypeFormation(structureOf(type));
+      } finally {
+        active.pop();
+        if (active.length === 0) formingNominals.delete(type.Declaration);
       }
-      checkTypeFormation(structureOf(type));
     } else if (type.Kind === 'function') {
       for (const signature of type.Signatures) {
         for (const formal of signature.Parameters) checkTypeFormation(formal.Type);

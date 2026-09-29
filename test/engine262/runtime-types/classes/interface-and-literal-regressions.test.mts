@@ -334,7 +334,9 @@ test('a parameterised tuple substitutes its elements', () => {
 
   // A REST marker and a NESTED tuple ride along; each element is spread, so only
   // [[Type]] is replaced.
-  expect(accepts('type P<T: type> = [T, ...string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  expect(accepts('type P<T: type> = [T, ...[].<string>]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(true);
+  // #sec-array-and-tuple-types: a tuple rest collects an array or tuple, not a scalar.
+  expect(accepts('type P<T: type> = [T, ...string]; let p: P.<uint8> = [(1 := uint8), "s"];')).toBe(false);
   expect(accepts('type P<T: type> = [[T], string]; let p: P.<uint8> = [[(1 := uint8)], "s"];')).toBe(true);
 
   // ...and a value that does not fit still refuses, generic or not.
@@ -633,30 +635,25 @@ test('an empty array literal is refused where no array fits', () => {
   expect(accepts('let a: [].<uint8> = [(1 := uint8)];')).toBe(true);
 });
 
-test('concat does not admit a foreign element', () => {
-  // `concat` shared a table case with `slice`, `reverse`, `sort`,
-  // `toReversed` and `toSorted`, all returning the RECEIVER. That is right for
-  // the other five and wrong for concat, whose result unions the ARGUMENTS'
-  // element types - which the RUN TIME already answered:
-  // `Reflect.typeOf(a.concat(["s"]))` is `[].<string | uint.<8>>` where the
-  // checker said `[].<uint.<8>>`.
-  //
-  // A LOOSENING, not a display quirk: the checker believed the result had the
-  // receiver's type, so the binding matched and RAN, and `b[1]` was the string
-  // `"s"` inside an array typed `[].<uint8>`.
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(false);
-  // The parameters are arrays OF THE ELEMENT now, so the argument is refused on
-  // its own - one table entry caused both halves.
-  expect(accepts('let a: [].<uint8> = []; a.concat(["s"]);')).toBe(false);
-  // A matching element still passes, and its result still binds.
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.concat([(2 := uint8)]);')).toBe(true);
+test('concat preserves its joined element contract', () => {
+  // #sec-intrinsic-array-contracts: an established intrinsic joins elements
+  // in a new array. Its result, not each input, must fit a receiving type.
+  const A = 'const a: [].<uint8> = []; ';
+  expect(accepts(`${A}let b: [].<uint8> = a.concat(["s"]);`)).toBe(false);
+  expect(accepts(`${A}const s: [].<string> = []; let b: [].<uint8> = a.concat(s);`)).toBe(false);
+  expect(accepts(`${A}a.concat(["s"]);`)).toBe(true);
+  expect(accepts(`${A}let b: [].<uint8|string> = a.concat(["s"]);`)).toBe(true);
+  expect(accepts(`${A}const b: [].<uint8> = [2]; let c: [].<uint8> = a.concat(b);`)).toBe(true);
 
-  // The five that KEEP the shared case: their result really is the receiver's.
-  expect(accepts('let a: [].<uint8> = []; let b: [].<string> = a.slice();')).toBe(false);
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.slice();')).toBe(true);
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.sort();')).toBe(true);
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.reverse();')).toBe(true);
-  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.toSorted();')).toBe(true);
+  // An unresolved receiver origin keeps its runtime conversion boundary.
+  expect(accepts('let a: [].<uint8> = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(true);
+  expect(rejects('let a: [].<uint8> = []; let b: [].<uint8> = a.concat(["s"]);')).toBe(true);
+
+  expect(accepts(`${A}let b: [].<string> = a.slice();`)).toBe(false);
+  expect(accepts(`${A}let b: [].<uint8> = a.slice();`)).toBe(true);
+  expect(accepts(`${A}let b: [].<uint8> = a.sort();`)).toBe(true);
+  expect(accepts(`${A}let b: [].<uint8> = a.reverse();`)).toBe(true);
+  expect(accepts(`${A}let b: [].<uint8> = a.toSorted();`)).toBe(true);
 });
 
 test('push, unshift and splice check their element', () => {
@@ -1291,18 +1288,17 @@ test('concat accepts an element or an array of them', () => {
   // one level, and every argument is optional: `[1].concat(2)` is `[1, 2]` and
   // `a.concat()` copies.
   //
-  // The checker's parameter for it must therefore be `T | [].<T>`, optional from
-  // the first, and its array form must carry a ~dynamic~ Extent like every other
-  // array Type Record - an `undefined` Extent renders as `[undefined].<uint.<8>>`
-  // and matches nothing, refusing an argument of exactly the right element type.
-  const A = 'let a: [].<uint8> = []; ';
-  expect(accepts(`${A}let b: [].<uint8> = []; a.concat(b);`)).toBe(true);
+  // #sec-intrinsic-array-contracts: unlike an in-place store, concat admits
+  // other element types and joins their contracts in the new array.
+  const A = 'const a: [].<uint8> = []; ';
+  expect(accepts(`${A}const b: [].<uint8> = []; a.concat(b);`)).toBe(true);
   expect(accepts(`${A}a.concat((1 := uint8));`)).toBe(true);
   expect(accepts(`${A}a.concat();`)).toBe(true);
 
-  // A foreign element is still refused, in either form.
-  expect(accepts(`${A}let s: [].<string> = []; a.concat(s);`)).toBe(false);
-  expect(accepts(`${A}a.concat("s");`)).toBe(false);
+  expect(accepts(`${A}const s: [].<string> = []; a.concat(s);`)).toBe(true);
+  expect(accepts(`${A}a.concat("s");`)).toBe(true);
+  expect(accepts(`${A}let b: [].<uint8|string> = a.concat("s", "t", "u");`)).toBe(true);
+  expect(accepts(`${A}let b: [].<uint8> = a.concat("s");`)).toBe(false);
 
   // It runs, and its result carries the element type.
   expect(evaluated('let a: [].<uint8> = [(1 := uint8)]; let b: [].<uint8> = [(2 := uint8)];'
