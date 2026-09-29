@@ -540,6 +540,17 @@ export function ValidateSpecializationList<S>(
   primary?: readonly PatternSlotParameter<S>[],
   describe: (domain: S) => string = String,
   extentDomain?: S,
+  options?: {
+    /** Whether a slot's domain is `type`, so that a capture standing in it binds a type rather than a value. */
+    readonly isTypeDomain?: (domain: S) => boolean,
+    /**
+     * #sec-specialization-lists: a FIXED entry of the list at the top level,
+     * judged against the primary parameter at _index_. Answers a diagnostic
+     * where the primary could not bind the entry, so that no application could
+     * select the specialization, and *null* otherwise.
+     */
+    readonly fixedArgumentProblem?: (entry: ParseNode, index: number) => string | null,
+  },
 ): SpecializationDiagnostic[] {
   const diagnostics: SpecializationDiagnostic[] = [];
   const records = CaptureRecordsOf(list.Captures ?? []);
@@ -555,6 +566,20 @@ export function ValidateSpecializationList<S>(
         message: (parameter.Arity ?? 0) === 0
           ? `\`const ${name}\` captures a constructor, and \`${parameter.Name}\` of ${owner} holds a first-order argument`
           : `\`${parameter.Name}\` of ${owner} holds a constructor of ${parameter.Arity} parameters, and \`const ${name}\` declares ${item.Arity}`,
+        node: item,
+      });
+      return;
+    }
+    // #sec-capture-scope: a capture standing where a VALUE belongs has no
+    // `extends` bound, as a value parameter has none; its values are narrowed
+    // by a `where` clause. The position's kind is known only once the primary
+    // or the nested constructor is resolved, so this is a type error here and
+    // not the Syntax Error the parameter's own rule is.
+    if (item.TypeParameterConstraint && !parameter.Metadata && parameter.Domain !== undefined
+      && options?.isTypeDomain && !options.isTypeDomain(parameter.Domain)) {
+      diagnostics.push({
+        kind: 'value-bound',
+        message: `\`const ${name}\` captures the value of \`${parameter.Name}\` of ${owner}, and a value has no \`extends\` bound; narrow it with a \`where\` clause`,
         node: item,
       });
       return;
@@ -623,6 +648,10 @@ export function ValidateSpecializationList<S>(
       runs.forEach((run, q) => {
         if (!primary[q].Variadic && run.length === 1) {
           checkSlot(run[0], primary[q], 'the primary declaration');
+          if (options?.fixedArgumentProblem && run[0].type !== 'CaptureBinding' && !probe.hasPatternPart(run[0])) {
+            const problem = options.fixedArgumentProblem(run[0], q);
+            if (problem) diagnostics.push({ kind: 'unreachable', message: problem, node: run[0] });
+          }
         }
       });
     } catch (e) {

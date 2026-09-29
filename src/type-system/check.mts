@@ -3932,6 +3932,73 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
+  /**
+   * #sec-higher-kinded-parameters: once an application binds a higher-kinded
+   * parameter, each application of it in the declaration "is an ordinary
+   * application" of the bound declaration, whose arguments are checked against
+   * that declaration's domains and bounds as any other application's are. The
+   * declaration was checked once, over the parameter resolving to itself, and
+   * the count against its holes; this is the half only the binding can decide.
+   * `f<W<_>: type>(x: W.<uint8>)` bound `f.<Box>` for `Box<T: type extends
+   * string>` is `Box.<uint8>`, which no annotation could write, and nothing
+   * reported it. An argument that still reads an open parameter is left to
+   * the specialization that closes it.
+   */
+  const checkKindedApplications = (owner: ParseNode, kinded: ReadonlyMap<string, TypeRecord>, firstOrder: ReadonlyMap<string, TypeRecord>): void => {
+    if (kinded.size === 0) return;
+    const scope = new Map<string, Known>();
+    for (const name of typeParameterNamesOf(owner) ?? []) scope.set(name, null);
+    const visit = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+        return;
+      }
+      const n = node as ParseNode & Record<string, unknown>;
+      if (typeof n.type !== 'string') return;
+      if (n.type === 'TypeReference') {
+        const ref = n as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } | null, TypeName: { IdentifierReference: ParseNode & { name: string }, MemberNames: readonly unknown[] } };
+        const name = ref.TypeName.IdentifierReference.name;
+        const bound = ref.TypeArguments && ref.TypeName.MemberNames.length === 0 ? kinded.get(name) : undefined;
+        if (bound && ResolveBindingDeclaration(ref.TypeName.IdentifierReference, name)?.node === owner) {
+          const params = (bound as { Declaration?: { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null } })
+            .Declaration?.TypeParameters?.TypeParameterList ?? [];
+          const list = ref.TypeArguments!.TypeArgumentList ?? [];
+          if (list.length === params.length && !list.some((a) => (a as { IsSpread?: boolean }).IsSpread || typeArgumentNameOfShared(a) !== undefined)) {
+            typeParameterScopes.push(scope);
+            let args: Known[];
+            try {
+              args = list.map((a) => {
+                const r = resolveType(a as ParseNode.Type);
+                return r ? substituteTypeParameters(r, firstOrder) : null;
+              });
+            } finally {
+              typeParameterScopes.pop();
+            }
+            params.forEach((q, i) => {
+              const argument = args[i];
+              if (!argument || (q.Arity ?? 0) > 0 || mentionsTypeParameter(argument)) return;
+              if (q.IsValueParameter) {
+                checkClassValueArgument(q, argument);
+                return;
+              }
+              const constraint = q.TypeParameterConstraint ? resolveType(q.TypeParameterConstraint) : null;
+              if (constraint && !mentionsTypeParameter(constraint) && !IsAssignable(argument, constraint)) {
+                errors.push(Throw.StaticTypeError('$1 is not assignable to $2, the constraint of $3',
+                  Value(displayType(argument)), Value(displayType(constraint)), Value(q.BindingIdentifier.name)).Value as ObjectValue);
+              }
+            });
+          }
+        }
+      }
+      for (const key of Object.keys(n)) {
+        if (key === 'parent' || key === 'location' || key === 'sourceText' || key === 'strict') continue;
+        visit(n[key]);
+      }
+    };
+    visit(owner);
+  };
+
   /** #sec-generic-specialization: close obligations when an outer parameter binds. */
   const checkSpecializedDeclaration = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>): void => {
     if (declaration.type === 'ClassDeclaration' && declaration.TypeParameters?.ListKind === 'parameters') {
@@ -7554,7 +7621,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }));
     let analysis;
     try {
-      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord));
+      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord), isTypeDomainRecord);
     } catch {
       return undefined;
     }
@@ -8228,6 +8295,63 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * or the list as given where the class declares no parameters or has a
    * variadic one; a missing default reports and fills `any` so the walk goes on.
    */
+  /** Whether a slot's resolved domain is `type`, so that what stands in it is a type rather than a value. */
+  const isTypeDomainRecord = (domain: unknown): boolean => (domain as { Kind?: string }).Kind === 'primitive'
+    && (domain as { Name?: string }).Name === 'type';
+
+  /**
+   * #sec-generic-parameters-as-values: a VALUE parameter's argument "is a
+   * value of the named type rather than a type", and #sec-bindtypearguments
+   * converts it to the parameter's domain, a *TypeError* where it cannot be.
+   * Functions, interfaces and aliases reach that step through
+   * `finishTypeArgumentBindings`; a class application did not, since both of
+   * its paths checked only a type parameter's `extends` bound and passed a
+   * literal by as "left to the binder" - so `G.<300>` for `G<N: uint8>` was
+   * accepted in a type and thrown at run time by `new`, and `G.<uint8>`, a
+   * type where a value belongs, was accepted everywhere. One check for both
+   * paths, as the binder states it once for every application site.
+   */
+  const checkClassValueArgument = (q: ParseNode.TypeParameter, argument: TypeRecord | number): void => {
+    if (!q.IsValueParameter || q.IsVariadic || !q.TypeParameterDomain) return;
+    const supplied: TypeRecord = typeof argument === 'number'
+      ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as TypeRecord
+      : argument;
+    // An open argument - an enclosing value parameter, a deferred computation,
+    // or an opaque one - is checked per specialization, when it is bound.
+    if (supplied.Kind === 'parameter' || supplied.Kind === 'deferred' || supplied.Kind === 'any'
+      || (supplied as { Opaque?: boolean }).Opaque || mentionsTypeParameter(supplied)) return;
+    if (supplied.Kind !== 'literal') {
+      errors.push(Throw.StaticTypeError('$1 requires a value argument', Value(q.BindingIdentifier.name)).Value as ObjectValue);
+      return;
+    }
+    const domain = resolveType(q.TypeParameterDomain);
+    if (domain && !mentionsTypeParameter(domain)) requireAssignable(supplied, domain);
+  };
+
+  /**
+   * #sec-type-references: an unknown name, a name supplied twice, and a
+   * positional argument after a named one are type errors wherever the applied
+   * declaration is known, and so Early Errors by #sec-type-errors. The
+   * annotation path reported them; the expression paths - `new G.<...>()` and
+   * a class applied as a value, `G.<...>` - read a malformed list
+   * positionally, so each threw only at run time, and not at all in a function
+   * nobody called. A variadic parameter opens a run that a name alone cannot
+   * order, and stays with the binder. Reports and answers *true* where the
+   * list is refused.
+   */
+  const classArgumentOrderError = (params: readonly ParseNode.TypeParameter[], list: readonly ParseNode[], className: string): boolean => {
+    const names = list.map((a) => typeArgumentNameOfShared(a as ParseNode.Type));
+    if (!names.some((n) => n !== undefined) || params.some((q) => q.IsVariadic)) return false;
+    const order = orderTypeArgumentsShared(params.map((q) => q.BindingIdentifier.name), names.map((_, i) => i), names);
+    if (order.ok) return false;
+    const message = order.kind === 'unknown-name' ? `${order.name} does not name a type parameter of ${className}`
+      : order.kind === 'supplied-twice' ? `${order.name} is supplied twice to ${className}`
+      : order.kind === 'positional-after-named' ? 'a positional type argument follows a named argument'
+      : `${className} takes ${params.length} type arguments`;
+    errors.push(Throw.StaticTypeError('$1', Value(message)).Value as ObjectValue);
+    return true;
+  };
+
   const fillClassDefaults = (userClass: Known, args: readonly (TypeRecord | number | undefined)[]): (TypeRecord | number)[] => {
     if (!userClass || userClass.Kind !== 'nominal') {
       return args.filter((arg): arg is TypeRecord | number => arg !== undefined);
@@ -9850,7 +9974,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const n = node as ParseNode & Record<string, unknown>;
       if (typeof n.type !== 'string') return;
       if (n.type === 'TypeReference') {
-        const ref = n as unknown as { TypeArguments?: unknown, TypeName: { IdentifierReference: ParseNode & { name: string }, MemberNames: readonly unknown[] } };
+        const ref = n as unknown as { TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } | null, TypeName: { IdentifierReference: ParseNode & { name: string }, MemberNames: readonly unknown[] } };
+        // #sec-higher-kinded-parameters: an APPLIED higher-kinded parameter
+        // supplies exactly its arity, positionally. The arity is written and
+        // never inferred, and the declaration is checked once, before any
+        // application binds the parameter, so the count is judged here against
+        // the holes rather than against whatever is bound later - which binding
+        // already requires to have that many parameters. The holes carry no
+        // names, so a named argument has nothing to address. A spread whose
+        // length is not known here is left to the binding.
+        if (ref.TypeArguments && ref.TypeName.MemberNames.length === 0) {
+          const name = ref.TypeName.IdentifierReference.name;
+          const declaration = ResolveBindingDeclaration(ref.TypeName.IdentifierReference, name);
+          if (declaration?.kind === 'type-parameter') {
+            const tp = ((declaration.node as unknown as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string }, Arity?: number }[] } })
+              .TypeParameters?.TypeParameterList ?? []).find((t) => t.BindingIdentifier?.name === name);
+            const list = ref.TypeArguments.TypeArgumentList ?? [];
+            if (tp?.Arity && tp.Arity > 0 && !list.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
+              if (list.some((a) => typeArgumentNameOfShared(a) !== undefined)) {
+                errors.push(Throw.StaticTypeError('$1', Value(`\`${name}\` is a higher-kinded parameter, whose holes have no names; supply its ${tp.Arity} type arguments positionally`)).Value as ObjectValue);
+              } else if (list.length !== tp.Arity) {
+                errors.push(Throw.StaticTypeError('$1', Value(`\`${name}\` takes ${tp.Arity} type arguments, and this application supplies ${list.length}; an application of a higher-kinded parameter supplies exactly its arity`)).Value as ObjectValue);
+              }
+            }
+          }
+        }
         if (!ref.TypeArguments && ref.TypeName.MemberNames.length === 0) {
           const name = ref.TypeName.IdentifierReference.name;
           const declaration = ResolveBindingDeclaration(ref.TypeName.IdentifierReference, name);
@@ -9926,6 +10074,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (typeof n.type !== 'string') return;
     if (n.type === 'TypeAnnotation' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
     if (n.type === 'TypeAnnotation' && n.Type) checkUnappliedHigherKinded(n.Type as ParseNode);
+    if (n.type === 'TypeAliasDeclaration' && n.Type) checkUnappliedHigherKinded(n.Type as ParseNode);
     if (n.type === 'TypeAliasDeclaration' && n.Type) checkTypePositionEvaluability(n.Type as ParseNode);
     if (n.type === 'TypeAnnotation' && n.Type) checkBuilderCalls(n.Type as ParseNode);
     if (n.type === 'TypeAliasDeclaration' && n.Type) checkBuilderCalls(n.Type as ParseNode);
@@ -10705,6 +10854,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const bareBuiltin = builtinTypeRecord(baseName);
           const builtinTakesArguments = args.length > 0 && !!appliedBuiltin
             && (!bareBuiltin || !SameType(bareBuiltin, appliedBuiltin));
+          // #sec-parameterized-types: after a base that declares NO type
+          // parameters the bracket is a metadata record, not type arguments.
+          // `.<>` there supplies neither, and is refused in type position as
+          // it already is in expression position. A class or interface base
+          // takes one record written as an object type, whose keys face the
+          // unclaimed-key rule of #sec-metadata-decomposition as a
+          // primitive's do - they reached only the run time before. A
+          // primitive or alias base keeps its other spellings (a base-form
+          // meta type's leaf, `uint8.<7>`; the ranges extension's bounds), but
+          // an argument that denotes a plain TYPE is never a metadata value:
+          // `uint8.<uint8>` was accepted as though it named something.
+          {
+            const inScope = typeParameterInScope(baseName);
+            const declared = (inScope ? null : (classTypeOf(baseName) ?? interfaceTypeOf(baseName))) as {
+              Kind?: string, LibraryName?: string, Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null },
+            } | null;
+            const nominalBase = declared && !declared.LibraryName
+              && (declared.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0) === 0 ? declared as unknown as TypeRecord : null;
+            const aliasDecl = inScope || declared ? undefined : aliasNodes.get(baseName) as {
+              TypeParameters?: { TypeParameterList?: readonly unknown[] } | null,
+            } | undefined;
+            const aliasBase = !!aliasDecl && (aliasDecl.TypeParameters?.TypeParameterList?.length ?? 0) === 0;
+            const primitiveBase = !inScope && !declared && !aliasDecl && bareBuiltin?.Kind === 'primitive' && !builtinTakesArguments
+              && !PrimitiveDeclaresParameters(baseName) && (bareBuiltin as { Name?: string }).Name !== 'type';
+            if (nominalBase || aliasBase || primitiveBase) {
+              if (rawArgList.length === 0) {
+                errors.push(Throw.StaticTypeError('$1', Value(`\`${baseName}\` declares no type parameters, so \`.<>\` after it supplies neither arguments nor a metadata record; remove it`)).Value as ObjectValue);
+                return null;
+              }
+              const only = args.length === 1 && typeof args[0] !== 'number' ? args[0] as TypeRecord : null;
+              const open = !!only && (only.Kind === 'any' || only.Kind === 'parameter' || only.Kind === 'deferred' || mentionsTypeParameter(only));
+              if (nominalBase && !open) {
+                if (!only || only.Kind !== 'object') {
+                  errors.push(Throw.StaticTypeError('$1', Value(`\`${baseName}\` declares no type parameters, so its \`.<...>\` is one metadata record written as an object type, such as \`${baseName}.<{ brand: 'B' }>\``)).Value as ObjectValue);
+                  return null;
+                }
+                const metadata = MetadataObjectFromType(only, nominalBase);
+                const keys = Object.keys(metadata as unknown as Record<string, unknown>);
+                if (keys.length > 0) {
+                  unclaimed.push({ node, display: displayType({ Kind: 'parameterized', Base: nominalBase, Metadata: metadata as unknown as MetadataRecord } as TypeRecord), base: nominalBase, keys });
+                }
+              } else if (only && !open && ['primitive', 'array', 'tuple', 'union', 'function'].includes(only.Kind)) {
+                errors.push(Throw.StaticTypeError('$1', Value(`\`${displayType(only)}\` is a type, and \`${baseName}\` declares no type parameters, so its \`.<...>\` is metadata, which a type is not`)).Value as ObjectValue);
+                return null;
+              }
+            }
+          }
           if (!builtinTakesArguments
             && args.length === 1 && typeof args[0] !== 'number' && (args[0] as TypeRecord).Kind === 'object') {
             // The base is a BUILTIN or an ALIAS, and both are consulted: a
@@ -10980,6 +11176,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             for (let i = 0; i < constrained.length && i < args.length; i += 1) {
               const q = constrained[i]!;
               const argument = args[i];
+              if (q.IsValueParameter) {
+                checkClassValueArgument(q, argument);
+                continue;
+              }
               if (!q.TypeParameterConstraint || typeof argument === 'number' || argument.Kind === 'literal') {
                 continue;
               }
@@ -11013,6 +11213,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 )) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
               return null;
+            }
+            {
+              const kinded = new Map<string, TypeRecord>();
+              const firstOrder = new Map<string, TypeRecord>();
+              constrained.forEach((q, i) => {
+                const argument = args[i];
+                if (argument === undefined || typeof argument === 'number') return;
+                ((q.Arity ?? 0) > 0 ? kinded : firstOrder).set(q.BindingIdentifier.name, argument);
+              });
+              const declaration = (userClass as unknown as { Declaration?: ParseNode }).Declaration;
+              if (declaration && kinded.size > 0) checkKindedApplications(declaration, kinded, firstOrder);
             }
             const completed = fillClassDefaults(userClass, args);
             if (!inFamilyPattern() && completed.some((a) => typeof a !== 'number' && a.Kind === 'deferred' && a.DefaultNode)) return null;
@@ -12043,8 +12254,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     let unresolved = false;
+    const kinded = new Map<string, TypeRecord>();
     typeParams.forEach((tp, k) => {
       const run = assigned.runs[k]!;
+      if (tp.Arity > 0 && !tp.Variadic && run[0]?.node) {
+        const argument = kindedArgumentOf(run[0].node);
+        if (argument && !badKindedArgument({
+          Declaration: { TypeParameters: { TypeParameterList: [{ BindingIdentifier: { name: tp.Name }, Arity: tp.Arity }] } },
+        } as unknown as TypeRecord, [argument])) kinded.set(tp.Name, argument);
+      }
       // #sec-higher-kinded-parameters: an argument bound to a higher-kinded
       // parameter must be a generic declaration of its arity - "An argument
       // that is not a generic declaration at all is a type error naming the
@@ -12084,6 +12302,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     });
     if (validation) finishTypeArgumentBindings(typeParams, into, { ...validation, complete: validation.complete && !unresolved });
+    if (kinded.size > 0) {
+      let owner: ParseNode | undefined = typeParams[0]?.Declaration;
+      while (owner && !(owner as { TypeParameters?: unknown }).TypeParameters) owner = owner.parent as ParseNode | undefined;
+      if (owner) checkKindedApplications(owner, kinded, into);
+    }
   };
 
   // ---- standard-library signatures ----------------------------------
@@ -15492,7 +15715,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }));
     let analysis;
     try {
-      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord));
+      analysis = AnalyzeCallableGroup(members as never, host, (r) => displayType(r as TypeRecord), isTypeDomainRecord);
     } catch {
       return undefined;
     }
@@ -16465,6 +16688,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const declaration = classTarget.Declaration;
           const params = (declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } }).TypeParameters?.TypeParameterList;
           if (params?.length) {
+            if (classArgumentOrderError(params, specialization.TypeArguments.TypeArgumentList as unknown as readonly ParseNode[], (bare as { name: string }).name)) return base;
             const bindings = new Map<string, TypeRecord>();
             bindExplicitTypeArguments(typeParameterRecordsOf(params), specialization.TypeArguments.TypeArgumentList, bindings);
             checkSpecializedDeclaration(declaration, bindings);
@@ -17958,6 +18182,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 } }).Declaration?.TypeParameters?.TypeParameterList ?? []);
                 const argNameAt = spec.TypeArguments.TypeArgumentList
                   .map((a) => typeArgumentNameOfShared(a as unknown as ParseNode.Type));
+                // A malformed named list is refused here, not read positionally.
+                if (!base.LibraryName && classArgumentOrderError(specParams, spec.TypeArguments.TypeArgumentList as unknown as readonly ParseNode[], specName)) {
+                  return null;
+                }
                 for (let i = 0; i < specParams.length; i += 1) {
                   const q = specParams[i]!;
                   const named = q.BindingIdentifier?.name;
@@ -17969,6 +18197,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     continue;
                   }
                   const argument = args[at]!;
+                  if (q.IsValueParameter) {
+                    checkClassValueArgument(q, argument);
+                    continue;
+                  }
                   // An OPAQUE open argument - one whose structure the
                   // checker cannot represent - is checked per specialization,
                   // when the run time applies it; a bare unbounded parameter is
@@ -30218,6 +30450,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (operandParticipates(heritage) && invalidBase(staticType(heritage))) {
               errors.push(Throw.StaticTypeError('a typed superclass must be a constructor with an Object-or-null prototype, or null').Value as ObjectValue);
             }
+            // #sec-parameterized-types: a heritage clause is a type position, so
+            // the bare name of a generic declaration there binds its defaults,
+            // and `Box` for a `class Box<T: type>` is a type error naming `T` -
+            // an Early Error by #sec-type-errors, where the heritage is proven
+            // to denote that declaration. Proven through the same stable origins
+            // the invocation judgment uses (parentheses, `const` aliases, an
+            // unreassigned class binding); anything else stays with the run
+            // time. Inside the generic's own body the bare name denotes the
+            // class over its own parameters, so a nested class there may extend
+            // it.
+            {
+              const origin = heritageOriginOf(n);
+              const baseDeclaration = origin?.declaration;
+              const baseList = (baseDeclaration as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters;
+              let nested = false;
+              for (let at = (n as { parent?: ParseNode }).parent; at && !nested; at = (at as { parent?: ParseNode }).parent) nested = at === baseDeclaration;
+              if (origin && !origin.arguments && !nested && baseList?.ListKind === 'parameters') {
+                const missing = baseList.TypeParameterList.find((tp) => !tp.IsVariadic && !tp.TypeParameterDefault);
+                if (missing) {
+                  errors.push(Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default',
+                    Value(missing.BindingIdentifier.name), Value(baseDeclaration!.BindingIdentifier?.name ?? '(anonymous class)')).Value as ObjectValue);
+                }
+              }
+            }
             walk(heritage);
           } finally {
             if (scoped) typeParameterScopes.pop();
@@ -30698,7 +30954,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }));
         let analysis;
         try {
-          analysis = AnalyzeCallableGroup(members as never, callableHost, (r) => displayType(r as TypeRecord));
+          analysis = AnalyzeCallableGroup(members as never, callableHost, (r) => displayType(r as TypeRecord), isTypeDomainRecord);
         } catch (e) {
           report(`${labelOf(group[0]!)}: ${(e as Error).message}`);
           continue;
@@ -30849,14 +31105,93 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const name = c.BindingIdentifier?.name;
         if (name && list && list.ListKind !== 'specialization' && list.ListKind !== 'mixed') primaries.set(name, list);
       }
+      // #sec-specialization-lists: the primary binds before any specialization
+      // is matched, so a fixed argument the primary could not bind leaves a
+      // list no application can reach - the test a callable declaration fails
+      // when it does not attach, except that a class family has no standalone
+      // case to receive it. Judged speculatively: the ordinary refusal is what
+      // decides, and only its verdict is kept.
+      const fixedArgumentProblem = (primary: ParseNode.TypeParameters) => (entry: ParseNode, index: number): string | null => {
+        const tp = primary.TypeParameterList[index];
+        if (!tp || (tp.Arity ?? 0) > 0) return null;
+        const resolved = resolveType(entry as ParseNode.Type);
+        if (!resolved || resolved.Kind === 'any' || mentionsTypeParameter(resolved)) return null;
+        const name = tp.BindingIdentifier.name;
+        const unreachable = 'so no application can select this specialization';
+        if (tp.IsValueParameter) {
+          if (resolved.Kind !== 'literal') return `\`${entry.sourceText}\` is a type, and \`${name}\` of the primary declaration takes a value, ${unreachable}`;
+          const domain = tp.TypeParameterDomain ? resolveType(tp.TypeParameterDomain) : null;
+          if (!domain || mentionsTypeParameter(domain)) return null;
+          const before = errors.length;
+          requireAssignable(resolved, domain);
+          const refused = errors.length > before;
+          errors.length = before;
+          return refused ? `\`${entry.sourceText}\` is not a value of \`${displayType(domain)}\`, the domain of \`${name}\` of the primary declaration, ${unreachable}` : null;
+        }
+        const bound = tp.TypeParameterConstraint ? resolveType(tp.TypeParameterConstraint) : null;
+        if (bound && !mentionsTypeParameter(bound) && !IsAssignable(resolved, bound)) {
+          return `\`${entry.sourceText}\` is not assignable to \`${displayType(bound)}\`, the bound of \`${name}\` of the primary declaration, ${unreachable}`;
+        }
+        return null;
+      };
+      // #sec-specialization-lists: two class specializations of one family
+      // that admit the same applications are a type error at the later one.
+      // Compared as the callable rule compares them: captures by binding
+      // identity (renamed in order of declaration), a fixed entry by the type
+      // it denotes, and an omitted trailing entry as its position's default.
+      const listKey = (list: ParseNode.TypeParameters, primary: ParseNode.TypeParameters): string | null => {
+        const captures = (list.Captures ?? []).map((capture) => capture.BindingIdentifier.name);
+        const probeCaptures = new Set(captures);
+        const entries = SpecializationPatternsOf(list);
+        const parts: string[] = [];
+        for (const entry of entries) {
+          const text = entry.sourceText;
+          const open = text.includes('const ') || /(^|[^A-Za-z0-9_$])_([^A-Za-z0-9_$]|$)/.test(text)
+            || [...probeCaptures].some((c) => new RegExp(`(^|[^A-Za-z0-9_$])${c}([^A-Za-z0-9_$]|$)`).test(text));
+          if (!open) {
+            const resolved = resolveType(entry as ParseNode.Type);
+            parts.push(resolved ? `F:${displayType(resolved)}` : `T:${text.replace(/\s+/g, '')}`);
+            continue;
+          }
+          // Renamed before whitespace is dropped: `const T` would otherwise
+          // read as one word and keep the name it was declared with.
+          let normalized = text;
+          captures.forEach((c, k) => {
+            normalized = normalized.replace(new RegExp(`(^|[^A-Za-z0-9_$])${c}(?=[^A-Za-z0-9_$]|$)`, 'g'), `$1\u0000${k}`);
+          });
+          parts.push(`P:${normalized.replace(/\s+/g, '')}`);
+        }
+        for (let i = entries.length; i < primary.TypeParameterList.length; i += 1) {
+          const fallback = primary.TypeParameterList[i]!.TypeParameterDefault;
+          if (!fallback) return null;
+          const resolved = resolveType(fallback);
+          if (!resolved || mentionsTypeParameter(resolved)) return null;
+          parts.push(`F:${displayType(resolved)}`);
+        }
+        return parts.join('\u0001');
+      };
+      const seenLists = new Map<string, Map<string, ParseNode.ClassDeclaration>>();
       for (const c of classes) {
         const list = listOf(c);
         const name = c.BindingIdentifier?.name;
         const primary = name ? primaries.get(name) : undefined;
         if (!list || list.ListKind !== 'specialization' || !primary) continue;
         const slots = primarySlotsOf(primary);
-        for (const diagnostic of ValidateSpecializationList(list, classFamilyHost, slots, (r) => displayType(r as TypeRecord))) {
+        const diagnostics = ValidateSpecializationList(list, classFamilyHost, slots, (r) => displayType(r as TypeRecord), undefined,
+          { isTypeDomain: isTypeDomainRecord, fixedArgumentProblem: fixedArgumentProblem(primary) });
+        for (const diagnostic of diagnostics) {
           report(diagnostic.message);
+        }
+        if (diagnostics.length > 0 || IsPartialDeclaration(c)) continue;
+        const key = listKey(list, primary);
+        if (key === null) continue;
+        const family = seenLists.get(name!) ?? new Map<string, ParseNode.ClassDeclaration>();
+        seenLists.set(name!, family);
+        const earlier = family.get(key);
+        if (earlier) {
+          report(`\`class ${name}${list.sourceText}\` repeats the specialization \`class ${name}${listOf(earlier)!.sourceText}\` for the same applications; no application could choose between them, so remove one`);
+        } else {
+          family.set(key, c);
         }
       }
     }

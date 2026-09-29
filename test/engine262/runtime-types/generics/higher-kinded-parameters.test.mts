@@ -101,7 +101,10 @@ test('arity distinguishes parameters of the same name', () => {
   // one-argument declaration and the other for a two-argument one, so a value
   // of one is not a value of the other.
   expect(ok('class C<W<_>: type> { v: W.<uint8>; }')).toBe(true);
-  expect(ok('class C<W<_, _>: type> { v: W.<uint8>; }')).toBe(true);
+  expect(ok('class C<W<_, _>: type> { v: W.<uint8, uint16>; }')).toBe(true);
+  // #sec-higher-kinded-parameters: an application supplies exactly the arity,
+  // so the two-hole parameter applied to one argument is refused.
+  expect(ok('class C<W<_, _>: type> { v: W.<uint8>; }')).toBe(false);
 });
 
 test('an ordinary parameter is untouched', () => {

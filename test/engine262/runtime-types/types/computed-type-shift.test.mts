@@ -21,8 +21,11 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 // A builder returns a TYPE OBJECT, which is what #sec-computed-types requires:
 // "the type the |ComputedType| denotes is the Type Object that
-// EvaluateToTypeObject returns for it".
-const N = 'function N(x) { return Reflect.typeOf((x := uint32)); } class B<M: uint32> { } ';
+// EvaluateToTypeObject returns for it". So `B` takes a TYPE parameter: a value
+// parameter takes a value (#sec-bindtypearguments), and binding this Type
+// Object to one is refused. The shift under test sits in the builder call's
+// own argument, which is where the value is.
+const N = 'function N(x) { return Reflect.typeOf((x := uint32)); } class B<M: type> { } ';
 
 test('a right shift reaches a value argument', () => {
   expect(evaluated(`${N}let b: B.<N((8 >> 1))> = new B.<N((8 >> 1))>(); "ok";`)).toBe('ok');

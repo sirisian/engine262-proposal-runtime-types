@@ -205,7 +205,10 @@ test('a bare name where a parameter has no default is the naming error', () => {
   expectStaticTypeError(`${BOX} const b: Box = new Box((1 := uint8));`);
   expectStaticTypeError(`${BOX} function f(x: Box) {}`);
   expectThrown(`${BOX} String(type Box);`, 'has no argument and no default');
-  expectThrown(`${BOX} class S extends Box {}`, 'is not determined by the arguments and has no default');
+  // #sec-parameterized-types lists the heritage clause among the type
+  // positions, so this is the annotation's error, and early (#sec-type-errors).
+  expectStaticTypeError(`${BOX} class S extends Box {}`);
+  expectThrown(`${BOX} class S extends Box {}`, 'has no argument and no default');
   // With defaults, the heritage is the defaulted specialization.
   expect(evaluated('class A<T: type = uint8> { a: T; constructor(a: T) { this.a = a; } } class S extends A {} const s = new S(3); String(Reflect.typeOf(s.a)) + " " + String(s instanceof A.<uint8>);')).toBe('uint.<8> true');
   // A bare name as a type ARGUMENT is a declaration (a kinded position), untouched.

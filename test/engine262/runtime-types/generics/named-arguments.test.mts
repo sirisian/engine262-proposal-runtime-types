@@ -5,7 +5,7 @@
 // mis-positioned (the argument landed in position 0), which is the exact
 // failure the unknown-name rule exists to prevent.
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectThrown, expectStaticTypeError, expectEarlyError } from '../harness.mts';
 
 // A field over a parameter takes its value through the constructor: a plain
 // literal is not a value of an opaque parameter (generic-body-checking).
@@ -39,12 +39,25 @@ test('heritage takes the same list', () => {
   expect(evaluated(`${BUFFER} class Audio extends Buffer.<float32, Name: 'audio'> {} String(new Audio().label());`)).toBe('audio');
 });
 
+// #sec-type-references and #sec-type-errors: the applied class is known, so
+// each refusal is an Early Error, as it is in a type annotation - not a throw
+// at the `new`, which a function nobody called would never reach.
 test('the named-argument error surface on a class', () => {
-  expectThrown(`${BUFFER} new Buffer.<Sizee: 1>();`, 'does not name a type parameter');
-  expectThrown(`${BUFFER} new Buffer.<Size: 1, Size: 2>();`, 'supplied twice');
-  expectThrown(`${BUFFER} new Buffer.<uint8, T: uint16>();`, 'supplied twice');
-  expectThrown(`${BUFFER} new Buffer.<Size: 1, uint8>();`, 'positional type argument cannot follow');
-  expectThrown(`${BUFFER} new Buffer.<Size: 'x'>();`);  // CheckedConvertValue's own wording; the refusal is what's pinned
+  const refusals: [string, string][] = [
+    [`${BUFFER} new Buffer.<Sizee: 1>();`, 'does not name a type parameter'],
+    [`${BUFFER} new Buffer.<uint8, T: uint16>();`, 'supplied twice'],
+    [`${BUFFER} new Buffer.<Size: 1, uint8>();`, 'positional type argument follows a named argument'],
+    [`${BUFFER} function f() { return new Buffer.<Sizee: 1>(); }`, 'does not name a type parameter'],
+    [`${BUFFER} const B = Buffer.<Sizee: 1>;`, 'does not name a type parameter'],
+  ];
+  for (const [source, message] of refusals) {
+    expectStaticTypeError(source);
+    expectThrown(source, message);
+  }
+  // One name written twice is visible in the list alone: a Syntax Error.
+  expectEarlyError(`${BUFFER} new Buffer.<Size: 1, Size: 2>();`, 'SyntaxError');
+  // A string where `Size: uint32` takes a value: the value domain's refusal.
+  expectStaticTypeError(`${BUFFER} new Buffer.<Size: 'x'>();`);
 });
 
 test('an unnamed middle parameter with a default is filled, not skipped', () => {

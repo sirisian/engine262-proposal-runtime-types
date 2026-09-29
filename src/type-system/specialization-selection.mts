@@ -481,7 +481,7 @@ function accepts<S>(owner: CallableDeclaration<S>, list: ParseNode.TypeParameter
  * accepting owners are an error naming both; none leaves it standalone. A
  * mixed list carries its own labels and never attaches.
  */
-export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclaration<S>[], host: CallableGroupHost<S>, describe?: (domain: S) => string): CallableGroup<S> {
+export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclaration<S>[], host: CallableGroupHost<S>, describe?: (domain: S) => string, isTypeDomain?: (domain: S) => boolean): CallableGroup<S> {
   const owners = declarations.filter((d) => d.List?.ListKind === 'parameters');
   const attached: { Case: CallableDeclaration<S>, Owner: CallableDeclaration<S> }[] = [];
   const standalone: CallableDeclaration<S>[] = [];
@@ -506,7 +506,7 @@ export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclarati
     }
     if (accepting.length === 1) {
       attached.push({ Case: d, Owner: accepting[0] });
-      diagnostics.push(...ValidateSpecializationList(d.List, host, accepting[0].Parameters, describe));
+      diagnostics.push(...ValidateSpecializationList(d.List, host, accepting[0].Parameters, describe, undefined, { isTypeDomain }));
       continue;
     }
     standalone.push(d);
@@ -514,6 +514,19 @@ export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclarati
     // A capture's domain is inherited from its slot, and a standalone
     // case's top-level slots belong to no owner, so there is nothing to inherit.
     for (const entry of SpecializationPatternsOf(d.List)) {
+      // #sec-capture-scope: a standalone case's top-level capture states its
+      // domain, and one that states a value domain has no `extends` bound.
+      if (entry.type === 'CaptureBinding' && entry.TypeParameterDomain && entry.TypeParameterConstraint) {
+        const written = entry.TypeParameterDomain.sourceText.replace(/\s+/g, '');
+        if (written !== 'type' && !(entry.IsVariadic && written === '[].<type>')) {
+          const name = entry.BindingIdentifier.name;
+          diagnostics.push({
+            kind: 'value-bound',
+            message: `\`const ${name}\` captures a value of \`${entry.TypeParameterDomain.sourceText}\`, and a value has no \`extends\` bound; narrow it with a \`where\` clause`,
+            node: entry,
+          });
+        }
+      }
       if (entry.type === 'CaptureBinding' && !entry.TypeParameterDomain) {
         const name = entry.BindingIdentifier.name;
         diagnostics.push({
