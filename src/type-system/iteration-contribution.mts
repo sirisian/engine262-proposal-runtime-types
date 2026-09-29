@@ -1,6 +1,6 @@
-import { wellKnownSymbols, Value } from '#self';
 import { CanonicalizeType } from './intern.mts';
 import type { TypeRecord } from './records.mts';
+import { wellKnownSymbols, Value } from '#self';
 
 export interface IterationContribution {
   readonly element: TypeRecord | null;
@@ -8,6 +8,11 @@ export interface IterationContribution {
 }
 
 const unknownContribution: IterationContribution = { element: null };
+
+/** #sec-static-iteration-contribution: an optional property read includes absence. */
+const valueRead = (property: { type: TypeRecord, optional?: boolean } | undefined): TypeRecord | null => property
+  ? property.optional ? CanonicalizeType({ Kind: 'union', Members: [property.type,
+    { Kind: 'primitive', Name: 'undefined', Arguments: [] }] }) : property.type : null;
 const join = (types: readonly TypeRecord[]): TypeRecord | null => types.length === 0 ? null
   : types.length === 1 ? types[0]! : CanonicalizeType({ Kind: 'union', Members: types });
 
@@ -49,7 +54,7 @@ export function StaticIterationContribution(
     if (record?.Kind !== 'object') return unknownContribution;
     const done = record.Properties.find((property) => property.key === 'done');
     if (!done?.optional && done?.type.Kind === 'literal' && done.type.Value === Value.true) continue;
-    const value = record.Properties.find((property) => property.key === 'value')?.type;
+    const value = valueRead(record.Properties.find((property) => property.key === 'value'));
     if (!value) return unknownContribution;
     types.push(value);
   }
@@ -86,7 +91,7 @@ export function AsyncIterationContribution(
       return { element: { Kind: 'union', Members: [] } };
     }
     const value = record.Properties.find((property) => property.key === 'value');
-    return value && !value.optional ? { element: value.type } : unknownContribution;
+    return { element: valueRead(value) };
   };
   const next = (iterator: TypeRecord | null): IterationContribution => {
     if (!iterator) return unknownContribution;
@@ -142,7 +147,7 @@ export function StaticDelegationContribution(
     if (record?.Kind !== 'object') return unknown;
     const done = record.Properties.find((property) => property.key === 'done');
     const value = record.Properties.find((property) => property.key === 'value');
-    const supplied = value && !value.optional ? value.type : null;
+    const supplied = valueRead(value);
     return {
       yielded: !done?.optional && done?.type.Kind === 'literal' && done.type.Value === Value.true ? never : supplied,
       terminal: done?.type.Kind === 'literal' && done.type.Value === Value.false ? never : supplied,

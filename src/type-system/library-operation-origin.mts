@@ -10,7 +10,7 @@ const groups = {
   '%Array%': ['from', 'fromAsync', 'of'],
   '%Map%': ['groupBy'],
   '%Promise%': ['all', 'race', 'any', 'allSettled', 'resolve'],
-  '%Reflect%': ['set'],
+  '%Reflect%': ['set', 'apply', 'construct'],
   '%TypedArrayLike.prototype%': ['capacity'],
   '%Map.prototype%': ['size'],
   '%Set.prototype%': ['size'],
@@ -38,7 +38,7 @@ export function OriginalLibraryFunction(realm: Realm, group: string, key: string
 }
 
 export interface LibraryOperation {
-  readonly kind: 'descriptor' | 'adapter' | 'atomic' | 'write';
+  readonly kind: 'descriptor' | 'adapter' | 'atomic' | 'write' | 'reflectApply' | 'reflectConstruct';
   readonly name: string;
   readonly target: ParseNode;
   readonly count?: number;
@@ -143,6 +143,12 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
     const declarations = node.type === 'IdentifierReference' && !mutated.has(node.name) ? definitions.get(node.name) : undefined;
     return !!declarations?.length && declarations.every((d) => d.type === 'FunctionDeclaration' && topLevel(d));
   };
+  const localTarget = (expression: ParseNode): boolean => {
+    const node = initializer(expression, new Set());
+    if (['ArrowFunction', 'FunctionExpression', 'ClassExpression'].includes(node.type)) return true;
+    const declarations = node.type === 'IdentifierReference' && !mutated.has(node.name) ? definitions.get(node.name) : undefined;
+    return !!declarations?.length && declarations.every((d) => ['FunctionDeclaration', 'ClassDeclaration'].includes(d.type) && topLevel(d));
+  };
   const scalarOrReference = (expression: ParseNode): boolean => scalar(expression)
     || (expression.type === 'RefExpression' && scalar(expression.Expression));
   const freshArray = (expression: ParseNode): ParseNode.ArrayLiteral | null => {
@@ -176,6 +182,16 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
       const suitable = name === 'apply' ? args.length === 2 && scalar(args[0]) && list(args[1]) !== null
         : args.every((arg, i) => scalarOrReference(arg) || (name === 'callThread' && i === 0 && data(arg)?.PropertyDefinitionList.length === 0));
       if (suitable) candidates.set(node, { kind: 'adapter', name, target });
+    }
+    if (call && target.type === 'IdentifierReference' && target.name === 'Reflect' && global('Reflect')
+        && ['apply', 'construct'].includes(name) && original('%Reflect%', name)) {
+      const args = call.Arguments;
+      const suitable = name === 'apply' ? args.length === 3 && scalar(args[1]) && list(args[2]) !== null
+        : args.length >= 2 && args.length <= 3 && list(args[1]) !== null
+          && (!args[2] || localTarget(args[2]) || scalar(args[2]));
+      if (suitable && (localTarget(args[0]) || scalar(args[0]))) {
+        candidates.set(node, { kind: name === 'apply' ? 'reflectApply' : 'reflectConstruct', name, target: args[0] });
+      }
     }
     if (call && target.type === 'IdentifierReference' && target.name === 'Atomics' && global('Atomics')
         && original('%Atomics%', name) && call.Arguments.every((arg, i) => scalarOrReference(arg) || (i === 0 && data(arg) !== null))) {
@@ -234,6 +250,7 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
   // effects are not modeled here. Only established adapters may enter bodies.
   let stable = !nodes.some((node) => {
     if (node.type === 'TypeAnnotation') return !inertAnnotation(node);
+    if ((node.type === 'ClassDeclaration' || node.type === 'ClassExpression') && node.ClassTail.ClassHeritage) return true;
     if (node.type === 'AssignmentExpression' && node.LeftHandSideExpression.type === 'MemberExpression') {
       const member = node.LeftHandSideExpression;
       const key = member.IdentifierName?.name ?? (member.Expression?.type === 'StringLiteral' ? member.Expression.value : null);

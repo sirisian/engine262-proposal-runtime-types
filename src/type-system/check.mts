@@ -20,6 +20,7 @@ import { TV } from '../static-semantics/TemplateStrings.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { MissingLiteralSymbol, OrdinaryPrototypeLacks } from './literal-prototype.mts';
 import { ProvenLibraryOperations } from './library-operation-origin.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
 import { ProvenStaticLibraryOperations } from './static-library-origin.mts';
@@ -9819,6 +9820,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         errors.push(Throw.StaticTypeError('the indexed access $1 has no declared property for $2',
           Value(displayType(operands[0])), Value(displayType(operands[1]))).Value as ObjectValue);
       }
+    } else if (type.Kind === 'primitive') {
+      // #sec-library-type-parameters: closed specializations retain family formation obligations.
+      for (const argument of type.Arguments) if (typeof argument === 'object') checkTypeFormation(argument);
+      if (type.Name === 'Composite') checkCompositeArgument(type.Arguments);
+      requireWellFormedVector(type);
     } else if (type.Kind === 'tuple') {
       for (const element of type.Elements) {
         if (element.InitializerNode) checkFilledDefault(element.Type, element.InitializerNode, element.Initial === 'none' ? undefined : element.Initial);
@@ -9839,6 +9845,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } else if (type.Kind === 'union' || type.Kind === 'intersection') type.Members.forEach(checkTypeFormation);
     else if (type.Kind === 'array') checkTypeFormation(type.Element);
     else if (type.Kind === 'nominal') {
+      for (const argument of type.Arguments) if (typeof argument === 'object') checkTypeFormation(argument);
       checkClosedCaseContract(type);
       const declaration = type.Declaration as ParseNode.ClassDeclaration;
       const parameters = declaration?.TypeParameters?.TypeParameterList ?? [];
@@ -9853,6 +9860,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const signature of type.Signatures) {
         for (const formal of signature.Parameters) checkTypeFormation(formal.Type);
         checkTypeFormation(signature.Return);
+        checkTypeFormation(signature.ThisType ?? null);
       }
     }
   };
@@ -16380,6 +16388,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'CallExpression': {
         const bound = boundAdapterType(node);
         if (bound) return bound;
+        const libraryResult = staticLibraryResult(node);
+        if (libraryResult) return libraryResult;
         const vectorResult = vectorCallType(node, false);
         if (vectorResult) return vectorResult;
         const called = patternExpression(node.CallExpression);
@@ -18635,27 +18645,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (requiresMembers) {
       const literalShape = objectLiteralMembers(node as unknown as ParseNode);
       if (literalShape) {
-        const supplied = new Set(((literalShape as unknown as {
-          Properties?: readonly { key: string }[],
-        }).Properties ?? []).map((q) => q.key));
+        const supplied = new Set(literalShape.Kind === 'object' ? literalShape.Properties.map((q) => q.key) : []);
         for (const wanted of target.Properties ?? []) {
-          const q = wanted as unknown as { key: unknown, optional?: boolean };
-          // A SYMBOL-keyed member is skipped. Its [[key]] is a Value rather than
-          // a string, so it is not comparable against the shape's string keys and
-          // `Value(key)` throws a RangeError on it - which is what this reported
-          // before the guard, crashing two decorator tests instead of refusing
-          // anything.
-          //
-          // Skipping is the conservative answer and matches the rest of this
-          // check: where a member cannot be enumerated it is not demanded.
-          if (typeof q.key !== 'string') {
-            continue;
-          }
-          if (!q.optional && !supplied.has(q.key)) {
-            const completion = Throw.StaticTypeError('$1 is required by $2 and is not supplied', Value(q.key), Value(displayType(target))) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
-            break;
-          }
+          if (wanted.optional || supplied.has(wanted.key)) continue;
+          if (typeof wanted.key !== 'string' && !MissingLiteralSymbol(root, node, wanted.key, surroundingAgent.currentRealmRecord)) continue;
+          const shown = typeof wanted.key === 'string' ? wanted.key
+            : `[${wanted.key.Description === Value.undefined ? 'Symbol' : (wanted.key.Description as JSStringValue).stringValue()}]`;
+          errors.push(Throw.StaticTypeError('$1 is required by $2 and is not supplied',
+            Value(shown), Value(displayType(target))).Value as ObjectValue);
+          break;
         }
       }
     }
@@ -18681,7 +18679,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         continue;
       }
-      const spreadShape = objectLiteralMembers(member as ParseNode)
+      const spreadShape = (asAny.AssignmentExpression ? primitiveSpreadShape(asAny.AssignmentExpression) : null)
+        ?? objectLiteralMembers(member as ParseNode)
         ?? (asAny.AssignmentExpression ? staticType(asAny.AssignmentExpression) : null);
       const spreadProps = (spreadShape as unknown as {
         Kind?: string, Properties?: readonly { key: string }[],
@@ -18782,8 +18781,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the NULL where the keys are unknowable - an `any`-typed operand, a
       // getter - so an unknowable spread reports nothing rather than everything.
       if (!def.PropertyName && def.AssignmentExpression) {
-        const spreadShape = objectLiteralMembers(member as ParseNode)
-          ?? staticType(def.AssignmentExpression);
+        const spreadShape = primitiveSpreadShape(def.AssignmentExpression)
+          ?? objectLiteralMembers(member as ParseNode) ?? staticType(def.AssignmentExpression);
         const spreadProps = (spreadShape as unknown as {
           Kind?: string, Properties?: readonly { key: string }[],
         } | null);
@@ -18904,6 +18903,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * operand, a getter, a computed key. Enumerating those would report
    * every declared member as missing.
    */
+  const primitiveSpreadShape = (node: ParseNode): Extract<TypeRecord, { Kind: 'object' }> | null => {
+    const type = staticType(node);
+    if (!type || !knownNonObject(type)) return null;
+    const base = type.Kind === 'literal' ? type.Base : type;
+    if (base.Kind !== 'primitive') return null;
+    if (base.Name === 'string') {
+      if (type.Kind !== 'literal' || !(type.Value instanceof JSStringValue)) return null;
+      const text = type.Value.stringValue();
+      // Own String indices address UTF-16 code units, not code points.
+      return { Kind: 'object', Properties: Array.from({ length: text.length }, (_, i) => ({
+        key: String(i), type: makePrimitive('string'), optional: false, readonly: false,
+      })), IndexSignatures: [] };
+    }
+    return { Kind: 'object', Properties: [], IndexSignatures: [] };
+  };
+
   const objectLiteralMembers = (node: ParseNode): Known => {
     const plain = objectLiteralShape(node);
     if (plain) {
@@ -19265,8 +19280,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         AssignmentExpression?: ParseNode | null,
         TypeAnnotation?: ParseNode.TypeAnnotation | null,
       };
-      const key = prop.PropertyName?.name ?? prop.PropertyName?.value;
-      if (!key || prop.PropertyName?.type === 'ComputedPropertyName' || !prop.AssignmentExpression) {
+      if (!prop.PropertyName && prop.AssignmentExpression) {
+        const spread = primitiveSpreadShape(prop.AssignmentExpression);
+        if (spread?.Kind !== 'object') return null;
+        for (const property of spread.Properties) {
+          const prior = Properties.findIndex((p) => p.key === property.key);
+          if (prior !== -1) Properties.splice(prior, 1);
+          Properties.push({ ...property });
+        }
+        continue;
+      }
+      const key = prop.PropertyName ? memberKeyOf(prop.PropertyName as ParseNode.PropertyName) : undefined;
+      if (key === undefined || !prop.AssignmentExpression) {
         return null;
       }
       const declaredMember = prop.TypeAnnotation ? resolveType(prop.TypeAnnotation.Type) : null;
@@ -24178,6 +24203,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const inert = (type: Known): boolean => !!type && (type.Kind === 'any' || type.Kind === 'void'
         || (type.Kind === 'primitive' && knownNonObject(type))
         || (type.Kind === 'literal' && inert(type.Base))
+        || (type.Kind === 'array' && inert(type.Element))
         || (type.Kind === 'tuple' && type.Elements.every((e) => !e.InitializerNode && inert(e.Type))));
       provenStaticLibraryOperations = ProvenStaticLibraryOperations(root, surroundingAgent.currentRealmRecord,
         (annotation) => inert(resolveType(annotation.Type)), (node, length) => {
@@ -24190,6 +24216,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } finally {
       provingStaticLibraryOperations = false;
     }
+  };
+
+  /** #sec-proved-library-operations: the same origin proof supplies inputs and results. */
+  const staticLibraryResult = (call: ParseNode.CallExpression): Known => {
+    const operation = staticLibraryOperations().get(call);
+    if (operation?.owner !== 'Array' || operation.name !== 'from' || !operation.positions) return null;
+    const contribution = StaticIterationContribution(staticType(call.Arguments[0]), structureOf);
+    let element: Known = contribution.element;
+    const mapper = call.Arguments[1] ? staticType(call.Arguments[1]) : undefinedType;
+    if (mapper && !SameType(mapper, undefinedType)) {
+      const callback = callableForm(mapper);
+      if (callback?.Kind !== 'function' || !callback.Signatures.length
+          || callback.Signatures.some((signature) => !signature.Return || signature.Return.Kind === 'any')) return null;
+      element = callback.Signatures.reduce<Known>((joined, signature) => joined ? joinTypes(joined, signature.Return!) : signature.Return, null);
+    }
+    return element && element.Kind !== 'any' ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null;
   };
 
   const checkStaticLibraryCall = (call: ParseNode.CallExpression): void => {
@@ -24232,13 +24274,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const adapterProjection = (call: ParseNode.CallExpression): { callee: Extract<TypeRecord, { Kind: 'function' }>, args: readonly ParseNode[], receiver?: ParseNode, partial: boolean } | null => {
     const operation = libraryOperations().members.get(call.CallExpression);
-    if (operation?.kind !== 'adapter') return null;
+    if (operation?.kind !== 'adapter' && operation?.kind !== 'reflectApply') return null;
     const target = callableForm(staticType(operation.target));
     if (target?.Kind !== 'function') return null;
     const written = call.Arguments;
     let args: readonly ParseNode[];
     if (operation.name === 'apply') {
-      const entries = written[1] && libraryOperations().list(written[1]);
+      const listIndex = operation.kind === 'reflectApply' ? 2 : 1;
+      const entries = written[listIndex] && libraryOperations().list(written[listIndex]);
       if (!entries) return null;
       args = entries;
     } else if (operation.name === 'callThread') {
@@ -24261,7 +24304,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const callee = partial ? { ...target, Signatures: target.Signatures.map((sig) => ({ ...sig,
       Parameters: sig.Parameters.map((p, i) => i >= args.length ? { ...p, Optional: true } : p),
     })) } : target;
-    return { callee, args, receiver: operation.name === 'callThread' ? undefined : written[0], partial };
+    return { callee, args, receiver: operation.name === 'callThread' ? undefined : written[operation.kind === 'reflectApply' ? 1 : 0], partial };
   };
 
   const boundAdapterType = (call: ParseNode.CallExpression): Known => {
@@ -24281,7 +24324,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const proof = libraryOperations();
     const operation = proof.members.get(call.CallExpression);
     if (!operation) return;
-    if (operation.kind === 'adapter') {
+    if (operation.kind === 'adapter' || operation.kind === 'reflectApply') {
+      if (operation.kind === 'reflectApply') {
+        checkInvocation(operation.target, false);
+        checkCallable(callableForm(staticType(operation.target)));
+      }
       const projected = adapterProjection(call);
       if (!projected) return;
       const view = { CallExpression: operation.target, Arguments: projected.args };
@@ -24293,6 +24340,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     const args = call.Arguments;
+    if (operation.kind === 'reflectConstruct') {
+      const checkTarget = (expression: ParseNode): void => {
+        checkInvocation(expression, true);
+        if (operandParticipates(expression) && knownNonObject(staticType(expression))) {
+          errors.push(Throw.StaticTypeError('a Reflect.construct target must be a constructor').Value as ObjectValue);
+        }
+      };
+      checkTarget(operation.target);
+      if (args[2]) checkTarget(args[2]);
+      const entries = proof.list(args[1]);
+      if (!entries) return;
+      const origins = invocationFact(operation.target)?.classTargets;
+      if (origins?.length) {
+        for (const origin of origins) {
+          // Generic constructors require specialization facts; do not invent
+          // them from a different newTarget or from the resulting prototype.
+          if (origin.declaration.TypeParameters) continue;
+          const signatures = constructSignatures.get(origin.declaration);
+          if (signatures?.length) checkCallArguments({ CallExpression: operation.target, Arguments: entries },
+            { Kind: 'function', Signatures: signatures.map((signature) => ({ ...signature, Return: null })) }, call);
+        }
+      } else {
+        const target = callableForm(staticType(operation.target));
+        if (invocationFact(operation.target)?.constructible && target?.Kind === 'function') {
+          checkCallArguments({ CallExpression: operation.target, Arguments: entries }, target, call);
+        }
+      }
+      return;
+    }
     const typedProperty = (object: ParseNode, key: string | SymbolValue): Known => {
       const data = proof.data(object);
       // A later duplicate property is the installed descriptor.
@@ -24406,6 +24482,93 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       changes = Math.max(args.length - 2, 0) !== removed;
     }
     if (changes) errors.push(Throw.StaticTypeError('this intrinsic mutation changes a fixed array extent').Value as ObjectValue);
+  };
+
+  /** #sec-intrinsic-array-contracts: simulate only established destination stores. */
+  const checkTupleMutation = (call: ParseNode.CallExpression): void => {
+    const member = patternExpression(call.CallExpression);
+    if (member?.type !== 'MemberExpression') return;
+    const name = memberKey(member);
+    if (typeof name !== 'string' || !['reverse', 'copyWithin', 'fill', 'splice'].includes(name)) return;
+    provenArrayMembers ??= ProvenArrayMembers(root, surroundingAgent.currentRealmRecord);
+    if (!provenArrayMembers.has(member)) return;
+    const receiver = staticType(member.MemberExpression);
+    if (receiver?.Kind !== 'tuple' || receiver.Elements.some((entry) => entry.Rest || entry.InitializerNode
+      || entry.Type.Kind !== 'primitive' || !knownNonObject(entry.Type))) return;
+    const slots = receiver.Elements.map((entry) => entry.Type);
+    const length = slots.length;
+    const args = call.Arguments;
+    const integer = (node: ParseNode | undefined, fallback: number): number | null => {
+      if (!node) return fallback;
+      const type = staticType(node);
+      if (type?.Kind === 'primitive' && type.Name === 'undefined') return fallback;
+      if (type?.Kind !== 'literal') return null;
+      const value = type.Value;
+      const number = value instanceof NumberValue ? R(value) : value instanceof JSStringValue ? Number(value.stringValue())
+        : value === Value.true ? 1 : value === Value.false || value === Value.null ? 0 : value === Value.undefined ? fallback : null;
+      return number === null ? null : Number.isNaN(number) ? 0 : Math.trunc(number);
+    };
+    const relative = (value: number): number => value < 0 ? Math.max(length + value, 0) : Math.min(value, length);
+    const store = (index: number, source: Known): boolean => {
+      if (!source || !slots[index]) return false;
+      if (conversionImpossible(source, receiver.Elements[index].Type)) {
+        errors.push(Throw.StaticTypeError('an intrinsic array store cannot convert $1 to slot type $2',
+          Value(displayType(source)), Value(displayType(receiver.Elements[index].Type))).Value as ObjectValue);
+        return true;
+      }
+      // A successful write has the destination's contract, including any
+      // conversion; an overlapping later read sees that stored value.
+      slots[index] = receiver.Elements[index].Type;
+      return false;
+    };
+    if (name === 'reverse') {
+      for (let low = 0; low < Math.floor(length / 2); low += 1) {
+        const high = length - low - 1;
+        const lower = slots[low]; const upper = slots[high];
+        if (store(low, upper) || store(high, lower)) return;
+      }
+      return;
+    }
+    if (name === 'fill') {
+      const start = integer(args[1], 0); const end = integer(args[2], length);
+      if (start === null || end === null) return;
+      const value = args[0] ? staticType(args[0]) : undefinedType;
+      for (let index = relative(start); index < relative(end); index += 1) if (store(index, value)) return;
+      return;
+    }
+    const start = integer(args[0], 0);
+    if (start === null) return;
+    if (name === 'copyWithin') {
+      const from = integer(args[1], 0); const end = integer(args[2], length);
+      if (from === null || end === null) return;
+      let target = relative(start); let source = relative(from);
+      let count = Math.min(relative(end) - source, length - target);
+      const direction = source < target && target < source + count ? -1 : 1;
+      if (direction === -1) {
+        target += count - 1;
+        source += count - 1;
+      }
+      while (count > 0) {
+        if (store(target, slots[source])) return;
+        target += direction; source += direction; count -= 1;
+      }
+      return;
+    }
+    const from = relative(start);
+    const count = args.length === 0 ? 0 : args.length === 1 ? length - from : integer(args[1], 0);
+    if (count === null) return;
+    const removed = Math.min(Math.max(count, 0), length - from);
+    const inserted = Math.max(args.length - 2, 0);
+    if (inserted < removed) {
+      for (let index = from; index < length - removed; index += 1) {
+        if (store(index + inserted, slots[index + removed])) return;
+      }
+      // Deleting the tail precedes insertion and has its own storage rules.
+      return;
+    }
+    // Growth encounters storage outside the established tuple before insertion.
+    if (inserted > removed) return;
+    for (let index = 0; index < inserted; index += 1) if (store(from + index, staticType(args[index + 2]))) return;
   };
 
   const arrayContract = (member: ParseNode, receiver: TypeRecord, name: string): Known => {
@@ -25699,6 +25862,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (target?.Kind !== 'nominal' || !['Map', 'Set', 'WeakMap', 'WeakSet'].includes(target.LibraryName ?? '')) return;
     const name = target.LibraryName as 'Map' | 'Set' | 'WeakMap' | 'WeakSet';
     const mapLike = name === 'Map' || name === 'WeakMap';
+    const currentConstruction = (): boolean => {
+      for (let parent = node.parent; parent; parent = parent.parent) {
+        if (/Function|Arrow|Method|Class/.test(parent.type)) return false;
+      }
+      return true;
+    };
     if (!intrinsicOrigin(node.MemberExpression, name)) return;
     const args = node.Arguments ?? [];
     if (args.some((arg) => arg.type === 'AssignmentRestElement' || arg.type === 'NamedArgument')) return;
@@ -25714,8 +25883,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       checkRangeAtElement(seed, target.Arguments[0]);
       return;
     }
-    if (!literalSeed && !typedSeed) return;
     const realm = surroundingAgent.currentRealmRecord;
+    if (!literalSeed && !typedSeed) {
+      if (!currentConstruction()) return;
+      const source = seedType?.Kind === 'literal' ? seedType.Base : seedType;
+      if (source?.Kind === 'primitive' && knownNonObject(source)
+          && !['null', 'undefined', 'string'].includes(source.Name)) {
+        const family = source.Name === 'boolean' ? 'Boolean' : source.Name === 'symbol' ? 'Symbol'
+          : source.Name === 'bigint' ? 'BigInt' : isNumericOperandName(source.Name) ? 'Number' : null;
+        if (family && OrdinaryPrototypeLacks(realm.Intrinsics[`%${family}.prototype%`], wellKnownSymbols.iterator)) {
+          errors.push(Throw.StaticTypeError('a collection seed must be iterable, null or undefined').Value as ObjectValue);
+        }
+      }
+      return;
+    }
     const intrinsic = realm.Intrinsics;
     const adder = mapLike ? 'set' : 'add';
     if (intrinsicData(intrinsic[`%${name}.prototype%`], Value(adder)) !== intrinsic[`%${name}.prototype.${adder}%` as '%Map.prototype.set%']
@@ -25791,19 +25972,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const value of seed.ElementList) reject(value, positions[0]);
       return;
     }
+    const entryPair = (expression: ParseNode): readonly [ParseNode, ParseNode] | null => {
+      const entry = patternExpression(expression);
+      if (!entry) return null;
+      if (!currentConstruction() && !(entry.type === 'ArrayLiteral' && entry.ElementList.length === 2)) return null;
+      if (knownNonObject(staticType(entry))) {
+        errors.push(Throw.StaticTypeError('a Map seed entry must be an Object').Value as ObjectValue);
+        return null;
+      }
+      if (entry.type !== 'ArrayLiteral' && entry.type !== 'ObjectLiteral') return null;
+      if (entry.type === 'ArrayLiteral' && entry.ElementList.some((element) => !element || element.type === 'SpreadElement')) return null;
+      if (entry.type === 'ObjectLiteral' && entry.PropertyDefinitionList.some((property) => property.type !== 'PropertyDefinition'
+          || !property.AssignmentExpression || property.PropertyName?.type === 'PropertyName'
+          || classElementKey(property.PropertyName) === '__proto__')) return null;
+      const read = (index: number): ParseNode | null => {
+        const property = entry.type === 'ObjectLiteral' ? entry.PropertyDefinitionList.findLast((member) => member.type === 'PropertyDefinition'
+          && classElementKey(member.PropertyName) === String(index)) as ParseNode.PropertyDefinition | undefined : undefined;
+        const own = entry.type === 'ArrayLiteral' ? entry.ElementList[index] : property?.AssignmentExpression;
+        if (own) return property?.TypeAnnotation ? typedExpressionView(own, resolveType(property.TypeAnnotation.Type)) : own;
+        const prototype = realm.Intrinsics[entry.type === 'ArrayLiteral' ? '%Array.prototype%' : '%Object.prototype%'];
+        if (!OrdinaryPrototypeLacks(prototype, Value(String(index)))) return null;
+        // The runtime read is undefined even if the source shadows that name.
+        const absent = { type: 'IdentifierReference', name: 'undefined' } as ParseNode.IdentifierReference;
+        expressionViewTypes.set(absent, { Kind: 'literal', Value: Value.undefined, Base: undefinedType });
+        return absent;
+      };
+      const key = read(0); const value = read(1);
+      return key && value ? [key, value] : null;
+    };
+    // Read entries in traversal order. An earlier unavailable getter or
+    // positional read can invalidate facts about later traversal steps.
+    const entryPairs: (readonly [ParseNode, ParseNode])[] = [];
+    for (const entry of seed.ElementList) {
+      const pair = entryPair(entry);
+      if (!pair) return;
+      entryPairs.push(pair);
+    }
     if (name === 'WeakMap') {
       // A WeakMap's keys are objects, so the primitive-key duplicate proof
       // below never applies. A key the weak-holding rule refuses cannot undergo
       // the conversion to its key type, whatever follows it. A value survives
       // unless a later entry's key may be the same object: one entry has
       // nothing after it, and fresh allocations are distinct from each other.
-      const pairs: (readonly [ParseNode, ParseNode])[] = [];
-      for (const entry of seed.ElementList) {
-        const pair = patternExpression(entry);
-        if (pair?.type !== 'ArrayLiteral' || pair.ElementList.length !== 2
-            || pair.ElementList.some((el) => !el || el.type === 'SpreadElement')) return;
-        pairs.push([pair.ElementList[0] as ParseNode, pair.ElementList[1] as ParseNode]);
-      }
+      const pairs = entryPairs;
       for (const [keyNode] of pairs) {
         const keyType = staticType(keyNode);
         if (keyType && keyType.Kind !== 'any' && !typeCanBeHeldWeakly(keyType as TypeRecord)) {
@@ -25822,11 +26033,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Host Map uses SameValueZero for these primitive payloads too. Restrict
     // the key facts to that shared domain; structural/value-class keys defer.
     const final = new Map<string | number | bigint | Value, { keyNode: ParseNode, valueNode: ParseNode }>();
-    for (const entry of seed.ElementList) {
-      const pair = patternExpression(entry);
-      if (pair?.type !== 'ArrayLiteral' || pair.ElementList.length !== 2
-          || pair.ElementList.some((el) => !el || el.type === 'SpreadElement')) return;
-      const [keyNode, valueNode] = pair.ElementList;
+    for (const [keyNode, valueNode] of entryPairs) {
       const keyType = staticType(keyNode);
       // A later unknown key might overwrite any earlier bad value. Keep the
       // whole seed dynamic unless every comparison is established here.
@@ -28429,6 +28636,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkLibraryOperation(n as ParseNode.CallExpression);
         checkStaticLibraryCall(n as ParseNode.CallExpression);
         checkFixedArrayMutation(n as ParseNode.CallExpression);
+        checkTupleMutation(n as ParseNode.CallExpression);
         checkCallArguments(c, callee, n);
         // A builtin STATIC supplies its callback's parameter types the way a
         // declared signature does. Recorded before the arguments are walked, so
