@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, FinishLoadingImportedModule, Get, Value, X } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, FinishLoadingImportedModule, Get, Value, X, type JSStringValue } from '#self';
 
 // #sec-partial-classes: extensions preserve the imported declaration's identity.
 async function evaluateModules(modules: Record<string, string>, source: string): Promise<{ name: string, message: string, result: string }> {
@@ -11,7 +11,7 @@ async function evaluateModules(modules: Record<string, string>, source: string):
     },
   } } as never));
   const realm = new ManagedRealm();
-  const completion = EnsureCompletion(await new Promise((resolve) => realm.evaluateModule(source, 'main', resolve)) as never) as unknown as {
+  const completion = EnsureCompletion(await new Promise<unknown>((resolve) => realm.evaluateModule(source, 'main', resolve)) as never) as unknown as {
     Type: string, Value: { PromiseState?: string, PromiseResult?: Value },
   };
   const error = completion.Type === 'throw' ? completion.Value as unknown as Value
@@ -21,10 +21,10 @@ async function evaluateModules(modules: Record<string, string>, source: string):
   if (error) {
     const pop = realm.pushTopContext();
     try {
-      name = X(Get(X(Get(error as never, Value('constructor'))) as never, Value('name'))).stringValue();
-      message = X(Get(error as never, Value('message'))).stringValue();
+      name = (X(Get(X(Get(error as never, Value('constructor'))) as never, Value('name'))) as JSStringValue).stringValue();
+      message = (X(Get(error as never, Value('message'))) as JSStringValue).stringValue();
     } finally {
-      pop();
+      pop?.();
     }
   }
   const result = realm.evaluateScriptSkipDebugger('String(globalThis.result);') as unknown as { Value: { stringValue(): string } };

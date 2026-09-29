@@ -1,5 +1,5 @@
 import { test } from 'vitest';
-import { evaluated, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 // #sec-generics: enclosing parameters stay fixed throughout a generic body.
 
@@ -49,5 +49,7 @@ test("overloaded constructor closed", () => {
 
 
 test('a missing interface member names the selected application', () => {
-  expectStaticTypeError('interface Store<T: type> { get(): T; } interface Store<boolean> { get(): boolean; bits(): uint8; } class P implements Store.<boolean> { get(): boolean { return true; } }', 'Store.<boolean>');
+  const source = 'interface Store<T: type> { get(): T; } interface Store<boolean> { get(): boolean; bits(): uint8; } class P implements Store.<boolean> { get(): boolean { return true; } }';
+  expectStaticTypeError(source);
+  expectThrown(source, 'Store.<boolean>');
 });

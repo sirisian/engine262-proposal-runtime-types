@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectStaticTypeError, ok, evaluated } from '../harness.mts';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-static-type-of-an-expression
 

@@ -1,6 +1,5 @@
 import { expect, test } from 'vitest';
 import { expectStaticTypeError, ok } from '../harness.mts';
-import { X } from '#self';
 
 // #sec-typed-destructuring
 

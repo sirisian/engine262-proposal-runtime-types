@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectThrownKind, expectStaticTypeError, ok } from '../harness.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, Value } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion } from '#self';
 
 // #sec-layout-properties
 
@@ -66,7 +66,7 @@ test('a prototype setter does not intercept fixed own layout data', () => {
   const realm = new ManagedRealm();
   expect(EnsureCompletion(realm.evaluateScriptSkipDebugger('globalThis.changed=false;Object.defineProperty(Object.getPrototypeOf(uint8),"byteLength",{set(v){globalThis.changed=true;},configurable:true});')).Type).toBe('normal');
   expect(EnsureCompletion(realm.evaluateScriptSkipDebugger('const T:any=uint8;Reflect.set(T,"byteLength",9);')).Type).toBe('normal');
-  expect((realm.evaluateScriptSkipDebugger('String(globalThis.changed);').Value as { stringValue(): string }).stringValue()).toBe('false');
+  expect((EnsureCompletion(realm.evaluateScriptSkipDebugger('String(globalThis.changed);')).Value as { stringValue(): string }).stringValue()).toBe('false');
 });
 
 test.each([

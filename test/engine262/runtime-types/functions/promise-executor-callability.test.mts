@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { expectStaticTypeError, ok } from '../harness.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, Get, Value, X } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, Get, Value, X, ObjectValue } from '#self';
 
 // #sec-typed-promise-executors
 
@@ -39,11 +39,11 @@ test("preserves runtime precedence for new Promise(1);", () => {
   expect(completion.Type).toBe('throw');
   const pop = realm.pushTopContext();
   try {
-    expect((X(Get(X(Get(completion.Value, Value('constructor'))), Value('name'))) as {stringValue(): string}).stringValue()).toBe("TypeError");
+    expect((X(Get(X(Get(completion.Value as ObjectValue, Value('constructor'))) as ObjectValue, Value('name'))) as {stringValue(): string}).stringValue()).toBe("TypeError");
   } finally {
     pop?.();
   }
-  expect(realm.evaluateScriptSkipDebugger('globalThis.reached;').Value).toBe(Value.true);
+  expect(EnsureCompletion(realm.evaluateScriptSkipDebugger('globalThis.reached;')).Value).toBe(Value.true);
 });
 
 

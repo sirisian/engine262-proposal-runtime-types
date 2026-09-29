@@ -6,7 +6,7 @@ import {
   CompareSpecificity, SelectSpecialization, FindDuplicateCases, AnalyzeCallableGroup,
   type CallableGroupHost, type CallableDeclaration, type SpecializationCase,
 } from '#self';
-import type { PatternSlotParameter } from '#self';
+import type { PatternSlotParameter, ParseNode } from '#self';
 import { Agent, ManagedRealm, setSurroundingAgent, Parser } from '#self';
 
 /**
