@@ -245,7 +245,7 @@ test('a fixed extent lays its elements inline, so it closes a cycle', () => {
 });
 
 test('an alias defined as itself denotes no type', () => {
-  // Refused before the program runs (#sec-type-alias-declarations; Round 4, Gap 2).
+  // Refused before the program runs (#sec-type-alias-declarations).
   expect(earlyError('type L = L;'))
     .toBe('StaticTypeError: "L" is defined as itself, so it denotes no type');
 });

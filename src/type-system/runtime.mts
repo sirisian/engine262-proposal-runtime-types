@@ -4223,7 +4223,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         let ctor: Value | null = (t.Constructor as Value | undefined) ?? null;
         // A class expression's node knows the constructor it evaluated to,
-        // named or not (Round 6, Q2).
+        // named or not (#sec-typed-classes).
         if (!ctor && t.Declaration.type === 'ClassExpression') {
           ctor = classConstructorOfNode.get(t.Declaration as object) ?? null;
         }

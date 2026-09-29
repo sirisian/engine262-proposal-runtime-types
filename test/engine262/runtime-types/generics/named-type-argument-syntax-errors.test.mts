@@ -6,7 +6,7 @@ import { evaluated, expectEarlyError, expectStaticTypeError } from '../harness.m
  *
  * Two named type arguments with the same name are a Syntax Error: the list
  * alone shows it. A name that is not a parameter, and a positional argument
- * after a named one, are TYPE errors (Q3 of the round-2 review): deciding them
+ * after a named one, are TYPE errors (#sec-type-references): deciding them
  * needs the applied declaration - a positional argument after a variadic
  * parameter's name joins its run - and a Syntax Error cannot wait for an
  * imported or computed declaration to resolve. Either way each is reported

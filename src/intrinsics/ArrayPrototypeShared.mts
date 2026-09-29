@@ -275,7 +275,7 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
     let element = (O as { TypedElement?: TypeRecord }).TypedElement;
     // A typed tuple searches at the union of its position types (a rest
     // contributing its element), as #sec-array-defaults-and-stores gives a
-    // tuple's search methods (Round 4, Q1): `t.includes(2)` on a
+    // tuple's search methods: `t.includes(2)` on a
     // `[uint16, uint16]` then compares a `uint16` against `uint16`s.
     const tuple = (O as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple;
     if (element === undefined && tuple !== undefined) {

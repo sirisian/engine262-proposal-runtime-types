@@ -599,7 +599,7 @@ const INITIALIZABLE_CONTEXTS: readonly string[] = [
   'ClassMethod', 'ClassOperator', 'ObjectMethod', 'ObjectGetter', 'ObjectSetter',
 ];
 
-/** The constructor each class node last evaluated to (Round 6, Q2). */
+/** The constructor each class node last evaluated to (#sec-typed-classes). */
 export const classConstructorOfNode = new WeakMap<object, ObjectValue>();
 
 export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator<FunctionObject> {
@@ -851,7 +851,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   F.SourceText = sourceText;
   // 16. Perform MakeConstructor(F, false, proto).
   MakeConstructor(F, Value.false, proto);
-  // proposal-runtime-types (Round 6, Q2): record the constructor the class's
+  // proposal-runtime-types #sec-typed-classes: record the constructor the class's
   // node evaluated to, so a class type whose [[Declaration]] is a class
   // EXPRESSION - which may have no name to resolve - can find it for the
   // prototype-chain membership test. The latest evaluation is recorded, which

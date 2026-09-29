@@ -1023,7 +1023,7 @@ export abstract class TypeParser extends ExpressionParser {
     try {
       // An arrow's return position is a |TypeAnnotation| (#sec-arrow-function-
       // definitions), so it admits the predicate form `: x is T` as the other
-      // return sites do (Round 5, Gap 5). Return decorators are not changed.
+      // return sites do. Return decorators are not changed.
       const annotation = this.parseTypeAnnotation(false, true);
       if (this.test(Token.ARROW) && !this.peek().hadLineTerminatorBefore) {
         return annotation;

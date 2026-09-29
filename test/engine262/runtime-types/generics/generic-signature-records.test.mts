@@ -43,7 +43,7 @@ test('a literal that adopts a generic contextual signature is a generic value', 
   // value entering a typed position IS of that type, was broken for exactly one
   // kind of value: the program passed the check and `o.map.<uint8>(x)` was
   // refused at run time as a non-generic callable. TypeScript's contextual
-  // signature instantiation is the same commitment. See open-questions-round-2, Q3.
+  // signature instantiation is the same commitment.
   expect(evaluated('interface J { map<T: type>(x: T): T; } let o: J = { map(x) { return x; } }; String(o.map.<uint8>((1 := uint8)));')).toBe('1');
   expect(evaluated("type I = { map<T: type>(x: T): T }; let o: I = { map(x) { return x; } }; String(o.map.<string>('s'));")).toBe('s');
   // A method that declares its own keeps its own.

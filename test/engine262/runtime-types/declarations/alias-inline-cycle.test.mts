@@ -87,7 +87,7 @@ test('an alias defined as itself keeps its own diagnostic', () => {
   // this report a ReferenceError against an unbound name instead. It is an
   // Early Error: #sec-type-alias-declarations refuses a cycle that passes
   // through no reference position, and a bare self-reference passes through
-  // none (Round 4, Gap 2).
+  // none.
   expect(evaluated('try { eval("type L = L;"); "no error"; } catch (e) { e.constructor.name + ": " + e.message; }'))
     .toBe('StaticTypeError: "L" is defined as itself, so it denotes no type');
 });

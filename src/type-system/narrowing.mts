@@ -170,7 +170,7 @@ export function NarrowTo(s: TypeRecord, t: TypeRecord): NarrowResult {
   if (IsSubtype(t, s, [])) {
     return t;
   }
-  // Q7 of the round-2 review: two ~nominal~ records whose declarations are
+  // Two ~nominal~ records whose declarations are
   // both CLASS declarations, neither a subtype of the other (both tests just
   // failed), have no common value - the judgment the Early Error of
   // #sec-intersection-type-early-errors makes of `P & Q`. It is made here and

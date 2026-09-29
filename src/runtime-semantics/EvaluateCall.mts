@@ -162,7 +162,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     // `('5', 10)`. Without a declared type in view, the callee's own parameter
     // list is read, as before.
     // An overload set with no declared type in view binds names against the
-    // member whose parameters include them (Round 4, Gap 1); the dispatcher
+    // member whose parameters include them (#sec-bindarguments); the dispatcher
     // then resolves the call from the positions that binding produced.
     const names: string[] = [];
     for (const a of args as ParseNode.Arguments) {

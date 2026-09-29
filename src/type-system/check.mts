@@ -1559,8 +1559,8 @@ function literalOperand(node: ParseNode): ParseNode | null {
  * The value of a numeric literal - through parentheses and a sign - that is
  * not an integer, or null. #sec-literalvalueintype: for an integer type, "If
  * _mv_ is not an integer, return ~unrepresentable~", so such a literal beside
- * an integer operand is a type error as an out-of-range one is (Round 7, Gap
- * 4); `signedLiteralValue` answers only integers, which left it unchecked.
+ * an integer operand is a type error as an out-of-range one is;
+ * `signedLiteralValue` answers only integers, which left it unchecked.
  */
 function fractionalLiteralValue(node: ParseNode): number | null {
   let sign = 1;
@@ -3574,7 +3574,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * [[Value]]" of the literal type its argument binds. In the unspecialized
    * body that value is unknown but its type is not: every argument is checked
    * against the parameter's domain (EffectiveConstraint), so a read of it has
-   * the domain as its Static Type (Round 6, Gap 5 and Q1).
+   * the domain as its Static Type (#sec-generic-parameters-as-values).
    */
   const valueParameterDomains = new WeakMap<Map<string, Known | null>, Map<string, Known>>();
   const valueParameterDomainOf = (name: string): Known => {
@@ -5098,7 +5098,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return false;
     }
     const name = (target as { Name?: string }).Name;
-    // Round 3, Gap 1. At a `string` target every arithmetic compound but `+=`
+    // At a `string` target every arithmetic compound but `+=`
     // yields a number, and at a `boolean` target none yields a boolean, so each
     // is refused as its `=` spelling is (the Conversion Rule, #sec-the-conversion-
     // rule). `+=` at a `string` stays unjudged: it may concatenate, and whether a
@@ -6207,7 +6207,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * The type a class's generic parameter has where the class body reads it as a
    * value. A value parameter is its domain (#sec-generic-parameters-as-values,
-   * EffectiveConstraint; Round 6, Gap 5 and Q1); a type or variadic parameter
+   * EffectiveConstraint); a type or variadic parameter
    * keeps the open type it had.
    */
   const classParameterBindingType = (parameter: ParseNode.TypeParameter): TypeRecord => {
@@ -7581,11 +7581,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // is unresolved" defer. In a class with no heritage, a return of an
       // object or array literal, or of `this`, yields an object with no
       // [[Call]], and a path that returns nothing yields the instance, which
-      // has none either - so construction is proved non-callable (Round 7,
-      // Gap 5). Any other replacement object, a parameter, or a heritage whose
+      // has none either - so construction is proved non-callable. Any other
+      // replacement object, a parameter, or a heritage whose
       // fall-through depends on the base still needs a stronger proof.
       // A `new K(...)` of a class whose own construction is proved non-callable
-      // by this same judgment is as established (Round 8, Gap 3): the rule's own
+      // by this same judgment is as established: the rule's own
       // example is "an ordinary class with default non-callable construction".
       const establishedNonCallable = (e: ParseNode): boolean => {
         const x = patternExpression(e);
@@ -8425,7 +8425,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * The protected-access judgment for a receiver and a statically established
    * set of keys, shared by member access and by an object pattern's property,
-   * which reads the same declaration (Round 3, Q2).
+   * which reads the same declaration.
    */
   /**
    * The keys an object rest or spread of _receiverType_ reads, where it is an
@@ -8434,7 +8434,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * properties, so CopyDataProperties reads each; methods live on the
    * prototype and private names are not properties, so neither is read.
    * #sec-typed-classes makes a protected one of them a type error outside its
-   * scope (Round 7, Gap 3 and Q1).
+   * scope.
    */
   const checkProtectedCopy = (receiverType: Known, named: ReadonlySet<string | SymbolValue>): void => {
     const receiver = erasedForJudgment(receiverType) as { Kind?: string, Declaration?: ParseNode } | null;
@@ -9934,7 +9934,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // only a typed class can be a value type class; one annotated only on a
     // method, a getter, a constructor parameter or a static field "is not
     // typed". A class whose instance fields are all UNTYPED therefore has no
-    // default unless it declares a zero (#sec-defaultvalueof; Round 4, Gap 3),
+    // default unless it declares a zero (#sec-defaultvalueof),
     // which is what the run time already answers. A class with NO instance
     // field keeps its default - "nothing about it lacks a zero", the reading
     // `reference-field-default` pins and the doc's Q2 leaves open - and a class
@@ -11478,7 +11478,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // call must supply anything for this parameter.
                 // #sec-function-types: the collected-container rule "applies to
                 // every annotated rest in ... method signature", an object
-                // type's as an interface's (Round 8, Gap 1).
+                // type's as an interface's.
                 const resolvedParam = mp.TypeAnnotation ? resolveType(mp.TypeAnnotation.Type) : null;
                 if (mp.Rest) {
                   // A type parameter is judged by its constraint, so the
@@ -11519,7 +11519,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // accident and refused `o.map.<uint8>(x)` on an `I`-typed
               // binding while accepting it on the interface's. The scope push
               // above already resolved `x: T` against these parameters; only
-              // the record omitted them. See open-questions-round-2, Q2.
+              // the record omitted them.
               type: {
                 Kind: 'function',
                 Signatures: [{
@@ -11825,8 +11825,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Every refusal that reaches here needed the DECLARATION: whether a
         // name is one of its parameters, whether a name was already supplied
         // positionally, and whether a positional argument after a name joins a
-        // variadic run. Those are type errors (#sec-type-references, Q3 of the
-        // round-2 review), decided where the applied declaration is resolved,
+        // variadic run. Those are type errors (#sec-type-references), decided
+        // where the applied declaration is resolved,
         // which for an imported or computed callee is past the point a Syntax
         // Error could be. The purely syntactic ones - one name twice in a list,
         // a name on an array type - are the parser's.
@@ -14741,7 +14741,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * #sec-arithmetic-never-promotes: a shift's right operand is a DISTANCE, "the
    * distance may be of any" integer type, "and the result has the left
    * operand's type" - so `a <<= b` stores `a << b`, never `b`, and judging the
-   * distance against the target refused a valid store (Round 5, Gap 4). Every
+   * distance against the target refused a valid store. Every
    * other arithmetic compound requires same-typed operands, so its right
    * operand is the fact the target is judged by, as before.
    */
@@ -17116,7 +17116,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const tupleName = (m.IdentifierName as { name?: string } | undefined)?.name;
             // #sec-array-defaults-and-stores: the search methods take their
             // element at *t*, and "for a tuple, *t* is the union of its position
-            // types" (Round 4, Q1) - a rest position contributing its element.
+            // types" - a rest position contributing its element.
             // A literal then adopts the union, and an impossible search is
             // refused as it is for an array.
             if (tupleName === 'includes' || tupleName === 'indexOf' || tupleName === 'lastIndexOf') {
@@ -17503,7 +17503,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const target = patternExpression((node as { MemberExpression?: ParseNode }).MemberExpression);
         // A class expression written inline where it is constructed is an
         // established class, and `new` of it has its instance type
-        // (#sec-typed-classes; Round 6's Q2, reached here for Round 8, Gap 4).
+        // (#sec-typed-classes).
         if (target?.type === 'ClassExpression'
             && !((target as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length)) {
           return instanceTypeOf(target);
@@ -17511,7 +17511,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (target && target.type === 'IdentifierReference') {
           const targetName = (target as { name: string }).name;
           // A class expression bound immutably constructs its own instance type
-          // (Round 6, Gap 2 and Q2); a generic one is left as before.
+          // (#sec-typed-classes); a generic one is left as before.
           const boundOrigin = classNodes.has(targetName) ? undefined : stableClassOrigin(target);
           const boundExpression = boundOrigin?.declaration.type === 'ClassExpression' && !boundOrigin.arguments ? boundOrigin.declaration : undefined;
           const expressionParams = (boundExpression as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
@@ -18113,7 +18113,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ? (node as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator
               : (node as unknown as { operator?: string }).operator;
             const distance = rightLit ? foldIntegerConstant(rightNode, constExactValue) : null;
-            // #sec-integer-operations, Q1 of Round 5: an explicit conversion of a
+            // #sec-integer-operations: an explicit conversion of a
             // literal zero to an integer type is a literal zero divisor too -
             // `(0 := uint8)` is how a zero of the operand's type is written, and
             // the conversion of zero is zero in every integer type.
@@ -20231,7 +20231,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // while the static type still says `Pos` - and reporting that branch as
       // dead would have contradicted a documented behaviour. So the rule
       // fires for the kinds whose membership a value cannot lose.
-      // A CLASS joins them (Q7 of the round-2 review): its membership is an
+      // A CLASS joins them: its membership is an
       // identity - the prototype chain - and not a structure, so no write to a
       // field can take a value out of it. That is the fact the `instanceof`
       // form and the Early Error on `P & Q` already rest on; an object type or a
@@ -20832,7 +20832,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // For `boolean` ONLY. AtomsOfType answers atoms for other subjects
           // too - a Composite over a tuple, a sealed chain - and there a
           // `default` after a pattern that happens to cover them is the
-          // belt-and-braces shape round 1 left undecided (see the note at the
+          // belt-and-braces shape left undecided (see the note at the
           // clause loop); `boolean` is the case the clause names, and the
           // decision on the rest is not made here by the back door.
           errors.push((Throw.StaticTypeError(
@@ -22536,8 +22536,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // BARE chain - `type R = R;`, `type A = B; type B = A;` - passes through no
     // position at all, so the member walk below never meets it: the alias
     // resolves to nothing and is skipped, and the chain was refused only when
-    // a top-level declaration evaluated, and never in any other scope (Round 4,
-    // Gap 2). Follow each alias's right-hand side while it is itself a bare
+    // a top-level declaration evaluated, and never in any other scope.
+    // Follow each alias's right-hand side while it is itself a bare
     // reference to an alias, and report a chain that returns to its start.
     {
       const bareTarget = (name: string): string | undefined => {
@@ -23069,9 +23069,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const typedClassDeclarationOf = (type: Known): ParseNode | undefined => {
     const t = type?.Kind === 'reference' ? type.Target as TypeRecord : type;
     if (!t || t.Kind !== 'nominal' || t.EnumMembers !== undefined) return undefined;
-    // A class EXPRESSION is an established class too (#sec-typed-classes, Round
-    // 6's Q2), so the operator rules that read a typed class through here reach
-    // its instances as a declaration's (Round 8, Gap 4).
+    // A class EXPRESSION is an established class too (#sec-typed-classes), so
+    // the operator rules that read a typed class through here reach its
+    // instances as a declaration's.
     const written = (t as { Declaration?: ParseNode }).Declaration;
     const declaration = (classDeclarationOf(t) ?? (written?.type === 'ClassExpression' ? written : undefined)) as ParseNode | undefined;
     if (!declaration) return undefined;
@@ -23256,7 +23256,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // #sec-typed-classes: a pattern property with a statically established
     // key selects the same declaration a dot access does, so the protected
-    // permission governs it too (Round 3, Q2).
+    // permission governs it too.
     checkProtectedKeys(source.type, [key]);
     const expr = patternExpression(source.expression);
     if (expr?.type === 'ArrayLiteral' && typeof key === 'string') {
@@ -23415,7 +23415,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (type.Kind === 'union') return type.Members.length > 0 && type.Members.every(fails);
       if (type.Kind === 'shared') return fails(type.Target);
       if (declaredOperator(type, `unary ${node.operator}`)) return false;
-      // A typed-class operand (Round 5, Gap 2): its conversion, inherited or
+      // A typed-class operand: its conversion, inherited or
       // its own, yields a number, and a number is stored back only where the
       // location's class declares a conversion from one. So where every
       // destination is such a class without one, every path fails "storing the
@@ -23992,7 +23992,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * bind is a type error. A fresh object literal of plain String-keyed data
    * members establishes its keys and its lack of an iterator (while
    * %Object.prototype% has none), so it is judged as the named arguments it
-   * stands for (Round 4, Gap 1). Anything else keeps its run-time check.
+   * stands for (#sec-bindarguments). Anything else keeps its run-time check.
    */
   const objectSpreadItems = (arg: ParseNode): ArgumentItem<ParseNode>[] | null => {
     if (arg.type !== 'AssignmentRestElement') return null;
@@ -24125,8 +24125,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // established callback result alternative fails the reached flattening
       // protocol." A concise body that is a conditional has one alternative
       // per arm; where the callback's inferred result does not carry them, the
-      // arms are read directly, and a viable or unknown one still defers
-      // (Round 7, Gap 2).
+      // arms are read directly, and a viable or unknown one still defers.
       const conditionalArms = (node: ParseNode | undefined): ParseNode[] | null => {
         const e = node ? patternExpression(node) : undefined;
         if (e?.type !== 'ConditionalExpression') return null;
@@ -24137,7 +24136,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const arrow = patternExpression(callbackArgument) as { type?: string, TypeAnnotation?: unknown, ConciseBody?: { type?: string, ExpressionBody?: ParseNode, FunctionStatementList?: readonly ParseNode[] }, FunctionBody?: { FunctionStatementList?: readonly ParseNode[] } } | undefined;
       // A block body's alternatives are its `return` expressions, and a
       // conditional among them has one alternative per arm, as a concise
-      // conditional body does (Round 8, Gap 2). A path that falls through
+      // conditional body does. A path that falls through
       // returns *undefined*, which fails the protocol too.
       const blockStatements = !arrow || arrow.TypeAnnotation ? undefined
         : arrow.type === 'ArrowFunction' && arrow.ConciseBody?.type === 'FunctionBody' ? arrow.ConciseBody.FunctionStatementList
@@ -24650,8 +24649,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // result inference and argument checking ask the same resolver in the current context.
   const selectCallSignature = (c: object, supplied: readonly ParseNode[], callee: TypeRecord & { Kind: 'function' }, n: ParseNode, diagnose: boolean): SignatureRecord | null => {
     let sig: SignatureRecord | null = callee.Signatures.length === 1 ? callee.Signatures[0] : null;
-    // An object-literal spread supplies names too (#sec-bindarguments; Round 4,
-    // Gap 1), and selects the signature in view by them as written names do.
+    // An object-literal spread supplies names too (#sec-bindarguments), and
+    // selects the signature in view by them as written names do.
     const namedNames = [
       ...supplied.filter((a): a is ParseNode.NamedArgument => a.type === 'NamedArgument').map((a) => a.Name),
       ...supplied.flatMap((a) => objectSpreadItems(a)?.map((item) => item.name!) ?? []),
@@ -25656,8 +25655,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (budget.remaining-- <= 0) return null;
     const node = patternExpression(expression)!;
     // #sec-function-types: a conditional selection is a `?:`, `||`, `&&` or
-    // `??` expression, and its possible origins are the operands it can yield
-    // (Round 3, Q3). Each logical operator yields one of its operands unchanged,
+    // `??` expression, and its possible origins are the operands it can yield.
+    // Each logical operator yields one of its operands unchanged,
     // so both are possible origins, as both arms of `?:` are; a falsy value a
     // `&&` may yield is never a constructor or callable, so it adds nothing.
     const logicalOperands = node.type === 'LogicalORExpression' ? [node.LogicalORExpression, node.LogicalANDExpression]
@@ -25855,7 +25854,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkedCollectionSeeds = new WeakMap<ParseNode, Set<TypeRecord>>();
   const checkCollectionSeed = (node: ParseNode.NewExpression, target: Known): void => {
-    // The weak collections are seeded by the same judgment (Round 4, Gap 5):
+    // The weak collections are seeded by the same judgment:
     // #sec-collection-construction checks "an established surviving key, value
     // or element" for every keyed collection, and a key the weak-holding rule
     // refuses is one that cannot undergo the conversion to its key type.
@@ -26110,7 +26109,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || (t.Kind === 'primitive' && t.Name === 'boolean')
       || (t.Kind === 'union' && t.Members.length > 0 && t.Members.every((m) => m.Kind !== 'any' && !mentionsTypeParameter(m)))
       || (t.Kind === 'array' && typeof (t as { Extent?: unknown }).Extent === 'number' && closed((t as { Element: TypeRecord }).Element)));
-    // A value parameter trials its DOMAIN (Q5 of the round-2 review): `M: 'a' |
+    // A value parameter trials its DOMAIN (#sec-trial-specialization): `M: 'a' |
     // 'b'` and `M: type extends 'a' | 'b'` name one candidate set, and the run
     // time already trials the domain.
     const trialSet = (tp: ParseNode.TypeParameter): Known => {
@@ -26698,7 +26697,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * #sec-declared-narrowing: "It is a type error if the |BindingIdentifier| is
    * not the name of a parameter of that signature." A function DECLARATION is
    * judged where its signature is declared; an arrow or a function expression,
-   * whose return predicate now parses (Round 5, Gap 5), is judged here.
+   * whose return predicate parses, is judged here.
    */
   const checkPredicateTarget = (annotation: ParseNode.TypeAnnotation | null | undefined, formals: readonly ParseNode[] | null | undefined): void => {
     const target = (annotation as { NarrowsTarget?: string } | null | undefined)?.NarrowsTarget;
@@ -27571,7 +27570,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // takes the type of the other", and #sec-literal-propagation makes a
         // literal that type cannot represent a type error. Only the equality
         // forms and `case` answer *false* instead (line 3662), so a relational
-        // operator is judged as arithmetic is (Round 6, Gap 4); the run time
+        // operator is judged as arithmetic is; the run time
         // adopted the literal and threw a RangeError.
         if (rel.RelationalExpression && ['<', '<=', '>', '>='].includes(rel.operator)) {
           const sides: [ParseNode, ParseNode][] = [[rel.ShiftExpression, rel.RelationalExpression], [rel.RelationalExpression, rel.ShiftExpression]];
@@ -27877,7 +27876,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(n.PropertyDefinitionList);
         checkObjectAccessorPairs(n);
         // An object spread copies every own enumerable property of its operand,
-        // a protected field of a typed-class instance included (Round 7, Gap 3).
+        // a protected field of a typed-class instance included.
         for (const member of n.PropertyDefinitionList) {
           if (member.type === 'PropertyDefinition' && member.PropertyName === null && member.AssignmentExpression) {
             checkProtectedCopy(staticType(member.AssignmentExpression), new Set());
@@ -28414,7 +28413,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-operator-declarations: "It is a type error to apply an arithmetic,
         // bitwise or ordered operator to an instance of a typed class whose
         // class declares neither that operator nor a primitive conversion of its
-        // own" - the unary forms included (Round 5, Q2): `-c` of such a class
+        // own" - the unary forms included: `-c` of such a class
         // is the *NaN* the rule exists to refuse, and line 3819 already reads
         // unary `+` on a class as an operator rather than ToNumber.
         if ((u.operator === '-' || u.operator === '~' || u.operator === '+') && u.UnaryExpression) {
@@ -29311,8 +29310,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ? (owner as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name
             : undefined;
           const ownerParams = (owner as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
-          // A class EXPRESSION is judged from its own node, named or not
-          // (Round 6, Gap 2): the rule is about the class body alone.
+          // A class EXPRESSION is judged from its own node, named or not:
+          // the rule is about the class body alone.
           const instance = !(ownerParams && ownerParams.length > 0)
             ? (owner?.type === 'ClassExpression' ? instanceTypeOf(owner) : ownerName ? classTypeOf(ownerName) : null) : null;
           const zero = instance ? staticType(n.Initializer) : null;
@@ -29606,7 +29605,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }) });
                 // #sec-partial-classes: "A statically established collision ...
                 // is an early type error", and the static namespace collides
-                // within itself as the instance one does (Round 7, Gap 1). The
+                // within itself as the instance one does. The
                 // static members merge only when something reads the class
                 // object, so merge them here, where the partial is declared.
                 withPartialStructure({ ...own, Structure: classObjectTypeOfNode(primary) ?? undefined }, true);
@@ -30123,8 +30122,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { Name: name, Parameters: parameters, argumentsOf: () => null, defaultOf: () => undefined };
       },
     } as typeof callableHost;
-    // #sec-collectcaptures for a CLASS family's specialization lists (Round 3,
-    // Gap 2): "It is a type error, at the declaration" for a written domain
+    // #sec-collectcaptures for a CLASS family's specialization lists: "It is a
+    // type error, at the declaration" for a written domain
     // that is not its position's, for a capture where no constructor exposes a
     // component, and for a constructor capture in a first-order position. The
     // validator already makes all three judgments and ran only for a primitive
