@@ -30,7 +30,7 @@ test.each([
     "direct already rejects",
     "abstract class A{m():uint8;} function f(){new A();}"
   ]
-])('R41 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -43,7 +43,7 @@ test.each([
     "computed producer stays dynamic",
     "abstract class A{m():uint8;} function get():any{return A;}new (get())();"
   ]
-])('R41 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -64,7 +64,7 @@ test.each([
     "shadowed alias",
     "abstract class A{m():uint8;} function f(K:any){new K();}f(class{});"
   ]
-])('R41 preserves valid behavior: %s', (_name, source) => {
+])('preserves valid behavior: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -86,7 +86,7 @@ test.each([
     "block alias",
     "abstract class A{m():uint8;}function f(){const K=A;{const Alias=K;new Alias();}}"
   ]
-])('R41 rejects a proved edge case: %s', (_name, source) => {
+])('rejects a proved edge case: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -95,7 +95,7 @@ test.each([
     "abstract constructor from parameter",
     "abstract class A{m():uint8;}function f(K:any){new K();}f(A);"
   ]
-])('R41 keeps unknown origins dynamic: %s', (_name, source) => {
+])('keeps unknown origins dynamic: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -120,6 +120,6 @@ test.each([
     "anonymous concrete expression",
     "const K=class{x:uint8=1;};new K();"
   ]
-])('R41 accepts a viable edge case: %s', (_name, source) => {
+])('accepts a viable edge case: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });

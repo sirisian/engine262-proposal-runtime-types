@@ -4,7 +4,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 // Preserve the error phase as well as the outcome and observable effects.
 test.each([
   [
-    "R60-01: placement-inner-call",
+    "placement-inner-call",
     "class C{x:uint8=0;}function f(n:uint8){return new (n()) C();}",
     {
       "completion": "throw",
@@ -16,7 +16,7 @@ test.each([
     }
   ],
   [
-    "R60-02: placement-inner-arg",
+    "placement-inner-arg",
     "class C{x:uint8=0;}function g(x:uint8):ArrayBuffer{return new ArrayBuffer(8);}function f(){return new (g(\"bad\")) C();}",
     {
       "completion": "throw",
@@ -28,7 +28,7 @@ test.each([
     }
   ],
   [
-    "R60-03: placement-offset-call",
+    "placement-offset-call",
     "class C{x:uint8=0;}function f(b:ArrayBuffer,n:uint8){return new (b,n()) C();}",
     {
       "completion": "throw",
@@ -40,7 +40,7 @@ test.each([
     }
   ],
   [
-    "R60-04: placement-count-call",
+    "placement-count-call",
     "class C{x:uint8=0;}function f(b:ArrayBuffer,n:uint8){return new (b,0,n()) C();}",
     {
       "completion": "throw",
@@ -52,7 +52,7 @@ test.each([
     }
   ],
   [
-    "R60-05: placement-inner-call-run",
+    "placement-inner-call-run",
     "class C{x:uint8=0;}function f(n:uint8){return new (n()) C();}f(1);",
     {
       "completion": "throw",
@@ -64,7 +64,7 @@ test.each([
     }
   ],
   [
-    "R60-06: placement-reference-state",
+    "placement-reference-state",
     "class C{x:uint8=0;}let n:uint8=1;const ref r=n;function f(b:ArrayBuffer){return new (b,do {ref r=n;0;}) C();}",
     {
       "completion": "throw",
@@ -76,7 +76,7 @@ test.each([
     }
   ],
   [
-    "R60-07: placement-global-call-control",
+    "placement-global-call-control",
     "function f(n:uint8){n();}",
     {
       "completion": "throw",
@@ -88,7 +88,7 @@ test.each([
     }
   ],
   [
-    "R60-08: placement-control",
+    "placement-control",
     "class C{x:uint8=1;}const b=new ArrayBuffer(8);new (b) C();",
     {
       "completion": "normal",
@@ -99,7 +99,7 @@ test.each([
     }
   ],
   [
-    "R60-09: placement-arraybuffer-typed",
+    "placement-arraybuffer-typed",
     "class C{x:uint8=1;}function f(b:ArrayBuffer){return new (b) C();}f(new ArrayBuffer(8));",
     {
       "completion": "normal",
@@ -110,7 +110,7 @@ test.each([
     }
   ],
   [
-    "R60-10: placement-target-run",
+    "placement-target-run",
     "class C {x:uint8=0;}function f(n:uint8){return new (n) C();}f(1);",
     {
       "completion": "throw",
@@ -121,7 +121,7 @@ test.each([
     }
   ],
   [
-    "R60-11: placement-symbol",
+    "placement-symbol",
     "class C{x:uint8=0;}function f(b:ArrayBuffer,n:symbol){return new (b,n) C();}f(new ArrayBuffer(8),Symbol());",
     {
       "completion": "throw",
@@ -132,7 +132,7 @@ test.each([
     }
   ],
   [
-    "R60-12: placement-bigint",
+    "placement-bigint",
     "class C{x:uint8=0;}function f(b:ArrayBuffer,n:bigint){return new (b,n) C();}f(new ArrayBuffer(8),1n);",
     {
       "completion": "throw",
@@ -143,7 +143,7 @@ test.each([
     }
   ],
   [
-    "R60-13: placement-no-layout",
+    "placement-no-layout",
     "dynamic class C{x:string=\"\";}function f(b:ArrayBuffer){return new(b) C();}f(new ArrayBuffer(8));",
     {
       "completion": "throw",
@@ -154,7 +154,7 @@ test.each([
     }
   ],
   [
-    "R60-14: unreachable placement child still checked",
+    "unreachable placement child still checked",
     "class C{x:uint8=0;}function f(n:uint8){if(false){new (n()) C();}}",
     {
       "completion": "throw",
@@ -166,7 +166,7 @@ test.each([
     }
   ],
   [
-    "R60-15: child typed operator error",
+    "child typed operator error",
     "class C{x:uint8=0;}function f(b:ArrayBuffer,s:symbol){return new (b,+s) C();}",
     {
       "completion": "throw",
@@ -178,7 +178,7 @@ test.each([
     }
   ],
   [
-    "R60-16: child type mismatch in nested function",
+    "child type mismatch in nested function",
     "class C{x:uint8=0;}function f(b:ArrayBuffer){return new(b,do {const g=()=>{let n:uint8=\"bad\";};0;}) C();}",
     {
       "completion": "throw",
@@ -190,7 +190,7 @@ test.each([
     }
   ],
   [
-    "R60-17: valid coercing offset unchanged",
+    "valid coercing offset unchanged",
     "class C{x:uint8=1;}function f(b:ArrayBuffer,s:string){return new(b,s) C();}f(new ArrayBuffer(8),\"1\");",
     {
       "completion": "normal",
@@ -199,7 +199,7 @@ test.each([
     }
   ],
   [
-    "R60-18: dynamic placement child stays runtime",
+    "dynamic placement child stays runtime",
     "class C{x:uint8=0;}function f(n:any){return new(n()) C();}f(1);",
     {
       "completion": "throw",
@@ -208,7 +208,7 @@ test.each([
     }
   ],
   [
-    "R60-19: placement effects happen exactly once",
+    "placement effects happen exactly once",
     "class C{x:uint8=1;}let count=0;function get():ArrayBuffer{count++;return new ArrayBuffer(8);}new(get()) C();globalThis.settled=String(count);",
     {
       "completion": "normal",
@@ -218,7 +218,7 @@ test.each([
     }
   ],
   [
-    "R60-20: dynamic capacity check retained",
+    "dynamic capacity check retained",
     "class C{x:uint8=1;}function f(b:ArrayBuffer,n:number){return new(b,n) C();}f(new ArrayBuffer(8),9);",
     {
       "completion": "throw",

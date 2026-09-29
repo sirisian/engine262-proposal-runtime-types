@@ -22,7 +22,7 @@ const MAX = '9223372036854775807';
 test('conversion refuses a value that does not fit', () => {
   // A LITERAL out of range is refused before the program runs - #sec-literal-types:
   // "a literal whose value that type cannot represent is a type error rather
-  // than a silent truncation" (the F10 plan's L1).
+  // than a silent truncation" (#sec-literal-propagation).
   for (const src of ['1e308 := rational64;', '5e-324 := rational64;', 'rational64(1e308);', 'let r: rational64 = 1e30;']) {
     expectStaticTypeError(src);
   }

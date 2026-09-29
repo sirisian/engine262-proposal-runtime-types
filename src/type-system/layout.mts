@@ -623,7 +623,7 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // already resolved: the substituter is an ordinary function, so the walk
     // stays synchronous and a compile-time constant stays one.
     const args = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments;
-    // Phase 5, plan 6.3: layout is derived AFTER selection. An application
+    // #sec-specialization-lists: layout is derived AFTER selection. An application
     // whose selected body is a case has the case's own fields, not the
     // primary's with the arguments substituted, so its layout is the one its
     // own constructor computed from that body.

@@ -50,7 +50,7 @@ test.each([
     "bigint to number executed",
     "function f(x:{[Symbol.toPrimitive]:()=>bigint}){+x;}f({[Symbol.toPrimitive](){return 1n;}});"
   ]
-])('R40 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -63,7 +63,7 @@ test.each([
     "legacy",
     "let x={[Symbol.toPrimitive](){return Symbol();}};`${x}`;"
   ]
-])('R40 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -108,7 +108,7 @@ test.each([
     "let hits=0;function tag(strings:any,x:any){return 1;}function f(x:{[Symbol.toPrimitive]:()=>symbol}){return tag`${x}`;}f({[Symbol.toPrimitive](){hits++;return Symbol();}});globalThis.settled=String(hits);",
     "0"
   ]
-])('R40 preserves values and effects: %s', (_name, source, expected) => {
+])('preserves values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });
 
@@ -145,7 +145,7 @@ test.each([
     "projected BigInt Number mix",
     "class C{[Symbol.toPrimitive](hint:string):bigint{return 8n;}}function f(x:C,n:number){x * n;}"
   ]
-])('R40 additional early: %s', (_name, source) => {
+])('additional early: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -158,7 +158,7 @@ test.each([
     "object type retained",
     "function f(x:{[Symbol.toPrimitive]:()=>string,label:number}){`${x}`;let y:object=x;let n:number=x.label;}f({[Symbol.toPrimitive](){return \"ok\";},label:1});"
   ]
-])('R40 additional ok: %s', (_name, source) => {
+])('additional ok: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -178,6 +178,6 @@ test.each([
     "const key=Symbol();function f(x:{[key]:()=>symbol}){return `${x}`;}globalThis.settled=f({[key](){return Symbol();}});",
     "[object Object]"
   ]
-])('R40 additional values and effects: %s', (_name, source, expected) => {
+])('additional values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });

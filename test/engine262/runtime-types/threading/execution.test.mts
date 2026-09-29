@@ -7,7 +7,7 @@ import {
  * Extension coverage - threading.md, the execution model.
  *
  * Covers #sec-threading-agent-cluster, #sec-threading-scheduling, and
- * #sec-threading-callthread as implemented in E2b: a simulated cluster whose
+ * #sec-threading-callthread as implemented here: a simulated cluster whose
  * agents share one realm and take turns a job at a time.
  *
  * The point of a simulation is that it can answer WHERE something ran, which is

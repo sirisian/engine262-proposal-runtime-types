@@ -102,7 +102,7 @@ export function numericPredicate(value: Value, which: NumericPredicate, surface:
     }
   }
   if (isDecimalObject(value)) {
-    // A decimal NaN or infinity (N1): the value tests the table names.
+    // A decimal NaN or infinity: the value tests the table names.
     const special = (value as unknown as { DecimalSpecial?: string }).DecimalSpecial;
     if (special !== undefined) {
       switch (which) {

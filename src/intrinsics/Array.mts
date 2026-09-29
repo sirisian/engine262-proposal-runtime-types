@@ -77,7 +77,7 @@ function* ArrayConstructor(values: Arguments, { NewTarget }: FunctionCallContext
     //
     // The comparison below is why the value is unwrapped rather than tested in
     // place: SameValueZero of a plain uint32 3 against a TYPED 3 is *false* by
-    // R1, so leaving `len` typed would turn every valid typed length into a
+    // #sec-value-types, so leaving `len` typed would turn every valid typed length into a
     // RangeError. The array's stored length stays a plain Number, which the
     // array exotic object asserts and which was left in place - the typing of
     // a length lives at the [[Get]], not in the slot.

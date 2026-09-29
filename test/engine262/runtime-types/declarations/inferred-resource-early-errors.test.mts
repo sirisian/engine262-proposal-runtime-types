@@ -4,7 +4,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 // Preserve the error phase as well as the outcome and observable effects.
 test.each([
   [
-    "R59-01: using-inferred",
+    "using-inferred",
     "function f(r:{[Symbol.dispose]:uint8}){using x=r;}f({[Symbol.dispose]:1});",
     {
       "completion": "throw",
@@ -16,7 +16,7 @@ test.each([
     }
   ],
   [
-    "R59-02: using-inferred-args",
+    "using-inferred-args",
     "function f(r:{[Symbol.dispose]:(x:uint8)=>void}){using x=r;}f({[Symbol.dispose]:(x:uint8):void=>{}});",
     {
       "completion": "throw",
@@ -28,7 +28,7 @@ test.each([
     }
   ],
   [
-    "R59-03: using-primitive-unused",
+    "using-primitive-unused",
     "function f(n:uint8){using x=n;}",
     {
       "completion": "throw",
@@ -40,7 +40,7 @@ test.each([
     }
   ],
   [
-    "R59-04: using-primitive-run",
+    "using-primitive-run",
     "function f(n:uint8){using x=n;}f(1);",
     {
       "completion": "throw",
@@ -52,7 +52,7 @@ test.each([
     }
   ],
   [
-    "R59-05: using-number",
+    "using-number",
     "function f(n:number){using x=n;}f(1);",
     {
       "completion": "throw",
@@ -64,7 +64,7 @@ test.each([
     }
   ],
   [
-    "R59-06: using-call-unused",
+    "using-call-unused",
     "function make():{[Symbol.dispose]:uint8}{return {[Symbol.dispose]:1};}function f(){using x=make();}",
     {
       "completion": "throw",
@@ -76,7 +76,7 @@ test.each([
     }
   ],
   [
-    "R59-07: using-class-unused",
+    "using-class-unused",
     "class Bad{[Symbol.dispose]:uint8=1;}function f(){using x=new Bad();}",
     {
       "completion": "throw",
@@ -88,7 +88,7 @@ test.each([
     }
   ],
   [
-    "R59-08: using-inherited-unused",
+    "using-inherited-unused",
     "class B{[Symbol.dispose]:uint8=1;}class C extends B{}function f(c:C){using x=c;}",
     {
       "completion": "throw",
@@ -100,7 +100,7 @@ test.each([
     }
   ],
   [
-    "R59-09: using-getter-unused",
+    "using-getter-unused",
     "class C{get [Symbol.dispose]():uint8{globalThis.hookRan=true;return 1;}}function f(c:C){using x=c;}",
     {
       "completion": "throw",
@@ -112,7 +112,7 @@ test.each([
     }
   ],
   [
-    "R59-10: using-call-args-unused",
+    "using-call-args-unused",
     "function f(c:{[Symbol.dispose]:(n:uint8)=>void}){using x=c;}",
     {
       "completion": "throw",
@@ -124,7 +124,7 @@ test.each([
     }
   ],
   [
-    "R59-11: using-union-invalid",
+    "using-union-invalid",
     "function f(n:uint8|{[Symbol.dispose]:uint8}){using x=n;}",
     {
       "completion": "throw",
@@ -136,7 +136,7 @@ test.each([
     }
   ],
   [
-    "R59-12: using-plain-js",
+    "using-plain-js",
     "function f(n){using x=n;}f(1);",
     {
       "completion": "throw",
@@ -147,7 +147,7 @@ test.each([
     }
   ],
   [
-    "R59-13: using-any",
+    "using-any",
     "function f(n:any){using x=n;}f(1);",
     {
       "completion": "throw",
@@ -158,7 +158,7 @@ test.each([
     }
   ],
   [
-    "R59-14: using-explicit-any",
+    "using-explicit-any",
     "function f(n:{[Symbol.dispose]:uint8}){using x:any=n;}f({[Symbol.dispose]:1});",
     {
       "completion": "throw",
@@ -169,7 +169,7 @@ test.each([
     }
   ],
   [
-    "R59-15: using-annotation-control",
+    "using-annotation-control",
     "function f(c:{[Symbol.dispose]:uint8}){using x:{[Symbol.dispose]:uint8}=c;}",
     {
       "completion": "throw",
@@ -181,7 +181,7 @@ test.each([
     }
   ],
   [
-    "R59-16: using-good-call",
+    "using-good-call",
     "function f(c:{[Symbol.dispose]:()=>void}){using x=c;}f({[Symbol.dispose]:()=>{globalThis.hookRan=true;}});",
     {
       "completion": "normal",
@@ -192,7 +192,7 @@ test.each([
     }
   ],
   [
-    "R59-17: using-optional-arg",
+    "using-optional-arg",
     "function f(c:{[Symbol.dispose]:(n?:uint8)=>void}){using x=c;}f({[Symbol.dispose]:(n?:uint8):void=>{globalThis.hookRan=true;}});",
     {
       "completion": "normal",
@@ -203,7 +203,7 @@ test.each([
     }
   ],
   [
-    "R59-18: using-nullish",
+    "using-nullish",
     "function f(n:null|undefined){using x=n;}f(null);f(undefined);",
     {
       "completion": "normal",
@@ -214,7 +214,7 @@ test.each([
     }
   ],
   [
-    "R59-19: using-union-viable",
+    "using-union-viable",
     "function f(n:uint8|null){using x=n;}f(null);",
     {
       "completion": "normal",
@@ -225,7 +225,7 @@ test.each([
     }
   ],
   [
-    "R59-20: using-open",
+    "using-open",
     "function f(n:object){using x=n;}f({[Symbol.dispose](){globalThis.hookRan=true;}});",
     {
       "completion": "normal",
@@ -236,7 +236,7 @@ test.each([
     }
   ],
   [
-    "R59-21: using-generic",
+    "using-generic",
     "function f<T: type>(n:T){using x=n;}",
     {
       "completion": "normal",
@@ -247,7 +247,7 @@ test.each([
     }
   ],
   [
-    "R59-22: ignored disposer result remains ignored",
+    "ignored disposer result remains ignored",
     "type Bad={then:(x:uint8)=>void};function f(c:{[Symbol.dispose]:()=>Bad}){using x=c;}f({[Symbol.dispose]:()=>({then:(x:uint8):void=>{}})});",
     {
       "completion": "normal",
@@ -256,7 +256,7 @@ test.each([
     }
   ],
   [
-    "R59-23: explicit broad annotation remains a boundary",
+    "explicit broad annotation remains a boundary",
     "function f(c:{[Symbol.dispose]:uint8}){using x:object=c;}f({[Symbol.dispose]:1});",
     {
       "completion": "throw",

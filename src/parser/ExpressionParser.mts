@@ -274,7 +274,7 @@ function firstWriteIn(node: object, depth = 0): string | undefined {
 }
 
 export abstract class ExpressionParser extends FunctionParser {
-  /** Set while a class element's operator definition is parsed (phase 4, step 1). */
+  /** Set while a class element's operator definition is parsed. */
   protected parsingClassOperator = false;
   private readonly matchBoundNames = new WeakMap<ParseNode.MatchPattern, ReadonlySet<string>>();
 
@@ -3519,7 +3519,7 @@ export abstract class ExpressionParser extends FunctionParser {
       node.ClassStaticBlockBody = this.finishNode(ClassStaticBlockBody, 'ClassStaticBlockBody');
       element = this.finishNode(node, 'ClassStaticBlock');
     } else if (surroundingAgent.feature('runtime-types') && this.classElementStartsOperatorDefinition()) {
-      // A CLASS operator's list may hold cases (phase 4, step 1); an
+      // A CLASS operator's list may hold cases; an
       // interface's or a primitive block's operator list may not.
       this.parsingClassOperator = true;
       try {
@@ -4447,7 +4447,7 @@ export abstract class ExpressionParser extends FunctionParser {
           && !isAsync
           && !isGenerator
           && !this.classElementNameIsConstructor(node.ClassElementName)) {
-        // Plan section 3.8, rule 2: a method whose generic list declares
+        // #sec-callable-overload-contracts: a method whose generic list declares
         // binders only is an OWNER, and may omit its body without being
         // abstract - `read<T: type>(): T;` in a concrete class - since it has
         // no subclass obligation; its cases, not a subclass, implement it.

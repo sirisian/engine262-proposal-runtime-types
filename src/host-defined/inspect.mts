@@ -85,7 +85,7 @@ const INSPECTORS = {
     }
     return n.toString();
   },
-  // proposal-runtime-types R6: a typed number prints its value with a typed
+  // proposal-runtime-types: a typed number prints its value with a typed
   // marker so it is distinguishable from a plain Number in debug output.
   // The payload is read as it is CARRIED: a value of a type wider than 53 bits
   // holds a BigInt, and rendering it through a Number would show a different

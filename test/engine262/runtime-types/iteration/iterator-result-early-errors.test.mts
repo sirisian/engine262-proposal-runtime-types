@@ -58,7 +58,7 @@ test.each([
     "async step rejection",
     "async function unused(x:{[Symbol.asyncIterator]:()=>{next:()=>Promise.<number,never>}}){for await(const v of x){}} unused({[Symbol.asyncIterator](){return {next:async function():Promise.<number,never>{return 1;}};}}).then(()=>globalThis.settled=\"normal\",e=>globalThis.settled=e.constructor.name);"
   ]
-])('R28 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -67,7 +67,7 @@ test.each([
     "any runtime",
     "function unused(x:any){for(const v of x){}} unused({[Symbol.iterator](){return 1;}});"
   ]
-])('R28 retains runtime failure: %s', (_name, source) => {
+])('retains runtime failure: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -92,7 +92,7 @@ test.each([
     "union hook return",
     "function unused(x:{[Symbol.iterator]:()=>(number|{next:()=>{done:boolean,value:number}})}){for(const v of x){}}"
   ]
-])('R28 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -102,7 +102,7 @@ test.each([
     "async function unused(x:{[Symbol.asyncIterator]:()=>{next:()=>Promise.<{done:boolean,value:number},never>}}){for await(const v of x){}} unused({[Symbol.asyncIterator](){return {next:async function():Promise.<{done:boolean,value:number},never>{return {done:true,value:1};}};}}).then(()=>globalThis.settled=\"normal\",e=>globalThis.settled=e.constructor.name);",
     "normal"
   ]
-])('R28 async result: %s', (_name, source, result) => {
+])('async result: %s', (_name, source, result) => {
   expect(settledAfterJobs(source)).toBe(result);
 });
 
@@ -135,7 +135,7 @@ test.each([
     "sync fallback raw scalar",
     "async function f(x:{[Symbol.asyncIterator]:undefined,[Symbol.iterator]:()=>{next:()=>number}}){for await(const v of x){}}"
   ]
-])('R28 boundary control (early): %s', (_name, source) => {
+])('boundary control (early): %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -172,11 +172,11 @@ test.each([
     "reference iteration",
     "function f(x:{[Symbol.iterator]:()=>number}){for(const ref v of x){}}"
   ]
-])('R28 boundary control (ok): %s', (_name, source) => {
+])('boundary control (ok): %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
-test('R38 rejects when the only Object result requires an unsupplied argument', () => {
+test('a protocol hook is refused when its only Object result requires an unsupplied argument', () => {
   expectStaticTypeError('interface Hook{():number;(n:number):{next:()=>{}};}function f(x:{[Symbol.iterator]:Hook}){const [v]=x;}');
   expectStaticTypeError('interface Next{():number;(n:number):{};}function f(x:{[Symbol.iterator]:()=>{next:Next}}){const [v]=x;}');
 });

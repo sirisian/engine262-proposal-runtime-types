@@ -10,7 +10,7 @@ import { kit, evaluateBuilder } from '../corpus/type-challenges/harness.mts';
  * user `meta` block claiming it is refused - so withholding preserved nothing,
  * and the name cannot be returned either way. What stays reversible is the other
  * half: validation is live, so these do real work now, while the subtype judgment
- * is the floor of reflexivity and can be strengthened later by R18 without
+ * is the floor of reflexivity and can be strengthened by the pattern-inclusion decision procedure without
  * breaking anyone.
  *
  * Being unexported also hid a defect. All three build their type through

@@ -3,8 +3,7 @@ import {
 } from './Float128Arithmetic.mts';
 
 /**
- * Correctly rounded transcendental functions for binary128 - the float128 plan's
- * B4: every one answers the binary128 value nearest the exact mathematical
+ * Correctly rounded transcendental functions for binary128: every one answers the binary128 value nearest the exact mathematical
  * result, ties to even, the same on every implementation.
  *
  * Ziv's strategy. Each function is evaluated in exact integer arithmetic at a

@@ -135,24 +135,22 @@ test('the where positions previously claimed as covered', () => {
 });
 
 test('the deferred application record kind exists and relates by identity', () => {
-  // Steps 1, 3 and 4 of five: the ~application~ kind, its IsSubtype arm, and its
-  // CanonicalizeType case. Step 4 is what makes step 3's `s.Builder ===
-  // t.Builder` meaningful - "two mentions of one deferred call are one type by
+  // The ~application~ kind, its IsSubtype arm, and its CanonicalizeType case.
+  // Interning is what makes the IsSubtype arm's `s.Builder === t.Builder`
+  // meaningful - "two mentions of one deferred call are one type by
   // interning, and two different calls are unrelated until they evaluate" -
   // since without interning two spellings of one call would compare unequal.
   //
   // Nothing PRODUCES one yet, so what is asserted here is that the kind's
   // arrival disturbs nothing: every existing relation holds, and
   // a computed type over a BOUND parameter still evaluates rather than
-  // deferring, which is the case step 2 must not capture.
-  // Unblocking the assumed half. Steps 1 and 3 of the five: the ~application~
-  // Type Record kind, and the IsSubtype arm.
+  // deferring, which is the case deferral must not capture.
   //
   // #sec-computed-types: "A deferred ~application~ is a subtype only of itself
   // and of the `any` type. Before specialization nothing finer than identity is
   // known about its result, so nothing finer is assumed."
   //
-  // Nothing PRODUCES one yet (step 2), so this asserts what the kind's arrival
+  // Nothing PRODUCES one yet, so this asserts what the kind's arrival
   // must not disturb: every existing relation is unchanged, and the
   // exhaustiveness check in displayType - which caught the new kind as a compile
   // error, exactly as its own comment says it should - still has a case for it.
@@ -174,8 +172,8 @@ test('a checked contract is ASSUMED before specialization', () => {
   // builder, before the code that relied on it runs."
   //
   // The fact is a SUBTYPE EDGE and its direction is the whole point -
-  // `typeprogramming.md` §6.2: "checking a generic body that PRODUCES the result
-  // needs a lower bound, and for `omit` the true one is `T <: return`".
+  // checking a generic body that PRODUCES the
+  // result needs a lower bound, and for `omit` the true one is `T <: return`.
   const omit = 'function omit(T: type, k: string): type where Reflect.isAssignable(T, return) { return T; } ';
   // ADMITTED by the fact: a body returning a `T` where `omit(T, …)` is declared.
   // Nothing structural relates them - `omit(T, "password")` cannot be evaluated

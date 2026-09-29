@@ -22,6 +22,6 @@ test('a positional short list crosses its own specialization\'s boundary', () =>
 
 test('positional and named spellings of one application are one type in TYPE position', () => {
   // A positional list fills its trailing defaults as a named one does
-  // (#sec-parameterized-types, PLAN-v3 Q7-a), so the two records are one.
+  // (#sec-parameterized-types), so the two records are one.
   expect(evaluated("class B<T: type = uint8, S: uint32 = 256> {} type A = B.<uint8>; type C = B.<T: uint8>; String(A === C);")).toBe('true');
 });

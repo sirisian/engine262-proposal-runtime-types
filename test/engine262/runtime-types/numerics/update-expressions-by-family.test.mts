@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
- * Spec: #sec-which-operations-each-family-defines (plan OQ3 C).
+ * Spec: #sec-which-operations-each-family-defines.
  *
  * An update steps a value by its family's unit. A rational and a decimal step
  * by one in their own type; the complex numbers, which the table leaves

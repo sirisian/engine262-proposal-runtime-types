@@ -938,7 +938,7 @@ function* SerializeJSONProperty(state: State, key: JSStringValue, holder: Object
     }
     return Value('null');
   }
-  // proposal-runtime-types R6: a typed number serializes as its numeric value.
+  // proposal-runtime-types: a typed number serializes as its numeric value.
   if (isTypedNumber(value)) {
     const n = unwrapToNumber(value);
     if (n.isFinite()) {

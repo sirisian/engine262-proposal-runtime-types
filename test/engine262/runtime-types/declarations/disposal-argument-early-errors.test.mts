@@ -1,107 +1,107 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind, ok, settledAfterJobs } from '../harness.mts';
 
-test("R46: required number unused", () => {
+test("required number unused", () => {
   expectStaticTypeError("function f(x:{[Symbol.dispose]:(n:number)=>void}){{using r:{[Symbol.dispose]:(n:number)=>void}=x;}}");
 });
 
-test("R46: required number executed", () => {
+test("required number executed", () => {
   expectStaticTypeError("function f(x:{[Symbol.dispose]:(n:number)=>void}){{using r:{[Symbol.dispose]:(n:number)=>void}=x;}}f({[Symbol.dispose](n:number):void{globalThis.hookRan=true;}});");
 });
 
-test("R46: nominal inherited unused", () => {
+test("nominal inherited unused", () => {
   expectStaticTypeError("class B{[Symbol.dispose](n:number):void{}}class C extends B{}function f(x:C){{using r:C=x;}}");
 });
 
-test("R46: nominal inherited executed", () => {
+test("nominal inherited executed", () => {
   expectStaticTypeError("class B{[Symbol.dispose](n:number):void{}}class C extends B{}function f(x:C){{using r:C=x;}}f(new C());");
 });
 
-test("R46: specialized unused", () => {
+test("specialized unused", () => {
   expectStaticTypeError("class R<T: type>{[Symbol.dispose](n:T):void{}}function f(x:R.<number>){{using r:R.<number>=x;}}");
 });
 
-test("R46: specialized executed", () => {
+test("specialized executed", () => {
   expectStaticTypeError("class R<T: type>{[Symbol.dispose](n:T):void{}}function f(x:R.<number>){{using r:R.<number>=x;}}f(new R.<number>());");
 });
 
-test("R46: required ref unused", () => {
+test("required ref unused", () => {
   expectStaticTypeError("class R{[Symbol.dispose](ref n:number):void{}}function f(x:R){{using r:R=x;}}");
 });
 
-test("R46: required ref executed", () => {
+test("required ref executed", () => {
   expectStaticTypeError("class R{[Symbol.dispose](ref n:number):void{}}function f(x:R){{using r:R=x;}}f(new R());");
 });
 
-test("R46: fixed rest unused", () => {
+test("fixed rest unused", () => {
   expectStaticTypeError("class R{[Symbol.dispose](...n:[1].<number>):void{}}function f(x:R){{using r:R=x;}}");
 });
 
-test("R46: fixed rest executed", () => {
+test("fixed rest executed", () => {
   expectStaticTypeError("class R{[Symbol.dispose](...n:[1].<number>):void{}}function f(x:R){{using r:R=x;}}f(new R());");
 });
 
-test("R46: optional", () => {
+test("optional", () => {
   expect(ok("class R{[Symbol.dispose](n?:number):void{globalThis.hookRan=true;}}{using r:R=new R();}")).toBe(true);
 });
 
-test("R46: default", () => {
+test("default", () => {
   expect(ok("class R{[Symbol.dispose](n:number=1):void{globalThis.hookRan=true;}}{using r:R=new R();}")).toBe(true);
 });
 
-test("R46: undefined admitted", () => {
+test("undefined admitted", () => {
   expect(ok("class R{[Symbol.dispose](n:number|undefined):void{globalThis.hookRan=true;}}{using r:R=new R();}")).toBe(true);
 });
 
-test("R46: empty rest", () => {
+test("empty rest", () => {
   expect(ok("class R{[Symbol.dispose](...n:[].<number>):void{globalThis.hookRan=true;}}{using r:R=new R();}")).toBe(true);
 });
 
-test("R46: ignored numeric result", () => {
+test("ignored numeric result", () => {
   expect(ok("class R{[Symbol.dispose]():number{globalThis.hookRan=true;return 1;}}{using r:R=new R();}")).toBe(true);
 });
 
-test("R46: nullish viable", () => {
+test("nullish viable", () => {
   expect(ok("function f(x:null|{[Symbol.dispose]:(n:number)=>void}){{using r:null|{[Symbol.dispose]:(n:number)=>void}=x;}}f(null);")).toBe(true);
 });
 
-test("R46: unknown type", () => {
+test("unknown type", () => {
   expect(ok("function f<T: type>(x:{[Symbol.dispose]:(n:T)=>void}){{using r:{[Symbol.dispose]:(n:T)=>void}=x;}}")).toBe(true);
 });
 
-test("R46: known viable overload", () => {
+test("known viable overload", () => {
   expect(ok("function f(x:{[Symbol.dispose]:{(n:number):void;():void}}){{using r:{[Symbol.dispose]:{(n:number):void;():void}}=x;}}")).toBe(true);
 });
 
-test("R46: any boundary", () => {
+test("any boundary", () => {
   expectThrownKind("function f(x:any){{using r:any=x;}}f({[Symbol.dispose](n:number):void{}});", 'TypeError');
 });
 
-test("R46: existing noncallable check", () => {
+test("existing noncallable check", () => {
   expectStaticTypeError("function f(x:{[Symbol.dispose]:number}){{using r:{[Symbol.dispose]:number}=x;}}");
 });
 
-test("R46: all invalid overloads", () => {
+test("all invalid overloads", () => {
   expectStaticTypeError("class R{[Symbol.dispose](n:number):void{} [Symbol.dispose](n:boolean):void{}} function f(x:R){using r:R=x;}");
 });
 
-test("R46: getter declared bad signature", () => {
+test("getter declared bad signature", () => {
   expectStaticTypeError("class R{get [Symbol.dispose]():(n:number)=>void {globalThis.hookRan=true;return (n:number)=>{};}}function f(x:R){using r:R=x;}");
 });
 
-test("R46: optional hook is still required callable", () => {
+test("optional hook is still required callable", () => {
   expectStaticTypeError("function f(x:{[Symbol.dispose]?: (n:number)=>void}){using r:{[Symbol.dispose]?: (n:number)=>void}=x;}");
 });
 
-test("R46: viable callable union", () => {
+test("viable callable union", () => {
   expect(ok("function f(x:{[Symbol.dispose]:((n:number)=>void)|(()=>void)}){using r:{[Symbol.dispose]:((n:number)=>void)|(()=>void)}=x;}")).toBe(true);
 });
 
-test("R46: cleanup runs once after abrupt block exit", () => {
+test("cleanup runs once after abrupt block exit", () => {
   expect(evaluated("let log=\"\"; function f(){using r:{[Symbol.dispose]:()=>void}={[Symbol.dispose](){log+=\"d\";}};log+=\"b\";throw 1;}try{f();}catch(e){log+=\"c\";}log;")).toBe("bdc");
 });
 
-test("R46: static disposal check never reads a getter", () => {
+test("static disposal check never reads a getter", () => {
   expect(evaluated("let reads=0;class R{get [Symbol.dispose]():()=>void {reads++;return ()=>{};}}function f(x:R){using r:R=x;}String(reads);")).toBe("0");
 });
 

@@ -98,15 +98,15 @@ test('a BigInt in a union lands in its exact numeric member, never as a string',
 
 test('what the boundary does not reach is unchanged', () => {
   // A decimal takes every numeric source at a boundary, by its row - the
-  // separate question this once named, answered by B1.
+  // separate question this once named.
   expect(evaluated(at('5n', 'decimal64'))).toBe('5');
-  // S3's row: a decimal to bigint, truncated toward zero - exact here.
+  // The row from a decimal to bigint: truncated toward zero - exact here.
   // A typed decimal at a bigint boundary is refused, not converted (stricter-runtime decision).
   expectThrownKind(at('(5 := decimal64)', 'bigint'), 'TypeError');
   // Into `rational`, a `bigint` converts as every integer type does: the
   // implicit-conversions table checks an `any` value at the boundary and, "if it
   // is a numeric value the target represents exactly, converted" - an `int32` 5
-  // already did, and the F10 plan's B1 gives `bigint` its conversion row.
+  // already did, and `bigint` has its conversion row.
   expect(evaluated(at('5n', 'rational64'))).toBe('5');
   // `complex` into an integer is refused for `uint8` too.
   expectThrownKind(at('(5 := complex64)', 'bigint'), 'TypeError');

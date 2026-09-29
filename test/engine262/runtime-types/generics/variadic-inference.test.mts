@@ -6,30 +6,30 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-test('a bare type pack binds the tuple of a rest parameter\'s arguments (G1)', () => {
+test('a bare type pack binds the tuple of a rest parameter\'s arguments', () => {
   expect(evaluated('function count<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } String(count(1, "a", true));')).toBe('3');
   expect(evaluated('function count<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } String(count());')).toBe('0');
 });
 
-test('a bounded type pack binds and its bound refuses (G2)', () => {
+test('a bounded type pack binds and its bound refuses', () => {
   expect(evaluated('function only<...Ts: [].<type> extends [].<string>>(...xs: Ts): uint64 { return xs.length; } String(only("a", "b"));')).toBe('2');
   expectThrown('function only<...Ts: [].<type> extends [].<string>>(...xs: Ts): uint64 { return xs.length; } only("a", 1);', 'not assignable');
 });
 
-test('a VALUE pack binds from constant arguments and reads in the body (G3, the join idiom)', () => {
+test('a VALUE pack binds from constant arguments and reads in the body (the join idiom)', () => {
   expect(evaluated('function j<...Ps: [].<string>>(sep: string, ...parts: Ps): uint64 { return Ps.length; } String(j("-", "a", "b"));')).toBe('2');
   expect(evaluated('function j<...Ps: [].<string>>(sep: string, ...parts: Ps): string { return Ps[1]; } j("-", "a", "b");')).toBe('b');
 });
 
-test('a whole-tuple parameter binds a pack from one tuple (G4)', () => {
+test('a whole-tuple parameter binds a pack from one tuple', () => {
   expect(evaluated('function w<...Ts: [].<type>>(t: Ts): uint64 { return t.length; } String(w([1, "a"]));')).toBe('2');
 });
 
-test('a written tuple pattern binds a pack by the assignment rule (G5, nested)', () => {
+test('a written tuple pattern binds a pack by the assignment rule (nested)', () => {
   expect(evaluated('function pairUp<T: type, ...Rest: [].<type>>(p: [T, ...Rest]): uint64 { return p.length; } String(pairUp([1, "a", true]));')).toBe('3');
 });
 
-test('explicit type arguments bind a pack, and the arguments are checked against its elements (G6)', () => {
+test('explicit type arguments bind a pack, and the arguments are checked against its elements', () => {
   expect(evaluated('function count<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } String(count.<uint8, string>(1, "a"));')).toBe('2');
   expectThrown('function count<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } count.<uint8, string>("a", 1);', 'not assignable');
   expect(evaluated('type Two = [uint8, string]; function count<...Ts: [].<type>>(...xs: Ts): uint64 { return xs.length; } String(count.<...Two>(1, "a"));')).toBe('2');

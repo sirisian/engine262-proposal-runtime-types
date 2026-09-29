@@ -178,7 +178,7 @@ function* Evaluate_UnaryExpression_Typeof({ UnaryExpression }: ParseNode.UnaryEx
   } else if (val instanceof NumberValue) {
     return Value('number');
   } else if (isTypedNumber(val)) {
-    // proposal-runtime-types R6: a typed number is a numeric primitive; typeof
+    // proposal-runtime-types: a typed number is a numeric primitive; typeof
     // reports 'number', consistent with it reading as its underlying Number.
     return Value('number');
   } else if (isFloat128Object(val) || isDecimalObject(val)) {
@@ -305,7 +305,7 @@ function* Evaluate_UnaryExpression_Plus({ UnaryExpression }: ParseNode.UnaryExpr
 function* Evaluate_UnaryExpression_Minus({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
   // 1. Let expr be the result of evaluating UnaryExpression.
   const expr = Q(yield* Evaluate(UnaryExpression));
-  // proposal-runtime-types R3: read the raw value first; a typed number keeps
+  // proposal-runtime-types #sec-unary-operators-for-typed-values: read the raw value first; a typed number keeps
   // its type through unary minus, and must be seen before ToNumeric unwraps it.
   const rawValue = Q(yield* GetValue(expr));
   // #sec-primitive-operator-blocks: a block's unary `-` speaks for its
@@ -426,7 +426,7 @@ function findUnaryClassOperator(operand: Value, opText: string): Value | null {
 function* Evaluate_UnaryExpression_Tilde({ UnaryExpression }: ParseNode.UnaryExpression): ValueEvaluator {
   // 1. Let expr be the result of evaluating UnaryExpression.
   const expr = Q(yield* Evaluate(UnaryExpression));
-  // proposal-runtime-types R3: read the raw value first; bitwise NOT preserves
+  // proposal-runtime-types #sec-unary-operators-for-typed-values: read the raw value first; bitwise NOT preserves
   // the numeric value type and must see it before ToNumeric unwraps.
   const rawValue = Q(yield* GetValue(expr));
   if (surroundingAgent.feature('runtime-types') && rawValue instanceof TypedNumberValue) {

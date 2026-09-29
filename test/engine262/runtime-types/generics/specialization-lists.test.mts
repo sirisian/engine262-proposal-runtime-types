@@ -11,12 +11,10 @@ import type { ParseNode } from '#self';
  * proposal-runtime-types #sec-specialization-lists, #sec-capture-scope, and
  * #sec-type-parameters-static-semantics-early-errors: a declaration's list is
  * parsed into parameters and arguments, captures are collected, and the
- * errors that syntax alone decides are reported before anything runs. Plan:
- * runtime-types const specialization, phase 3 (C02, C05, C21).
+ * errors that syntax alone decides are reported before anything runs.
  *
- * Selecting a specialization is phases 4 and 5, so every valid specialization
- * list still reports that it is not supported; what these tests pin is that a
- * MORE SPECIFIC error comes first where there is one.
+ * Where a list has more than one error, these tests pin that the MORE
+ * SPECIFIC one is reported first.
  */
 
 function typeParametersOf(source: string): ParseNode.TypeParameters {
@@ -62,7 +60,7 @@ test('captures: variadic, holes, domain, and bound', () => {
   expect(byName.R.IsVariadic).toBe(true);
 });
 
-test('C21: a capture declared twice is refused, even where the annotations agree', () => {
+test('a capture declared twice is refused, even where the annotations agree', () => {
   expectEarlyError('class Pair<const T, const T> {}', 'SyntaxError');
   expectEarlyError('class S<Map.<const T: type, const T: type>> {}', 'SyntaxError');
   expectThrown('class S<Map.<const T, Set.<const T>>> {}', '`T` is already captured in this list');
@@ -93,8 +91,8 @@ test('a mixed list is a selector-prefixed overload, which only a callable declar
   expectThrown('class Box<uint32, N: 8> {}', 'which only a function, method, or operator may');
   // A capture at the top of a mixed list observes nothing a caller could not name.
   expectThrown('function f<const T, N: uint32>() {}', 'declare `T: type`, or a value domain, as a parameter');
-  // A callable's mixed list declares a standalone case (plan section 3.8, A3);
-  // selecting it is refused until phase 4, step 2.
+  // A callable's mixed list declares a standalone case
+  // (#sec-callable-overload-contracts).
   expect(evaluated('function write<float32, maximum: float32>(v: float32) {} "ok";')).toBe('ok');
   expect(evaluated('class W { write<float32, maximum: float32>(v: float32) {} } "ok";')).toBe('ok');
 });
@@ -120,7 +118,7 @@ test('a valid class specialization is accepted beside its primary, and an orphan
   expect(evaluated('class Store<T: type> {} class Store<Map.<K: string, V: const E>> {} "ok";')).toBe('ok');
   // With no primary in its statement list, a case specializes nothing.
   expectThrown('class Box<> {}', 'a case of `Box` specializes a family declared in the same statement list');
-  // A class operator's case is a declaration (phase 4, step 1); a USE of its
+  // A class operator's case is a declaration; a USE of its
   // group is what is deferred (generics/callable-groups.test.mts).
   expect(evaluated('class M { operator+.<uint32>(rhs: uint32) { return this; } } "ok";')).toBe('ok');
   // A second PRIMARY of one name is still a duplicate declaration.

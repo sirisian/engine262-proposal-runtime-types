@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// Phase 5: interface specializations (plan 6.4). An interface CASE is a
+// #sec-specialization-lists: interface specializations. An interface CASE is a
 // declaration-level REFINEMENT of its family's contract: it keeps every member
 // the primary declares, after substitution, and may add guarantees, which an
 // application selecting it requires.

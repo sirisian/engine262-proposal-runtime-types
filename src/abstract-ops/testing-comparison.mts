@@ -148,13 +148,13 @@ export function IsStringPrefix(p: JSStringValue, q: JSStringValue) {
 }
 
 /** https://tc39.es/ecma262/#sec-samevalue */
-// proposal-runtime-types R1 #sec-value-types: a value type has no identity, so
+// proposal-runtime-types #sec-value-types: a value type has no identity, so
 // two typed numbers are the same value iff their Type Records are the same and
 // their payloads match; a typed number is never the same value as a plain
 // Number. Returns a verdict when at least one operand is typed, else null so
 // the caller falls through to the ordinary Number path.
 /**
- * proposal-runtime-types R1: typed numbers have value-type identity.
+ * proposal-runtime-types #sec-value-types: typed numbers have value-type identity.
  *
  * `zeroInsensitive` is what parts SameValue from SameValueZero for them. The
  * specification enumerates the SameValueZero equivalence classes with more than
@@ -193,7 +193,7 @@ function typedNumberIdentity(x: Value, y: Value, zeroInsensitive = false): boole
   if (typeof xv === 'bigint' || typeof yv === 'bigint') {
     return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue();
   }
-  // proposal-runtime-types R6: unwrap both to plain Numbers before the payload
+  // proposal-runtime-types: unwrap both to plain Numbers before the payload
   // comparison. A typed number is no longer a NumberValue, so it lacks the
   // isNaN/isFinite helpers Number::sameValue calls; unwrapToNumber gives a real
   // NumberValue with the same payload.
@@ -249,7 +249,7 @@ export function SameValue(x: Value, y: Value): boolean {
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
     return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth && decimalSameValue(x, y);
   }
-  // proposal-runtime-types R1: typed numbers have value-type identity.
+  // proposal-runtime-types #sec-value-types: typed numbers have value-type identity.
   const typed = typedNumberIdentity(x, y);
   if (typed !== null) {
     return typed;
@@ -423,7 +423,7 @@ function valueClassEquals(x: Value, y: Value, zero: boolean): boolean | undefine
     return undefined;
   }
   // A callable is never a value-class instance, and RuntimeTypeOf of one now
-  // derives its signature (PLAN-callable Q1) - not a cost to pay on every
+  // derives its signature - not a cost to pay on every
   // `===` between two functions, nor one that can be paid at all while the
   // realm is still being built and no execution context exists.
   if (IsCallable(x) || IsCallable(y)) {
@@ -534,7 +534,7 @@ export function SameValueZero(x: Value, y: Value): boolean {
     return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth
       && (decimalEquals(x, y) || (x.DecimalSpecial === 'NaN' && y.DecimalSpecial === 'NaN'));
   }
-  // proposal-runtime-types R1: typed numbers have value-type identity, and
+  // proposal-runtime-types #sec-value-types: typed numbers have value-type identity, and
   // SameValueZero compares NUMERICAL VALUE within a type where SameValue
   // distinguishes representations - so a typed signed zero pairs with its
   // opposite here and not there.
@@ -894,8 +894,8 @@ export function* IsLooselyEqual(x: Value, y: Value): PlainEvaluator<boolean> {
   // values, while `===` sees each width as its own type (#sec-rational-types).
   // Without this they reached the strict comparison below and `==` answered
   // false where `uint8(1) == uint16(1)` answers true.
-  // The same rule for EVERY numeric family (the plan "how numeric values of
-  // different types meet", EQ1): `==` compares exact mathematical values, as
+  // The same rule for EVERY numeric family (#sec-equality-and-comparison):
+  // `==` compares exact mathematical values, as
   // `1 == 1n` does, whenever either side is a value of the proposal's numeric
   // types. It compared them only among the typed integers and floats, so a
   // decimal or rational was not `==` to an equal integer, and against a plain
@@ -1008,7 +1008,7 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
   if (surroundingAgent.feature('runtime-types') && (isDecimalObject(x) || isDecimalObject(y))) {
     return isDecimalObject(x) && isDecimalObject(y) && x.DecimalWidth === y.DecimalWidth && decimalEquals(x, y);
   }
-  // proposal-runtime-types R1: === distinguishes value types. Two typed numbers
+  // proposal-runtime-types #sec-value-types: === distinguishes value types. Two typed numbers
   // are strictly equal iff same type and same payload; a typed number is never
   // strictly equal to a plain Number.
   const xt = x instanceof TypedNumberValue;
@@ -1029,7 +1029,7 @@ export function IsStrictlyEqual(x: Value, y: Value): boolean {
     if (typeof xv === 'bigint' || typeof yv === 'bigint') {
       return (x as TypedNumberValue).bigintValue() === (y as TypedNumberValue).bigintValue();
     }
-    // proposal-runtime-types R6: unwrap both to plain Numbers; a typed number
+    // proposal-runtime-types: unwrap both to plain Numbers; a typed number
     // lacks the helpers Number::equal relies on.
     return NumberValue.equal(unwrapToNumber(x as TypedNumberValue), unwrapToNumber(y as TypedNumberValue)) === Value.true;
   }

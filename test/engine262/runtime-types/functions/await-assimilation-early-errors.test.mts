@@ -34,7 +34,7 @@ test.each([
     "required reference callback executed",
     "async function f(x:{then:(ref resolve:any,reject:any)=>void}){await x;}f({then(ref resolve:any,reject:any):void{globalThis.hookRan=true;}}).then(()=>globalThis.settled=\"ok\",e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});"
   ]
-])('R44 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -94,7 +94,7 @@ test.each([
     "async function f(x:object){await x;}f({then(resolve,reject){resolve(1);}}).then(()=>globalThis.settled=\"ok\",e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     "ok"
   ]
-])('R44 preserves settlement: %s', (_name, source, expected) => {
+])('preserves settlement: %s', (_name, source, expected) => {
   expect(settledAfterJobs(source)).toBe(expected);
 });
 
@@ -139,7 +139,7 @@ test.each([
     "assignment context",
     "async function f(x:{then:(a:number,b:number)=>void}){const y=await x;}"
   ]
-])('R44 rejects a proved edge case: %s', (_name, source) => {
+])('rejects a proved edge case: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -172,7 +172,7 @@ test.each([
     "promise and thenable union",
     "async function f(x:Promise.<number,any>|{then:(a:number,b:number)=>void}){await x;}"
   ]
-])('R44 accepts a viable edge case: %s', (_name, source) => {
+])('accepts a viable edge case: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -187,6 +187,6 @@ test.each([
     "Function.prototype.marker=1;async function f(x:{then:(a:{marker:number},b:any)=>void}){await x;}f({then(a:{marker:number},b:any):void{const resolve:any=a;resolve(1);}}).then(()=>globalThis.settled=\"ok\",e=>globalThis.settled=e.constructor.name);",
     "ok"
   ]
-])('R44 accepts actual callback values: %s', (_name, source, expected) => {
+])('accepts actual callback values: %s', (_name, source, expected) => {
   expect(settledAfterJobs(source)).toBe(expected);
 });

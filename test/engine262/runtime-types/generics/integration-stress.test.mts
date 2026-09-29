@@ -118,7 +118,7 @@ test('positional, named, named-run, spread, and default forms bind one declarati
 });
 
 test('the refusals, each by its own rule', () => {
-  expectThrown(`${STRESS} stress.<uint8, 0, 1, "x", 3>();`);                        // the type-blind split hands 'x' to N; step 8 refuses
+  expectThrown(`${STRESS} stress.<uint8, 0, 1, "x", 3>();`);                        // the type-blind split hands 'x' to N, and its domain refuses it
   expectThrown(`${STRESS} stress.<T: uint8, N: 1, I: 0, 1>();`, 'where');
   expectThrown(`${STRESS} stress.<>();`, 'has no argument and no default');
   expectThrown(`${STRESS} stress.<uint8, I: 0, N: 4, 1>();`, 'positional');

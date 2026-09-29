@@ -30,7 +30,7 @@ test.each([
     "new already refuses",
     "function unused(){const Base=(x:uint8):uint8=>x;new Base(uint8(1));}"
   ]
-])('R29 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -43,7 +43,7 @@ test.each([
     "legacy failure",
     "function unused(){const Base=()=>1;class C extends Base{}}unused();"
   ]
-])('R29 retains runtime failure: %s', (_name, source) => {
+])('retains runtime failure: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -68,7 +68,7 @@ test.each([
     "replaced origin",
     "function unused(){let Base=(x:uint8):uint8=>x;Base=function(x:uint8):uint8{return x;};class C extends Base{}}unused();"
   ]
-])('R29 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -89,7 +89,7 @@ test.each([
     "immutable alias",
     "const B=(x:uint8)=>x;const Alias=B;class C extends (Alias){}"
   ]
-])('R29 boundary control (early): %s', (_name, source) => {
+])('boundary control (early): %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -122,7 +122,7 @@ test.each([
     "function type annotation",
     "const B:(x:uint8)=>uint8=function(x:uint8):uint8{return x;};class C extends B{}"
   ]
-])('R29 boundary control (ok): %s', (_name, source) => {
+])('boundary control (ok): %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -131,6 +131,6 @@ test.each([
     "class self TDZ executed",
     "const B=(x:uint8)=>x;function f(){class B extends B{}}f();"
   ]
-])('R29 boundary control (ReferenceError): %s', (_name, source) => {
+])('boundary control (ReferenceError): %s', (_name, source) => {
   expectThrownKind(source, 'ReferenceError');
 });

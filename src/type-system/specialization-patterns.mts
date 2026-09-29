@@ -2,7 +2,7 @@
  * proposal-runtime-types #sec-matching-specialization-lists: the bounded
  * structural matcher behind specialization lists, and behind the slotted form
  * of a type-subject pattern (#sec-pattern-matching), which shares it and
- * differs only in how a fixed leaf is compared (plan D5).
+ * differs only in how a fixed leaf is compared.
  *
  * The matcher is PURE over its host. Selection will run in two places - the
  * checker, where arguments are static, and the run time, where they are
@@ -491,7 +491,7 @@ export function MatchSpecializationList<S>(
  * #sec-matchspecializationpattern as an entry point of its own, over one
  * pattern, one subject, and a relation mode. The slotted form of a
  * type-subject pattern, `when extends Map.<string, const V>`, is this call with
- * ~type-subject~ (plan D5); the pattern's own captures are its scope.
+ * ~type-subject~; the pattern's own captures are its scope.
  */
 export function MatchSpecializationPattern<S>(
   pattern: ParseNode,
@@ -527,10 +527,10 @@ export interface SpecializationDiagnostic {
 /**
  * #sec-capture-scope, the half that needs resolution: each nested application
  * must name a constructor and supply its labels correctly, and each capture
- * that writes a domain must restate its slot's (plan D9) unless the slot is a
+ * that writes a domain must restate its slot's (#sec-collectcaptures) unless the slot is a
  * metadata position; a capture with holes must occupy a slot of the same
  * arity. Checked once per declaration, before and independently of any match,
- * so an unused invalid declaration is refused too (C21). _primary_, where the
+ * so an unused invalid declaration is refused too. _primary_, where the
  * caller has resolved the family, extends the checks to the top-level entries;
  * _extentDomain_, the index type, to a captured array extent.
  */
@@ -648,8 +648,8 @@ export interface MetadataCaptureView {
 /**
  * #sec-primitive-operator-blocks: the captures of a primitive block's list,
  * `primitive float32<const D: Dimensions>`, each binding the receiver's
- * metadata of its written meta type (plan D9: in a metadata position the
- * written domain selects the meta type). The block has no parameters of its
+ * metadata of its written meta type (in a metadata position the written
+ * domain selects the meta type, #sec-collectcaptures). The block has no parameters of its
  * own; this is the one place its readers - the checker's scope for its
  * operator bodies and the run time's frame - learn what it binds.
  */

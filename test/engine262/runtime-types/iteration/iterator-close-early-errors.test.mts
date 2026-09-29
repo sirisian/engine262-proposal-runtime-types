@@ -34,7 +34,7 @@ test.each([
     "async close rejects after awaiting return",
     "async function f(x:{[Symbol.asyncIterator]:()=>{next:()=>Promise.<{done:false,value:number},never>,return:()=>Promise.<number,never>}}){for await(const v of x){break;}}f({[Symbol.asyncIterator](){return {next:async function(){return {done:false,value:1};},return:async function(){return 1;}};}}).then(()=>globalThis.settled=\"normal\",e=>globalThis.settled=e.constructor.name);"
   ]
-])('R34 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -51,7 +51,7 @@ test.each([
     "control: legacy",
     "const []={[Symbol.iterator](){return {return(){return 1;}};}};"
   ]
-])('R34 preserves runtime timing: %s', (_name, source) => {
+])('preserves runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -100,7 +100,7 @@ test.each([
     "edge: unknown done break",
     "function f(x:{[Symbol.iterator]:()=>{next:()=>{done:boolean,value:number},return:number}}){for(const v of x){break;}}f({[Symbol.iterator](){return {next(){return {done:true,value:1};},return:1};}});"
   ]
-])('R34 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -110,7 +110,7 @@ test.each([
     "async function f(x:{[Symbol.asyncIterator]:()=>{next:()=>Promise.<{done:false,value:number},never>,return:()=>Promise.<{},never>}}){for await(const v of x){break;}}f({[Symbol.asyncIterator](){return {next:async function(){return {done:false,value:1};},return:async function(){return {};}};}}).then(()=>globalThis.settled=\"normal\",e=>globalThis.settled=e.constructor.name);",
     "normal"
   ]
-])('R34 async control: %s', (_name, source, result) => {
+])('async control: %s', (_name, source, result) => {
   expect(settledAfterJobs(source)).toBe(result);
 });
 
@@ -127,7 +127,7 @@ test.each([
     "inherited specialized close",
     "class B<T: type>{[Symbol.iterator]():{next:number,return:()=>T}{throw 1;}}class C extends B.<number>{}function f(x:C){const []=x;}"
   ]
-])('R34 additional early boundary: %s', (_name, source) => {
+])('additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -144,6 +144,6 @@ test.each([
     "open return can be callable",
     "function f(x:{[Symbol.iterator]:()=>{next:number,return:object}}){const []=x;}f({[Symbol.iterator](){return {next:1,return(){return {};}};}});"
   ]
-])('R34 additional ok boundary: %s', (_name, source) => {
+])('additional ok boundary: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });

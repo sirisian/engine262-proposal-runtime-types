@@ -3470,7 +3470,7 @@ export namespace ParseNode {
     readonly BindingIdentifier: BindingIdentifier;
     /** The count of `_` holes: a capture of a higher-kinded position. */
     readonly Arity: number;
-    /** The written domain, or *null* where the capture takes its slot's (D4). */
+    /** The written domain, or *null* where the capture takes its slot's (#sec-collectcaptures). */
     readonly TypeParameterDomain: Type | null;
     /** The `extends` bound on a type capture, or *null*. */
     readonly TypeParameterConstraint: Type | null;

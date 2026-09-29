@@ -338,7 +338,7 @@ function* ArrayProto_reserve([n = Value.undefined]: Arguments, { thisValue }: Fu
   if (O.TypedElement === undefined) {
     return Throw.TypeError('reserve is available on an array with an element type');
   }
-  // #sec-toindextype (I2): a COUNT is CHECKED, not coerced. `ToLength` stood
+  // #sec-toindextype: a COUNT is CHECKED, not coerced. `ToLength` stood
   // here and accepted anything convertible - a String, a negative clamped to 0,
   // a fraction truncated - so `a.reserve("4")` was admitted at run time while
   // the checker refused it, which is the disagreement the clause names.

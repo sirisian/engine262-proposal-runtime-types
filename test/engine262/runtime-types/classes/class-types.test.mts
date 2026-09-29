@@ -42,8 +42,8 @@ test('a class name denotes its class type', () => {
   expect(evaluated('class A {} String((type A) === A);')).toBe('true');
   // A GENERIC class's specialization is not unified with the constructor: it
   // is a distinct class object with a Type Object of its own. (A bare `G` in
-  // type position names `G.<>`, an error where T has no default - PLAN-v3
-  // Q7-a - so the application is written.)
+  // type position names `G.<>`, an error where T has no default
+  // (#sec-parameterized-types) - so the application is written.)
   expect(evaluated('class G<T: type> {} String((type G.<uint8>) === G);')).toBe('false');
   expectThrown('class G<T: type> {} type G;');
   // The class type is stable: the same class yields the same Type Object.
@@ -228,7 +228,7 @@ test('the rules downstream of the walk still see a mutable Properties', () => {
   // merges `implements` members into `Properties` and re-reads `setterTypes`
   // for the accessor-variance checks, both AFTER the folds - so returning a
   // finished list would have broken them, and silently, by giving the tail
-  // nothing to merge into. An earlier draft of the plan cut there.
+  // nothing to merge into.
   const I = 'interface I { v: uint8 } class C implements I { v: uint8 = 1; } const c = new C(); ';
   expect(evaluated(`${I} let u: uint8 = c.v; String(u);`)).toBe('1');
   expectStatic(`${I} let s: string = c.v;`);
@@ -283,9 +283,7 @@ test('the guard still does the job it was written for', () => {
 // be the wrong thing to merge here; that one call is the whole difference.
 //
 // The recursion was already guarded: the memo is set to *null* before the walk,
-// so a heritage cycle answers nothing rather than hanging. An earlier draft of
-// the plan for this believed there was no guard and put the recursion first -
-// measuring it moved the risk from moderate to low.
+// so a heritage cycle answers nothing rather than hanging.
 // ---------------------------------------------------------------------------
 
 test('a subclass inherits its base statics, with their types', () => {

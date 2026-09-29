@@ -11,7 +11,7 @@ import { ok, evaluated } from '../harness.mts';
  * mark; what it cannot do is make the result usable where the marked type is
  * required. A veto would be a second mechanism refusing what the first refuses,
  * and it would have to decide what a BUILDER may do rather than what a VALUE may
- * be - which is the distinction R1's identity law rests on.
+ * be - which is the distinction the identity law of #sec-value-types rests on.
  */
 
 // A judgment that refuses to drop the mark: marked is usable where unmarked is

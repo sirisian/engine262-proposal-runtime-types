@@ -4,7 +4,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 // Preserve the error phase as well as the outcome and observable effects.
 test.each([
   [
-    "R58-01: async-next-unused",
+    "async-next-unused",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad}}){for await(const x of xs){}}",
     {
       "completion": "throw",
@@ -16,7 +16,7 @@ test.each([
     }
   ],
   [
-    "R58-02: async-next-run",
+    "async-next-run",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad}}){for await(const x of xs){}}f({[Symbol.asyncIterator]:()=>({next:()=>({then:(x:uint8):void=>{}})})}).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -28,7 +28,7 @@ test.each([
     }
   ],
   [
-    "R58-03: async-fromsync-unused",
+    "async-fromsync-unused",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:undefined,[Symbol.iterator]:()=>{next:()=>{done:false,value:Bad}}}){for await(const x of xs){break;}}",
     {
       "completion": "throw",
@@ -40,7 +40,7 @@ test.each([
     }
   ],
   [
-    "R58-04: async-fromsync-run",
+    "async-fromsync-run",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:undefined,[Symbol.iterator]:()=>{next:()=>{done:false,value:Bad}}}){for await(const x of xs){break;}}f({[Symbol.asyncIterator]:undefined,[Symbol.iterator]:()=>({next:()=>({done:false,value:{then:(x:uint8):void=>{}}})})}).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -52,7 +52,7 @@ test.each([
     }
   ],
   [
-    "R58-05: async-close-run",
+    "async-close-run",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>{done:false},return:()=>Bad}}){for await(const x of xs){break;}}f({[Symbol.asyncIterator]:()=>({next:()=>({done:false}),return:()=>({then:(x:uint8):void=>{}})})}).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -64,7 +64,7 @@ test.each([
     }
   ],
   [
-    "R58-06: async-delegate-run",
+    "async-delegate-run",
     "type Bad={then:(x:uint8)=>void};async function* f(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad}}){yield* xs;}f({[Symbol.asyncIterator]:()=>({next:()=>({then:(x:uint8):void=>{}})})}).next().catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -76,7 +76,7 @@ test.each([
     }
   ],
   [
-    "R58-07: async-next-control",
+    "async-next-control",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>{done:true}}}){for await(const x of xs){}}f({[Symbol.asyncIterator]:()=>({next:()=>({done:true})})}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -87,7 +87,7 @@ test.each([
     }
   ],
   [
-    "R58-08: sync-value-noawait",
+    "sync-value-noawait",
     "type Bad={then:(x:uint8)=>void};function f(xs:{[Symbol.iterator]:()=>{next:()=>{done:false,value:Bad}}}){for(const x of xs){break;}}f({[Symbol.iterator]:()=>({next:()=>({done:false,value:{then:(x:uint8):void=>{}}})})});",
     {
       "completion": "normal",
@@ -98,7 +98,7 @@ test.each([
     }
   ],
   [
-    "R58-09: async-value-noawait",
+    "async-value-noawait",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>{done:false,value:Bad}}}){for await(const x of xs){break;}}f({[Symbol.asyncIterator]:()=>({next:()=>({done:false,value:{then:(x:uint8):void=>{}}})})}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -109,7 +109,7 @@ test.each([
     }
   ],
   [
-    "R58-10: async-entry-notawaited",
+    "async-entry-notawaited",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{then:(x:uint8)=>void,next:()=>{done:true}}}){for await(const x of xs){}}f({[Symbol.asyncIterator]:()=>({then:(x:uint8):void=>{},next:()=>({done:true})})}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -120,7 +120,7 @@ test.each([
     }
   ],
   [
-    "R58-11: close unused",
+    "close unused",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>{done:false},return:()=>Bad}}){for await(const x of xs){break;}}",
     {
       "completion": "throw",
@@ -132,7 +132,7 @@ test.each([
     }
   ],
   [
-    "R58-12: delegation unused",
+    "delegation unused",
     "type Bad={then:(x:uint8)=>void};async function* f(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad}}){yield* xs;}",
     {
       "completion": "throw",
@@ -144,7 +144,7 @@ test.each([
     }
   ],
   [
-    "R58-13: noncallable then accepted",
+    "noncallable then accepted",
     "async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>{done:true,then:uint8}}}){for await(const x of xs){}}f({[Symbol.asyncIterator]:()=>({next:()=>({done:true,then:1})})}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -154,7 +154,7 @@ test.each([
     }
   ],
   [
-    "R58-14: good thenable resolves step",
+    "good thenable resolves step",
     "async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>{then:(resolve:any,reject:any)=>void}}}){for await(const x of xs){}}f({[Symbol.asyncIterator]:()=>({next:()=>({then(resolve:any,reject:any):void{resolve({done:true});}})})}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -164,7 +164,7 @@ test.each([
     }
   ],
   [
-    "R58-15: primitive async step existing error",
+    "primitive async step existing error",
     "async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>uint8}}){for await(const x of xs){}}",
     {
       "completion": "throw",
@@ -176,7 +176,7 @@ test.each([
     }
   ],
   [
-    "R58-16: any iterator retains dynamic rejection",
+    "any iterator retains dynamic rejection",
     "type Bad={then:(x:uint8)=>void};async function f(xs:any){for await(const x of xs){}}f({[Symbol.asyncIterator]:()=>({next:()=>({then:(x:uint8):void=>{}})})}).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -186,7 +186,7 @@ test.each([
     }
   ],
   [
-    "R58-17: normal exhaustion never closes",
+    "normal exhaustion never closes",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>{done:true},return:()=>Bad}}){for await(const x of xs){break;}}f({[Symbol.asyncIterator]:()=>({next:()=>({done:true}),return:()=>({then:(x:uint8):void=>{}})})}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -196,7 +196,7 @@ test.each([
     }
   ],
   [
-    "R58-18: sync fallback awaits done value too",
+    "sync fallback awaits done value too",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:undefined,[Symbol.iterator]:()=>{next:()=>{done:true,value:Bad}}}){for await(const x of xs){}}f({[Symbol.asyncIterator]:undefined,[Symbol.iterator]:()=>({next:()=>({done:true,value:{then:(x:uint8):void=>{}}})})}).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -208,7 +208,7 @@ test.each([
     }
   ],
   [
-    "R58-19: viable result union",
+    "viable result union",
     "type Bad={then:(x:uint8)=>void};async function f(xs:{[Symbol.asyncIterator]:()=>{next:()=>Bad|{done:true}}}){for await(const x of xs){}}f({[Symbol.asyncIterator]:()=>({next:()=>({done:true})})}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -218,7 +218,7 @@ test.each([
     }
   ],
   [
-    "R58-20: sync iterator then is not assimilated",
+    "sync iterator then is not assimilated",
     "type Bad={then:(x:uint8)=>void};function f(xs:{[Symbol.iterator]:()=>{next:()=>{done:true,then:(x:uint8)=>void}}}){for(const x of xs){}}f({[Symbol.iterator]:()=>({next:()=>({done:true,then:(x:uint8):void=>{}})})});",
     {
       "completion": "normal",

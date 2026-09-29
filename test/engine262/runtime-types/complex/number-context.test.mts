@@ -28,7 +28,7 @@ test('every Number context refuses a complex', () => {
 test('`==` compares a complex with a real by value, and `===` sees the type', () => {
   // Not a Number context: `==` asks a question across two value types and answers
   // it by mathematical value, as `1 == 1n` does and as it now does for a decimal
-  // and a rational (the plan "how numeric values of different types meet", R1).
+  // and a rational (#sec-equality-and-comparison).
   // A complex equals a real when its imaginary part is zero and its real part is
   // that value; against a LITERAL the literal takes the complex's type, as before.
   expect(evaluated(`${C}let n = 3; String(c == n);`)).toBe('true');

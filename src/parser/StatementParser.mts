@@ -210,7 +210,7 @@ export abstract class StatementParser extends TypeParser {
     node.WhereClauses = whereClauses.length > 0 ? whereClauses : null;
     this.semicolon();
     const finished = this.finishNode(node, 'TypeAliasDeclaration');
-    // An alias CASE (phase 5) joins its family and declares no name.
+    // An alias CASE joins its family and declares no name.
     if (!finished.TypeParameters || finished.TypeParameters.ListKind === 'parameters') {
       this.scope.declare(finished, 'lexical');
     }
@@ -554,8 +554,8 @@ export abstract class StatementParser extends TypeParser {
             return;
           }
           if (pattern.type === 'CaptureBinding' && !pattern.IsVariadic && pattern.Arity === 0) {
-            // D4: the capture takes its slot's domain. D9: a written domain
-            // restates it. A type slot's domain is `type`, so a meta type
+            // #sec-collectcaptures: the capture takes its slot's domain, and a
+            // written domain restates it. A type slot's domain is `type`, so a meta type
             // written there is metadata one list too early.
             const domain = pattern.TypeParameterDomain?.sourceText.replace(/\s+/g, '');
             const kind = kinds[q];

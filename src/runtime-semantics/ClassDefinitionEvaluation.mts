@@ -691,7 +691,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // f. Else if IsConstructor(superclass) is false, throw a TypeError exception.
       return Throw.TypeError('Super class $1 is not a constructor', superclass);
     } else { // g. Else,
-      // proposal-runtime-types (PLAN-v3 Q7-a, F2): a GENERIC class written bare
+      // proposal-runtime-types #sec-parameterized-types: a GENERIC class written bare
       // as a heritage names its all-defaults specialization, as the bare name
       // does in every type position, and is an error naming the parameter where
       // one has no default. Extending the open declaration gave the subclass a
@@ -1212,7 +1212,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         if (e.type === 'MethodDefinition' && surroundingAgent.feature('runtime-types')) {
           // SUB-TARGETS UNCONDITIONALLY, the member's own only where written.
           // Gating the parameters on the constructor's own decorator list is
-          // the defect A4 found for plain functions and C1 for operators: a
+          // the defect already fixed for plain functions and operators: a
           // parameter's decorator belongs to the parameter.
           Q(yield* ApplySubTargetDecorators(e as never, 'ClassMethod', Value('constructor'), F as Value));
           if (e.Decorators?.length) {
@@ -1624,7 +1624,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           controls: fieldControls,
         });
       }
-      // Phase 5, plan 6.3: layout is derived AFTER selection. A field whose type
+      // #sec-specialization-lists: layout is derived AFTER selection. A field whose type
       // applies a family with cases takes its layout from the selected body,
       // which exists once the application is materialized - so materialize it
       // before this layout reads it, rather than substitute into the primary's.

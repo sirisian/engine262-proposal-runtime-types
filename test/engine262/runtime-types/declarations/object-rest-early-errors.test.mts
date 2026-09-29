@@ -4,7 +4,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 // Check phase and effects as well as the outcome, including unused bodies.
 test.each([
   [
-    "R63-01: numeric rest annotation unused",
+    "numeric rest annotation unused",
     "function f(o:any){let {...r:uint8}=o;}",
     {
       "completion": "throw",
@@ -16,7 +16,7 @@ test.each([
     }
   ],
   [
-    "R63-02: numeric rest annotation executed",
+    "numeric rest annotation executed",
     "function f(o:any){let {...r:uint8}=o;}f({});",
     {
       "completion": "throw",
@@ -28,7 +28,7 @@ test.each([
     }
   ],
   [
-    "R63-03: symbol rest annotation unused",
+    "symbol rest annotation unused",
     "function f(o:any){let {...r:symbol}=o;}",
     {
       "completion": "throw",
@@ -40,7 +40,7 @@ test.each([
     }
   ],
   [
-    "R63-04: symbol rest annotation executed",
+    "symbol rest annotation executed",
     "function f(o:any){let {...r:symbol}=o;}f({});",
     {
       "completion": "throw",
@@ -52,7 +52,7 @@ test.each([
     }
   ],
   [
-    "R63-05: null rest annotation unused",
+    "null rest annotation unused",
     "function f(o:any){let {...r:null}=o;}",
     {
       "completion": "throw",
@@ -64,7 +64,7 @@ test.each([
     }
   ],
   [
-    "R63-06: null rest annotation executed",
+    "null rest annotation executed",
     "function f(o:any){let {...r:null}=o;}f({});",
     {
       "completion": "throw",
@@ -76,7 +76,7 @@ test.each([
     }
   ],
   [
-    "R63-07: callable rest annotation unused",
+    "callable rest annotation unused",
     "function f(o:any){let {...r:()=>void}=o;}",
     {
       "completion": "throw",
@@ -88,7 +88,7 @@ test.each([
     }
   ],
   [
-    "R63-08: callable rest annotation executed",
+    "callable rest annotation executed",
     "function f(o:any){let {...r:()=>void}=o;}f({});",
     {
       "completion": "throw",
@@ -100,7 +100,7 @@ test.each([
     }
   ],
   [
-    "R63-09: rest assignment boundary unused",
+    "rest assignment boundary unused",
     "function f(o:any){let r:uint8=1;({...r}=o);}",
     {
       "completion": "throw",
@@ -112,7 +112,7 @@ test.each([
     }
   ],
   [
-    "R63-10: rest assignment boundary executed",
+    "rest assignment boundary executed",
     "function f(o:any){let r:uint8=1;({...r}=o);}f({});",
     {
       "completion": "throw",
@@ -124,7 +124,7 @@ test.each([
     }
   ],
   [
-    "R63-11: rest parameter annotation",
+    "rest parameter annotation",
     "function f({...r:uint8}:any){}",
     {
       "completion": "throw",
@@ -136,7 +136,7 @@ test.each([
     }
   ],
   [
-    "R63-12: known structural source already checked",
+    "known structural source already checked",
     "function f(o:{x:uint8}){let {...r:uint8}=o;}",
     {
       "completion": "throw",
@@ -148,7 +148,7 @@ test.each([
     }
   ],
   [
-    "R63-13: any rest annotation",
+    "any rest annotation",
     "function f(o:any){let {...r:any}=o;}f({x:1});",
     {
       "completion": "normal",
@@ -160,7 +160,7 @@ test.each([
     }
   ],
   [
-    "R63-14: object rest annotation",
+    "object rest annotation",
     "function f(o:any){let {...r:object}=o;}f({});",
     {
       "completion": "normal",
@@ -172,7 +172,7 @@ test.each([
     }
   ],
   [
-    "R63-15: structural rest annotation",
+    "structural rest annotation",
     "function f(o:any){let {...r:{x:uint8}}=o;}f({x:1});",
     {
       "completion": "normal",
@@ -184,7 +184,7 @@ test.each([
     }
   ],
   [
-    "R63-16: viable object union",
+    "viable object union",
     "function f(o:any){let {...r:uint8|object}=o;}f({});",
     {
       "completion": "normal",
@@ -196,7 +196,7 @@ test.each([
     }
   ],
   [
-    "R63-17: runtime source eligibility",
+    "runtime source eligibility",
     "function f(o:any){let {...r:object}=o;}f(null);",
     {
       "completion": "throw",
@@ -208,7 +208,7 @@ test.each([
     }
   ],
   [
-    "R63-18: copy executes getter",
+    "copy executes getter",
     "function f(o:any){let {...r:{x:uint8}}=o;}f({get x(){globalThis.hookRan=true;return 1;}});",
     {
       "completion": "normal",
@@ -220,7 +220,7 @@ test.each([
     }
   ],
   [
-    "R63-19: unchecked body does not execute getter",
+    "unchecked body does not execute getter",
     "function f(o:any){let {...r:{x:uint8}}=o;}const o={get x(){globalThis.hookRan=true;return 1;}};",
     {
       "completion": "normal",
@@ -232,7 +232,7 @@ test.each([
     }
   ],
   [
-    "R63-20: primitive source still boxes",
+    "primitive source still boxes",
     "function f(o:any){let {...r:object}=o;}f(\"abc\");",
     {
       "completion": "normal",
@@ -250,7 +250,7 @@ test.each([
 // Adjacent controls and regressions found while implementing the recommendation.
 test.each([
   [
-    "R13-extra-44: function f<T: type extends uint8>(o:any){let {...r:T}=o;}",
+    "function f<T: type extends uint8>(o:any){let {...r:T}=o;}",
     "function f<T: type extends uint8>(o:any){let {...r:T}=o;}",
     {
       "completion": "throw",
@@ -262,7 +262,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-45: function f<T: type>(o:any){let {...r:T}=o;}f.<object>({});",
+    "function f<T: type>(o:any){let {...r:T}=o;}f.<object>({});",
     "function f<T: type>(o:any){let {...r:T}=o;}f.<object>({});",
     {
       "completion": "normal",
@@ -274,7 +274,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-46: function f(o:any){let {...r:uint8|string}=o;}",
+    "function f(o:any){let {...r:uint8|string}=o;}",
     "function f(o:any){let {...r:uint8|string}=o;}",
     {
       "completion": "throw",
@@ -286,7 +286,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-47: function f(o:any){let {...r:{x:uint8}}=o;globalThis.settled=String(r.x);}f({x:1});",
+    "function f(o:any){let {...r:{x:uint8}}=o;globalThis.settled=String(r.x);}f({x:1});",
     "function f(o:any){let {...r:{x:uint8}}=o;globalThis.settled=String(r.x);}f({x:1});",
     {
       "completion": "normal",
@@ -298,7 +298,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-51: function f(o:{x:uint8}){let {...r:{x?:string}}=o;}f(Object.create({x:uint8(1)}));",
+    "function f(o:{x:uint8}){let {...r:{x?:string}}=o;}f(Object.create({x:uint8(1)}));",
     "function f(o:{x:uint8}){let {...r:{x?:string}}=o;}f(Object.create({x:uint8(1)}));",
     {
       "completion": "normal",
@@ -310,7 +310,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-52: function f(o:{x:uint8}){let {...r:{x?:string}}=o;}const o={};Object.defineProperty(o,\"x\",{value:uint8(1),enumerable:false});f(o);",
+    "function f(o:{x:uint8}){let {...r:{x?:string}}=o;}const o={};Object.defineProperty(o,\"x\",{value:uint8(1),enumerable:false});f(o);",
     "function f(o:{x:uint8}){let {...r:{x?:string}}=o;}const o={};Object.defineProperty(o,\"x\",{value:uint8(1),enumerable:false});f(o);",
     {
       "completion": "normal",
@@ -322,7 +322,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-53: function f(o:any,k:string){let {[k]:removed,...r:{x?:string}}=o;}f({x:1},\"x\");",
+    "function f(o:any,k:string){let {[k]:removed,...r:{x?:string}}=o;}f({x:1},\"x\");",
     "function f(o:any,k:string){let {[k]:removed,...r:{x?:string}}=o;}f({x:1},\"x\");",
     {
       "completion": "normal",
@@ -334,7 +334,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-54: function f(){let {...r:{x:string}}={x:uint8(1)};}",
+    "function f(){let {...r:{x:string}}={x:uint8(1)};}",
     "function f(){let {...r:{x:string}}={x:uint8(1)};}",
     {
       "completion": "throw",

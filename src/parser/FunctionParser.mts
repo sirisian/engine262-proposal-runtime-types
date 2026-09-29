@@ -154,7 +154,7 @@ export abstract class FunctionParser extends IdentifierParser {
         (node as { WhereClauses?: ParseNode.WhereClause[] }).WhereClauses = this.parseWhereClauses();
       }
 
-      // Plan section 3.8, rule 2: an OWNER - a declaration whose list holds
+      // #sec-callable-overload-contracts: an OWNER - a declaration whose list holds
       // binders only - may omit its body: `function read<T: type>(): T;`
       // declares the labels and generic contract its cases keep, and an
       // application no case matches is then no viable overload. Nothing else

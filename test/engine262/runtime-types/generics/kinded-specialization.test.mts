@@ -54,7 +54,7 @@ test('the checker was already right, and stays right', () => {
   expect(evaluated(`${ID}${B} const b: B.<Id> = new B.<Id>(); "ok";`)).toBe('ok');
   expectThrown(`${ID}${B} const b: B.<Wrap> = new B.<Id>();`, '"B.<Id>" is not assignable to "B.<Wrap>"');
   // A bare construction at an annotated position constructs the annotation's
-  // specialization (PLAN-v3 Q2-c): `new B()` at `B.<Id>` is `new B.<Id>()`.
+  // specialization (#sec-constructing-a-generic-class): `new B()` at `B.<Id>` is `new B.<Id>()`.
   expect(evaluated(`${ID}${B} const b: B.<Id> = new B(); String(Reflect.typeOf(b));`)).toBe('B.<Id>');
 });
 

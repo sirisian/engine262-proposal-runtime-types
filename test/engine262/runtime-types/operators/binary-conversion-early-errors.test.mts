@@ -118,7 +118,7 @@ test.each([
     "edge: right string concatenation prior control",
     "function f(x:symbol){x+\"\";}"
   ]
-])('R31 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -139,7 +139,7 @@ test.each([
     "control: any",
     "function f(x:any,y:number){x*y;}f(Symbol(),2);"
   ]
-])('R31 preserves runtime timing: %s', (_name, source) => {
+])('preserves runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -168,7 +168,7 @@ test.each([
     "control: typed string coercion",
     "function f(x:uint8,y:string){x*y;}f(uint8(2),\"3\");"
   ]
-])('R31 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -189,7 +189,7 @@ test.each([
     "typed const alias",
     "function f(x:symbol){const s=x;s*2;}"
   ]
-])('R31 additional early boundary: %s', (_name, source) => {
+])('additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -218,7 +218,7 @@ test.each([
     "BigInt and Boolean ordering",
     "function f(x:bigint,y:boolean){return x<y;}f(0n,true);"
   ]
-])('R31 additional ok boundary: %s', (_name, source) => {
+])('additional ok boundary: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 

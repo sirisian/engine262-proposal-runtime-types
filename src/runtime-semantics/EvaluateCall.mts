@@ -44,7 +44,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
       // argument as `T(v)`", and a type parameter is "a compile-time constant
       // whose value is a type". Its reference names no Environment Record, so
       // the call has no this value: undefined, as for a non-Reference callee
-      // (phase 4, step 9i; `LengthType(n)` in the packet writer asserted).
+      // (`LengthType(n)` in the binary packet writer asserted).
       if (!(refEnv instanceof EnvironmentRecord)) {
         thisValue = Value.undefined;
       } else {

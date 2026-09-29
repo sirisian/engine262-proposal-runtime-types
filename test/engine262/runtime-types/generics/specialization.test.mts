@@ -48,7 +48,7 @@ test('a value parameter carries the type it was declared with', () => {
 
 test('an unspecialized generic class stays usable', () => {
   // the declaration binds the name; a construction that reaches no argument for
-  // a parameter with no default is the naming error (PLAN-v3 Q4), never an
+  // a parameter with no default is the naming error, never an
   // instance with an open parameter
   expectThrown('class C<W: uint32> { m() { return 1; } } new C();', 'is not determined by the arguments and has no default');
   expect(evaluated('class C<W: uint32> { static f = W; } String(typeof C);')).toBe('function');
@@ -381,7 +381,7 @@ test('two specializations do not share a field type', () => {
 
 test('an unspecialized generic does not construct', () => {
   // A construction that reaches nothing for a parameter with no default is the
-  // naming error (PLAN-v3 Q4): there is no instance whose `v: T` is open.
+  // naming error: there is no instance whose `v: T` is open.
   // Every construction of a generic class is a construction of a specialization.
   expectThrown('class U<T: type> { v: T; } new U();', 'is not determined by the arguments and has no default');
   expect(evaluated('class U<T: type> { v: T; } typeof new U.<uint8>();')).toBe('object');

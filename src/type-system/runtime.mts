@@ -404,7 +404,7 @@ export function* MetadataCaptureView(record: TypeRecord): ValueEvaluator {
 
 /** Binds _record_ to _name_ in _frame_, marking it if _param_ was declared with `:`. */
 /**
- * #sec-generics (decided in phase 4, step 9g): a VALUE parameter keeps its
+ * #sec-generics: a VALUE parameter keeps its
  * declared type wherever it is read - in a type-level expression as in a body
  * - so `[(S + B / 8 - 1) / (B / 8)]` divides as `uint32` does (Rust's const
  * parameters, C++'s non-type template parameters). A written literal binds as
@@ -567,7 +567,8 @@ export function packElementAdmits(record: TypeRecord, elementBound: TypeRecord):
  * length, a tuple constraint fixes length and typing position by position, and
  * every element must be admitted by the element type - by the same literal
  * rule the split used, so a converted value element passes as its scalar twin
- * does. A constraint that is no collection at all is the E2 type error.
+ * does. A constraint that is no collection at all is a type error
+ * (#sec-variadic-parameters).
  */
 export function packConstraintRefuses(elements: readonly TypeRecord[], constraint: TypeRecord): boolean {
   if (constraint.Kind === 'array') {
@@ -762,7 +763,7 @@ export function* BindTypeArgumentRecordsInto(
         // 4 over a `number` base failed its own formal's boundary.
         record = { ...record, Value: converted.Value as Value, Base: constraint } as TypeRecord;
       } else if (constraint && !Q(yield* ConstraintAdmits(record, constraint))) {
-        // A non-literal explicit argument is checked against the constraint here (step 8).
+        // A non-literal explicit argument is checked against the constraint here (#sec-computed-constraints step 8).
         return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
       }
     }
@@ -1174,7 +1175,7 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
         Value(declaration.BindingIdentifier.name),
       );
     }
-    // Phase 5 (plan 6.4): an application of an alias family with CASES selects
+    // #sec-specialization-lists: an application of an alias family with CASES selects
     // its right-hand side as a class application selects its body - by the
     // function rule, once its arguments are closed, as they are here - and the
     // selected case's captures join the frame.
@@ -1587,7 +1588,7 @@ function* proposeThroughDeclaredInverse(
   if (inverse === undefined) {
     return null;
   }
-  // A1: the argument's type - a rest's is the tuple of what it collects.
+  // The argument's type - a rest's is the tuple of what it collects.
   const formal = formals[site.formalIndex]! as { type?: string };
   let argType: TypeRecord;
   if (formal.type === 'BindingRestElement') {
@@ -2353,7 +2354,7 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
   // type of `{}`. `f<T extends []>(window)` then failed its own bound while
   // `window is []` answered *true*, which is the two answers disagreeing that
   // #sec-instanceof-for-type-objects exists to prevent.
-  // T2. The stored mark wins over the structurally derived answer: an object's
+  // The stored mark wins over the structurally derived answer: an object's
   // runtime type is otherwise read from its shape, and a brand is deliberately
   // not structural. A brand records PROVENANCE, so a mutation that changes the
   // shape does not change where the value came from - a class instance behaves
@@ -2420,7 +2421,7 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
     const collection = (value as { TypedCollection?: readonly (TypeRecord | number)[] }).TypedCollection;
     const slots = value as unknown as Record<string, unknown>;
     // A PROMISE, a GENERATOR and their async forms report their library type
-    // rather than `{}` (D30b), by the same slot test the collections above use.
+    // rather than `{}`, by the same slot test the collections above use.
     //
     // `Reflect.typeOf(Promise.resolve(1))` answered `{}` while the CHECKER
     // answered `Promise.<uint.<8>>` for the same shape - two mechanisms
@@ -2790,8 +2791,8 @@ function makeObjectType(): TypeRecord {
  * runs in the function's OWN scope: the running context's LexicalEnvironment
  * is set to the function's [[Environment]] for the duration, so an annotation
  * naming an alias local to the declaring scope resolves there and not at
- * whatever site asked (V15), and OverloadSignatureOf pushes the frame the
- * function captured (P34). It runs no user code: a formal whose annotation
+ * whatever site asked, and OverloadSignatureOf pushes the frame the
+ * function captured. It runs no user code: a formal whose annotation
  * contains a computed type reads `any` (computedAsAny), and a derivation that
  * fails - an annotation naming nothing in scope - yields the all-`any`
  * signature marked [[Untyped]], the catch-all of #sec-issignaturesubtype step
@@ -2834,7 +2835,7 @@ function untypedSignatureOf(value: ObjectValue): TypeRecord {
 }
 
 function deriveSignatureType(value: ObjectValue): TypeRecord {
-  // Step 8 (H1, H2): a selected case's value has the case's signature with its
+  // A selected case's value has the case's signature with its
   // captures bound - `(v: uint.<12>) => string`, never exposing `N`.
   const selection = SelectionOfValue(value);
   if (selection?.frame) {
@@ -2872,7 +2873,7 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
   let declared: readonly OverloadSignature[] | null = null;
   try {
     // A group holding cases and an owner has its OWNER's generic function
-    // value (plan section 3.8, rule 4): a replacement is reached through that
+    // value (#sec-callable-overload-contracts): a replacement is reached through that
     // contract, and an additive case never is, so neither is listed beside it
     // (a replacement's signature may even name its captures). A group of
     // standalone cases alone stays an ordinary overload set (rule 5).
@@ -4046,7 +4047,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       }
       const len = R(unwrapToNumber(lenValue as NumberValue | TypedNumberValue));
       if (t.Kind === 'array') {
-        // An extent RECORD (phase 4, step 9q): a parameter's is its binding in
+        // An extent RECORD: a parameter's is its binding in
         // the running frames, where bound; an opaque one - a construction's
         // run-time extent, `new [n].<T>()` - and an unbound parameter's are
         // unknown statically, so the value's own fixed length stands.
@@ -4582,7 +4583,7 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
     case 'float64': {
       // #sec-value-types: numeric value types have their own values; a plain
       // Number is not a member of a numeric value type, and a typed number is a
-      // member only of its own type (R1 gave these values distinct identity).
+      // member only of its own type (#sec-value-types gives these values distinct identity).
       if (!(value instanceof TypedNumberValue)) {
         return false;
       }
@@ -4974,7 +4975,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
     return Throw.TypeError('$1', Value(error.message));
   }
   // A generic class's bare name in its own body is the class over its own
-  // parameters (step 9b): here, their bindings in the running frames.
+  // parameters: here, their bindings in the running frames.
   const injected = InjectedClassOf(node);
   if (injected) {
     const bound = injected.params.map((name) => lookupTypeParameter(name));
@@ -5962,7 +5963,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // yet bound, as a generic declaration's own evaluation has it - is
           // itself open until specialization, as a bare `[S]` is above; it is
           // not computed from the placeholder (which read as NaN, or as the
-          // name: `[S + 1]` was "S1") (phase 4, step 9g).
+          // name: `[S + 1]` was "S1").
           if (ExtentNamesOpenParameter(node.ArrayExtent)) {
             return {
               Kind: 'array', Element,
@@ -6652,7 +6653,7 @@ export function KeyTypesOf(t: TypeRecord): TypeRecord {
 export function fitsNumericType(v: number | bigint, name: string, args: readonly (TypeRecord | number)[]): boolean {
   // A width may reach here as a numeric literal record (a value parameter's
   // binding, typed or not) from a record no constructor canonicalized: read it
-  // as its number, or every value falls outside the range (phase 4, step 9e).
+  // as its number, or every value falls outside the range.
   // Some callers pass a record's absent Arguments (a float's); they read none.
   args = (args ?? []).map(CanonicalWidthArgument);
   if (name === 'uint' || name === 'int') {

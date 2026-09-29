@@ -633,7 +633,7 @@ export class NumberValue extends PrimitiveValue {
 }
 
 /**
- * proposal-runtime-types R6 (Option A) #sec-value-types: a numeric value type's
+ * proposal-runtime-types #sec-value-types: a numeric value type's
  * value. It is a sibling of NumberValue under PrimitiveValue, not a subclass, so
  * a typed number is not an instanceof NumberValue. Membership is decided by the
  * carried Type Record, a plain Number is not a member of any numeric value type,
@@ -685,7 +685,7 @@ export class TypedNumberValue extends PrimitiveValue {
 
   readonly TypeRecord: unknown;
 
-  // proposal-runtime-types R6: unlike the other value classes (which use a
+  // proposal-runtime-types: unlike the other value classes (which use a
   // private constructor plus a module-level factory for nominal typing), this
   // constructor is public. The class is already nominally distinct via its
   // distinct type tag and TypeRecord field, and public construction keeps the
@@ -1667,7 +1667,7 @@ export function SameType(x: Value, y: Value) {
     case x === Value.null && y === Value.null:
     case x instanceof BooleanValue && y instanceof BooleanValue:
     case x instanceof NumberValue && y instanceof NumberValue:
-    // proposal-runtime-types R6 (Option A): a typed number is same-type only
+    // proposal-runtime-types #sec-value-types: a typed number is same-type only
     // with another typed number, never with a plain Number. The per-Type-Record
     // refinement (a uint8 versus a uint16) lives in the type-system SameType;
     // at the value level a TypedNumberValue is its own Type in the language
@@ -1684,7 +1684,7 @@ export function SameType(x: Value, y: Value) {
 }
 
 /**
- * proposal-runtime-types R6 (Option A): the type guard for a typed number. Its
+ * proposal-runtime-types #sec-value-types: the type guard for a typed number. Its
  * own instanceof does not narrow (the value hierarchy shares a static
  * hasInstance), so call sites use this to narrow a Value to TypedNumberValue.
  */
@@ -1693,7 +1693,7 @@ export function isTypedNumber(v: Value): v is TypedNumberValue {
 }
 
 /**
- * proposal-runtime-types R6 (Option A): the single, named way to read a typed
+ * proposal-runtime-types #sec-value-types: the single, named way to read a typed
  * number as its underlying plain Number. Every numeric-reading site (JSON, Date,
  * Math, the Number intrinsics, ToNumber, ToString, and so on) that must treat a
  * typed number as its value routes through here, so the "unwrap" logic exists in

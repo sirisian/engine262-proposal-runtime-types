@@ -136,7 +136,7 @@ function* DefineMethodProperty(key: PropertyKeyValue | PrivateName, homeObject: 
         // new one - rather than nesting the set as a member, so the group is
         // one list of declarations, as a statement list's functions are
         // (`collectOverloadGroups`); a group holding a specialized case is
-        // analyzed from that list (phase 4, step 7).
+        // analyzed from that list.
         const members = (existing as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
         value = Q(yield* MakeOverloadedFunction(
           key instanceof JSStringValue ? key : Value(String(key)),

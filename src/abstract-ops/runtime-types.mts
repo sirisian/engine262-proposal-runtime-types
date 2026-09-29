@@ -747,7 +747,7 @@ function isBooleanConversionSource(value: Value): boolean {
 /**
  * How a numeric union arm ranks for selection: narrower first, integers before
  * floats. Exported so the CHECKER's member-adaptation path uses this rule rather
- * than a copy of it (D70b) - the two positions cannot then disagree.
+ * than a copy of it - the two positions cannot then disagree.
  */
 export function NumericArmRank(m: TypeRecord): number | null {
     if (m.Kind !== 'primitive') {
@@ -965,7 +965,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   // it, as every narrowing conversion does.
   if (surroundingAgent.feature('runtime-types') && isDecimalObject(value)) {
     // #sec-numeric-conversions: "decimal -> integer of width M: The source
-    // truncated toward zero, then modulo 2**M" - and, S3's row, "decimal ->
+    // truncated toward zero, then modulo 2**M" - and "decimal ->
     // `bigint`: the source truncated toward zero". The `:=` spelling refused the
     // first, which the call spelling already ran, and crashed on the second.
     if (t.Kind === 'primitive' && (t.Name === 'int' || t.Name === 'uint' || t.Name === 'bigint')) {
@@ -1162,8 +1162,8 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // BRAND RULE. So the rule about BARE values was applied at the boundary
     // that exists to let a value stop being bare, and a brand refused its own
     // construction: `UserId(7)` threw with the same diagnostic as
-    // `let x: UserId = 7`. B11 held and B5 did not, which is not a brand but a
-    // type nothing can inhabit.
+    // `let x: UserId = 7`, which is not a brand but a type nothing can
+    // inhabit.
     //
     // The same correction was already made for the CAST path, and
     // RequireTypeAfterCast records it: "a meta type offering no judgment now
@@ -1196,7 +1196,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   if (isTypedNumber(atBase)) {
     return new TypedNumberValue(atBase.value, t);
   }
-  // T3. An object or array carries the brand as a mark, read back by
+  // An object or array carries the brand as a mark, read back by
   // `CarriedTypeRecordOf` and `RuntimeTypeOf`.
   if (atBase instanceof ObjectValue) {
     Object.defineProperty(atBase, 'BrandTypeRecord', {
@@ -1473,8 +1473,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
           if (isFloatTypeName(t.Name)) {
             return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
           }
-          // The row #sec-numeric-conversions gained (the plan "how numeric values
-          // of different types meet", S3): "the exact quotient truncated toward
+          // The row #sec-numeric-conversions gained, "the exact quotient truncated toward
           // zero, then modulo 2**M" - the bigint row's modulo, exactly, at any
           // width. It truncated and then REFUSED what did not fit, where every
           // sibling row to a fixed-width integer wraps.
@@ -1684,7 +1683,7 @@ function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): Pl
   if (!ctor || !IsConstructor(ctor)) {
     return undefined;
   }
-  // proposal-runtime-types (PLAN-v3 §1.3, item 9): the converting constructor is
+  // proposal-runtime-types: the converting constructor is
   // the TARGET's. An annotation record for `Box.<uint8>` carries the
   // declaration's constructor, and constructing through THAT built a `Box` of
   // whatever arrived - a `Box.<uint16>`, a String - and called it the
@@ -1818,8 +1817,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   if (declared !== undefined) {
     return declared;
   }
-  // The plan "how numeric values of different types meet at run time", B1: a
-  // numeric value at a numeric type through the boundary converts by its
+  // #sec-the-boundary-check: a numeric value at a numeric type through the boundary converts by its
   // conversion row, as #sec-requiretype specifies, refused where the conversion
   // would wrap, truncate toward zero, round a finite value to an infinity, or lose
   // NaN or an infinity. Routed here for the families that refused it outright or
@@ -2328,7 +2326,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
           break;
         }
         // A `bigint` converts here too: the boundary runs the conversion the call
-        // and `:=` run, and the plan's B1 gives that conversion a `bigint` row.
+        // and `:=` run, and that conversion has a `bigint` row.
         if (!(value instanceof NumberValue) && !isTypedNumber(value) && !isDecimalObject(value) && !(value instanceof BigIntValue)) {
           break;
         }
@@ -2367,8 +2365,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
             // calls lossy and visible.
             return new TypedNumberValue(wrapToType(Number(rn) / Number(rd), t), t);
           }
-          // The row #sec-numeric-conversions gained (the plan "how numeric values
-          // of different types meet", S3): "the exact quotient truncated toward
+          // The row #sec-numeric-conversions gained, "the exact quotient truncated toward
           // zero, then modulo 2**M" - the bigint row's modulo, exactly, at any
           // width. It truncated and then REFUSED what did not fit, where every
           // sibling row to a fixed-width integer wraps.
@@ -2497,7 +2494,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         // frozen from its creation (#sec-composite-types), so
         // `Composite.<{ n: number }>` could not be narrowed to `{ n: uint32 }`.
         //
-        // Refusing is W1, chosen over copying (W3) because the callee receives
+        // Refusing is chosen over copying because the callee receives
         // the SAME object today - `f(o) === o` answers *true* - and undeclared
         // properties survive the crossing; a copy would break the first and
         // make sharing depend on the argument's property descriptors.
@@ -2836,7 +2833,7 @@ export function RegisteredPrimitiveOperators(typeName: string, opText: string): 
  *
  * The receiver's primitive is read from the value: a typed numeric value names
  * its own base, and a plain Number is `number`, which is the declaration the
- * design uses to close the scalar-on-the-left case (F4) - `2 * v` dispatches
+ * design uses to close the scalar-on-the-left case - `2 * v` dispatches
  * because the LEFT operand is a number and `number` declares the operator.
  */
 /**
@@ -2875,7 +2872,7 @@ export function LookupPrimitiveOperator(value: Value, opText: string): readonly 
   // The blocks that may speak for _value_, most specific first: a block over
   // its exact primitive, `primitive uint8`, and then one over the FAMILY that
   // primitive belongs to, `primitive uint<const W>`. A fixed width is a fixed
-  // slot, which is more specific than a capture (plan section 6.1), so the
+  // slot, which is more specific than a capture (#sec-matching-specialization-lists), so the
   // exact block is consulted first whatever order the two were declared in.
   const names: string[] = [];
   if (isTypedNumber(value)) {
@@ -4595,14 +4592,14 @@ export function classFrameOfMethod(fn: unknown): Map<string, TypeRecord> | null 
 }
 
 /**
- * typeprogramming.md R15, spec.emu #sec-declared-inverses: the INVERSE a
+ * #sec-declared-inverses: the INVERSE a
  * builder declares - an
  * internal association from the builder's function object to the inverse
  * function, never a property, so nothing observable but reflection and no shape
  * effect. Recorded by `Reflect.declareInverse(context, inverse)`, which is not
  * a registry: it requires the LIVE decoration context of the declaration being
  * decorated, so it can be called only from inside the decorator applied to
- * that declaration - one author, no timeline, which is what R15 requires.
+ * that declaration - one author, no timeline, as #sec-declared-inverses requires.
  */
 const declaredInverses = new WeakMap<object, Value>();
 const openDecorationContexts = new WeakSet<object>();
@@ -4837,10 +4834,10 @@ function annotationMentionsName(node: unknown, name: string): boolean {
 
 /** Converts each annotated parameter's bound value in place at entry. */
 export function* EnforceParameterTypes(fn: AnnotatedFunction, env: { HasBinding(n: Value): PlainEvaluator<import('../value.mts').BooleanValue>, GetBindingValue(n: Value, s: import('../value.mts').BooleanValue): ValueEvaluator, SetMutableBinding(n: Value, v: Value, s: import('../value.mts').BooleanValue): PlainEvaluator }): PlainEvaluator {
-  // Plan section 3.8, until selection is implemented (phase 4, step 2): a
-  // specialized case's body, and a bodyless owner, run only through a
-  // selection this engine does not yet make, so reaching one is refused rather
-  // than run as an ordinary overload. The checker refuses the calls statically.
+  // #sec-callable-overload-contracts: a specialized case's body, and a
+  // bodyless owner, run only through a selection, so reaching one without it
+  // is refused rather than run as an ordinary overload. The checker refuses
+  // such calls statically.
   const deferral = SpecializedCaseDeferral(fn);
   if (deferral !== undefined) {
     return Throw.TypeError('$1', Value(deferral));
@@ -5013,8 +5010,7 @@ function clauseSourceText(clause: object): string | undefined {
  *
  * Only one clause shape carries an edge - `Reflect.isAssignable(X, return)`,
  * which states `X <: thisApplication`, the LOWER bound a generic body producing
- * the result needs (`typeprogramming.md` §6.2: "Direction is everything here,
- * and it is easy to get backwards"). A clause asserting a kind carries none and
+ * the result needs. A clause asserting a kind carries none and
  * yields no fact; it is verified at each evaluation instead.
  *
  * `resolveArgument` maps a clause's argument expression to a Type Record where
@@ -5299,7 +5295,7 @@ export function LookupClassType(ctor: object): Value | undefined {
  */
 export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, options: { computedAsAny?: boolean } = {}): PlainEvaluator<OverloadSignature> {
   const formals = ((fn as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined) ?? [];
-  // PLAN-callable Q5: a caller that must not run user code (RuntimeTypeOf's
+  // A caller that must not run user code (RuntimeTypeOf's
   // signature derivation) reads a formal whose annotation contains a computed
   // type - a builder call, which evaluates - as `any`, and the return likewise.
   const computedAsAny = options.computedAsAny === true;
@@ -5322,15 +5318,15 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
   // A generic CLASS's constructor is a generic signature over the CLASS's
   // parameters: `Reflect.typeOf(Box)` for `class Box<T> { constructor(v: T) }`
   // is `<T>(v: T) => Box.<T>`, as `Reflect.typeOf(f)` for `function f<T>(x: T):
-  // T` is `<T>(x: T) => T`. Read without them the formal's `T` was not defined
-  // (PLAN-v3 H8). A SPECIALIZATION's constructor resolves under its own frame
+  // T` is `<T>(x: T) => T`. Read without them the formal's `T` was not defined.
+  // A SPECIALIZATION's constructor resolves under its own frame
   // (classFrameOfMethod) and is not this.
   // The frames are for RESOLUTION; the syntactic read (resolveAnnotations
   // false) looks up none of them - classFrameOfMethod types the HomeObject,
   // which for a method of an object literal is the literal holding it.
   const methodClassFrame = resolveAnnotations ? classFrameOfMethod(fn) : null;
   const constructorOfGeneric = resolveAnnotations && methodClassFrame === null ? GenericClassDeclarationOf(fn as unknown as Value) : undefined;
-  // A METHOD of a generic DECLARATION (PLAN-callable V5): its HomeObject is the
+  // A METHOD of a generic DECLARATION: its HomeObject is the
   // declaration's prototype (or, for a static method, the declaration), whose
   // record carries no arguments, so classFrameOfMethod answers nothing and
   // `m(y: T): T` read `T` as undefined. The class's parameters are put in
@@ -5362,7 +5358,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     pushTypeParameterFrame(methodClassFrame);
   }
   // A CLOSURE over a generic body captured its frame at creation
-  // (`F.TypeParameterFrame`, PLAN-callable P34): `(y: T): T => y` returned from
+  // (`F.TypeParameterFrame`): `(y: T): T => y` returned from
   // `mk<T>` means the T that mk was called at, and resolves under that frame.
   const capturedFrame = resolveAnnotations ? ((fn as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame ?? null) : null;
   if (capturedFrame) {
@@ -5528,7 +5524,7 @@ interface OverloadSlots {
  */
 export function* SignaturesOf(overloaded: Value, only?: (fn: Value) => boolean): PlainEvaluator<readonly OverloadSignature[]> {
   const slots = overloaded as unknown as OverloadSlots;
-  // _only_ selects members (phase 4 step 4: a replacement, whose signature
+  // _only_ selects members (a replacement, whose signature
   // names captures bound only by a selection, is left out); such a subset is
   // not the group's cached list.
   if (slots.OverloadSignatures && !only) {
@@ -5565,7 +5561,7 @@ export function* SignaturesOf(overloaded: Value, only?: (fn: Value) => boolean):
  * selection is implemented; *undefined* for any other function.
  */
 export function SpecializedCaseDeferral(fn: unknown): string | undefined {
-  // A case a direct explicit call selected (phase 4, step 2) runs.
+  // A case a direct explicit call selected runs.
   if (IsSelectedInvocation(fn)) {
     return undefined;
   }
@@ -5622,9 +5618,9 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
   }
   const caseMember = functions.find((fn) => SpecializedCaseDeferral(fn) !== undefined);
   const behaviour = function* overloadDispatch(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
-    // Step 4: an implicit call into a group holding a specialized case selects
-    // through value resolution and its owner's inferred binding (plan section
-    // 3.8, rules 4 and 5).
+    // An implicit call into a group holding a specialized case selects through
+    // value resolution and its owner's inferred binding
+    // (#sec-callable-overload-contracts).
     if (caseMember !== undefined) {
       return Q(yield* DispatchCaseGroup(overloaded, args, context.thisValue, name.stringValue(), TakeBodyContext() ?? undefined));
     }

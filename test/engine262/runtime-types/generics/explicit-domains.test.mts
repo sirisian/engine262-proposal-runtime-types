@@ -7,11 +7,10 @@ import {
  * proposal-runtime-types #sec-type-parameters and #sec-parameter-kinds: every
  * parameter states its domain, `T: type` declares a type parameter, any other
  * domain declares a value parameter, and an entry without `name :` is an
- * argument of a specialization list. Plan: runtime-types const specialization,
- * phase 2 (C01, C02, C22, C25).
+ * argument of a specialization list.
  */
 
-test('C25: a class over T: type constructs and checks its argument', () => {
+test('a class over T: type constructs and checks its argument', () => {
   // Before explicit domains, `T: type` was read as a VALUE parameter whose
   // domain is `type`, and construction reported that uint.<8> "is not
   // assignable to type, the constraint of T".
@@ -19,17 +18,17 @@ test('C25: a class over T: type constructs and checks its argument', () => {
   expectThrown('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } new Box.<uint8>(300);');
 });
 
-test('C25: a type parameter binds from an argument\'s type (D2)', () => {
+test('a type parameter binds from an argument\'s type', () => {
   expect(evaluated('function f<T: type>(x: T): T { return x; } String(f((3 := uint16)) is uint16);')).toBe('true');
   expect(evaluated('function f<T: type>(x: [].<T>): string { return String(T); } f([(1 := uint8)]);')).toBe('uint.<8>');
 });
 
-test('C25: explicit application reaches an overload over T: type', () => {
+test('explicit application reaches an overload over T: type', () => {
   expect(evaluated('function f<T: type>(x: T): string { return "one"; } function f<U: type>(x: U, y: U): string { return "two"; }'
     + ' f.<uint8>((1 := uint8), (2 := uint8));')).toBe('two');
 });
 
-test('a value parameter still binds the constant it is given (D2)', () => {
+test('a value parameter still binds the constant it is given', () => {
   expect(evaluated('enum Component: uint8 { A, B }; function f<C: Component>(c: C) { return String(C); } f(Component.B);')).toBe('1');
   expect(evaluated('class C<W: uint32> { m() { return W; } } String(new C.<4>().m());')).toBe('4');
 });
@@ -47,8 +46,8 @@ test('a generic signature displays its domains', () => {
   expect(evaluated('function f<N: uint32, ...Ts: [].<type>>(): void {} String(Reflect.typeOf(f));')).toBe('<N: uint32, ...Ts: [].<type>>() => void');
 });
 
-test('C22: an entry without a domain is an argument, not a parameter', () => {
-  // A callable's list may now hold cases (phase 4, step 1), so a bare name there
+test('an entry without a domain is an argument, not a parameter', () => {
+  // A callable's list may hold cases, so a bare name there
   // is a selector the checker resolves: statically refused, with the same hint.
   expectEarlyError('function f<T>(x: T) {}', 'StaticTypeError');
   expectEarlyError('class Box<T> {}', 'SyntaxError');
@@ -61,8 +60,8 @@ test('C22: an entry without a domain is an argument, not a parameter', () => {
 });
 
 test('specialization lists and captures are reported, not accepted and ignored', () => {
-  // #sec-specialization-lists: a class case beside its primary is selected
-  // (phase 5), so it is accepted; one with no primary is still reported.
+  // #sec-specialization-lists: a class case beside its primary is selected,
+  // so it is accepted; one with no primary is still reported.
   expect(evaluated('class Box<T: type> {} class Box<uint32> {} "ok";')).toBe('ok');
   expect(evaluated('class Box<T: type, N: uint32> {} class Box<const T, 8> {} "ok";')).toBe('ok');
   expectThrown('class Box<uint32> {}', 'declares the family it would specialize');
@@ -83,7 +82,7 @@ test('`out` stays an ordinary name', () => {
   expect(evaluated('class C<out T: type> { } typeof C;')).toBe('function');
 });
 
-test('D2: a domain admitting Type Objects alongside other values is refused', () => {
+test('a domain admitting Type Objects alongside other values is refused', () => {
   expectEarlyError('function f<V: any>() {}', 'StaticTypeError');
   expectEarlyError('function f<V: type | uint32>() {}', 'StaticTypeError');
   expectThrown('function f<V: any>() {}', 'admits Type Objects alongside other values');
@@ -91,9 +90,9 @@ test('D2: a domain admitting Type Objects alongside other values is refused', ()
   expect(evaluated('function f<V: uint8 | string>(): string { return String(V); } f.<"a">();')).toBe('a');
 });
 
-// Recorded gaps, each owned by a later part of the plan.
+// Parameters named after predefined types.
 
-test('D6: a parameter named after a predefined type shadows it in the body too', () => {
+test('a parameter named after a predefined type shadows it in the body too', () => {
   expect(evaluated('function f<uint32: type>() { return String(uint32 === string); } f.<string>();')).toBe('true');
   expect(evaluated('function f<uint32: type>(x: uint32): string { return String(uint32); } f.<string>("a");')).toBe('string');
   expect(evaluated('class C<string: type> { m() { return String(string); } } new C.<uint8>().m();')).toBe('uint.<8>');
@@ -132,7 +131,7 @@ test('#sec-type-parameters-static-semantics-early-errors: a callable\'s own leve
   expect(evaluated('class B<T: type> { static { let T = 4; } } "ok";')).toBe('ok');
 });
 
-test('D3: a bound written as a domain is refused at the declaration', () => {
+test('a bound written as a domain is refused at the declaration', () => {
   expectEarlyError('interface Ord { lt(o: any): boolean; } function f<T: Ord>() {}', 'StaticTypeError');
   expectEarlyError('class K {} function f<T: K>() {}', 'StaticTypeError');
   expectEarlyError('function f<V: (x: uint8) => uint8>() {}', 'StaticTypeError');

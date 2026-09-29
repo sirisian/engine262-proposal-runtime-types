@@ -53,8 +53,8 @@ export interface DecimalObject extends OrdinaryObject {
    * #sec-decimal-floating-point-types: the values are "those of the corresponding
    * IEEE 754-2019 decimal interchange formats", and "NaN and the infinities are
    * values of ... every decimal type" - arriving by conversion and by bytes, never
-   * made by the arithmetic from finite operands (the plan "NaN and the infinities
-   * in the decimal types", N1 and O1).
+   * made by the arithmetic from finite operands
+   * (#sec-decimal-floating-point-types).
    */
   DecimalSpecial?: DecimalSpecialKind;
 }
@@ -227,7 +227,7 @@ function atPreferredExponent(significand: bigint, exponent: number, preferred: n
 
 export interface DecimalParts { significand: bigint, exponent: number, special?: DecimalSpecialKind }
 
-/** An operation IEEE signals as INVALID - `inf - inf`, `0 * inf`, `inf / inf`, `inf % y` - which raises, by O1. */
+/** An operation IEEE signals as INVALID - `inf - inf`, `0 * inf`, `inf / inf`, `inf % y` - which raises. */
 export type DecimalInvalid = 'invalid';
 
 /** Both operands at one exponent, which is the lower of the two - always exact. */
@@ -249,7 +249,7 @@ const finiteSign = (x: DecimalObject): number => (x.DecimalSignificand < 0n ? -1
 const nonFinite = (k: DecimalSpecialKind, width: 32 | 64 | 128) => ({ parts: { significand: 0n, exponent: 0, special: k }, width });
 const infinityOfSign = (sign: number): DecimalSpecialKind => (sign < 0 ? '-Infinity' : 'Infinity');
 
-/** O1 for a sum: a NaN operand gives the NaN; infinities of one sign give it; of both signs, IEEE's invalid `inf - inf`. */
+/** The invalid-operation rule for a sum: a NaN operand gives the NaN; infinities of one sign give it; of both signs, IEEE's invalid `inf - inf`. */
 function nonFiniteSum(a: DecimalSpecialKind | undefined, b: DecimalSpecialKind | undefined, width: 32 | 64 | 128) {
   if (a === 'NaN' || b === 'NaN') {
     return nonFinite('NaN', width);
@@ -567,7 +567,7 @@ export function CreateDecimalValue(significand: bigint, exponent: number, width:
 }
 
 
-/** A decimal NaN or infinity of a width - arriving by conversion or by bytes (N1). */
+/** A decimal NaN or infinity of a width - arriving by conversion or by bytes. */
 export function CreateDecimalSpecial(kind: DecimalSpecialKind, width: 32 | 64 | 128, realmRec: Realm, typeRecord?: unknown): DecimalObject {
   const obj = CreateDecimalValue(0n, 0, width, realmRec, typeRecord) as Mutable<DecimalObject>;
   obj.DecimalSpecial = kind;
@@ -576,8 +576,8 @@ export function CreateDecimalSpecial(kind: DecimalSpecialKind, width: 32 | 64 | 
 
 /**
  * A decimal operation's result as a value - the one place results are made, so
- * the rules hold at every operator: an operation IEEE signals as invalid raises
- * (O1); a NaN or an infinity from a non-finite operand is that value; and a
+ * the rules hold at every operator: an operation IEEE signals as invalid raises;
+ * a NaN or an infinity from a non-finite operand is that value; and a
  * finite result outside the width's range raises, since "a decimal's range is a
  * property of its type".
  */

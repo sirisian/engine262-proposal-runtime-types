@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// Phase 5, slice 2: alias specializations (plan 6.4). An alias CASE - an alias
+// #sec-specialization-lists: alias specializations. An alias CASE - an alias
 // declaration whose list specializes its family - supplies the right-hand side
 // an application selects once its arguments are known, by the rule function
 // and class cases use.

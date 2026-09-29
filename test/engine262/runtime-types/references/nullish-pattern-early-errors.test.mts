@@ -78,7 +78,7 @@ test.each([
     "control: forof elements",
     "function f(xs:[].<null>){for(const {} of xs){}}f([null]);"
   ]
-])('R32 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -99,7 +99,7 @@ test.each([
     "control: readonly no liveness bypass",
     "let a:[].<{x:uint8}>=[{x:1}];let ref r=a[0];a.pop();const {}=r;"
   ]
-])('R32 preserves runtime timing: %s', (_name, source) => {
+])('preserves runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -128,7 +128,7 @@ test.each([
     "control: fallback rescues",
     "function f(x:null|{a:number}){const {a}=x??{a:1};}f(null);"
   ]
-])('R32 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -145,7 +145,7 @@ test.each([
     "inherited member contribution",
     "class B{p:null=null;}class C extends B{}function f(x:C){const {}=x.p;}"
   ]
-])('R32 additional early boundary: %s', (_name, source) => {
+])('additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -154,7 +154,7 @@ test.each([
     "legacy const alias remains dynamic",
     "const x=null;const {}=x;"
   ]
-])('R32 additional runtime boundary: %s', (_name, source) => {
+])('additional runtime boundary: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -163,6 +163,6 @@ test.each([
     "nested undefined takes default",
     "function f(x:{p:undefined}){const {p:{a}={a:1}}=x;}f({p:undefined});"
   ]
-])('R32 additional ok boundary: %s', (_name, source) => {
+])('additional ok boundary: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });

@@ -1,13 +1,12 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// Decision N1 (phase 4, construction inside a class body): inside a generic
-// class's own body, `new B(args)` constructs the specialization being evaluated
-// - what the inner class binding names at run time (decision V1) - so the
+// Inside a generic class's own body, `new B(args)` constructs the specialization being evaluated
+// - what the inner class binding names at run time - so the
 // checker types it over the class's OWN parameters and checks its arguments at
-// them. Before, it inferred another specialization from the arguments (S1),
-// fell back to `any` (S3), or took a value parameter's default (S4), none of
-// which is what runs.
+// them, rather than inferring another specialization from the arguments,
+// falling back to `any`, or taking a value parameter's default, none of which
+// is what runs.
 
 const B = 'class B<T: type = uint8> { v: T; constructor(v: T) { this.v = v; } ';
 

@@ -418,7 +418,7 @@ export function* OrdinaryHasInstance(constructor: Value, O: Value): ValueEvaluat
       return Value.true;
     }
   }
-  // proposal-runtime-types #sec-instanceof-for-type-objects (PLAN-v3 Q7-i): a
+  // proposal-runtime-types #sec-instanceof-for-type-objects: a
   // GENERIC class's declaration is the family of its specializations. Each
   // specialization is a distinct class object, so the walk above never reaches
   // the declaration's prototype from an instance of one; `x instanceof Box` is

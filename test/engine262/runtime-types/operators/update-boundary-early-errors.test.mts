@@ -98,7 +98,7 @@ test.each([
     "declared update control",
     "class C{operator++():boolean{return true;}} function unused(c:C){c++;}"
   ]
-])('R26 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -107,7 +107,7 @@ test.each([
     "partial singleton union runtime",
     "function f(x:1|2){x++;} f(2);"
   ]
-])('R26 retains runtime failure: %s', (_name, source) => {
+])('retains runtime failure: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -140,7 +140,7 @@ test.each([
     "declared update valid",
     "class C{operator++():C{return this;}} function unused(c:C){c++;} unused(new C());"
   ]
-])('R26 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -161,7 +161,7 @@ test.each([
     "super setter",
     "class B{get x():boolean{return true;}set x(v:boolean){}}class C extends B{f(){super.x++;}}"
   ]
-])('R26 boundary control (early): %s', (_name, source) => {
+])('boundary control (early): %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -190,7 +190,7 @@ test.each([
     "legacy boolean",
     "let x=true; x++;"
   ]
-])('R26 boundary control (ok): %s', (_name, source) => {
+])('boundary control (ok): %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -199,7 +199,7 @@ test.each([
     "stale ref",
     "let a:[].<uint8>=[1];let ref x=a[0];a.pop();x++;"
   ]
-])('R26 boundary control (runtime): %s', (_name, source) => {
+])('boundary control (runtime): %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 

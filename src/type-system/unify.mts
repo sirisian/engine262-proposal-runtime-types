@@ -5,9 +5,8 @@ import { makePrimitive, type TypeRecord } from './records.mts';
 import { IsAssignable, SameType } from './relations.mts';
 
 /**
- * proposal-runtime-types #sec-computed-constraints, #sec-variadic-parameters
- * (PLAN-v3 Q6, "the reach of the shared core"): the STRUCTURAL rung of
- * inference, shared.
+ * proposal-runtime-types #sec-computed-constraints, #sec-variadic-parameters:
+ * the STRUCTURAL rung of inference, shared.
  *
  * A parameter binds from the argument a formal annotated with exactly it
  * receives; that is the positional rule and it is the first rung. A formal

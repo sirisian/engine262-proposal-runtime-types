@@ -54,7 +54,7 @@ test.each([
     "one family existing",
     "function unused(a:float32){~a;}"
   ]
-])('R27 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -63,7 +63,7 @@ test.each([
     "overlap runtime",
     "function unused(a:uint8|int8,b:uint8|uint16){a*b;} unused(int8(1),uint16(2));"
   ]
-])('R27 retains runtime failure: %s', (_name, source) => {
+])('retains runtime failure: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -84,7 +84,7 @@ test.each([
     "class operators",
     "class A{operator*(x:uint16):uint8{return 1;}} class B{operator*(x:uint16):uint8{return 1;}} function unused(a:A|B,b:uint16){a*b;} unused(new A(),uint16(1));"
   ]
-])('R27 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -93,7 +93,7 @@ test.each([
     "parenthesized bitwise",
     "function f(x:float32|float64,y:float32|float64){(x)&(y);}"
   ]
-])('R27 boundary control (early): %s', (_name, source) => {
+])('boundary control (early): %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -122,7 +122,7 @@ test.each([
     "rational exponent union",
     "function f(x:rational64,y:uint8|int8){x**y;}f(rational64(2),uint8(2));"
   ]
-])('R27 boundary control (ok): %s', (_name, source) => {
+])('boundary control (ok): %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 

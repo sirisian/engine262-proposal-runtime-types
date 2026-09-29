@@ -146,7 +146,7 @@ export function ToBoolean(argument: Value): BooleanValue {
     // value's type, and this operation asks only for its truth.
     return argument.booleanValue() ? Value.true : Value.false;
   } else if (isTypedNumber(argument)) {
-    // proposal-runtime-types R6: a typed number is falsy when its value is +0,
+    // proposal-runtime-types #sec-existing-abstract-conversion-operations: a typed number is falsy when its value is +0,
     // -0, or NaN, matching a plain Number.
     const n = unwrapToNumber(argument);
     if (n.numberValue() === 0 || n.isNaN()) { // eslint-disable-line @engine262/mathematical-value -- n is a fresh unwrapped NumberValue
@@ -212,7 +212,7 @@ export function* ToNumber(argument: Value): ValueEvaluator<NumberValue> {
     // If argument is false, return +0𝔽.
     return F(+0);
   } else if (isTypedNumber(argument)) {
-    // proposal-runtime-types R6: ToNumber's contract is to produce a Number, so
+    // proposal-runtime-types #sec-existing-abstract-conversion-operations: ToNumber's contract is to produce a Number, so
     // a typed number unwraps to its underlying plain Number, matching how
     // Number(5n) yields 5. Value-type identity and arithmetic do not route
     // through this path for their type decision, so unwrapping here is safe.
@@ -451,7 +451,7 @@ export function* ToString(argument: Value): ValueEvaluator<JSStringValue> {
     // If argument is false, return "false".
     return Value(argument.booleanValue() ? 'true' : 'false');
   } else if (isTypedNumber(argument)) {
-    // proposal-runtime-types R6: a typed number stringifies as its underlying
+    // proposal-runtime-types #sec-existing-abstract-conversion-operations: a typed number stringifies as its underlying
     // decimal, with no type tag (String(5 := uint8) is "5").
     //
     // A value of a type wider than 53 bits carries a BigInt, and routing it
@@ -528,7 +528,7 @@ export function ToObject(argument: Value): ValueCompletion<ObjectValue> {
     // the host and `in` and `Reflect.get` reported a type error.
     return VectorWrapperCreate(argument as VectorValue, surroundingAgent.intrinsic('%Object.prototype%'));
   } else if (isTypedNumber(argument)) {
-    // proposal-runtime-types R6: a typed number boxes to a Number object with
+    // proposal-runtime-types #sec-existing-abstract-conversion-operations: a typed number boxes to a Number object with
     // its underlying value, so property access reaches %Number.prototype%.
     const obj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Number.prototype%'), ['NumberData']) as Mutable<NumberObject>;
     obj.NumberData = unwrapToNumber(argument);

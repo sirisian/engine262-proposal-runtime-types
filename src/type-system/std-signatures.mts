@@ -74,7 +74,7 @@ export const awaitedElementType = (t: Known): Known => {
 // another, so a typed argument names the only viable family, two different
 // typed arguments are viable at no signature, and with no typed argument the
 // contextual type (#sec-contextual-types) selects the family through the
-// return filter, which is R8's specialized call. The Number signature is
+// return filter (#sec-overloading-on-return-type). The Number signature is
 // every listed function's default: resolution to it types nothing and
 // records nothing, so an untyped program stays exactly as silent as before.
 export const numericFamilyOf = (t: Known): (TypeRecord & { Kind: 'primitive' }) | 'bigint' | null => {

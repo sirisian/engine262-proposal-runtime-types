@@ -47,8 +47,7 @@ test('a bare parameterized primitive is not a value, and an applied one is', () 
   // `complex` is `complex.<number>`" - so the bare name is already an
   // application, and #sec-type-names' shorthand table lists it, beside
   // `rational` for `rational.<64>`. So each is a value as `uint8` is: its Type
-  // Object, whose call still constructs from two parts, `complex(0, 4)` (the plan
-  // "the bare names rational and complex as Type Objects").
+  // Object, whose call still constructs from two parts, `complex(0, 4)`.
   expect(evaluated('type _ = uint8; String(typeof complex);')).toBe('object');
   expect(evaluated('type _ = uint8; String(typeof rational64);')).toBe('object');
   expect(evaluated('String((type rational64) === (type rational.<64>));')).toBe('true');

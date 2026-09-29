@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 import { Agent, Get, ManagedRealm, setSurroundingAgent, Value, X } from '#self';
 
-// Phase 5, slice 1: class specializations (plan 6.3). A CASE - a class
+// #sec-specialization-lists: class specializations. A CASE - a class
 // declaration whose list specializes its family - supplies a complete body,
 // selected per application by the rule function cases use, and keeps the
 // primary's public contract.
@@ -97,7 +97,7 @@ test('in a module, a case exports no name of its own, and an imported family tak
 });
 
 test('reflection makes the selected declaration discoverable', () => {
-  // Plan C23: an application reports which declaration it selected - the case
+  // An application reports which declaration it selected - the case
   // whose complete body it runs, or the primary - as written.
   expect(evaluated(`${P}${PACKED} String(Reflect.getReflection(Box.<boolean>).generic.selected);`)).toBe('Box<boolean>');
   expect(evaluated(`${P}${PACKED} String(Reflect.getReflection(Box.<uint8>).generic.selected);`)).toBe('Box<T: type>');

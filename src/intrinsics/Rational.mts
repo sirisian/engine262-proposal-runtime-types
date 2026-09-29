@@ -706,7 +706,7 @@ function exactOfDouble(v: number): { n: bigint, d: bigint } {
 
 /**
  * The closest value of the type to x whose denominator does not exceed `bound` -
- * the design's `approximate`, at a width (the F10 plan's A1). A value of
+ * the design's `approximate`, at a width. A value of
  * `rational.<N>` has BOTH parts in `int.<N>`, so the continued-fraction search is
  * bounded twice: the denominator by the bound and the type's maximum, the
  * numerator by the type's range. Its last convergent within both bounds and the

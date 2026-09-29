@@ -18,33 +18,33 @@ const P = 'type P = { a: uint8, b: string }; ';
 const PLUCK = 'function pluck<T: type, K: keyof T>(o: T, key: K): T[K] { return o[key]; } ';
 const O = 'let o: P = { a: (1 := uint8), b: "x" }; ';
 
-test('E1/E2: the clause example compiles, inferred and explicit', () => {
+test('the clause example compiles, inferred and explicit', () => {
   expect(evaluated(`${P}${PLUCK}${O}let n: uint8 = pluck(o, "a"); \`\${n}\`;`)).toBe('1');
   expect(evaluated(`${P}${PLUCK}${O}let n: uint8 = pluck.<P, "a">(o, "a"); \`\${n}\`;`)).toBe('1');
 });
 
-test('E3: keyof as a constraint, honoured after binding', () => {
+test('keyof as a constraint, honoured after binding', () => {
   expect(evaluated(`${P}function id<T: type, K: keyof T>(k: K): K { return k; } let r: "a" = id.<P, "a">("a"); \`\${r}\`;`)).toBe('a');
 });
 
-test('E7: a union key yields a union', () => {
+test('a union key yields a union', () => {
   expect(evaluated(`${P}${PLUCK}${O}let k: "a" | "b" = "a"; let v: uint8 | string = pluck(o, k); \`\${v}\`;`)).toBe('1');
 });
 
-test('E8, SOUNDNESS: the wrong target is refused for the real reason', () => {
+test('SOUNDNESS: the wrong target is refused for the real reason', () => {
   // Refused before too - but only because an opaque "T[K]" was assignable to
   // nothing. A fix that made the record too permissive would let this through;
   // the message is what shows the evaluation happened.
   expectThrown(`${P}${PLUCK}${O}let s: string = pluck(o, "a");`, '"uint.<8>" is not assignable to "string"');
 });
 
-test('E10: inside the declaration nothing is known, and nothing changes', () => {
+test('inside the declaration nothing is known, and nothing changes', () => {
   // The fix adds an EXIT from deferral; it must not weaken what deferral
   // refuses. `5` is not a `T[K]` for an unknown `T`, as before.
   expectThrown(`${P}function bad<T: type, K: keyof T>(o: T, key: K): T[K] { return 5; }`, 'is not assignable to "T[K]"');
 });
 
-test('E9: the non-generic forms are untouched', () => {
+test('the non-generic forms are untouched', () => {
   expect(evaluated(`${P}\`\${type keyof P}\`;`)).toBe("'a' | 'b'");
   expect(evaluated(`${P}\`\${type P["a"]}\`;`)).toBe('uint.<8>');
   expect(evaluated('type Q = { a?: string }; `${type Q["a"]}`;')).toBe('string | undefined');
@@ -67,7 +67,7 @@ test('inference keeps a literal under a deferred keyof', () => {
   expect(evaluated(`${P}${PLUCK}${O}\`\${Reflect.typeOf(pluck(o, "a"))}\`;`)).toBe('uint.<8>');
 });
 
-test('E11: one kind for every deferred computation, and it reflects as one', () => {
+test('one kind for every deferred computation, and it reflects as one', () => {
   // A deferred operator is not a parameter - a parameter is identified by its
   // declaration, a derived one has none - and it is not a leaf. It is an
   // operator waiting on operands, and that is what Reflect reports, with one
@@ -78,7 +78,7 @@ test('E11: one kind for every deferred computation, and it reflects as one', () 
   expect(evaluated(reflectReturn('type F = <T: type, K: keyof T>(o: T, k: K) => T[K];'))).toBe('T[K] deferred indexed 2');
 });
 
-test('E12: the run time and the checker read `keyof T` alike', () => {
+test('the run time and the checker read `keyof T` alike', () => {
   // `KeyTypesOf` is the one implementation, and it defers an operand that
   // involves an unbound parameter. Before, the checker deferred and the run
   // time's annotation path fell to "anything else has no keys" - so the same
@@ -90,7 +90,7 @@ test('E12: the run time and the checker read `keyof T` alike', () => {
     + "let o: P = { a: (1 := uint8), b: 'x' }; String(p(o, 'a')) + String(p.<P, 'b'>(o, 'b'));")).toBe('1x');
 });
 
-test('C3: a wrong key is refused at compile time', () => {
+test('a wrong key is refused at compile time', () => {
   // The constraint check on an INFERRED binding. `pluck.<P, "zz">` was refused
   // statically and `pluck(o, "zz")` only at run time, because substitution
   // replaced `K: keyof T` wholesale with K's binding `'zz'` and the argument was
@@ -108,7 +108,7 @@ test('C3: a wrong key is refused at compile time', () => {
   expectThrown('function f<T: uint8>(x: T): T { return x; } f(300);', '"300" is not assignable to "uint.<8>"');
 });
 
-test('E6: the checker\'s binding travels to the run time for a declared shape', () => {
+test('the checker\'s binding travels to the run time for a declared shape', () => {
   // The binder infers from the value it holds, and a declared type the value
   // does not carry - `q: Q` with `a?: uint8`, holding `{}` - is the checker's
   // knowledge alone. `pluck(q, "a")` compiled and then threw, T bound to `{}`

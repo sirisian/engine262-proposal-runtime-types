@@ -1740,7 +1740,7 @@ function containsComputedType(node: unknown): boolean {
 }
 
 /**
- * Plan section 3.8: every function and method declaration that shares its
+ * #sec-callable-overload-contracts: every function and method declaration that shares its
  * group - its statement list's or class body's same-named declarations - with
  * a specialized case. Purely syntactic, so it is known before the walk.
  */
@@ -1815,22 +1815,22 @@ function CaseGroupMemberOf(classDeclaration: object, name: string, caseGroups: W
 
 /**
  * Whether _n_ is a direct explicit call `f.<A>(x)` of a name with positional
- * arguments only: the form step 2 selects, statically and at run time.
+ * arguments only: the form selection covers, statically and at run time.
  */
 function IsDirectExplicitFunctionCall(n: unknown): boolean {
   const callee = (n as { CallExpression?: { type?: string, Expression?: { type?: string }, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
-  // A spread type argument is admitted since phase 4, step 9o (see IsSelectableCall).
+  // A spread type argument is admitted (see IsSelectableCall).
   return callee?.type === 'TypeArgumentsExpression' && callee.Expression?.type === 'IdentifierReference';
 }
 
 /**
  * Whether _n_ is a call whose callee - `f`, `x.m`, or `super.m`, applied or not,
- * spread type arguments included (step 9o) - names a group steps 2 to 7 select in.
+ * spread type arguments included - names a group selection covers.
  */
 function IsSelectableCall(n: unknown): boolean {
   let callee = (n as { CallExpression?: { type?: string, Expression?: unknown, TypeArguments?: { TypeArgumentList?: readonly unknown[] } } } | null)?.CallExpression;
   if (callee?.type === 'TypeArgumentsExpression') {
-    // A spread type argument is selectable since phase 4, step 9o: the run time
+    // A spread type argument is selectable: the run time
     // expands the tuple it is bound to, and the checker routes an open run
     // through a variadic owner's contract (rule 7).
     callee = callee.Expression as typeof callee;
@@ -1869,8 +1869,8 @@ function ClassMethodsNamed(container: unknown, name: string): ParseNode[] {
 }
 
 /**
- * Whether _n_ calls a name directly, `f(x)` or `f.<A>(x)`: the forms steps 2 to
- * 4 select, statically and at run time. A method's call (step 7) is not one.
+ * Whether _n_ calls a name directly, `f(x)` or `f.<A>(x)`: the forms selection
+ * covers, statically and at run time. A method's call is not one.
  */
 function IsDirectFunctionCall(n: unknown): boolean {
   const callee = (n as { CallExpression?: { type?: string } } | null)?.CallExpression;
@@ -3735,7 +3735,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return pushTypeParameterScopeOf({ TypeParameters: { TypeParameterList: BlockCapturesOf(declaration as ParseNode.PrimitiveOperatorDeclaration) } } as unknown as ParseNode, only);
     }
     // A callable's specialized case binds its list's captures too - `N` of
-    // `write<uint.<const N>>` - as a primitive block's header does (step 9d):
+    // `write<uint.<const N>>` - as a primitive block's header does:
     // a pattern-only case has no binders, and pushed no scope at all.
     {
       const tp = (declaration as unknown as { TypeParameters?: { ListKind?: string, TypeParameterList?: readonly ParseNode.TypeParameter[], Captures?: readonly unknown[] } | null } | null | undefined)?.TypeParameters;
@@ -3777,7 +3777,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // at all", and inference reads exactly that distinction: a constrained
         // parameter keeps the literal a call supplies, an unconstrained one
         // widens it. Recording the node's presence keeps the two apart.
-        // #sec-parameter-kinds (plan D3): a value parameter's domain must be a
+        // #sec-parameter-kinds: a value parameter's domain must be a
         // value domain. An interface, a class, or a function type is not one -
         // its values are objects, which no generic argument can be - and
         // `T: Ordered.<T>` is almost always a bound written where a domain
@@ -3790,7 +3790,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A union is a value domain when every member is one, so
           // `V: uint8 | string` is admitted. `any`, and a union reaching `type`,
           // admit Type Objects alongside other values, and a binding from an
-          // argument could not tell which reading was meant (plan D2).
+          // argument could not tell which reading was meant.
           type DomainRecord = { Kind: string, Name?: string, Declaration?: { type?: string }, Members?: readonly DomainRecord[] };
           const mixed = (d: DomainRecord): boolean => d.Kind === 'any' || d.Kind === 'type' || (d.Kind === 'primitive' && d.Name === 'type')
             || (d.Kind === 'union' && (d.Members ?? []).some(mixed));
@@ -5306,7 +5306,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * own use. A Property Type Record's [[Key]] is "a String or a Symbol", so a
    * symbol-keyed member needs a Symbol to be keyed by - and a checker has no
    * access to the one the program will create at run time. Minting per
-   * declaration gives the identity §6.6 asks for: two consts mint two symbols
+   * declaration gives the identity unique symbols need: two consts mint two symbols
    * and compare unequal, one const named twice resolves to one symbol and
    * compares equal, which is exactly the rule read where no value exists.
    */
@@ -5871,7 +5871,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   /**
    * An interface's record from its DECLARATION: the primary through the name
-   * (with its partial declarations, merged), or a CASE (phase 5) through its
+   * (with its partial declarations, merged), or a CASE through its
    * own node alone - a case is never recorded under its family's name, so its
    * members refine the application that selects it and merge into nothing.
    */
@@ -6062,8 +6062,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       if (key === undefined) {
-        // A COMPUTED key. §6.6 types one whose expression is a symbol literal -
-        // a `const` bound to `Symbol(...)` - and nothing else can be typed at
+        // A COMPUTED key. One whose expression is a symbol literal - a `const`
+        // bound to `Symbol(...)` - is typed, and nothing else can be typed at
         // all: a `let`, a parameter, or any other expression has no identity a
         // checker can compare. TypeScript refuses exactly this case ("A
         // computed property name in an interface must refer to an expression
@@ -6569,7 +6569,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * would break both - silently, by giving the tail nothing to merge into.
    */
   type DeclaredOverload = SignatureRecord & { Untyped?: boolean };
-  /** Calls already refused for reaching a group with a specialized case (phase 4, step 1). */
+  /** Calls already refused for reaching a group with a specialized case. */
   const deferredCaseCalls = new WeakSet<object>();
   /** Operator groups already refused, per class, for holding a specialized case. */
   const deferredCaseOperators = new WeakMap<object, Set<string>>();
@@ -6646,7 +6646,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const prior of existing) {
       const a = overloadDeclarations.get(prior);
       if (!a || prior.Untyped || a.node === b.node) continue;
-      // Plan section 3.8: a specialized case shares its owner's value
+      // #sec-callable-overload-contracts: a specialized case shares its owner's value
       // signature by design (that makes it a replacement), and is told apart by
       // its list; the group analysis judges duplicates among cases by coverage.
       {
@@ -7284,7 +7284,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /**
    * A class over its own parameters - `A.<T>` - the type of `this` in its body,
-   * and (step 9b) of its bare name in a type position there.
+   * and of its bare name in a type position there.
    */
   const injectedInProgress = new Set<object>();
   const classOverOwnParameters = (n: ParseNode): Known => {
@@ -7301,10 +7301,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : declaredInstance;
   };
   /**
-   * Decision N1 (phase 4, construction inside a class body): inside a generic
-   * class's own BODY, `new B(args)` - `B` the bare name, resolving to that class
+   * Inside a generic class's own BODY, `new B(args)` - `B` the bare name, resolving to that class
    * - constructs the specialization being evaluated, which at run time is what
-   * the inner class binding names (decision V1). So it is typed over the class's
+   * the inner class binding names. So it is typed over the class's
    * own parameters, `B.<T>`, and its arguments are checked against the
    * constructor at those parameters: a mismatched argument is a static error
    * rather than an inference of another specialization, and a value parameter's
@@ -7334,7 +7333,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
   /**
-   * Phase 5, plan 6.3: a class CASE supplies a complete body, and keeps the
+   * #sec-specialization-lists: a class CASE supplies a complete body, and keeps the
    * primary's public contract after substitution - every public instance
    * member the primary declares, at a type the primary's member accepts (a
    * method by function assignability), and a constructor that accepts each of
@@ -7432,7 +7431,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
   };
-  /** Phase 5, plan 6.4: an alias family's CASES, in the primary's own statement list. */
+  /** #sec-specialization-lists: an alias family's CASES, in the primary's own statement list. */
   const aliasCasesOf = (primary: ParseNode): ParseNode[] => {
     const name = (primary as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
     let holder = primary as { type?: string, parent?: object };
@@ -7497,7 +7496,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { Declaration: result.Case.Declaration, Bindings: bindings };
   };
   /**
-   * A CLOSED application of an alias family (phase 5, plan 6.4): the selected
+   * A CLOSED application of an alias family (#sec-specialization-lists): the selected
    * case's right-hand side, or the primary's where none applies, resolved with
    * the parameters and the case's captures in scope and then substituted. A
    * deferred application reaches here from substitution once its arguments
@@ -7529,7 +7528,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   setAliasApplicationImpl((alias, operands) => resolveClosedAliasApplication(alias as ParseNode, operands) as TypeRecord | null);
   /**
-   * An interface CASE's record (phase 5): its own members, resolved with its
+   * An interface CASE's record: its own members, resolved with its
    * captures in scope and then bound. Its Declaration is the case, so the
    * application interns apart from the primary's; its Structure is closed.
    */
@@ -9025,7 +9024,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The synthesized node stands in the tree where its application does, so
     // that an argument naming an enclosing class's or case's parameter -
     // `uint.<B>(v)` in a method of `P<B: uint32>` - is found open, not closed
-    // and evaluated without a binding (phase 4, step 9e).
+    // and evaluated without a binding.
     const target = !binding && !application ? builtinTypeRecord(name) : resolveType({
       type: 'TypeReference',
       TypeName: { IdentifierReference: nameNode, MemberNames: [] },
@@ -10058,7 +10057,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // default unless it declares a zero (#sec-defaultvalueof),
     // which is what the run time already answers. A class with NO instance
     // field keeps its default - "nothing about it lacks a zero", the reading
-    // `reference-field-default` pins and the doc's Q2 leaves open - and a class
+    // `reference-field-default` pins - and a class
     // mixing annotated and untyped fields stays undecided.
     let annotatedFields = 0;
     let untypedFields = 0;
@@ -10266,7 +10265,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return null;
     }
     // A generic class's bare name in its own body is the class over its own
-    // parameters (step 9b).
+    // parameters.
     const injected = InjectedClassOf(node);
     if (injected) {
       // A self-reference met while the class's own type is being built (its
@@ -10484,7 +10483,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const bindings = new Map<string, TypeRecord>();
             bindExplicitTypeArguments(parameters, rawArgList, bindings, { complete: true, application: node });
             if (bindings.size !== parameters.length) return null;
-            // Phase 5, plan 6.4: a family with CASES selects before either shape
+            // #sec-specialization-lists: a family with CASES selects before either shape
             // is assumed - an alias's right-hand side, an interface's contract.
             // Returning the primary here bypassed case selection entirely.
             const familyCases = aliasCasesOf(genericDeclaration as unknown as ParseNode);
@@ -10764,7 +10763,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             });
             if (bindings.size === aliasParams.length) {
-              // Phase 5, plan 6.4: a family with cases selects its right-hand
+              // #sec-specialization-lists: a family with cases selects its right-hand
               // side once its arguments are known; before that it is not
               // decided, and the primary's must not be assumed.
               let rightHandSide: ParseNode.Type = aliasDecl.Type;
@@ -10773,7 +10772,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (familyCases.length > 0) {
                 const chosen = aliasCaseSelection(aliasDecl as unknown as ParseNode, familyCases, parameterizedName, args as readonly (TypeRecord | number)[]);
                 if (chosen === 'open') {
-                  // Deferred (plan 6.4): which case applies is decided once the
+                  // Deferred: which case applies is decided once the
                   // arguments close, when substitution selects it; until then the
                   // application relates only to itself, and the primary's
                   // right-hand side is never assumed.
@@ -10843,7 +10842,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // literal check, which is the other half and cannot be separated.
           const userInterface = interfaceTypeOf(parameterizedName) as TypeRecord | null;
           if (userInterface && userInterface.Kind === 'nominal') {
-            // Phase 5, plan 6.4: an application of an interface family with a
+            // #sec-specialization-lists: an application of an interface family with a
             // case whose list matches takes the case's REFINED contract - its
             // record, captures bound - once the arguments are known. Open, it
             // keeps the primary's contract, which every case refines, so nothing
@@ -11904,7 +11903,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             entries.push({ node: null, record: (t as { Element: TypeRecord }).Element, name: undefined });
           }
         } else if (t.Kind === 'array') {
-          // #sec-type-references E6: a spread of a DYNAMIC array cannot
+          // #sec-type-references: a spread of a DYNAMIC array cannot
           // say how many parameters it fills - a STATIC refusal, reported here
           // without the program running it.
           const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(t)), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
@@ -12524,7 +12523,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // that is worth fixing anyway - a weaker type than the engine can
           // state is a claim that goes stale, and it would become visible the
           // moment a promise reports its arguments (`Reflect.typeOf` answers a
-          // bare `Promise` today, D30b).
+          // bare `Promise` today).
             ? libraryTypeRecord('Promise', [widen(value) as TypeRecord, neverType]) ?? null
             : null;
         };
@@ -14898,7 +14897,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // #sec-user-defined-operators: the first operator table in the prototype
   // chain declaring this key supplies the overload set, as LookupClassOperator does.
   /**
-   * Plan section 3.8, step 7b: the class operators keyed _key_ in the nearest
+   * #sec-callable-overload-contracts: the class operators keyed _key_ in the nearest
    * class of _receiver_'s chain whose body declares any, when one is a case.
    */
   const operatorGroupOf = (receiver: Known, key: string): ParseNode[] | undefined => {
@@ -15172,17 +15171,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // A call decays in value positions. Location consumers explicitly request
   // its undegraded return contract, including unions of reference returns.
   /**
-   * Plan section 3.8 and section 6.1, phase 4 step 2b: the static selection
+   * #sec-matching-specialization-lists: the static selection
    * for a DIRECT EXPLICIT call, `f.<A>(x)`, of a function group holding a
    * specialized case - the rule the run time applies (`SelectExplicitCase`):
    * the most specific attached case, then a matching standalone case, then the
    * owner's body, then no viable overload. *undefined* leaves the call to the
-   * ordinary typing: another callee, a named or spread application (step 3),
+   * ordinary typing: another callee, a named or spread application,
    * an argument not known statically (the run time selects), or the owner's
    * fallback, which the ordinary path types as any generic call.
    */
   /**
-   * Plan section 3.8, step 7: the group a callee names - a function's, by its
+   * #sec-callable-overload-contracts: the group a callee names - a function's, by its
    * nearest declaring statement list; a method's, by its receiver's class (the
    * nearest class in its chain whose body declares it) or object literal; and
    * `super`'s, by the enclosing class's superclass - when it holds a case.
@@ -15276,14 +15275,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(argument);
     if (!mentions) return null;
     // `F.<...>` over a primitive family `F` is some member of `F`: that is its
-    // bound, which D8's proof reads (`uint.<N>` is some `uint`).
+    // bound, which the open-argument proof reads (`uint.<N>` is some `uint`).
     const ref = argument as ParseNode.TypeReference;
     const family = ref.type === 'TypeReference' && ref.TypeArguments && ref.TypeName.MemberNames.length === 0
       && ['int', 'uint', 'rational', 'complex', 'vector'].includes(ref.TypeName.IdentifierReference.name)
       ? { Kind: 'primitive', Name: ref.TypeName.IdentifierReference.name, Arguments: [], Family: true } as unknown as TypeRecord
       : undefined;
     // Marked OPAQUE: its structure is not represented, so a check it cannot
-    // decide statically is left to the run time (step 9l).
+    // decide statically is left to the run time.
     return { Kind: 'parameter', Name: (argument as { sourceText?: string }).sourceText ?? 'open', Opaque: true, ...(family ? { Constraint: family } : {}) } as TypeRecord;
   };
   const enclosingTypeParameter = (from: ParseNode, argument: ParseNode): TypeRecord | null => {
@@ -15301,10 +15300,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
   const reportedSelections = new WeakSet<object>();
-  /** The chosen case's own signature per call, for the callee's type (step 2b). */
+  /** The chosen case's own signature per call, for the callee's type. */
   const selectedCaseSignatures = new WeakMap<object, SignatureRecord>();
   const caseSelections = new WeakMap<object, { type: Known } | undefined>();
-  /** A stored application's own call, for its selection (step 5). */
+  /** A stored application's own call, for its selection. */
   const storedApplicationCalls = new WeakMap<object, ParseNode>();
   const staticCaseSelection = (node: ParseNode): { type: Known } | undefined => {
     if (caseSelections.has(node)) return caseSelections.get(node);
@@ -15313,12 +15312,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return result;
   };
   const staticCaseSelectionUncached = (node: ParseNode): { type: Known } | undefined => {
-    // Step 7b: a binary operator's use arrives as a call of its group, its
+    // A binary operator's use arrives as a call of its group, its
     // right operand the one value argument.
     const operatorGroup = (node as { OperatorGroup?: ParseNode[], OperatorName?: string }).OperatorGroup;
     if (!operatorGroup && !IsSelectableCall(node)) return undefined;
     const callee = (node as { CallExpression?: { type?: string, Expression?: ParseNode, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] } } }).CallExpression;
-    // Step 4b: an implicit call, `f(x)`, selects too; step 7: a method's.
+    // An implicit call, `f(x)`, selects too, and so does a method's.
     const implicit = operatorGroup !== undefined || callee!.type !== 'TypeArgumentsExpression';
     const target = (operatorGroup ? undefined : implicit ? callee : callee!.Expression) as ParseNode;
     const argNodes = implicit ? [] : callee!.TypeArguments?.TypeArgumentList ?? [];
@@ -15331,7 +15330,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const a of argNodes) {
       // A bare name the checker cannot resolve here that an enclosing
       // declaration declares as a type parameter - a method's own, whose scope
-      // is not active where its callee is typed - is that open parameter (F5).
+      // is not active where its callee is typed - is that open parameter.
       const r = resolveType(a as ParseNode.Type) ?? enclosingTypeParameter(node, a) ?? resolveInEnclosingScopes(node, a)
         ?? openArgument(node, a)
         // A spread no rule resolves is an open run of unknown length; the
@@ -15366,16 +15365,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
     };
     const valueArguments = ((node as { Arguments?: readonly { type?: string }[] }).Arguments ?? []);
-    // A stored application (step 5) has no call, so no count to filter by.
+    // A stored application has no call, so no count to filter by.
     const stored = (node as { StoredApplication?: boolean }).StoredApplication === true;
     const valueCount = stored || valueArguments.some((a) => a?.type === 'AssignmentRestElement' || a?.type === 'SpreadElement') ? undefined : valueArguments.length;
-    // Cases whose `where` filter this selection decided (step 9r): local to
+    // Cases whose `where` filter this selection decided: local to
     // the one call, so a decision at one site never exempts another.
     const filtersDecided = new Set<object>();
     const returnOf = (kase: D, bindings: readonly { Capture: { Name: string }, Value: unknown }[]): Known => {
       // A case with a `where` filter is chosen at run time only if the filter
-      // holds (B12); the checker does not yet evaluate filters while it selects,
-      // so it refuses rather than type a choice the run time may not make.
+      // holds; a filter this selection did not decide is refused rather than
+      // typed as a choice the run time may not make.
       const kind = kase.TypeParameters?.ListKind;
       if ((kind === 'specialization' || kind === 'mixed') && ((kase as { WhereClauses?: readonly unknown[] | null }).WhereClauses?.length ?? 0) > 0
         && !filtersDecided.has(kase)) {
@@ -15420,7 +15419,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return returned;
     };
     if (implicit) {
-      // Plan section 3.8, rules 4 and 5 (step 4b), as `DispatchCaseGroup`
+      // #sec-callable-overload-contracts, as `DispatchCaseGroup`
       // applies them: an additive or standalone case by its own signature,
       // ranking above the owner as a concrete signature ranks above a generic
       // one; otherwise the owner, its binding inferred, reaching a replacement
@@ -15483,7 +15482,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return undefined;
     }
-    // Plan section 3.8, rule 7 and D8 (step 6): an argument OPEN in a generic
+    // #sec-callable-overload-contracts: an argument OPEN in a generic
     // body - `read.<T>()` - is selected per specialization at run time, and
     // checked here once for every binding: through an owner that takes it,
     // against the owner's contract; or through a case the argument's bound
@@ -15494,11 +15493,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // checker cannot know: the call is OPEN (rule 7). An owner with a variadic
     // parameter takes any run, so its contract covers the call: its leading
     // parameters bind the leading written arguments, its pack an opaque open
-    // record; the run time selects per binding (phase 4, step 9o).
+    // record; the run time selects per binding.
     if (argNodes.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
       const owner = analysis.Owners.find((o) => (o.Parameters ?? []).some((p) => (p as { Variadic?: boolean }).Variadic));
       if (!owner) {
-        // Rule 7 and D8: an open run no contract covers is a static error.
+        // An open run no contract covers is a static error.
         report(`\`${name}\` is applied to a spread of unknown length, and no variadic owner's contract covers every length`);
         return { type: null };
       }
@@ -15525,7 +15524,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       });
       if (ownerTakes) {
         // Checked against the owner's contract: the callee is the owner's own
-        // signature at the (open) arguments (F5: `super.read.<T>()`).
+        // signature at the (open) arguments, as for `super.read.<T>()`.
         const owner = analysis.Owners.find((o) => (o.Parameters ?? []).length >= args.length)!;
         return { type: returnOf(owner.Node as D, (owner.Parameters ?? []).slice(0, args.length).map((p, i) => ({ Capture: { Name: p.Name }, Value: args[i]! }))) };
       }
@@ -15540,7 +15539,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return !!fixed && SameType(fixed, arg);
         }
         // A parameter's bound, or - for a family application over an open
-        // argument, `uint.<N>` with `N` in scope - that family (step 9d).
+        // argument, `uint.<N>` with `N` in scope - that family.
         const bound = (arg as { Kind?: string, Constraint?: TypeRecord }).Kind === 'parameter'
           ? (arg as { Constraint?: TypeRecord }).Constraint
           : (arg as { Kind?: string, Name?: string }).Kind === 'primitive' && ['int', 'uint', 'rational', 'complex', 'vector'].includes((arg as { Name: string }).Name)
@@ -15568,7 +15567,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return { type: null };
       }
       const chosen = proven[0]!;
-      // D8: each other case that some binding could select instead must keep
+      // Each other case that some binding could select instead must keep
       // the proven case's signature at that binding.
       // A declaration's parameters at _bindings_: a capture-parameterized type
       // (`uint.<N>`) instantiated at the binding, as a component type is.
@@ -15670,7 +15669,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The ordinary default-evaluation pass will recheck with the completed
     // binding. Do not choose a fallback or report a missing case prematurely.
     if (pendingOwnerDefault) return { type: null };
-    // Decision W1 (phase 4, step 9r): a filtered candidate's `where` is decided
+    // A filtered candidate's `where` is decided
     // at compile time where its inputs are - its bindings, the receiver's value
     // parameters, literals - as the run time decides it: false is not admitted
     // (the selection moves on), true is decided for this selection, and an
@@ -15761,7 +15760,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * A case's `where` filter at compile time: *true* or *false* where every
    * input is a compile-time constant - the case's numeric bindings, the
    * receiver's value parameters, literals - over integer arithmetic (a value
-   * parameter's division truncates, step 9g), comparisons, and logic;
+   * parameter's division truncates), comparisons, and logic;
    * 'unknown' otherwise.
    */
   const staticFilterVerdict = (kase: ParseNode, bindings: readonly { Capture: { Name: string }, Value: unknown }[], receiver: Known): boolean | 'unknown' => {
@@ -16154,7 +16153,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // family's unit, and the complex numbers have no step - they are the
         // family the table leaves unordered, and `c++` evaluated to NaN+0i,
         // silently losing the value. Rational and decimal numbers step by one
-        // in their own type (plan OQ3 C).
+        // in their own type (#sec-which-operations-each-family-defines).
         if (base?.Kind === 'primitive' && base.Name === 'complex') {
           if (!undefinedUpdateReported.has(node)) {
             undefinedUpdateReported.add(node);
@@ -16203,7 +16202,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `let n: uint8 = null` goes unchecked.
         return makePrimitive('null') as Known;
       case 'IdentifierReference': {
-        // Step 4b: the callee of an implicit call whose declaration was chosen
+        // The callee of an implicit call whose declaration was chosen
         // is that declaration's own signature, instantiated - as an explicit
         // call's is (the `TypeArgumentsExpression` arm).
         {
@@ -16290,7 +16289,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return { Kind: 'function', Signatures: [{ Parameters: [parameter(indexTypeRecord(), { Optional: true })], Return: result }] };
           }
         }
-        // Step 2b: the callee of a direct explicit call whose case is chosen
+        // The callee of a direct explicit call whose case is chosen
         // is that case's own signature - not the group's - so the ordinary
         // call checks bind no type arguments against the owner, and resolve
         // no value overloads across the group.
@@ -16301,7 +16300,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const chosen = selectedCaseSignatures.get(call);
             if (chosen) return { Kind: 'function', Signatures: [chosen] } as Known;
           } else {
-            // Step 5: a STORED application, `f.<A>` as a value, selects as the
+            // A STORED application, `f.<A>` as a value, selects as the
             // run time's does, through a call of its own with no arguments.
             let synthetic = storedApplicationCalls.get(node);
             if (!synthetic) {
@@ -17109,7 +17108,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const capacity = capacityContract(node);
         if (capacity) return capacity;
         if (checkMemberReceiver(node)) return neverType;
-        // Step 7: a method callee whose declaration was chosen is that
+        // A method callee whose declaration was chosen is that
         // declaration's own signature, as a function callee's is.
         {
           const call = (node as { parent?: ParseNode }).parent;
@@ -17715,9 +17714,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const extentNode = extentElements.length === 1
               ? extentElements[0] as { type?: string, value?: unknown }
               : undefined;
-            // #sec-array-types (phase 4, step 9q): a construction's extent makes
-            // a FIXED array whatever it is written as - a spec line 564 array is
-            // invariant in its extent, and the run time builds a fixed array. A
+            // #sec-array-and-tuple-types: a construction's extent makes a FIXED
+            // array whatever it is written as - an array is invariant in its
+            // extent, and the run time builds a fixed array. A
             // bare in-scope parameter is that parameter's extent, as in an
             // annotation; a constant, its value; anything else - a run-time
             // value, an expression over parameters - an extent known only at
@@ -17797,8 +17796,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   // An argument no rule above resolves that names an enclosing
                   // declaration's parameter - `[...Ts, T]` in `new Acc.<[...Ts, T]>()`
                   // inside `Acc` - is OPEN: the application stays open, not the
-                  // defaults the dropped argument fell back to (phase 4, step 9l;
-                  // 9c fixed the value-parameter case the same way).
+                  // defaults the dropped argument fell back to, as for a value
+                  // parameter.
                   ?? openArgument(node, a as unknown as ParseNode))
                 .filter((a): a is TypeRecord => !!a);
               if (args.length === spec.TypeArguments.TypeArgumentList.length) {
@@ -17833,7 +17832,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     continue;
                   }
                   const argument = args[at]!;
-                  // An OPAQUE open argument (step 9l) - one whose structure the
+                  // An OPAQUE open argument - one whose structure the
                   // checker cannot represent - is checked per specialization,
                   // when the run time applies it; a bare unbounded parameter is
                   // not opaque, and is still refused here.
@@ -18271,7 +18270,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ShiftExpression: (node as ParseNode.ShiftExpression).operator,
           BitwiseANDExpression: '&', BitwiseXORExpression: '^', BitwiseORExpression: '|',
         } as Record<string, string | undefined>)[node.type];
-        // Step 7b: a class operator group holding a case selects by the right
+        // A class operator group holding a case selects by the right
         // operand, as an implicit call does, and the operation is typed by the
         // chosen declaration's own signature.
         if (token && rightNode) {
@@ -18490,7 +18489,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // A shift's distance is a count taken as written, not a value mixed
           // into the left operand: any integer type gives it, and the result
-          // has the left operand's type (phase 4, step 9h; as the run time).
+          // has the left operand's type, as at run time.
           if (token === '<<' || token === '>>' || token === '>>>') {
             const integer = (t: Known | undefined) => t?.Kind === 'primitive'
               && ((t as { Name: string }).Name === 'int' || (t as { Name: string }).Name === 'uint');
@@ -22171,11 +22170,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     // Key identities must precede signatures and aliases that mention them.
-    // typeprogramming.md §6.6: "a declared `const s = Symbol()` used in type
-    // position IS the unique symbol type, without a keyword". A checker has no
+    // A declared `const s = Symbol()` used in type position IS the unique
+    // symbol type, without a keyword. A checker has no
     // VALUES, so that identity is carried by the DECLARATION - two consts are
     // two types, and one const named twice is one type, which is exactly what
-    // §6.6's identity rule means where no symbol can be held.
+    // that identity rule means where no symbol can be held.
     for (const n of list) {
       if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
         continue;
@@ -22219,7 +22218,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (n.type === 'ClassDeclaration') {
         const className = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        // A case (phase 5) joins its family and never names it.
+        // A case joins its family and never names it.
         const isCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
         if (className && !classNodes.has(className) && !isCase) {
           classNodes.set(className, n);
@@ -22232,7 +22231,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // pre-pass that collected only classes silently un-checked
         // `class C implements I { }`.
         const interfaceName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        // An interface case (phase 5) refines its family: it is neither
+        // An interface case refines its family: it is neither
         // recorded under the family's name nor registered as it.
         const interfaceCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
         if (interfaceName && !interfaceCase) {
@@ -22256,7 +22255,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Names only, as above: the alias's own type is still resolved lazily,
         // so nothing is computed earlier than before - only found.
         const aliasName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        // An alias case (phase 5) joins its family and never names it.
+        // An alias case joins its family and never names it.
         const aliasCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
         if (aliasName && !aliasNodes.has(aliasName) && !aliasCase) {
           aliasNodes.set(aliasName, n);
@@ -22560,7 +22559,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (name) {
           if (IsPartialDeclaration(n)) continue;
           if (((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters') {
-            // An interface CASE (phase 5): checked as a refinement of its primary.
+            // An interface CASE: checked as a refinement of its primary.
             if (interfaceNodes.has(name)) checkInterfaceRefinement(n as ParseNode, interfaceNodes.get(name) as ParseNode, name);
           } else {
             recordInterfaceDeclaration(name, n);
@@ -24232,7 +24231,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // sec-check-elision applies to the effective body result: ordinary T,
     // Promise resolve T, or Generator R. Resumability does not excuse undefined.
-    // A bodyless owner (plan section 3.8, rule 2) has no body to complete: its
+    // A bodyless owner (#sec-callable-overload-contracts) has no body to complete: its
     // cases implement it, and an application none matches is no viable overload.
     const bodylessOwner = !!((body as { parent?: { BodylessOwner?: boolean } } | null)?.parent?.BodylessOwner);
     if (checkReturns && hasDeclaredReturn && declaredReturn && !bodylessOwner
@@ -25308,9 +25307,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     checkedCallSignatures.delete(c);
     const sig = selectCallSignature(c, supplied, callee, n, true);
-    // Plan section 3.8, phase 4 step 1: a call into a group holding a
-    // specialized case - a method's as well as a function's - is refused until
-    // selection is implemented, whichever signature it would reach.
+    // #sec-callable-overload-contracts: a call into a group holding a
+    // specialized case - a method's as well as a function's - in a form
+    // selection does not cover is refused, whichever signature it would reach.
     if (!IsSelectableCall(n)) {
       const caseGroups = CaseGroupDeclarations(root);
       let declared = callee.Signatures.map((s2) => overloadDeclarations.get(s2)?.node).find((d) => d !== undefined && caseGroups.has(d));
@@ -26534,7 +26533,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // source text with NO decoration certainly has none - the association is
     // made only by its own decoration - so the pass's ladder refuses the call
     // exactly as the run time would. A decorated builder may carry an inverse
-    // the pass cannot see yet (Q4), and is left to the run time.
+    // the pass cannot see yet, and is left to the run time.
     const undecoratedBuilderReads = (name: string): boolean => declaration.FormalParameters!.some((formal) => {
       const type = (formal as { TypeAnnotation?: { Type?: ParseNode.Type } | null }).TypeAnnotation?.Type as ParseNode.ComputedType | undefined;
       if (type?.type !== 'ComputedType' || !FreeReferences(type).some((r) => r.name === name)) return false;
@@ -27057,7 +27056,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (unknownContribution && found.length === 0) return null;
     if (found.length > 1) {
       // Several portions may be recomputed after a shared conversion. Preserve
-      // the numeric layout while leaving their merged metadata to that plan.
+      // the numeric layout while leaving their merged metadata to that conversion.
       if (base.Name === 'vector') {
         const lane = base.Arguments[0] as TypeRecord;
         return { ...base, Arguments: [lane.Kind === 'parameterized' ? lane.Base : lane, base.Arguments[1]] };
@@ -28881,7 +28880,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'CallExpression': {
         recordTrialObligation(n as ParseNode.CallExpression);
-        // Step 2b: select a direct explicit call's case even where its type is
+        // Select a direct explicit call's case even where its type is
         // never asked for (a call statement), so its errors are reported.
         if (IsSelectableCall(n)) staticCaseSelection(n);
         checkProxyTarget(n.CallExpression, n.Arguments ?? [], true);
@@ -30279,12 +30278,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : Throw.StaticTypeError('the operator is ambiguous between two declared signatures');
     errors.push(completion.Value as ObjectValue);
   }
-  // Plan section 3.8, phase 4 step 1: the callable group analysis. Each
+  // #sec-callable-overload-contracts: the callable group analysis. Each
   // statement list's functions and each class body's methods are grouped by
   // name; a group holding a specialized case or a bodyless owner is analyzed
-  // (owners, attachment, duplicates, D4 and D9), and each attached case is
-  // classified (Q4). A direct call into a function group with a case is
-  // refused statically until selection is implemented (step 2).
+  // (owners, attachment, duplicates, capture domains), and each attached case
+  // is classified. A direct call into a function group with a case is refused
+  // statically unless selection covers its form.
   {
     type Decl = ParseNode & {
       TypeParameters?: ParseNode.TypeParameters | null, BodylessOwner?: boolean, parent?: object,
@@ -30303,7 +30302,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? ((d as unknown as ParseNode.OperatorDefinition).OperatorName ? `${d.static ? 'static ' : ''}operator ${operatorTableKey(d as unknown as ParseNode.OperatorDefinition)}` : undefined)
         : d.ClassElementName?.type === 'IdentifierName' ? `${d.static ? 'static ' : ''}${d.ClassElementName.name}` : undefined);
     // Each owner binder as a pattern slot, a value binder carrying its resolved
-    // domain, which D9 compares a case's written capture domain against.
+    // domain, which a case's written capture domain is compared against
+    // (#sec-collectcaptures).
     const binderParameters = (list: ParseNode.TypeParameters) => (list.TypeParameterList ?? []).map((tp) => {
       const written = tp.IsValueParameter ? (tp.TypeParameterDomain ?? tp.TypeParameterConstraint) : undefined;
       const domain = written ? resolveType(written as ParseNode.Type) : null;
@@ -30346,7 +30346,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const parameters = parametersOf(d).map((p) => (p as { sourceText?: string }).sourceText ?? '').join(', ');
       return `\`${nameOf(d) ?? 'this declaration'}${list}(${parameters})\``;
     };
-    // Q4: an attached case whose parameter list is the owner's instantiated at
+    // An attached case whose parameter list is the owner's instantiated at
     // its pattern is a REPLACEMENT, whose return must be a subtype of the
     // owner's; any other parameter list makes it ADDITIVE.
     const classifyAttached = (kase: Decl, owner: Decl) => {
@@ -30388,7 +30388,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return !a || !b || SameType(a, b);
         });
       }
-      // Recorded for the run time's implicit selection (step 4), which reaches
+      // Recorded for the run time's implicit selection, which reaches
       // a replacement through its owner and an additive case by its signature.
       (kase as { CaseRole?: string }).CaseRole = sameList ? 'replacement' : 'additive';
       if (!sameList) return; // additive: borrows the owner's labels, never substituted through its generic value
@@ -30422,7 +30422,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           continue;
         }
         for (const diagnostic of analysis.Diagnostics) report(diagnostic.message);
-        // C22: a bare name in a standalone case that names no type is almost
+        // A bare name in a standalone case that names no type is almost
         // always a type parameter written without its domain.
         for (const d of analysis.Standalone) {
           for (const entry of listOf(d.Node as Decl)?.ListKind === 'specialization' ? SpecializationPatternsOf(listOf(d.Node as Decl)!) : []) {
@@ -30478,9 +30478,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     };
     findGroups(root);
-    // D9 for a primitive block's own component list (A7b): each capture's
+    // #sec-collectcaptures for a primitive block's own component list: each capture's
     // written domain against its primitive's slot, `uint32` for a value slot.
-    // A metadata position is exempt, as D9 states.
+    // A metadata position is exempt, as that clause states.
     {
       const seenBlocks = new Set<object>();
       const findBlocks = (value: unknown): void => {
@@ -30578,7 +30578,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
-    // Step 1's static deferral: a direct call into a function group with a case.
+    // The static deferral: a direct call into a function group with a case.
     if (groupsWithCases.size > 0) {
       const seenCalls = new Set<object>();
       const findCalls = (value: unknown): void => {

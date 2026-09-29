@@ -490,8 +490,7 @@ export type MetadataRecord = { readonly [key: string]: Value | MetadataRecord };
  *
  * #sec-checked-contracts: "the checker takes each clause as a known fact about
  * the ~application~ Type Record". A fact is a SUBTYPE EDGE, and the clause says
- * which way it points - `typeprogramming.md` §6.2: "Direction is everything
- * here, and it is easy to get backwards."
+ * which way it points, and it is easy to get backwards.
  *
  * `LowerBound` is what `Reflect.isAssignable(X, return)` states: every X value
  * is a value of this application, so `X <: thisApplication`. It is the bound a
@@ -677,7 +676,7 @@ export const neverType: TypeRecord = { Kind: 'union', Members: [] };
 /**
  * A primitive's width or count in canonical form: a plain number. A numeric
  * literal record - a value parameter's binding, typed (`N: uint32`) or not -
- * is that number; anything else is unchanged (phase 4, steps 9d and 9e).
+ * is that number; anything else is unchanged.
  */
 export function CanonicalWidthArgument(a: TypeRecord | number): TypeRecord | number {
   if (typeof a !== 'object' || a === null || (a as { Kind?: string }).Kind !== 'literal') return a;
@@ -864,7 +863,7 @@ export function isCoreOperator(operator: DeferredOperator): operator is 'keyof' 
  * it defers, at specialization, and is not evaluated here.
  */
 let deferredOperatorImpl: ((operator: 'keyof' | 'indexed', operands: readonly TypeRecord[]) => TypeRecord | null) | null = null;
-/** Resolves a closed alias application (phase 5): set by the checker, which owns alias resolution. */
+/** Resolves a closed alias application: set by the checker, which owns alias resolution. */
 let aliasApplicationImpl: ((alias: object, operands: readonly (TypeRecord | number)[]) => TypeRecord | null) | null = null;
 export function setAliasApplicationImpl(f: typeof aliasApplicationImpl): void {
   aliasApplicationImpl = f;
@@ -1497,9 +1496,8 @@ export function UnderlyingOf(t: TypeRecord): TypeRecord {
 /**
  * The CANONICAL SOURCE FORM of a type: the text a developer could paste back.
  *
- * `typeprogramming.md` §3.3 promises this
- * of `Type.prototype.toString` - *"`String(type 'a' | 'b')` is `"'a' | 'b'"`"* -
- * and nothing implemented it, so every type stringified as `[object Type]`.
+ * #sec-type-names: `Type.prototype.toString` gives `String(type 'a' | 'b')` as
+ * `"'a' | 'b'"`, rather than `[object Type]`.
  *
  * Distinct from `displayType`, which is a DIAGNOSTIC formatter and rightly names
  * the KIND of thing that was wrong: it prints a literal as "a literal type of
@@ -1789,7 +1787,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
       if (t.Operator === 'indexed') {
         return `${show(t.Operands[0]!)}[${show(t.Operands[1]!)}]`;
       }
-      // An alias application (phase 5) is named by its alias declaration.
+      // An alias application is named by its alias declaration.
       const aliasName = (t.Operator as { type?: string, BindingIdentifier?: { name?: string } } | undefined)?.type === 'TypeAliasDeclaration'
         ? (t.Operator as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name : undefined;
       const builderName = aliasName ?? (t.Operator as { name?: { stringValue?: () => string } } | undefined)
@@ -2156,7 +2154,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
         ? walk(a as TypeRecord) as TypeRecord
         : a));
     const still = Operands.some((a) => a && typeof a === 'object' && 'Kind' in a && mentionsTypeParameter(a as TypeRecord));
-    // An ALIAS application (phase 5, plan 6.4) - its operator the alias
+    // An ALIAS application (#sec-specialization-lists) - its operator the alias
     // declaration - selects its right-hand side once its arguments close;
     // until then it stays deferred, and relates only to itself.
     if (!still && (t.Operator as { type?: string } | null)?.type === 'TypeAliasDeclaration' && aliasApplicationImpl) {
@@ -2317,7 +2315,7 @@ export function IsFamilyRecord(t: unknown): boolean {
 }
 
 /**
- * #sec-generics (decided in phase 4, step 9b): within a generic class's BODY -
+ * #sec-generics: within a generic class's BODY -
  * its instance and static members, not its heritage or its own parameter list
  * - the class's bare name in a TYPE position denotes the class over its own
  * parameters, as C++'s injected-class-name and Swift's bare name inside a

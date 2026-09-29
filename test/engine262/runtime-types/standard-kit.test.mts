@@ -117,7 +117,7 @@ function runWith(extraSpecifier: string, extraSource: string, body: string): Pro
 }
 
 // ---------------------------------------------------------------------------
-// 1. Per-export. One test each. The identity §4 claims for the helper, not a
+// 1. Per-export. One test each. The identity #annex-standard-kit claims for the helper, not a
 //    shape check - `partial(User)` must BE `{ id?: uint8 }`, interned, and not
 //    merely "an object type with an optional property".
 // ---------------------------------------------------------------------------
@@ -221,7 +221,7 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['brand', "std.brand(uint32, 'UserId') === type uint32.<{ brand: 'UserId' }>", ''],
   ['options', 'std.reflect(std.options(type { n: uint8 }, type { inc: () => void })).properties.length === 2', ''],
   ['listeners', 'std.listeners(type { x: uint8 }) === type { onXChanged: (uint8) => void }', ''],
-  // typeprogramming.md R15 / #sec-declared-inverses: `@inverse(fn)` on a
+  // #sec-declared-inverses: `@inverse(fn)` on a
   // BUILDER declares the function that proposes its argument, so a pack
   // reached only through the builder can be inferred. The decorator is
   // `Reflect.declareInverse` applied at the declaration; the row checks that

@@ -1,5 +1,5 @@
 /**
- * Plan section 3.8 and section 6.1, phase 4 step 2: selecting a callable's
+ * #sec-callable-overload-contracts, #sec-matching-specialization-lists: selecting a callable's
  * specialized case for a DIRECT EXPLICIT call, `f.<A>(x)`.
  *
  * The group's roles are rebuilt with the same `AnalyzeCallableGroup` the
@@ -160,7 +160,7 @@ function* AnalyzeGroupAtRuntime(members: readonly { fn: Value, declaration: Decl
 
 /** A case's capture bindings as a type-parameter frame, values marked as value parameters. */
 /**
- * #sec-generics (decided in phase 4, step 9g), for a selected case: a value
+ * #sec-generics, for a selected case: a value
  * binder keeps its declared type where it is read - `maximum: float32` bound
  * from `write.<float32, -1024, 1024, 18>` is a `float32`, so `value / maximum`
  * divides two `float32`s. The binder's literal binds through
@@ -193,7 +193,7 @@ function FrameOfBindings(bindings: readonly { Capture: { Name: string }, Value: 
 }
 
 /**
- * Plan section 3.8, rules 4 and 5 (step 4): an IMPLICIT call, `f(x)`, into a
+ * #sec-callable-overload-contracts: an IMPLICIT call, `f(x)`, into a
  * group holding a case. Ordinary value resolution chooses among the owner (its
  * binding inferred, as any generic call's), the additive cases, and the
  * standalone cases - a replacement is reached only through its owner. When the
@@ -202,7 +202,7 @@ function FrameOfBindings(bindings: readonly { Capture: { Name: string }, Value: 
  * owner no replacement matches is no viable overload.
  */
 /**
- * Phase 5 (plan 6.3): the case of a CLASS family an application selects - the
+ * #sec-specialization-lists: the case of a CLASS family an application selects - the
  * unique most specific case whose list matches the application's arguments,
  * by the same rule function cases use (SelectSpecialization), so declaration
  * order never decides - with the frame binding its captures; *undefined* when
@@ -246,7 +246,7 @@ export function* DispatchCaseGroup(
   const members = CaseGroupMembers(overloaded) ?? [];
   const { analysis, host } = Q(yield* AnalyzeGroupAtRuntime(members, name));
   const declarationOf = (fn: Value) => members.find((m) => m.fn === fn)?.declaration;
-  // The checker records each attached case's role (Q4); unrecorded is a replacement.
+  // The checker records each attached case's role; unrecorded is a replacement.
   const replacements = new Set<object>(analysis.Attached
     .filter((a) => (a.Case.Node as { CaseRole?: string }).CaseRole !== 'additive')
     .map((a) => a.Case.Node as object));
@@ -316,7 +316,7 @@ export function* DispatchCaseGroup(
 }
 
 /**
- * Plan section 3.8 (B12), step 7c: whether a case's `where` filters hold for
+ * #sec-generic-where: whether a case's `where` filters hold for
  * its bindings, evaluated before any call as a generic application's clauses
  * are (#sec-generic-where), with the receiver's class bindings - a method's
  * filter reads its class's parameters. A case whose filter does not hold is
@@ -435,7 +435,7 @@ export type CaseSelection =
 type Ordered = { ok: true, ordered: (TypeRecord | undefined)[] } | { ok: false, unknown?: string };
 
 /**
- * Plan section 3.8, rules 3 to 5 (step 3): the arguments in a candidate's own
+ * #sec-callable-overload-contracts: the arguments in a candidate's own
  * positions. A positional argument fills the next position; a named one the
  * position its label names. An unlabeled position (a selector, a pattern-only
  * case's entry) takes no name, and a capture's name is never a label.
@@ -461,7 +461,7 @@ function OrderByLabels(labels: readonly (string | undefined)[], args: readonly T
 }
 
 /**
- * Plan section 3.8 and section 6.1: the choice for a direct explicit call, for
+ * #sec-callable-overload-contracts, #sec-matching-specialization-lists: the choice for a direct explicit call, for
  * the checker and the run time alike. Each candidate orders the arguments by
  * its own labels - an attached case by its owner's, a mixed case by its
  * binders', a pattern-only case by none - and then: the most specific attached
@@ -573,10 +573,10 @@ export function* SelectCase(
 }
 
 /**
- * Plan section 3.8, phase 4 step 5: a stored application's case as a callable:
+ * #sec-generic-function-values: a stored application's case as a callable:
  * each call runs the case in its captures' frame, as a selected invocation.
- * One value per case function and binding, so `f.<T: uint8> === f.<uint8>`
- * (C14), while a case function of another closure's evaluation is another.
+ * One value per case function and binding, so `f.<T: uint8> === f.<uint8>`,
+ * while a case function of another closure's evaluation is another.
  */
 interface StoredCaseNode {
   readonly next: Map<string | object, StoredCaseNode>;
@@ -584,7 +584,7 @@ interface StoredCaseNode {
 }
 const storedCaseValues = new WeakMap<object, StoredCaseNode>();
 /**
- * Step 8: what a specialization value selected - its group, the chosen
+ * What a specialization value selected - its group, the chosen
  * declaration's function, and a case's capture frame - for its reflected type
  * and its declaration reflection.
  */
@@ -654,11 +654,11 @@ export function* SelectExplicitCase(
   evaluateArguments?: () => PlainEvaluator<readonly ArgumentItem<Value>[]>,
   classFrame: Map<string, TypeRecord> | null = null,
 ): PlainEvaluator<CaseChoice> {
-  // Step 3: a named argument's label, ordered per candidate by SelectCase.
+  // A named argument's label, ordered per candidate by SelectCase.
   // The arguments, and every written type the group's lists name, resolved now.
   // A spread argument - `f.<...Rest>()` from a case that captured `...const
   // Rest` - contributes the elements of the tuple it is bound to, each
-  // positional: the pack a `...` capture binds is that tuple (phase 4, step 9o).
+  // positional: the pack a `...` capture binds is that tuple.
   const names: (string | undefined)[] = [];
   const args: Argument[] = [];
   for (const node of typeArguments) {

@@ -153,8 +153,7 @@ test('a boundary is not a conversion', () => {
   // refuses where the call converts. This holds for every numeric pair, not
   // just for decimals: `let b: uint8 = someUint16` is refused too.
   // An unannotated `let` is `any`, so this is the boundary - which converts by the
-  // row and refuses what it would truncate (the plan "how numeric values of
-  // different types meet", B1). A TYPED source is the case this rule is about:
+  // row and refuses what it would truncate (#sec-the-boundary-check). A TYPED source is the case this rule is about:
   // refused before the program runs.
   // Refused by TYPE before any range question (stricter-runtime decision).
   expectThrownKind("let d = decimal64.parse('7.9'); let i: int64 = d;", 'TypeError');

@@ -16,16 +16,16 @@ import { evaluated, expectError, ok } from '../harness.mts';
 
 const okSrc = (s: string) => expect(ok(s), `expected accepted: ${s}`).toBe(true);
 
-// -- §1.1, the reported gap: these must be REFUSED -----------------------------
+// -- These must be REFUSED -----------------------------------------------------
 
-test('§1.1 an indexed access over a parameter refuses a concrete value', () => {
+test('an indexed access over a parameter refuses a concrete value', () => {
   expectError('function p<T: type, K: keyof T>(o: T, k: K): T[K] { return 5; }');
   expectError('function p<T: type, K: keyof T>(o: T, k: K) { let v: T[K] = 5; }');
 });
 
-// -- §1.3, what must not break: these must be ACCEPTED -------------------------
+// -- What must not break: these must be ACCEPTED -------------------------------
 
-test('§1.3 a generic accessor still type checks', () => {
+test('a generic accessor still type checks', () => {
   // The one the whole staging was ordered around: it passes because `o[k]` and
   // `T[K]` reach one operation and answer one record, not because either is
   // unresolvable.
@@ -33,12 +33,12 @@ test('§1.3 a generic accessor still type checks', () => {
   expect(evaluated('function p<T: type, K: keyof T>(o: T, k: K): T[K] { return o[k]; } let u = { n: "x" }; String(p(u, "n"));')).toBe('x');
 });
 
-test('§1.3 the identities hold', () => {
+test('the identities hold', () => {
   okSrc('function q<T: type>(o: T, k: keyof T): keyof T { return k; }');
   okSrc('function f<T: type>(x: T): T { return x; }');
 });
 
-test('§1.3 the call boundary is unchanged', () => {
+test('the call boundary is unchanged', () => {
   okSrc('function id<T: type>(v: T) { return v; } id(5); id("hi"); id({});');
 });
 

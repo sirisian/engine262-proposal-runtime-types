@@ -42,7 +42,7 @@ test.each([
     "return executed",
     "function get():symbol{return Symbol();}function unused(){`${get()}`;} unused();"
   ]
-])('R30 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -63,7 +63,7 @@ test.each([
     "unrelated annotation",
     "function unused(){let n:uint8=1;`${Symbol()}`;}unused();"
   ]
-])('R30 retains runtime failure: %s', (_name, source) => {
+])('retains runtime failure: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -92,7 +92,7 @@ test.each([
     "declared operator",
     "class C{operator+(s:symbol):string{return \"ok\";}}function unused(c:C,s:symbol){c+s;}unused(new C(),Symbol());"
   ]
-])('R30 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -109,7 +109,7 @@ test.each([
     "parenthesized symbol",
     "function f(x:symbol){`${(x)}`;}"
   ]
-])('R30 boundary control (early): %s', (_name, source) => {
+])('boundary control (early): %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -126,7 +126,7 @@ test.each([
     "mutable symbol inference",
     "let x=Symbol();x=\"yes\";`${x}`;"
   ]
-])('R30 boundary control (ok): %s', (_name, source) => {
+])('boundary control (ok): %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -135,6 +135,6 @@ test.each([
     "catchable dynamic",
     "function f(x:any){return `${x}`;}f(Symbol());"
   ]
-])('R30 boundary control (runtime): %s', (_name, source) => {
+])('boundary control (runtime): %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });

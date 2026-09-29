@@ -41,9 +41,9 @@ test('generics: a generic interface declares and applies', () => {
 test('generics: a generic class declares, constructs, and applies', () => {
   expect(evaluated('class Box<T: type> { } typeof Box;')).toBe('function');
   // construct with inferred and explicit type arguments. A bare construction
-  // binds T from the formal annotated with it (PLAN-v3 Q1); a constructor whose
+  // binds T from the formal annotated with it (#sec-constructing-a-generic-class); a constructor whose
   // formal is unannotated reaches T through nothing, and the bare form is then
-  // the naming error (PLAN-v3 Q4) rather than an instance whose T is open.
+  // the naming error rather than an instance whose T is open.
   expect(evaluated('class Box<T: type> { constructor(v: T) { this.v = v; } } String(new Box((5 := uint8)).v);')).toBe('5');
   expect(evaluated('class Box<T: type> { constructor(v) { this.v = v; } } String(new Box.<uint8>((5 := uint8)).v);')).toBe('5');
   expectThrown('class Box<T: type> { constructor(v) { this.v = v; } } new Box((5 := uint8));', 'is not determined by the arguments and has no default');
@@ -58,7 +58,7 @@ test('generics: a generic class may constrain its parameter', () => {
 // -- Generic functions (parse + run) -------------------------------------------
 test('generics: a generic function declares, calls, and applies', () => {
   expect(evaluated('function id<T: type>(x: T): T { return x; } typeof id;')).toBe('function');
-  // inferred call; a parameter no formal names is the naming error (PLAN-v3 Q4)
+  // inferred call; a parameter no formal names is the naming error
   expect(evaluated('function id<T: type>(x: T) { return x; } String(id(5));')).toBe('5');
   expectThrown('function id<T: type>(x) { return x; } id(5);', 'is not determined by the arguments and has no default');
   // explicit .<T> application

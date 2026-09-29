@@ -45,7 +45,7 @@ test('a user generic class instantiates distinctly by its argument', () => {
   expect(bool('class Box<T: type> {} type A = Box.<uint32>; type B = Box.<string>; String(A === B);')).toBe(false);
   expect(ok('class Box<T: type> {} type A = Box.<uint32>; type B = Box.<uint32>; A === B;')).toBe(true);
   // A bare `Box` in type position names `Box.<>` and is an error where a
-  // parameter has no default (PLAN-v3 Q7-a); the declaration's own Type Object
+  // parameter has no default (#sec-parameterized-types); the declaration's own Type Object
   // is what an instantiation's `generic.base` reflects, and it is not any
   // instantiation.
   expect(bool('class Box<T: type> {} type A = Box.<uint32>; String(Reflect.getReflection(A).generic.base === A);')).toBe(false);

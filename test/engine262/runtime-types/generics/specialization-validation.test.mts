@@ -14,7 +14,7 @@ test.each([
 
 // #sec-type-references: one name twice in a list is a Syntax Error, visible in
 // the list alone; a name that is no parameter, and a positional argument after
-// a named one, need the declaration and are type errors (Q3).
+// a named one, need the declaration and are type errors (#sec-type-references).
 test.each([
   ['function f<T: type>(x: T): T { return x; } const s = f.<Missing: uint8>;', 'StaticTypeError'],
   ['function f<T: type>(x: T): T { return x; } const s = f.<T: uint8, T: string>;', 'SyntaxError'],

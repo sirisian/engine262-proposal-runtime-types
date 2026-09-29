@@ -38,7 +38,7 @@ test.each([
     "existing non-object target error",
     "function f(x:number){({}) instanceof x;}"
   ]
-])('R33 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -51,7 +51,7 @@ test.each([
     "control: legacy",
     "({}) instanceof {[Symbol.hasInstance]:1};"
   ]
-])('R33 preserves runtime timing: %s', (_name, source) => {
+])('preserves runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -96,7 +96,7 @@ test.each([
     "a typed hook accepts the actual primitive argument",
     "function f(x:{[Symbol.hasInstance]:(v:number)=>boolean}){1 instanceof x;}f({[Symbol.hasInstance](v:number):boolean{return true;}});"
   ]
-])('R33 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -113,7 +113,7 @@ test.each([
     "all overload arguments invalid",
     "interface Hook{(x:number):boolean;(x:string):boolean;}function f(t:{[Symbol.hasInstance]:Hook}){({}) instanceof t;}"
   ]
-])('R33 additional early boundary: %s', (_name, source) => {
+])('additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -122,7 +122,7 @@ test.each([
     "argument union runtime alternative",
     "function f(x:number|object,t:{[Symbol.hasInstance]:(v:number)=>boolean}){x instanceof t;}f({},{[Symbol.hasInstance](v:number):boolean{return true;}});"
   ]
-])('R33 additional runtime boundary: %s', (_name, source) => {
+])('additional runtime boundary: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -135,7 +135,7 @@ test.each([
     "overload accepting actual argument",
     "interface Hook{(x:number):boolean;(x:object):boolean;}function f(t:{[Symbol.hasInstance]:Hook}){({}) instanceof t;}"
   ]
-])('R33 additional ok boundary: %s', (_name, source) => {
+])('additional ok boundary: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 

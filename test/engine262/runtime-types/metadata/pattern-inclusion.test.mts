@@ -5,7 +5,7 @@ import {
 import { evaluated } from '../harness.mts';
 
 /**
- * R18's decision procedure, from #sec-primitive-metadata: "pattern pairs free of
+ * The pattern-inclusion decision procedure, from #sec-primitive-metadata: "pattern pairs free of
  * backreferences and lookaround, within a fixed automaton size, get the exact
  * language-inclusion answer."
  *
@@ -49,12 +49,12 @@ test('a language includes itself', () => {
 });
 
 test('two spellings of one language include each other', () => {
-  // This is the answer reflexivity cannot give, and the reason R18 exists.
+  // This is the answer reflexivity cannot give, and the reason the decision procedure exists.
   expect(decide('^(ab)+$', '^ab(ab)*$')).toBe(true);
   expect(decide('^ab(ab)*$', '^(ab)+$')).toBe(true);
 });
 
-test('the judgment itself is sharpened, which is what R18 is', () => {
+test('the assignability judgment itself is sharpened', () => {
   // The row reflexivity could not give. Measured false before this landed.
   const P = (r: string) => `string.<{ pattern: ${r} }>`;
   const assignable = (x: string, y: string) => evaluated(`String(Reflect.isAssignable(type ${P(x)}, type ${P(y)}));`);

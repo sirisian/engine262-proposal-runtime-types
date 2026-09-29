@@ -489,7 +489,7 @@ function* FunctionCallSlot(this: FunctionObject, thisArgument: Value, argumentsL
 
   // 1. Assert: F is an ECMAScript function object.
   Assert(isECMAScriptFunctionObject(F));
-  // proposal-runtime-types (PLAN-v3 Q2-c, calls): the call's contextual type,
+  // proposal-runtime-types #sec-contextual-types: the call's contextual type,
   // handed over by EvaluateCall, is taken at the callee's entry and carried to
   // its body, whose inference reads it before the arguments.
   if (surroundingAgent.feature('runtime-types')) {

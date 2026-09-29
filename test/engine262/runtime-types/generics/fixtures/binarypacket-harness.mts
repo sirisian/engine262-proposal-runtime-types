@@ -1,4 +1,4 @@
-// Phase 4's exit test program (C24): the design's binary packet example
+// The design's binary packet example
 // (ecmascript-types, examples/binarypacket.md) - its writer, reader, and tuple
 // reader, with the design's `doc` decorators, typed inputs, and the writer's
 // bytes in place of the network - as a string, as the corpus suites hold their

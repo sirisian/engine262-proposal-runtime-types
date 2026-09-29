@@ -2,10 +2,9 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * How numeric values of different types meet at run time - the plans "how
- * numeric values of different types meet at run time" (EQ1, B1, S3) and
- * "conversions among the complex types" (D1). Every expectation is the plans'
- * ideal, derived from the specification's rows and measured:
+ * How numeric values of different types meet at run time, including the
+ * conversions among the complex types. Every expectation is derived from the
+ * specification's rows and measured:
  *
  * - Equality, as JavaScript treats `1` and `1n`: `===`, `Object.is` and a `Set`
  *   key see the type; `==` compares exact mathematical values, across every
@@ -159,8 +158,8 @@ test('the any boundary, from a complex', () => {
   }
 });
 
-// An any float64 NaN at a decimal is the decimal NaN - the case this test once
-// left pending, settled by the plan "NaN and the infinities in the decimal types".
+// An any float64 NaN at a decimal is the decimal NaN
+// (#sec-decimal-floating-point-types).
 test('the any boundary, a float NaN at a decimal', () => {
   // A typed NaN of another type is refused at the boundary (stricter-runtime decision).
   expect(at('(NaN := float64)', 'decimal64')).toBe('TypeError');

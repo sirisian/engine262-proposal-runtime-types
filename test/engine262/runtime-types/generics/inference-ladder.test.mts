@@ -20,13 +20,13 @@ test('rung three: a builder with no inverse refuses the call, naming the builder
   expectThrown(`${WRAP} function j3<...Ts: [].<type>>(...ps: wrapOf(Ts)): uint64 { return ps.length; } j3(1, "a");`, 'wrapOf declares no inverse, so Ts');
 });
 
-test('rung three: explicit arguments bind through the builder; a direct mention elsewhere still binds (G36 shape)', () => {
+test('rung three: explicit arguments bind through the builder; a direct mention elsewhere still binds', () => {
   expect(evaluated(`${WRAP} function j<T: type>(x: wrapOf(T)): uint32 { return 1; } String(j.<uint8>(1));`)).toBe('1');
   expect(evaluated(`${WRAP} function j3<...Ts: [].<type>>(...ps: wrapOf(Ts)): uint64 { return ps.length; } String(j3.<uint8, string>(1, "a"));`)).toBe('2');
   expect(evaluated(`${WRAP} function k<T: type>(x: T, y: wrapOf(T)): uint32 { return 1; } String(k(1, 2));`)).toBe('1');
 });
 
-test('the forward-declaration pattern needs no rung beyond the first (G35 shape)', () => {
+test('the forward-declaration pattern needs no rung beyond the first', () => {
   expect(evaluated('function all<...Ps: [].<type> extends [].<any>>(...ps: Ps): uint64 { return ps.length; } String(all(1, "a"));')).toBe('2');
 });
 

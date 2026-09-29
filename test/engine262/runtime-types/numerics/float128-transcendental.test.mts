@@ -4,7 +4,7 @@ import * as T from '../../../../src/intrinsics/Float128Transcendental.mts';
 import { finite, zero, infinity, NAN, type Binary128 } from '../../../../src/intrinsics/Float128Arithmetic.mts';
 
 /**
- * The float128 plan's B4: every transcendental function on float128 answers the
+ * Every transcendental function on float128 answers the
  * binary128 value nearest the exact result, ties to even - acos, acosh, asin, asinh, atan, atan2, atanh, cos, cosh, exp, expm1, log, log10, log1p, log2, powTranscendental, sin, sinh, tan, tanh.
  *
  * The anchors were computed with mpmath at 600 to 800 bits and each rounded to

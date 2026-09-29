@@ -139,7 +139,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
   // Object. This is what makes `2 * v` work where `v` declares the operator and
   // the left operand is a bare number: the design closes the scalar-on-the-left
   // case with a block on the number type, and the diagnostic below is what
-  // stood in for it (F4). Landing the block REPLACES that diagnostic with
+  // stood in for it. Landing the block REPLACES that diagnostic with
   // dispatch rather than deleting it - a program that declares no block still
   // gets told why its expression did not work.
   {
@@ -186,7 +186,7 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
     const result = rationalPow(lval, BigInt(exponent), surroundingAgent.currentRealmRecord);
     return 'zero' in result ? Throw.RangeError('a zero rational to a negative power') : result;
   }
-  // proposal-runtime-types R3: typed-number arithmetic. When either operand is
+  // proposal-runtime-types #sec-operators: typed-number arithmetic. When either operand is
   // a numeric value type and neither is a string, compute and wrap into the
   // target type. A '+' with a string operand still concatenates (handled
   // below), so this runs only for the numeric case.
@@ -299,8 +299,8 @@ export function* ApplyStringOrNumericBinaryOperator(lval: Value, opText: BinaryO
       case '*': return done(float128Multiply(a, b));
       case '/': return done(float128Divide(a, b));
       case '%': return done(float128Remainder(a, b));
-      // The exact route where there is one, and exp(y ln x) correctly rounded -
-      // the float128 plan's B4 - where there is not.
+      // The exact route where there is one, and exp(y ln x) correctly rounded
+      // where there is not.
       case '**': return done(float128Pow(a, b));
       default:
         return Throw.TypeError('this operator is not defined for a float128');

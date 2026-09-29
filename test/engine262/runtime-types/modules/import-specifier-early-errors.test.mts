@@ -59,7 +59,7 @@ test.each([
     "existing template conversion",
     "function f(x:symbol){`${x}`;}"
   ]
-])('R45 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -138,7 +138,7 @@ test.each([
       "Symbol(ok)"
     ]
   ]
-])('R45 preserves import outcomes: %s', (_name, source, settled, imports) => {
+])('preserves import outcomes: %s', (_name, source, settled, imports) => {
   expect(imported(source)).toEqual({ settled, imports });
 });
 
@@ -163,7 +163,7 @@ test.each([
     "import result assigned",
     "function f(s:symbol){const p=import(s);}"
   ]
-])('R45 rejects a proved edge case: %s', (_name, source) => {
+])('rejects a proved edge case: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -172,7 +172,7 @@ test.each([
     "unknown conversion hook",
     "function f(x:{[Symbol.toPrimitive]:any}){import(x);}"
   ]
-])('R45 accepts a viable edge case: %s', (_name, source) => {
+])('accepts a viable edge case: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -185,6 +185,6 @@ test.each([
       "fallback"
     ]
   ]
-])('R45 preserves fallback import: %s', (_name, source, settled, imports) => {
+])('preserves fallback import: %s', (_name, source, settled, imports) => {
   expect(imported(source)).toEqual({ settled, imports });
 });

@@ -7,9 +7,9 @@ import { evaluated, expectError } from '../harness.mts';
  * JavaScript's `typeof` reports the underlying language type as a string and is
  * unchanged by this proposal (`#sec-runtimetypeof`: "`typeof` is unchanged by
  * this proposal ... RuntimeTypeOf is what reports the type of this proposal").
- * The type query is `Reflect.typeOf(x)`, which `typeprogramming.md` §4.1 states
- * needs no operator of its own: "types are values, so `Reflect.typeOf(x)` in
- * type position is the type query".
+ * The type query is `Reflect.typeOf(x)` (#sec-reflect-typeof), which needs no
+ * operator of its own: types are values, so `Reflect.typeOf(x)` in type
+ * position is the type query.
  *
  * A `TypeQueryType` node existed in the engine from 2026-07-22 and in neither the
  * specification nor the design, giving two spellings for one query whose names

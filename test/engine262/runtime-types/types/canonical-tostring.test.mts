@@ -2,11 +2,9 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * `typeprogramming.md` §3.3 promises a
- * Type Object a canonical `toString` — *"the canonical source form —
- * `String(type 'a' | 'b')` is `"'a' | 'b'"` — because builders throwing authored
- * `TypeError`s need to print types"*. Nothing implemented it, so every type
- * stringified as `[object Type]`.
+ * #sec-type-names: a Type Object has a canonical `toString`, the canonical
+ * source form - `String(type 'a' | 'b')` is `"'a' | 'b'"` - because builders
+ * throwing authored `TypeError`s need to print types.
  */
 
 test('the canonical form is the source text, for every kind', () => {

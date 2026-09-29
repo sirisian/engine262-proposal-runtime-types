@@ -83,7 +83,7 @@ test('a wide integer converts exactly, not through a Number', () => {
 });
 
 test('a bigint converts exactly, by every path', () => {
-  // The F10 plan's B1: "`bigint` -> rational, the source's value over 1; a
+  // The row "`bigint` -> rational, the source's value over 1; a
   // RangeError if it is not representable" - the row the table lacked, though
   // `rational -> bigint` exists.
   for (const src of [call(VALUES.big), op(VALUES.big), boundary(VALUES.big)]) {

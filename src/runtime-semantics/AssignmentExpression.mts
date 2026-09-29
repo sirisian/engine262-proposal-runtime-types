@@ -212,7 +212,7 @@ function isTypedStorageTarget(reference: unknown): boolean {
  *
  * Read BEFORE the right operand runs, which is the whole point: a bare
  * construction on the right - `this.b = new Box(1)` at `b: Box.<uint8>` -
- * binds its parameters from the context first (PLAN-v3 Q2-c), and the checker
+ * binds its parameters from the context first (#sec-constructing-a-generic-class), and the checker
  * already reads the same row for the same node.
  */
 function declaredTypeOfTarget(lref: unknown): TypeRecord | null {

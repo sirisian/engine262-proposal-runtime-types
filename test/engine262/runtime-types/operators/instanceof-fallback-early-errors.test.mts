@@ -38,7 +38,7 @@ test.each([
     "existing bad hook",
     "function f(x:{[Symbol.hasInstance]:number}){({}) instanceof x;}"
   ]
-])('R42 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -51,7 +51,7 @@ test.each([
     "legacy runtime",
     "({}) instanceof {[Symbol.hasInstance]:null};"
   ]
-])('R42 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -80,7 +80,7 @@ test.each([
     "unknown hook on object literal",
     "function f(){const target:{x:number}={x:1};({}) instanceof target;}"
   ]
-])('R42 preserves valid behavior: %s', (_name, source) => {
+])('preserves valid behavior: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -94,7 +94,7 @@ test.each([
     "non-reassigned let",
     "function f(){let target:{[Symbol.hasInstance]:null}={[Symbol.hasInstance]:null};({}) instanceof target;}"
   ]
-])('R42 rejects a proved edge case: %s', (_name, source) => {
+])('rejects a proved edge case: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -103,7 +103,7 @@ test.each([
     "any alias",
     "const target:{[Symbol.hasInstance]:null}={[Symbol.hasInstance]:null};const a:any=target;({}) instanceof a;"
   ]
-])('R42 keeps unknown origins dynamic: %s', (_name, source) => {
+])('keeps unknown origins dynamic: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -132,6 +132,6 @@ test.each([
     "callable custom Object result",
     "function f(){const target:{[Symbol.hasInstance]:(x:any)=>object}={[Symbol.hasInstance](x:any):object{return {};}};({}) instanceof target;}f();"
   ]
-])('R42 accepts a viable edge case: %s', (_name, source) => {
+])('accepts a viable edge case: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });

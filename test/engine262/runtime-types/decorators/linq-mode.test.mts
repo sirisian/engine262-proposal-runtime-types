@@ -283,7 +283,7 @@ test('`let` introduces a frame, and later clauses destructure it', () => {
 });
 
 test('`orderby` takes several keys with independent directions', () => {
-  // And the plan is a `constant { }`: closed data, identical on every
+  // And the query is a `constant { }`: closed data, identical on every
   // evaluation, so it is built once per site rather than once per call.
   expect(compiled('const r = @linq { from e in emp orderby e.dept, e.salary descending select e };'))
     .toBe('const r = _map (_order (emp , constant {([[(e) => (e.dept) , "asc"] , '

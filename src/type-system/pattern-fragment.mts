@@ -1,7 +1,7 @@
 import { RegExpParser } from '../parser/RegExpParser.mts';
 
 /**
- * proposal-runtime-types #sec-primitive-metadata, the tier test for R18's decision
+ * proposal-runtime-types #sec-primitive-metadata, the tier test for the pattern-inclusion decision
  * procedure:
  *
  *   "pattern pairs free of backreferences and lookaround, within a fixed

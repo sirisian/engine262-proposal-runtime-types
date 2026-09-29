@@ -68,7 +68,7 @@ test('a frozen argument that DOES need conversion is refused at the boundary', (
   // because the object is frozen.
   expectThrown(`${F} const o: any = Object.freeze({ n: 1 }); f(o);`,
     'cannot be converted to "uint.<8>" in place, because it is not writable');
-  // Refusing rather than copying is W1, and this is what it buys: the callee
+  // Refusing rather than copying is what buys this: the callee
   // receives the SAME object, so a conversion that cannot happen in place cannot
   // be papered over with a copy.
   expect(evaluated('function g(x: { n: uint8 }) { return x; } const o = { n: 1 }; String(g(o) === o);')).toBe('true');

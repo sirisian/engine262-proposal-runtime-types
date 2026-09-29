@@ -42,7 +42,7 @@ test.each([
     "undefined exotic hook executed",
     "function f(x:{[Symbol.toPrimitive]:undefined,toString:()=>object,valueOf:()=>object}){`${x}`;}f({[Symbol.toPrimitive]:undefined,toString(){return {};},valueOf(){return {};}});"
   ]
-])('R39 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -55,7 +55,7 @@ test.each([
     "legacy",
     "let x={[Symbol.toPrimitive]:null,toString(){return {};},valueOf(){return {};}};`${x}`;"
   ]
-])('R39 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -95,7 +95,7 @@ test.each([
     "function f(x:{[Symbol.toPrimitive]:null,toString:()=>object|string,valueOf:()=>object}){return `${x}`;}globalThis.settled=f({[Symbol.toPrimitive]:null,toString(){return \"ok\";},valueOf(){return {};}});",
     "ok"
   ]
-])('R39 preserves values and effects: %s', (_name, source, expected) => {
+])('preserves values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });
 
@@ -112,7 +112,7 @@ test.each([
     "null or invalid exotic",
     "function f(x:{[Symbol.toPrimitive]:null|number,toString:()=>object,valueOf:()=>object}){`${x}`;}"
   ]
-])('R39 additional early: %s', (_name, source) => {
+])('additional early: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -133,7 +133,7 @@ test.each([
     "void result unknown",
     "function f(x:{[Symbol.toPrimitive]:null,toString:()=>void,valueOf:()=>object}){`${x}`;}"
   ]
-])('R39 additional ok: %s', (_name, source) => {
+])('additional ok: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -153,6 +153,6 @@ test.each([
     "function f(x:{[Symbol.toPrimitive]:null,toString:()=>string,valueOf:()=>object}){`${x}`;}try{f({[Symbol.toPrimitive]:null,toString(){throw \"original\";},valueOf(){return {};}});}catch(e){globalThis.settled=e;}",
     "original"
   ]
-])('R39 additional values and effects: %s', (_name, source, expected) => {
+])('additional values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });

@@ -154,7 +154,7 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
   const raw = GetValueFromBuffer(backing.Buffer, backing.ByteOffset + index * backing.Stride, type, true, 'unordered');
   // A 64-bit element kind reads back as a BigInt (ECMA-262's representation);
   // the element's own type carries a wide value exactly, as a bigint, so it is
-  // wrapped as the typed value it was written as, not returned raw (step 9j).
+  // wrapped as the typed value it was written as, not returned raw.
   if (raw instanceof BigIntValue) {
     return new TypedNumberValue(R(raw) as unknown as number, backing.Element);
   }
@@ -202,7 +202,7 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
   const converted = Q(yield* RequireType(value, backing.Element));
   // A 64-bit element kind is written as a BigInt, as ECMA-262's BigInt64 and
   // BigUint64 typed arrays are (SetValueInBuffer asserts it): a `uint64` held
-  // as a typed number reached it as a Number (phase 4, step 9j; the packet
+  // as a typed number reached it as a Number (the binary packet
   // writer's `Span.<uint8>` over its `uint.<64>` words).
   const wide = type === 'BigInt64' || type === 'BigUint64';
   const raw = converted instanceof TypedNumberValue ? (converted as unknown as { value: number | bigint }).value : undefined;
@@ -278,7 +278,7 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   // neither reported anything. The stride is last because nothing else in the
   // language has one - `%TypedArray%` cannot address interleaved data at all -
   // so the rare capability takes the rare position.
-  // #sec-toindextype (ISSUES I2): both of these are COUNTS, so they are CHECKED
+  // #sec-toindextype: both of these are COUNTS, so they are CHECKED
   // rather than coerced. `ToIndex` accepted anything convertible, so
   // `Span.<uint8>(b, 0, "4", 1)` was admitted through an `any`-typed value while
   // the checker refused the same call - the disagreement the clause names for

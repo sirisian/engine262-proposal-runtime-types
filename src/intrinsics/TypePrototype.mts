@@ -43,7 +43,7 @@ function* TypeProto_hasInstance([V = Value.undefined]: Arguments, { thisValue }:
  */
 /**
  * The design's `rational.approximate`, on a rational Type Object: the closest
- * value of THAT type under the bound (the F10 plan's A1). A type with no
+ * value of THAT type under the bound. A type with no
  * rational values has no approximation to give.
  */
 function* TypeProto_approximate(args: Arguments, { thisValue }: FunctionCallContext) {
@@ -815,11 +815,9 @@ function* TypeProto_epsilonGetter(_args: Arguments, { thisValue }: FunctionCallC
  *
  * `Type.prototype.toString` - the canonical source form of the type.
  *
- * `typeprogramming.md` §3.3 promises this
- * - *"`String(type 'a' | 'b')` is `"'a' | 'b'"`, because builders throwing
- * authored `TypeError`s need to print types"* - and nothing implemented it, so
- * every Type Object stringified as `[object Type]`. A developer had no way to
- * see a type in a console and a builder had nothing to put in a message.
+ * #sec-type-names: `String(type 'a' | 'b')` is `"'a' | 'b'"`, so a builder can
+ * put a type in the `TypeError` it throws and a developer can see a type in a
+ * console, rather than `[object Type]`.
  */
 function TypeProto_toString(this: unknown, _args: Arguments, { thisValue }: FunctionCallContext) {
   if (!isTypeObject(thisValue)) {

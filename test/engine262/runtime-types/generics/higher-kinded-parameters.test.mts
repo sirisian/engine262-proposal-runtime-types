@@ -226,7 +226,7 @@ test('a kinded argument resolves in a const annotation', () => {
   const P = 'type Identity<T: type> = T; class B<W<_>: type> {} ';
   // A bare `new B()` at a `B.<Identity>` position CONSTRUCTS `B.<Identity>`:
   // the position's type binds the parameter before the arguments are looked
-  // at (#sec-contextual-types, PLAN-v3 Q2-c), a kinded parameter included. The
+  // at (#sec-contextual-types), a kinded parameter included. The
   // two spellings reach one specialization, and the earlier reading - that the
   // bare construction was a `B` which could not satisfy the annotation - was
   // the defect, not the rule.

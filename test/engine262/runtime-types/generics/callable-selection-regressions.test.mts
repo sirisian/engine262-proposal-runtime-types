@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
-// September 2026 callable-specialization review: regressions at both boundaries.
+// Callable specialization: regressions at both boundaries.
 test.each(['0, -0', '-0, 0'])('stored case bindings preserve signed zero (%s)', (order) => {
   const [first, second] = order.split(', ');
   expect(evaluated(`function f<string, N: number>(): number { return N; }

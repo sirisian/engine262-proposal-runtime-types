@@ -48,7 +48,7 @@ export const typeParameterNamesOf = (declaration: ParseNode | null | undefined):
     : (declaration as unknown as {
       TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string } }[] },
     } | null | undefined)?.TypeParameters?.TypeParameterList;
-  // A callable's specialized case (plan section 3.8) binds its list's captures
+  // A callable's specialized case (#sec-callable-overload-contracts) binds its list's captures
   // too - `n` of `write<uint.<const n>>(value: uint.<n>)` - as a primitive
   // block's header does, so its signature and body see them.
   const captures = declaration?.type === 'PrimitiveOperatorDeclaration' ? [] : ((declaration as unknown as {

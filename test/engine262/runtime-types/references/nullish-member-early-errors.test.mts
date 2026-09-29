@@ -82,7 +82,7 @@ test.each([
     "existing mixed-nullable member rejection null value",
     "function f(x:null|{a:number}){return x.a;}f(null);"
   ]
-])('R36 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -95,7 +95,7 @@ test.each([
     "legacy",
     "let x=null;x.a;"
   ]
-])('R36 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -125,7 +125,7 @@ test.each([
     "function f(x:number){return x.toString();}globalThis.settled=f(3);",
     "3"
   ]
-])('R36 preserves values and effects: %s', (_name, source, expected) => {
+])('preserves values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });
 
@@ -146,7 +146,7 @@ test.each([
     "specialized field",
     "class Box<T: type>{v:T;}function f(x:Box.<null>){x.v.a;}"
   ]
-])('R36 additional early: %s', (_name, source) => {
+])('additional early: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -159,7 +159,7 @@ test.each([
     "liveness retained",
     "let a:[].<string>=[\"a\",\"b\"];let ref r=a[1];a.pop();r.length;"
   ]
-])('R36 additional runtime: %s', (_name, source) => {
+])('additional runtime: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -172,7 +172,7 @@ test.each([
     "never receiver",
     "function f(x:never){x.a;}"
   ]
-])('R36 additional ok: %s', (_name, source) => {
+])('additional ok: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -182,6 +182,6 @@ test.each([
     "function f(x:null){return delete x?.a;}globalThis.settled=String(f(null));",
     "true"
   ]
-])('R36 additional values and effects: %s', (_name, source, expected) => {
+])('additional values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });

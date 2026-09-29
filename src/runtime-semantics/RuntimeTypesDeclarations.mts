@@ -166,7 +166,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     return undefined;
   }
   if (node.type === 'InterfaceDeclaration' && node.Partial && !shapeOnly) return yield* RegisterPartialInterface(node);
-  // An alias CASE (phase 5) is inert where it is written; an application of
+  // An alias CASE is inert where it is written; an application of
   // its family selects it.
   if ((node.type === 'TypeAliasDeclaration' || node.type === 'InterfaceDeclaration') && node.TypeParameters && node.TypeParameters.ListKind !== 'parameters' && !IsPartialDeclaration(node)) {
     return undefined;
@@ -2347,8 +2347,8 @@ export function* SpecializationForConstruction(
  * built for `class S extends Box { }`, where the heritage is an expression
  * that evaluated to the declaration's constructor. A parameter with no default
  * is the naming TypeError the ladder gives an unreached parameter, since a
- * subclass of the open declaration would inherit a `v: T` that checks nothing
- * (F2). No contextual type takes part: a heritage is not a position that
+ * subclass of the open declaration would inherit a `v: T` that checks nothing.
+ * No contextual type takes part: a heritage is not a position that
  * requires a type.
  */
 export function* DefaultSpecializationOf(
@@ -2415,7 +2415,7 @@ export function* IsInstanceOfSomeSpecialization(declaration: ParseNode.ClassDecl
 }
 
 /**
- * Phase 5 (plan 6.3): a class family's CASES - the class declarations in the
+ * #sec-specialization-lists: a class family's CASES - the class declarations in the
  * primary's own statement list, of the same name, whose list specializes the
  * family. A case anywhere else - another block, another module - is not the
  * family's: replacement is confined to the owning declaration group.
@@ -2532,14 +2532,14 @@ function* SpecializeFromFrame(
 }
 
 /**
- * A class's or an alias's CASES (phase 5): the declarations of the same kind
+ * A class's or an alias's CASES (#sec-specialization-lists): the declarations of the same kind
  * and name in its own statement list whose list specializes the family.
  */
 export function FamilyCasesOf(declaration: ParseNode.ClassDeclaration | ParseNode.TypeAliasDeclaration): ParseNode.ClassDeclaration[] {
   return ClassCasesOf(declaration as ParseNode.ClassDeclaration);
 }
 
-/** Whether a class family has cases (phase 5): its applications' layouts come from the selected body. */
+/** Whether a class family has cases: its applications' layouts come from the selected body. */
 export function HasClassCases(declaration: unknown): boolean {
   const d = declaration as ParseNode.ClassDeclaration | undefined;
   return !!d && d.type === 'ClassDeclaration' && ClassCasesOf(d).length > 0;
@@ -2547,8 +2547,8 @@ export function HasClassCases(declaration: unknown): boolean {
 
 /**
  * The declaration whose body built each application's constructor - a case,
- * or the primary (phase 5, plan C23: the selected declaration is
- * discoverable).
+ * or the primary, so the selected declaration is
+ * discoverable.
  */
 const selectedDeclarations = new WeakMap<object, ParseNode.ClassDeclaration>();
 /** The selected declaration of an application's constructor, as written: `Box<boolean>`, `Box<T: type>`. */
@@ -2559,7 +2559,7 @@ export function SelectedDeclarationOf(ctor: unknown): string | undefined {
   return `${d.BindingIdentifier?.name ?? ''}${list}`;
 }
 
-/** Constructors built from a CASE body (phase 5); layout reads their own. */
+/** Constructors built from a CASE body; layout reads their own. */
 const caseBuiltConstructors = new WeakSet<object>();
 setCaseSpecializationLookup((declaration, args) => {
   const ctor = SpecializedClassConstructor(declaration, args);
@@ -2674,7 +2674,7 @@ function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: 
     if (record.Kind === 'literal' && param.TypeParameterConstraint) {
       // #sec-computed-constraints: resolved UNDER the frame, and a value
       // the constraint refuses is a refusal, not a silent literal of the wrong
-      // type (§2.2 step 8's check).
+      // type.
       pushTypeParameterFrame(frame);
       let declared;
       try {
@@ -2903,7 +2903,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     }
   }
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue && IsCallable(value)) {
-    // Plan section 3.8, phase 4 step 5: a STORED application, `f.<A>` as a
+    // #sec-generic-function-values: a STORED application, `f.<A>` as a
     // value, of a group holding a specialized case selects as a direct call
     // would (the value count unknown): a case becomes a callable bound to its
     // captures, identical for an identical selection; the owner's fallback is
@@ -2921,7 +2921,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
         return StoredCaseValue(choice.fn, choice.frame, groupName, value);
       }
       const specialized = Q(yield* SpecializeGenericFunction(choice.fn as ObjectValue, inspected.Value, node, functionTypeParameters(choice.fn as never) ?? [], choice.frame));
-      // Step 8: the owner's fallback records its group, for reflection.
+      // The owner's fallback records its group, for reflection.
       RecordSelection(specialized as Value, value, choice.fn, undefined);
       return specialized;
     }

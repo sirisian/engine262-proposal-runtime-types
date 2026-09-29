@@ -37,7 +37,7 @@ test('a block over a family reaches each member, with its component bound', () =
     String(a * 'x') + ' ' + String(b * 'x');`)).toBe('same:float64 same:float32');
 });
 
-test("plan section 6.1: the exact primitive's block is more specific than the family's, in either order", () => {
+test("the exact primitive's block is more specific than the family's, in either order", () => {
   const exact = `primitive uint8 { operator *(rhs: string): string { return 'exact'; } }`;
   const family = `primitive uint<const W> { operator *(rhs: string): string { return 'family'; } }`;
   const run = `String((3 := uint8) * 'x') + ' ' + String((3 := uint16) * 'x');`;

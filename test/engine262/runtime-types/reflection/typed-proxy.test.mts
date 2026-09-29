@@ -87,7 +87,7 @@ test('the shape traps may not contradict the declared type', () => {
   const P = 'type P = { a: uint8 }; const t = { a: (1 := uint8) }; ';
   expectThrown(`${P}const p = new Proxy.<P>(t, { has() { return false; } }); "a" in p;`, 'may not deny it');
   // Deleting a declared member is refused by the CHECKER, which knows the
-  // proxy's Static Type is `P` now that G1 landed, so the `deleteProperty` trap
+  // proxy's Static Type is `P`, so the `deleteProperty` trap
   // is never reached. That is the better answer - earlier, and without running
   // the trap - and the runtime refusal beside it still covers a proxy whose
   // static type is not known at the deletion.

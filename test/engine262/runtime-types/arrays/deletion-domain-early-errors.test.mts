@@ -62,7 +62,7 @@ test.each([
     "existing fixed position",
     "function f(a:[2].<uint8>){delete a[0];}"
   ]
-])('R43 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -75,7 +75,7 @@ test.each([
     "unknown key runtime",
     "function f(a:[].<uint8>,k:string){delete a[k];}f([1],\"0\");"
   ]
-])('R43 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -108,7 +108,7 @@ test.each([
     "mixed nonposition remains dynamic",
     "function f(a:[uint8]|[].<uint8>){delete a[2];}let a:[uint8]=[1];f(a);"
   ]
-])('R43 preserves valid behavior: %s', (_name, source) => {
+])('preserves valid behavior: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -142,7 +142,7 @@ test.each([
     "typed any element",
     "function f(a:[].<any>){delete a[0];}"
   ]
-])('R43 rejects a proved edge case: %s', (_name, source) => {
+])('rejects a proved edge case: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -171,6 +171,6 @@ test.each([
     "ref iteration unaffected",
     "let a:[].<uint8>=[1,2];for(let ref x of a){x=3;}"
   ]
-])('R43 accepts a viable edge case: %s', (_name, source) => {
+])('accepts a viable edge case: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });

@@ -7,7 +7,7 @@ import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
  * of two values of `int.<N>`", in lowest terms, and "an operation whose exact
  * result is not representable ... throws a RangeError rather than rounding."
  *
- * The F10 plan: the width was dropped before anything ran - `rational.<8>` WAS
+ * The width was once dropped before anything ran - `rational.<8>` WAS
  * the bare `rational` constructor - so no width but 64 was enforced, a width-N
  * value failed its own type, and widths neither stayed distinct nor converted.
  * Every expectation here is computed from exact fractions by the oracle below,
@@ -66,7 +66,7 @@ for (const n of WIDTHS) {
     expect(outcome(`(() => { let v = (0.1 := float32); return v := ${T(n)}; })()`)).toBe(expected(13421773n, 1n << 27n, n));
     // a decimal is its exact value
     expect(outcome(`decimal64.parse('0.001') := ${T(n)}`)).toBe(expected(1n, 1000n, n));
-    // a rational of another width converts exactly or not at all (X1)
+    // a rational of another width converts exactly or not at all
     for (const m of WIDTHS.filter((w) => w >= 11)) {
       expect(outcome(`${T(m)}.parse('1/1000') := ${T(n)}`), `1/1000 at ${T(m)} := ${T(n)}`).toBe(expected(1n, 1000n, n));
     }

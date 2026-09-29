@@ -1161,7 +1161,7 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   // `union<U>(other: Set.<U>)` has no spelling in a checker that cannot say
   // "a Set of some element type", and `Set.<any>` is that spelling.
   //
-  // proposal-runtime-types (PLAN-v3 Q7): the same rule for a USER generic
+  // proposal-runtime-types #sec-parameterized-types: the same rule for a USER generic
   // class. Once a bare construction yields a specialization, no value of the
   // bare type `Box` exists and the family needs a spelling; `Box.<any>` is the
   // one the collections already have, and it is sound for the same reason
@@ -1976,7 +1976,7 @@ function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, ass
  * a rest, its element type was the union of the elements and every position
  * was asked to accept the union, which refused the positional
  * `(x: uint32, y: float32) => void` at `(...xs: [uint32, float32]) => void`
- * (PLAN-callable, found by the function-typed boundary check). A reference
+ * (found by the function-typed boundary check). A reference
  * rest expands to reference elements. A tuple with a rest element, or an
  * array, is a rest as before.
  */

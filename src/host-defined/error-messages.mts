@@ -100,7 +100,7 @@ export function format(arg: Formattable): string {
       }
       return n.toString();
     }
-    // proposal-runtime-types R6: a typed number displays its value with a typed
+    // proposal-runtime-types: a typed number displays its value with a typed
     // marker in error messages, matching the inspector.
     // proposal-runtime-types #sec-vector-types: a vector in a diagnostic prints
     // as its lanes. Without this the formatter fell through to its exhaustive

@@ -23,7 +23,7 @@ test('the operators compute at binary128 and keep the type', () => {
   expect(typed(`+${Q(1)}`)).toBe('float128');
   expect(evaluated(`let x = ${Q(1)}; x++; ++x; String(x);`)).toBe('3');
   expect(show(`${Q(2)} ** 10`)).toBe('1024');
-  // A non-integer exponent is exp(y ln x), correctly rounded (the plan's B4):
+  // A non-integer exponent is exp(y ln x), correctly rounded:
   // 2 ** 0.5 is the same binary128 as Math.sqrt(2).
   expect(show(`${Q(2)} ** 0.5`)).toBe('1.414213562373095048801688724209698');
 });
@@ -67,7 +67,7 @@ test('conversions in and out, each rounded once from the exact value', () => {
   expect(show(`decimal128(${Q(0.5)})`)).toBe('0.5');
 });
 
-test('C2: implicit use as a Number refuses; the explicit conversion agrees in every spelling', () => {
+test('implicit use as a Number refuses; the explicit conversion agrees in every spelling', () => {
   for (const [label, x, want] of [
     ['decimal', "decimal64.parse('1.5')", '1.5'],
     ['rational64', 'rational64(1, 3)', '0.3333333333333333'],
@@ -96,7 +96,7 @@ test('Math: exact or correctly rounded', () => {
   expect(show(`Math.fround(${Q(1)} / ${Q(3)})`)).toBe('0.3333333432674407958984375');
   expect(typed(`Math.fround(${Q(1)} / ${Q(3)})`)).toBe('float128');
   expect(show(`Math.f16round(${Q(1)} / ${Q(3)})`)).toBe('0.333251953125');
-  // The transcendentals are correctly rounded (B4), and keep the float128 type.
+  // The transcendentals are correctly rounded, and keep the float128 type.
   expect(show(`Math.sin(${Q(1)})`)).toBe('0.841470984807896506652502321630299');
   expect(typed(`Math.sin(${Q(1)})`)).toBe('float128');
   expectStaticTypeError(`Math.clz32(${Q(1)});`);

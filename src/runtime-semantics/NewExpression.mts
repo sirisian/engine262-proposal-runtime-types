@@ -36,7 +36,7 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // 2. Assert: arguments is either empty or an Arguments.
   Assert(args === undefined || isArray(args));
   // The construction's own position, read before its arguments push theirs
-  // (PLAN-v3 Q2-c; #sec-constructing-a-generic-class).
+  // (#sec-constructing-a-generic-class).
   const constructionContext = surroundingAgent.feature('runtime-types') ? contextualTypeFor(newExpression) : undefined;
   // 3. Let ref be the result of evaluating constructExpr.
   // Refused BEFORE the callee is evaluated. `Span` is deliberately not a global

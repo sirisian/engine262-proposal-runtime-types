@@ -91,7 +91,7 @@ test('`meet` answers what two constraints have in common', () => {
   expect(ok(`${NB} type T = uint8.<{ bounds: 1..=3 }> & uint8.<{ bounds: 3..=5 }>;`)).toBe(true);
   expect(ok(`${NB} type T = uint8.<{ bounds: 1..=3 }> & uint8.<{ bounds: 1..=3 }>;`)).toBe(true);
 
-  // Through Q1's object distribution, which is what routes a shared member here
+  // Through object distribution, which is what routes a shared member here
   // rather than to the arm rule - so without a deferral at the member, the object
   // form of the same mistake went unreported.
   expectStaticTypeError(`${NB} type T = { a: uint8.<{ bounds: 1..=3 }> } & { a: uint8.<{ bounds: 8..=9 }> };`);
@@ -156,7 +156,7 @@ test('a non-empty `meet` becomes the TYPE', () => {
   // Containment reduces to the narrower.
   expect(evaluated(`${NB} type T = uint8.<{bounds: 1..=3}> & uint8.<{bounds: 1..=10}>; String(T);`))
     .toBe('uint.<8>.<{ bounds: 1..=3 }>');
-  // The same at a shared member, which Q1's distribution routes here rather than
+  // The same at a shared member, which object distribution routes here rather than
   // to the arm rule - one rule, one answer.
   expect(evaluated(`${NB} type T = { a: uint8.<{bounds: 1..=10}> } & { a: uint8.<{bounds: 5..=20}> }; String(T);`))
     .toBe('{ a: uint.<8>.<{ bounds: 5..=10 }> }');

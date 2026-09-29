@@ -87,7 +87,7 @@ function* StringPattern_validate([v = Value.undefined, metadata = Value.undefine
  * Declared rather than left to fall out of interning. It agreed with interning
  * before and still does, so this changes no answer - what it changes is that the
  * judgment is now CONSULTED, which the clause's own sharpening needs somewhere to
- * live. R18 replaces the body: "pattern pairs free of backreferences and
+ * live. The decision procedure replaces the body: "pattern pairs free of backreferences and
  * lookaround, within a fixed automaton size, get the exact language-inclusion
  * answer, and pairs beyond the bound get the syntactic one."
  *

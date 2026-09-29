@@ -1155,8 +1155,8 @@ export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSS
     // the frame. Consulting the frames only once the name was otherwise
     // unresolvable let every enclosing binding win - `let T = 5` outside
     // `function f<T: type>()` made `T` read 5 in the body - and let a
-    // built-in type name win over a parameter named after it, which plan D6
-    // says the parameter shadows everywhere.
+    // built-in type name win over a parameter named after it, though the
+    // parameter shadows it everywhere.
     if (exceptedFromTypeNames !== true && TypeParameterInScopeAt(env, name)) {
       return NormalCompletion(new ReferenceRecord({
         Base: 'unresolvable',

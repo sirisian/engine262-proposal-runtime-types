@@ -10,7 +10,7 @@ import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
  * second captures metadata - `primitive complex<_><const T: P>`, as the type
  * is `complex.<float64>.<{ phase: 1 }>` - while `float32` declares none and
  * takes `<const D: Dim>` directly. A capture's written domain names the meta
- * type (plan D9, a metadata position). The history below is of the earlier
+ * type (#sec-collectcaptures, a metadata position). The history below is of the earlier
  * parameter form.
  *
  * #sec-primitive-operator-blocks: "A declaration of the form `primitive` _T_ _P_
@@ -73,7 +73,7 @@ type Ph = complex.<float64>.<{ phase: 1 }>;
 });
 
 test('a component capture: its slot\'s domain, and where it may be named', () => {
-  // D9: a capture takes its slot's domain; writing another is refused.
+  // A capture takes its slot's domain; writing another is refused.
   expectThrown('type P = { phase: int32 }; primitive complex<const E: P><const T: P> {}', 'restates that slot\'s domain');
   expectThrown('primitive complex<const E, const F><const T: P> {}', '`complex` declares 1 parameter');
   // An operator's signature binds it from each receiver: see

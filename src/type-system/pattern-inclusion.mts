@@ -1,5 +1,5 @@
 /**
- * proposal-runtime-types #sec-primitive-metadata, R18's decision procedure: "pattern pairs
+ * proposal-runtime-types #sec-primitive-metadata, the pattern-inclusion decision procedure: "pattern pairs
  * free of backreferences and lookaround, within a fixed automaton size, get the
  * exact language-inclusion answer".
  *
@@ -326,7 +326,7 @@ function compile(ast: unknown, alphabet: readonly Interval[]): Nfa | undefined {
           return [start, accept];
         }
         if (record.production === 'CharacterClass') {
-          // #sec-primitive-metadata R18: a class is the pair a reader most
+          // #sec-primitive-metadata: a class is the pair a reader most
           // expects the procedure to decide, and the symbolic interval alphabet
           // exists for it - `/^[a-c]$/` in `/^[a-z]$/` took the syntactic answer
           // and was refused while the inclusion plainly held.

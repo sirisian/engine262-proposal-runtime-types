@@ -29,7 +29,7 @@ test('the two-argument rational constructor names why a bigint is refused', () =
   expect(thrownMessage('rational64(1, 5n);')).toBe('5n is not assignable to "int.<64>"');
   // A non-integral Number is still told it is not an integer.
   expect(thrownMessage('rational64(1.5, 2);')).toBe('a rational numerator must be an integer');
-  // The one-argument CONVERSION takes a bigint (the F10 plan's B1): its value
+  // The one-argument CONVERSION takes a bigint: its value
   // over 1, and a RangeError naming the type where it does not fit.
   expect(thrownMessage('rational64(2n ** 70n);')).toBe('"1180591620717411303424/1" is not in the range of "rational64"');
 });

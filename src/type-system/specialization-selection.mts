@@ -1,14 +1,15 @@
 /**
- * proposal-runtime-types, plan phase 4: choosing among specializations, and
- * assembling a callable's overload contracts (plan section 3.8, D1).
+ * proposal-runtime-types #sec-matching-specialization-lists and
+ * #sec-callable-overload-contracts: choosing among specializations, and
+ * assembling a callable's overload contracts.
  *
  * Like the matcher it builds on (specialization-patterns.mts), this module is
  * pure over a host: the checker, where arguments are static, and the run time,
  * where they are bound, will both call it, and neither keeps its own copy of
  * the rules. What it decides by itself is everything the patterns decide:
  *
- * - SPECIFICITY (section 6.1): whether every application one list matches is
- *   matched by another, over the finite facts the plan names - fixed slots,
+ * - SPECIFICITY: whether every application one list matches is matched by
+ *   another, over finite facts - fixed slots,
  *   matching constructors, wildcard and capture positions, repeated-binding
  *   equalities, and bounds whose inclusion the host's decidable relations
  *   establish. Alpha-renaming a capture changes nothing.
@@ -323,8 +324,8 @@ function slotsOf<S>(c: SpecializationCase<S>, primary: readonly PatternSlotParam
 }
 
 /**
- * Whether every application _specific_ matches is matched by _general_ (plan
- * section 6.1's finite facts).
+ * Whether every application _specific_ matches is matched by _general_, over
+ * the finite facts of specificity.
  */
 export function PatternIncludes<S>(
   general: SpecializationCase<S>,
@@ -366,7 +367,7 @@ export type SelectionResult<S> =
   | { readonly Kind: 'ambiguous', readonly Cases: readonly SpecializationCase<S>[] };
 
 /**
- * Plan section 6.1 step 5: the unique most specific applicable case. A case
+ * #sec-matching-specialization-lists: the unique most specific applicable case. A case
  * is chosen only when it is at least as specific as every other applicable
  * case; otherwise the maximal survivors are reported, so declaration order
  * never decides.
@@ -400,7 +401,7 @@ export function SelectSpecialization<S>(
 /**
  * Duplicate cases: two lists of equal coverage, by any capture names. A
  * replacement identical in coverage to another is a duplicate rather than a
- * fallback (plan section 6.1).
+ * fallback.
  */
 export function FindDuplicateCases<S>(
   cases: readonly SpecializationCase<S>[],
@@ -420,7 +421,7 @@ export function FindDuplicateCases<S>(
 }
 
 // ---------------------------------------------------------------------------
-// Callable groups (plan section 3.8).
+// Callable groups (#sec-callable-overload-contracts).
 
 /** One declaration of a callable group: a function, method, or operator of one name. */
 export interface CallableDeclaration<S> {
@@ -434,8 +435,8 @@ export interface CallableDeclaration<S> {
 export interface CallableGroupHost<S> extends SpecificityHost<S> {
   /**
    * Whether a FIXED entry of a case may stand in _parameter_: the same kind,
-   * and within its domain and bound (plan phase 4, cycle 3: an owner accepts
-   * only a case whose applications its contract admits).
+   * and within its domain and bound: an owner accepts
+   * only a case whose applications its contract admits.
    */
   admits(entry: ParseNode, parameter: PatternSlotParameter<S>): boolean;
   /**
@@ -464,7 +465,7 @@ function accepts<S>(owner: CallableDeclaration<S>, list: ParseNode.TypeParameter
     return false;
   }
   return assigned.runs.every((run, q) => run.every((entry) => {
-    // A capture or wildcard takes its slot's domain (D4), so it fits any slot;
+    // A capture or wildcard takes its slot's domain, so it fits any slot;
     // a nested application fits where its constructor's result could.
     if (entry.type === 'CaptureBinding' || bareName(entry) === '_') {
       return true;
@@ -474,7 +475,7 @@ function accepts<S>(owner: CallableDeclaration<S>, list: ParseNode.TypeParameter
 }
 
 /**
- * Plan section 3.8, for the declarations of one name in one declaration
+ * #sec-callable-overload-contracts, for the declarations of one name in one declaration
  * group. Owners are the declarations whose lists declare only parameters. A
  * pattern-only case attaches to the unique owner that accepts it; two
  * accepting owners are an error naming both; none leaves it standalone. A
@@ -510,7 +511,7 @@ export function AnalyzeCallableGroup<S>(declarations: readonly CallableDeclarati
     }
     standalone.push(d);
     diagnostics.push(...ValidateSpecializationList(d.List, host, undefined, describe));
-    // D4: a capture's domain is inherited from its slot, and a standalone
+    // A capture's domain is inherited from its slot, and a standalone
     // case's top-level slots belong to no owner, so there is nothing to inherit.
     for (const entry of SpecializationPatternsOf(d.List)) {
       if (entry.type === 'CaptureBinding' && !entry.TypeParameterDomain) {

@@ -332,7 +332,7 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
   if (t.Kind === 'primitive') {
     // A width or count is a plain number in canonical form, however it was
     // built: a numeric literal (a value parameter's binding, typed or not) is
-    // that number (phase 4, step 9e), as `makePrimitive` makes it.
+    // that number, as `makePrimitive` makes it.
     return {
       Kind: 'primitive', Name: t.Name,
       Arguments: t.Arguments.map((a) => {
@@ -872,7 +872,7 @@ export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: str
   // reduced where it fits and rounded to the width's digits where it does not,
   // DecimalFromDouble's rule applied to 113 bits instead of 53.
   if (isFloat128Object(arg)) {
-    // A float128 NaN or infinity is the decimal's (N1): #sec-numeric-conversions,
+    // A float128 NaN or infinity is the decimal's: #sec-numeric-conversions,
     // "The source's exact value if it is representable" - and NaN and the
     // infinities are values of every decimal type.
     if (arg.Float128Class === 'nan') {
@@ -914,7 +914,8 @@ export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: str
     }
   }
   if (typeof numericSource === 'number') {
-    // A Number or float NaN or infinity is the decimal's (N1).
+    // A Number or float NaN or infinity is the decimal's
+    // (#sec-decimal-floating-point-types).
     if (!Number.isFinite(numericSource)) {
       const kind = Number.isNaN(numericSource) ? 'NaN' : numericSource > 0 ? 'Infinity' : '-Infinity';
       return CreateDecimalSpecial(kind, width, surroundingAgent.currentRealmRecord);
@@ -939,7 +940,7 @@ export function ConvertToDecimal(arg: Value, width: 32 | 64 | 128, typeName: str
   if (isDecimalObject(arg)) {
     // A decimal to a decimal of another WIDTH re-rounds to that width's
     // precision and keeps its cohort member where it fits.
-    // A decimal NaN or infinity keeps its kind across widths (N1).
+    // A decimal NaN or infinity keeps its kind across widths.
     if (arg.DecimalSpecial !== undefined) {
       return CreateDecimalSpecial(arg.DecimalSpecial, width, surroundingAgent.currentRealmRecord);
     }

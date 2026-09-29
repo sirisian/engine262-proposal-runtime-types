@@ -6,33 +6,33 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-test('two generic function types that differ only in a name are one type (alpha-equivalence, J31)', () => {
+test('two generic function types that differ only in a name are one type (alpha-equivalence)', () => {
   expect(evaluated('type A = <T: type>(x: T) => T; type B = <U: type>(x: U) => U; String(A === B);')).toBe('true');
   expect(evaluated('type A = <T: type, U: type>(x: T, y: U) => U; type B = <U: type, T: type>(x: U, y: T) => T; String(A === B);')).toBe('true');
 });
 
-test('a different shape is a different type (J32, J33)', () => {
+test('a different shape is a different type', () => {
   expect(evaluated('type A = <T: type>(x: T) => T; type B = <T: type, U: type>(x: T) => T; String(A === B);')).toBe('false');
   expect(evaluated('type A = <T: type>(x: T) => T; type C = (x: uint8) => uint8; String(A === C);')).toBe('false');
   expect(evaluated('type A = <T: type>(x: T) => T; type D = <T: type>(x: T, y: T) => T; String(A === D);')).toBe('false');
 });
 
-test('a generic function crosses into a CONCRETE slot by instantiation (J35 shape)', () => {
+test('a generic function crosses into a CONCRETE slot by instantiation', () => {
   // The relation infers T = uint8 from the slot's parameter, checks the
   // instantiated signature, and the call through the slot works.
   expect(evaluated('function id<T: type>(x: T): T { return x; } let g: (uint8) => uint8 = id; String(g(3));')).toBe('3');
   expect(evaluated('function first<T: type>(xs: [].<T>): T { return xs[0]; } let f: ([].<uint8>) => uint8 = first; String(f([7, 8]));')).toBe('7');
 });
 
-test('a concrete function does NOT cross into a generic slot (J36)', () => {
+test('a concrete function does NOT cross into a generic slot', () => {
   expectThrown('let h: <T: type>(x: T) => T = (x: uint8): uint8 => x;', 'not assignable');
 });
 
-test('a generic function crosses into a generic slot of the same shape (J37)', () => {
+test('a generic function crosses into a generic slot of the same shape', () => {
   expect(evaluated('function id<T: type>(x: T): T { return x; } let h: <U: type>(x: U) => U = id; "ok";')).toBe('ok');
 });
 
-test('an overload set mixes concrete and generic members, concrete winning (J84 shape)', () => {
+test('an overload set mixes concrete and generic members, concrete winning', () => {
   const R = "function route(e: uint8): string { return 'u8'; } function route<T: type>(e: T): string { return 'g'; }";
   expect(evaluated(`${R} String(route(1));`)).toBe('u8');
   expect(evaluated(`${R} String(route('s'));`)).toBe('g');

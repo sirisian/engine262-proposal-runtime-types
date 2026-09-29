@@ -2083,7 +2083,7 @@ function Float128Math(name: string, args: readonly (Value | undefined)[]): Value
     case 'fround': return Float128FromNumber(Float128ToBinaryFloat(x, 32), surroundingAgent.currentRealmRecord);
     case 'f16round': return Float128FromNumber(Float128ToBinaryFloat(x, 16), surroundingAgent.currentRealmRecord);
     case 'conj': return done(x); // a real number is its own conjugate
-    // Correctly rounded - the float128 plan's B4 - by Float128Transcendental.
+    // Correctly rounded, by Float128Transcendental.
     case 'exp': return done(Float128Exp(x));
     case 'expm1': return done(Float128Expm1(x));
     case 'log': return done(Float128Log(x));

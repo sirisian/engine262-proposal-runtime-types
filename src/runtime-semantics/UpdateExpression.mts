@@ -27,7 +27,7 @@ import { surroundingAgent,
  * steps a value by its family's unit. A rational and a decimal step IN their
  * own type - neither has a Number value, so ToNumeric threw for both - and a
  * complex number has no step, so an update of one is refused rather than
- * evaluated to NaN+0i through ToNumeric (plan OQ3 C). Answers *undefined* for
+ * evaluated to NaN+0i through ToNumeric (#sec-which-operations-each-family-defines). Answers *undefined* for
  * every other value, which keeps the ordinary path.
  */
 function stepExactNumeric(value: Value, operator: '++' | '--'): Value | ThrowCompletion | undefined {
@@ -53,7 +53,7 @@ function stepExactNumeric(value: Value, operator: '++' | '--'): Value | ThrowCom
   return undefined;
 }
 
-// proposal-runtime-types R6 (Option A): a typed number is a numeric value, so
+// proposal-runtime-types #sec-unary-operators-for-typed-values: a typed number is a numeric value, so
 // ++/-- produce and consume it alongside Number and BigInt.
 type AnyNumericValue = BigIntValue | NumberValue | TypedNumberValue;
 
@@ -104,7 +104,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     case operator === '++' && !!LeftHandSideExpression: {
       // 1. Let lhs be the result of evaluating LeftHandSideExpression.
       const lhs = Q(yield* EvaluateUpdateTarget(LeftHandSideExpression));
-      // proposal-runtime-types R3: read the raw value; a typed number keeps its
+      // proposal-runtime-types #sec-unary-operators-for-typed-values: read the raw value; a typed number keeps its
       // type through ++ and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(lhs));
       // proposal-runtime-types (operatoroverloading.md): a class increment operator.
@@ -149,7 +149,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     case operator === '--' && !!LeftHandSideExpression: {
       // 1. Let lhs be the result of evaluating LeftHandSideExpression.
       const lhs = Q(yield* EvaluateUpdateTarget(LeftHandSideExpression));
-      // proposal-runtime-types R3: read the raw value; a typed number keeps its
+      // proposal-runtime-types #sec-unary-operators-for-typed-values: read the raw value; a typed number keeps its
       // type through -- and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(lhs));
       // proposal-runtime-types (operatoroverloading.md): a class decrement operator.
@@ -194,7 +194,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     case operator === '++' && !!UnaryExpression: {
       // 1. Let expr be the result of evaluating UnaryExpression.
       const expr = Q(yield* EvaluateUpdateTarget(UnaryExpression));
-      // proposal-runtime-types R3: read the raw value; a typed number keeps its
+      // proposal-runtime-types #sec-unary-operators-for-typed-values: read the raw value; a typed number keeps its
       // type through prefix ++ and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(expr));
       // proposal-runtime-types (operatoroverloading.md): a class increment operator.
@@ -237,7 +237,7 @@ export function* Evaluate_UpdateExpression({ LeftHandSideExpression, operator, U
     case operator === '--' && !!UnaryExpression: {
       // 1. Let expr be the result of evaluating UnaryExpression.
       const expr = Q(yield* EvaluateUpdateTarget(UnaryExpression));
-      // proposal-runtime-types R3: read the raw value; a typed number keeps its
+      // proposal-runtime-types #sec-unary-operators-for-typed-values: read the raw value; a typed number keeps its
       // type through prefix -- and must be seen before ToNumeric unwraps it.
       const rawOld = Q(yield* GetValue(expr));
       // proposal-runtime-types (operatoroverloading.md): a class decrement operator.

@@ -341,8 +341,7 @@ function* Atomics_wait(args: Arguments): ValueEvaluator {
  *
  * A wait is a cancellation checkpoint (#sec-thread-cancellation): a signal
  * aborted while the wait is parked WAKES it, and the wait then completes with the
- * signal's abort reason. This is the checkpoint E2b could not implement for want
- * of anything to park on.
+ * signal's abort reason.
  */
 function* Atomics_waitAsync(args: Arguments): ValueEvaluator {
   const target = Q(yield* ValidateAtomicTarget(args, 'integer-only'));

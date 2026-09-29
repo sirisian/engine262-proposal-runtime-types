@@ -24,7 +24,7 @@ function thisNumberValue(value: Value) {
   if (value instanceof NumberValue) {
     return value;
   }
-  // proposal-runtime-types R6: a typed number reads as its underlying Number, so
+  // proposal-runtime-types: a typed number reads as its underlying Number, so
   // Number.prototype methods invoked on a typed receiver operate on its value.
   if (isTypedNumber(value)) {
     return unwrapToNumber(value);

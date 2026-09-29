@@ -264,7 +264,7 @@ export function ParseRange(
 }
 
 /**
- * Phase 5 (plan 6.3): a class CASE - a class declaration whose list
+ * #sec-specialization-lists: a class CASE - a class declaration whose list
  * specializes a family - belongs to the primary of the same name declared in
  * its own statement list. One with no primary there specializes nothing the
  * program owns, and is an early error: replacement is confined to the owning
@@ -484,11 +484,11 @@ function ParseScriptInRealm(sourceText: string, realm: Realm, hostDefined: Parse
       return [completion.Value as ObjectValue];
     }
     const typeErrors = CheckScript(body);
-    // A3.3: where the walk RECORDED a narrowing request it ran without the
+    // Where the walk RECORDED a narrowing request it ran without the
     // narrowing, so it both over-reports and under-reports and must not speak.
     // The checking pass re-walks with the resolutions and reports instead -
     // later, and by throwing rather than as an early error. A program that
-    // recorded nothing is untouched and still reports here (A3.4).
+    // recorded nothing is untouched and still reports here.
     const suppressed = typeErrors.length > 0 && TakeNarrowingRequests(body).length > 0;
     if (typeErrors.length > 0 && !suppressed) {
       const scriptId = hostDefined.doNotTrackScriptId ? undefined : surroundingAgent.addDynamicParsedSource(realm, sourceText);

@@ -4,7 +4,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 // Preserve the error phase as well as the outcome and observable effects.
 test.each([
   [
-    "R57-01: import-options-unused",
+    "import-options-unused",
     "function f(o:uint8){return import(\"m\",o);}",
     {
       "completion": "throw",
@@ -16,7 +16,7 @@ test.each([
     }
   ],
   [
-    "R57-02: import-options-run",
+    "import-options-run",
     "function f(o:uint8){return import(\"m\",o);}f(1).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -28,7 +28,7 @@ test.each([
     }
   ],
   [
-    "R57-03: import-with-unused",
+    "import-with-unused",
     "function f(o:{with:uint8}){return import(\"m\",o);}",
     {
       "completion": "throw",
@@ -40,7 +40,7 @@ test.each([
     }
   ],
   [
-    "R57-04: import-with-run",
+    "import-with-run",
     "function f(o:{with:uint8}){return import(\"m\",o);}f({with:1}).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -52,7 +52,7 @@ test.each([
     }
   ],
   [
-    "R57-05: import-inherited-with",
+    "import-inherited-with",
     "function f(o:{with:uint8}){return import(\"m\",o);}f(Object.create({with:1})).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "throw",
@@ -64,7 +64,7 @@ test.each([
     }
   ],
   [
-    "R57-06: import-undefined",
+    "import-undefined",
     "function f(o:undefined){return import(\"m\",o);}f(undefined).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -78,7 +78,7 @@ test.each([
     }
   ],
   [
-    "R57-07: import-optional-with",
+    "import-optional-with",
     "function f(o:{with?:uint8}){return import(\"m\",o);}f({}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -92,7 +92,7 @@ test.each([
     }
   ],
   [
-    "R57-08: import-nonenumerable-attribute2",
+    "import-nonenumerable-attribute2",
     "function f(o:{with:{type:uint8}}){return import(\"m\",o);}const attrs=Object.defineProperty({},\"type\",{value:1,enumerable:false,writable:true});f({with:attrs}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -106,7 +106,7 @@ test.each([
     }
   ],
   [
-    "R57-09: null options unused",
+    "null options unused",
     "function f(o:null){return import(\"m\",o);}",
     {
       "completion": "throw",
@@ -118,7 +118,7 @@ test.each([
     }
   ],
   [
-    "R57-10: all primitive options union",
+    "all primitive options union",
     "function f(o:uint8|boolean){return import(\"m\",o);}",
     {
       "completion": "throw",
@@ -130,7 +130,7 @@ test.each([
     }
   ],
   [
-    "R57-11: null with unused",
+    "null with unused",
     "function f(o:{with:null}){return import(\"m\",o);}",
     {
       "completion": "throw",
@@ -142,7 +142,7 @@ test.each([
     }
   ],
   [
-    "R57-12: bad with getter never executed",
+    "bad with getter never executed",
     "class O{get with():uint8{globalThis.hookRan=true;return 1;}}function f(o:O){return import(\"m\",o);}",
     {
       "completion": "throw",
@@ -154,7 +154,7 @@ test.each([
     }
   ],
   [
-    "R57-13: undefined options union is viable",
+    "undefined options union is viable",
     "function f(o:uint8|undefined){return import(\"m\",o);}f(undefined).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -167,7 +167,7 @@ test.each([
     }
   ],
   [
-    "R57-14: undefined with value valid",
+    "undefined with value valid",
     "function f(o:{with:undefined}){return import(\"m\",o);}f({with:undefined}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -180,7 +180,7 @@ test.each([
     }
   ],
   [
-    "R57-15: with union has viable Object",
+    "with union has viable Object",
     "function f(o:{with:uint8|object}){return import(\"m\",o);}f({with:{}}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -193,7 +193,7 @@ test.each([
     }
   ],
   [
-    "R57-16: open options valid",
+    "open options valid",
     "function f(o:object){return import(\"m\",o);}f({}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -206,7 +206,7 @@ test.each([
     }
   ],
   [
-    "R57-17: any options retain promise rejection",
+    "any options retain promise rejection",
     "function f(o:any){return import(\"m\",o);}f(1).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -217,7 +217,7 @@ test.each([
     }
   ],
   [
-    "R57-18: ordinary JavaScript retains rejection",
+    "ordinary JavaScript retains rejection",
     "import(\"m\",1).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -228,7 +228,7 @@ test.each([
     }
   ],
   [
-    "R57-19: String attributes reach separate host support check",
+    "String attributes reach separate host support check",
     "function f(o:{with:{type:string}}){return import(\"m\",o);}f({with:{type:\"json\"}}).then(()=>{globalThis.settled=\"ok\";},e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",
@@ -240,7 +240,7 @@ test.each([
     }
   ],
   [
-    "R57-20: typed enumerable attribute remains deferred in this recommendation",
+    "typed enumerable attribute remains deferred in this recommendation",
     "function f(o:{with:{type:uint8}}){return import(\"m\",o);}f({with:{type:1}}).catch(e=>{globalThis.settled=e.constructor.name;globalThis.settledMessage=e.message;});",
     {
       "completion": "normal",

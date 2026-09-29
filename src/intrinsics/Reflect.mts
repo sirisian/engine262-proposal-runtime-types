@@ -350,7 +350,7 @@ function* Reflect_typeOf([value = Value.undefined]: Arguments) {
   // constructor's return being the class and a signature whose return was not
   // written reporting the return the checker published. That construction
   // lived here, for the top level alone; it is RuntimeTypeOf's now
-  // (SignatureTypeOf, PLAN-callable Q1), so a callable inside a structure
+  // (SignatureTypeOf), so a callable inside a structure
   // reports the same signature it reports alone.
   // proposal-runtime-types: the interned Type Object of the value's run-time type.
   return GetTypeObject(RuntimeTypeOf(value));
@@ -486,7 +486,7 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
   if (!(node instanceof ObjectValue)) {
     return Throw.TypeError('$1 is not a type node', node);
   }
-  // proposal-runtime-types (PLAN-v3 Q7-a): a GENERIC class's constructor stands
+  // proposal-runtime-types #sec-parameterized-types: a GENERIC class's constructor stands
   // for its declaration. A bare generic name in a type position names the
   // application at its defaults, so the declaration's own Type Object - what a
   // `generic` node's `base` is, and what `getReflection(A).generic.base`
@@ -942,7 +942,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
         X(CreateDataProperty(genericView, Value('base'), typeObj({ ...nominalT, Arguments: [] })));
         const args = nominalT.Arguments.map((a) => (typeof a === 'number' ? Value(a) : typeObj(a)) as Value);
         X(CreateDataProperty(genericView, Value('arguments'), CreateArrayFromList(args)));
-        // Phase 5 (plan C23): the SELECTED declaration is discoverable - the
+        // The SELECTED declaration is discoverable - the
         // case whose complete body this application runs, or the primary.
         const selected = SelectedDeclarationOf((nominalT as { Constructor?: unknown }).Constructor);
         if (selected !== undefined) {
@@ -1048,7 +1048,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
           const p = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
           X(CreateDataProperty(p, Value('type'), typeObj(pr.Type)));
           X(CreateDataProperty(p, Value('index'), Value(i)));
-          // typeprogramming.md R1: `rest` on a parameter record, which the
+          // `rest` on a parameter record, which the
           // node model needs and which the parameter record makes available to report.
           X(CreateDataProperty(p, Value('rest'), pr.Rest ? Value.true : Value.false));
           X(CreateDataProperty(p, Value('optional'), pr.Optional ? Value.true : Value.false));
@@ -1160,8 +1160,8 @@ function Reflect_getMetadata() {
 }
 
 /**
- * Plan section 3.8, step 8 (C23; decision Q3 as refined): a function value's
- * DECLARATIONS. A group's type is its owner's contract (step 5), and a type's
+ * A function value's DECLARATIONS. A group's type is its owner's contract
+ * (#sec-callable-overload-contracts), and a type's
  * reflection must round-trip, so the declarations are reflected from the
  * value: one entry per declaration with its role and its generic slots (a
  * label - the owner's, a mixed case's binder's, or none - a kind, and the
@@ -1230,7 +1230,7 @@ function DeclarationReflection(value: ObjectValue, realm: Realm): ObjectValue | 
 
 function Reflect_getReflection([type = Value.undefined]: Arguments) {
   // A function value holding specialized declarations, or a specialization of
-  // one, reflects its declarations (step 8); a type reflects its structure.
+  // one, reflects its declarations; a type reflects its structure.
   if (!isTypeObject(type) && type instanceof ObjectValue && IsCallable(type)) {
     const declarations = DeclarationReflection(type, surroundingAgent.currentRealmRecord);
     if (declarations) return declarations;

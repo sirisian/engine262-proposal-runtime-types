@@ -119,7 +119,7 @@ test('arrays expose extent and element, and keep fixed apart from dynamic', () =
   expect(bindings(MatchSpecializationList(tuple, storePrimary, [seq(uint8, str, uint16)], host))).toEqual({ Head: 'uint8', Tail: '[string, uint16]' });
 });
 
-test('C08/C09: forward computations run after structural positions; bounds last', () => {
+test('forward computations run after structural positions; bounds last', () => {
   // `Wrap(T)` reads T, which a LATER position binds.
   const l = list('Wrap(T), const T');
   expect(bindings(MatchSpecializationList(l, pairPrimary, [app('Wrapped', uint8), uint8], host))).toEqual({ T: 'uint8' });
@@ -136,7 +136,7 @@ test('a metadata position binds the metadata of the written meta type', () => {
   expect(bindings(MatchSpecializationList(l, storePrimary, [app('Tagged', prim('float32'))], host))).toBe('no-match');
 });
 
-test('C16/D5: one matcher, two relations for a fixed leaf', () => {
+test('one matcher, two relations for a fixed leaf', () => {
   const pattern = list('Map.<string, const V>').SpecializationEntryList![0].Pattern as unknown as ParseNode;
   const captures = list('Map.<string, const V>').Captures!;
   const literalKey = app('Map', { k: 'lit', base: 'string', value: 'a' }, uint8);
@@ -146,7 +146,7 @@ test('C16/D5: one matcher, two relations for a fixed leaf', () => {
   expect(bindings(MatchSpecializationPattern(pattern, captures, literalKey, host, 'type-subject'))).toEqual({ V: 'uint8' });
 });
 
-test('C01/D9: a written capture domain must restate its slot\'s', () => {
+test('a written capture domain must restate its slot\'s', () => {
   const check = (entries: string, primary?: PatternSlotParameter<M>[]) => ValidateSpecializationList(list(entries), host, primary, show, uint64).map((d) => d.kind);
   expect(check('Map.<K: string, V: const E>')).toEqual([]);
   expect(check('Map.<K: string, V: const E: type>')).toEqual([]);

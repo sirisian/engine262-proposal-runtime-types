@@ -2,22 +2,21 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
- * Plan section 3.8 and section 6.1, phase 4 step 2a: the run-time selection
- * of a specialized case for a direct explicit call, `f.<A>(x)`. The checker
- * still defers these calls (step 2b lifts it), so the tests reach the run time
- * through a callee typed `any`.
+ * #sec-callable-overload-contracts and #sec-matching-specialization-lists: the
+ * selection of a specialized case, statically and at run time. Tests that
+ * exercise the run time reach it through a callee typed `any`.
  */
 
 const P = `function f<T: type>(x: T): string { return 'generic'; }
 function f<uint8>(x: uint8): string { return 'uint8'; }
 const g: any = f;`;
 
-test('B1 and B2: an exact case beats the owner; no case falls back to the owner', () => {
+test('an exact case beats the owner; no case falls back to the owner', () => {
   expect(evaluated(`${P} g.<uint8>(3);`)).toBe('uint8');
   expect(evaluated(`${P} g.<uint16>(3);`)).toBe('generic');
 });
 
-test('B3: a bodyless owner with no matching case is no viable overload', () => {
+test('a bodyless owner with no matching case is no viable overload', () => {
   const R = `function read<T: type>(): T; function read<boolean>(): boolean { return true; } const r: any = read;`;
   expect(evaluated(`${R} String(r.<boolean>());`)).toBe('true');
   expectThrown(`${R} r.<float16>();`, 'no overload of `r` applies to (float16): no case matches, and its owner has no body');
@@ -27,49 +26,49 @@ const PAIR = `function p<A: type, B: type>(): string { return 'owner'; }
 function p<const T, T>(): string { return 'equal'; }
 function p<uint32, _>(): string { return 'u32-first'; }`;
 
-test('B5, B7 and B8: the most specific applicable case, whatever the source order', () => {
+test('the most specific applicable case, whatever the source order', () => {
   const run = `const h: any = p; [h.<uint8, uint8>(), h.<uint32, string>(), h.<uint32, uint32>(), h.<string, uint8>(), h.<uint8, uint16>()].join(',');`;
   const both = `function p<uint32, uint32>(): string { return 'both'; }`;
   expect(evaluated(`${PAIR} ${both} ${run}`)).toBe('equal,u32-first,both,owner,owner');
-  // C10: reversing the declarations changes nothing.
+  // Reversing the declarations changes nothing.
   const reversed = `function p<A: type, B: type>(): string { return 'owner'; } ${both}
     function p<uint32, _>(): string { return 'u32-first'; } function p<const T, T>(): string { return 'equal'; }`;
   expect(evaluated(`${reversed} ${run}`)).toBe('equal,u32-first,both,owner,owner');
 });
 
-test('B6: an incomparable overlap is an ambiguity naming both cases and the arguments', () => {
+test('an incomparable overlap is an ambiguity naming both cases and the arguments', () => {
   expectThrown(`${PAIR} const h: any = p; h.<uint32, uint32>();`,
     '`p<const T, T>` and `p<uint32, _>` both apply to (uint.<32>, uint.<32>)');
   // Only the affected application: the others still select.
   expect(evaluated(`${PAIR} const h: any = p; h.<uint8, uint8>();`)).toBe('equal');
 });
 
-test('B10 and B11: a width-family capture binds its value; int and uint are distinct', () => {
+test('a width-family capture binds its value; int and uint are distinct', () => {
   expect(evaluated(`function w<T: type>(v: T): string { return 'g'; }
     function w<uint.<const N>>(v: uint.<N>): string { return 'uint ' + String(N); }
     function w<int.<const N>>(v: int.<N>): string { return 'int ' + String(N); }
     const k: any = w; k.<uint.<12>>(1) + '|' + k.<int.<12>>(1);`)).toBe('uint 12|int 12');
 });
 
-test('B17: an alias selects as the type it names', () => {
+test('an alias selects as the type it names', () => {
   expect(evaluated(`${P} type Byte = uint8; g.<Byte>(3);`)).toBe('uint8');
 });
 
-test('B9: a standalone case the arguments match beats the owner', () => {
+test('a standalone case the arguments match beats the owner', () => {
   expect(evaluated(`function s<A: type, B: type>(): string { return 'owner'; }
     function s<string>(): string { return 'standalone'; } const t: any = s; t.<string>();`)).toBe('standalone');
 });
 
-test('step 4b: an implicit call the checker sees selects statically, as the run time does', () => {
+test('an implicit call the checker sees selects statically, as the run time does', () => {
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic ' + String(T); }
     function f<uint8>(x: uint8): string { return 'uint8'; }
     f((3 := uint8)) + '|' + f((3 := uint16)) + '|' + f('a');`)).toBe('uint8|generic uint.<16>|generic string');
-  // D3 with a static argument is a static error.
+  // An owner with no body, at a static argument no case matches, is a static error.
   const R = `function read<T: type>(x: T): string; function read<boolean>(x: boolean): string { return 'b'; }`;
   expect(evaluated(`${R} read(true);`)).toBe('b');
   expectEarlyError(`${R} read(3.5);`, 'StaticTypeError');
   expectThrown(`${R} read(3.5);`, 'no overload of `read` applies to (number): no case matches, and its owner has no body');
-  // D4 and D5.
+  // Standalone and additive cases.
   expect(evaluated(`function s<uint8>(x: uint8): string { return 'standalone'; }
     function s(x: string): string { return 'str'; } s((3 := uint8)) + '|' + s('a');`)).toBe('standalone|str');
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
@@ -77,7 +76,7 @@ test('step 4b: an implicit call the checker sees selects statically, as the run 
     f((3 := uint8)) + '|' + f((3 := uint8), 'e');`)).toBe('generic|additive');
 });
 
-test('step 4b: the call is typed as the chosen declaration returns, and binds as it returns', () => {
+test('the call is typed as the chosen declaration returns, and binds as it returns', () => {
   // A replacement's narrower return, and a capture in it; a contextual type
   // does not filter out the owner that routes to the replacement.
   expect(evaluated(`function f<T: type>(x: T): string { return 'g'; }
@@ -90,18 +89,18 @@ test('step 4b: the call is typed as the chosen declaration returns, and binds as
     function f<uint8>(x: uint8): string { return 'uint8'; } const n: number = f((3 := uint8));`, 'StaticTypeError');
 });
 
-// Step 2b: the checker selects too.
+// The checker selects too.
 const F = `function f<T: type>(x: T): string { return 'generic'; }
 function f<uint8>(x: uint8): string { return 'uint8'; }`;
 
-test('step 2b: a direct explicit call selects statically, and runs', () => {
+test('a direct explicit call selects statically, and runs', () => {
   expect(evaluated(`${F} f.<uint8>(3);`)).toBe('uint8');
   expect(evaluated(`${F} f.<uint16>(3);`)).toBe('generic');
   expect(evaluated(`${PAIR} function p<uint32, uint32>(): string { return 'both'; }
     [p.<uint8, uint8>(), p.<uint32, string>(), p.<uint32, uint32>(), p.<string, uint8>()].join(',');`)).toBe('equal,u32-first,both,owner');
 });
 
-test('step 2b: the call is typed as the chosen case returns, captures instantiated', () => {
+test('the call is typed as the chosen case returns, captures instantiated', () => {
   // A replacement's narrower return is the call's type.
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
     function f<uint8>(x: uint8): 'u' { return 'u'; } const c: 'u' = f.<uint8>(3); c;`)).toBe('u');
@@ -110,14 +109,14 @@ test('step 2b: the call is typed as the chosen case returns, captures instantiat
   expectEarlyError(`${F} const n: number = f.<uint8>(3);`, 'StaticTypeError');
 });
 
-test('step 2b: no viable overload and an ambiguity are static errors, even in a call statement', () => {
+test('no viable overload and an ambiguity are static errors, even in a call statement', () => {
   const R = `function read<T: type>(): T; function read<boolean>(): boolean { return true; }`;
   expectEarlyError(`${R} read.<float16>();`, 'StaticTypeError');
   expectThrown(`${R} read.<float16>();`, 'no overload of `read` applies to (float16)');
   expectThrown(`${PAIR} p.<uint32, uint32>();`, '`p<const T, T>` and `p<uint32, _>` both apply');
 });
 
-test('a mixed standalone case: selectors match, binders bind with defaults and bounds (B13, B14)', () => {
+test('a mixed standalone case: selectors match, binders bind with defaults and bounds', () => {
   const W = `function write<T: type>(v: T): string { return 'g'; }
     function write<string, LengthType: type extends uint8 = uint8>(v: string): string { return 'len ' + String(LengthType); }
     const k: any = write;`;
@@ -126,7 +125,7 @@ test('a mixed standalone case: selectors match, binders bind with defaults and b
   expect(evaluated(`${W} k.<boolean>(true);`)).toBe('g');
 });
 
-test('a standalone case selects statically too, typed by its own signature (B9, B13, B14)', () => {
+test('a standalone case selects statically too, typed by its own signature', () => {
   expect(evaluated(`function s<A: type, B: type>(): string { return 'owner'; }
     function s<string>(): string { return 'standalone'; } s.<string>();`)).toBe('standalone');
   const W = `function write<T: type>(v: T): string { return 'g'; }
@@ -159,8 +158,8 @@ test('a wildcard family application is a constraint, and only a constraint', () 
   expectEarlyError('let x: uint = 3;', 'StaticTypeError');
 });
 
-// Step 3: named calls (plan section 3.8, rules 3 to 5; C03).
-test('C1 and C5: an attached case borrows its owner\'s labels; named and positional select alike', () => {
+// Named calls (#sec-named-arguments).
+test('an attached case borrows its owner\'s labels; named and positional select alike', () => {
   expect(evaluated(`${F} f.<T: uint8>(3) + '|' + f.<T: uint16>(3);`)).toBe('uint8|generic');
   expect(evaluated(`${F} const k: any = f; k.<T: uint8>(3) + '|' + k.<T: uint16>(3);`)).toBe('uint8|generic');
 });
@@ -169,7 +168,7 @@ const MIXED = `function write<T: type>(v: T): string { return 'g'; }
   function write<float32, maximum: uint32, bits: uint32 = 16>(v: float32): string {
     return 'max=' + String(maximum) + ' bits=' + String(bits); }`;
 
-test('C2: a mixed case\'s binders take their own labels; its selectors are positional', () => {
+test('a mixed case\'s binders take their own labels; its selectors are positional', () => {
   expect(evaluated(`${MIXED} [write.<float32, maximum: 1024, bits: 18>(1.5), write.<float32, 1024, 18>(1.5),
     write.<float32, bits: 18, maximum: 1024>(1.5), write.<float32, maximum: 1024>(1.5)].join('|');`))
     .toBe('max=1024 bits=18|max=1024 bits=18|max=1024 bits=18|max=1024 bits=16');
@@ -180,16 +179,15 @@ test('C2: a mixed case\'s binders take their own labels; its selectors are posit
   expectThrown(`${MIXED} write.<float32, bits: 18>(1.5);`, 'no case matches, and its owner does not take these arguments');
 });
 
-test('C3 and C4: a pattern-only case takes no labels, and a capture\'s name is not a label', () => {
+test('a pattern-only case takes no labels, and a capture\'s name is not a label', () => {
   expectThrown(`function g<uint8, string>(): string { return 'a'; } g.<A: uint8, B: string>();`,
     '`A` names no type parameter of `g`');
   expectThrown(`function h<uint.<const N>>(): string { return 'a'; } h.<N: 12>();`, '`N` names no type parameter of `h`');
   expectThrown(`${F} f.<U: uint8>(3);`, '`U` names no type parameter of `f`');
 });
 
-// Step 4a: implicit calls, dispatched at run time (reached through `any`
-// until the checker's half, step 4b, lifts the static deferral).
-test('D1 and D2: the owner\'s inferred binding selects its replacement, else its body', () => {
+// Implicit calls, dispatched at run time (reached through `any`).
+test('the owner\'s inferred binding selects its replacement, else its body', () => {
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic ' + String(T); }
     function f<uint8>(x: uint8): string { return 'uint8'; } const g: any = f;
     g((3 := uint8)) + '|' + g((3 := uint16)) + '|' + g('a');`)).toBe('uint8|generic uint.<16>|generic string');
@@ -199,13 +197,13 @@ test('D1 and D2: the owner\'s inferred binding selects its replacement, else its
     k((5 := uint.<12>)) + '|' + k('s');`)).toBe('uint 12|g');
 });
 
-test('D3: a bodyless owner no replacement matches is no viable overload', () => {
+test('a bodyless owner no replacement matches is no viable overload', () => {
   const R = `function read<T: type>(x: T): string; function read<boolean>(x: boolean): string { return 'b'; } const r: any = read;`;
   expect(evaluated(`${R} r(true);`)).toBe('b');
   expectThrown(`${R} r(3.5);`, 'no case matches, and its owner has no body');
 });
 
-test('D4 and D5: standalone and additive cases take part by their own value signatures', () => {
+test('standalone and additive cases take part by their own value signatures', () => {
   expect(evaluated(`function s<uint8>(x: uint8): string { return 'standalone'; }
     function s(x: string): string { return 'str'; } const t: any = s; t((3 := uint8)) + '|' + t('a');`)).toBe('standalone|str');
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
@@ -213,11 +211,11 @@ test('D4 and D5: standalone and additive cases take part by their own value sign
     g((3 := uint8)) + '|' + g((3 := uint8), 'e');`)).toBe('generic|additive');
 });
 
-// Step 5: first-class values (plan section 3.8, rules 4 and 5; C14).
+// First-class values (#sec-generic-function-values).
 const G = `function f<T: type>(x: T): string { return 'generic'; }
   function f<uint8>(x: uint8): 'u' { return 'u'; }`;
 
-test('E1 and E4: a stored application selects its case, as a value and as a callback', () => {
+test('a stored application selects its case, as a value and as a callback', () => {
   expect(evaluated(`${G} const g = f.<uint8>; const h = f.<uint16>; g(3) + '|' + h(3);`)).toBe('u|generic');
   expect(evaluated(`${G} [(3 := uint8)].map(f.<uint8>).join(',');`)).toBe('u');
   // A capture binds in the stored value.
@@ -225,20 +223,20 @@ test('E1 and E4: a stored application selects its case, as a value and as a call
     function w<uint.<const N>>(v: uint.<N>): string { return 'n=' + String(N); } const k = w.<uint.<12>>; k(1);`)).toBe('n=12');
 });
 
-test('E1, statically: a stored application has the chosen case\'s type', () => {
+test('statically, a stored application has the chosen case\'s type', () => {
   expect(evaluated(`${G} const g = f.<uint8>; const c: 'u' = g(3); c;`)).toBe('u');
   expectEarlyError(`${G} const g = f.<uint8>; const n: number = g(3);`, 'StaticTypeError');
   expectEarlyError(`${G} const g = f.<uint8>; g('x');`, 'StaticTypeError');
   expectEarlyError(`function read<T: type>(): T; function read<boolean>(): boolean { return true; } const r = read.<float16>;`, 'StaticTypeError');
 });
 
-test('E2 and E3: one selection is one value; another closure\'s declaration is another', () => {
+test('one selection is one value; another closure\'s declaration is another', () => {
   expect(evaluated(`${G} String(f.<uint8> === f.<uint8>) + String(f.<T: uint8> === f.<uint8>) + String(f.<uint16> === f.<uint16>);`)).toBe('truetruetrue');
   expect(evaluated(`function mk() { function f<T: type>(x: T): string { return 'g'; } function f<uint8>(x: uint8): string { return 'u'; } return f.<uint8>; }
     const a = mk(); const b = mk(); String(a === b) + '|' + String(a === a);`)).toBe('false|true');
 });
 
-test('E5 and E7: a group\'s generic function value is its owner\'s: it reaches a replacement, never an additive case', () => {
+test('a group\'s generic function value is its owner\'s: it reaches a replacement, never an additive case', () => {
   const APPLY = `function apply(fn: <U: type>(x: U) => string): string { return fn.<uint8>(3); }`;
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
     function f<uint8>(x: uint8): string { return 'uint8'; } ${APPLY} apply(f);`)).toBe('uint8');
@@ -246,19 +244,18 @@ test('E5 and E7: a group\'s generic function value is its owner\'s: it reaches a
     function f<uint8>(x: uint8, extra: string): string { return 'additive'; } ${APPLY} apply(f);`)).toBe('generic');
 });
 
-test('E6: a group of standalone cases alone has no generic function value; it is an ordinary overload set', () => {
+test('a group of standalone cases alone has no generic function value; it is an ordinary overload set', () => {
   expectEarlyError(`function s<uint8>(x: uint8): string { return 'a'; } const h: <U: type>(x: U) => string = s;`, 'StaticTypeError');
   expect(evaluated(`function s<uint8>(x: uint8): string { return 'a'; } function s(x: string): string { return 'b'; }
     function use(fn: (x: string) => string): string { return fn('z'); } use(s);`)).toBe('b');
 });
 
-// Step 6: forwarding an open argument from a generic body (plan section 3.8,
-// rule 7; D8).
+// Forwarding an open argument from a generic body.
 const READ = `function read<T: type>(): T; function read<boolean>(): boolean { return true; }
   function read<uint8>(): uint8 { return (7 := uint8); }`;
 const WRITE = `function write<uint.<const N>>(v: uint.<N>): string { return 'uint ' + String(N); }`;
 
-test('F1 and B4: through an owner, checked once, selected per specialization', () => {
+test('through an owner, checked once, selected per specialization', () => {
   expect(evaluated(`${READ} function fwd<T: type>(): T { return read.<T>(); }
     String(fwd.<boolean>()) + '|' + String(fwd.<uint8>());`)).toBe('true|7');
   // A binding no case matches, beside a bodyless owner, fails where it is applied.
@@ -266,7 +263,7 @@ test('F1 and B4: through an owner, checked once, selected per specialization', (
     'no overload of `read` applies to (float16)');
 });
 
-test('F2: through a case the argument\'s bound proves applicable to every binding (D8)', () => {
+test('through a case the argument\'s bound proves applicable to every binding', () => {
   expect(evaluated(`${WRITE} function g<L: type extends uint.<_>>(v: L): string { return write.<L>(v); }
     g.<uint8>((3 := uint8)) + '|' + g.<uint.<12>>((5 := uint.<12>));`)).toBe('uint 8|uint 12');
   // A more specific case keeping the proven signature is reached by its bindings.
@@ -278,13 +275,13 @@ test('F2: through a case the argument\'s bound proves applicable to every bindin
     function g<L: type extends uint.<_>>(v: L): string { return write.<L>(v); } g.<uint8>((3 := uint8));`)).toBe('uint 8');
 });
 
-test('F3: a more specific case a binding would reach with another signature is refused (D8)', () => {
+test('a more specific case a binding would reach with another signature is refused', () => {
   expectThrown(`${WRITE} function write<uint8>(v: string): string { return 'x'; }
     function g<L: type extends uint.<_>>(v: L): string { return write.<L>(v); }`,
   '`write.<L>` forwards through `write<uint.<const N>>`, but `write<uint8>`, which a binding of the argument would select, has another signature');
 });
 
-test('F4: no owner and no proving bound is refused', () => {
+test('no owner and no proving bound is refused', () => {
   expectThrown(`${WRITE} function g<T: type>(v: T): string { return write.<T>(v); }`,
     '`write.<T>` forwards an open argument, and no contract covers every binding');
 });
@@ -294,7 +291,7 @@ test('standalone cases rank by specificity (section 6.1; rule 8)', () => {
     write.<uint8>((3 := uint8)) + '|' + write.<uint16>((3 := uint16));`)).toBe('eight|uint 16');
 });
 
-// Step 7: methods and object literals (the rules of steps 2 to 6).
+// Methods and object literals, by the rules above.
 const METHODS = `class W { write<T: type>(v: T): string { return 'g'; }
   write<uint8>(v: uint8): 'u8' { return 'u8'; }
   write<uint.<const N>>(v: uint.<N>): string { return 'uint ' + String(N); } }`;
@@ -329,7 +326,7 @@ test('three same-named methods form one group, not nested sets', () => {
     const v = new V(); v.m('x') + v.m(1) + v.m(true);`)).toBe('snb');
 });
 
-// Step 7b: class operators, selected by the right operand.
+// Class operators, selected by the right operand.
 const OPS = `class V { x: float64; constructor(x: float64) { this.x = x; }
   operator +.<T: type>(rhs: T): string { return 'g'; }
   operator +.<uint8>(rhs: uint8): 'u' { return 'u'; }
@@ -350,8 +347,8 @@ test('an operator without a right operand to select by is deferred; a bodyless o
     "is a class operator's owner without a body");
 });
 
-// Step 7c: `where` filters (B12), receiverless extraction (E8), `super` forwarding (F5).
-test('B12: a case whose where filter does not hold is not applicable; selection moves on', () => {
+// `where` filters, receiverless extraction, `super` forwarding.
+test('a case whose where filter does not hold is not applicable; selection moves on', () => {
   const F = `function f<T: type>(x: T): string { return 'generic'; }
     function f<uint.<const N>>(x: uint.<N>): string where N > 8 { return 'wide ' + String(N); } const g: any = f;`;
   expect(evaluated(`${F} g.<uint.<12>>((1 := uint.<12>)) + '|' + g.<uint.<4>>((1 := uint.<4>))
@@ -360,36 +357,35 @@ test('B12: a case whose where filter does not hold is not applicable; selection 
   expect(evaluated(`class P<Bits: uint32 = 64> { write<T: type>(v: T): string { return 'g'; }
     write<float64>(v: float64): string where Bits >= 64 { return 'f64'; } }
     const a: any = new P.<64>(); const b: any = new P.<32>(); a.write.<float64>(1.5) + '|' + b.write.<float64>(1.5);`)).toBe('f64|g');
-  // The checker decides the filter too (step 9r, decision W1), as the run time does:
-  // it held 'not supported yet' until filters were evaluated while selecting.
+  // The checker decides the filter too, as the run time does.
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; }
     function f<uint.<const N>>(x: uint.<N>): string where N > 8 { return 'wide'; }
     f.<uint.<12>>((1 := uint.<12>)) + '|' + f.<uint.<4>>((1 := uint.<4>));`)).toBe('wide|generic');
 });
 
-test('E8: an extracted method application binds no receiver', () => {
+test('an extracted method application binds no receiver', () => {
   expect(evaluated(`class W { tag: string = 'w'; write<T: type>(v: T): string { return 'g'; }
     write<boolean>(v: boolean): string { return this.tag; } }
     const w = new W(); const m = w.write.<boolean>;
     m.call(w, true) + '|' + String((() => { try { return m(true); } catch (e) { return 'no receiver'; } })());`)).toBe('w|no receiver');
 });
 
-test('F5: an owner override forwards through super, checked against the owner', () => {
+test('an owner override forwards through super, checked against the owner', () => {
   expect(evaluated(`class R { read<T: type>(): T; read<boolean>(): boolean { return true; } read<uint8>(): uint8 { return (7 := uint8); } }
     class A extends R { read<T: type>(): T { return super.read.<T>(); } }
     const a = new A(); String(a.read.<boolean>()) + '|' + String(a.read.<uint8>());`)).toBe('true|7');
 });
 
-// Step 8: reflection (C23; decision Q3, refined: declarations reflect from the value).
+// Reflection: declarations reflect from the value.
 const RF = `function f<T: type>(x: T): string { return 'generic'; } function f<uint8>(x: uint8): string { return 'uint8'; }
   function f<uint.<const N>>(x: uint.<N>): string { return 'n'; }`;
 
-test('H1 and H2: a group reflects its owner\'s contract; a selected case, its signature with captures bound', () => {
+test('a group reflects its owner\'s contract; a selected case, its signature with captures bound', () => {
   expect(evaluated(`${RF} String(Reflect.typeOf(f)) + ' | ' + String(Reflect.typeOf(f.<uint8>)) + ' | ' + String(Reflect.typeOf(f.<uint.<12>>));`))
     .toBe('<T: type>(x: T) => string | (x: uint.<8>) => string | (x: uint.<12>) => string');
 });
 
-test('H3: a group value reflects one entry per declaration, with its role and generic slots', () => {
+test('a group value reflects one entry per declaration, with its role and generic slots', () => {
   expect(evaluated(`${RF} Reflect.getReflection(f).signatures.map((e) => e.role + '['
     + e.typeParameters.map((t) => String(t.name) + (t.pattern ? '=' + t.pattern : '')).join(',') + ']').join(' ');`))
     .toBe('owner[T] replacement[T=uint8] replacement[T=uint.<const N>]');
@@ -397,19 +393,19 @@ test('H3: a group value reflects one entry per declaration, with its role and ge
   expect(evaluated('String(Reflect.getReflection(uint8).kind);')).toBe('primitive');
 });
 
-test('H3b: a specialization value names the entry it selected, the owner\'s for a fallback', () => {
+test('a specialization value names the entry it selected, the owner\'s for a fallback', () => {
   expect(evaluated(`${RF} const s = Reflect.getReflection(f.<uint8>); s.selected.role + ':' + s.selected.typeParameters[0].pattern;`)).toBe('replacement:uint8');
   expect(evaluated(`function f<T: type>(x: T): string { return 'generic'; } function f<uint8>(x: uint8): string { return 'u'; }
     Reflect.getReflection(f.<uint16>).selected.role;`)).toBe('owner');
 });
 
-test('H3c: a standalone case\'s selector positions take no labels; a mixed case\'s binders do', () => {
+test('a standalone case\'s selector positions take no labels; a mixed case\'s binders do', () => {
   expect(evaluated(`function g<uint8, string>(): string { return 'a'; } function g<float32, bits: uint32>(): string { return 'm'; }
     Reflect.getReflection(g).signatures.map((e) => e.role + '[' + e.typeParameters.map((t) => String(t.name)).join(',') + ']').join(' ');`))
     .toBe('standalone[undefined,undefined] standalone[undefined,bits]');
 });
 
-// Step 9 (C24) groundwork: a case forwarding with its own capture.
+// A case forwarding with its own capture.
 test('a case forwards an argument over its own capture through the owner (rule 7)', () => {
   // `uint.<N>` over the enclosing case's `N` cannot be represented statically
   // (an open width); it is open, checked against the owner, selected per call.
@@ -419,31 +415,31 @@ test('a case forwards an argument over its own capture through the owner (rule 7
     const r = new R(); r.read.<int.<12>>() + '|' + r.read.<int.<8>>();`)).toBe('i12>u12|i8>u8');
 });
 
-// Step 9b: a generic class's bare name in its own body (decision B, #sec-generics).
-test('P1, P4, P5, P7: the bare name in a type position is the class over its own parameters', () => {
-  // P1: `return this` under a bare return type, for a non-default specialization.
+// A generic class's bare name in its own body (#sec-generics).
+test('the bare name in a type position is the class over its own parameters', () => {
+  // `return this` under a bare return type, for a non-default specialization.
   expect(evaluated(`class B<T: type = string> { v: T; constructor(v: T) { this.v = v; } self(): B { return this; } }
     String(Reflect.typeOf(new B.<uint8>((3 := uint8)).self()));`)).toBe('B.<uint.<8>>');
-  // P4: with no defaults (an error before).
+  // With no defaults.
   expect(evaluated(`class Box<T: type> { v: T; constructor(v: T) { this.v = v; } self(): Box { return this; } }
     String(Reflect.typeOf(new Box.<uint8>((3 := uint8)).self()));`)).toBe('Box.<uint.<8>>');
-  // P5: a static member, per specialization.
+  // A static member, per specialization.
   expect(evaluated(`class S<T: type = string> { static make(): S { return new S(); } }
     String(Reflect.typeOf(S.<uint8>.make())) + '|' + String(Reflect.typeOf(S.make()));`)).toBe('S.<uint.<8>>|S.<string>');
-  // P7: a nested function inside a member.
+  // A nested function inside a member.
   expect(evaluated(`class W<T: type = string> { v: T; constructor(v: T) { this.v = v; }
     get(): string { const f = (): W => this; return String(Reflect.typeOf(f())); } }
     new W.<uint8>((1 := uint8)).get();`)).toBe('W.<uint.<8>>');
 });
 
-test('P2 and P12: a same-type parameter is this specialization; outside the body, the defaults', () => {
+test('a same-type parameter is this specialization; outside the body, the defaults', () => {
   expectEarlyError(`class N<T: type = string> { v: T; constructor(v: T) { this.v = v; } link(o: N): string { return 'ok'; } }
     new N.<uint8>((1 := uint8)).link(new N.<string>('x'));`, 'StaticTypeError');
   expect(evaluated(`class B<T: type = string> { v: T; constructor(v: T) { this.v = v; } }
     function outside(x: B): string { return String(Reflect.typeOf(x)); } outside(new B('s'));`)).toBe('B.<string>');
 });
 
-test('an open family application forwards through the case its family proves (D8)', () => {
+test('an open family application forwards through the case its family proves', () => {
   // `uint.<N>` over an enclosing case's capture is some `uint`; an owner-less
   // group's `uint.<const N>` case admits it.
   expect(evaluated(`class P { put<uint.<const N>>(v: uint.<N>): string { return 'u' + String(N); }
@@ -451,7 +447,7 @@ test('an open family application forwards through the case its family proves (D8
     new P().put.<int.<12>>((1 := int.<12>));`)).toBe('i12>u12');
 });
 
-// Step 9c: a class's own VALUE parameter as an explicit construction argument.
+// A class's own VALUE parameter as an explicit construction argument.
 test('new C.<S>() inside C is C over its own parameter, not the default', () => {
   // A value parameter's name is not a type; the checker dropped it and fell
   // back to the defaults, which B's own-parameter annotation exposed.
@@ -460,7 +456,7 @@ test('new C.<S>() inside C is C over its own parameter, not the default', () => 
   expectEarlyError('class C<S: uint32 = 7> { plain(): C.<7> { return new C.<S>(); } }', 'StaticTypeError');
 });
 
-// Step 9d: a case's captures in scope; widths in canonical form.
+// A case's captures in scope; widths in canonical form.
 test('a conversion to a case capture\'s width types in the case\'s scope', () => {
   // `N` of `f<uint.<const N>>` was in no scope: a pattern-only case pushed none.
   expect(evaluated(`function f<T: type>(v: T): string { return 'g'; }
@@ -473,7 +469,7 @@ test('a value parameter bound to a (typed) number is a plain width: uint.<N> at 
   expect(evaluated('function h<N: uint32>(v: uint.<N>): string { return \'ok\'; } h.<8>((3 := uint8));')).toBe('ok');
 });
 
-// Step 9e: open-width conversions.
+// Open-width conversions.
 test('a conversion to an open width checks its range against the bound width', () => {
   // `uint.<N>(v)` ranged over a `uint.<literal 8>` record: nothing fit.
   expect(evaluated(`function g<N: uint32>(v: uint32): string { return String(uint.<N>(v)); }
@@ -487,7 +483,7 @@ test('a conversion reading a class parameter, in a method, is open (not closed)'
     new P.<16>().f(3) + '|' + String(new P.<16>().g());`)).toBe('3|1');
 });
 
-// Step 9g: a value parameter keeps its declared type in a type-level expression.
+// A value parameter keeps its declared type in a type-level expression.
 test('a computed extent divides as its parameters\' uint32 does, and defaults zero-filled', () => {
   // Was 2.875 ("not a type"): the frame bound the written literal untyped.
   expect(evaluated(`class P<S: uint32 = 16, B: uint32 = 64> { #b: [(S + B / 8 - 1) / (B / 8)].<uint.<B>>;
@@ -501,7 +497,7 @@ test('an extent over an open parameter stays open until specialization', () => {
     new P().n() + '|' + new P.<4>().n();`)).toBe('17|5');
 });
 
-// Step 9h: a shift's distance is a count, and a case's value binder is typed.
+// A shift's distance is a count, and a case's value binder is typed.
 test('a shift takes a distance of any integer type, exactly; the result is the left type', () => {
   expect(evaluated('String((1 := uint64) << (3 := uint32)) + \':\' + String(Reflect.typeOf((1 := uint64) << (3 := uint32)));')).toBe('8:uint.<64>');
   // Forcing 256 into uint8 would shift by 0; the distance as written shifts all out.
@@ -516,7 +512,7 @@ test('a selected case\'s value binder keeps its declared type', () => {
     new A().w.<float32, 4>((2 := float32));`)).toBe('float32:0.5');
 });
 
-// Step 9i: a type parameter applied as a conversion, `T(v)`.
+// A type parameter applied as a conversion, `T(v)`.
 test('a type parameter converts as its Type Object does, with no this value', () => {
   // #sec-type-objects: "a type may be applied to an argument as `T(v)`"; the
   // reference names no Environment Record, and EvaluateCall asserted one.
@@ -527,7 +523,7 @@ test('a type parameter converts as its Type Object does, with no this value', ()
   expect(evaluated('const o = { m() { return this === o; } }; String(o.m());')).toBe('true');
 });
 
-// Step 9j: a byte view over 64-bit elements, both directions.
+// A byte view over 64-bit elements, both directions.
 test('a byte view over 64-bit elements writes and reads them exactly', () => {
   // SetValueInBuffer asserted a BigInt for 64-bit kinds; reads came back raw.
   expect(evaluated(`const a = new [2].<uint64>(); a[0] = (258 := uint64); const s = Span.<uint8>(a);
@@ -537,7 +533,7 @@ test('a byte view over 64-bit elements writes and reads them exactly', () => {
   expect(evaluated('const a = new [1].<int64>(); a[0] = (-2 := int64); const s = Span.<uint8>(a); String(s[0]) + \',\' + String(s[7]);')).toBe('254,255');
 });
 
-// Step 9l: an explicit construction argument the checker cannot represent is open.
+// An explicit construction argument the checker cannot represent is open.
 test('new C.<[...Ts, T]>(...) inside C stays open; its arguments are checked per specialization', () => {
   // The unresolvable `[...Ts, T]` dropped the application to its defaults: `[]`.
   expect(evaluated(`class Acc<Ts: type extends [].<any> = []> { #v: Ts; constructor(v: Ts) { this.#v = v; }
@@ -547,7 +543,7 @@ test('new C.<[...Ts, T]>(...) inside C stays open; its arguments are checked per
   expectEarlyError('class B<T: type extends [].<any> = []> { } function g<U: type>(): string { new B.<U>(); return \'x\'; }', 'StaticTypeError');
 });
 
-// Step 9n: cases of a variadic owner (#sec-specialization, spec line 1579).
+// Cases of a variadic owner (#sec-variadic-parameters).
 test('a variadic owner\'s cases match its pack: fixed patterns, a peeling capture, and the empty case', () => {
   // The run was refused by one-label-per-parameter ordering, and the matcher's
   // host had no sequence for a pack's tuple or a `...` capture's result.
@@ -561,7 +557,7 @@ test('a variadic owner\'s cases match its pack: fixed patterns, a peeling captur
     f.<>() + '|' + f.<uint8>() + '|' + f.<uint8, string>();`)).toBe('end|peel|peel');
 });
 
-// Step 9o (run time): a spread type argument contributes its tuple's elements.
+// At run time, a spread type argument contributes its tuple's elements.
 test('f.<...Rest>() forwards a captured pack at run time, peeling to the empty case', () => {
   // SelectExplicitCase refused every spread application. Through `any` the
   // call reaches the run time; static forwarding of a spread is a later step.
@@ -570,7 +566,7 @@ test('f.<...Rest>() forwards a captured pack at run time, peeling to the empty c
     f.<uint8, uint16>();`)).toBe('uint.<8>+uint.<16>+end');
 });
 
-// Step 9o (static): forwarding a spread pack is open, covered by a variadic owner.
+// Statically, forwarding a spread pack is open, covered by a variadic owner.
 test('f.<...Rest>() and f.<...Us>() type through a variadic owner\'s contract; an uncovered spread is refused', () => {
   expect(evaluated(`function f<...Ts: type>(): string; function f<>(): string { return 'end'; }
     function f<const T, ...const Rest>(): string { return String(T) + '+' + f.<...Rest>(); }
@@ -582,7 +578,7 @@ test('f.<...Rest>() and f.<...Us>() type through a variadic owner\'s contract; a
     function g<...Us: type>(): string { return f.<...Us>(); }`, 'StaticTypeError');
 });
 
-// Step 9p: a method group's variadic cases, whose bodyless owner has no function at run time.
+// A method group's variadic cases, whose bodyless owner has no function at run time.
 test('readAll as method cases: a standalone spread list takes the whole run', () => {
   // Matched standalone at run time; ordered by one label per entry, and
   // matched a position per entry, the run was refused on both counts.
@@ -593,7 +589,7 @@ test('readAll as method cases: a standalone spread list takes the whole run', ()
     String(a) + String(b) + String(c) + ':' + String(Reflect.typeOf(a)) + ',' + String(Reflect.typeOf(c));`)).toBe('123:uint.<8>,uint.<32>');
 });
 
-// Step 9q: a construction's extent makes a FIXED array, whatever it is written as.
+// A construction's extent makes a FIXED array, whatever it is written as.
 test('new [n].<T>() is fixed of a run-time length, never dynamic', () => {
   // Typed as dynamic, `const d: [].<T> = new [n].<T>()` passed the checker and
   // failed at run time; array types are invariant in their extent (spec 564).
@@ -603,7 +599,7 @@ test('new [n].<T>() is fixed of a run-time length, never dynamic', () => {
   expectEarlyError('function f(n: uint32): string { const d: [].<uint8> = new [n].<uint8>(); return \'x\'; }', 'StaticTypeError');
 });
 
-// Step 9r (decision W1): a `where` filter decided at compile time where its inputs are.
+// A `where` filter decided at compile time where its inputs are.
 test('a where-filtered case is selected or excluded statically, as the run time decides it', () => {
   expect(evaluated(`class P<S: uint32 = 64> { m<T: type>(): string { return 'owner'; } m<boolean>(): string where S >= 64 { return 'wide'; } }
     new P().m.<boolean>() + '|' + new P.<16>().m.<boolean>();`)).toBe('wide|owner');
@@ -614,13 +610,13 @@ test('a where-filtered case is selected or excluded statically, as the run time 
     f.<uint.<16>>() + '|' + f.<uint.<8>>();`)).toBe('wide|owner');
 });
 
-// Step 0 of the construction plan: 9r's defects D0-D2.
+// Deciding a `where` filter: its condition, owner-less groups, and each site.
 test('a where filter is decided statically with no owner, and per call site', () => {
-  // D0: the condition is the clause's RefinementPredicate (it was never read,
-  // so every filter was undecided). D1: owner-less groups decide too.
+  // The condition is the clause's RefinementPredicate, and owner-less groups
+  // decide too.
   expect(evaluated('function f<uint.<const N>>(): string where N > 8 { return \'wide\'; } f.<uint.<16>>();')).toBe('wide');
   expectEarlyError('function f<uint.<const N>>(): string where N > 8 { return \'wide\'; } f.<uint.<8>>();', 'StaticTypeError');
-  // D2: a decision at one site does not exempt an undecidable site elsewhere.
+  // A decision at one site does not exempt an undecidable site elsewhere.
   expectEarlyError(`function f<uint.<const N>>(): string where N > 8 { return 'wide'; } const a = f.<uint.<16>>();
     class C<M: uint32 = 4> { m(): string { return f.<uint.<M>>(); } }`, 'StaticTypeError');
 });

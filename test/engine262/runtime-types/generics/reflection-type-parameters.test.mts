@@ -3,14 +3,14 @@
 import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
-test('a generic function type reflects name, kind, variadic, variance, arity (K1, K2)', () => {
+test('a generic function type reflects name, kind, variadic, variance, arity', () => {
   const F = 'type F = <T: type, out U: type, ...I: [].<uint32>>(x: T) => T;';
   expect(evaluated(`${F} String(Reflect.getReflection(F).signatures[0].typeParameters.map((t) => t.name + ":" + t.kind + ":" + t.variadic + ":" + t.variance).join(","));`))
     .toBe('T:type:false:invariant,U:type:false:covariant,I:value:true:invariant');
   expect(evaluated(`${F} String(Reflect.getReflection(F).signatures[0].typeParameters[2].arity);`)).toBe('0');
 });
 
-test('a concrete signature reflects no typeParameters property (K3)', () => {
+test('a concrete signature reflects no typeParameters property', () => {
   expect(evaluated('type G = (x: uint8) => uint8; String(Reflect.getReflection(G).signatures[0].typeParameters);')).toBe('undefined');
 });
 

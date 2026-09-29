@@ -148,7 +148,7 @@ test('an owner accepts only cases its contract admits; the rest are standalone',
   });
 });
 
-test('D4: a standalone capture has no slot domain to inherit; D9 against the owner', () => {
+test('a standalone capture has no slot domain to inherit; a written domain is checked against the owner', () => {
   expect(analyze('function f<const T>() {}').errors).toEqual(['no-slot-domain']);
   expect(analyze('function f<const T: type>() {}').errors).toEqual([]);
   expect(analyze('function g<T: type>() {} function g<const T>() {}').errors).toEqual([]);

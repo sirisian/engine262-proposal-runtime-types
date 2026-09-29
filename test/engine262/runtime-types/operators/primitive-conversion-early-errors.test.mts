@@ -54,7 +54,7 @@ test.each([
     "edge: inherited method result",
     "class B{[Symbol.toPrimitive](hint:string):object{return {};}}class C extends B{}function f(x:C){const o={[x]:1};}f(new C());"
   ]
-])('R35 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -67,7 +67,7 @@ test.each([
     "control: legacy",
     "let x={[Symbol.toPrimitive]:1};let o={[x]:1};"
   ]
-])('R35 preserves runtime timing: %s', (_name, source) => {
+])('preserves runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -124,7 +124,7 @@ test.each([
     "edge: optional access shortcircuits",
     "function f(x:{[Symbol.toPrimitive]:number}){const o:null=null;o?.[x];}f({[Symbol.toPrimitive]:1});"
   ]
-])('R35 admits the control: %s', (_name, source) => {
+])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -177,7 +177,7 @@ test.each([
     "super property key",
     "class B{}class C extends B{f(x:{[Symbol.toPrimitive]:number}){super[x];}}"
   ]
-])('R35 additional early boundary: %s', (_name, source) => {
+])('additional early boundary: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -206,7 +206,7 @@ test.each([
     "void return contract is inconclusive",
     "function f(x:{[Symbol.toPrimitive]:(hint:string)=>void}){({[x]:1});}"
   ]
-])('R35 additional ok boundary: %s', (_name, source) => {
+])('additional ok boundary: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -217,7 +217,7 @@ test('a valid primitive-conversion contract does not bypass reference liveness',
   `, 'TypeError');
 });
 
-// R40 now follows the successful primitive result into text conversion.
+// The successful primitive result is followed into text conversion.
 test('a Symbol-producing hook fails implicit text conversion before evaluation', () => {
   expectStaticTypeError('function f(x:{[Symbol.toPrimitive]:(hint:string)=>symbol}){`${x}`;}f({[Symbol.toPrimitive](hint:string):symbol{return Symbol();}});');
 });

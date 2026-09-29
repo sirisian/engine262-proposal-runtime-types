@@ -1,4 +1,4 @@
-// typeprogramming.md R15 / spec.emu #sec-declared-inverses: the POSITIVE half of
+// #sec-declared-inverses: the POSITIVE half of
 // inference through a builder. A builder that declares an inverse -
 // `@inverse(fn)` from std:types, applied to the builder's own declaration - lets
 // a parameter reached only through it be inferred: the inverse receives the
@@ -59,7 +59,7 @@ function assertEq(expr: string, expected: string): string {
   return `if (String(${expr}) !== ${JSON.stringify(expected)}) { throw new Error("got " + String(${expr})); }`;
 }
 
-test('a pack reached only through a builder binds through the builder\'s declared inverse (G37, A1)', async () => {
+test('a pack reached only through a builder binds through the builder\'s declared inverse', async () => {
   const src = PRELUDE
     + 'function unpack<...Ts: [].<type>>(...bs: boxesOf(Ts)): string { return Reflect.getReflection(Ts).elements.map((e) => String(e.type)).join(","); }' + NL
     + assertEq('unpack(new Box.<uint8>(1), new Box.<string>("a"))', 'uint.<8>,string');
@@ -132,7 +132,7 @@ test('a multi-slot builder proposes a record keyed by parameter name, verified j
   expect(await evaluate(src)).toBe('evaluated');
 });
 
-test('Reflect.declareInverse is refused outside a live decoration (B1: a declaration-site fact, not a registry)', async () => {
+test('Reflect.declareInverse is refused outside a live decoration (a declaration-site fact, not a registry)', async () => {
   const src = 'function f(T) { return T; } function g(B) { return B; }' + NL
     + 'Reflect.declareInverse({ kind: "Function", type: f, metadata: {} }, g);';
   expect(await evaluate(src)).toContain('accepts only the decoration context');

@@ -4,7 +4,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 // Preserve the error phase as well as the outcome and observable effects.
 test.each([
   [
-    "R56-01: private-read-unused",
+    "private-read-unused",
     "class C {#x:uint8=1;f(o:uint8){return o.#x;}}",
     {
       "completion": "throw",
@@ -16,7 +16,7 @@ test.each([
     }
   ],
   [
-    "R56-02: private-read-run",
+    "private-read-run",
     "class C {#x:uint8=1;f(o:uint8){return o.#x;}}new C().f(1);",
     {
       "completion": "throw",
@@ -28,7 +28,7 @@ test.each([
     }
   ],
   [
-    "R56-03: private-write",
+    "private-write",
     "class C {#x:uint8=1;f(o:uint8){o.#x=2;}}new C().f(1);",
     {
       "completion": "throw",
@@ -40,7 +40,7 @@ test.each([
     }
   ],
   [
-    "R56-04: private-call",
+    "private-call",
     "class C {#m():void{}f(o:uint8){o.#m();}}new C().f(1);",
     {
       "completion": "throw",
@@ -52,7 +52,7 @@ test.each([
     }
   ],
   [
-    "R56-05: private-update",
+    "private-update",
     "class C{#x:uint8=1;f(o:uint8){o.#x++;}}",
     {
       "completion": "throw",
@@ -64,7 +64,7 @@ test.each([
     }
   ],
   [
-    "R56-06: private-pattern",
+    "private-pattern",
     "class C{#x:uint8=1;f(o:uint8){[o.#x]=[1];}}",
     {
       "completion": "throw",
@@ -76,7 +76,7 @@ test.each([
     }
   ],
   [
-    "R56-07: private-optional-scalar",
+    "private-optional-scalar",
     "class C{#x:uint8=1;f(o:uint8){return o?.#x;}}",
     {
       "completion": "throw",
@@ -88,7 +88,7 @@ test.each([
     }
   ],
   [
-    "R56-08: private-string",
+    "private-string",
     "class C{#x:uint8=1;f(o:string){return o.#x;}}",
     {
       "completion": "throw",
@@ -100,7 +100,7 @@ test.each([
     }
   ],
   [
-    "R56-09: private-union",
+    "private-union",
     "class C{#x:uint8=1;f(o:uint8|string){return o.#x;}}",
     {
       "completion": "throw",
@@ -112,7 +112,7 @@ test.each([
     }
   ],
   [
-    "R56-10: private-optional-null",
+    "private-optional-null",
     "class C{#x:uint8=1;f(o:null){return o?.#x;}}new C().f(null);",
     {
       "completion": "normal",
@@ -123,7 +123,7 @@ test.each([
     }
   ],
   [
-    "R56-11: private-mixed",
+    "private-mixed",
     "class C{#x:uint8=1;f(o:C|uint8){return o.#x;}}let c=new C();c.f(c);",
     {
       "completion": "normal",
@@ -134,7 +134,7 @@ test.each([
     }
   ],
   [
-    "R56-12: private-brand-stamp",
+    "private-brand-stamp",
     "class Base{constructor(o){return o;}}class C extends Base{#x:uint8=1;static read(o:object){return o.#x;}}const o={};new C(o);String(C.read(o));",
     {
       "completion": "normal",
@@ -145,7 +145,7 @@ test.each([
     }
   ],
   [
-    "R56-13: private-in",
+    "private-in",
     "class C {#x:uint8=1;f(o:uint8){return #x in o;}}",
     {
       "completion": "throw",
@@ -157,7 +157,7 @@ test.each([
     }
   ],
   [
-    "R56-14: private-borrow",
+    "private-borrow",
     "class C{#x:uint8=1;f(o:uint8){let ref x=o.#x;}}",
     {
       "completion": "throw",
@@ -169,7 +169,7 @@ test.each([
     }
   ],
   [
-    "R56-15: ordinary primitive public read",
+    "ordinary primitive public read",
     "function f(s:string){return s.length;}f(\"abc\");",
     {
       "completion": "normal",
@@ -178,7 +178,7 @@ test.each([
     }
   ],
   [
-    "R56-16: any private receiver keeps runtime check",
+    "any private receiver keeps runtime check",
     "class C{#x:uint8=1;f(o:any){return o.#x;}}new C().f(1);",
     {
       "completion": "throw",
@@ -187,7 +187,7 @@ test.each([
     }
   ],
   [
-    "R56-17: untyped private receiver keeps runtime check",
+    "untyped private receiver keeps runtime check",
     "class C{#x=1;f(o){return o.#x;}}new C().f(1);",
     {
       "completion": "throw",
@@ -196,7 +196,7 @@ test.each([
     }
   ],
   [
-    "R56-18: valid private owner",
+    "valid private owner",
     "class C{#x:uint8=1;f(o:C){return o.#x;}}let c=new C();c.f(c);",
     {
       "completion": "normal",
@@ -205,7 +205,7 @@ test.each([
     }
   ],
   [
-    "R56-19: optional nullish union has an invalid selected access",
+    "optional nullish union has an invalid selected access",
     "class C{#x:uint8=1;f(o:uint8|null){return o?.#x;}}new C().f(null);",
     {
       "completion": "throw",
@@ -217,7 +217,7 @@ test.each([
     }
   ],
   [
-    "R56-20: all primitive method receiver union",
+    "all primitive method receiver union",
     "class C{#m():void{}f(o:uint8|string){o.#m();}}",
     {
       "completion": "throw",
@@ -229,7 +229,7 @@ test.each([
     }
   ],
   [
-    "R56-21: optional call precedent rejects remaining scalar",
+    "optional call precedent rejects remaining scalar",
     "function f(n:uint8|null){n?.();}f(null);",
     {
       "completion": "throw",
@@ -241,7 +241,7 @@ test.each([
     }
   ],
   [
-    "R56-22: ordinary null private receiver already rejected",
+    "ordinary null private receiver already rejected",
     "class C{#x:uint8=1;f(o:null){return o.#x;}}",
     {
       "completion": "throw",

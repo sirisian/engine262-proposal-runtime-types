@@ -4,7 +4,7 @@ import { observeProtocol } from '../observe-protocol.mts';
 // Check phase and effects as well as the outcome, including unused bodies.
 test.each([
   [
-    "R65-01: array length contribution unused",
+    "array length contribution unused",
     "function f(a:[].<uint8>){const {length:n:boolean}=a;}",
     {
       "completion": "throw",
@@ -16,7 +16,7 @@ test.each([
     }
   ],
   [
-    "R65-02: array length contribution executed",
+    "array length contribution executed",
     "function f(a:[].<uint8>){const {length:n:boolean}=a;}f([1]);",
     {
       "completion": "throw",
@@ -28,7 +28,7 @@ test.each([
     }
   ],
   [
-    "R65-03: fixed array index contribution unused",
+    "fixed array index contribution unused",
     "function f(a:[2].<uint8>){const {0:n:boolean}=a;}",
     {
       "completion": "throw",
@@ -40,7 +40,7 @@ test.each([
     }
   ],
   [
-    "R65-04: fixed array index contribution executed",
+    "fixed array index contribution executed",
     "function f(a:[2].<uint8>){const {0:n:boolean}=a;}f([1,2]);",
     {
       "completion": "throw",
@@ -52,7 +52,7 @@ test.each([
     }
   ],
   [
-    "R65-05: tuple position contribution unused",
+    "tuple position contribution unused",
     "function f(a:[uint8,string]){const {1:n:boolean}=a;}",
     {
       "completion": "throw",
@@ -64,7 +64,7 @@ test.each([
     }
   ],
   [
-    "R65-06: tuple position contribution executed",
+    "tuple position contribution executed",
     "function f(a:[uint8,string]){const {1:n:boolean}=a;}f([1,\"x\"]);",
     {
       "completion": "throw",
@@ -76,7 +76,7 @@ test.each([
     }
   ],
   [
-    "R65-07: assignment pattern unused",
+    "assignment pattern unused",
     "function f(a:[].<uint8>){let n:boolean=false;({length:n}=a);}",
     {
       "completion": "throw",
@@ -88,7 +88,7 @@ test.each([
     }
   ],
   [
-    "R65-08: assignment pattern executed",
+    "assignment pattern executed",
     "function f(a:[].<uint8>){let n:boolean=false;({length:n}=a);}f([1]);",
     {
       "completion": "throw",
@@ -100,7 +100,7 @@ test.each([
     }
   ],
   [
-    "R65-09: inferred const contribution unused",
+    "inferred const contribution unused",
     "function f(a:[].<uint8>){const {length}=a;length();}",
     {
       "completion": "throw",
@@ -112,7 +112,7 @@ test.each([
     }
   ],
   [
-    "R65-10: inferred const contribution executed",
+    "inferred const contribution executed",
     "function f(a:[].<uint8>){const {length}=a;length();}f([1]);",
     {
       "completion": "throw",
@@ -124,7 +124,7 @@ test.each([
     }
   ],
   [
-    "R65-11: known computed key",
+    "known computed key",
     "function f(a:[].<uint8>){const {[\"length\"]:n:boolean}=a;}",
     {
       "completion": "throw",
@@ -136,7 +136,7 @@ test.each([
     }
   ],
   [
-    "R65-12: common array tuple key",
+    "common array tuple key",
     "function f(a:[].<uint8>|[uint8]){const {length:n:boolean}=a;}",
     {
       "completion": "throw",
@@ -148,7 +148,7 @@ test.each([
     }
   ],
   [
-    "R65-13: default does not hide present property",
+    "default does not hide present property",
     "function f(a:[].<uint8>){const {length:n:boolean=false}=a;}f([1]);",
     {
       "completion": "throw",
@@ -160,7 +160,7 @@ test.each([
     }
   ],
   [
-    "R65-14: direct length already checked",
+    "direct length already checked",
     "function f(a:[].<uint8>){let n:boolean=a.length;}",
     {
       "completion": "throw",
@@ -172,7 +172,7 @@ test.each([
     }
   ],
   [
-    "R65-15: direct array index already checked",
+    "direct array index already checked",
     "function f(a:[2].<uint8>){let n:boolean=a[0];}",
     {
       "completion": "throw",
@@ -184,7 +184,7 @@ test.each([
     }
   ],
   [
-    "R65-16: direct tuple index already checked",
+    "direct tuple index already checked",
     "function f(a:[uint8,string]){let n:boolean=a[1];}",
     {
       "completion": "throw",
@@ -196,7 +196,7 @@ test.each([
     }
   ],
   [
-    "R65-17: valid tuple position",
+    "valid tuple position",
     "function f(a:[uint8,string]){const {1:n:string}=a;}f([1,\"x\"]);",
     {
       "completion": "normal",
@@ -208,7 +208,7 @@ test.each([
     }
   ],
   [
-    "R65-18: valid array length",
+    "valid array length",
     "function f(a:[].<uint8>){const {length:n:uint64}=a;}f([1]);",
     {
       "completion": "normal",
@@ -220,7 +220,7 @@ test.each([
     }
   ],
   [
-    "R65-19: unknown source remains dynamic",
+    "unknown source remains dynamic",
     "function f(a:any){const {length:n:boolean}=a;}f({length:true});",
     {
       "completion": "normal",
@@ -232,7 +232,7 @@ test.each([
     }
   ],
   [
-    "R65-20: let gets no new storage annotation",
+    "let gets no new storage annotation",
     "function f(a:[].<uint8>){let {length}=a;length=true;}f([1]);",
     {
       "completion": "normal",
@@ -244,7 +244,7 @@ test.each([
     }
   ],
   [
-    "R65-21: unknown named property",
+    "unknown named property",
     "function f(a:[].<uint8>){const {other:n:boolean}=a;}",
     {
       "completion": "normal",
@@ -262,7 +262,7 @@ test.each([
 // Adjacent controls and regressions found while implementing the recommendation.
 test.each([
   [
-    "R13-extra-35: function f(a:[uint8]){const {length:n:uint64}=a;globalThis.settled=String(n);}f([1]);",
+    "function f(a:[uint8]){const {length:n:uint64}=a;globalThis.settled=String(n);}f([1]);",
     "function f(a:[uint8]){const {length:n:uint64}=a;globalThis.settled=String(n);}f([1]);",
     {
       "completion": "normal",
@@ -274,7 +274,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-36: function f(){const {length:n:number}=[1,2];globalThis.settled=String(n);}f();",
+    "function f(){const {length:n:number}=[1,2];globalThis.settled=String(n);}f();",
     "function f(){const {length:n:number}=[1,2];globalThis.settled=String(n);}f();",
     {
       "completion": "normal",
@@ -286,7 +286,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-37: function f(){const {0:n:uint8}=[1];globalThis.settled=String(n);}f();",
+    "function f(){const {0:n:uint8}=[1];globalThis.settled=String(n);}f();",
     "function f(){const {0:n:uint8}=[1];globalThis.settled=String(n);}f();",
     {
       "completion": "normal",
@@ -298,7 +298,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-38: function f(a:[uint8,...[].<string>]){const {1:n:string}=a;}f([1,\"s\"]);",
+    "function f(a:[uint8,...[].<string>]){const {1:n:string}=a;}f([1,\"s\"]);",
     "function f(a:[uint8,...[].<string>]){const {1:n:string}=a;}f([1,\"s\"]);",
     {
       "completion": "normal",
@@ -310,7 +310,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-39: function f(a:[2].<uint8>){const {[\"0\"]:n:boolean}=a;}",
+    "function f(a:[2].<uint8>){const {[\"0\"]:n:boolean}=a;}",
     "function f(a:[2].<uint8>){const {[\"0\"]:n:boolean}=a;}",
     {
       "completion": "throw",
@@ -322,7 +322,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-40: function f({0:n}:[2].<uint8>){n();}",
+    "function f({0:n}:[2].<uint8>){n();}",
     "function f({0:n}:[2].<uint8>){n();}",
     {
       "completion": "throw",
@@ -334,7 +334,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-41: function f(a:[].<uint8>){const {\"-1\":n:undefined}=a;}f([1]);",
+    "function f(a:[].<uint8>){const {\"-1\":n:undefined}=a;}f([1]);",
     "function f(a:[].<uint8>){const {\"-1\":n:undefined}=a;}f([1]);",
     {
       "completion": "throw",
@@ -346,7 +346,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-42: function f(a:[uint8,...[].<string>]){const {\"4294967295\":n:undefined}=a;}f([1,\"s\"]);",
+    "function f(a:[uint8,...[].<string>]){const {\"4294967295\":n:undefined}=a;}f([1,\"s\"]);",
     "function f(a:[uint8,...[].<string>]){const {\"4294967295\":n:undefined}=a;}f([1,\"s\"]);",
     {
       "completion": "normal",
@@ -358,7 +358,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-43: function f(a:[].<uint8>){const {\"18446744073709551616\":n:undefined}=a;}f([1]);",
+    "function f(a:[].<uint8>){const {\"18446744073709551616\":n:undefined}=a;}f([1]);",
     "function f(a:[].<uint8>){const {\"18446744073709551616\":n:undefined}=a;}f([1]);",
     {
       "completion": "normal",
@@ -370,7 +370,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-59: function f(a:[2].<uint8>){a[Symbol.iterator]=function*(){yield \"s\";};const {0:n:uint8}=a;globalThis.settled=String(n);}f([1,2]);",
+    "function f(a:[2].<uint8>){a[Symbol.iterator]=function*(){yield \"s\";};const {0:n:uint8}=a;globalThis.settled=String(n);}f([1,2]);",
     "function f(a:[2].<uint8>){a[Symbol.iterator]=function*(){yield \"s\";};const {0:n:uint8}=a;globalThis.settled=String(n);}f([1,2]);",
     {
       "completion": "normal",
@@ -382,7 +382,7 @@ test.each([
     }
   ],
   [
-    "R13-extra-60: function f(){let a:[2].<uint8>=[1,2];a[Symbol.iterator]=function*(){yield \"s\";};const [n:string]=a;globalThis.settled=n;}f();",
+    "function f(){let a:[2].<uint8>=[1,2];a[Symbol.iterator]=function*(){yield \"s\";};const [n:string]=a;globalThis.settled=n;}f();",
     "function f(){let a:[2].<uint8>=[1,2];a[Symbol.iterator]=function*(){yield \"s\";};const [n:string]=a;globalThis.settled=n;}f();",
     {
       "completion": "normal",

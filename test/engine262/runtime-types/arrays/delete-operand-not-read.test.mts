@@ -15,7 +15,7 @@ import { expectStaticTypeError, ok } from '../harness.mts';
  * `[uint8] | [].<uint8>` is left to the deletion judgment, which defers because
  * the members disagree.
  *
- * The first test is the R43 case. The rest guard the flag from reaching further
+ * The first test is the case itself. The rest guard the flag from reaching further
  * than a delete. Measured by making the exemption apply to every read: the READ
  * and STORE tests below then fail, which is the leak this file exists to catch.
  * The all-nullish test pins that a delete still needs an object to delete from,

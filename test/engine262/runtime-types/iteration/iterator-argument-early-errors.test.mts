@@ -58,7 +58,7 @@ test.each([
     "async next executed",
     "async function f(x:{[Symbol.asyncIterator]:()=>{next:(n:number)=>Promise.<object,never>}}){for await(const v of x){break;}}f({[Symbol.asyncIterator](){return {next(n:number){return Promise.resolve({done:true});}};}}).then(()=>globalThis.settled=\"normal\",e=>globalThis.settled=e.constructor.name);"
   ]
-])('R38 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -67,7 +67,7 @@ test.each([
     "any boundary",
     "function f(x:any){const []=x;}f({[Symbol.iterator](n:number){return {next(){return {};}};}});"
   ]
-])('R38 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -92,7 +92,7 @@ test.each([
     "exhaustion skips return",
     "function f(x:{[Symbol.iterator]:()=>{next:()=>{done:true},return:(n:number)=>object}}){for(const v of x){}}f({[Symbol.iterator](){return {next(){return {done:true};},return(n:number){return {};}};}});"
   ]
-])('R38 preserves valid behavior: %s', (_name, source) => {
+])('preserves valid behavior: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -102,7 +102,7 @@ test.each([
     "function f(x:{[Symbol.iterator]:()=>{next:()=>{done:false,value:number},return:(n:number)=>object}}){for(const v of x){throw \"original\";}}try{f({[Symbol.iterator](){return {next(){return {done:false,value:1};},return(n:number){return {};}};}});}catch(e){globalThis.settled=e;}",
     "original"
   ]
-])('R38 preserves values and effects: %s', (_name, source, expected) => {
+])('preserves values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });
 
@@ -155,7 +155,7 @@ test.each([
     "sync fallback next",
     "async function f(x:{[Symbol.asyncIterator]:null,[Symbol.iterator]:()=>{next:(n:number)=>object}}){for await(const v of x){break;}}"
   ]
-])('R38 additional early: %s', (_name, source) => {
+])('additional early: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -180,7 +180,7 @@ test.each([
     "overload viable",
     "function f(x:{[Symbol.iterator]:{(n:number):{next:()=>object};():{next:()=>object}}}){const []=x;}"
   ]
-])('R38 additional ok: %s', (_name, source) => {
+])('additional ok: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -190,7 +190,7 @@ test.each([
     "let reads=0;class C{get [Symbol.iterator]():()=>{next:()=>object}{reads++;return ()=>({next(){return {};}});}}function f(x:C){const []=x;}globalThis.settled=String(reads);",
     "0"
   ]
-])('R38 additional values and effects: %s', (_name, source, expected) => {
+])('additional values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });
 
@@ -198,13 +198,13 @@ test.each([
 test.each([
   'function f(x:{[Symbol.iterator]:(...xs:[number,...[].<string>])=>{next:()=>object}}){const []=x;}',
   'function* f(x:{[Symbol.iterator]:()=>{next:(...xs:[number,...[].<string>])=>object}}){yield* x;}',
-])('R38 checks required positions inside a tuple rest: %s', (source) => {
+])('checks required positions inside a tuple rest: %s', (source) => {
   expectStaticTypeError(source);
 });
 
 test.each([
   'function f(x:{[Symbol.iterator]:(...xs:[...[].<string>])=>{next:()=>object}}){const []=x;}f({[Symbol.iterator](...xs:[...[].<string>]){return {next(){return {};}};}});',
   'function* f(x:{[Symbol.iterator]:()=>{next:(...xs:[undefined,...[].<string>])=>object}}){yield* x;}f({[Symbol.iterator](){return {next(...xs:[undefined,...[].<string>]){return {done:true};}};}}).next();',
-])('R38 admits viable positions inside a tuple rest: %s', (source) => {
+])('admits viable positions inside a tuple rest: %s', (source) => {
   expect(ok(source)).toBe(true);
 });

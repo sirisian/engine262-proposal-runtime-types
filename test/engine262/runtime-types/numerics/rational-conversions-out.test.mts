@@ -33,7 +33,7 @@ test('to an integer, truncating toward zero', () => {
 });
 
 test('an integer target still checks range', () => {
-  // Explicitly, S3's row wraps, as every row to a fixed-width integer does.
+  // Explicitly, the row wraps, as every row to a fixed-width integer does.
   expect(evaluated('const r: rational64 = 300 / 1; String(uint8(r));')).toBe('44');
   // At the boundary a typed rational is refused, not converted (stricter-runtime
   // decision): the explicit conversion above is the way to change its type.

@@ -42,7 +42,7 @@ test.each([
     "all-invalid union executed",
     "function f(x:bigint|boolean,y:bigint){x >>> y;}f(8n,1n);"
   ]
-])('R37 rejects before evaluation: %s', (_name, source) => {
+])('rejects before evaluation: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -59,7 +59,7 @@ test.each([
     "legacy",
     "8n >>> 1n;"
   ]
-])('R37 retains runtime timing: %s', (_name, source) => {
+])('retains runtime timing: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -94,7 +94,7 @@ test.each([
     "function f(x:number|bigint,y:number|bigint){return x >>> y;}globalThis.settled=String(f(8,1));",
     "4"
   ]
-])('R37 preserves values and effects: %s', (_name, source, expected) => {
+])('preserves values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });
 
@@ -115,7 +115,7 @@ test.each([
     "specialized field",
     "class Box<T: type>{v:T;}function f(x:Box.<bigint>){x.v >>> 1;}"
   ]
-])('R37 additional early: %s', (_name, source) => {
+])('additional early: %s', (_name, source) => {
   expectStaticTypeError(source);
 });
 
@@ -124,7 +124,7 @@ test.each([
     "unrelated annotation",
     "let n:number=1;8n >>> 1n;"
   ]
-])('R37 additional runtime: %s', (_name, source) => {
+])('additional runtime: %s', (_name, source) => {
   expectThrownKind(source, 'TypeError');
 });
 
@@ -137,7 +137,7 @@ test.each([
     "unknown left",
     "function f(x:any,n:bigint){x >>> n;}"
   ]
-])('R37 additional ok: %s', (_name, source) => {
+])('additional ok: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
 });
 
@@ -147,6 +147,6 @@ test.each([
     "function f(x:bigint,n:bigint){return Number(x) >>> Number(n);}globalThis.settled=String(f(8n,1n));",
     "4"
   ]
-])('R37 additional values and effects: %s', (_name, source, expected) => {
+])('additional values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });

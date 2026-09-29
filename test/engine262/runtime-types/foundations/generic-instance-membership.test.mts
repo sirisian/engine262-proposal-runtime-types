@@ -23,7 +23,7 @@ test('membership still discriminates, and still refuses what it should', () => {
   // specialization is not a member of another.
   expect(evaluated(`${G} String(new G.<uint8>() is G.<string>);`)).toBe('false');
   // There is no UNSPECIALIZED type to be a member of: a bare `G` in type
-  // position names `G.<>`, an error where T has no default (PLAN-v3 Q7-a),
+  // position names `G.<>`, an error where T has no default (#sec-parameterized-types),
   // and the FAMILY is spelled `G.<any>`, which every specialization satisfies
   // (the collections' wildcard rule, extended to a user class).
   expectThrown(`${G} String(new G.<uint8>() is G);`);
@@ -35,8 +35,8 @@ test('membership still discriminates, and still refuses what it should', () => {
 test('the shapes that already worked are unchanged', () => {
   expect(evaluated('class P { x: uint8; } String(new P() is P);')).toBe('true');
   // A bare construction of a generic class constructs a specialization, from
-  // its context where the arguments reach nothing (PLAN-v3 Q1, Q2-c); with
-  // neither, the naming error (Q4) rather than an instance of an open type.
+  // its context where the arguments reach nothing (#sec-constructing-a-generic-class);
+  // with neither, the naming error rather than an instance of an open type.
   expect(evaluated(`${G} let b: G.<uint8> = new G(); String(b is G.<uint8>);`)).toBe('true');
   expectThrown(`${G} new G();`, 'is not determined by the arguments and has no default');
   expect(evaluated(`${G} let b: G.<uint8> = new G.<uint8>(); String(b.x);`)).toBe('0');

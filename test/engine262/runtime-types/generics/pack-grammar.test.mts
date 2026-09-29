@@ -7,7 +7,7 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-test('a variadic parameter parses with a collection-typed constraint (A1, A2)', () => {
+test('a variadic parameter parses with a collection-typed constraint', () => {
   expect(evaluated('function swizzle<...I: [].<uint32>>(): uint32 { return 1; } "ok";')).toBe('ok');
   expect(evaluated('class Q { each<...Cs: [].<type> extends [].<any>>(): void {} } "ok";')).toBe('ok');
   expect(evaluated('function lanes<...I: [4].<uint8>>(): uint32 { return 4; } "ok";')).toBe('ok');

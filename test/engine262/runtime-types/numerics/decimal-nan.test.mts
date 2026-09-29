@@ -2,8 +2,7 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * NaN and the infinities in the decimal types - the plan "NaN and the infinities
- * in the decimal types", N1 and O1. The values are those of the IEEE interchange
+ * NaN and the infinities in the decimal types. The values are those of the IEEE interchange
  * formats, NaN and the infinities included (#sec-decimal-floating-point-types);
  * they arrive by conversion, and an operation on them gives IEEE's result - while
  * an operation that would MAKE one from finite operands still raises: an overflow,
@@ -36,7 +35,7 @@ test('decimal NaN and infinities: conversions out', () => {
   }
 });
 
-test('decimal NaN and infinities: arithmetic, by O1', () => {
+test('decimal NaN and infinities: arithmetic', () => {
   const cases: [string, string][] = [["(NaN := decimal64) + decimal64.parse('1')", "NaN"], ["(Infinity := decimal64) + decimal64.parse('1')", "Infinity"], ["(-Infinity := decimal64) * decimal64.parse('2')", "-Infinity"], ["decimal64.parse('1') / (Infinity := decimal64)", "0"], ["(Infinity := decimal64) / decimal64.parse('-2')", "-Infinity"], ["decimal64.parse('5') % (Infinity := decimal64)", "5"], ["-(Infinity := decimal64)", "-Infinity"], ["-(NaN := decimal64)", "NaN"], ["(Infinity := decimal64) + (Infinity := decimal64)", "Infinity"], ["(Infinity := decimal64) - (Infinity := decimal64)", "RangeError"], ["decimal64.parse('0') * (Infinity := decimal64)", "RangeError"], ["(Infinity := decimal64) / (Infinity := decimal64)", "RangeError"], ["(Infinity := decimal64) % decimal64.parse('2')", "RangeError"], ["decimal64.parse('9e384') * decimal64.parse('10')", "RangeError"], ["decimal64.parse('1') / decimal64.parse('0')", "RangeError"], ["decimal64.parse('0') / decimal64.parse('0')", "RangeError"], ["decimal64.parse('1.5') + decimal64.parse('2.25')", "3.75"]];
   for (const [expr, rowWant] of cases) {
     // A typed value passed through `any` into a decimal binding is checked, not

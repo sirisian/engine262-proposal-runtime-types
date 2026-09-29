@@ -290,7 +290,8 @@ export function BindMetadataCaptures(
  * `int`, `uint`, or `rational`, or `vector`'s lane count - has the domain
  * `uint32`: the spec states each as a positive integer, its range (1 to 2**16
  * for a width) being a bound apart from its type, as a const generic's type is
- * one integer type in Rust. D9 compares a written capture domain against it.
+ * one integer type in Rust. A written capture domain is compared against it
+ * (#sec-collectcaptures).
  */
 export function PrimitiveSlotParameters(name: string): PatternSlotParameter<Argument>[] {
   // The spec's own parameter names: `vector.<T, N>`, `int.<N>`, `complex.<E>`.
@@ -394,7 +395,7 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownS
       const array = t as { Extent: number | 'dynamic' | TypeRecord, Element: TypeRecord };
       return { Extent: array.Extent as Argument | 'dynamic', Element: array.Element as Argument };
     },
-    // A pack's binding - the tuple of its run (phase 4, step 9n) - is the
+    // A pack's binding - the tuple of its run - is the
     // sequence of its element types; any other subject has none.
     sequenceOf: (subject: Argument) => {
       const t = subject as { Kind?: string, Elements?: readonly { Type: TypeRecord, Rest?: boolean }[] } | number;
@@ -522,7 +523,7 @@ export function FixedTypeSubtrees(node: ParseNode, names: ReadonlySet<string>): 
 }
 
 /**
- * Plan section 3.8: the host the checker's callable group analysis
+ * #sec-callable-overload-contracts: the host the checker's callable group analysis
  * (`AnalyzeCallableGroup`) runs over. It matches and orders patterns as the
  * component host does, and judges whether an owner's slot admits a case's
  * entry: a type slot admits a type (within its `extends` bound), and a value
@@ -582,7 +583,7 @@ export type StandaloneMatch =
   | { readonly Kind: 'bound', readonly Message: string };
 
 /**
- * Plan section 3.8, rules 5 and 8: a STANDALONE case's list against a direct
+ * #sec-matching-specialization-lists: a STANDALONE case's list against a direct
  * explicit application's arguments, position by position, for the checker and
  * the run time alike.
  *
@@ -597,7 +598,7 @@ export type StandaloneMatch =
  */
 export function MatchStandaloneCase(
   list: ParseNode.TypeParameters,
-  // A hole is a position a named call left open (step 3).
+  // A hole is a position a named call left open.
   args: readonly (TypeRecord | undefined)[],
   resolve: (node: ParseNode) => TypeRecord | null,
   isSubtype: (sub: TypeRecord, sup: TypeRecord) => boolean,
@@ -615,7 +616,7 @@ export function MatchStandaloneCase(
     // no owner in reach, as a method group's bodyless owner is at run time -
     // takes the call's arguments as ONE variadic run: its patterns matched as a
     // sequence, the spread binding the tuple of the elements it covers, as a
-    // class's variadic parameter is matched (#sec-specialization; step 9p).
+    // class's variadic parameter is matched (#sec-variadic-parameters).
     const patterns = SpecializationPatternsOf(list);
     const spread = patterns.some((e) => (e as { IsSpread?: boolean }).IsSpread === true
       || ((e as { type?: string }).type === 'CaptureBinding' && (e as { IsVariadic?: boolean }).IsVariadic === true));

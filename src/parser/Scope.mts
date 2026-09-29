@@ -113,7 +113,7 @@ export function getDeclarations(node: ParseNode | readonly ParseNode[]): Declara
       return getDeclarations(node.VariableDeclarationList);
     case 'ClassDeclaration':
       Assert(!!node.BindingIdentifier);
-      // A CASE (phase 5) joins the family its primary declares - and exports -
+      // A CASE joins the family its primary declares - and exports -
       // and declares no name of its own, lexical or exported, as its
       // BoundNames says.
       if (node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
@@ -127,7 +127,7 @@ export function getDeclarations(node: ParseNode | readonly ParseNode[]): Declara
       }
       return getDeclarations(node.BindingIdentifier);
     case 'InterfaceDeclaration':
-      // An interface CASE (phase 5) refines its family and declares no name.
+      // An interface CASE refines its family and declares no name.
       if (node.TypeParameters && node.TypeParameters.ListKind !== 'parameters') {
         return [];
       }

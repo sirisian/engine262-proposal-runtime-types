@@ -133,7 +133,7 @@ test('a UNION is not callable when no member is', () => {
   expectThrown(dead('let u: uint8 | string = uint8(1); if (u is uint8) { let q = u(); }'),
     'is not callable');
 
-  // R18 checks each known callable alternative; a non-callable arm requires
+  // A call checks each known callable alternative; a non-callable arm requires
   // narrowing before the call, even when another arm is callable.
   expectThrown(dead('let u: uint8 | (() => uint8) = uint8(1); let q = u();'), 'is not callable');
   // A TYPE PARAMETER is not judged - it stands for something not yet known.

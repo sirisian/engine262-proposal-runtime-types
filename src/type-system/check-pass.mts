@@ -583,14 +583,14 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     resolutions.set(request.key, { whenTrue, whenFalse });
   }
   SetNarrowingResolutions(root, resolutions);
-  // A3.3: the SECOND walk. The first ran without any narrowing, so it both
+  // The SECOND walk. The first ran without any narrowing, so it both
   // over-reports (an un-narrowed binding failing an assignment narrowing would
   // admit) and under-reports (a diagnostic that needs the narrowed type). This
   // walk has strictly more information, so its errors are the answer - and it
   // reports by THROWING, because that is how this pass speaks, where the first
   // walk's errors joined the early error list.
   //
-  // Only when something was recorded (A3.4): a program that never compares a
+  // Only when something was recorded: a program that never compares a
   // bounded value must pay none of this, and must keep reporting at parse time.
   // ... or when this source text declared a call-form alias that has only just
   // become resolvable: the first walk read it as ~any~, and this one reads what

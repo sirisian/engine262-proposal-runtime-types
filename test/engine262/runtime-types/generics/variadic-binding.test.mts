@@ -25,7 +25,7 @@ test('a tuple default fills an empty pack', () => {
   expect(evaluated('function d<...I: [].<uint32> = [0, 1, 2]>(): uint32 { return I.length; } String(d.<>());')).toBe('3');
 });
 
-test('the value view is frozen and the same array on every read (H2, H3)', () => {
+test('the value view is frozen and the same array on every read', () => {
   expect(evaluated('function f<...I: [].<uint32>>(): boolean { return I === I && Object.isFrozen(I); } String(f.<1, 2>());')).toBe('true');
   expect(evaluated('function f<...I: [].<uint32>>(): uint32 { return I.every((i) => i < 3) ? 1 : 0; } String(f.<1, 2>());')).toBe('1');
 });
@@ -64,7 +64,7 @@ test('a class with a pack in TYPE position and its own specialization agree', ()
   expect(evaluated('class W<...I: [].<uint32>> { n(): uint32 { return I.length; } } let w: W.<0, 1> = new W.<0, 1>(); String(w.n());')).toBe('2');
 });
 
-test('a where clause over a pack is checked once, at specialization (H6)', () => {
+test('a where clause over a pack is checked once, at specialization', () => {
   expect(evaluated('function f<...I: [].<uint32>>(): uint32 where I.every((i) => i < 4) { return I.length; } String(f.<0, 3>());')).toBe('2');
   expectThrown('function f<...I: [].<uint32>>(): uint32 where I.every((i) => i < 4) { return I.length; } f.<0, 4>();');
 });

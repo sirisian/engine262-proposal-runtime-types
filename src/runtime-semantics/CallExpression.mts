@@ -1109,7 +1109,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // they take precedence over inference, which is filtered against the frames
   // in scope.
   let explicitFrame: Map<string, TypeRecord> | undefined;
-  // Plan section 3.8, phase 4 step 2: a direct explicit call into a group
+  // #sec-matching-specialization-lists: a direct explicit call into a group
   // holding a specialized case binds its owner, evaluates the arguments once,
   // and selects an applicable case or the owner's fallback body.
   if (surroundingAgent.feature('runtime-types') && memberExpr.type === 'TypeArgumentsExpression') {
@@ -1138,11 +1138,11 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     // A HIGHER-KINDED parameter binds here too. Its argument is a generic
     // declaration, which TypeNodeToTypeRecord answers for a bare generic name
     // in a type-ARGUMENT position (the one position a bare generic name is left
-    // as its declaration, PLAN-v3 Q7-a). This path excluded a kinded list and
+    // as its declaration, #sec-parameterized-types). This path excluded a kinded list and
     // deferred to the specialization-value path, which excludes it too
     // ("bound by the explicit call alone"), so `m.<Identity>()` bound W to
     // nothing and the body read it as `any` - a hole the removal of the `any`
-    // fallback (PLAN-v3 Q4) turned into the naming error.
+    // fallback turned into the naming error.
     if (params && params.length > 0) {
       const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
       // `f.<V: 5>()`

@@ -56,8 +56,8 @@ export const eraseMetadata = (t: TypeRecord, seen: Set<TypeRecord> = new Set()):
 
 // #sec-contextual-types: a numeric literal whose value fits a numeric value
 // type is assignable to it; the boundary constructs the typed value. This is
-// the permanent contextual-typing rule (not a stopgap): after R1/R3 the value
-// space is genuinely distinct, and this is how a plain literal enters it.
+// the permanent contextual-typing rule (not a stopgap): typed numbers are value types
+// (#sec-value-types), so the value space is genuinely distinct, and this is how a plain literal enters it.
 export const literalFitsNumericType = (sourceRaw: TypeRecord, targetRaw: TypeRecord, seen: Set<TypeRecord> = new Set()): boolean => {
   // `shared uint8` is `uint8` for the purpose of this rule. `IsSubtype` looks
   // through the marker (relations.mts), but a numeric literal reaches a

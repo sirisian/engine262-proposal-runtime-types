@@ -7,7 +7,7 @@ import { fitsNumericType } from './runtime.mts';
 import { AbruptCompletion, Throw, MetadataMismatchDescription, type ThrowCompletion } from '#self';
 
 /**
- * proposal-runtime-types R3 #sec-numeric-types: arithmetic over numeric value
+ * proposal-runtime-types #sec-numeric-types-of-this-proposal: arithmetic over numeric value
  * types. Each operation computes in the mathematical (JavaScript-number) domain
  * and then applies the target type's wrap/round rule, returning a value of that
  * type. This mirrors the specification's per-type operator methods
@@ -193,7 +193,7 @@ function mathOpExact(op: BinOp, x: bigint, y: bigint, bits: number, signed: bool
 }
 
 function payload(v: Value): number {
-  // proposal-runtime-types R6: read the numeric payload directly. Both
+  // proposal-runtime-types: read the numeric payload directly. Both
   // NumberValue and TypedNumberValue expose numberValue(); R would assert
   // instanceof NumberValue, which a typed number no longer satisfies.
   return (v as NumberValue | TypedNumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value
@@ -248,7 +248,7 @@ export function isTypedArithmetic(x: Value, y: Value): boolean {
  * other's type while any other untyped operand is a mix and throws.
  */
 export function typedBinary(op: BinOp, x: Value, y: Value, literals?: { left: boolean, right: boolean, leftLetConst?: boolean, rightLetConst?: boolean }): TypedNumberValue | ThrowCompletion {
-  // #sec-integer-operations (phase 4, step 9h): a shift takes its distance as
+  // #sec-integer-operations: a shift takes its distance as
   // written - its exact value, read below - so the distance is a count, not a
   // value mixed into the left operand: any integer type may give it, and the
   // result has the LEFT operand's type (Rust's `Shl<u32> for u64`; C, Java and

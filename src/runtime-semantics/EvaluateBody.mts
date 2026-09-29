@@ -49,7 +49,7 @@ export function Evaluate_AnyFunctionBody({ FunctionStatementList }: ParseNode.Fu
 // FunctionBody : FunctionStatementList
 export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.FunctionBody, functionObject: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // 1. Perform ? FunctionDeclarationInstantiation(functionObject, argumentsList).
-  // proposal-runtime-types (PLAN-v3 §10): the call's context, read FIRST -
+  // proposal-runtime-types #sec-contextual-types: the call's context, read FIRST -
   // before FunctionDeclarationInstantiation, whose parameter binding calls a
   // list iterator's `next`, a built-in, and any built-in entry resets the slot.
   const callContext = surroundingAgent.feature('runtime-types') ? TakeBodyContext() : undefined;

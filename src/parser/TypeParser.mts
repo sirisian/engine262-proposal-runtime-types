@@ -977,7 +977,7 @@ export abstract class TypeParser extends ExpressionParser {
     // #sec-specialization-lists: "Until they are [specified], an
     // implementation reports a specialization it cannot select as an error
     // rather than accepting it and ignoring it."
-    // Plan section 3.8: a function's or method's list declares an overload
+    // #sec-callable-overload-contracts: a function's or method's list declares an overload
     // contract, so a case - an owner's attached replacement or additive
     // overload, or a standalone case - is a declaration in its own right. The
     // checker's group analysis judges it. An operator's cases, and every
@@ -985,7 +985,7 @@ export abstract class TypeParser extends ExpressionParser {
     // Phase 5: a class DECLARATION's list may specialize its family - the case
     // joins the primary declared in the same statement list, which owns it. A
     // class expression has no family to join, and a partial class is an
-    // additive extension that must not become a replacement (plan 6.3), so both
+    // additive extension that must not become a replacement, so both
     // keep the error below.
     if (context === 'class' || context === 'alias' || context === 'interface' || context === 'partial') {
       // Whether the case has a primary is known only once its statement list

@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * #sec-structural-matching, R8. `Reflect.inferSlot(name)` "returns a fresh slot,
+ * #sec-structural-matching. `Reflect.inferSlot(name)` "returns a fresh slot,
  * a Type Object standing for a position a match is to bind", and
  * `Reflect.matchType(pattern, subject)` "performs one-sided structural
  * unification of pattern against subject: where every slot in pattern can be
