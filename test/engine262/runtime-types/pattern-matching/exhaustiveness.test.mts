@@ -95,9 +95,14 @@ test('a SEALED class is a closed set too', () => {
   // A guarded arm proves nothing, for the same reason it proves nothing over an
   // enum: the checker does not evaluate guards.
   expect(outcome8(`${S} function f(s: S) { return match (s) { when T: 1; when U if (true): 2; }; } f(new T());`)).toBe('StaticTypeError');
-  // An UNSEALED base is not a closed set, so nothing is required of it - which
-  // is what says the check reads `sealed` rather than any class hierarchy.
-  expect(outcome8('class B {} class C extends B {} function f(b: B) { return match (b) { when C: 1; }; } f(new C());')).toBe('ACCEPTED');
+  // An UNSEALED base is not a closed set, so no subclass need be enumerated -
+  // which is what says the check reads `sealed` rather than any class
+  // hierarchy. It has no atoms either, so the other half of
+  // #sec-match-exhaustiveness asks it for a catch-all (early-error survey 1,
+  // Gap 2): "exactly one of 'this `match` needs a catch-all' and 'this `match`
+  // must not have one' holds".
+  expect(outcome8('class B {} class C extends B {} function f(b: B) { return match (b) { when C: 1; default: 0; }; } f(new C());')).toBe('ACCEPTED');
+  expect(outcome8('class B {} class C extends B {} function f(b: B) { return match (b) { when C: 1; }; } f(new C());')).toBe('StaticTypeError');
 });
 
 test('the shape a class instance type carries', () => {

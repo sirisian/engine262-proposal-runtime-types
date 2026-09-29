@@ -88,8 +88,14 @@ test('a value position still converts, per the conversion rule', () => {
   // an ordinary store and keeps the whole conversion rule.
   expect(evaluated(`const m = new Map.<uint8, string>(); ${HIDE} m.set(1, n); m.get(1);`)).toBe('1');
   expect(evaluated(`const m = new Map.<uint8, string>(); ${HIDE} m.set(1, b); m.get(1);`)).toBe('true');
-  // Including through the constructor seed.
-  expect(evaluated('const m = new Map.<uint8, string>([[1, 2]]); m.get(1);')).toBe('2');
+  // Including through the constructor seed. The value crosses as ~any~: a
+  // literal `2` in the seed is a known Number, which `string` does not admit
+  // (`let s: string = 2` is refused), and the seed judgment of
+  // #sec-collection-construction says so early now that the effect screen no
+  // longer stands down at the `m.get(1)` that follows (early-error survey 1,
+  // Gap 5).
+  expect(evaluated(`const m = new Map.<uint8, string>(); ${HIDE} const m2 = new Map.<uint8, string>([[1, n]]); m2.get(1);`)).toBe('1');
+  expect(ok('const m = new Map.<uint8, string>([[1, 2]]); m.get(1);')).toBe(false);
 });
 
 test('everything that worked before still works', () => {

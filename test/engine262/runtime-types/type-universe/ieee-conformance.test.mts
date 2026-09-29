@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind, ok } from '../harness.mts';
 
 /**
  * IEEE 754 CONFORMANCE.
@@ -456,11 +456,16 @@ test('every shift is performed at the type\'s own width', () => {
       const expected = dist >= bits
         ? '0'
         : BigInt.asUintN(bits, 1n << BigInt(dist)).toString();
+      // The distance is read from a `let`: a converted literal distance at or
+      // above the width is the Early Error of #sec-integer-operations now
+      // that the shift rule reads a conversion as the divisor rule does
+      // (early-error survey 1, Q2).
       expect(
-        evaluated(`String((1 := uint.<${bits}>) << (${dist} := uint.<${bits}>));`),
+        evaluated(`let d: uint.<${bits}> = ${dist}; String((1 := uint.<${bits}>) << d);`),
         `uint.<${bits}> 1 << ${dist}`,
       ).toBe(expected);
     }
+    expect(ok(`String((1 := uint.<${bits}>) << (${bits} := uint.<${bits}>));`)).toBe(false);
   }
 });
 

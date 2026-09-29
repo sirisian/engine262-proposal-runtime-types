@@ -252,8 +252,13 @@ test('a NON-qualifying chain requires a default, as before', () => {
   // call raises a TypeError of its own and would read as an exhaustiveness
   // failure. Measured earlier in this project and easy to re-trip.
   const ORD = "type Ord = { n: string } where if (this.n > 'a') { this is { p: string } } else { this is { p: string } }; ";
-  expect(outcome(`${ORD}function f(a: Ord) { return match (a) { when { n: 'b' }: 1; }; } f({ n: 'b', p: 'x' });`))
+  // "Writes a `default`" is the rule, not a courtesy: the chain denotes no
+  // atoms, so the catch-all half of #sec-match-exhaustiveness asks for one
+  // (early-error survey 1, Gap 2).
+  expect(outcome(`${ORD}function f(a: Ord) { return match (a) { when { n: 'b' }: 1; default: 0; }; } f({ n: 'b', p: 'x' });`))
     .toBe('ACCEPTED');
+  expect(outcome(`${ORD}function f(a: Ord) { return match (a) { when { n: 'b' }: 1; }; } f({ n: 'b', p: 'x' });`))
+    .toBe('StaticTypeError');
 });
 
 test('the two pre-existing sources still work, through the same operation', () => {

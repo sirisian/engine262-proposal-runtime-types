@@ -40,10 +40,10 @@ test('what narrowing does NOT do, by the design\'s own account', () => {
   // the opposite of what a permissive implementation would produce.
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const n: uint8 = v; return n; } return uint8(0); } f(uint8(1));')).toBe('StaticTypeError');
   expect(outcome('function f(v: uint8 | string) { if (v is not { x: _ }) { const s: string = v; return s; } return ""; } f("a");')).toBe('StaticTypeError');
-  // SEALED-CLASS exhaustiveness, which the clause names beside enums and which
-  // must be BUILT rather than extended - the checker tracks no `sealed`
-  // machinery at all.
-  expect(outcome('class S {} class T extends S {} function f(s: S) { return match (s) { when T: 1; }; } f(new T());')).toBe('ACCEPTED');
+  // An UNSEALED class is not a closed set, so a subclass arm plus a catch-all
+  // is what a `match` over one looks like; without the catch-all the other
+  // half of #sec-match-exhaustiveness refuses it (early-error survey 1, Gap 2).
+  expect(outcome('class S {} class T extends S {} function f(s: S) { return match (s) { when T: 1; default: 0; }; } f(new T());')).toBe('ACCEPTED');
 });
 
 

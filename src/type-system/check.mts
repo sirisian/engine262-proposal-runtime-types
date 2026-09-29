@@ -165,6 +165,15 @@ interface Frame {
   /** The EXACT decimal value of a `const` whose initializer is a constant expression. */
   readonly constDecimalValues: Map<string, Dec>;
   readonly constClosedInitializers: Map<string, ParseNode>;
+  /**
+   * The exact integer value a `const` of an integer VALUE type holds - `const K:
+   * uint8 = 8` - after conversion to that type. Such a binding is not a literal
+   * (it does not propagate; `typeof K` is its type), so it is kept apart from
+   * `constLiteralValues`; it is read only by the judgments over a divisor or a
+   * shift distance, where a constant of the operand's own type is the idiom
+   * the design recommends.
+   */
+  readonly constTypedValues: Map<string, bigint>;
 
   /** Names bound by a `let` to a numeric constant; see `letConstantUses`. */
   readonly letConstants: Set<string>;
@@ -204,6 +213,7 @@ function emptyFrame(): Frame {
     constLiterals: new Set<string>(),
     constLiteralTypes: new Map<string, TypeRecord>(), constPropertyKeys: new Map<string, string | SymbolValue>(),
     constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), constClosedInitializers: new Map<string, ParseNode>(),
+    constTypedValues: new Map<string, bigint>(),
     letConstants: new Set<string>(),
     immutableNames: new Set<string>(),
     declaredNames: new Set<string>(),
@@ -236,6 +246,7 @@ function cloneFrame(frame: Frame): Frame {
     constLiteralValues: new Map(frame.constLiteralValues),
     constDecimalValues: new Map(frame.constDecimalValues),
     constClosedInitializers: new Map(frame.constClosedInitializers),
+    constTypedValues: new Map(frame.constTypedValues),
     immutableNames: new Set(frame.immutableNames),
     letConstants: new Set(frame.letConstants),
     declaredNames: new Set(frame.declaredNames),
@@ -4283,18 +4294,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * parameter exactly: a constructor of two is reached through target-typed
    * construction, not through a conversion.
    */
-  const convertingConstructorAccepts = (target: TypeRecord, source: TypeRecord): boolean => {
-    if (target.Kind !== 'nominal') {
-      return false;
+  /** One declared conversion that applies to a (source, target) pair, with the parameter type it was selected on. */
+  interface ApplicableConversion {
+    readonly form: 'constructor' | 'operator' | 'inbound';
+    /** The declared parameter type, or null for an unannotated parameter, which admits anything and is the least specific. */
+    readonly parameter: TypeRecord | null;
+    readonly declaration: ParseNode;
+  }
+
+  const conversionClassBody = (type: TypeRecord): readonly ParseNode[] | null => {
+    if (type.Kind !== 'nominal') {
+      return null;
     }
-    const decl = (target as unknown as { Declaration?: ParseNode }).Declaration;
-    const body = (decl as unknown as {
+    const decl = (type as unknown as { Declaration?: ParseNode }).Declaration;
+    return (decl as unknown as {
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
-    } | undefined)?.ClassTail?.ClassBody;
-    if (!body) {
-      return false;
+    } | undefined)?.ClassTail?.ClassBody ?? null;
+  };
+
+  /** Whether a declared parameter type admits the source - assignability, or a literal fitting a numeric type. */
+  const parameterAdmits = (annotation: { Type: ParseNode.Type } | null | undefined, source: TypeRecord): { admits: boolean, parameter: TypeRecord | null } => {
+    if (!annotation) {
+      return { admits: true, parameter: null };
     }
-    for (const member of body) {
+    const want = resolveType(annotation.Type);
+    return { admits: !!want && (IsAssignable(source, want) || literalFitsNumericType(source, want)), parameter: want ?? null };
+  };
+
+  /**
+   * Every converting constructor of _target_ that admits _source_ - the first
+   * declaring form of sec-user-defined-conversions, a one-parameter
+   * constructor. Read from the declaration rather than from the resolved
+   * signatures so that a class whose constructor is untyped still converts, as
+   * the clause says it does.
+   */
+  const convertingConstructors = (target: TypeRecord, source: TypeRecord): ApplicableConversion[] => {
+    const body = conversionClassBody(target);
+    const found: ApplicableConversion[] = [];
+    for (const member of body ?? []) {
       if ((member as { type?: string }).type !== 'MethodDefinition') {
         continue;
       }
@@ -4311,19 +4348,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (params.length !== 1) {
         continue;
       }
-      const annotation = (params[0] as unknown as {
+      const { admits, parameter } = parameterAdmits((params[0] as unknown as {
         TypeAnnotation?: { Type: ParseNode.Type } | null,
-      }).TypeAnnotation;
-      if (!annotation) {
-        return true;
-      }
-      const want = resolveType(annotation.Type);
-      if (want && (IsAssignable(source, want) || literalFitsNumericType(source, want))) {
-        return true;
+      }).TypeAnnotation, source);
+      if (admits) {
+        found.push({ form: 'constructor', parameter, declaration: member });
       }
     }
-    return false;
+    return found;
   };
+
+  /** Whether _target_ declares a one-parameter constructor admitting _source_. */
+  const convertingConstructorAccepts = (target: TypeRecord, source: TypeRecord): boolean => convertingConstructors(target, source).length > 0;
 
   /**
    * Whether _source_ is a class declaring `operator T()` for _target_ - the
@@ -4332,17 +4368,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * the TARGET, this one on the SOURCE.
    */
   const declaresConversionTo = (source: TypeRecord, target: TypeRecord): boolean => {
-    if (source.Kind !== 'nominal') {
-      return false;
-    }
-    const decl = (source as unknown as { Declaration?: ParseNode }).Declaration;
-    const body = (decl as unknown as {
-      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
-    } | undefined)?.ClassTail?.ClassBody;
-    if (!body) {
-      return false;
-    }
-    for (const member of body) {
+    for (const member of conversionClassBody(source) ?? []) {
       const m = member as unknown as {
         type?: string,
         OperatorName?: string | null,
@@ -4360,24 +4386,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /**
-   * Whether _target_ is a class declaring `operator T(value: S)` for its own
-   * type - the third declaring form of sec-user-defined-conversions, "the form a
-   * type declares when its constructor is already spoken for". Declared on the
-   * TARGET like a converting constructor, but taking a parameter, and running
-   * with no receiver.
+   * Every `operator T(value: S)` of _target_ admitting _source_ - the third
+   * declaring form of sec-user-defined-conversions, "the form a type declares
+   * when its constructor is already spoken for". Declared on the TARGET like a
+   * converting constructor, but taking a parameter, and running with no
+   * receiver.
    */
-  const declaresInboundConversion = (target: TypeRecord, source: TypeRecord): boolean => {
-    if (target.Kind !== 'nominal') {
-      return false;
-    }
-    const decl = (target as unknown as { Declaration?: ParseNode }).Declaration;
-    const body = (decl as unknown as {
-      ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
-    } | undefined)?.ClassTail?.ClassBody;
-    if (!body) {
-      return false;
-    }
-    for (const member of body) {
+  const inboundConversions = (target: TypeRecord, source: TypeRecord): ApplicableConversion[] => {
+    const found: ApplicableConversion[] = [];
+    for (const member of conversionClassBody(target) ?? []) {
       const m = member as unknown as {
         type?: string,
         OperatorName?: string | null,
@@ -4395,16 +4412,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!to || !SameType(to, target)) {
         continue;
       }
-      const ann = (params[0] as unknown as { TypeAnnotation?: { Type: ParseNode.Type } | null }).TypeAnnotation;
-      if (!ann) {
-        return true;
-      }
-      const want = resolveType(ann.Type);
-      if (want && (IsAssignable(source, want) || literalFitsNumericType(source, want))) {
-        return true;
+      const { admits, parameter } = parameterAdmits((params[0] as unknown as { TypeAnnotation?: { Type: ParseNode.Type } | null }).TypeAnnotation, source);
+      if (admits) {
+        found.push({ form: 'inbound', parameter, declaration: member });
       }
     }
-    return false;
+    return found;
+  };
+
+  /** Whether _target_ declares `operator T(value: S)` admitting _source_. */
+  const declaresInboundConversion = (target: TypeRecord, source: TypeRecord): boolean => inboundConversions(target, source).length > 0;
+
+  /**
+   * Of several applicable conversions of one form, the most specific, or the
+   * survivors where none is: a conversion whose parameter type is a proper
+   * subtype of another's is more specific than it, and an unannotated parameter
+   * is less specific than any annotated one - the specificity ResolveOverload
+   * applies to a call, applied to the parameter each conversion was selected
+   * on. sec-user-defined-conversions: "It is a type error if two conversions
+   * of the same form apply and neither is more specific."
+   */
+  const mostSpecificConversions = (candidates: readonly ApplicableConversion[]): ApplicableConversion[] => {
+    const moreSpecific = (a: ApplicableConversion, b: ApplicableConversion): boolean => {
+      if (a.parameter === null) return false;
+      if (b.parameter === null) return true;
+      return !SameType(a.parameter, b.parameter) && IsAssignable(a.parameter, b.parameter) && !IsAssignable(b.parameter, a.parameter);
+    };
+    return candidates.filter((c) => !candidates.some((other) => other !== c && moreSpecific(other, c)));
+  };
+
+  /**
+   * The user-defined conversion a (source, target) pair selects, or why it
+   * does not: `none` where no declared conversion applies, `ambiguous` where two
+   * of one form apply and neither is more specific, and the selected form
+   * otherwise. "When both a converting constructor and a declared conversion
+   * could apply to the same pair, the constructor is preferred."
+   */
+  const resolveConversion = (target: TypeRecord, source: TypeRecord): { kind: 'none' } | { kind: 'ambiguous', form: 'constructor' | 'inbound' } | { kind: 'found', form: ApplicableConversion['form'] } => {
+    const constructors = convertingConstructors(target, source);
+    if (constructors.length > 0) {
+      const best = mostSpecificConversions(constructors);
+      return best.length > 1 ? { kind: 'ambiguous', form: 'constructor' } : { kind: 'found', form: 'constructor' };
+    }
+    if (declaresConversionTo(source, target)) {
+      return { kind: 'found', form: 'operator' };
+    }
+    const inbound = inboundConversions(target, source);
+    if (inbound.length > 0) {
+      const best = mostSpecificConversions(inbound);
+      return best.length > 1 ? { kind: 'ambiguous', form: 'inbound' } : { kind: 'found', form: 'inbound' };
+    }
+    return { kind: 'none' };
   };
 
   const requireAssignable = (source: Known, target: Known) => {
@@ -4608,9 +4666,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // is both the clause's ordering and the ranking it needs - a value that
       // already fits is never routed through a user conversion, so declaring a
       // constructor cannot change which overload an existing call selects.
-      if (convertingConstructorAccepts(erasedTarget, erasedSource)
-        || declaresConversionTo(erasedSource, erasedTarget)
-        || declaresInboundConversion(erasedTarget, erasedSource)) {
+      const conversion = resolveConversion(erasedTarget, erasedSource);
+      if (conversion.kind === 'found') {
+        return;
+      }
+      // Round 1 of the early-error survey, Gap 4: the pair reaches two
+      // declared conversions of one form and neither is more specific, which
+      // the clause names a type error. The direct call `new T(v)` already
+      // reports this through ResolveOverload; the implicit boundary reached
+      // the run time's "ambiguous between overloads" instead.
+      if (conversion.kind === 'ambiguous') {
+        errors.push(((conversion.form === 'constructor'
+          ? Throw.StaticTypeError('the conversion from $1 to $2 is ambiguous: more than one declared constructor applies and none is more specific',
+            Value(displayType(erasedSource)), Value(displayType(erasedTarget)))
+          : Throw.StaticTypeError('the conversion from $1 to $2 is ambiguous: more than one declared conversion operator applies and none is more specific',
+            Value(displayType(erasedSource)), Value(displayType(erasedTarget)))) as ThrowCompletion).Value as ObjectValue);
         return;
       }
       report(erasedSource, erasedTarget);
@@ -13093,6 +13163,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** `foldIntegerConstant` with this scope's constants resolvable. */
   const foldConstant = (node: ParseNode): bigint | null => foldIntegerConstant(node, constExactValue);
 
+  /** The exact value of a `const` of an integer value type, resolved as `constExactValue` resolves a literal one. */
+  const constTypedValue = (name: string): bigint | null => {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      if (frames[i].declaredNames.has(name) || frames[i].bindingKinds.has(name)
+          || frames[i].bindings.has(name) || frames[i].constLiterals.has(name) || frames[i].dynamicBindings) {
+        return frames[i].constTypedValues.get(name) ?? null;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * The exact integer an operand is statically known to be, for the judgments
+   * of #sec-integer-operations over a divisor and a shift distance: a literal
+   * or a constant expression over literals and `const` chains (`foldConstant`);
+   * an explicit conversion of one to an integer value type, in either spelling
+   * - `(0 := uint8)` or `uint8(0)`, "the same operation" by
+   * #sec-explicit-conversion - folded THROUGH the conversion's wrap, so the
+   * value read is the value the operand holds at run time; or a `const` of an
+   * integer value type. Null where the operand is not one of these.
+   */
+  const exactIntegerOperand = (operand: ParseNode): bigint | null => {
+    const direct = foldConstant(operand);
+    if (direct !== null) return direct;
+    const e = patternExpression(operand);
+    if (!e) return null;
+    if (e.type === 'IdentifierReference') return constTypedValue(e.name);
+    let target: Known = null;
+    let inner: ParseNode | undefined;
+    if (e.type === 'TypedConversionExpression') {
+      const conversion = e as { Expression?: ParseNode, Type?: ParseNode.Type };
+      if (!conversion.Expression || !conversion.Type) return null;
+      target = resolveType(conversion.Type);
+      inner = conversion.Expression;
+    } else if (e.type === 'CallExpression') {
+      const call = e as { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] };
+      const args = call.Arguments ?? [];
+      if (args.length !== 1 || args[0]!.type === 'AssignmentRestElement' || args[0]!.type === 'NamedArgument') return null;
+      const callee = callableForm(staticType(call.CallExpression!));
+      target = callee?.Kind === 'function' ? null : typeObjectTarget(call.CallExpression);
+      inner = args[0];
+    } else {
+      return null;
+    }
+    if (!inner || !isIntegerValueType(target as TypeRecord)) return null;
+    const value = exactIntegerOperand(inner);
+    return value === null ? null : BigInt(wrapToType(value, target as TypeRecord));
+  };
+
   /** The exact decimal of a constant `const`, an integer constant serving as a decimal of exponent 0. */
   const constDecimalValue = (name: string): Dec | null => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -18236,20 +18355,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const op = node.type === 'MultiplicativeExpression'
               ? (node as unknown as { MultiplicativeOperator?: string }).MultiplicativeOperator
               : (node as unknown as { operator?: string }).operator;
-            const distance = rightLit ? foldIntegerConstant(rightNode, constExactValue) : null;
-            // #sec-integer-operations: an explicit conversion of a
-            // literal zero to an integer type is a literal zero divisor too -
-            // `(0 := uint8)` is how a zero of the operand's type is written, and
-            // the conversion of zero is zero in every integer type.
-            const convertedZero = (() => {
-              if (rightLit || (op !== '/' && op !== '%')) return false;
-              const conversion = patternExpression(rightNode) as { type?: string, Expression?: ParseNode, Type?: ParseNode.Type } | undefined;
-              if (conversion?.type !== 'TypedConversionExpression' || !conversion.Expression || !conversion.Type) return false;
-              if (!isIntegerValueType(resolveType(conversion.Type))) return false;
-              return !!(literalOperand(conversion.Expression) ?? constUse(conversion.Expression))
-                && foldIntegerConstant(conversion.Expression, constExactValue) === 0n;
-            })();
-            if ((distance !== null && (op === '/' || op === '%') && distance === 0n) || convertedZero) {
+            // #sec-integer-operations: the divisor rule names "a literal zero,
+            // or an explicit conversion of one to an integer type", and the
+            // shift rule is "the divisor rule one operator along", so both read
+            // the same constant: a literal, a `const` chain, an explicit
+            // conversion of either in either spelling (`(8 := uint8)` and
+            // `uint8(8)` are one operation, #sec-explicit-conversion), or a
+            // `const` of an integer value type (Round 1 of the early-error
+            // survey, Q2). A conversion is folded THROUGH its wrap, so
+            // `uint8(256)` is the distance 0 it is at run time and not 256.
+            const distance = exactIntegerOperand(rightNode);
+            if (distance !== null && (op === '/' || op === '%') && distance === 0n) {
               errors.push((Throw.StaticTypeError('a literal zero divisor is not a division at $1', Value(displayType(operandType!))) as ThrowCompletion).Value as ObjectValue);
             }
             if (distance !== null && node.type === 'ShiftExpression') {
@@ -20886,28 +21002,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // member: each member must be covered by an unguarded clause's pattern,
       // which is the clause's remainder folded to `never`.
       const unionSubject = subjectType?.Kind === 'union' ? subjectType : null;
+      // A string or number literal pattern covers the literal member it names,
+      // which a union of literals is made of: `when "a":` covers `'a'`. Read
+      // by the coverage judgments below only; the reachability judgment keeps
+      // its own reading.
+      const literalPatternCovers = (pattern: ParseNode, member: TypeRecord): boolean => {
+        const p = pattern as unknown as { type?: string, Literal?: { type?: string, value?: unknown } };
+        if (p.type === 'MatchOrPattern') {
+          const or = pattern as unknown as { Left: ParseNode, Right: ParseNode };
+          return literalPatternCovers(or.Left, member) || literalPatternCovers(or.Right, member);
+        }
+        if (p.type !== 'MatchLiteralPattern' || !p.Literal || member.Kind !== 'literal') return false;
+        const want = (member as { Value: unknown }).Value;
+        if (p.Literal.type === 'StringLiteral' && typeof p.Literal.value === 'string') {
+          return (want as { stringValue?: () => string }).stringValue?.() === p.Literal.value;
+        }
+        if (p.Literal.type === 'NumericLiteral' && typeof p.Literal.value === 'number') {
+          return want instanceof NumberValue && R(want) === p.Literal.value;
+        }
+        return false;
+      };
       if (!me.All && chainAtoms.length === 0 && !overEnumerators && unionSubject
           && !me.Clauses.some((clause) => clause.Pattern === null)
           && unionSubject.Members.every((member) => member.Kind !== 'any' && !mentionsTypeParameter(member))) {
-        // A string or number literal pattern covers the literal member it names,
-        // which a union of literals is made of: `when "a":` covers `'a'`. Read
-        // here only; the reachability judgment keeps its own reading.
-        const literalPatternCovers = (pattern: ParseNode, member: TypeRecord): boolean => {
-          const p = pattern as unknown as { type?: string, Literal?: { type?: string, value?: unknown } };
-          if (p.type === 'MatchOrPattern') {
-            const or = pattern as unknown as { Left: ParseNode, Right: ParseNode };
-            return literalPatternCovers(or.Left, member) || literalPatternCovers(or.Right, member);
-          }
-          if (p.type !== 'MatchLiteralPattern' || !p.Literal || member.Kind !== 'literal') return false;
-          const want = (member as { Value: unknown }).Value;
-          if (p.Literal.type === 'StringLiteral' && typeof p.Literal.value === 'string') {
-            return (want as { stringValue?: () => string }).stringValue?.() === p.Literal.value;
-          }
-          if (p.Literal.type === 'NumericLiteral' && typeof p.Literal.value === 'number') {
-            return want instanceof NumberValue && R(want) === p.Literal.value;
-          }
-          return false;
-        };
         const uncovered = unionSubject.Members.filter((member) => !me.Clauses.some((clause) => clause.Pattern !== null
           && !clause.Guard && (structuralPatternCovers(clause.Pattern, member) || literalPatternCovers(clause.Pattern, member))));
         if (uncovered.length > 0) {
@@ -21060,6 +21177,59 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const completion = Throw.StaticTypeError('match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
+        }
+      }
+      // #sec-match-exhaustiveness: "A `match` is exhaustive when it has a
+      // catch-all clause, or when the atoms of its subject's Static Type are
+      // not ~none~ and every atom is covered by some clause. It is a type error
+      // for a `match` not to be exhaustive." The branches above are the atoms
+      // half; this is the catch-all half, for a subject whose atoms ARE ~none~
+      // - a numeric type, `string`, a lone object or tuple type, an unsealed
+      // class, a Type Object - and it needs only the clause list. An ~any~
+      // subject is exempt (Round 1 of the early-error survey, Q1): the clause's
+      // own note leaves "the throw for an untyped subject", and the gradual
+      // rule raises an error only where both sides are known. A subject that
+      // mentions a type parameter is a specialization's question, and a union
+      // is judged member by member above.
+      if (!me.All && subjectType && !unionSubject && enumAtoms.length === 0 && chainAtoms.length === 0
+          && atomDecls.length === 0 && subjectType.Kind !== 'any' && subjectType.Kind !== 'parameter'
+          && subjectType.Kind !== 'deferred' && !mentionsTypeParameter(subjectType)) {
+        // "A pattern is irrefutable when it matches every value: the wildcard;
+        // a MatchBindingPattern with no TypeAnnotation, or one whose annotation
+        // denotes ~any~; a parenthesized irrefutable pattern; an `and` both of
+        // whose operands are irrefutable; and an `or` either of whose
+        // alternatives is. A clause is a catch-all when it is a `default`, or
+        // is unguarded with an irrefutable pattern."
+        const irrefutable = (pattern: ParseNode.MatchPattern): boolean => {
+          switch (pattern.type) {
+            case 'MatchWildcardPattern':
+              return true;
+            case 'MatchBindingPattern':
+              return pattern.TypeAnnotation === null || resolveType(pattern.TypeAnnotation)?.Kind === 'any';
+            case 'MatchAndPattern':
+              return irrefutable(pattern.Left) && irrefutable(pattern.Right);
+            case 'MatchOrPattern':
+              return irrefutable(pattern.Left) || irrefutable(pattern.Right);
+            default:
+              return false;
+          }
+        };
+        const catchAll = me.Clauses.some((clause) => clause.Pattern === null || (!clause.Guard && irrefutable(clause.Pattern)));
+        // What the clause loop above established by narrowing counts as
+        // coverage too: a subject the unguarded patterns leave nothing of -
+        // `match (1) { when 1: ... }`, whose literal type the literal pattern
+        // exhausts - has a clause for every value it can hold, which is what
+        // the rule is for ("a `match` whose subject holds a value of its
+        // Static Type has a clause for it"). The direction is recorded as Q1's
+        // companion in the survey; the spec's sentence names atoms only.
+        const exhaustedByNarrowing = (remaining?.Kind === 'union' && remaining.Members.length === 0)
+          || (subjectType.Kind === 'literal' && me.Clauses.some((clause) => clause.Pattern !== null && !clause.Guard
+            && literalPatternCovers(clause.Pattern, subjectType)));
+        if (!catchAll && !exhaustedByNarrowing) {
+          errors.push((Throw.StaticTypeError(
+            'match over $1 needs a catch-all: the type has no cases to cover, so add a default or an unguarded binding or wildcard clause',
+            Value(displayType(subjectType)),
+          ) as ThrowCompletion).Value as ObjectValue);
         }
       }
       const adapt = (type: TypeRecord): TypeRecord => {
@@ -26120,9 +26290,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
-  let stableIntrinsicSource: boolean | undefined;
-  let stableWeakSource: boolean | undefined;
-  let stablePromiseSource: boolean | undefined;
+  const stableIntrinsicSource = new Map<ParseNode, boolean>();
+  const stableWeakSource = new Map<ParseNode, boolean>();
+  const stablePromiseSource = new Map<ParseNode, boolean>();
   const promiseExecutorScalarCall = (node: ParseNode): boolean => {
     if (node.type === 'NewExpression') {
       const executor = node.Arguments?.[0];
@@ -26175,11 +26345,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     scope = frames.length - 1, seen = new Set<InvocationOrigin>()): boolean => {
     const realm = surroundingAgent.currentRealmRecord;
     const weak = name === 'WeakRef' || name === 'FinalizationRegistry';
-    if (weak) stableWeakSource ??= intrinsicSourceIsStable(root, realm,
-      (node) => node.type === 'AssignmentRestElement' && objectSpreadItems(node) !== null);
-    if (name === 'Promise') stablePromiseSource ??= intrinsicSourceIsStable(root, realm, promiseExecutorScalarCall);
-    else stableIntrinsicSource ??= intrinsicSourceIsStable(root, realm);
-    if (!(weak ? stableWeakSource : name === 'Promise' ? stablePromiseSource : stableIntrinsicSource) || hasDirectEval) return false;
+    // The screen is judged per construction site, since what can run before
+    // one site differs from what can run before another (Q4, Round 1).
+    const site = expression.parent ?? expression;
+    const memo = weak ? stableWeakSource : name === 'Promise' ? stablePromiseSource : stableIntrinsicSource;
+    let stable = memo.get(site);
+    if (stable === undefined) {
+      stable = weak ? intrinsicSourceIsStable(root, realm, (node) => node.type === 'AssignmentRestElement' && objectSpreadItems(node) !== null, site)
+        : name === 'Promise' ? intrinsicSourceIsStable(root, realm, promiseExecutorScalarCall, site)
+          : intrinsicSourceIsStable(root, realm, undefined, site);
+      memo.set(site, stable);
+    }
+    if (!stable || hasDirectEval) return false;
     const node = patternExpression(expression)!;
     if (node.type === 'TypeArgumentsExpression') return intrinsicOrigin(node.Expression, name, scope, seen);
     if (node.type !== 'IdentifierReference') return false;
@@ -28681,6 +28858,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             (isConstDeclaration ? frame.constLiterals : frame.letConstants)
               .add(n.BindingIdentifier.name);
             if (isConstDeclaration) recordNumericConstant(n.BindingIdentifier.name, n.Initializer, frame);
+          }
+          // #sec-integer-operations: `const K: uint8 = 8` holds a value the
+          // checker can read exactly, and a divisor or a shift distance written
+          // as one is the design's idiom for a typed constant. The binding is
+          // not a literal - nothing propagates - so the value is recorded on
+          // its own map.
+          if (isConstDeclaration && n.TypeAnnotation && n.Initializer && declared && isIntegerValueType(declared as TypeRecord)) {
+            const exact = exactIntegerOperand(n.Initializer);
+            if (exact !== null) {
+              frames[frames.length - 1].constTypedValues.set(n.BindingIdentifier.name, BigInt(wrapToType(exact, declared as TypeRecord)));
+            }
           }
           // A `const` cannot be reassigned, so a call through it reaches the
           // function the checker read a signature from (#sec-check-elision).

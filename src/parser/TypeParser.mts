@@ -1404,11 +1404,33 @@ export abstract class TypeParser extends ExpressionParser {
       return this.unexpected();
     }
     const only = list[0];
-    if (only.Ref || only.Rest || only.BindingIdentifier !== null || only.Type === null) {
+    if (only.Rest || only.BindingIdentifier !== null || only.Type === null) {
       return this.unexpected();
     }
+    // #sec-function-types: "it is a type error if the cover does not match
+    // that refinement". A parameter default is a FunctionTypeParameter's and
+    // not a Type's, so `(uint8 = 1)` with no `=>` matches nothing; it used to
+    // refine to `uint8` with the default silently dropped.
+    if (only.Initializer !== null) {
+      this.addEarlyError(Throw.SyntaxError('A parenthesized type carries no default; write a function type, or drop the initializer'), only.Initializer);
+    }
+    // #sec-type-expressions: `ref` PrimaryType is a ReferenceType, itself a
+    // PrimaryType, so `(ref uint8)` is a well-formed `( Type )`. The cover
+    // reads the `ref` as the parameter modifier; refining it back is the
+    // parenthesized reference type it always was.
     const paren = node as ParseNode.Unfinished<ParseNode.ParenthesizedType>;
-    paren.Type = only.Type;
+    paren.Type = only.Ref
+      ? this.repurpose(only, 'ReferenceType', (asNew, _old, partial) => {
+        asNew.Type = only.Type!;
+        delete partial.Ref;
+        delete partial.Rest;
+        delete partial.BindingIdentifier;
+        delete partial.Optional;
+        delete partial.TypeAnnotation;
+        delete partial.Initializer;
+        delete partial.IsThis;
+      })
+      : only.Type;
     return this.finishNode(paren, 'ParenthesizedType');
   }
 

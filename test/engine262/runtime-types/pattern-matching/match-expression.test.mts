@@ -26,8 +26,11 @@ test('clauses are tried in source order, first match wins', () => {
   expect(evaluated('match (2) { when 1: "a"; when 2: "b"; when 2: "c"; default: "d"; }')).toBe('b');
   // "If no clause matches, a TypeError is thrown" - and the exhaustiveness
   // rules make that throw statically impossible exactly where the types can
-  // prove it - exhaustiveness.test.mts owns that half.
-  expect(outcome('match (5) { when 1: 1; }')).toBe('TypeError');
+  // prove it - exhaustiveness.test.mts owns that half. A literal subject has
+  // a Static Type, so it is asked for a catch-all (early-error survey 1, Gap
+  // 2); the throw is left for an untyped subject.
+  expect(outcome('match (5) { when 1: 1; }')).toBe('StaticTypeError');
+  expect(outcome('let x = 5; match (x) { when 1: 1; }')).toBe('TypeError');
 });
 
 test('`default` must be LAST, and it is reserved', () => {
@@ -56,7 +59,7 @@ test('a GUARD fails its arm without abandoning the match', () => {
 test('a `throw` arm throws rather than yielding a value', () => {
   // Admitted "because an arm that reports an impossible case is the commonest
   // arm a total `match` has".
-  expect(outcome('match (1) { when 1: throw new RangeError("x"); }')).toBe('RangeError');
+  expect(outcome('match (1) { when 1: throw new RangeError("x"); default: 0; }')).toBe('RangeError');
   expect(evaluated('match (2) { when 1: throw new RangeError("x"); default: "fine"; }')).toBe('fine');
 });
 
