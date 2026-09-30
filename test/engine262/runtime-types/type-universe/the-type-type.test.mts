@@ -49,10 +49,9 @@ test('Type Objects are interned, so they can key a collection', () => {
   expect(evaluated('const m = new Map.<type, any>(); m.set(type, 7); String(m.get(type));')).toBe('7');
 });
 
-test('generics.md\'s EventBus runs as written', () => {
-  // the design's illustration of a type parameter used as a VALUE: the channel
-  // map is keyed on `T`, which needs `type`, generic methods, and parameters
-  // readable as values together
+test('the EventBus example runs as written', () => {
+  // a type parameter used as a VALUE (#sec-generic-parameters-as-values): the channel map is keyed on `T`, which
+  // needs `type`, generic methods, and parameters readable as values together
   const BUS = 'class EventBus { #channels = new Map.<type, any>();'
     + ' emit<T: type>(event: T) { const c = this.#channels.get(T); if (c) { c.push(event); } return this.#channels.size; }'
     + ' open<T: type>() { this.#channels.set(T, []); return this.#channels.size; }'

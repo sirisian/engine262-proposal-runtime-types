@@ -2,9 +2,8 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
- * #sec-primitive-operator-blocks: an operator's own metadata parameter,
- * `operator *.<Y: Dim>(rhs: float32.<Y>)`, lets a Dimensions block combine two
- * DIFFERENT dimensions, with a result computed by a builder - the design's
+ * #sec-primitive-operator-blocks: an operator's own metadata parameter, `operator *.<Y: Dim>(rhs:
+ * float32.<Y>)`, lets a Dimensions block combine two DIFFERENT dimensions, with a result computed by a builder:
  * `operator*.<D2: Dimensions>(rhs: float32.<D2>): vector.<float32.<multiplyDimensions(D, D2)>, N>;`.
  */
 

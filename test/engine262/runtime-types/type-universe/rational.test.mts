@@ -2,21 +2,11 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * Spec: #sec-rational-types (Rational Types); design: rational64.md.
- *
- * A rational is an exact fraction kept in canonical form (reduced to lowest
- * terms, denominator strictly positive, zero as 0/1), so structural equality is
- * mathematical equality and a rational serves as a Map or Set key by value. It is
- * constructed from parts, its arithmetic is exact and returned canonical, its
- * order is exact, and `rational` is a usable type name. The value is backed by a
- * pair of arbitrary-precision integers, so this core has no overflow.
- *
- * Deferred with the rest of the extension, each needing a facility another part
- * supplies: the fixed-width `rational.<N>` and its overflow RangeError, the
- * `1/3`-in-a-rational-context literal sugar (context-directed evaluation the
- * engine does not do for a compound expression), the float and integer
- * conversions (`float64(r)`, `int64(r)`, `rational64(f)`, `Rational.approximate`),
- * the Math overloads, and the sibling complex and decimal value types.
+ * Spec: #sec-rational-types (Rational Types). A rational is an exact fraction kept in canonical form (reduced to
+ * lowest terms, denominator strictly positive, zero as 0/1), so structural equality is mathematical equality
+ * and a rational serves as a Map or Set key by value. It is constructed from parts, its arithmetic is exact and
+ * returned canonical, its order is exact, and `rational` is a usable type name. The fixed-width `rational.<N>`,
+ * its overflow RangeError, the conversions and the Math overloads are covered in numerics/.
  */
 
 // -- construction, canonical form ---------------------------------------------
@@ -109,14 +99,10 @@ test('rational is a usable type name', () => {
 });
 
 test('a numeric literal at a rational position IS a rational; a string is not', () => {
-  // The bare name is an APPLICATION, not an unapplied parameterized primitive:
-  // #table-default-type-arguments gives `rational` the default `rational.<64>`,
-  // as it gives `complex` one. So `rational` denotes a type wherever it is
-  // written - the width itself is deferred with the rest of `rational.<N>` -
-  // and a literal in that position is representable exactly.
-  // #sec-literalvalueintype: "The mathematical value of a literal is exact ... `0.1`
-  // ... in a `rational` position is 1/10." An integer is the same rule at a
-  // unit denominator.
+  // #table-type-name-shorthands gives `rational` the default `rational.<64>`, as it gives `complex` one. So
+  // `rational` denotes a type wherever it is written, and a literal in that position is representable exactly.
+  // #sec-literalvalueintype: the mathematical value of a literal is exact, so `0.1` in a `rational` position is
+  // 1/10. An integer is the same rule at a unit denominator.
   expect(evaluated('let r: rational64 = 5; r.toString();')).toBe('5');
   expect(evaluated('let r: rational64 = 5; String(Reflect.typeOf(r));')).toBe('rational64');
   expect(evaluated('let r: rational64 = 0.1; r.toString();')).toBe('1/10');

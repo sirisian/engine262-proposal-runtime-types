@@ -66,23 +66,15 @@ test('a decimal reads its cohort member from the DIGITS', () => {
 });
 
 test('a NUMBER converts by CARRYING WHAT THE FLOAT HOLDS', () => {
-  // The conversion the specification flagged as the hard one from the start -
-  // "the difficulty is not arithmetic but WHICH COHORT MEMBER RESULTS" - and
-  // decimal.md settles it: "`decimal128(f)` CARRIES WHATEVER `f` ALREADY HOLDS,
-  // so a binary `0.1` stays slightly off", "rounded to 34 digits".
+  // The conversion from a binary float is the hard one: "the difficulty is not arithmetic but which cohort member
+  // results" (#table-numeric-conversions). `decimal128(f)` CARRIES WHATEVER `f` ALREADY HOLDS, so a binary `0.1`
+  // stays slightly off, rounded to 34 digits. So this is the exact binary expansion rounded to the width, NOT the
+  // shortest round-tripping digits. Every binary float IS a terminating decimal - a double is m x 2^e, and m / 2^k
+  // is m x 5^k / 10^k - so the expansion is exact before the rounding; `0.1` needs 55 digits.
   //
-  // So this is the exact binary expansion rounded to the width, NOT the
-  // shortest round-tripping digits. Every binary float IS a terminating
-  // decimal - a double is m x 2^e, and m / 2^k is m x 5^k / 10^k - so the
-  // expansion is exact before the rounding; `0.1` needs 55 digits, which is the
-  // figure the spec quotes.
-  //
-  // The float has to reach the conversion as a VALUE. A LITERAL operand is read
-  // in the target's context - #sec-literalvalueintype, "the mathematical value
-  // denoted by the literal ... BEFORE ANY ROUNDING" - so `decimal128(0.1)` is the
-  // decimal one tenth, not the float; that is asserted below. These asserted the
-  // float's expansion OF A LITERAL, from before literal operands of a conversion
-  // were read that way.
+  // The float has to reach the conversion as a VALUE. A LITERAL operand is read in the target's context -
+  // #sec-literalvalueintype, "the mathematical value denoted by the literal ... BEFORE ANY ROUNDING" - so
+  // `decimal128(0.1)` is the decimal one tenth, not the float; that is asserted below.
   const f = 'let f = 0.1;';
   expect(evaluated(`${f} decimal128(f).toString();`)).toBe('0.1000000000000000055511151231257827');
   // **THE ASSERTION THAT SAYS WHY**: the converted float is NOT one tenth.
@@ -156,9 +148,9 @@ test('DIVISION is where exactness runs out, and rounds half-even', () => {
   // PRECISION - 34 significant digits for `decimal128`, IEEE 754-2008 Table
   // 3.1 - and rounded.
   expect(evaluated(`(${D('1')} / ${D('3')}).toString();`)).toBe('0.3333333333333333333333333333333333');
-  // Division by zero is a RangeError, as decimal.md says: "decimals raise a
-  // RangeError, since their range is a property of the type rather than of the
-  // format".
+  // Division by zero is a RangeError (#sec-decimal-floating-point-types): an operation that would make an
+  // infinity from finite operands throws, since a decimal's range is a property of the type rather than of the
+  // format.
   expect(evaluated(`try { ${D('1')} / ${D('0')}; "OK"; } catch (e) { e.constructor.name; }`)).toBe('RangeError');
   expect(evaluated(`try { ${D('1')} % ${D('0')}; "OK"; } catch (e) { e.constructor.name; }`)).toBe('RangeError');
 });
@@ -234,9 +226,8 @@ test('every other literal is UNAFFECTED', () => {
 
 test('a composite stores the REDUCED cohort member', () => {
   const D = (x: string) => `decimal128.parse("${x}")`;
-  // composites.md: "Where the type declares no scale, the REDUCED member is
-  // stored: trailing zeros are stripped, THE ONE MEMBER COMPUTABLE FROM THE
-  // NUMERICAL VALUE ALONE, independent of the width."
+  // Where the type declares no scale, the REDUCED member is stored (#sec-canonicalizecompositevalue): trailing
+  // zeros are stripped, THE ONE MEMBER COMPUTABLE FROM THE NUMERICAL VALUE ALONE, independent of the width.
   expect(evaluated(`Composite({ v: ${D('1.00')} }).v.toString();`)).toBe('1');
   expect(evaluated(`Composite({ v: ${D('19.90')} }).v.toString();`)).toBe('19.9');
   expect(evaluated(`Composite({ v: ${D('0.00')} }).v.toString();`)).toBe('0');
@@ -336,10 +327,9 @@ test('the buffer round-trip claim was measuring a DEFAULT', () => {
 });
 
 test('`parse` reads the DIGITS, like the constructor call', () => {
-  // decimal.md names this beside a literal as the exact form: "an exact decimal
-  // comes from a literal or a string, NEVER FROM A ROUND TRIP THROUGH BINARY".
-  // So it must not go through `Number` first, which would lose the significance
-  // this form exists to keep.
+  // An exact decimal comes from a literal or a string, NEVER FROM A ROUND TRIP THROUGH BINARY
+  // (#table-numeric-conversions). So this must not go through `Number` first, which would lose the
+  // significance this form exists to keep.
   expect(evaluated('decimal128.parse("19.99").toString();')).toBe('19.99');
   expect(evaluated('decimal128.parse("1.00").toString();')).toBe('1.00');
   expect(evaluated('decimal32.parse("1.0").toString();')).toBe('1.0');

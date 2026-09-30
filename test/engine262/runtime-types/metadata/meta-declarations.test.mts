@@ -134,13 +134,10 @@ test('meta: a meta declaration on a META TYPE governs a parameterization', () =>
 });
 
 // -- Claiming: how a metadata value finds the meta type that governs it --------
-// "A meta type claims the property keys of its constraint shape. Claiming is
-// global and flat: it is an early error, reported at the second MetaDeclaration
-// rather than at any use, for two meta types to claim one key."
-//
-// This is what makes the design's own form work. `meta Bounds { ... }` is
-// declared against the METADATA type and never names a base, and it governs every
-// parameterization whose metadata uses the keys Bounds declares.
+// A meta type claims the property keys of its constraint shape (#sec-metadata-decomposition). Claiming is global
+// and flat: two meta types claiming one key is an early error, reported at the second MetaDeclaration rather than
+// at any use. So `meta Bounds { ... }` is declared against the METADATA type and never names a base, and it
+// governs every parameterization whose metadata uses the keys Bounds declares.
 test('meta: a meta type governs a parameterization through the keys it claims', () => {
   expect(evaluated(`
     type Bounds = { min: number, max: number };
@@ -454,10 +451,8 @@ test('a builder that names ambient state is not compile-time evaluable', () => {
 });
 
 test('a meta declaration may be generic', () => {
-  // #sec-meta-declarations has carried
-  // `TypeParameters?` in the production; the parser read a TypeName and went
-  // straight to the brace, so `meta NumberBounds<T: Ordered.<T>> { … }` - the
-  // central worked example of primitivemetadata.md - did not parse.
+  // #sec-meta-declarations carries `TypeParameters?` in the production, so a generic meta type parses:
+  // `meta NumberBounds<T: Ordered.<T>> { … }`.
   const ord = 'interface Ordered<T: type> { v: T; } ';
   expect(run(`type NB<T: type> = { nonZero?: boolean }; meta NB<T: type> { default = {}; subtype(a, b) { return true; } } "ok";`)).toMatchObject({ Type: 'normal' });
   // The constrained form comes along, because parseTypeParameters is the same
@@ -541,18 +536,12 @@ test('a generic meta declaration claims its keys and runs its hooks', () => {
 });
 
 test('a hook may name the meta type\'s type parameter in its annotations', () => {
-  // The declaration was accepted and the
-  // annotation was enforced when the hook was CALLED, where `T` was not bound:
-  // `ReferenceError: "T" is not defined`. A generic meta type therefore worked
-  // only if its hooks were written unannotated - which the design documents do
-  // not do.
-  //
-  // #sec-meta-declarations says what to bind: the parameter "is bound to the
-  // base at each parameterization the meta type governs … the name of what the
-  // base IS". So it is bound per invocation, from the base the caller is
-  // deciding about, and the frame is pushed around the Call in ApplyMetaHook -
-  // EvaluateBody pushes one only from the FUNCTION's own type parameters, and a
-  // hook function has none.
+  // A generic meta type's hooks may annotate with its parameter. #sec-meta-declarations says what to bind: the
+  // parameter "is bound to the base at each parameterization the meta type governs … the name of what the base
+  // IS". So it is bound per invocation, from the base the caller is deciding about, and the frame is pushed around
+  // the Call in ApplyMetaHook - EvaluateBody pushes one only from the FUNCTION's own type parameters, and a hook
+  // function has none. Otherwise a hook annotated with `T` would fail with `ReferenceError: "T" is not defined`,
+  // and a generic meta type would work only if its hooks were written unannotated.
   const hooked = 'type GG<T: type> = { gg?: boolean }; '
     + 'meta GG<T: type> { default = { gg: false }; '
     + 'subtype(sub: GG.<T>, sup: GG.<T>): boolean { return sup.gg === undefined || sub.gg === sup.gg; } } ';

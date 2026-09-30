@@ -162,8 +162,8 @@ test('primitive metadata: a default crosses, so both spellings of a declaration 
   const castD = 'primitive float64 { operator float64.<{ m: 1 }>(): float64.<{ m: 1 }> { return this; } } ';
   const castB = 'primitive float64 { operator float64.<{ lo: 0 }>(): float64.<{ lo: 0 }> { return this; } } ';
 
-  // No `validate`, cast declared: the crossing completes and the zero exists.
-  // This is the design's own units case, which the membership model denied.
+  // No `validate`, cast declared: the crossing completes and the zero exists. This is the units case, which the
+  // membership model denied.
   expect(evaluated(`${dims}${castD} let w: float64.<{ m: 1 }>; String(Number(w));`)).toBe('0');
   expect(evaluated(`${dims}${castD} let w: float64.<{ m: 1 }> = 10; String(Number(w));`)).toBe('10');
   // No `validate`, no cast: neither spelling gets a value.

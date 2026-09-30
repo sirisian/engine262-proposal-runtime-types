@@ -2,31 +2,22 @@ import { test, expect } from 'vitest';
 import { ok, expectThrown } from '../harness.mts';
 
 /**
- * A literal in a meta type's `default` takes the type its claim shape gives the
- * key.
+ * A literal in a meta type's `default` takes the type its claim shape gives the key (#sec-literal-propagation):
+ * `meta D { default = { m: 0 } }` against `type D = { m: int32 }` is accepted, the literal being converted to
+ * `int32` as it is everywhere else a literal has a context. Without that the default would be the one place a
+ * literal had to state a type the declaration beside it already fixes: `{ m: (0 := int32) }`. The membership
+ * check judges the SNAPSHOT rather than the live object, which keeps a getter on the default to exactly one
+ * read; the conversion happens to the snapshot, after that single read.
  *
- * `meta D { default = { m: 0 } }` against `type D = { m: int32 }` was refused
- * with "the default of a meta type must be a value of its constraint shape". By
- * the time the membership test ran, `{ m: 0 }` held a plain number, and a plain
- * number is not an `int32`. Writing `{ m: (0 := int32) }` passed, which made the
- * default the one place a literal had to state a type the declaration beside it
- * already fixed - where #sec-literal-propagation gives a literal the type of its
- * context everywhere else.
- *
- * The membership check itself was right and is unchanged: it judges the SNAPSHOT
- * rather than the live object, which keeps a getter on the default to exactly one
- * read. The conversion happens to the snapshot, after that single read.
- *
- * Found by running `examples/primitivemetadata.md`, which declares `int32`
- * exponent fields with bare-literal defaults and so failed on every metadata
- * example it contains.
+ * Fixture: examples/primitivemetadata.md of the ecmascript-types repository, which declares `int32` exponent
+ * fields with bare-literal defaults.
  */
 
 const SUB = ' subtype(a, b) { return a.m === b.m; }';
 
 test('a bare literal adopts the claim shape\'s type', () => {
   expect(ok(`type D = { m: int32 }; meta D { default = { m: 0 };${SUB} }`)).toBe(true);
-  // Several keys, as the design documents write them.
+  // Several keys, as a meta type with several members writes them.
   expect(ok('type D = { m: int32, kg: int32 };'
     + ' meta D { default = { m: 0, kg: 0 }; subtype(a, b) { return a.m === b.m; } }')).toBe(true);
 });

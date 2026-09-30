@@ -2,29 +2,20 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * A CAST DECLARED AGAINST A META TYPE COVERS EVERY PARAMETERIZATION IT GOVERNS.
+ * A CAST DECLARED AGAINST A META TYPE COVERS EVERY PARAMETERIZATION IT GOVERNS (#sec-primitive-operator-blocks,
+ * #sec-primitive-metadata). A crossing is declared as `primitive float32 { operator float32.<Dimensions>() {
+ * return this; } }`, and declaring it means `let d: Meter;` and `let d: Meter = 0;` succeed together and fail
+ * together.
  *
- * `primitivemetadata.md` declares the crossing as
- * `primitive float32 { operator float32.<Dimensions>() { return this; } }`, and
- * says what declaring it buys: "`let d: Meter;` and `let d: Meter = 0;`
- * therefore succeed together and fail together", and - named there as
- * load-bearing for the memory-layout extension - a `Vector3` of `Meter` fields
- * becomes zero-fillable.
+ * Cast selection therefore asks COVERAGE, not identity: it compares the cast's target to the crossing's target
+ * by whether the meta type governs it, because a family is never the same type as one of its members (`SameType`
+ * would match nothing, and declaring the cast would change no program). The record for `float32.<Dimensions>`
+ * keeps the meta type: `Dimensions`'s members are types rather than values, so the metadata object it reduces
+ * to is EMPTY, and the record must not be indistinguishable from `float32.<{}>`. The guard rows below are as
+ * important as the enabling ones: coverage follows the META TYPE and must not become a blanket match.
  *
- * None of it worked. Cast selection compared the cast's target to the crossing's
- * target with `SameType`, and a family is never the same type as one of its
- * members, so the documented form matched NOTHING: declaring the cast changed no
- * program, and the two columns of that "succeed together and fail together"
- * always resolved to *fail*.
- *
- * Two things were needed. The record for `float32.<Dimensions>` did not keep the
- * meta type at all - `Dimensions`'s members are types rather than values, so the
- * metadata object it reduced to was EMPTY and the record was indistinguishable
- * from `float32.<{}>`. And selection needed to ask coverage rather than
- * identity.
- *
- * The guard rows below are as important as the enabling ones: coverage follows
- * the META TYPE and must not become a blanket match.
+ * Unspecified: that declaring the cast also makes a `Vector3` of `Meter` fields zero-fillable, which a memory
+ * layout needs. The specification states the crossing's conversion, not the zero.
  */
 
 const DIM = `type Dimensions = { m: int32 };
@@ -58,8 +49,7 @@ test('the documented cast form gives the type a zero', () => {
 });
 
 test('the documented cast form makes an aggregate zero-fillable', () => {
-  // The case `primitivemetadata.md` calls load-bearing: "the memory layout
-  // extension needs `let d: [10].<Vector3>;` to hold ten zero-filled instances".
+  // The zero-fill case: `let d: [10].<Vector3>;` holds ten zero-filled instances.
   expect(evaluated(`${DIM}${META_CAST}class V3 { x: Meter; y: Meter; z: Meter; }
     const f: [10].<V3>; String(f.length);`)).toBe('10');
   expect(evaluated(`${DIM}${META_CAST}class V3 { x: Meter; y: Meter; z: Meter; }

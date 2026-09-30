@@ -59,12 +59,11 @@ test('conversions in range are unchanged', () => {
 /**
  * Three spellings are exact and one carries the bits (#table-numeric-conversions, any numeric type to
  * `decimal`): `let tenth: decimal128 = 0.1` and `0.1 := decimal128` are exact - the second forces decimal on
- * an otherwise-Number literal - while `decimal128(f)` CARRIES WHATEVER `f` ALREADY HOLDS. The CALL is a
- * conversion whatever its argument looks like: the argument is evaluated first, so by the time the
- * conversion sees it the literal IS the double, and `decimal128(0.1)` is not exact.
- * `type-universe/decimal.test.mts` pins this against making it equal `decimal128.parse("0.1")`, which
- * "would launder a binary approximation into an exact-looking decimal and hide the whole reason these
- * types exist"; the table's own note says the same.
+ * an otherwise-Number literal - and so is `decimal128(0.1)`, which reads a literal's digits (the next test),
+ * while `decimal128(f)` for a float VALUE `f` CARRIES WHATEVER `f` ALREADY HOLDS. `type-universe/decimal.test.mts`
+ * pins the last against making it equal `decimal128.parse("0.1")`, which "would launder a binary approximation
+ * into an exact-looking decimal and hide the whole reason these types exist"; the table's own note says the
+ * same.
  */
 test('the exact spellings are the annotation and the cast', () => {
   expect(evaluated('let t: decimal128 = 0.1; String(t);')).toBe('0.1');

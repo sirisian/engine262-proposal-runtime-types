@@ -109,9 +109,8 @@ test('#sec-type-parameters-static-semantics-early-errors: the list captures meta
   expectThrown('primitive complex<const T: P> {}', 'primitive complex<const E><const T: P>');
   // `float32` declares no parameters: its first list is its metadata already.
   expectThrown('primitive float32<const D: Dim><const E: Dim> {}', 'its first list is already its metadata');
-  // Only captures naming their meta type are implemented; any other pattern
-  // over a primitive, including the component patterns of primitivemetadata.md,
-  // is reported as unsupported rather than accepted and ignored.
+  // Only captures naming their meta type are implemented; any other pattern over a primitive, including the
+  // component patterns, is reported as unsupported rather than accepted and ignored.
   expectThrown('type D = { m: int32 }; primitive float32<const T> {}', 'other patterns over a primitive are not supported yet');
   expectThrown('primitive float32<float64> {}', 'other patterns over a primitive are not supported yet');
   expectThrown('primitive float32<...const Ds: D> {}', 'other patterns over a primitive are not supported yet');

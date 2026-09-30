@@ -2,20 +2,17 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * Spec: #sec-literal-types (Literal Types) - unique symbol types. Design:
- * typeprogramming.md section 6.6, "Symbol literal types - adopt them".
+ * Spec: #sec-literal-types (Literal Types) - unique symbol types. A declared `const s = Symbol()` used in
+ * type position IS the unique symbol type, without a keyword - identity-compared like every other literal. A
+ * checker has no VALUES, so that identity is carried by the DECLARATION: two consts are two types, and one
+ * const named twice is one type. THE RULE IS TOTAL rather than judging what it happens to see. A computed
+ * member name whose expression has no literal type cannot be compared by any static rule, so it is REFUSED -
+ * TypeScript's rule ("must refer to an expression whose type is a literal type or a 'unique symbol' type") -
+ * since a member that is declared and unjudgeable reads as support. What survives the refusal is exactly what
+ * the unique-symbol rule can type.
  *
- * section 6.6: "a declared `const s = Symbol()` used in type position IS the unique
- * symbol type, without a keyword" - identity-compared like every other literal.
- * A checker has no VALUES, so that identity is carried by the DECLARATION: two
- * consts are two types, and one const named twice is one type.
- *
- * THE RULE IS TOTAL rather than judging what it happens to see. A computed
- * member name whose expression has no literal type cannot be compared by any
- * static rule, so it is REFUSED - TypeScript's rule ("must refer to an
- * expression whose type is a literal type or a 'unique symbol' type") -
- * since a member that is declared and unjudgeable reads as support.
- * What survives the refusal is exactly what section 6.6 can type.
+ * Unspecified: #sec-literal-types allows a Symbol as the value of a literal type but does not state the
+ * unique-symbol rule; these tests pin it.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
@@ -46,8 +43,8 @@ test('a computed key that CANNOT be typed is refused', () => {
 });
 
 test('the rule reaches a `partial interface`, which is where metadata lives', () => {
-  // decorators.md adds metadata through `partial interface ClassMetadata {
-  // [myMetadata]: string }`, so the partial form is the one that matters most.
+  // A metadata interface is extended through `partial interface ClassMetadata { [myMetadata]: string }`
+  // (#sec-decorator-metadata), so the partial form is the one that matters most.
   expect(outcome('const k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; }')).toBe('ACCEPTED');
   expect(outcome('let k = Symbol("k"); partial interface ClassFieldMetadata { [k]: string; }')).toBe('StaticTypeError');
 });

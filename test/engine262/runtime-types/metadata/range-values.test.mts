@@ -2,34 +2,21 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, run } from '../harness.mts';
 
 /**
- * Spec: #sec-metadata-decomposition (Metadata Decomposition),
- * #table-metadata-values. Design: primitivemetadata.md.
- *
- * A RANGE as a metadata value.
- *
- * The metadata language is closed, and this adds one row to it. A range is
- * admitted as a VALUE, not as an implementation of an interface: the four
- * shapes are the whole of what a metadata range may be, its endpoints are
- * compile-time constants, and two ranges are equivalent when they have the same
- * shape, the same bound at each endpoint the shape has, and SameValue at each
- * endpoint's value.
- *
- * It is carried STRUCTURALLY -- endpoints and bounds, never a Range object --
- * for the reason the pattern row already gives: two objects are never equal, so
- * one range written in two modules would otherwise be two types. A Range is
- * materialized at the one boundary where metadata reaches a program, which is
- * where a hook receives it, so `bounds.contains(v)` is a real call on a real
- * range while the carried form stays comparable.
- *
- * The `NumberBounds` block below is transcribed from primitivemetadata.md
- * rather than built into the engine, which deliberately ships no meta type of
- * its own. This suite uses optional keys with an empty default; total range
- * defaults are covered in range-origin-shapes.test.mts. Narrowing is not
- * exercised here.
+ * Spec: #sec-metadata-decomposition (Metadata Decomposition), #table-metadata-values. A RANGE as a metadata
+ * value. The metadata language is closed, and this adds one row to it. A range is admitted as a VALUE, not as an
+ * implementation of an interface: the four shapes are the whole of what a metadata range may be, its endpoints
+ * are compile-time constants, and two ranges are equivalent when they have the same shape, the same bound at
+ * each endpoint the shape has, and SameValue at each endpoint's value. It is carried STRUCTURALLY - endpoints
+ * and bounds, never a Range object - for the reason the pattern row already gives: two objects are never equal,
+ * so one range written in two modules would otherwise be two types. A Range is materialized at the one boundary
+ * where metadata reaches a program, which is where a hook receives it, so `bounds.contains(v)` is a real call on
+ * a real range while the carried form stays comparable. The `NumberBounds` block below is written as test
+ * source rather than built into the engine, which deliberately ships no meta type of its own. This suite uses
+ * optional keys with an empty default; total range defaults are covered in range-origin-shapes.test.mts.
+ * Narrowing is not exercised here.
  */
 
-// The design's meta type, as test source. Its `subtype` is containment and its
-// `validate` is membership, exactly as primitivemetadata.md writes them.
+// A `NumberBounds` meta type, as test source. Its `subtype` is containment and its `validate` is membership.
 const NumberBounds = `
 type NumberBounds = { bounds?: RangeBounds.<any>, nonZero?: boolean };
 
@@ -87,7 +74,7 @@ test('a range prints as it was written, not as its carrier', () => {
 
 // -- the meta type ------------------------------------------------------------
 
-test('the NumberBounds block from the design declares and runs', () => {
+test('the NumberBounds block declares and runs', () => {
   expect(evaluated(`${NumberBounds} "ok";`)).toBe('ok');
 });
 
@@ -129,8 +116,8 @@ test('subtype is containment of one range in another', () => {
 });
 
 test('bounds that exclude zero satisfy nonZero without saying so', () => {
-  // primitivemetadata.md: "a range that already excludes zero is non-zero
-  // whether or not it says so", which is what keeps a positive type a Divisor.
+  // Unspecified: a range that already excludes zero is non-zero whether or not it says so, which is what keeps a
+  // positive type a Divisor.
   expect(evaluated(`${NumberBounds}
     type Positive = float64.<{ bounds: 1.. }>;
     type NonZero = float64.<{ nonZero: true }>;

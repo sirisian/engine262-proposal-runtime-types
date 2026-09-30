@@ -2,16 +2,12 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, bool, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
- * Spec: #sec-value-types (Value Types), #sec-decimal-floating-point-types,
- * #sec-rational-types, #sec-complex-types. Design: complex.md, decimal.md,
- * rational.md (the extended numeric types).
+ * Spec: #sec-value-types (Value Types), #sec-decimal-floating-point-types, #sec-rational-types.
  *
- * `float128` and `decimal32/64/128` are core type-universe members whose TYPE
- * NAMES are registered: they resolve, intern, reflect as primitives, and are
- * distinct. Decimal literals and rational values work; `float128`'s value
- * level, the `complex` type, and the imaginary literal remain refusals,
- * pinned below so a partial landing is noticed rather than mistaken for
- * support.
+ * `float128` and `decimal32/64/128` are core type-universe members whose TYPE NAMES are registered: they
+ * resolve, intern, reflect as primitives, and are distinct. Decimal literals and rational values work;
+ * `float128` has a type name and no value level. (`complex` and the imaginary literal are covered in
+ * complex/.)
  */
 
 // -- float128 and decimal type names -------------------------------------------
@@ -51,12 +47,10 @@ test('numeric types: the type names are shadowable', () => {
   expect(evaluated('let float128 = 5; String(float128);')).toBe('5');
 });
 
-// -- Documented gaps: the value level ------------------------------------------
+// -- A decimal literal converts; float128 has no value level ----------------------
 test('numeric types: a decimal literal converts, and so does a float128', () => {
-  // Target (decimal.md): `let a: decimal128 = 1.5` gives a decimal128 value.
-  // The value-level conversion/arithmetic is deferred.
-  // A DECIMAL literal converts: it is read from its
-  // SOURCE TEXT, so the cohort member is the one written - `1.5` and `1.50` are
+  // `let a: decimal128 = 1.5` gives a decimal128 value (#table-numeric-conversions). A DECIMAL literal
+  // converts: it is read from its SOURCE TEXT, so the cohort member is the one written - `1.5` and `1.50` are
   // two values of one numerical value, which a double cannot tell apart.
   expect(evaluated('let a: decimal128 = 1.5; a.toString();')).toBe('1.5');
   expect(evaluated('let a: decimal128 = 1.50; a.toString();')).toBe('1.50');

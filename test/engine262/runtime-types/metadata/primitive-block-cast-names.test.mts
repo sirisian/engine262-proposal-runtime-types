@@ -2,20 +2,15 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
- * A CAST'S NAME IS A TYPE, AND FOLLOWS THE HEADER'S RULE.
- *
- * `primitivemetadata.md`: "A cast's name is a type and follows the same rule, so
- * `complex.<T>` would name a complex whose parts are `T`; a block that casts into the
- * metadata of every complex captures the component and names it". The block HEADER
- * `primitive complex<const T: P>` is refused with the spelling to use. A cast NAME
- * that put a metadata capture in a component position was accepted silently: it named
- * a complex whose parts are a metadata record, which no value is, so it never applied,
- * and the program failed later at an annotation - "`1+2i` is not assignable to
- * `complex.<float64>.<{ phase: 1 }>`" - with no mention of the cast.
- *
- * The first `.<...>` of a primitive that declares parameters is its component list. A
- * bare name there bound by the block's METADATA list is the mistake; a component
- * capture there is not, and a primitive that declares no parameters has no component
+ * A CAST'S NAME IS A TYPE, AND FOLLOWS THE HEADER'S RULE. #sec-primitive-operator-blocks: "A cast's name is a
+ * type, read as every type is, so where the primitive declares parameters the name supplies them before its
+ * metadata: `complex.<T>` names a complex whose component is `T`". The block HEADER `primitive complex<const T:
+ * P>` is refused with the spelling to use, and a cast NAME that puts a metadata capture in a component
+ * position must be refused too: it would name a complex whose parts are a metadata record, which no value is,
+ * so it would never apply, and the program would fail later at an annotation - "`1+2i` is not assignable to
+ * `complex.<float64>.<{ phase: 1 }>`" - with no mention of the cast. The first `.<...>` of a primitive that
+ * declares parameters is its component list. A bare name there bound by the block's METADATA list is the
+ * mistake; a component capture there is not, and a primitive that declares no parameters has no component
  * list.
  */
 

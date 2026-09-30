@@ -3,15 +3,14 @@ import { evaluated as evaluatedWithoutTemporal } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * Extension coverage - temporal.md, Temporal as a type source.
- *
- * With the temporal feature on, Temporal's classes become nominal class types
- * (membership walks the prototype chain to the class constructor) and Temporal.Unit
- * becomes a string enum. Values flow through typed bindings, annotations, `is`, and
- * dependent record types, and each class's `compare` carries its signature's
- * int32 return. The dimensioned-duration overloads (which need the Dimensions
- * primitive-metadata meta type), the remaining typed method signatures, the
- * from-string cast operators, and the ordering operator sugar are deferred.
+ * Unspecified: Temporal as a type source is a deferred library extension
+ * (#sec-coverage-of-the-design-documents), so the specification states none of this and the tests pin the
+ * engine's behaviour. With the temporal feature on, Temporal's classes become nominal class types (membership
+ * walks the prototype chain to the class constructor) and Temporal.Unit becomes a string enum. Values flow
+ * through typed bindings, annotations, `is`, and dependent record types, and each class's `compare` carries
+ * its signature's int32 return. The dimensioned-duration overloads (which need the Dimensions
+ * primitive-metadata meta type), the remaining typed method signatures, the from-string cast operators, and
+ * the ordering operator sugar are deferred.
  */
 
 // Local harness: Temporal is behind its own feature, so these run with both the
@@ -113,10 +112,9 @@ test('temporal: with the temporal feature off, Temporal is not defined', () => {
 
 // -- A built-in's signature carries its value-type return ----------------------
 test('temporal: each class comparison returns its signature int32 rather than a plain number', () => {
-  // temporal.md and standardlibrary.md: a built-in whose signature gives it a
-  // value-type return carries that type on its result. A comparison answers with
-  // an int32, so the result satisfies `is int32` while keeping the ordinary
-  // negative, zero, positive readings.
+  // A built-in whose signature gives it a value-type return carries that type on its result
+  // (#sec-typed-standard-library-statics). A comparison answers with an int32, so the result satisfies `is int32`
+  // while keeping the ordinary negative, zero, positive readings.
   expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(0); let b = Temporal.Instant.fromEpochMilliseconds(1); (Temporal.Instant.compare(a, b) is int32) ? "int32" : "plain";')).toBe('int32');
   expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(0); let b = Temporal.Instant.fromEpochMilliseconds(1); String(Number(Temporal.Instant.compare(a, b)));')).toBe('-1');
   expect(evaluated('let a = Temporal.Instant.fromEpochMilliseconds(5); String(Number(Temporal.Instant.compare(a, a)));')).toBe('0');

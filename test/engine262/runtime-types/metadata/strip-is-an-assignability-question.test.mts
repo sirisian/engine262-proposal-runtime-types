@@ -2,16 +2,14 @@ import { test, expect } from 'vitest';
 import { ok, evaluated } from '../harness.mts';
 
 /**
- * typeprogramming.md section 8 asked whether a meta type should be able to VETO a
- * structural edit - whether a builder should be stopped from stripping a mark
- * from a type whose users depend on it.
+ * Should a meta type be able to VETO a structural edit - should a builder be stopped from stripping a mark
+ * from a type whose users depend on it? It should not, because the edit is already an ordinary assignability
+ * question and the metadata subtype judgment already answers it. A builder may strip the mark; what it cannot
+ * do is make the result usable where the marked type is required. A veto would be a second mechanism refusing
+ * what the first refuses, and it would have to decide what a BUILDER may do rather than what a VALUE may be -
+ * which is the distinction the identity law of #sec-value-types rests on.
  *
- * It should not, because the edit is already an ordinary assignability question
- * and the metadata subtype judgment already answers it. A builder may strip the
- * mark; what it cannot do is make the result usable where the marked type is
- * required. A veto would be a second mechanism refusing what the first refuses,
- * and it would have to decide what a BUILDER may do rather than what a VALUE may
- * be - which is the distinction the identity law of #sec-value-types rests on.
+ * Unspecified: the specification does not state this decision; these tests pin it.
  */
 
 // A judgment that refuses to drop the mark: marked is usable where unmarked is
