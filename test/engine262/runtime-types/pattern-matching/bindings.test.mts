@@ -13,16 +13,16 @@ import { evaluated, expectEarlyError } from '../harness.mts';
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
 
 test('a binding binds, and the arm sees it', () => {
-  expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
-  expect(evaluated('String(match (5) { when const x: x + 1; default: 0; });')).toBe('6');
+  expect(evaluated('String(match (5) { when let x: x * 2; });')).toBe('10');
+  expect(evaluated('String(match (5) { when const x: x + 1; });')).toBe('6');
   // Each clause gets a FRESH environment, so one arm's binding is invisible to
   // the next - asserted by binding the same name in two clauses.
-  expect(evaluated('String(match (2) { when 1: "one"; when let x: x * 3; default: 0; });')).toBe('6');
+  expect(evaluated('String(match (2) { when 1: "one"; when let x: x * 3; });')).toBe('6');
 });
 
 test('an ANNOTATED binding tests before it binds', () => {
   // Which is `catch (e: TypeError)` in a new position.
-  expect(evaluated('String(match (uint8(5)) { when let x: uint8: "typed"; default: "no"; });')).toBe('typed');
+  expect(evaluated('String(match (uint8(5)) { when let x: uint8: "typed"; });')).toBe('typed');
   expectEarlyError('match (5) { when let x: uint8: "typed"; default: "no"; };', 'StaticTypeError');
   expect(evaluated('let subject: any = 5; String(match (subject) { when let x: uint8: "typed"; default: "no"; });')).toBe('no');
 });
@@ -60,8 +60,8 @@ test('the binding COLON is resolved by CONTEXT, not by lookahead', () => {
   // three at once.
   const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // Clause position, both spellings.
-  expect(evaluated('String(match (uint8(1)) { when let x: uint8: "yes"; default: "no"; });')).toBe('yes');
-  expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
+  expect(evaluated('String(match (uint8(1)) { when let x: uint8: "yes"; });')).toBe('yes');
+  expect(evaluated('String(match (5) { when let x: x * 2; });')).toBe('10');
   // `is` position, where there is no clause colon to find.
   expect(outcome2('if (uint8(1) is let x: uint8) {}')).toBe('ACCEPTED');
   expect(evaluated('String((uint8(1) is let x: uint8) && true);')).toBe('true');

@@ -55,7 +55,9 @@ test('a key NO member declares is an ordinary absent read', () => {
   expect(ok(`${U}let q = u.absent === undefined; "ok";`)).toBe(true);
   // A plain read and an optional one, which must not disagree with each other.
   expect(ok(`${U}let q = u.zz; "ok";`)).toBe(true);
-  expect(ok(`${U}let q = u?.zz; "ok";`)).toBe(true);
+  // An optional read of a union that can never be nullish is now refused as a
+  // dead optional chain (#sec-narrowing), a separate rule from the absent read.
+  expect(ok(`${U}let q = u?.zz; "ok";`)).toBe(false);
   // An Object.prototype member is declared by no arm's structure and is
   // reachable on every value the union admits.
   const V = 'let u: { a: uint8 } | { a: string } = { a: uint8(1) }; ';

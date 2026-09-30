@@ -11,7 +11,7 @@ test('explicit pattern annotations still test unknown iterator values', () => {
 });
 
 test('typed immutable Composite positions remain known', () => {
-  expect(evaluated('const a = Composite.<[uint8]>([1]); String(match(a) { when [let x]: { let n: uint8 = x; n; } default: 0; });')).toBe('1');
+  expect(evaluated('const a = Composite.<[uint8]>([1]); String(match(a) { when [let x]: { let n: uint8 = x; n; } });')).toBe('1');
   expectStaticTypeError('const a = Composite.<[uint8]>([1]); match(a) { when [let x]: { let n: [uint8] = x; n; } default: [0]; };');
 });
 

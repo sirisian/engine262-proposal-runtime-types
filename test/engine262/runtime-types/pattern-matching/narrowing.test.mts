@@ -52,13 +52,13 @@ test('an ANNOTATED binding types as its annotation', () => {
   // `uint8` in the arm, and a clause is its own scope - "a fresh declarative
   // environment per clause" at run time, a frame in the checker.
   const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome2('function f(v: uint8) { return match (v) { when let x: uint8: x; default: uint8(0); }; } f(uint8(1));')).toBe('ACCEPTED');
+  expect(outcome2('function f(v: uint8) { return match (v) { when let x: uint8: x; }; } f(uint8(1));')).toBe('ACCEPTED');
   // THE DISCRIMINATING ASSERTION: assigning the bound name to an unrelated type
   // is REFUSED, which is what says the annotation reached the arm rather than
   // the name staying `any`.
-  expect(outcome2('function f(v: uint8) { return match (v) { when let x: uint8: (() => { const s: string = x; return s; })(); default: ""; }; } f(uint8(1));')).toBe('StaticTypeError');
+  expect(outcome2('function f(v: uint8) { return match (v) { when let x: uint8: (() => { const s: string = x; return s; })(); }; } f(uint8(1));')).toBe('StaticTypeError');
   // And the runtime is unchanged by the checker knowing more.
-  expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
+  expect(evaluated('String(match (5) { when let x: x * 2; });')).toBe('10');
 });
 
 test('a MEMBER binding may be annotated too', () => {
@@ -78,15 +78,15 @@ test('an UNANNOTATED binding types as the SUBJECT', () => {
   // beyond what the position already said - which makes the subject's type
   // exactly right for a top-level binding.
   const outcome4 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome4('function f(v: uint8) { return match (v) { when let x: x; default: uint8(0); }; } f(uint8(1));')).toBe('ACCEPTED');
+  expect(outcome4('function f(v: uint8) { return match (v) { when let x: x; }; } f(uint8(1));')).toBe('ACCEPTED');
   // THE DISCRIMINATING ASSERTION: assigning it to an unrelated type is REFUSED,
   // where before it was accepted because the name was undeclared and resolved
   // outward as a free name.
-  expect(outcome4('function f(v: uint8) { return match (v) { when let x: (() => { const s: string = x; return s; })(); default: ""; }; } f(uint8(1));')).toBe('StaticTypeError');
+  expect(outcome4('function f(v: uint8) { return match (v) { when let x: (() => { const s: string = x; return s; })(); }; } f(uint8(1));')).toBe('StaticTypeError');
   // The runtime is unchanged by the checker knowing more.
-  expect(evaluated('String(match (5) { when let x: x * 2; default: 0; });')).toBe('10');
+  expect(evaluated('String(match (5) { when let x: x * 2; });')).toBe('10');
   // A COMBINATOR does not change the position, so both sides see the same type.
-  expect(outcome4('function f(v: uint8) { return match (v) { when let x and uint8: x; default: uint8(0); }; } f(uint8(1));')).toBe('ACCEPTED');
+  expect(outcome4('function f(v: uint8) { return match (v) { when let x and uint8: x; }; } f(uint8(1));')).toBe('ACCEPTED');
 });
 
 

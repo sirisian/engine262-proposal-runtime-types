@@ -71,6 +71,6 @@ test('a selected predicate retains every declared target', () => {
 });
 test('a typed call view enforces its receiver after erased installation', () => {
   expect(evaluated(methodType + 'globalThis.entered=false; function implementation():uint8 { globalThis.entered=true; return 1; } let erased:any=implementation; const o:{x:any,m:Method}={x:"bad",m:erased}; try {o.m();} catch(e) {} String(globalThis.entered);')).toBe('false');
-  expect(evaluated(methodType + 'globalThis.entered=false; function implementation():uint8 { globalThis.entered=true; return 1; } let erased:any=implementation; const o:{x:any,m:Method}={x:"bad",m:erased}; try {o.m?.();} catch(e) {} String(globalThis.entered);')).toBe('false');
-  expect(evaluated(methodType + 'globalThis.entered=false; function implementation():uint8 { globalThis.entered=true; return 1; } let erased:any=implementation; const o:{x:uint8,m:Method}={x:1,m:erased}; const factory:()=>{x:uint8,m:Method}=()=>o; factory?.().m(); String(globalThis.entered);')).toBe('true');
+  expect(evaluated(methodType + 'globalThis.entered=false; function implementation():uint8 { globalThis.entered=true; return 1; } let erased:any=implementation; const o:{x:any,m:Method|null}={x:"bad",m:erased}; try {o.m?.();} catch(e) {} String(globalThis.entered);')).toBe('false');
+  expect(evaluated(methodType + 'globalThis.entered=false; function implementation():uint8 { globalThis.entered=true; return 1; } let erased:any=implementation; const o:{x:uint8,m:Method}={x:1,m:erased}; const factory:(()=>{x:uint8,m:Method})|null=()=>o; factory?.().m(); String(globalThis.entered);')).toBe('true');
 });

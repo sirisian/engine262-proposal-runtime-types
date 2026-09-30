@@ -503,7 +503,7 @@ test('a method called without its object is refused', () => {
 test('every call that supplies a this stays legal', () => {
   expect(evaluated(`${M}String(c.m());`)).toBe('1');
   expect(evaluated(`${M}String((c.m)());`)).toBe('1');
-  expect(evaluated(`${M}String(c?.m());`)).toBe('1');
+  expect(evaluated(`${M}const d: C | null = c; String(d?.m());`)).toBe('1');
   expect(evaluated(`${M}const f = c.m.bind(c); String(f());`)).toBe('1');
   expect(evaluated(`${M}const f = c.m; String(f.call(c));`)).toBe('1');
   expect(evaluated(`${M}const f = C.s; String(f());`)).toBe('1');

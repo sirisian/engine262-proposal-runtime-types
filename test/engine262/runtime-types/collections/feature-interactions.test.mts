@@ -67,7 +67,7 @@ test('a collection narrows, matches and is caught by its specialization', () => 
   expect(evaluated('const x: any = new Map.<string, uint8>(); String(x is Map.<string, uint8>);')).toBe('true');
   expect(evaluated('const x: any = new Map.<string, uint8>(); String(x is Map.<string, string>);')).toBe('false');
   expect(evaluated('try { throw new Set.<uint8>(); } catch (e: Set.<uint8>) { "caught"; }')).toBe('caught');
-  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, uint8>: "right"; default: "no"; }')).toBe('right');
+  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, uint8>: "right"; }')).toBe('right');
 });
 
 // ---------------------------------------------------------------------------

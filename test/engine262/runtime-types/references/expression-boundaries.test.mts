@@ -102,7 +102,7 @@ test("ref spread value valid preserves behavior", () => {
 });
 
 test("ref optional valid preserves behavior", () => {
-  expect(evaluated("function take(x:uint8){return x;}let x:uint8=1;String(take?.(ref x));")).toBe("1");
+  expect(evaluated("function take(x:uint8){return x;}const t:((x:uint8)=>uint8)|null=take;let x:uint8=1;String(t?.(ref x));")).toBe("1");
 });
 
 test("readonly live reference preserves behavior", () => {

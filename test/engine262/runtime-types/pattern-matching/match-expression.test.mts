@@ -21,9 +21,9 @@ test('EXISTING PROGRAMS USING `match` STILL WORK', () => {
 });
 
 test('clauses are tried in source order, first match wins', () => {
-  expect(evaluated('match (1) { when 1: "one"; default: "other"; }')).toBe('one');
+  expect(evaluated('match (1) { when 1: "one"; }')).toBe('one');
   expect(evaluated('match (2) { when 1: "one"; default: "other"; }')).toBe('other');
-  expect(evaluated('match (2) { when 1: "a"; when 2: "b"; when 2: "c"; default: "d"; }')).toBe('b');
+  expect(evaluated('match (2) { when 1: "a"; when 2: "b"; when 2 or 3: "c"; default: "d"; }')).toBe('b');
   // "If no clause matches, a TypeError is thrown" - and the exhaustiveness rules make
   // that throw statically impossible exactly where the types can prove it;
   // exhaustiveness.test.mts owns that half. A literal subject has a Static Type, so it is
@@ -67,7 +67,7 @@ test('every pattern form works as a clause pattern', () => {
   expect(evaluated('match (5) { when 1..<3: "low"; when 4..<6: "mid"; default: "high"; }')).toBe('mid');
   expect(evaluated('match ({ x: 1 }) { when { x: _ }: "has x"; default: "no"; }')).toBe('has x');
   expect(evaluated('match ("aaa") { when /^a+$/: "as"; default: "no"; }')).toBe('as');
-  expect(evaluated('match (uint8(1)) { when uint8: "typed"; default: "no"; }')).toBe('typed');
+  expect(evaluated('match (uint8(1)) { when uint8: "typed"; }')).toBe('typed');
   expect(evaluated('match (5) { when 4 or 5: "either"; default: "no"; }')).toBe('either');
 });
 
@@ -179,7 +179,7 @@ test('what the match expression does not yet carry', () => {
   expect(outcome('match (1) { when 1: 1; default: 2; }')).toBe('ACCEPTED');
   // BINDINGS are bindings.test.mts's. What remains of the checker half is
   // NARROWING and EXHAUSTIVENESS.
-  expect(evaluated('String(match (1) { when let x: x + 1; default: 0; });')).toBe('2');
+  expect(evaluated('String(match (1) { when let x: x + 1; });')).toBe('2');
 });
 
 // -- The environment a match restores --------------------------------------------

@@ -11,15 +11,15 @@ test("rejects optional spread reached method", () => {
 });
 
 test("accepts optional spread any good", () => {
-  expect(ok("function unused(f:()=>void,x:any){f?.(...x);}")).toBe(true);
+  expect(ok("function unused(f:(()=>void)|null,x:any){f?.(...x);}")).toBe(true);
 });
 
 test("accepts optional spread named good", () => {
-  expect(ok("function f(x:uint8):void{} f?.(...{x:1});")).toBe(true);
+  expect(ok("function unused(f:((x:uint8)=>void)|null){f?.(...{x:1});}")).toBe(true);
 });
 
 test("accepts optional spread good", () => {
-  expect(ok("function unused(f:(x:uint8)=>void,x:Iterable.<uint8>){f?.(...x);}")).toBe(true);
+  expect(ok("function unused(f:((x:uint8)=>void)|null,x:Iterable.<uint8>){f?.(...x);}")).toBe(true);
 });
 
 test("accepts optional spread null", () => {
@@ -28,5 +28,5 @@ test("accepts optional spread null", () => {
 
 test("accepts optional spread string", () => {
   // A string is iterable; the parameter takes what it yields.
-  expect(ok("function unused(f:(x:string)=>void,x:string){f?.(...x);}")).toBe(true);
+  expect(ok("function unused(f:((x:string)=>void)|null,x:string){f?.(...x);}")).toBe(true);
 });

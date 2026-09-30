@@ -447,7 +447,7 @@ test('membership agrees with assignability', () => {
   expect(bool('let a: [4].<uint32> = [1, 2, 3, 4]; String(a is [4].<uint32>);')).toBe(true);
   expect(bool('let a: [].<uint32> = [1, 2]; String(a is [].<uint32>);')).toBe(true);
   expect(evaluated('let a: [4].<uint32> = [1, 2, 3, 4];'
-    + ' match (a) { when [].<uint32>: "dyn"; when [4].<uint32>: "fixed"; default: "no" };')).toBe('fixed');
+    + ' match (a) { when [].<uint32>: "dyn"; when [4].<uint32>: "fixed" };')).toBe('fixed');
 });
 
 test('the window is what replaces it', () => {

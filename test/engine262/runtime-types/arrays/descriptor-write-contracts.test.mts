@@ -27,6 +27,11 @@ test.each([
   [
     "empty capacity logical store",
     "let a:[].<uint8>=[];a.capacity||=4;"
+  ],
+  [
+    // #sec-narrowing: `??=` on a capacity that can never be nullish can never store.
+    "nullish capacity store is dead code",
+    "let a:[].<uint8>=[1];a.capacity??=4;"
   ]
 ])('%s', (_name, source) => {
   expectStaticTypeError(source);
@@ -48,10 +53,6 @@ test.each([
   [
     "array capacity store",
     "function unused(a: [].<uint8>) { a.capacity = 4; }"
-  ],
-  [
-    "nullish capacity store does not execute",
-    "let a:[].<uint8>=[1];a.capacity??=4;"
   ],
   [
     "truthy capacity skips logical or",

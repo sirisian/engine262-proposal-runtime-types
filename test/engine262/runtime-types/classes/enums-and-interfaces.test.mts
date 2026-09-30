@@ -683,7 +683,7 @@ test('an enum reaches generics, unions, and narrowing', () => {
   expect(evaluated(`${C}function f(x: C | string) { if (x is C) { return "enum"; } return "str"; } f(C.One);`)).toBe('enum');
   expect(evaluated(`${C}function f(x: C | string) { if (x is C) { return "enum"; } return "str"; } f("s");`)).toBe('str');
   // And an enumerator is a legal match subject and pattern.
-  expect(evaluated(`${C}match (C.One) { when C.One: "one"; default: "other"; }`)).toBe('one');
+  expect(evaluated(`${C}match (C.One) { when C.One: "one"; }`)).toBe('one');
 });
 
 test('the enumeration surface iterates in declaration order', () => {

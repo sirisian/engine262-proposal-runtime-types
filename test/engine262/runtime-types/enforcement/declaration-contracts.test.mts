@@ -150,7 +150,7 @@ test.each([
 ])("optional calls preserve receiver requirements: %s", (source) => expectStaticTypeError(source));
 
 test("optional calls preserve receiver requirements preserve valid and dynamic cases", () => {
-  expect(evaluated("class C { x: uint8; m(): uint8 { return this.x; } } const c: C = new C(); String(c.m?.());")).toBe("0");
+  expect(evaluated("class C { x: uint8; m(): uint8 { return this.x; } } const c: C | null = new C(); String(c?.m());")).toBe("0");
   expect(ok("const f: (() => uint8) | null = null; f?.();")).toBe(true);
   expect(ok("class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f: any = c.m; f?.(); }")).toBe(true);
 });
@@ -173,7 +173,7 @@ test("repeated fields share a storage contract preserve valid and dynamic cases"
 });
 
 test('a receiver-free function remains callable through an optional call', () => {
-  expect(evaluated('const f: () => uint8 = () => 1; String(f?.());')).toBe('1');
+  expect(evaluated('const f: (() => uint8) | null = (): uint8 => 1; String(f?.());')).toBe('1');
 });
 
 test('abstract redeclarations must preserve covariance', () => {
@@ -209,7 +209,9 @@ test('default closure contracts do not initialize later parameters', () => {
 });
 
 test('logical index assignments reject only a possible store', () => {
-  expect(ok('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] ||= 2; c[0] ??= 2; }')).toBe(true);
+  expect(ok('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] ||= 2; }')).toBe(true);
+  // `??=` on a value that can never be nullish can never store (#sec-narrowing).
+  expect(ok('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] ??= 2; }')).toBe(false);
   expectStaticTypeError('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] &&= 2; }');
 });
 

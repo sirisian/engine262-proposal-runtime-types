@@ -184,7 +184,8 @@ test('every call syntax reaches the rule', () => {
   expectThrown(dead(`${N}let r: [].<uint8> = []; let q = n(...r);`), 'is not callable');
   expectThrown(dead(`${N}let q = n |> %();`), 'is not callable');
   expectThrown(dead(`${N}let q = n\`x\`;`), 'is not callable');
-  expectThrown(dead(`${N}let q = n?.();`), 'is not callable');
+  // A nullable base, so the optional call is live and the callee is judged.
+  expectThrown(dead('let n: uint8 | null = uint8(1); let q = n?.();'), 'is not callable');
   expectThrown(dead(`${N}let q = new n();`), 'is not a constructor');
 });
 
@@ -193,10 +194,13 @@ test('an OPTIONAL call still tolerates absence, which is its point', () => {
   // can be called. A nullable callee is exactly what `?.` is for.
   expect(ok(dead('let f: (() => uint8) | null = null; let q = f?.();'))).toBe(true);
   expect(ok(dead('let f: (() => uint8) | undefined = undefined; let q = f?.();'))).toBe(true);
-  expect(ok(dead('function f() { return 1; } let q = f?.();'))).toBe(true);
-  expect(ok(dead('let n: uint8 = uint8(1); let q = n?.x;'))).toBe(true);
-  expect(ok(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m();'))).toBe(true);
-  expect(ok(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m?.();'))).toBe(true);
+  // #sec-narrowing lists `?.` with `??`: on a base that can never be nullish
+  // the optional branch is dead, so these are refused for that rather than
+  // for callability.
+  expectThrown(dead('function f() { return 1; } let q = f?.();'), 'can never succeed');
+  expectThrown(dead('let n: uint8 = uint8(1); let q = n?.x;'), 'can never succeed');
+  expectThrown(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m();'), 'can never succeed');
+  expectThrown(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m?.();'), 'can never succeed');
   expect(ok(dead('let a: any = () => 1; let q = a?.();'))).toBe(true);
   // And short-circuits at run time.
   expect(evaluated('let o = null; String(o?.());')).toBe('undefined');

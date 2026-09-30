@@ -23,7 +23,7 @@ test.each([
   'function take(x: uint8, y: string) {} function f() { take(y: "s", x: 1); }',
   'function take(x: uint8 = 1, y: string = "s") {} function f() { take(y: "s"); }',
   'function take(x: uint8, ...tail: [].<string>) {} function f() { take(x: 1, tail: "s"); }',
-  'function take(x: uint8) {} function f() { take?.(1); }',
+  'function f(take: ((x: uint8) => void) | null) { take?.(1); }',
   'function tag(strings: any, x: uint8) {} function f() { tag`x${1}`; }',
   'class C<T: type> { constructor(x: T) {} } function f() { new C.<uint8>(1); }',
   'function f(x: { a: uint8 }) { x["a"] = 1; }',

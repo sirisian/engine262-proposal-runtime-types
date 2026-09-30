@@ -82,7 +82,7 @@ test('a `when` pattern naming a specialization selects on it', () => {
   // Membership in different syntax: `when T:` tests membership, so this arm and
   // the `is` above are one question.
   expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, string>: "wrong"; default: "fell through"; }')).toBe('fell through');
-  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, uint8>: "right"; default: "fell through"; }')).toBe('right');
+  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, uint8>: "right"; }')).toBe('right');
 });
 
 test('a typed catch selects on the specialization', () => {

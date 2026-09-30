@@ -16,8 +16,8 @@ test.each([
 });
 
 test('or merges one binding and distinct simultaneous names remain valid', () => {
-  expect(evaluated('const x = 9; String(match (1) { when let x or let x: x; default: 0; });')).toBe('1');
-  expect(evaluated('String(match (1) { when let x and let y: x + y; default: 0; });')).toBe('2');
+  expect(evaluated('const x = 9; String(match (1) { when let x or let x: x; });')).toBe('1');
+  expect(evaluated('String(match (1) { when let x and let y: x + y; });')).toBe('2');
   expectEarlyError('match (1) { when ${match (1) { when let x and let x: 1; default: 0; }}: 1; default: 0; };', 'SyntaxError');
 });
 
