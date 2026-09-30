@@ -279,16 +279,15 @@ test('what the disjointness rule leaves alone', () => {
 // ---------------------------------------------------------------------------
 // A `case` LABEL THAT CANNOT MATCH IS THE SWITCH SPELLING OF THE SAME MISTAKE.
 //
-// A `case` is compared to the discriminant by strict equality, so the rule that
-// refuses `a === b` for disjoint `a` and `b` applies here too - completing the
-// set the design already refuses elsewhere: `a is string` for a `uint8`, a
-// disjoint intersection, a narrowing that reaches nothing, and a strict `===`.
+// A `case` is compared to the discriminant by strict equality, so the rule that refuses `a === b` for
+// disjoint `a` and `b` applies here too, completing the set of statically impossible tests the checker
+// refuses: `a is string` for a `uint8`, a disjoint intersection, a narrowing that reaches nothing, and a
+// strict `===`. Unspecified: the specification states none of these refusals for a `===` or a `case`.
 //
-// The label and the discriminant are typed at the `switch` arm because neither
-// is typed by walking - the same statement-position gap the `if` condition had,
-// which is why this rule could not be written until that was closed. A LITERAL
-// label is excluded for the reason the `===` rule excludes one: `case 5` for a
-// `uint32` compares against a literal whose Base is `number`, and it adopts.
+// The label and the discriminant are typed at the `switch` arm because neither is typed by walking - the
+// same statement-position gap the `if` condition had. A LITERAL label is excluded for the reason the `===`
+// rule excludes one: `case 5` for a `uint32` compares against a literal whose Base is `number`, and it
+// adopts.
 // ---------------------------------------------------------------------------
 
 test('a case label disjoint from the discriminant is refused', () => {

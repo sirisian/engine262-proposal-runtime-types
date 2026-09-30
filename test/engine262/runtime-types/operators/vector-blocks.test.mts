@@ -2,13 +2,11 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
- * #sec-primitive-operator-blocks over `vector`: the design's dimensioned-vector
- * block (primitivemetadata.md) is
- * `primitive vector<float32.<const D: Dimensions>, const N: uint32> { ... }`.
- * Its component list is a specialization list over `vector`'s own parameters,
- * matched against the receiver's lane type and count by the specialization
- * matcher: D binds the lanes' metadata and N the lane count. Vector operators
- * went straight to the lane-wise operation, so no block was ever consulted.
+ * #sec-primitive-operator-blocks over `vector`: a dimensioned-vector block is `primitive
+ * vector<float32.<const D: Dimensions>, const N: uint32> { ... }`. Its component list is a specialization
+ * list over `vector`'s own parameters, matched against the receiver's lane type and count by the
+ * specialization matcher: D binds the lanes' metadata and N the lane count. A vector operator must consult
+ * the block before going to the lane-wise operation.
  */
 
 const D = `type Dim = { m: int32 };
@@ -41,7 +39,7 @@ test('a bodyless definition gives the lane-wise result its type, lanes included'
   expect(evaluated(`${D} const c = a + a; String(Reflect.typeOf(c));`)).toBe('vector.<float32.<{ m: 1 }>, 4>');
 });
 
-test("the component list admits the design's shapes and refuses others as unsupported", () => {
+test("the component list admits the specified shapes and refuses others as unsupported", () => {
   // `uint` declares a parameter, so `uint.<...>` is not a metadata position.
   expectThrown('primitive vector<uint.<const W>, const N: uint32> {}', 'not supported yet');
 });
@@ -59,7 +57,7 @@ test('the checker types a bodyless vector result as dispatch stamps it', () => {
   expect(evaluated(`${D} ${preserving} const c: V = a + a; String(Reflect.typeOf(c));`)).toBe('vector.<float32.<{ m: 1 }>, 4>');
 });
 
-test("the design's dimensioned-vector form: a vector times a scalar of another dimension", () => {
+test("the dimensioned-vector form: a vector times a scalar of another dimension", () => {
   // `operator*.<D2: Dimensions>(rhs: float32.<D2>): vector.<float32.<multiplyDimensions(D, D2)>, N>;`
   // D is a nested metadata capture and D2 the operator's own parameter, both
   // read by the builder as metadata objects; the lane-wise broadcast runs on
@@ -86,7 +84,7 @@ test('a computed lane type is the lane type written the same way', () => {
   expectThrown(`${D} ${block} const c: vector.<float32.<{ m: 3 }>, 2> = a * s;`, 'is not assignable to');
 });
 
-test("the checker types the design's vector result exactly", () => {
+test("the checker types the vector result exactly", () => {
   // The builder runs in the pass before evaluation, with the nested capture D,
   // the operator's D2, and the count N bound in a type-parameter frame as
   // dispatch binds them; the recheck types `a * s` with the result.

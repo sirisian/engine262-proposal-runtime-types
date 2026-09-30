@@ -2,17 +2,11 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Spec: #sec-reflection (Reflection) - the `Type` context.
- *
- * The table there says of it: "This is the ONE CONTEXT THIS SPECIFICATION
- * DEFINES; the rest are the decorators extension's." So it is the one whose
- * shape is already normative, and it is built before any decorator context
- * for exactly that reason.
- *
- * decorators.md adds the other half: `Reflect.Type` "is the one reflection
- * target that is not also a decorator context - a bare type expression carries
- * no decorator" - so it appears in the reflection signatures and nowhere in the
- * replacement, `addInitializer`, or decorator-context tables.
+ * Spec: #sec-reflection (Reflection) - the `Type` context. The table there says of it: "This is the ONE
+ * CONTEXT THIS SPECIFICATION DEFINES; the rest are the decorators extension's." So it is the one whose shape
+ * is already normative. It is also the one reflection target that is not a decorator context - a bare type
+ * expression carries no decorator (#sec-decorator-contexts) - so it appears in the reflection signatures and
+ * nowhere in the replacement, `addInitializer`, or decorator-context tables.
  */
 
 test('Reflect.Type is a named reflection context', () => {
@@ -63,11 +57,9 @@ test('Reflect.Type discriminates every structural form', () => {
 });
 
 test('a type declaration carries no decorator', () => {
-  // decorators.md: `Reflect.Type` "is the one reflection target that is not also
-  // a decorator context - a bare type expression carries no decorator".
-  //
-  // MEASURED: the grammar does not admit one at all, so this is a SyntaxError
-  // rather than a type error - the stronger of the two answers, since a
-  // position that cannot be written cannot be written wrongly.
+  // `Reflect.Type` is the one reflection target that is not also a decorator context - a bare type expression
+  // carries no decorator (#sec-decorator-metadata). The grammar does not admit one at all, so this is a
+  // SyntaxError rather than a type error - the stronger of the two answers, since a position that cannot be
+  // written cannot be written wrongly.
   expectThrown('function f(c: Reflect.Type) {} @f type X = uint8;');
 });

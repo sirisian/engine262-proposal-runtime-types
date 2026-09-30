@@ -2,17 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
- * Extension coverage - operatoroverloading.md.
- *
- * The extension works the operator rules through a math library. On a class the
- * receiver is the left operand (main proposal). The binary arithmetic, bitwise,
- * shift, relational, and equality operators dispatch, and the unary operators
- * (`operator-()`, `operator!()`, `operator~()`, `operator+()`), the increment and
- * decrement operators (`++`/`--`, prefix and postfix), and compound assignment
- * (both the desugaring through the binary operator and an explicit `operator+=`)
- * dispatch too. `===`/`!==` keep strict-equality semantics. The scalar-on-the-left
- * case is deferred: it needs a `primitive` block from the primitive metadata
- * extension, so a number on the left does not find the object operator.
+ * Spec: #sec-user-defined-operators. The operator rules are worked through a math library. On a class the
+ * receiver is the left operand. The binary arithmetic, bitwise, shift, relational, and equality operators
+ * dispatch, and so do the unary operators (`operator-()`, `operator!()`, `operator~()`, `operator+()`), the
+ * increment and decrement operators (`++`/`--`, prefix and postfix), and compound assignment (both the
+ * desugaring through the binary operator and an explicit `operator+=`). `===`/`!==` keep strict-equality
+ * semantics. The scalar-on-the-left case is deferred to the `primitive` blocks of
+ * #sec-operator-declarations, so a number on the left does not find the object operator.
  */
 
 // -- Binary arithmetic with typed parameters ----------------------------------
@@ -51,7 +47,7 @@ test('operators: strict equality does not dispatch to operator==', () => {
 
 // -- Unary operators ----------------------------------------------------------
 test('operators: operator-() makes unary minus negate', () => {
-  // Target (operatoroverloading.md): `operator-(): Vector4` so `-v` negates.
+  // `operator-(): Vector4`, so `-v` negates.
   expect(evaluated('class V { constructor(x) { this.x = x; } operator-() { return new V(0 - this.x); } } let v = new V(3); let r = -v; String(r.x);')).toBe('-3');
 });
 
@@ -123,16 +119,13 @@ test('operators: an explicit operator+= updates in place and returns the result'
 });
 
 test('operators: an explicit compound assignment works on a `const` binding', () => {
-  // operatoroverloading.md: compound assignments "are invoked as method calls on
-  // the left-hand side. The binding itself is never reassigned, so THEY WORK ON
-  // `const` BINDINGS, and the value of the expression `a += b` is whatever the
-  // operator returns, allowing operators to return `this` for chaining."
-  //
-  // Writing the operator's result back to the reference made `a += b` a
-  // reassignment, so a `const` binding threw "Assignment to constant variable" -
-  // the one case the design calls out as working. It matters most for a value
-  // type, which uses this form precisely to update in place and whose bindings
-  // are usually `const`, so the form was unavailable exactly where it was meant.
+  // #sec-user-defined-operators: a compound assignment a class declares is invoked as a method call on the
+  // left operand, and the assignment target is not written. The binding itself is never reassigned, so it
+  // works on `const` bindings, and the value of `a += b` is whatever the operator returns, allowing operators
+  // to return `this` for chaining. Writing the operator's result back to the reference would make `a += b` a
+  // reassignment, so a `const` binding would throw "Assignment to constant variable" - the one case this form
+  // exists for. It matters most for a value type, which uses this form precisely to update in place and whose
+  // bindings are usually `const`.
   const klass = 'class V { constructor(n) { this.n = n; } operator+=(rhs) { this.n += rhs.n; return this; } } ';
   expect(evaluated(`${klass}const a = new V(5); const b = new V(3); a += b; String(a.n);`)).toBe('8');
   // It chains, and the value of the expression is whatever the operator returns.
@@ -269,10 +262,9 @@ test('a primitive block may declare an implicit cast into a parameterization', (
   // boundary. The declared type names what the result BECOMES; the body
   // computes, the target converts.
   expect(evaluated(`${dim}${cast} let v: Velocity = 10; String(Reflect.typeOf(v) === Velocity);`)).toBe('true');
-  // The BOUNDS spelling, which is the one primitivemetadata.md and ranges.md
-  // actually write - `uint8.<{ bounds: 1..=6 }>` - and which reaches a boundary
-  // the dimensions case above cannot: a singleton range is a type with one
-  // value, so it is where "a cast is a way IN, not a way PAST" is sharpest.
+  // The BOUNDS spelling, `uint8.<{ bounds: 1..=6 }>` (#sec-primitive-metadata), which reaches a boundary the
+  // dimensions case above cannot: a singleton range is a type with one value, so it is where "a cast is a way
+  // in, not a way past" a constraint is sharpest.
   const nb = 'type NB = { bounds?: RangeBounds.<any> }; '
     + 'meta NB { default = {}; '
     + 'subtype(a, b) { if (b.bounds === undefined) return true; if (a.bounds === undefined) return false; return b.bounds.contains(a.bounds); } '
@@ -280,10 +272,8 @@ test('a primitive block may declare an implicit cast into a parameterization', (
   const dieCast = 'primitive uint32 { operator uint32.<{ bounds: 1..=6 }>(): uint32.<{ bounds: 1..=6 }> { return this; } } ';
   expect(evaluated(`${nb}${dieCast} type Die = uint32.<{ bounds: 1..=6 }>; let v: Die = 3; String(Number(v));`)).toBe('3');
   expectThrown(`${nb}${dieCast} type Die = uint32.<{ bounds: 1..=6 }>; let v: Die = 9;`);
-  // A singleton range narrows a member of the base, which is what the design
-  // reached for when it wrote `{ a: uint32 } & { a: 5 }` - a written numeric
-  // literal keeps base `number` (#sec-literal-types), so the range is the
-  // spelling that works.
+  // A singleton range narrows a member of the base - the spelling that works for `{ a: uint32 } & { a: 5 }`,
+  // since a written numeric literal keeps base `number` (#sec-literal-types).
   const fiveCast = 'primitive uint32 { operator uint32.<{ bounds: 5..=5 }>(): uint32.<{ bounds: 5..=5 }> { return this; } } ';
   expect(evaluated(`${nb}${fiveCast} type Five = uint32.<{ bounds: 5..=5 }>;`
     + ' type T = { a: uint32 } & { a: Five }; let v: T = { a: 5 }; String(Number(v.a));')).toBe('5');
@@ -297,20 +287,14 @@ test('a primitive block may declare an implicit cast into a parameterization', (
 });
 
 test('a cast into a meta type that defines no validate admits the crossing', () => {
-  // The case every fixture above is blind to: each of them gives its meta type
-  // a `validate` returning
-  // *true*, and the DESIGN'S OWN `Dimensions` defines none - "No validate -
-  // dimensions constrain type compatibility, not value ranges"
-  // (primitivemetadata.md). So the sentence those fixtures assert,
-  // "`const v: Velocity = 10;` compiles exactly where `number` declares a cast
-  // into the dimensions meta type", was passing only in the variant the design
-  // does not write.
-  //
-  // #sec-primitive-metadata, ConvertParameterization's second way through:
-  // "Set _v_ to the result of applying that operator to _v_. IF _M_ DEFINES
-  // `validate` and it does not hold of _v_ and _tp_, throw" - the hook,
-  // conditioned on definedness. Asking membership instead re-applied the brand
-  // rule, which is a rule about BARE values, to a value that had just crossed.
+  // The case every fixture above is blind to: each of them gives its meta type a `validate` returning true,
+  // and a dimensions meta type defines none - dimensions constrain type compatibility, not value ranges. So
+  // the sentence those fixtures assert, "`const v: Velocity = 10;` compiles exactly where `number` declares a
+  // cast into the dimensions meta type", was passing only in the variant where `validate` exists.
+  // #sec-primitive-metadata, ConvertParameterization's second way through: "Set _v_ to the result of applying
+  // that operator to _v_. IF _M_ DEFINES `validate` and it does not hold of _v_ and _tp_, throw" - the hook is
+  // conditioned on definedness. Asking membership instead would re-apply the brand rule, which is a rule about
+  // BARE values, to a value that had just crossed.
   const dim = 'type Dim = { m: number, s: number }; '
     + 'meta Dim { default = { m: 0, s: 0 }; subtype(a, b) { return a.m === b.m && a.s === b.s; } } ';
   const cast = 'primitive float64 { operator float64.<{ m: 1, s: -1 }>(): float64.<{ m: 1, s: -1 }> { return this; } } ';

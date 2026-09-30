@@ -17,7 +17,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 
 const E = 'enum Component: uint8 { A, B, C } ';
 
-test('the design\u2019s own example runs', () => {
+test('the worked example runs', () => {
   expect(evaluated(`${E}String(Reflect.getReflection.<Reflect.Enum, Component>().size);`)).toBe('3');
 });
 
@@ -46,13 +46,11 @@ test('the routes that already worked still do', () => {
   expect(evaluated(`${E}String(Reflect.getReflection(Component).family);`)).toBe('enum');
 });
 
-// `EnumEnumerator` completes the family. decorators.md gives it TWO forms:
-//
+// `EnumEnumerator` completes the family (#sec-reflection-shape-enum). It has TWO forms:
 //   getReflection<Reflect.EnumEnumerator, T>()          -> every enumerator, keyed by name
 //   getReflection<Reflect.EnumEnumerator, T>(value: T)  -> that one enumerator
-//
-// The names live on the DECLARATION's EnumMemberList - [[EnumMembers]] carries
-// only the values - so the two are read together and aligned by index.
+// The names live on the DECLARATION's EnumMemberList - [[EnumMembers]] carries only the values - so the two
+// are read together and aligned by index.
 
 const C = 'enum Color: uint8 { Red, Green, Blue } ';
 

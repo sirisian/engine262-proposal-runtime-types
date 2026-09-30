@@ -2,16 +2,12 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown, expectStaticTypeError } from '../harness.mts';
 
 /**
- * Spec: #sec-reflect-maketype (Reflect.makeType),
- * #sec-reflect-getreflection. Design: typeprogramming.md.
- *
- * The design is type BUILDERS: `Reflect.makeType` plus the completed node model,
- * with the standard kit (mapped/conditional types, template literals, and the
- * rest) shipping as JavaScript over that base rather than as new syntax. The
- * builder foundation is implemented: makeType builds a type from a reflection
- * node and round-trips with getReflection; the `keyof` and `is` operators work.
- * The `typeof` type operator, indexed-access types, and the higher-level catalog
- * are not implemented.
+ * Spec: #sec-reflect-maketype (Reflect.makeType), #sec-reflect-getreflection, #sec-computed-types. Type
+ * BUILDERS: `Reflect.makeType` plus the completed node model, with the standard kit (mapped/conditional
+ * types, template literals, and the rest) shipping as JavaScript over that base rather than as new syntax.
+ * makeType builds a type from a reflection node and round-trips with getReflection; the `keyof` and `is`
+ * operators work, and so do indexed-access types (#sec-indexed-access-types). `typeof` is not a type
+ * operator: `Reflect.typeOf(x)` in type position is the type query (#sec-reflect-typeof).
  */
 
 // -- Reflect.makeType: the builder foundation ----------------------------------
@@ -46,10 +42,9 @@ test('type builders: the is operator tests a value against a type', () => {
 
 // -- The typeof and indexed-access operators -----------------------------------
 test('type builders: Reflect.typeOf in type position is the type of a value', () => {
-  // typeprogramming.md 4.1: `Reflect.typeOf(x)` in type position IS the type
-  // query - "typeof x needs no builder", which is why there is no such operator.
-  // The binding is `const`: a type position is compile-time evaluable, and a
-  // read of a `let` is not (#sec-iscompiletimeevaluable).
+  // `Reflect.typeOf(x)` in type position IS the type query (#sec-reflect-typeof): a builder needs no `typeof x`,
+  // which is why there is no such operator. The binding is `const`: a type position is compile-time evaluable,
+  // and a read of a `let` is not (#sec-iscompiletimeevaluable).
   expect(evaluated('const x = (5 := uint8); type T = Reflect.typeOf(x); (T === uint8) ? "yes" : "no";')).toBe('yes');
   // a value of that type passes the membership test, one not of it does not
   expect(evaluated('let s = "hi"; ("world" is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('yes');
@@ -57,8 +52,8 @@ test('type builders: Reflect.typeOf in type position is the type of a value', ()
 });
 
 test('type builders: an indexed-access type is the type of the named property', () => {
-  // typeprogramming.md 4.1: `T["a"]` is the type of property a, and `T[keyof T]`
-  // the union of the value types.
+  // `T["a"]` is the type of property a, and `T[keyof T]` the union of the value types
+  // (#sec-indexed-access-types).
   expect(evaluated('type T = { a: uint8, b: string }; type A = T["a"]; (A === uint8) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('type T = { a: string, b: string }; type V = T[keyof T]; (V === string) ? "yes" : "no";')).toBe('yes');
   // an optional property's access admits undefined; a required one does not
@@ -70,15 +65,15 @@ test('type builders: an indexed-access type is the type of the named property', 
 
 // -- Documented gaps: the catalog ships as builders, not syntax -----------------
 test('type builders: conditional-type syntax is deferred (documents the gap)', () => {
-  // Target (typeprogramming.md 4.3): conditional types ship as builder functions
-  // over makeType, not as `extends ? :` syntax; that syntax does not parse.
+  // Conditional types ship as builder functions over makeType (#sec-computed-types), not as `extends ? :`
+  // syntax; that syntax does not parse.
   expectThrown('type T = uint8 extends number ? "yes" : "no"; T;');
 });
 
 // -- typeof and indexed-access: depth, a qualified operand, and a round-trip ----
 test('typeof and indexed access compose and round-trip through reflection', () => {
-  // typeprogramming.md: indexed access chains, so an access into an access
-  // resolves stepwise to the nested property type.
+  // Indexed access chains (#sec-indexed-access-types): an access into an access resolves stepwise to the nested
+  // property type.
   expect(evaluated('type T = { a: { b: uint8 } }; type A = T["a"]["b"]; (A === uint8) ? "yes" : "no";')).toBe('yes');
   // the typeof operand may be a qualified member expression, not only a bare name
   // The binding is `const`: a type position is compile-time evaluable, and a
@@ -94,9 +89,9 @@ test('typeof and indexed access compose and round-trip through reflection', () =
 
 // -- indexed access is limited to string-literal keys today --------------------
 test('indexed access rejects non-literal and numeric-index keys (documents the gap)', () => {
-  // typeprogramming.md: beyond string-literal keys, numeric, tuple, and
-  // index-signature access are not covered. Each such form is rejected today; the
-  // diagnostic for a non-literal key names the string-literal requirement.
+  // #sec-indexed-access-types: only a String literal key is admitted in this edition. A numeric key, an index
+  // signature and a tuple index are each a type error; the diagnostic for a non-literal key names the
+  // string-literal requirement.
   expectStaticTypeError('type T = { a: uint8 }; type Z = T[number];');
   expectStaticTypeError('type T = { a: uint8 }; type Z = T[string];');
   // a numeric index into a tuple is likewise not resolved
@@ -105,9 +100,8 @@ test('indexed access rejects non-literal and numeric-index keys (documents the g
 
 // -- keyof binds looser than an index access, matching the TypeScript grouping -
 test('keyof applied to an index access groups as keyof of the indexed type', () => {
-  // typeprogramming.md follows TypeScript here: `keyof T["a"]` groups as
-  // `keyof (T["a"])`, the keys of the indexed property type, not `(keyof T)["a"]`.
-  // So it resolves to the union of that property type's keys.
+  // `keyof T["a"]` groups as `keyof (T["a"])`, the keys of the indexed property type, not `(keyof T)["a"]`
+  // (#sec-indexed-access-types: the form is postfix). So it resolves to the union of that property type's keys.
   expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type K = keyof T["a"]; Reflect.getReflection(K).kind;')).toBe('union');
   expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; type K = keyof T["a"]; (("x" is K) && ("y" is K)) ? "both" : "no";')).toBe('both');
   expect(evaluated('type T = { a: { x: uint8, y: uint8 } }; ("z" is keyof T["a"]) ? "y" : "n";')).toBe('n');

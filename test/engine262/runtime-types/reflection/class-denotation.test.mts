@@ -1,17 +1,12 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// A class DENOTES its type through its constructor - the design's "a class's type
-// object is its constructor" - but `Reflect.getReflection(K)` threw "is not a
-// type", because `isTypeObject` is `'TypeRecord' in value` and a constructor
-// carries no record.
-//
-// The record CANNOT simply be attached to it. Doing so makes `typeof K` report
-// "object", where ECMA-262 requires "function" - measured, and it failed twelve
-// tests. A class is the one denotation whose shape is fixed by another
-// specification, so the association is resolved at the reflection site instead.
-//
-// Every other type object reports typeof "object", which sec-type-object-opacity
+// A class DENOTES its type through its constructor - a class's type object is its constructor - so
+// `Reflect.getReflection(K)` must reflect a class as it does any other type, though `isTypeObject` is
+// `'TypeRecord' in value` and a constructor carries no record. The record cannot simply be attached to the
+// constructor: that would make `typeof K` report "object", where ECMA-262 requires "function". A class is the
+// one denotation whose shape is fixed by another specification, so the association is resolved at the
+// reflection site instead. Every other type object reports typeof "object", which #sec-type-object-opacity
 // requires: "This does not make a Type Object a function to `typeof`".
 
 test('a class reflects through its constructor', () => {

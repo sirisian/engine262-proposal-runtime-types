@@ -240,19 +240,15 @@ test('a relational between two different numeric types is a type error, as the c
 });
 
 // ---------------------------------------------------------------------------
-// A LITERAL IN ARITHMETIC IS READ BEFORE ROUNDING.
+// A LITERAL IN ARITHMETIC IS READ BEFORE ROUNDING (#sec-literal-propagation, #sec-contextual-types). A
+// literal takes the type of its context; an arithmetic expression whose operands are all compile-time
+// evaluable is folded and the contextual type applied to its mathematical value; and a value that does not
+// fit is a compile-time error rather than a silent truncation.
 //
-// README, "Four things remain implicit": a literal takes the type of its
-// context; a `const` of a numeric constant "behaves as if inlined" and "the
-// initializer may compute"; and "one that doesn't fit is a compile-time
-// TypeError rather than a silent truncation". Two paths lost the literal's
-// digits: a literal OPERAND beside a typed value took the type but was read as
-// the double the lexer produced, and a constant EXPRESSION at a typed position
-// was computed in Number before the type was consulted.
-//
-// The checker had no arm for any arithmetic expression, which is why neither
-// path could be right: nothing typed the operator, so nothing could hand a
-// literal its type or fold a constant. Expected values are BigInt arithmetic.
+// So a literal OPERAND beside a typed value takes the type and is read at that type's digits, not as the
+// double the lexer produced, and a constant EXPRESSION at a typed position is computed exactly before the
+// type is consulted. That needs the checker to type arithmetic expressions, so that the operator can hand a
+// literal its type and fold a constant. Expected values are BigInt arithmetic.
 // ---------------------------------------------------------------------------
 
 const P53 = 2n ** 53n;
@@ -268,9 +264,8 @@ test('a constant arithmetic expression takes the contextual type and is exact - 
 });
 
 test('the constant is folded FIRST and checked against the type - no silent wrap', () => {
-  // `uint8(200) + uint8(100)` wraps to 44 at run time. Had the type been
-  // propagated to each literal and the sum computed in the type, this would be
-  // a silent 44; folded first it is the compile-time error the README promises.
+  // `uint8(200) + uint8(100)` wraps to 44 at run time. Were the type propagated to each literal and the sum
+  // computed in the type, this would be a silent 44; folded first it is a compile-time error.
   expect(run('let x: uint8 = 200 + 100;')).toMatchObject({ Type: 'throw' });
   expect(evaluated('try { eval("let x: uint8 = 200 + 100;"); "ok"; } catch (e) { e.constructor.name; }')).toBe('StaticTypeError');
   expect(evaluated('let x: uint8 = 1 + 2; String(x);')).toBe('3');
@@ -311,7 +306,7 @@ for (const ty of ['uint64', 'int64', 'uint128', 'int128']) {
 }
 
 test('a literal that cannot take the other operand\'s type is a compile-time error', () => {
-  // The README's own example: `a + 300` at a `uint8`.
+  // `a + 300` at a `uint8` (#sec-literal-propagation).
   expect(evaluated('try { eval("let a: uint8 = 200; a + 300;"); "ok"; } catch (e) { e.constructor.name; }')).toBe('StaticTypeError');
   expect(evaluated('let a: uint8 = 200; String(a + 1);')).toBe('201');
 });
@@ -328,11 +323,10 @@ test('typed arithmetic has a Static Type, so its result is checked where it goes
 });
 
 test('a const of a numeric constant behaves as if inlined - exactly, at any width', () => {
-  // README: "A const of a numeric constant behaves as if inlined ... The
-  // initializer may compute ... and so does a chain of such constants." The
-  // binding itself holds a Number - `typeof K` is 'number', `K` alone prints
-  // the rounded value - so a USE of it at a wide type has to fold to the exact
-  // value of the initializer rather than read the binding. It read the binding.
+  // A `const` of a numeric constant behaves as if inlined: the initializer may compute, and so does a chain of
+  // such constants (#sec-contextual-types). The binding itself holds a Number - `typeof K` is 'number', `K`
+  // alone prints the rounded value - so a USE of it at a wide type has to fold to the exact value of the
+  // initializer rather than read the binding.
   const K = Q53;
   expect(evaluated(`const K = ${K}; let b: uint64 = K; String(b);`)).toBe(String(K));
   expect(evaluated(`const K = ${P53} + ${Q53}; let b: uint64 = K; String(b);`)).toBe(String(P53 + Q53));
@@ -340,7 +334,7 @@ test('a const of a numeric constant behaves as if inlined - exactly, at any widt
   expect(evaluated(`const A = ${P53}; const B = A + 1; const C = A + B; let b: uint64 = C; String(b);`)).toBe(String(P53 + Q53));
   // As the literal operand beside a typed value.
   expect(evaluated(`const K = ${K}; let a: uint64 = 1; String(a + K);`)).toBe(String(1n + K));
-  // The README's own refusal, now the compile-time error it describes.
+  // The refusal, as the compile-time error it is.
   expect(evaluated('try { eval("const K = 300; let x: uint8 = K;"); "ok"; } catch (e) { e.constructor.name; }')).toBe('StaticTypeError');
   // Nothing about the binding changes: untyped use is a Number.
   expect(evaluated(`const K = ${K}; String(typeof K);`)).toBe('number');
@@ -354,15 +348,14 @@ test('a const of a numeric constant behaves as if inlined - exactly, at any widt
 // ---------------------------------------------------------------------------
 // A LITERAL BESIDE A DECIMAL TAKES THE DECIMAL TYPE, ON ITS SOURCE DIGITS.
 //
-// decimal.md: "a decimal literal is read from its source digits directly, not
-// routed through a binary float64", "in a decimal context the literal 0.1 is
-// the decimal one tenth", and "the literal 3 takes the decimal type". Two things
-// stood in the way. The decimal type records carry the width IN the name -
-// `decimal64`, where the integer records are `uint` AT 64 - so the value-type
-// predicate never matched them and `a + 0.2` beside a decimal was refused with
-// "a decimal operand requires a decimal on both sides". And there was no decimal
-// constant fold, so `0.1 + 0.2` at a decimal type was computed in Number and
-// `0.30000000000000004` was refused at the boundary.
+// Unspecified: the specification does not state how a literal beside a decimal is read. These tests pin the
+// engine's rule: a decimal literal is read from its source digits directly, not routed through a binary
+// float64; in a decimal context the literal 0.1 is the decimal one tenth; and the literal 3 takes the decimal
+// type. So `a + 0.2` beside a decimal is accepted, not refused with "a decimal operand requires a decimal on
+// both sides", and `0.1 + 0.2` at a decimal type is folded as decimals rather than computed in Number, where
+// `0.30000000000000004` would be refused at the boundary. The decimal type records carry the width IN the
+// name - `decimal64`, where the integer records are `uint` AT 64 - so the value-type predicate must
+// recognise them.
 // ---------------------------------------------------------------------------
 
 for (const ty of ['decimal64', 'decimal128']) {
@@ -372,7 +365,7 @@ for (const ty of ['decimal64', 'decimal128']) {
     expect(evaluated(`let a: ${ty} = 1.1; String(a * 3);`)).toBe('3.3');
     expect(evaluated(`let a: ${ty} = 1.0; String(a - 0.9);`)).toBe('0.1');
     expect(evaluated(`let a: ${ty} = 0.1; String((a + 0.2) is ${ty});`)).toBe('true');
-    // A value of another type still does not convert on its own (decimal.md).
+    // A value of another type still does not convert on its own (#sec-arithmetic-never-promotes).
     expect(run(`let a: ${ty} = 0.1; let n: uint8 = 2; a + n;`)).toMatchObject({ Type: 'throw' });
   });
 
@@ -421,9 +414,8 @@ test('a compound assignment on a typed target accepts an untyped operand', () =>
 });
 
 test('the conversion is CHECKED, and the arithmetic is the type\'s', () => {
-  // A value the target cannot hold is a RangeError, not a silent wrap - the
-  // plain conversion took this to 44, which is the truncation the design
-  // refuses everywhere else.
+  // A value the target cannot hold is a RangeError, not a silent wrap - the plain conversion would take this
+  // to 44, which is the truncation refused everywhere else (#table-numeric-conversions).
   expect(evaluated('function g() { return 300; } let a: uint8 = 0; try { a += g(); } catch (e) { e.constructor.name; }')).toBe('RangeError');
   // Wrapping that belongs to the TYPE's arithmetic still happens, exactly as it
   // does for the desugared spelling.

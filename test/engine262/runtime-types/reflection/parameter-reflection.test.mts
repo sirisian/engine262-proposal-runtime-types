@@ -2,14 +2,11 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Spec: #sec-decorator-contexts; design: decorators.md ~747.
- *
- * `getReflection` decided whether a call was a member read by testing the
- * context against a literal list of six, and every parameter and return context
- * was absent - so the call fell through to the TYPE path, which reads its first
- * argument as a type. A member name is a string, hence `"m" is not a type`,
- * which was the fall-through speaking rather than a diagnosis. The data was
- * always recorded: `getReflectionByIndex` read the same store and answered.
+ * Spec: #sec-decorator-contexts, #sec-reflection-retrieval. `getReflection` decides whether a call is a member
+ * read by testing the context, and every parameter and return context must be among those that name members;
+ * otherwise the call falls through to the TYPE path, which reads its first argument as a type, so a member
+ * name would report `"m" is not a type` - the fall-through speaking rather than a diagnosis. The data is
+ * recorded: `getReflectionByIndex` reads the same store and answers.
  */
 
 const A = 'class A { m(first: uint8, second: string) {} } ';
@@ -62,15 +59,12 @@ test('parameter reflection: the paths it shares a store with are unchanged', () 
 });
 
 /**
- * decorators.md ~330: "`initial` captures CONSTANT values only: a non-constant
- * initializer reports *undefined* ... `initializer` carries the same
- * declaration as a `TokenStream` ... The pair is a value and the expression
- * that produced it, not two spellings of one thing."
- *
- * A `hasDefault` Boolean stood in for both, on the reasoning that a default is
- * an expression evaluated per call. That is true of a NON-CONSTANT default and
- * leaves out the branch above; once `initializer` exists, `hasDefault` is
- * `initializer !== undefined` and reports what a second field implies.
+ * #sec-reflection-shape-rules: `initial` holds a declared default only where it is a constant, and *undefined*
+ * otherwise; `initializer` carries the declaration as a TokenStream. The pair is a value and the expression
+ * that produced it, not two spellings of one thing. A `hasDefault` Boolean is not a field: a default is an
+ * expression evaluated per call, which is true of a NON-CONSTANT default and leaves out the constant one, and
+ * once `initializer` exists `hasDefault` would be `initializer !== undefined`, reporting what a second field
+ * implies.
  */
 test('parameter reflection: a default is a value and the expression that made it', () => {
   const at = (decl: string, expr: string) => `class A { m(${decl}) {} }`

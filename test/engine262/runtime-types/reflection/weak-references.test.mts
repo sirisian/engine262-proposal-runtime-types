@@ -2,20 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * Spec: #sec-weak-references-and-typed-objects (Weak References and Typed
- * Objects).
- *
- * Weak references reject value types.
- *
- * A value of a value type has no identity (#sec-value-types), so weakly
- * holding one is meaningless: there is nothing for the reference to observe the
- * liveness of. Constructing a WeakRef over a typed-class instance, using one as a
- * WeakMap key or WeakSet value, or registering one as a FinalizationRegistry
- * target is therefore a TypeError (README "Weak References"). This is the same
- * identity principle as the parallel rejection of a Proxy over a typed-class
- * instance. An ordinary object, a function, and a registered Symbol are held
- * weakly as before; only an instance of a typed class, the same instance that
- * cannot be proxied, is rejected.
+ * Spec: #sec-weak-references-and-typed-objects (Weak References and Typed Objects). Weak references reject
+ * value types. A value of a value type has no identity (#sec-value-types), so weakly holding one is
+ * meaningless: there is nothing for the reference to observe the liveness of. Constructing a WeakRef over a
+ * typed-class instance, using one as a WeakMap key or WeakSet value, or registering one as a
+ * FinalizationRegistry target is therefore a TypeError. This is the same identity principle as the parallel
+ * rejection of a Proxy over a typed-class instance. An ordinary object, a function, and a registered Symbol
+ * are held weakly as before; only an instance of a typed class, the same instance that cannot be proxied, is
+ * rejected.
  */
 
 // -- WeakRef -------------------------------------------------------------------

@@ -2,20 +2,12 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, bool, evaluatedFlagOff } from '../harness.mts';
 
 /**
- * Spec: #sec-type-object-opacity (Type Object Opacity), #sec-reflect-typeof.
- * Design: typeobjects.md.
- *
- * This extension is substantially implemented in the core: type names are
- * first-class interned values, Reflect.typeOf returns the type object, the
- * meta-"type" type is the type of every type object, and Reflect.getReflection
- * cracks a type object open into a node discriminated by `kind` whose leaves are
- * themselves type objects.
- *
- * Minor gaps (documented, not asserted as failures): the `type` OPERATOR
- * (`type uint8` in type position) is a contextual-keyword form the spec leaves as
- * an unresolved cover-grammar question, and `type` is not writable as a type name
- * in an annotation; a type expression in raw expression position (`[].<uint8>`
- * outside an alias) does not always intern, though the alias form does.
+ * Spec: #sec-type-object-opacity (Type Object Opacity), #sec-reflect-typeof, #sec-computed-types. Type names
+ * are first-class interned values, Reflect.typeOf returns the type object, the meta-"type" type is the type
+ * of every type object, and Reflect.getReflection cracks a type object open into a node discriminated by
+ * `kind` whose leaves are themselves type objects. The `type` operator works in expression position (`type
+ * uint8`), `type` is writable as a type name in an annotation (`let x: type = uint8`), and a type expression
+ * in raw expression position (`[].<uint8>`) interns.
  */
 
 // -- Type names are first-class values -----------------------------------------

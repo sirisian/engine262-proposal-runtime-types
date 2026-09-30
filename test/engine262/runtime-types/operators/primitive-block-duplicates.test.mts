@@ -5,15 +5,14 @@ import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 /**
  * Spec: #sec-operator-declarations.
  *
- * "A `primitive` block adds to a global operator table; two definitions for one
- * pair of types is a type error at the second declaration."
+ * "A `primitive` block adds to a global operator table; two definitions for one pair of types is a type
+ * error at the second declaration."
  *
- * Both halves were missing. The table was keyed by operator text alone, so a
- * second definition REPLACED the first whatever its operand type: a repeated
- * pair silently changed the meaning of every later expression, and two
- * different pairs - the design's `2 * v` for two vector classes - lost the
- * first, whose operand then fell through to the primitive operation and
- * produced NaN.
+ * Both halves must hold: the table is keyed by the operator AND its operand types, so a second definition for
+ * a different pair does not replace the first, and a repeated pair is refused at the second declaration.
+ * Otherwise a repeated pair silently changes the meaning of every later expression, and two different pairs -
+ * `2 * v` for two vector classes - would lose the first, whose operand would fall through to the primitive
+ * operation and produce NaN.
  */
 
 test('a repeated pair is refused at the second declaration', () => {

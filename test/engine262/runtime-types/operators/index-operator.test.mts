@@ -4,20 +4,13 @@ import {
 } from '../harness.mts';
 
 /**
- * User-defined index operator dispatch (read direction).
- *
- * A class may declare an index operator `operator[](i)`. A numeric index access
- * `m[i]` on an instance of such a class dispatches to that operator, called with
- * the index value, in place of the ordinary property read (README
- * "Multidimensional and Jagged Array Support Via User-defined Index Operators",
- * #sec-operator-declarations). The index may be a plain number or a typed numeric
- * value. A non-numeric key, such as a string method name, is left to ordinary
- * property access, so an index-defining class keeps its methods reachable. A class
- * with no index operator is unaffected, and the dispatch is gated on the feature.
- *
- * The write direction is covered below. Deferred and not covered here: the
- * multi-argument form `m[x, y]` (which needs the comma-index grammar of the ranges
- * extension), and overload resolution among several index operators.
+ * User-defined index operator dispatch (read direction). A class may declare an index operator
+ * `operator[](i)`. A numeric index access `m[i]` on an instance of such a class dispatches to that operator,
+ * called with the index value, in place of the ordinary property read (#sec-user-defined-operators,
+ * #sec-operator-declarations). The index may be a plain number or a typed numeric value. A non-numeric key,
+ * such as a string method name, is left to ordinary property access, so an index-defining class keeps its
+ * methods reachable. A class with no index operator is unaffected, and the dispatch is gated on the feature.
+ * The write direction is covered below, and so is the multi-argument form `m[x, y]`.
  */
 
 // -- Read dispatch -------------------------------------------------------------
@@ -99,7 +92,7 @@ const GRID = 'class C { #d = [0, 0, 0, 0];'
   + ' set operator[](x: uint32, y: uint32, v) { this.#d[y * 2 + x] = v; } } ';
 
 test('a multi-index access reaches an accessor of that many parameters', () => {
-  // the design's `grid[x, y]`, which is what the multidimensional section is for
+  // `grid[x, y]` (#sec-user-defined-operators), which is what the multidimensional index is for
   expect(evaluated('class C { get operator[](x: uint32, y: uint32) { return (x * 10 + y) := uint32; } } String(new C()[1, 2]);')).toBe('12');
   expect(evaluated(`${GRID}const c = new C(); c[1, 1] = 9; String(c[1, 1]);`)).toBe('9');
   // three indices, the 4x4x4 grid of the same section
@@ -153,8 +146,8 @@ test('multi-index access is inert with the feature off', () => {
 const REFGET = 'class C { #d = [1, 2]; get operator[](i: uint32) { return ref this.#d[i]; } peek(i) { return this.#d[i]; } } ';
 
 test('a write goes through a borrow the read direction returned', () => {
-  // the design writes `get operator[]() { return ref this[...]; }` with no
-  // setter, because a reference already denotes the place a write goes
+  // a read direction that returns a reference needs no setter, because a reference already denotes the place a
+  // write goes (#sec-user-defined-operators): `get operator[]() { return ref this[...]; }`
   expect(evaluated(`${REFGET}const c = new C(); c[0] = 5; String(c.peek(0));`)).toBe('5');
   // and reading still decays, so a value use sees the referent
   expect(evaluated(`${REFGET}String(new C()[1]);`)).toBe('2');
@@ -213,7 +206,7 @@ test('the pair is refused only where it is actually ambiguous', () => {
   expect(evaluated('class C { #d = [1]; get operator[](i: uint32) { return this.#d[i]; }'
     + ' set operator[](i: uint32, v) { this.#d[i] = v; } }'
     + ' const c = new C(); c[0] = 7; String(c[0]);')).toBe('7');
-  // a reference read direction alone is the design's own form
+  // a reference read direction alone is a valid form
   expect(evaluated('class C { #d = [1]; get operator[](i: uint32) { return ref this.#d[i]; }'
     + ' peek(i) { return this.#d[i]; } }'
     + ' const c = new C(); c[0] = 7; String(c.peek(0));')).toBe('7');

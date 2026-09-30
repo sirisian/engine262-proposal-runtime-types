@@ -2,11 +2,9 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
- * #sec-primitive-operator-blocks for unary `-`: a block's `operator-()` speaks
- * for its receiver before the primitive negation, as its binary operators do.
- * Unary definitions were registered and never looked up - the design's
- * dimensioned vector declares `operator-(): vector.<float32.<D>, N>;` - and a
- * bodyless one was not registered at all.
+ * #sec-primitive-operator-blocks for unary `-`: a block's `operator-()` speaks for its receiver before the
+ * primitive negation, as its binary operators do. A dimensioned vector declares
+ * `operator-(): vector.<float32.<D>, N>;`, and a bodyless unary definition is registered too.
  */
 
 const D = `type Dim = { m: int32 };
