@@ -2,18 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
- * Spec: #sec-composites (Composites) - record composites and the registry.
- *
- * #sec-composites: a composite is a frozen, null-prototyped object that is
- * INTERNED, so two creations from the same contents are the same object.
- * Equality of contents is therefore identity, and `===`, `Map`, `Set` and
- * `Array.prototype.includes` compare composites structurally with NO CHANGE to
- * any of them - the comparison each already performs finds one object where the
- * contents are one. That is the whole of the collections integration, and the
- * reason it needs no specification text.
- *
- * This is the design's TYPED composites. Upstream is the base it layers on;
- * every rule below follows the clause.
+ * Spec: #sec-composites (Composites) - record composites and the registry. #sec-composites: a composite is a
+ * frozen, null-prototyped object that is INTERNED, so two creations from the same contents are the same object.
+ * Equality of contents is therefore identity, and `===`, `Map`, `Set` and `Array.prototype.includes` compare
+ * composites structurally with NO CHANGE to any of them - the comparison each already performs finds one object
+ * where the contents are one. That is the whole of the collections integration, and the reason it needs no
+ * specification text. These are TYPED composites; the untyped composites of the upstream proposal are the base
+ * they layer on, and every rule below follows the clause.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
@@ -32,7 +27,7 @@ test('the collections integration needs no code, which is the point', () => {
   expect(evaluated('String([Composite({ x: 1 })].includes(Composite({ x: 1 })));')).toBe('true');
 });
 
-test('INTERNING IS TYPE-SENSITIVE, the design\'s central deviation', () => {
+test('INTERNING IS TYPE-SENSITIVE, the central deviation from upstream', () => {
   // "a `uint8` field and a Number field of the same mathematical value are
   // different keys, so the value read back is the value that was stored, at its
   // type, however many creation sites produced the object". The alternative

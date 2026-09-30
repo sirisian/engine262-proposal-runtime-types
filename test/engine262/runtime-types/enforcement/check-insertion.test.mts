@@ -469,12 +469,9 @@ test('row 6: a value of the any type reaching a typed operator', () => {
   // A literal is not an `any` value: it TAKES the type of the other operand,
   // so it never forces a conversion and never reaches this row.
   expect(evaluated('String((1 := uint8) + 1) + "/" + String(((1 := uint8) + 1) is uint8);')).toBe('2/true');
-  // A literal that cannot take that type is a COMPILE-TIME error - the README:
-  // "one that doesn't fit is a compile-time TypeError rather than a silent
-  // truncation", and its own example is `a + 300` at a `uint8`. This row
-  // expected the run-time backstop, which is what it got while the checker had
-  // no arm for arithmetic; the checker types the operator now and the literal
-  // takes the other operand's type where it is written.
+  // A literal that cannot take that type is a COMPILE-TIME error: one that does not fit is a compile-time
+  // TypeError rather than a silent truncation (#sec-literal-propagation), the example being `a + 300` at a
+  // `uint8`. The checker types the operator, and the literal takes the other operand's type where it is written.
   expectStatic('(1 := uint8) + 300;');
   // The string behaviour of `+` is explicitly unchanged and applies FIRST:
   // uint8(1) + "x" is "1x" by #sec-operator-dispatch, which is why this line
@@ -630,11 +627,11 @@ test('a typed collection checks every position it declares, at any type', () => 
 });
 
 test('a set operation\'s result carries the element type its values can come from', () => {
-  // standardlibrary.md writes these out: `intersection` and `difference` draw
-  // only from `this`, so the result keeps T; `union` and `symmetricDifference`
-  // draw from both, so the result holds `T | U`. Both halves land together
-  // deliberately - a checker that says `Set.<uint8>` over a run time holding an
-  // unstamped Set is a disagreement between the two halves.
+  // Unspecified: the specification does not state the result types of the Set operations. These tests pin the
+  // engine's: `intersection` and `difference` draw only from `this`, so the result keeps T; `union` and
+  // `symmetricDifference` draw from both, so the result holds `T | U`. Both halves land together deliberately - a
+  // checker that says `Set.<uint8>` over a run time holding an unstamped Set is a disagreement between the two
+  // halves.
   const two = 'let a: Set.<uint8> = new Set(); a.add(1); let b: Set.<uint16> = new Set(); b.add(1000); ';
   // RUN TIME: an UNSTAMPED result switches the typed surface off for
   // everything downstream - `s.union(o).add(300)` accepted on two
@@ -683,8 +680,8 @@ test('the checker knows a typed collection\'s method signatures', () => {
   // a lookup that finds nothing answers undefined, so a binding of the value
   // type is a mistake the types can see.
   expectStatic('function f(m: Map.<string, uint8>) { let x: uint8 = m.get("a"); }');
-  // The positive forms typecheck, including the returns the design declares:
-  // `has` answers a boolean and `add` answers the set itself, for chaining.
+  // The positive forms typecheck, including the returns: `has` answers a boolean and `add` answers the set itself,
+  // for chaining.
   expect(evaluated('function f(s: Set.<uint8>) { let b: boolean = s.has(5); let t: Set.<uint8> = s.add(5); } "ok";')).toBe('ok');
   expect(evaluated('function f(m: Map.<string, uint8>) { let x: uint8 | undefined = m.get("a"); } "ok";')).toBe('ok');
   // An UNTYPED collection has no declared type to check against, so nothing
@@ -862,11 +859,8 @@ test('a BLOCK-bodied callback\'s return type is inferred', () => {
   expect(evaluated(`${a} { let b: [].<string> = a.map(x => { return "s"; }); } "ok";`)).toBe('ok');
   // A FunctionExpression callback, not only an arrow.
   expectStatic(`${a} { let b: [].<uint8> = a.map(function (x) { return "s"; }); }`);
-  // The parameters the position supplies are visible in the body, so the INDEX
-  // TYPE flows into the inference too. That type is `uint64` - #sec-array-and-tuple-types
-  // defines it, and notes that `standardlibrary.md` writes `uint32` for the
-  // callback's second parameter only because it predates the definition. This
-  // row asserted the stale spelling.
+  // The parameters the position supplies are visible in the body, so the INDEX TYPE flows into the inference too.
+  // That type is `uint64` (#index-type, #sec-array-and-tuple-types).
   expect(evaluated(`${a} { let b: [].<uint64> = a.map((x, i) => { return i; }); } "ok";`)).toBe('ok');
 
   // SEVERAL returns join into a union.
@@ -1132,11 +1126,9 @@ test('an EMPTY typed array carries its element type', () => {
 });
 
 test('a typed collection takes its needle at the element type', () => {
-  // A typed collection's search methods take the element type, which is the
-  // design's own shape for one (`has(value: T)` on a `WeakSet<T>`). Without it
-  // a correctly typed array could not find a literal it contains:
-  // `a.includes(65)` was *false* on a `[].<uint16>` holding 65, in fully typed
-  // code with no mixing anywhere.
+  // A typed collection's search methods take the element type (#sec-array-defaults-and-stores; `has(value: T)` on a
+  // `WeakSet<T>`). Without it a correctly typed array could not find a literal it contains: `a.includes(65)` would
+  // be *false* on a `[].<uint16>` holding 65, in fully typed code with no mixing anywhere.
   const a = 'let a: [].<uint16> = [65, 66]; ';
   expect(evaluated(`${a} String(a.includes(65));`)).toBe('true');
   expect(evaluated(`${a} String(a.indexOf(66));`)).toBe('1');
@@ -1536,21 +1528,15 @@ test('a boundary whose conversion has an effect is never elided', () => {
 });
 
 // ---------------------------------------------------------------------------
-// `a OP= b` IS `a = a OP b`, AND IS JUDGED AS ONE.
+// `a OP= b` IS `a = a OP b`, AND IS JUDGED AS ONE (#sec-literal-propagation). The judgment must not be guarded
+// on the `=` operator: otherwise every compound and logical assignment is left to the run time while its own
+// desugaring is an Early Error - `a = a + 300` refused and `a += 300` not. `requireWritableMember` in the same
+// arm already sits outside that guard, because every assignment operator writes.
 //
-// The arm's type check was guarded on `AssignmentOperator === '='`, so every
-// compound and logical assignment was left to the run time while its own
-// desugaring was an Early Error: `a = a + 300` was refused and `a += 300` was
-// not. `requireWritableMember` in the same arm already sat outside that guard,
-// with the comment "every assignment operator writes" - so the arm knew the
-// distinction and the check had simply not been extended.
-//
-// SCOPE, deliberately: the arithmetic compounds are judged where the target is a
-// NUMERIC value type, which is where "no implicit conversion" plainly applies.
-// A `string` target is left alone, because `s += n` is `s = s + n` and whether a
-// typed number may concatenate is an open question of the design - refusing it
-// here would decide that question by accident, and in the opposite direction
-// from the `=` spelling, which accepts it today.
+// SCOPE, deliberately: the arithmetic compounds are judged where the target is a NUMERIC value type, which is
+// where "no implicit conversion" plainly applies. A `string` target is left alone, because `s += n` is
+// `s = s + n` and whether a typed number may concatenate is an open question; refusing it here would decide
+// that question by accident, and in the opposite direction from the `=` spelling, which accepts it today.
 // ---------------------------------------------------------------------------
 
 test('a compound assignment is refused where its desugaring is', () => {

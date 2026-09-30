@@ -176,13 +176,11 @@ test('shortening is not deleting', () => {
   // DYNAMIC array's length is not part of its type, so it may shrink.
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; String(a.pop());')).toBe('3');
 
-  // A TUPLE's is. This case previously passed
-  // and now throws, and the change is deliberate: `push`, `shift` and `splice`
-  // on a tuple were already refused because the arity is part of the type, and
-  // `pop` reached the same truncation through `length`, which nothing checked.
-  // The comment above records why the rule is not in [[Delete]]; it does not
-  // decide whether a tuple may shrink, and the rest of the design says it may
-  // not - `[uint8, string]` with one position left is not of its type.
+  // A TUPLE's length is part of its type (#sec-array-and-tuple-types, #sec-intrinsic-array-contracts): `push`,
+  // `shift` and `splice` on a tuple are refused because the arity is part of the type, and `pop` reaches the same
+  // truncation through `length`, so it is refused too. The comment above records why the rule is not in [[Delete]];
+  // it does not decide whether a tuple may shrink, and a tuple may not: `[uint8, string]` with one position left is
+  // not of its type.
   expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t.pop();');
   expectThrown('type T = [uint8, string]; let t: T = [1, "s"]; t.length = 1;');
   // A rest collects any number, so shrinking to the fixed positions is fine.

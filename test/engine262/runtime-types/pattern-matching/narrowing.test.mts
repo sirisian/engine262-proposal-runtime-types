@@ -2,12 +2,10 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * Spec: #sec-declared-narrowing (Declared Narrowing), #sec-narrowfrom.
- *
- * What a pattern establishes about its subject is what
- * the arm may rely on - and what it CANNOT establish is as much of the design as
- * what it can: "`not` and arm-failure narrow only what subtraction can
- * represent - union members, sealed subclasses, literals, `null`".
+ * Spec: #sec-declared-narrowing (Declared Narrowing), #sec-narrowfrom. What a pattern establishes about its
+ * subject is what the arm may rely on - and what it CANNOT establish is as much of the rule as what it can: `not`
+ * and arm-failure narrow only what subtraction can represent - union members, sealed subclasses, literals,
+ * `null`.
  */
 
 const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
@@ -31,7 +29,7 @@ test('`not` NEGATES the narrowing rather than abandoning it', () => {
   expect(outcome('function f(v: uint8 | string) { if (v is not not uint8) { const n: uint8 = v; return n; } return uint8(0); } f(uint8(1));')).toBe('ACCEPTED');
 });
 
-test('what narrowing does NOT do, by the design\'s own account', () => {
+test('what narrowing does NOT do', () => {
   // "A failed structural pattern narrows nothing", because negation types do
   // not exist here - so a `not` over an object pattern establishes nothing in
   // the true branch and the union survives intact.
@@ -126,9 +124,8 @@ test('a numeric literal takes the CONTEXTUAL TYPE of its position', () => {
 });
 
 test('a numeric literal against a UNION of numeric types is ambiguous', () => {
-  // "Matching only one would be a silent half-answer" - and there is no
-  // principled way to pick a member, so this needs a RULE rather than
-  // inference. It is the one case the design calls out by name.
+  // Matching only one would be a silent half-answer, and there is no principled way to pick a member, so this needs
+  // a RULE rather than inference.
   const outcome7 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   expect(outcome7('function f(v: uint8 | float32) { return match (v) { when 5: 1; default: 0; }; } f(uint8(5));')).toBe('StaticTypeError');
   // A union with only ONE numeric member is not ambiguous.

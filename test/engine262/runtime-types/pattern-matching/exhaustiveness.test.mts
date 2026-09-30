@@ -69,10 +69,9 @@ test('what the checker half still lacks', () => {
 
 
 test('a SEALED class is a closed set too', () => {
-  // README: "A `sealed` class restricts `extends` to the module that declares
-  // it. The set of direct subclasses is therefore FIXED AND KNOWN when the
-  // module finishes evaluating." There is no `permits` clause to read - the set
-  // is whatever the declaration list holds.
+  // #sec-sealed-classes: a `sealed` class may not be extended outside the module that declares it, so its
+  // subclasses are a fixed and known set. There is no `permits` clause to read - the set is whatever the
+  // declaration list holds.
   const outcome8 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   const S = 'sealed class S {} class T extends S {} class U extends S {} ';
   // The BASE is one of the atoms, since a plain `sealed` class can be

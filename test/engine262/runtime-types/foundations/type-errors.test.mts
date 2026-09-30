@@ -30,11 +30,10 @@ function evaluated(source: string): string {
   return (completion as unknown as { Value: { stringValue(): string } }).Value.stringValue();
 }
 
-// The flagship of primitivemetadata.md, in the claim form: a meta type over a
-// declared shape claims its keys, and the claims are how it governs a
-// parameterization it never names. `subtype` compares the exponents and
-// ignores the ratio, which is exactly what lets Kilometer reach Meter while
-// refusing Velocity.
+// The flagship metadata example, in the claim form: a meta type over a declared shape claims its keys
+// (#sec-metadata-decomposition), and the claims are how it governs a parameterization it never names. `subtype`
+// compares the exponents and ignores the ratio, which is exactly what lets Kilometer reach Meter while refusing
+// Velocity.
 const dimensions = `
   type Dim = { m: number, s: number, ratio: number };
   meta Dim {

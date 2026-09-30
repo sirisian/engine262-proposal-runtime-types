@@ -2,27 +2,18 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * Spec: #sec-composite-modifications (Composite Modifications) - SameValueZero
- * within a typed float.
+ * Spec: #sec-composite-modifications (Composite Modifications) - SameValueZero within a typed float.
  *
- * The specification enumerates the SameValueZero equivalence classes with more
- * than one member as "the signed zeros, handled above for the Number type and
- * EACH BINARY FLOAT WIDTH, and the decimal cohorts". So `float32(-0)` and
- * `float32(+0)` are ONE class, exactly as `-0` and `+0` are for Number - while
- * SameValue keeps them apart, which is the split the design calls "the same
- * split Number already has for `+0` and `-0`".
+ * The specification enumerates the SameValueZero equivalence classes with more than one member as "the signed
+ * zeros, handled above for the Number type and EACH BINARY FLOAT WIDTH, and the decimal cohorts". So
+ * `float32(-0)` and `float32(+0)` are ONE class, exactly as `-0` and `+0` are for Number - while SameValue keeps
+ * them apart, the same split Number already has for `+0` and `-0`. One comparison must not serve both: there is a
+ * distinct -0 typed value, and a typed negative zero and a typed positive zero are one Map key.
  *
- * This had been one comparison serving both, on the reasoning that "a value type
- * has no separate zero identity ... there is no distinct -0 typed value here".
- * There is. The consequence was that a typed negative zero and a typed positive
- * zero were two Map keys where the specification makes them one.
- *
- * It is a PREREQUISITE for composites rather than a tidying: interning is
- * defined over SameValueZero, and `CanonicalizeCompositeValue` returns "the
- * positive zero of that type" for a binary float's negative zero - a step that
- * only means something if the two zeros are one class. Built on the old
- * behaviour, a composite would have stored a value that compared UNEQUAL to the
- * one its own clause says it stores.
+ * It is a PREREQUISITE for composites: interning is defined over SameValueZero, and `CanonicalizeCompositeValue`
+ * returns "the positive zero of that type" for a binary float's negative zero - a step that only means something
+ * if the two zeros are one class. Otherwise a composite would store a value that compares UNEQUAL to the one its
+ * own clause says it stores.
  */
 
 test('a typed float\'s two zeros are ONE SameValueZero class', () => {

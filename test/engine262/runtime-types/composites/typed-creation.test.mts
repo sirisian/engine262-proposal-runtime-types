@@ -24,15 +24,14 @@ test('the type argument TYPES the fields, which is the whole point', () => {
   expect(evaluated('interface I { x: uint8 } String(Composite.<I>({ x: 1 }) === Composite({ x: 1 }));')).toBe('false');
 });
 
-test('the design\'s CACHE KEY example, which is what the boundary is for', () => {
+test('the CACHE KEY example, which is what the boundary is for', () => {
   // "A typed producer and an untyped consumer do not meet ... the mitigation is
   // that the boundary is exactly where this proposal already puts annotations:
   // give the key a named shape and create it through that shape on both sides."
   const decl = 'interface CacheKey { id: uint32; page: uint8 } const cache = new Map(); ';
   expect(evaluated(`${decl} cache.set(Composite.<CacheKey>({ id: 7, page: 2 }), "results"); `
     + 'String(cache.get(Composite.<CacheKey>({ id: 7, page: 2 })));')).toBe('results');
-  // And the SILENT MISS the design names, pinned so the hazard is documented
-  // rather than only its fix.
+  // And the SILENT MISS, pinned so the hazard is documented rather than only its fix.
   expect(evaluated(`${decl} cache.set(Composite.<CacheKey>({ id: 7, page: 2 }), "results"); `
     + 'String(cache.get(Composite({ id: 7, page: 2 })));')).toBe('undefined');
 });
@@ -44,10 +43,8 @@ test('an optional member\'s default is filled AT CREATION', () => {
   const K = 'interface K { id: uint32; page?: uint8 = 0 } ';
   expect(evaluated(`${K} String(Composite.<K>({ id: 7 }).page);`)).toBe('0');
   expect(evaluated(`${K} String(Composite.<K>({ id: 7 }) === Composite.<K>({ id: 7, page: 0 }));`)).toBe('true');
-  // The default is CONVERTED to the member's type like any supplied value -
-  // filling the raw default stored a Number where the explicit spelling stored
-  // a `uint8`, so the two did not intern, which is the property the design's
-  // own example asserts.
+  // The default is CONVERTED to the member's type like any supplied value - filling the raw default would store a
+  // Number where the explicit spelling stores a `uint8`, so the two would not intern.
   expect(evaluated(`${K} String(Reflect.typeOf(Composite.<K>({ id: 7 }).page) === (type uint8));`)).toBe('true');
   expect(evaluated(`${K} String(Composite.<K>({ id: 7, page: 5 }).page);`)).toBe('5');
   // An optional member with NO default stays absent - "an optional member is

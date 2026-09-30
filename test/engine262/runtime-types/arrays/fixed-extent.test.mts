@@ -28,11 +28,12 @@ test('a fixed-extent array cannot be grown', () => {
 });
 
 test('an out-of-bounds READ is a RangeError', () => {
-  // Unspecified: the specification states no bounds rule for an element access. These tests pin the
-  // engine's: an access out of bounds of a typed array is a `RangeError` and not *undefined*, the
-  // ordinary JavaScript answer for a missing property being the wrong one for a value whose type says
-  // how many elements it has. A LITERAL index against a FIXED extent is decided at compile time; the
-  // run-time RangeError is the answer for every index that is not.
+  // Unspecified: no clause states the bounds rule for an element access, though #sec-typed-catch lists "*RangeError*
+  // ... at an out-of-bounds access" among the errors this proposal raises. These tests pin the engine's: an access
+  // out of bounds of a typed array is a `RangeError` and not *undefined*, the ordinary JavaScript answer for a
+  // missing property being the wrong one for a value whose type says how many elements it has. A LITERAL index
+  // against a FIXED extent is decided at compile time; the run-time RangeError is the answer for every index that
+  // is not.
   expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[9];');
   expectStaticTypeError('const a: [4].<float32> = [1, 2, 3, 4]; a[4];');
   // `-1` is a unary minus over a literal, and a negative index can only be

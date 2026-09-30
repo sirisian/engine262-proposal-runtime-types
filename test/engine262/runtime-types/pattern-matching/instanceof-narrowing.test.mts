@@ -2,20 +2,13 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 /**
- * `instanceof` is a narrowing form. The README says so where it introduces the
- * operator - "a successful check narrows the static type in that branch, the
- * nominal counterpart to the structural `is` operator" - and again where `#a in
- * value` is described as "joining `instanceof` and the structural `is` operator
- * as a narrowing form".
+ * Spec: #sec-narrowing (the narrowing-forms table).
  *
- * It narrowed nothing. The test was typed and reported on and never turned into
- * a fact, so the run time answered correctly while the checker refused every
- * member access the branch had just made safe.
- *
- * The right operand resolves through `classTypeOf` before `typeDenotedBy`:
- * `typeDenotedBy` answers aliases and built-ins and declines a class on purpose,
- * which is right for the impossible-test report it was written for and backwards
- * here, a class being the common right operand of `instanceof`.
+ * `instanceof` is a narrowing form: a successful check narrows the static type in that branch, the nominal
+ * counterpart to the structural `is` operator, so the member accesses the branch has just made safe are accepted.
+ * The right operand resolves through `classTypeOf` before `typeDenotedBy`: `typeDenotedBy` answers aliases and
+ * built-ins and declines a class on purpose, which is right for the impossible-test report it exists for and
+ * backwards here, a class being the common right operand of `instanceof`.
  */
 
 test('a successful instanceof narrows the branch it guards', () => {
@@ -75,13 +68,10 @@ test('a member expression narrows too, now that facts are keyed by place', () =>
 });
 
 /**
- * The BRAND CHECK narrows for the same reason and was missing for the same
- * reason. The README puts the three together: "the brand check `#a in value`
- * narrows the static type of `value` to the class in the true branch, joining
- * `instanceof` and the structural `is` operator as a narrowing form."
- *
- * Its subject is the RIGHT operand - the left is a private name, not an
- * expression - and the type it narrows to is the class declaring that name.
+ * The BRAND CHECK narrows for the same reason (#sec-narrowing): `#a in value` narrows the static type of `value`
+ * to the class in the true branch, joining `instanceof` and the structural `is` operator as a narrowing form. Its
+ * subject is the RIGHT operand - the left is a private name, not an expression - and the type it narrows to is the
+ * class declaring that name.
  */
 
 test('a brand check narrows the branch it guards, and subtracts in the other', () => {

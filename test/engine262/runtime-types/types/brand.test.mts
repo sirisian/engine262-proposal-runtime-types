@@ -30,9 +30,8 @@ test('a brand is distinguished by its tag and by its base', () => {
 });
 
 test('the same brand written twice is one type, with no registry', () => {
-  // typeprogramming.md 6.5: "one type everywhere it is written, in any module,
-  // without a registry". Structural interning delivers it - the tag is part of
-  // the metadata and the metadata is part of the type's identity.
+  // One type everywhere it is written, in any module, without a registry: structural interning delivers it - the
+  // tag is part of the metadata and the metadata is part of the type's identity (#sec-parameterized-types).
   expect(evaluated(`${U}String(U === type uint32.<{ brand: 'UserId' }>);`)).toBe('true');
 });
 

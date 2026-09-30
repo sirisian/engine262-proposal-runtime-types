@@ -224,10 +224,8 @@ test('a clause binding still does not escape its arm', () => {
 });
 
 /**
- * `MatchProperty : MatchBindingPattern` - the shorthand where the bound name is
- * also the member name. The specification gives it as an alternative and
- * patternmatching.md's opening example uses it, but the parser accepted only
- * `key: pattern`, so the design's own headline form was a Syntax Error.
+ * `MatchProperty : MatchBindingPattern` (#sec-match-patterns) - the shorthand where the bound name is also the
+ * member name. It is an alternative of the production, and the parser must accept it as well as `key: pattern`.
  */
 test('an object pattern may bind a member by its own name', () => {
   // The design's opening example.

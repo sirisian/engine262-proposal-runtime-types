@@ -2,30 +2,22 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 // ---------------------------------------------------------------------------
-// `JSON.parse.<Composite.<T>>(text)` VALIDATES AGAINST T AND INTERNS THE RESULT,
-// ALL THE WAY DOWN.
+// `JSON.parse.<Composite.<T>>(text)` VALIDATES AGAINST T AND INTERNS THE RESULT, ALL THE WAY DOWN
+// (#sec-composite-json): it validates against T by the walk of #sec-typed-json-parsing and interns the result, so
+// two parses of equal documents are the same object. Nested composites are trees terminating in non-composite
+// leaves, and a homogeneous `Composite.<[].<T>>` covers the variable-length case. Four requirements, each pinned
+// below:
 //
-// serialization.md: "validates the document against T by the rules above and
-// interns the result, so two parses of equal documents are the same object".
-// composites.md: "nested composites are trees terminating in non-composite
-// leaves"; "a homogeneous `Composite.<[].<T>>` covers the variable-length case".
-//
-// Only a FLAT shape worked. Four gaps, each measured:
-// 1. CompositeFromShape converted a nested member to its declared type and left
-//    it a plain object, so two parses of any nested document held different
-//    inner objects and never interned. A parsed document has no identity anyone
-//    holds, so the JSON path now interns deep. (A DIRECT `Composite({ v: {} })`
-//    still keeps the inner object's identity, as composites.md states.)
-// 2. `[].<T>` was refused as a shape - "not an object or tuple type".
-// 3. Membership: `Composite.<shape>` froze only the shape's own members, so a
-//    nested `[].<E>` kept a writable `E` no frozen composite could satisfy; and
-//    the relation had no arm for a tuple composite against a tuple or array
-//    type. So a parsed composite failed `is` against its own shape.
-// 4. The composite path skipped CoerceJSON's range check and ConvertValue
-//    WRAPPED: `"retries":300` at a `uint8` interned silently as 44 where the
-//    plain `JSON.parse.<T>` refused it. Validation now precedes interning.
-// And CoerceJSON had no tuple case at all, so `JSON.parse.<[uint8, string]>`
-// was refused on the plain path too.
+// 1. A nested member is converted to its declared type AND interned, so two parses of a nested document share
+//    their inner objects. A parsed document has no identity anyone holds, so the JSON path interns deep. (A
+//    DIRECT `Composite({ v: {} })` keeps the inner object's identity - the caller's.)
+// 2. `[].<T>` is accepted as a shape.
+// 3. Membership: `Composite.<shape>` freezes the shape's nested members too, so a nested `[].<E>` cannot keep a
+//    writable `E`, and the relation has an arm for a tuple composite against a tuple or array type. So a parsed
+//    composite is a member of its own shape.
+// 4. Validation precedes interning, including CoerceJSON's range check: `"retries":300` at a `uint8` is refused
+//    as it is on the plain `JSON.parse.<T>`, not wrapped to 44. CoerceJSON has a tuple case, so
+//    `JSON.parse.<[uint8, string]>` works on the plain path too.
 // ---------------------------------------------------------------------------
 
 const TYPES = 'type E = { host: string, port: uint16 }; type S = { name: string, endpoints: [].<E>, retries: uint8 }; ';
@@ -87,8 +79,8 @@ test('the shape of Composite.<S> is read as a composite tree, every spelling ali
 });
 
 test('the UNTYPED Composite keeps a nested plain object\'s identity - only a shape says the member is data', () => {
-  // composites.md: "Composite({ v: {} }) !== Composite({ v: {} })" - with no
-  // shape, the inner object is the caller's, with an identity the caller holds.
+  // `Composite({ v: {} }) !== Composite({ v: {} })`: with no shape, the inner object is the caller's, with an
+  // identity the caller holds.
   expect(evaluated('String(Composite({ v: {} }) === Composite({ v: {} }));')).toBe('false');
   expect(evaluated('const inner = {}; String(Composite({ v: inner }) === Composite({ v: inner }));')).toBe('true');
 });

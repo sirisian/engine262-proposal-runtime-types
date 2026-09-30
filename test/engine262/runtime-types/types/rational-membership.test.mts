@@ -67,9 +67,8 @@ test('a NON-literal Number converts by its exact value', () => {
 });
 
 test('a metadata default may write a bare literal', () => {
-  // The case that started this: `primitivemetadata.md` declares `ratio: rational64`
-  // with `default = { ratio: 1 }`, and every metadata example in that document
-  // failed because no literal reached any rational form.
+  // The case that started this: a meta type declares `ratio: rational64` with `default = { ratio: 1 }`, and no
+  // literal reached any rational form, so every metadata example of that shape failed.
   expect(evaluated('type D = { r: rational64 }; meta D { default = { r: 1 };'
     + ' subtype(a, b) { return true; } } "ok";')).toBe('ok');
 });

@@ -24,8 +24,7 @@ import { evaluated } from '../harness.mts';
 
 test('a rational member folds its fraction exactly', () => {
   expect(evaluated('String(Composite({ (v: rational64): 1 / 3 }).v);')).toBe('1/3');
-  // Three thirds summing to one is rational64.md's own headline claim, and it
-  // holds through a composite member now.
+  // Three thirds summing to one holds through a composite member.
   expect(evaluated(`const c = Composite({ (v: rational64): 1 / 3 });
     String(c.v + c.v + c.v);`)).toBe('1');
 });

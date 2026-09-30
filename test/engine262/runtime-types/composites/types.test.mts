@@ -52,12 +52,11 @@ test('the TOP composite type is the type of every composite', () => {
 });
 
 test('a shape must be NAMED at the creation site, not inferred', () => {
-  // The clause: "The Static Type of a call of the Composite function is the TOP
-  // composite type where the call supplies no TypeArguments and no contextual
-  // type reaches it." A shapeless type satisfies no specific interface, so this
-  // is refused - and that is the design's OWN advice rather than a shortfall:
-  // "an unannotated `Composite` call in typed code produces `number` fields,
-  // and code that means anything else should say so at the creation site".
+  // #sec-composite-types: the Static Type of a call of the Composite function is the TOP composite type where the
+  // call supplies no TypeArguments and no contextual type reaches it. A shapeless type satisfies no specific
+  // interface, so this is refused - and that is the advice for typed code rather than a shortfall: an unannotated
+  // `Composite` call produces `number` fields, and code that means anything else should say so at the creation
+  // site.
   expect(outcome('interface I { x: uint8 } let i: I = Composite({ x: uint8(1) });')).toBe('StaticTypeError');
   // The remedy is the TYPED CREATION form;
   // typed-creation.test.mts owns the assertions.

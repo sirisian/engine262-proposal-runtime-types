@@ -110,14 +110,10 @@ test('feature off: annotations and extra clauses stay errors', () => {
 // -- Semantics of a typed clause ----------------------------------------------
 
 /*
- * Design: errorhandling.md.
- *
- * A `catch (e: T)` runs only when the thrown value satisfies T, clauses are
- * tried in order, an untyped clause catches the rest, the binding is narrowed
- * within a typed clause, and an unmatched value propagates. The built-in error
- * constructors are registered as type names, so typed catch reaches them
- * (TypeError, RangeError, and the rest) as well as user classes and primitive
- * types.
+ * Spec: #sec-typed-catch. A `catch (e: T)` runs only when the thrown value satisfies T, clauses are tried in
+ * order, an untyped clause catches the rest, the binding is narrowed within a typed clause, and an unmatched
+ * value propagates. The built-in error constructors are registered as type names, so typed catch reaches them
+ * (TypeError, RangeError, and the rest) as well as user classes and primitive types.
  */
 
 // -- Typed catch by built-in error type ----------------------------------------
@@ -162,10 +158,9 @@ test('typed catch: a failed parse throws a catchable RangeError', () => {
 
 // -- Typed catch across an await boundary --------------------------------------
 test('typed catch: a clause matches an awaited rejection inside an async function', () => {
-  // errorhandling.md: a typed catch behaves the same around an awaited call, so a
-  // rejection surfaced by await is matched by the clause whose type it satisfies.
-  // The async continuation runs as a job, so a reader script evaluated after it
-  // (on the same realm, once the queue has drained) observes the outcome.
+  // A typed catch behaves the same around an awaited call (#sec-typed-catch): a rejection surfaced by await is
+  // matched by the clause whose type it satisfies. The async continuation runs as a job, so a reader script
+  // evaluated after it (on the same realm, once the queue has drained) observes the outcome.
   const setup = `
     globalThis.out = "none";
     async function f() {
@@ -190,10 +185,8 @@ test('typed catch: a clause matches an awaited rejection inside an async functio
 });
 
 test('typed catch: an untyped clause must be last', () => {
-  // #sec-typed-catch states this as a type error and errorhandling.md as a
-  // rule - "a typed clause after it could never run" - and neither the engine
-  // enforced it nor any test asserted it. An untyped clause catches
-  // everything, so a typed clause behind it is dead code that reads as live.
+  // #sec-typed-catch: it is a type error if a `catch` other than the last has no annotation. An untyped clause
+  // catches everything, so a typed clause behind it is dead code that reads as live.
   expectError('try { throw 1; } catch (e) { 1; } catch (e: TypeError) { 2; }');
   expectError('try { throw 1; } catch (e) { 1; } catch (e: TypeError) { 2; } catch (e: RangeError) { 3; }');
 

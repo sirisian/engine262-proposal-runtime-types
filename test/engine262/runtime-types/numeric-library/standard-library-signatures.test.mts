@@ -2,15 +2,11 @@ import { test, expect } from 'vitest';
 import { expectStaticTypeError, evaluated } from '../harness.mts';
 
 /**
- * Spec: #sec-overloading-of-the-standard-library (Overloading of the Standard
- * Library). Design: standardlibrary.md.
- *
- * This extension is explicitly "signature listings rather than new features":
- * every method it types already exists, and the signatures state how element and
- * key types flow through so a fully typed call site infers its callbacks. The
- * type-level signatures are a static-checker concern (there is no separate
- * runtime feature). The underlying methods are all present and are verified here;
- * the typed-signature inference rides on the (deferred) static type checker.
+ * Spec: #sec-overloading-of-the-standard-library (Overloading of the Standard Library),
+ * #sec-typed-standard-library-statics. The signatures are "signature listings rather than new features": every
+ * method they type already exists, and they state how element and key types flow through so a fully typed call
+ * site infers its callbacks. The type-level signatures are a static-checker concern (there is no separate runtime
+ * feature). The underlying methods are all present and are verified here.
  */
 
 // -- Iterator helpers ----------------------------------------------------------
@@ -54,13 +50,11 @@ test('standard library: the Promise combinators are present', () => {
   expect(evaluated('typeof Array.fromAsync;')).toBe('function');
 });
 
-// -- The built-in method signatures are not yet typed --------------------------
-test('standard library: an array method does not carry a typed signature (documents the gap)', () => {
-  // standardlibrary.md: the built-in signatures should be typed, so a callback
-  // parameter and the result element type follow the receiver's element type.
-  // Today the methods are the ordinary untyped ones: a callback returning a plain
-  // value out of the element type's range is neither rejected nor coerced, so the
-  // result holds a plain number rather than a value of the element type.
+// -- A callback's result is not coerced to the receiver's element type -----------
+test('standard library: map returns what its callback returns, not the receiver\'s element type', () => {
+  // Unspecified: the specification does not type the result of `map`. A callback's result is an array of whatever
+  // the callback returns, so a callback returning a plain value out of the element type's range is neither
+  // rejected nor coerced, and the result holds plain numbers rather than values of the element type.
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let good = "no-throw"; try { a.map((x) => 999); } catch { good = "throws"; } good;')).toBe('no-throw');
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let b = a.map((x) => 999); String(b[0]);')).toBe('999');
   expect(evaluated('let a: [].<uint8> = [1, 2, 3]; let b = a.map((x) => 999); String(b[0] instanceof uint8);')).toBe('false');

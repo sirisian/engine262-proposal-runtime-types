@@ -107,9 +107,8 @@ test('numeric library: an out-of-range integer result raises rather than wrappin
   // The operators WRAP: this is the conversion rule, and uint8 arithmetic says so.
   expect(evaluated('String(Number((200 := uint8) + (100 := uint8)));')).toBe('44');
   expect(evaluated('String(Number((2 := uint8) ** (10 := uint8)));')).toBe('0');
-  // A named function declares a return, and a declared return is checked, so the
-  // same arithmetic raises. The asymmetry is the design's own: the operator is the
-  // cheap wrapping form and the function the checked one.
+  // A named function declares a return, and a declared return is checked, so the same arithmetic raises. The
+  // asymmetry is deliberate: the operator is the cheap wrapping form and the function the checked one.
   expectThrownKind('Math.pow((2 := uint8), (10 := uint8));', 'RangeError');
   // the same shape at the signed boundary, where the magnitude of the most
   // negative value is not representable

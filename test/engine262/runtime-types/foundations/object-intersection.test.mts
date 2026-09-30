@@ -162,9 +162,9 @@ test('the type-programming kit carries a list as an array of types', () => {
 });
 
 test('`never` propagates out of the reference positions', () => {
-  // A `ref` names a location (references.md), and there is no location of the
-  // empty type. `shared` is the same, its marker not being observable in the
-  // value, and a parameterization refines its base and cannot add a value.
+  // A `ref` names a location (#sec-reference-values), and there is no location of the empty type. `shared` is the
+  // same, its marker not being observable in the value, and a parameterization refines its base and cannot add a
+  // value.
   expect(isNever('type T = ref never;')).toBe('true');
 });
 

@@ -178,7 +178,7 @@ test('named arithmetic: a saturating form CAN raise, for one reason only', () =>
 // the integer types: it is about rounding direction rather than overflow, and its
 // motivating use is written in untyped code.
 test('floored division: the pair also takes plain Numbers', () => {
-  // the design document's own examples, which used to throw
+  // the worked examples of the floored pair: they take plain Numbers
   expect(evaluated('String(Math.mod(-5, 3));')).toBe('1');
   expect(evaluated('String(Math.divFloor(-5, 3));')).toBe('-2');
   expect(evaluated('String(Math.divFloor(7, 2));')).toBe('3');

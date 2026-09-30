@@ -2,19 +2,17 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, evaluatedSeeded } from '../harness.mts';
 
 /**
- * Design: random.md; the typed form belongs to #sec-numeric-library, which
- * writes that "`Math.random` takes no numeric argument, and its typed form
- * `Math.random.<T>()` belongs to the random extension".
- *
- * A typed draw carries its value type, an integer type draws across its own
- * full range, and a seeded stream is reproducible across typed and untyped
- * draws alike.
+ * Unspecified: the random extension is deferred (#sec-coverage-of-the-design-documents), and
+ * #sec-numeric-library writes that "`Math.random` takes no numeric argument, and its typed form
+ * `Math.random.<T>()` belongs to the random extension". These tests pin the engine's behaviour: a typed draw
+ * carries its value type, an integer type draws across its own full range, and a seeded stream is reproducible
+ * across typed and untyped draws alike.
  */
 
 test('random: untyped Math.random works, and the typed no-argument form carries its value type', () => {
   // untyped baseline
   expect(ok('let r = Math.random(); r >= 0 && r < 1;')).toBe(true);
-  // random.md: Math.random.<float32>() is a value in [0, 1) at the float value type
+  // `Math.random.<float32>()` is a value in [0, 1) at the float value type
   expect(evaluated('let r = Math.random.<float32>(); (r is float32) ? "yes" : "no";')).toBe('yes');
   expect(evaluated('Reflect.typeOf(Math.random.<float32>()) === float32 ? "f32" : "num";')).toBe('f32');
   expect(ok('let r = Math.random.<float32>(); r >= 0 && r < 1;')).toBe(true);
@@ -40,8 +38,8 @@ test('random: untyped Math.random works, and the typed no-argument form carries 
 // -- random: a seed makes the stream reproducible, and typed draws share it -----
 
 test('random: a fixed seed reproduces the stream, and a typed draw advances that same stream', () => {
-  // random.md: the seed pins the pseudorandom stream, so the same seed yields the
-  // same sequence of untyped draws, and a different seed yields a different one.
+  // The seed pins the pseudorandom stream, so the same seed yields the same sequence of untyped draws, and a
+  // different seed yields a different one.
   const drawFour = 'let a = []; for (let i = 0; i < 4; i += 1) { a.push(Math.random()); } a.join(",");';
   const first = evaluatedSeeded('12345', drawFour);
   expect(evaluatedSeeded('12345', drawFour)).toBe(first);
@@ -58,8 +56,8 @@ test('random: a fixed seed reproduces the stream, and a typed draw advances that
 // -- random: every integer value type draws across its own full range ----------
 
 test('random: each integer value type draws an in-range value at that type', () => {
-  // random.md: an integer type draws across its full range, inclusive. int8 spans
-  // the negative side too, and the wider integer widths carry their own type.
+  // An integer type draws across its full range, inclusive. int8 spans the negative side too, and the wider integer
+  // widths carry their own type.
   expect(ok('let good = true; for (let i = 0; i < 100; i += 1) { let r = Math.random.<int8>(); if (!(r >= -128 && r <= 127)) good = false; } good;')).toBe(true);
   expect(evaluated('let r = Math.random.<uint16>(); (r is uint16) ? "yes" : "no";')).toBe('yes');
   expect(ok('let good = true; for (let i = 0; i < 100; i += 1) { let r = Math.random.<uint16>(); if (!(r >= 0 && r <= 65535)) good = false; } good;')).toBe(true);

@@ -19,8 +19,7 @@ test('an array source makes a frozen, null-prototyped exotic ARRAY', () => {
   expect(evaluated('String(Object.isFrozen(Composite([1])));')).toBe('true');
   expect(evaluated('String(Object.getPrototypeOf(Composite([1])));')).toBe('null');
   expect(evaluated('String(Composite.isComposite(Composite([1])));')).toBe('true');
-  // `length` is own and NON-ENUMERABLE, which keeps `Object.keys` to the
-  // elements - one of the three prototype objections the design answers.
+  // `length` is own and NON-ENUMERABLE, which keeps `Object.keys` to the elements (#sec-composite-objects).
   expect(evaluated('Object.keys(Composite([1, 2])).join(",");')).toBe('0,1');
 });
 
@@ -56,14 +55,12 @@ test('typed tuple creation converts each position', () => {
 });
 
 test('a tuple composite ITERATES BY KIND, with no Symbol.iterator', () => {
-  // #sec-composite-getiterator. Its prototype is deliberately *null*, so there
-  // is nowhere for a `Symbol.iterator` to live - which is one of the three
-  // prototype objections the design answers by DISSOLVING rather than
-  // accepting: "iteration stops being a prototype lookup".
+  // #sec-composite-getiterator. Its prototype is deliberately *null*, so there is nowhere for a `Symbol.iterator` to
+  // live: iteration stops being a prototype lookup, and the inserted step recognizes the kind directly.
   expect(evaluated('let out = []; for (const x of Composite([1, 2, 3])) { out.push(x); } out.join(",");')).toBe('1,2,3');
   expect(evaluated('[...Composite([1, 2])].join(",");')).toBe('1,2');
   expect(evaluated('const [a, b] = Composite([7, 8]); String(a) + "/" + String(b);')).toBe('7/8');
-  // The manual protocol spelling the design gives.
+  // The manual protocol spelling.
   expect(evaluated('String(Array.prototype.slice.call(Composite([1, 2])).join(","));')).toBe('1,2');
   // A RECORD composite is not iterable, which is what says the recognition is
   // by KIND and not by being a composite.
