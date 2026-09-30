@@ -13,14 +13,14 @@ test.each(['x = 2', 'x++', '[x] = [2]'])('is bindings are immutable under %s', (
 });
 
 test('pattern shadowing preserves the outer binding', () => {
-  expect(evaluated('let x: string = "outer"; let inside = ""; if (uint8(1) is let x: uint8) { inside = String(x); } inside + ":" + x;')).toBe('1:outer');
-  expect(evaluated('let x: string = "outer"; let inside = ""; if (uint8(1) is [let x]) { inside = String(x); } inside + ":" + x;')).toBe(':outer');
+  expect(evaluated('function anyv(v) { return v; } let x: string = "outer"; let inside = ""; if (anyv(uint8(1)) is let x: uint8) { inside = String(x); } inside + ":" + x;')).toBe('1:outer');
+  expect(evaluated('function anyv(v) { return v; } let x: string = "outer"; let inside = ""; if (anyv(uint8(1)) is [let x]) { inside = String(x); } inside + ":" + x;')).toBe(':outer');
 });
 
 test('negation and short circuiting expose only successful pattern bindings', () => {
-  expect(evaluated('let result = ""; if (!(uint8(1) is let x)) {} else { result = String(x); } result;')).toBe('1');
-  expect(evaluated('(uint8(1) is let x) && String(x);')).toBe('1');
-  expect(evaluated('!(uint8(1) is let x) || String(x);')).toBe('1');
+  expect(evaluated('function anyv(v) { return v; } let result = ""; if (!(anyv(uint8(1)) is let x)) {} else { result = String(x); } result;')).toBe('1');
+  expect(evaluated('function anyv(v) { return v; } (anyv(uint8(1)) is let x) && String(x);')).toBe('1');
+  expect(evaluated('function anyv(v) { return v; } !(anyv(uint8(1)) is let x) || String(x);')).toBe('1');
   expectStaticTypeError('function f() { (uint8(1) is let x) || String(x); }');
   expectStaticTypeError('function f() { if (!(uint8(1) is let x)) { return x; } }');
 });
@@ -30,7 +30,7 @@ test('while matches create fresh cells retained by closures', () => {
 });
 
 test('for updaters keep their current iteration environment', () => {
-  expect(evaluated('let callbacks = []; for (let i = 0; i < 2 && uint8(i) is let x; i++) { callbacks.push(() => String(x)); } callbacks[0]() + callbacks[1]();')).toBe('01');
+  expect(evaluated('function anyv(v) { return v; } let callbacks = []; for (let i = 0; i < 2 && anyv(uint8(i)) is let x; i++) { callbacks.push(() => String(x)); } callbacks[0]() + callbacks[1]();')).toBe('01');
 });
 
 test('dynamic evaluation also observes immutable pattern bindings', () => {
@@ -47,6 +47,6 @@ test('a binding shared by alternatives retains both possible types', () => {
 });
 
 test('for tests and update positions use the declaration variant of the grammar', () => {
-  expect(evaluated('let i = 0; let result = ""; for (; i < 2 && uint8(i) is let x; i++) { result += String(x); } result;')).toBe('01');
-  expect(evaluated('let result = ""; for (var i = 0; i < 2 && uint8(i) is let x; result += String(x), i++) {} result;')).toBe('01');
+  expect(evaluated('function anyv(v) { return v; } let i = 0; let result = ""; for (; i < 2 && anyv(uint8(i)) is let x; i++) { result += String(x); } result;')).toBe('01');
+  expect(evaluated('function anyv(v) { return v; } let result = ""; for (var i = 0; i < 2 && anyv(uint8(i)) is let x; result += String(x), i++) {} result;')).toBe('01');
 });

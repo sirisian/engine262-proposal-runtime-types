@@ -209,7 +209,9 @@ test('default closure contracts do not initialize later parameters', () => {
 });
 
 test('logical index assignments reject only a possible store', () => {
-  expect(ok('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] ||= 2; }')).toBe(true);
+  // `||=` on a value that is always truthy can never store, and its right
+  // operand is dead code (#sec-narrowfrom).
+  expect(ok('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] ||= 2; }')).toBe(false);
   // `??=` on a value that can never be nullish can never store (#sec-narrowing).
   expect(ok('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] ??= 2; }')).toBe(false);
   expectStaticTypeError('class C { operator [](i: uint8): 1 { return 1; } } function unused(c: C) { c[0] &&= 2; }');

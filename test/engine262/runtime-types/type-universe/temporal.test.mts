@@ -40,7 +40,7 @@ function expectThrown(source: string) {
 // -- Temporal classes are class types ------------------------------------------
 test('temporal: an instance is of its class type, and a non-instance is not', () => {
   expect(evaluated('let i = Temporal.Instant.from("2026-07-09T12:00:00Z"); (i is Temporal.Instant) ? "y" : "n";')).toBe('y');
-  expect(evaluated('("x" is Temporal.Instant) ? "y" : "n";')).toBe('n');
+  expect(evaluated('String("x" is Temporal.Instant);')).toBe('false');
   // a Duration is not an Instant: the class types are distinct
   expect(evaluated('let d = Temporal.Duration.from("PT1H"); (d is Temporal.Instant) ? "y" : "n";')).toBe('n');
 });
@@ -71,7 +71,7 @@ test('temporal: Temporal.Unit members are the unit strings', () => {
 test('temporal: a Temporal.Unit binding accepts a member and a dynamic matching string, rejects a misspelling', () => {
   expect(evaluated('let u: Temporal.Unit = Temporal.Unit.Second; u;')).toBe('second');
   expect(evaluated('let s: any = "second"; let u: Temporal.Unit = s; u;')).toBe('second');
-  expect(evaluated('("hour" is Temporal.Unit) ? "y" : "n";')).toBe('y');
+  expect(evaluated('String("hour" is Temporal.Unit);')).toBe('true');
   expectThrown('let u: Temporal.Unit = "secnod"; u;');
 });
 

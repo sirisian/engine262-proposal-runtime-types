@@ -112,6 +112,11 @@ test.each([
   expect(ok(source)).toBe(true);
 });
 
+test('an optional deletion through a receiver that is always null is dead code', () => {
+  // #sec-narrowfrom: the chain after `?.` can never be evaluated.
+  expect(ok('function f(a:null){delete a?.[0];}f(null);')).toBe(false);
+});
+
 
 test.each([
   [

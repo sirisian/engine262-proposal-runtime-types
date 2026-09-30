@@ -23,7 +23,7 @@ function evaluated(source: string, runtimeTypes = true): string {
 
 test('type names are global Type Object bindings', () => {
   expect(evaluated('uint8 === type uint8 ? "same" : "different";')).toBe('same');
-  expect(evaluated('((5 := uint8) instanceof uint8) && !(5 instanceof uint8) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('[(5 := uint8) instanceof uint8, 5 instanceof uint8].join();')).toBe('true,false');
   expect(evaluated('int8 === (type int.<8>) ? "same" : "different";')).toBe('same');
   // Types are first-class values.
   expect(evaluated('function member(T, v) { return v instanceof T; } member(uint8, (7 := uint8)) ? "ok" : "no";')).toBe('ok');

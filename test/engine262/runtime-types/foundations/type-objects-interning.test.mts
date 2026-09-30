@@ -51,13 +51,13 @@ test('instanceof is IsOfType membership', () => {
   // Number is no longer a member, and membership follows the constructed
   // value's own type.
   expect(evaluated(`type T = uint8;
-    ((5 := T) instanceof T) && !(5 instanceof T) && !("x" instanceof T) ? "ok" : "no";`)).toBe('ok');
+    [(5 := T) instanceof T, 5 instanceof T, "x" instanceof T].join();`)).toBe('true,false,false');
   // asked as a question rather than as a guard: a test that decides a branch and
   // can never succeed is dead code and is rejected by the checker
   expect(evaluated('String((7 := uint8) instanceof uint16);')).toBe('false');
-  expect(evaluated('type S = string; ("hi" instanceof S) && !(5 instanceof S) ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type L = "on"; ("on" instanceof L) && !("off" instanceof L) ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type U = uint8 | string; ((7 := uint8) instanceof U) && ("s" instanceof U) && !(true instanceof U) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type S = string; [("hi" instanceof S), (5 instanceof S)].join();')).toBe('true,false');
+  expect(evaluated('type L = "on"; [("on" instanceof L), ("off" instanceof L)].join();')).toBe('true,false');
+  expect(evaluated('type U = uint8 | string; [((7 := uint8) instanceof U), ("s" instanceof U), (true instanceof U)].join();')).toBe('true,true,false');
 });
 
 test('array and tuple membership', () => {
@@ -97,7 +97,7 @@ test('object types are structural', () => {
 
 test('function types and callability', () => {
   expect(evaluated('type F = (a: number) => string; ((x) => x) is F ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type F = (a: number) => string; (5 is F) ? "no" : "ok";')).toBe('ok');
+  expect(evaluated('type F = (a: number) => string; String(5 is F);')).toBe('false');
 });
 
 test('computed array extents evaluate', () => {

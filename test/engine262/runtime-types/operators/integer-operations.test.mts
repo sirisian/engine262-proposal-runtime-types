@@ -68,5 +68,5 @@ test('value-type identity is unaffected by the arithmetic rules', () => {
   // lives.
   expect(evaluated('(5 := uint8) === 5 ? "eq" : "neq";')).toBe('eq');
   expect(evaluated('let n = 5; (5 := uint8) === n ? "eq" : "neq";')).toBe('neq');
-  expect(evaluated('(5 := uint8) is uint8 ? "yes" : "no";')).toBe('yes');
+  expect(evaluated('String((5 := uint8) is uint8);')).toBe('true');
 });

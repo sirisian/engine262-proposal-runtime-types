@@ -52,11 +52,10 @@ test('typeof reports "object" for a complex at run time', () => {
   expect(evaluated('String(typeof complex(1, 2));')).toBe('object');
 });
 
-// Pinned as `test.fails`: the checker narrows a `typeof` test through a category for
-// "number" but has none for "object", so the test on a complex is refused as dead code
-// ("can never succeed") although its branch is live. The same refusal applies to a
-// rational and to a SIMD vector. Flips to `test` when "object" names those types.
-test.fails('a typeof "object" test on a union containing a complex guards a live branch', () => {
+// A complex value is an Object, so a `typeof` "object" test on a union containing one
+// can succeed, and #sec-narrowfrom does not report it (the same holds for a rational
+// and a SIMD vector).
+test('a typeof "object" test on a union containing a complex guards a live branch', () => {
   expect(evaluated(`
     function f(v: uint8 | complex) { if (typeof v === "object") { return 1; } return 0; }
     String(f(complex(1, 2)));

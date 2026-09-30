@@ -49,18 +49,18 @@ test('a qualified type name resolves an enum member to that ENUMERATOR', () => {
   // and not by any value that happens to share its number.
   expect(evaluated(`enum Color { Red, Green, Blue }
     type R = Color.Red;
-    (Color.Red is R) && !(Color.Green is R) && !(R === Color) ? "ok" : "no";`)).toBe('ok');
-  expect(evaluated('enum E: string { A = "x", B = "y" } type TA = E.A; (E.A is TA) && !(E.B is TA) ? "ok" : "no";')).toBe('ok');
+    [Color.Red is R, Color.Green is R, R === Color].join();`)).toBe('true,false,false');
+  expect(evaluated('enum E: string { A = "x", B = "y" } type TA = E.A; [E.A is TA, E.B is TA].join();')).toBe('true,false');
   // A bare value of the underlying type is not of it either, for the reason a
   // bare value is not of the enum.
-  expect(evaluated('enum Color { Red, Green } type R = Color.Red; !(0 is R) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum Color { Red, Green } type R = Color.Red; String(0 is R);')).toBe('false');
   // As an annotation.
-  expect(evaluated('enum E { A = 5 } let x: E.A = E.A; x == 5 ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum E { A = 5 } let x: E.A = E.A; String(x == 5);')).toBe('true');
   expectThrown('enum E { A = 5 } let x: E.A = 6;');
 });
 
 test('a qualified member resolves through its base, and a non-object base does not', () => {
-  expect(evaluated('enum E { A } type T = E.A; (E.A is T) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum E { A } type T = E.A; String(E.A is T);')).toBe('true');
   // Accessing through a non-object base throws.
   expectThrown('let x = 5; let y: x.foo = 1;');
 });

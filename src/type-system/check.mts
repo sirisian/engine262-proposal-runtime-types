@@ -295,6 +295,32 @@ const TOPIC_NAME = '%';
  * collide with.
  */
 const THIS_PATH = 'this';
+/**
+ * The name under which a test of an operand that is not a path is judged
+ * (#sec-narrowing). No binding or path has the empty name, so a fact under it
+ * narrows nothing.
+ */
+const NON_PATH = '';
+
+/**
+ * What a test establishes about one place (#table-narrowing-forms). Where the
+ * test succeeds the place is NarrowTo its `type`; where it fails it is
+ * NarrowFrom its `excluded`, which is `type` unless the form says otherwise
+ * (#sec-pattern-static-semantics). `subjectType` is the Static Type of the
+ * tested operand, which a path not yet narrowed has no entry for.
+ */
+interface NarrowingFact {
+  name: string;
+  type: TypeRecord;
+  excluded?: TypeRecord;
+  pattern?: ParseNode.MatchPattern;
+  subjectType?: TypeRecord | null;
+  negated: boolean;
+  sense?: 'true' | 'false';
+  additional?: NarrowingFact[];
+  verdict?: 'never-succeeds' | 'never-fails';
+  display?: string;
+}
 
 /** Identity of the self type a method's [[ThisType]] uses (#sec-this-adoption). */
 const SELF_THIS = { type: 'SelfThisMarker' } as unknown as ParseNode;
@@ -4348,19 +4374,133 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return refused;
   };
 
-  /**
-   * The can-never-succeed half of the nullish row of #sec-narrowing, for a
-   * form whose nullish branch is dead where _s_ cannot be nullish.
-   */
-  const reportNeverNullish = (s: TypeRecord, form: string, bothHalves = false): void => {
-    if (s.Kind === 'any' || mentionsTypeParameter(s)) return;
-    if (NarrowTo(s, nullishType()) === empty) {
-      errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(form)).Value as ObjectValue);
-    } else if (bothHalves && NarrowFrom(s, nullishType()) === empty) {
-      // The other half of the nullish row, as `??` already has it: a receiver
-      // that is always nullish leaves the rest of the chain dead.
-      errors.push(Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(form)).Value as ObjectValue);
+  // #sec-narrowfrom: the dead-branch judgment is made from Static Types, so each
+  // direction applies only where its answer is a fact a value cannot lose.
+  //
+  // A test CAN NEVER SUCCEED where the subject and the tested type are disjoint
+  // across a boundary no value crosses after it is checked: a value that is not
+  // an Object never becomes one, nor the reverse; two distinct primitive types
+  // share no value; two distinct classes share no instance. Disjointness that
+  // rests on an object's members is not such a boundary, since
+  // #sec-isoftype checks the members of an object type at the boundary only.
+  //
+  // A test CAN NEVER FAIL where every value of the subject is of the excluded
+  // type and stays so: a primitive, literal or enumerator value is immutable,
+  // and class membership is an identity. An object type or a `where`
+  // refinement is excluded, because a value checked against one can stop
+  // satisfying it through mutation, and a refinement is re-evaluated by each
+  // test.
+  // A library enum, `Temporal.Unit` among them, carries its enumerators without
+  // an EnumDeclaration.
+  const isEnumType = (t: TypeRecord): boolean => t.Kind === 'nominal'
+    && ((t as { Declaration?: { type?: string } }).Declaration?.type === 'EnumDeclaration'
+      || (t as { EnumMembers?: unknown }).EnumMembers !== undefined);
+  const isClassType = (t: TypeRecord): boolean => t.Kind === 'nominal'
+    && (t as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
+  // `type` values are Type Objects, and the `object` the `typeof` row names
+  // stands for every Object, so neither is a value that cannot be an Object.
+  const isImmutableValueType = (t: TypeRecord): boolean => (t.Kind === 'primitive' && t.Name !== 'type' && t.Name !== 'object')
+    || t.Kind === 'literal' || isEnumType(t);
+  // A value that is never an Object is an ECMAScript primitive: a Number of any
+  // numeric type, a BigInt, a String, a Boolean, a Symbol, `null` or
+  // `undefined`. A vector, complex, rational or Composite value is an Object,
+  // though it is immutable.
+  const primitiveValueNames = ['number', 'int', 'uint', 'float16', 'float32', 'float64', 'float128', 'decimal32', 'decimal64',
+    'decimal128', 'bigint', 'string', 'boolean', 'symbol', 'null', 'undefined'];
+  const cannotBeObject = (t: TypeRecord): boolean => (t.Kind === 'primitive' && primitiveValueNames.includes(t.Name))
+    || (t.Kind === 'literal' && !!t.Base && cannotBeObject(t.Base as TypeRecord))
+    || (isEnumType(t) && !!(t as { Underlying?: TypeRecord }).Underlying && cannotBeObject((t as { Underlying: TypeRecord }).Underlying))
+    || (t.Kind === 'parameterized' && cannotBeObject(t.Base as TypeRecord));
+  const mustBeObject = (t: TypeRecord): boolean => t.Kind === 'object' || t.Kind === 'array' || t.Kind === 'tuple'
+    || t.Kind === 'function' || (t.Kind === 'nominal' && !isEnumType(t));
+  const stablyDisjoint = (a: TypeRecord, b: TypeRecord): boolean => {
+    if (a.Kind === 'union') return a.Members.every((m) => stablyDisjoint(m as TypeRecord, b));
+    if (b.Kind === 'union') return b.Members.every((m) => stablyDisjoint(a, m as TypeRecord));
+    if ((cannotBeObject(a) && mustBeObject(b)) || (mustBeObject(a) && cannotBeObject(b))) return true;
+    // An enumerator is a value of its underlying type, so an enum is compared
+    // with another primitive through that type; two enums may share values.
+    const underlying = (t: TypeRecord): TypeRecord | null => (isEnumType(t)
+      ? ((t as { Underlying?: TypeRecord | null }).Underlying ?? null)
+      : t.Kind === 'parameterized' ? underlying(t.Base as TypeRecord) : t);
+    if (isEnumType(a) && isEnumType(b)) return false;
+    const ua = underlying(a);
+    const ub = underlying(b);
+    if (ua && ub && isImmutableValueType(ua) && isImmutableValueType(ub) && !isEnumType(ua) && !isEnumType(ub)) {
+      return NarrowTo(ua, ub) === empty;
     }
+    return isClassType(a) && isClassType(b) && NarrowTo(a, b) === empty;
+  };
+  const membershipStable = (t: TypeRecord): boolean => (t.Kind === 'union'
+    ? t.Members.every((m) => membershipStable(m as TypeRecord))
+    : t.Kind === 'any' || isImmutableValueType(t) || isClassType(t));
+
+  // NarrowTo and NarrowFrom where the tested type may be `any`, as an
+  // irrefutable pattern's is: every value is of `any`, so a test of it keeps the
+  // subject where it succeeds and keeps nothing where it fails.
+  const narrowToTested = (s: TypeRecord, t: TypeRecord) => (t.Kind === 'any' ? s : NarrowTo(s, t));
+  const narrowFromTested = (s: TypeRecord, t: TypeRecord) => (t.Kind === 'any' ? empty : NarrowFrom(s, t));
+
+  /**
+   * #sec-narrowfrom: whether a test of _s_ that establishes _t_ where it
+   * succeeds, and excludes _excluded_ where it fails, can never succeed or can
+   * never fail. A type the checker does not know is `any`, which narrows to
+   * itself in both directions and so never has a verdict.
+   */
+  const impossibleVerdict = (s: TypeRecord, t: TypeRecord, excluded: TypeRecord = t): 'never-succeeds' | 'never-fails' | null => {
+    if (s.Kind === 'any' || mentionsTypeParameter(s) || mentionsTypeParameter(t) || mentionsTypeParameter(excluded)) return null;
+    // A DYNAMIC array tested against a TUPLE type is not decidable here, and
+    // narrowing answers as though it were: `[].<uint8>` is not assignable to
+    // `[uint8, ...string]`, so NarrowTo keeps no member and the test reads as
+    // dead - but whether the value has the tuple's shape depends on its LENGTH,
+    // which a dynamic array's type does not carry. `[(1 := uint8)] instanceof
+    // [uint8, ...string]` is *true* at run time. The same holds in reverse,
+    // since a tuple-typed value is an Array.
+    const arrayVersusTuple = (a: TypeRecord, b: TypeRecord): boolean => (a.Kind === 'array' && (a as { Extent?: unknown }).Extent === 'dynamic' && b.Kind === 'tuple')
+      || (b.Kind === 'array' && (b as { Extent?: unknown }).Extent === 'dynamic' && a.Kind === 'tuple');
+    if (arrayVersusTuple(s, t)) return null;
+    if (narrowToTested(s, t) === empty && stablyDisjoint(s, t)) return 'never-succeeds';
+    if (narrowFromTested(s, excluded) === empty && membershipStable(s) && membershipStable(excluded)) return 'never-fails';
+    return null;
+  };
+
+  /**
+   * #sec-falsy-and-truthy-parts: *true* where every value of _t_ is truthy,
+   * *false* where every value is falsy, and *undefined* where the type does not
+   * settle it. A literal is settled by its value; `null` and `undefined` are
+   * always falsy; `symbol`, `type`, an object, array, tuple, function or
+   * (non-enum) nominal type always truthy. A `uint8` settles nothing, since 0 is
+   * falsy and every other value is not, and neither does an enum, whose values
+   * are its underlying type's.
+   */
+  const settledTruthiness = (t: TypeRecord): boolean | undefined => {
+    const members = t.Kind === 'union' ? t.Members : [t];
+    let seen: boolean | undefined;
+    for (const m of members) {
+      let truthy: boolean;
+      if (m.Kind === 'literal') {
+        truthy = Boolean((m.Value as { value?: unknown })?.value);
+      } else if (m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')) {
+        truthy = false;
+      } else if ((m.Kind === 'primitive' && (m.Name === 'symbol' || m.Name === 'type'))
+        || m.Kind === 'object' || m.Kind === 'array' || m.Kind === 'tuple' || m.Kind === 'function'
+        || (m.Kind === 'nominal' && (m as { EnumMembers?: unknown }).EnumMembers === undefined)) {
+        truthy = true;
+      } else {
+        return undefined;
+      }
+      if (seen === undefined) {
+        seen = truthy;
+      } else if (seen !== truthy) {
+        return undefined;
+      }
+    }
+    return seen;
+  };
+
+  const pushImpossibleTest = (verdict: 'never-succeeds' | 'never-fails', form: string): void => {
+    errors.push(Throw.StaticTypeError(verdict === 'never-succeeds'
+      ? 'the $1 test can never succeed, so the branch it guards is dead code'
+      : 'the $1 test can never fail, so the branch it guards is dead code', Value(form)).Value as ObjectValue);
   };
 
   const reportImpossibleTest = (s: TypeRecord, t: TypeRecord, form: string, isGuard: boolean) => {
@@ -4372,28 +4512,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!isGuard) {
       return;
     }
-    // A DYNAMIC array tested against a TUPLE type is not decidable here, and
-    // narrowing answers as though it were: `[].<uint8>` is not assignable to
-    // `[uint8, ...string]`, so NarrowTo keeps no member and the test reads as
-    // dead - but whether the value has the tuple's shape depends on its LENGTH,
-    // which a dynamic array's type does not carry. `[(1 := uint8)] instanceof
-    // [uint8, ...string]` is *true* at run time, and became a reported error the
-    // moment an array literal acquired a Static Type. The same holds in reverse,
-    // since a tuple-typed value is an Array.
-    const arrayVersusTuple = (a: TypeRecord, b: TypeRecord): boolean => (a.Kind === 'array' && (a as { Extent?: unknown }).Extent === 'dynamic' && b.Kind === 'tuple')
-      || (b.Kind === 'array' && (b as { Extent?: unknown }).Extent === 'dynamic' && a.Kind === 'tuple');
-    if (arrayVersusTuple(s, t)) {
-      return;
-    }
-    if (NarrowTo(s, t) === empty) {
-      const completion = Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
-      errors.push(completion.Value as ObjectValue);
-      return;
-    }
-    if (NarrowFrom(s, t) === empty) {
-      const completion = Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(form)) as ThrowCompletion;
-      errors.push(completion.Value as ObjectValue);
-    }
+    const verdict = impossibleVerdict(s, t);
+    if (verdict) pushImpossibleTest(verdict, form);
   };
 
   /** The class name for a diagnostic, or *undefined* for an anonymous one. */
@@ -9054,6 +9174,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     ];
     const covered = new Set<string>();
     const invalid: { shown: string }[] = [];
+    // #sec-enums: names sharing one value are one value for coverage, and the
+    // labels are tested in order, so a label for a value an earlier label
+    // tested can never succeed.
+    const values = (record as unknown as { EnumMembers?: readonly unknown[] }).EnumMembers;
+    const enumeratorValue = (member: string): unknown => (values && values.length === names.length ? values[names.indexOf(member)] : undefined);
+    const duplicates: string[] = [];
     for (const clause of clauses) {
       const label = (clause as { Expression?: ParseNode }).Expression;
       let member: string | null = null;
@@ -9068,11 +9194,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (member === null || !labelEnum || lookupEnum(labelEnum)?.declaration !== declaration || !names.includes(member)) {
         invalid.push({ shown: member !== null && labelEnum !== null ? `${labelEnum}.${member}` : 'a non-enumerator case' });
       } else {
+        const value = enumeratorValue(member);
+        if (covered.has(member) || (value !== undefined && [...covered].some((earlier) => {
+          const v = enumeratorValue(earlier);
+          return v !== undefined && SameValue(v as Value, value as Value);
+        }))) {
+          duplicates.push(`${labelEnum}.${member}`);
+        }
         covered.add(member);
       }
     }
     return {
-      enumName, record, names, covered, invalid,
+      enumName, record, names, covered, invalid, duplicates,
     };
   };
 
@@ -13766,9 +13899,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           validateDiscardedExpression(c.AssignmentExpression_b);
           return;
         }
-        const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
-        const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
-        const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+        const { whenTrue, whenFalse } = branchTypes(fact);
         pushBlock(() => {
           if (whenTrue !== empty && fact.sense !== 'false') {
             declareNarrowed(fact.name, whenTrue as Known);
@@ -14050,9 +14181,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!fact) {
       return [typeTrue(), typeFalse()];
     }
-    const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
-    const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
-    const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+    const { whenTrue, whenFalse } = branchTypes(fact);
     const a = pushBlock(() => {
       if (whenTrue !== empty && fact.sense !== 'false') {
         declareNarrowed(fact.name, whenTrue as Known);
@@ -20424,9 +20553,215 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return seen === 1 ? found : null;
   };
 
-  const narrowingFactOf = (expr: ParseNode): { name: string, type: TypeRecord, negated: boolean, sense?: 'true' | 'false', additional?: { name: string, type: TypeRecord, negated: boolean }[], verdict?: 'never-succeeds' | 'never-fails', display?: string } | undefined => {
+  /** A literal operand spelled in the source, or `undefined`. */
+  const isLiteralOperand = (node: ParseNode): boolean => {
+    let n = node;
+    while (n.type === 'ParenthesizedExpression') n = (n as unknown as { Expression: ParseNode }).Expression;
+    if (n.type === 'UnaryExpression' && ['-', '+'].includes((n as unknown as { operator: string }).operator)) {
+      n = (n as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
+    }
+    return ['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral', 'BigIntLiteral', 'TemplateLiteral'].includes(n.type)
+      || (n.type === 'IdentifierReference' && (n as unknown as { name: string }).name === 'undefined');
+  };
+
+  /**
+   * #sec-pattern-static-semantics: MatchNarrow(_s_, _P_) and MissNarrow(_s_,
+   * _P_), the types of the values of _s_ the pattern can match and can miss,
+   * each `empty` where there is none. Each carries whether an `empty` it holds
+   * meets the stability condition of #sec-narrowfrom, which a verdict needs.
+   * *null* where the checker has nothing to state: a numeric literal, which
+   * adopts its position's type and is judged by fit instead. An object or array
+   * pattern establishes nothing here; the structural impossibility rule judges
+   * it in `declareMatchPatternBindings`.
+   */
+  const patternBranches = (s: TypeRecord, p: ParseNode.MatchPattern | null): {
+    match: TypeRecord | typeof empty, miss: TypeRecord | typeof empty, matchStable: boolean, missStable: boolean,
+  } | null => {
+    if (!p) return null;
+    const union = (x: TypeRecord | typeof empty, y: TypeRecord | typeof empty): TypeRecord | typeof empty => (x === empty ? y
+      : y === empty ? x : CanonicalizeType({ Kind: 'union', Members: [x as TypeRecord, y as TypeRecord] }));
+    // A form every value of whose PatternType matches.
+    const exact = (t: TypeRecord | null) => (t ? {
+      match: narrowToTested(s, t),
+      miss: narrowFromTested(s, t),
+      matchStable: stablyDisjoint(s, t),
+      missStable: t.Kind === 'any' || (membershipStable(s) && membershipStable(t)),
+    } : null);
+    // A form that may miss values of its PatternType.
+    const partial = (t: TypeRecord | null) => ({
+      match: t ? narrowToTested(s, t) : s, miss: s, matchStable: !!t && stablyDisjoint(s, t), missStable: false,
+    });
+    switch (p.type) {
+      case 'MatchTypePattern':
+        return exact(resolveType(p.Type));
+      case 'MatchWildcardPattern':
+        return exact(anyTypeRecord);
+      case 'MatchBindingPattern':
+        return exact(p.TypeAnnotation ? resolveType(p.TypeAnnotation) : anyTypeRecord);
+      case 'MatchLiteralPattern': {
+        if (p.Literal.type === 'NumericLiteral' || p.Literal.type === 'UnaryExpression') return null;
+        const t = staticType(p.Literal);
+        return t && (t.Kind === 'literal' || (t.Kind === 'primitive' && (t.Name === 'null' || t.Name === 'undefined')))
+          ? exact(t) : partial(null);
+      }
+      case 'MatchInterpolationPattern': {
+        const t = staticType(p.Expression);
+        return t?.Kind === 'literal' ? exact(t) : partial(null);
+      }
+      case 'MatchRegExpPattern':
+        return partial(makePrimitive('string'));
+      case 'MatchJuxtapositionPattern':
+        return partial(resolveType(p.Head as ParseNode.Type));
+      case 'MatchNotPattern': {
+        const q = patternBranches(s, p.Operand);
+        return q && { match: q.miss, miss: q.match, matchStable: q.missStable, missStable: q.matchStable };
+      }
+      case 'MatchOrPattern': {
+        const q = patternBranches(s, p.Left);
+        const r = patternBranches(s, p.Right);
+        if (!q || !r) return null;
+        if (q.miss === empty) {
+          return { match: union(q.match, r.match), miss: empty, matchStable: q.matchStable && r.matchStable, missStable: q.missStable };
+        }
+        const rest = patternBranches(q.miss as TypeRecord, p.Right);
+        if (!rest) return null;
+        return { match: union(q.match, r.match), miss: rest.miss, matchStable: q.matchStable && r.matchStable, missStable: rest.missStable };
+      }
+      case 'MatchAndPattern': {
+        const q = patternBranches(s, p.Left);
+        if (!q) return null;
+        if (q.match === empty) {
+          return { match: empty, miss: q.miss, matchStable: q.matchStable, missStable: q.missStable };
+        }
+        const r = patternBranches(q.match as TypeRecord, p.Right);
+        if (!r) return null;
+        return { match: r.match, miss: union(q.miss, r.miss), matchStable: r.matchStable, missStable: q.missStable && r.missStable };
+      }
+      default:
+        return { match: s, miss: s, matchStable: false, missStable: false };
+    }
+  };
+
+  /**
+   * The Static Types a fact gives the two branches of its test: NarrowTo of
+   * what the test establishes where it succeeds and NarrowFrom of what it
+   * excludes where it fails, from the current type of the place, or from the
+   * operand's own Static Type where the place has not been narrowed.
+   */
+  const branchTypes = (fact: NarrowingFact) => {
+    const source = (fact.name !== NON_PATH ? lookup(fact.name) : null) ?? fact.subjectType ?? anyTypeRecord;
+    if (fact.pattern) {
+      const branches = source.Kind === 'any' || mentionsTypeParameter(source) ? null : patternBranches(source, fact.pattern);
+      if (!branches) return { source, whenTrue: source, whenFalse: source };
+      return {
+        source,
+        whenTrue: fact.negated ? branches.miss : branches.match,
+        whenFalse: fact.negated ? branches.match : branches.miss,
+      };
+    }
+    const excluded = fact.excluded ?? fact.type;
+    const whenTrue = fact.negated ? narrowFromTested(source, excluded) : narrowToTested(source, fact.type);
+    const whenFalse = fact.negated ? narrowToTested(source, fact.type) : narrowFromTested(source, excluded);
+    return { source, whenTrue, whenFalse };
+  };
+
+  /**
+   * #sec-narrowfrom: report a narrowing form that decides a branch and whose
+   * test can never succeed or can never fail. A fact derived through `&&` or
+   * `||` is judged where its own operand is walked, so it is not judged again.
+   */
+  const judgeFact = (fact: NarrowingFact): void => {
+    if (fact.sense) return;
+    const { source } = branchTypes(fact);
+    if (source.Kind === 'any') return;
+    if (fact.verdict) {
+      pushImpossibleTest(fact.verdict, fact.display ?? displayType(fact.type));
+      return;
+    }
+    let verdict: 'never-succeeds' | 'never-fails' | null;
+    if (fact.pattern) {
+      const branches = mentionsTypeParameter(source) ? null : patternBranches(source, fact.pattern);
+      verdict = !branches ? null
+        : branches.match === empty && branches.matchStable ? 'never-succeeds'
+          : branches.miss === empty && branches.missStable ? 'never-fails' : null;
+    } else {
+      verdict = impossibleVerdict(source, fact.type, fact.excluded ?? fact.type);
+    }
+    if (!verdict) return;
+    // The verdict is about the test as written: `!` and `!==` swap which
+    // branch is the dead one.
+    const written = fact.negated ? (verdict === 'never-succeeds' ? 'never-fails' : 'never-succeeds') : verdict;
+    pushImpossibleTest(written, fact.display ?? displayType(fact.type));
+  };
+
+  /**
+   * #sec-narrowing: a test decides every position it governs. Within a test
+   * that decides a branch, the right operand of `&&` or `||`, the last operand
+   * of a comma expression, and each arm of a conditional expression decide the
+   * same branch, so each is judged as the whole test is (#sec-narrowfrom). Each
+   * is judged where it is walked, inside the narrowing the operands before it
+   * establish: `(v instanceof A) && v.x === 1` reads `v.x` of an `A`.
+   */
+  const decidingNodes = new WeakSet<ParseNode>();
+  const stripTest = (test: ParseNode): ParseNode => {
+    let core = test;
+    while (core.type === 'ParenthesizedExpression'
+        || (core.type === 'UnaryExpression' && (core as unknown as { operator?: string }).operator === '!')) {
+      core = core.type === 'ParenthesizedExpression'
+        ? (core as unknown as { Expression: ParseNode }).Expression
+        : (core as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
+    }
+    return core;
+  };
+  const markDeciding = (test: ParseNode): void => {
+    const core = stripTest(test);
+    const mark = (node: ParseNode) => {
+      decidingNodes.add(node);
+      markDeciding(node);
+    };
+    switch (core.type) {
+      case 'LogicalANDExpression':
+        mark((core as unknown as { BitwiseORExpression: ParseNode }).BitwiseORExpression);
+        break;
+      case 'LogicalORExpression':
+        mark((core as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression);
+        break;
+      case 'CommaOperator': {
+        const list = (core as unknown as { ExpressionList: readonly ParseNode[] }).ExpressionList;
+        decidingNodes.add(core);
+        if (list.length) mark(list[list.length - 1]);
+        break;
+      }
+      case 'ConditionalExpression': {
+        const c = core as unknown as { AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
+        mark(c.AssignmentExpression_a);
+        mark(c.AssignmentExpression_b);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+  /** Judge a marked position that is itself a test rather than a combination of tests. */
+  const judgeDeciding = (node: ParseNode | null | undefined): void => {
+    if (!node || !decidingNodes.has(node)) return;
+    if (['LogicalANDExpression', 'LogicalORExpression', 'CommaOperator', 'ConditionalExpression'].includes(stripTest(node).type)) return;
+    const fact = narrowingFactOf(node, true);
+    if (fact) judgeFact(fact);
+  };
+  const walkDeciding = (node: ParseNode | null): void => {
+    judgeDeciding(node);
+    walk(node);
+  };
+
+  const narrowingFactOf = (expr: ParseNode, anyOperand = false): NarrowingFact | undefined => {
     let e = expr;
     let negated = false;
+    // A path names one place, and a fact about it narrows that place. A test of
+    // any other operand still decides the branch it guards (#sec-narrowing), so
+    // where the caller judges the test the operand is admitted under the empty
+    // name, which narrows nothing.
+    const subjectOf = (node: ParseNode): string | null => narrowableName(node) ?? (anyOperand ? NON_PATH : null);
     // `!(...)` inverts the sense; a parenthesized test is the test.
     for (;;) {
       if (e.type === 'ParenthesizedExpression') {
@@ -20443,39 +20778,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (e.type === 'IsExpression') {
       const ie = e as unknown as {
         Expression: ParseNode, Type: ParseNode | null,
-        Pattern?: { type?: string, Type?: ParseNode } | null,
+        Pattern?: ParseNode.MatchPattern | null,
       };
-      if (narrowableName(ie.Expression) === null) {
+      const subject = subjectOf(ie.Expression);
+      if (subject === null) {
         return undefined;
       }
       // proposal-runtime-types `sec-is-pattern`: "a |Type| is one |MatchPattern|
       // form, so every existing `is` keeps its parse AND ITS MEANING" - and its
-      // meaning to the CHECKER is the narrowing it drives. Routing every `is`
-      // through a pattern node without seeing through a bare TYPE pattern made
-      // narrowing stop: the test still answered correctly at run time and
-      // narrowed nothing, which is the promise half-kept. A pattern that is NOT
-      // a bare type narrows nothing yet - phase five - and that is the pin.
-      // A `not` over a bare type NEGATES the narrowing rather than abandoning
-      // it: `v is not uint8` leaves `v` everything it was except `uint8` in the
-      // true branch, which is what union subtraction can represent. Combinators
-      // over non-type patterns still narrow nothing, since "a failed structural
-      // pattern narrows nothing" and negation types do not exist here.
-      let patternNode = ie.Pattern as { type?: string, Type?: ParseNode, Operand?: { type?: string, Type?: ParseNode } } | null | undefined;
-      let patternNegated = negated;
-      while (patternNode?.type === 'MatchNotPattern') {
-        patternNegated = !patternNegated;
-        patternNode = patternNode.Operand as typeof patternNode;
+      // meaning to the CHECKER is the narrowing it drives: MatchNarrow where
+      // the test succeeds and MissNarrow where it fails (`patternBranches`).
+      // `v is not uint8` leaves `v` everything it was except `uint8` in the
+      // true branch, which is what union subtraction can represent.
+      if (ie.Type) {
+        const written = resolveType(ie.Type as ParseNode.Type);
+        return written ? { name: subject, type: written, subjectType: staticType(ie.Expression), negated } : undefined;
       }
-      const asType = ie.Type ?? (patternNode?.type === 'MatchTypePattern' ? patternNode.Type : null);
-      if (!asType) {
+      if (!ie.Pattern) {
         return undefined;
       }
-      const t = resolveType(asType as ParseNode.Type);
-      // The PATH, not `.name`: the guard above accepts a member expression now,
-      // and reading `.name` off one yields *undefined*, which would key the
-      // narrowing on nothing.
-      const subject = narrowableName(ie.Expression);
-      return t && subject !== null ? { name: subject, type: t, negated: patternNegated } : undefined;
+      let shown: ParseNode.MatchPattern = ie.Pattern;
+      while (shown.type === 'MatchNotPattern') shown = shown.Operand;
+      const shownType = shown.type === 'MatchTypePattern' ? resolveType(shown.Type) : null;
+      return {
+        name: subject, type: shownType ?? anyTypeRecord, pattern: ie.Pattern, subjectType: staticType(ie.Expression), negated,
+        display: shownType ? undefined : 'is',
+      };
     }
     // `instanceof` is a narrowing form. The README says so where it introduces
     // the operator - "a successful check narrows the static type in that branch,
@@ -20504,35 +20832,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // operand, the left being a private name rather than an expression, and
       // the type it narrows to is the class declaring that name.
       if (rel.operator === 'in' && rel.PrivateIdentifier && rel.ShiftExpression) {
-        const subject = narrowableName(rel.ShiftExpression);
+        const subject = subjectOf(rel.ShiftExpression);
         if (subject === null) {
           return undefined;
         }
         const owner = classOwningPrivateName(rel.PrivateIdentifier.name);
-        return owner ? { name: subject, type: owner, negated } : undefined;
+        return owner ? { name: subject, type: owner, subjectType: staticType(rel.ShiftExpression), negated } : undefined;
       }
       if (rel.operator !== 'instanceof' || !rel.RelationalExpression || !rel.ShiftExpression) {
         return undefined;
       }
-      const subject = narrowableName(rel.RelationalExpression);
+      const subject = subjectOf(rel.RelationalExpression);
       if (subject === null) {
         return undefined;
       }
       const right = rel.ShiftExpression;
       const rightName = right.type === 'IdentifierReference' ? (right as unknown as { name: string }).name : null;
       const t = (rightName ? classTypeOf(rightName) : null) ?? typeDenotedBy(right);
-      return t ? { name: subject, type: t, negated } : undefined;
+      return t ? { name: subject, type: t, subjectType: staticType(rel.RelationalExpression), negated } : undefined;
     }
     // `a && b` implies its LEFT operand only where the whole is true, and
     // `a || b` implies the left is false only where the whole is false. So a
     // conjunction narrows the branch it guards and a disjunction narrows the
     // other one, and neither says anything about the branch it does not imply.
     if (e.type === 'LogicalANDExpression') {
-      const l = narrowingFactOf((e as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression);
+      const l = narrowingFactOf((e as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression, anyOperand);
       return l ? { ...l, negated: l.negated !== negated, sense: negated ? 'false' : 'true' } : undefined;
     }
     if (e.type === 'LogicalORExpression') {
-      const l = narrowingFactOf((e as unknown as { LogicalORExpression: ParseNode }).LogicalORExpression);
+      const l = narrowingFactOf((e as unknown as { LogicalORExpression: ParseNode }).LogicalORExpression, anyOperand);
       return l ? { ...l, negated: l.negated !== negated, sense: negated ? 'true' : 'false' } : undefined;
     }
     if (e.type === 'EqualityExpression') {
@@ -20554,10 +20882,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `IdentifierReference` directly and so refused `typeof % === 'string'`
           // a fact, while `% is string` got one - the same binding, under a name
           // no program can write, narrowed by one test and not the other.
-          const operandName = narrowableName(operand);
+          const operandName = subjectOf(operand);
           if (operandName === null || against.type !== 'StringLiteral') {
             continue;
           }
+          const operandType = staticType(operand);
           const tag = (against as unknown as { value: string }).value;
           const writtenNegated = negated !== inverted;
           const display = `typeof ${JSON.stringify(tag)}`;
@@ -20566,11 +20895,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // numeric type. A tag no value has narrows to nothing, and a tag every
           // value of the subject has cannot fail (#sec-narrowfrom).
           if (!['undefined', 'object', 'boolean', 'number', 'bigint', 'string', 'symbol', 'function'].includes(tag)) {
-            return { name: operandName, type: makePrimitive('undefined'), negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display };
+            return { name: operandName, type: makePrimitive('undefined'), subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display };
           }
-          const current = lookup(operandName);
+          const current = (operandName !== NON_PATH ? lookup(operandName) : null) ?? operandType;
           if (current && typeofTagOfType(current) === tag) {
-            return { name: operandName, type: current, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display };
+            return { name: operandName, type: current, subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display };
           }
           // A function type's values are always 'function', and a typed class's
           // instances never are: #sec-typed-classes refuses a constructor that
@@ -20581,7 +20910,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const t = typeofStringToType(tag);
           if (t) {
-            return { name: operandName, type: t, negated: writtenNegated };
+            return { name: operandName, type: t, subjectType: operandType, negated: writtenNegated };
           }
           continue;
         }
@@ -20596,8 +20925,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // be correct in isolation and is worth strictly less than narrowing the
         // record, so where the base is a union this arm declines and the
         // discriminant rule runs.
-        const name = narrowableName(subject);
-        if (name === null) {
+        const name = subjectOf(subject);
+        // Two literals compared with each other are a constant expression, not
+        // a test of a value.
+        if (name === null || (name === NON_PATH && isLiteralOperand(subject))) {
           continue;
         }
         if (subject.type === 'MemberExpression') {
@@ -20616,7 +20947,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : (against.type === 'NullLiteral'
               ? makePrimitive('null')
               : makePrimitive('undefined'));
-          return { name, type: t as TypeRecord, negated: negated !== inverted };
+          return { name, type: t as TypeRecord, subjectType: staticType(subject), negated: negated !== inverted };
         }
         // `x === 5` and `x === 'a'`: the literal names a literal type.
         // A SIGNED numeric literal is admitted alongside a bare one: `-1` parses as a
@@ -20629,7 +20960,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && (against as unknown as { UnaryExpression?: { type?: string } }).UnaryExpression?.type === 'NumericLiteral';
         if (signedLiteral || against.type === 'NumericLiteral' || against.type === 'StringLiteral' || against.type === 'BooleanLiteral') {
           let lit = staticType(against);
-          const source = lookup(name);
+          const source = (name !== NON_PATH ? lookup(name) : null) ?? staticType(subject);
           const numericSource = source ? eraseMetadata(source) : null;
           if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
               && ['uint', 'int', 'float16', 'float32', 'float64'].includes(numericSource.Name)
@@ -20639,7 +20970,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             lit = { ...lit, Base: numericSource, Value: new TypedNumberValue(R(lit.Value), numericSource as never) };
           }
           if (lit && (!loose || sameEqualityBase(source, lit))) {
-            return { name, type: lit as TypeRecord, negated: negated !== inverted };
+            return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: negated !== inverted };
           }
         }
       }
@@ -20652,12 +20983,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           continue;
         }
         const me = subject as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
-        if (!me.MemberExpression || me.MemberExpression.type !== 'IdentifierReference' || !me.IdentifierName) {
+        if (!me.MemberExpression || !me.IdentifierName) {
           continue;
         }
-        const objName = (me.MemberExpression as unknown as { name: string }).name;
+        // The record is any path, `this.shape.kind` as much as `s.kind`.
+        const objName = narrowableName(me.MemberExpression);
+        if (objName === null) {
+          continue;
+        }
         const key = me.IdentifierName.name;
-        const objType = lookup(objName);
+        const objType = lookup(objName) ?? staticType(me.MemberExpression);
         if (!objType || objType.Kind !== 'union') {
           continue;
         }
@@ -20670,27 +21005,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const property = shape?.Kind === 'object' ? shape.Properties.find((p) => p.key === key) : undefined;
           return sameEqualityBase(property?.type, discriminant);
         })) continue;
-        const kept = objType.Members.filter((m) => {
+        const propertyOf = (m: TypeRecord): TypeRecord | undefined => {
           const shape = structureOf(m as Known);
-          if (!shape || shape.Kind !== 'object') {
-            return false;
-          }
-          const prop = shape.Properties.find((pp) => pp.key === key);
-          return prop ? IsAssignable(discriminant as TypeRecord, prop.type) : false;
+          return shape?.Kind === 'object' ? shape.Properties.find((pp) => pp.key === key)?.type : undefined;
+        };
+        // #sec-narrowing, the `v.p === e` row: the true branch keeps the members
+        // whose `p` admits the literal, and the false branch loses only the
+        // members whose `p` IS the literal. A member whose `p` is wider than the
+        // literal can reach either branch.
+        const kept = objType.Members.filter((m) => {
+          const prop = propertyOf(m as TypeRecord);
+          return prop ? IsAssignable(discriminant as TypeRecord, prop) : false;
         });
-        // #sec-narrowing: no member of the union admits the literal, so the
-        // `v.p === e` test can never succeed (#sec-narrowfrom).
+        const exact = objType.Members.filter((m) => {
+          const prop = propertyOf(m as TypeRecord);
+          return !!prop && IsSubtype(prop, discriminant as TypeRecord, []);
+        });
+        const writtenNegated = negated !== inverted;
+        // No member admits the literal, so the test can never succeed; every
+        // member's `p` is the literal, so it can never fail (#sec-narrowfrom).
         if (kept.length === 0 && !loose) {
-          const writtenNegated = negated !== inverted;
-          return { name: objName, type: discriminant as TypeRecord, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display: displayType(discriminant as TypeRecord) };
+          return { name: objName, type: discriminant as TypeRecord, subjectType: objType, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display: displayType(discriminant as TypeRecord) };
         }
-        if (kept.length === 0 || kept.length === objType.Members.length) {
+        if (exact.length === objType.Members.length && !loose) {
+          return { name: objName, type: discriminant as TypeRecord, subjectType: objType, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display: displayType(discriminant as TypeRecord) };
+        }
+        if (kept.length === 0) {
           continue;
         }
         return {
           name: objName,
           type: CanonicalizeType({ Kind: 'union', Members: kept }),
-          negated: inverted !== false ? inverted : false,
+          excluded: exact.length ? CanonicalizeType({ Kind: 'union', Members: exact }) : neverType as TypeRecord,
+          subjectType: objType,
+          negated: writtenNegated,
         };
       }
     }
@@ -20721,8 +21069,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // empty String is a value of `string`, so narrowing by truthiness generally
     // would make `if (count)` read as a type test while excluding a number the
     // type admits. A test on anything else yields no fact and narrows nothing.
-    if (e.type === 'IdentifierReference') {
-      const name = (e as unknown as { name: string }).name;
+    // The operand forms whose value is the test: a binding or path, and, where
+    // the caller judges a test of any operand, a call or an optional chain.
+    const bareName = e.type === 'IdentifierReference' || e.type === 'MemberExpression'
+      || (anyOperand && (e.type === 'CallExpression' || e.type === 'OptionalExpression')) ? subjectOf(e) : null;
+    if (bareName !== null && !isLiteralOperand(e)) {
       const t = staticType(e);
       const nullish = !!t && t.Kind === 'union'
         && (t as { Members: readonly TypeRecord[] }).Members.some((m) => m.Kind === 'primitive'
@@ -20731,7 +21082,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `negated` already carries the `!` count, and the sense here is the
         // reverse of the nullish comparison's: the TRUE branch is the present
         // one, so the fact is "is nullish" with the negation flipped.
-        return { name, type: nullishType() as TypeRecord, negated: !negated };
+        return { name: bareName, type: nullishType() as TypeRecord, subjectType: t, negated: !negated };
       }
     }
     return undefined;
@@ -20816,7 +21167,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * dominates, so there is no branch to hang it on and it belongs here, where
    * the statements it dominates are still to be walked.
    */
-  const predicateFacts = (call: ParseNode.CallExpression, assertion: boolean): { name: string, type: TypeRecord }[] => {
+  const predicateFacts = (call: ParseNode.CallExpression, assertion: boolean): { name: string, type: TypeRecord, subjectType: Known }[] => {
     const callee = callableForm(staticType(call.CallExpression));
     // Named binding alone does not select among several signatures sharing
     // the names. The call checker can retain its argument diagnostics without
@@ -20828,21 +21179,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ?? (callee?.Kind === 'function' && callee.Signatures.length === 1 ? callee.Signatures[0] : undefined);
     if (!signature || (!signature.Return || signature.Return.Kind === 'void') !== assertion) return [];
     const mapped = mapCallArguments(signature.Parameters, expandValueSpreads(call.Arguments));
-    const facts: { name: string, type: TypeRecord }[] = [];
+    const facts: { name: string, type: TypeRecord, subjectType: Known }[] = [];
     for (const rule of signature.Narrows ?? []) {
       if (mentionsTypeParameter(rule.Type)) continue;
       if (rule.Target === 'this') {
         let target: ParseNode = call.CallExpression;
         while (target.type === 'ParenthesizedExpression' || target.type === 'TypeArgumentsExpression') target = target.Expression;
         const name = target.type === 'MemberExpression' ? narrowableName(target.MemberExpression) : null;
-        if (name !== null) facts.push({ name, type: rule.Type });
+        if (name !== null) facts.push({ name, type: rule.Type, subjectType: staticType((target as ParseNode.MemberExpression).MemberExpression) });
         continue;
       }
       const slot = signature.Parameters.findIndex((parameter) => parameter.Name === rule.Target);
       const entries = mapped.certainEntries.filter((entry) => entry.slot === slot);
       if (entries.length !== 1 || signature.Parameters[slot]?.Rest) continue;
       const name = narrowableName(entries[0].node);
-      if (name !== null) facts.push({ name, type: rule.Type });
+      if (name !== null) facts.push({ name, type: rule.Type, subjectType: staticType(entries[0].node) });
     }
     return facts;
   };
@@ -20869,7 +21220,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
     }
-    for (const fact of predicateFacts(expression, true)) declareNarrowed(fact.name, fact.type);
+    // #sec-declared-narrowing: the ~void~ form establishes NarrowTo(_s_,
+    // [[Type]]) in every position the call dominates. Where that is ~empty~
+    // the call can never return normally, and every position it dominates is
+    // dead (#sec-narrowfrom). An assertion that can never fail decides no
+    // branch, since the form has no false branch.
+    for (const fact of predicateFacts(expression, true)) {
+      const source = lookup(fact.name) ?? fact.subjectType ?? anyTypeRecord;
+      const narrowed = NarrowTo(source, fact.type);
+      if (narrowed === empty) {
+        if (impossibleVerdict(source, fact.type) === 'never-succeeds') {
+          errors.push(Throw.StaticTypeError('the $1 assertion can never succeed, so the code it dominates is dead',
+            Value(displayType(fact.type))).Value as ObjectValue);
+        }
+        continue;
+      }
+      declareNarrowed(fact.name, narrowed as Known);
+    }
 
   };
 
@@ -20887,8 +21254,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (request) {
       narrowingRequestsHere.push({ ...request, parent: enclosingRequestKey });
     }
+    markDeciding(test);
     walk(test);
-    const fact = narrowingFactOf(test);
+    const fact = narrowingFactOf(test, true);
     // The enclosing key covers BOTH paths. A relational comparison yields no
     // type-level fact, so the guard below returns early - and that is exactly
     // the shape a narrowing request has, so skipping the push here left every
@@ -20908,11 +21276,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (resolved) {
         frames.push(emptyFrame());
         declareNarrowed(request!.name, resolved.whenTrue);
-        walk(whenTrueNode);
+        walkDeciding(whenTrueNode);
         frames.pop();
         frames.push(emptyFrame());
         declareNarrowed(request!.name, resolved.whenFalse);
-        walk(whenFalseNode);
+        walkDeciding(whenFalseNode);
         frames.pop();
         return;
       }
@@ -20948,12 +21316,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 declareNarrowed(name, { Kind: 'any' });
               }
             }
-            walk(whenTrueNode);
-            walk(whenFalseNode);
+            walkDeciding(whenTrueNode);
+            walkDeciding(whenFalseNode);
           });
         } else {
-          walk(whenTrueNode);
-          walk(whenFalseNode);
+          walkDeciding(whenTrueNode);
+          walkDeciding(whenFalseNode);
         }
         return;
       }
@@ -20967,70 +21335,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The narrowed walk of the two branches, split out so the parent-link
    * bookkeeping in `walkGuarded` covers both without duplicating the restore.
    */
-  const walkGuardedBranches = (fact: NonNullable<ReturnType<typeof narrowingFactOf>>, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
+  const walkGuardedBranches = (fact: NarrowingFact, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
     const paths = [fact, ...(fact.additional ?? [])].map((entry) => {
       const fact = { ...entry, sense: 'sense' in entry ? entry.sense : undefined };
-      const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
+      judgeFact(fact);
+      const { source, whenTrue, whenFalse } = branchTypes(fact);
       // A fact that already knows its test's answer - a `typeof` tag no value
       // has or every value has, a member literal no union member admits -
-      // reports it directly and narrows nothing.
-      const known = entry as { verdict?: 'never-succeeds' | 'never-fails', display?: string };
-      if (known.verdict && source.Kind !== 'any') {
-        errors.push(Throw.StaticTypeError(known.verdict === 'never-succeeds'
-          ? 'the $1 test can never succeed, so the branch it guards is dead code'
-          : 'the $1 test can never fail, so the branch it guards is dead code', Value(known.display ?? displayType(fact.type))).Value as ObjectValue);
-        return { fact, whenTrue: source as Known, whenFalse: source as Known };
-      }
-      const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
-      const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
-      // sec-narrowing: "It is a type error to apply a narrowing form where the
-      // test can never succeed or can never fail, since the branch it guards is
-      // then dead code the program did not intend." The checker had this rule and
-      // reached it only for a test over a TYPE, never for one over a binding,
-      // which is the shape a program writes.
-      // The dead-branch rule reasons from the STATIC type, so it applies only
-      // where membership is a stable fact about the value. It is not, for an
-      // object type or a refinement: sec-isoftype says in as many words that the
-      // object case "is checked at the boundary but not afterwards", so a binding
-      // of an object type can stop satisfying it through mutation, and a `where`
-      // predicate is re-evaluated on every test. The suite has the case that
-      // proves it - `let p: Pos = ...; p.a = 0; p is Pos` is *false* at run time
-      // while the static type still says `Pos` - and reporting that branch as
-      // dead would have contradicted a documented behaviour. So the rule
-      // fires for the kinds whose membership a value cannot lose.
-      // A CLASS joins them: its membership is an
-      // identity - the prototype chain - and not a structure, so no write to a
-      // field can take a value out of it. That is the fact the `instanceof`
-      // form and the Early Error on `P & Q` already rest on; an object type or a
-      // refinement stays out, for the reason above.
-      const decidable = (t: TypeRecord): boolean => t.Kind === 'primitive' || t.Kind === 'literal'
-        || (t.Kind === 'nominal' && (t as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration')
-        || (t.Kind === 'union' && t.Members.every(decidable));
-      if (source.Kind !== 'any' && !fact.sense && decidable(source) && decidable(fact.type)) {
-        if (whenTrue === empty) {
-          const completion = Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
-          errors.push(completion.Value as ObjectValue);
-        } else if (whenFalse === empty) {
-          const completion = Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(displayType(fact.type))) as ThrowCompletion;
-          errors.push(completion.Value as ObjectValue);
-        }
+      // narrows nothing.
+      if (fact.verdict && source.Kind !== 'any') {
+        return { fact, whenTrue: source as Known | typeof empty, whenFalse: source as Known | typeof empty };
       }
       return { fact, whenTrue, whenFalse };
     });
     if (whenTrueNode) {
       pushBlock(() => {
         for (const { fact, whenTrue } of paths) {
-          if (whenTrue !== empty && fact.sense !== 'false') declareNarrowed(fact.name, whenTrue as Known);
+          if (whenTrue !== empty && fact.sense !== 'false' && fact.name !== NON_PATH) declareNarrowed(fact.name, whenTrue as Known);
         }
-        walk(whenTrueNode);
+        walkDeciding(whenTrueNode);
       });
     }
     if (whenFalseNode) {
       pushBlock(() => {
         for (const { fact, whenFalse } of paths) {
-          if (whenFalse !== empty && fact.sense !== 'true') declareNarrowed(fact.name, whenFalse as Known);
+          if (whenFalse !== empty && fact.sense !== 'true' && fact.name !== NON_PATH) declareNarrowed(fact.name, whenFalse as Known);
         }
-        walk(whenFalseNode);
+        walkDeciding(whenFalseNode);
       });
     }
   };
@@ -21055,6 +21386,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const structuralPatternCovers = (pattern: ParseNode, atom: TypeRecord): boolean => {
     switch (pattern.type) {
       case 'MatchWildcardPattern': return true;
+      // `not P` covers exactly the atoms `P` can never match: its match is the
+      // miss of its operand (#sec-pattern-static-semantics).
+      case 'MatchNotPattern': {
+        const operand = patternBranches(atom, pattern.Operand);
+        return !!operand && operand.match === empty && operand.matchStable;
+      }
       case 'MatchBindingPattern': {
         const annotation = pattern.TypeAnnotation ? resolveType(pattern.TypeAnnotation) : null;
         return annotation ? IsSubtype(atom, annotation, []) : !pattern.TypeAnnotation;
@@ -21151,8 +21488,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return classNamesInSource.has(name);
   };
 
+  /**
+   * #sec-pattern-static-semantics: an object or array pattern can never match
+   * where its position holds no Object, since MatchObjectPattern and
+   * MatchArrayPattern answer *false* for any other value; and an array pattern
+   * can never match where the static iteration contribution fixes a length its
+   * length test refuses.
+   */
+  const structurallyUnmatchable = (pattern: ParseNode.MatchObjectPattern | ParseNode.MatchArrayPattern, positionType: Known): boolean => {
+    if (!positionType || positionType.Kind === 'any' || mentionsTypeParameter(positionType)) return false;
+    const members = (positionType.Kind === 'union' ? positionType.Members : [positionType]) as TypeRecord[];
+    return members.length > 0 && members.every((member) => {
+      if (cannotBeObject(member)) return true;
+      if (pattern.type !== 'MatchArrayPattern') return false;
+      const { positions } = StaticIterationContribution(member, structureOf);
+      return !!positions && positions.length !== pattern.Elements.length;
+    });
+  };
+
   const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType: Known = null, subPattern = false): Known => {
     if (!pattern) return positionType;
+    if ((pattern.type === 'MatchObjectPattern' || pattern.type === 'MatchArrayPattern') && structurallyUnmatchable(pattern, positionType)) {
+      errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType as TypeRecord))).Value as ObjectValue);
+      // The sub-patterns still declare their bindings, at a position no value
+      // reaches.
+      if (pattern.type === 'MatchObjectPattern') {
+        pattern.Properties.forEach((prop) => declareMatchPatternBindings(prop.Pattern, null, true));
+        declareMatchPatternBindings(pattern.Rest ?? null, null, true);
+      } else {
+        pattern.Elements.forEach((element) => declareMatchPatternBindings(element, null, true));
+      }
+      return neverType;
+    }
     const narrow = (target: Known, diagnose: boolean): Known => {
       if (!target) return positionType;
       if (!positionType || positionType.Kind === 'any') return target;
@@ -21161,6 +21528,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || positionType.Kind === 'tuple' && target.Kind === 'array' && target.Extent === 'dynamic') return target;
       const result = NarrowTo(positionType, target);
       if (result !== empty) return result;
+      // #sec-narrowfrom: an ~empty~ that rests on an object's members is not a
+      // fact about the value, so it neither narrows nor is reported.
+      if (!stablyDisjoint(positionType, target)) return positionType;
       if (diagnose) errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType))).Value as ObjectValue);
       return neverType;
     };
@@ -21193,6 +21563,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const a = left.bindings.get(Name);
           const b = right.bindings.get(Name);
           declare(Name, a && b ? CanonicalizeType({ Kind: 'union', Members: [a, b] }) : null);
+        }
+        // Each alternative is a sub-pattern at the `or`'s own position, so one
+        // that can match nothing there is a type error although the other can
+        // match (#sec-pattern-static-semantics). Nested, each was diagnosed as a
+        // sub-pattern already; at the top, one dead alternative is diagnosed
+        // here, and two leave the whole pattern as the impossible test.
+        const leftDead = left.type === neverType;
+        const rightDead = right.type === neverType;
+        if (leftDead && rightDead) return neverType;
+        if (!subPattern && leftDead !== rightDead && positionType) {
+          errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType))).Value as ObjectValue);
         }
         return left.type && right.type ? CanonicalizeType({ Kind: 'union', Members: [left.type, right.type] }) : null;
       }
@@ -21522,8 +21903,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // earlier one matched". A guarded clause narrows nothing, so it never
         // exhausts the subject for the clauses after it, and is judged for its
         // own pattern like any other.
+        // #sec-match-exhaustiveness exempts `match all` from exhaustiveness and
+        // from what the preceding clauses leave, not from a clause's own row of
+        // #table-narrowing-forms: a clause that can match no value of the
+        // subject can never contribute (#sec-narrowfrom).
+        if (me.All && clause.Pattern !== null && subjectType && subjectType.Kind !== 'any' && boundType === neverType
+            && clause.Pattern.type !== 'MatchObjectPattern' && clause.Pattern.type !== 'MatchArrayPattern') {
+          errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(subjectType))).Value as ObjectValue);
+        }
         if (!me.All && before && before.Kind !== 'any') {
           const impossible = clause.Pattern !== null
+            && clause.Pattern.type !== 'MatchObjectPattern' && clause.Pattern.type !== 'MatchArrayPattern'
             && boundType === neverType
             && !isEmptyRecord(selected);
           // A `default` is NOT judged by narrowing, only by the atom coverage
@@ -28745,9 +29135,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // missing entry carried a guard fact for a binding and never for
         // `c.a` - the `else` spelling of the same test narrowed a path while
         // the guard-clause spelling did not.
-        const source = lookup(fact.name) ?? ({ Kind: 'any' } as TypeRecord);
-        const whenTrue = fact.negated ? NarrowFrom(source, fact.type) : NarrowTo(source, fact.type);
-        const whenFalse = fact.negated ? NarrowTo(source, fact.type) : NarrowFrom(source, fact.type);
+        const { whenTrue, whenFalse } = branchTypes(fact);
         const leaves = (b: ParseNode | null | undefined) => (b
           ? !canCompleteNormally(b, switchCoversDiscriminant)
           : false);
@@ -29014,6 +29402,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(rel.ShiftExpression as ParseNode);
         return;
       }
+      case 'CommaOperator': {
+        // The last operand of a comma expression that decides a branch decides
+        // it too (#sec-narrowing).
+        const list = (n as unknown as { ExpressionList: readonly ParseNode[] }).ExpressionList;
+        list.forEach((operand, index) => (index === list.length - 1 ? walkDeciding(operand) : walk(operand)));
+        return;
+      }
       case 'LogicalANDExpression':
       case 'LogicalORExpression': {
         // `??` is reported because its
@@ -29039,31 +29434,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (leftNode) {
           const lt = staticType(leftNode);
           if (lt) {
-            const uniform = (t: TypeRecord): boolean | undefined => {
-              const members = t.Kind === 'union' ? t.Members : [t];
-              let seen: boolean | undefined;
-              for (const m of members) {
-                let truthy: boolean;
-                if (m.Kind === 'literal') {
-                  truthy = Boolean((m.Value as { value?: unknown })?.value);
-                } else if (m.Kind === 'primitive' && (m.Name === 'null' || m.Name === 'undefined')) {
-                  truthy = false;
-                } else if ((m.Kind === 'primitive' && (m.Name === 'symbol' || m.Name === 'type'))
-                  || m.Kind === 'object' || m.Kind === 'array' || m.Kind === 'tuple' || m.Kind === 'function'
-                  || (m.Kind === 'nominal' && (m as { EnumMembers?: unknown }).EnumMembers === undefined)) {
-                  truthy = true;
-                } else {
-                  return undefined;
-                }
-                if (seen === undefined) {
-                  seen = truthy;
-                } else if (seen !== truthy) {
-                  return undefined;
-                }
-              }
-              return seen;
-            };
-            const t = uniform(lt);
+            const t = settledTruthiness(lt);
             // `||` skips its right operand when the left is truthy; `&&` when
             // the left is falsy.
             if (t !== undefined && t === isOr) {
@@ -29393,6 +29764,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               errors.push(completion.Value as ObjectValue);
             }
           }
+          // #sec-typed-catch: a clause runs only for a value no earlier clause
+          // accepted, and acceptance is IsOfType, which holds of every type a
+          // value's type is a subtype of. A clause whose type is a subtype of
+          // the union of the earlier clauses' types, or which follows one
+          // annotated `any`, can therefore never run.
+          const earlier: TypeRecord[] = [];
+          let catchesAll = false;
+          for (let i = 0; i < clauses.length; i += 1) {
+            const annotation = (clauses[i] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+            if (!annotation) {
+              if (catchesAll) {
+                errors.push(Throw.StaticTypeError('the catch clause for $1 can never run, since an earlier clause accepts every such value',
+                  Value('any')).Value as ObjectValue);
+              }
+              break;
+            }
+            const caught = resolveType(annotation.Type);
+            if (i > 0 && (catchesAll || (caught && caught.Kind !== 'any' && !mentionsTypeParameter(caught) && earlier.length
+                && IsSubtype(caught, CanonicalizeType({ Kind: 'union', Members: earlier }), [])))) {
+              errors.push(Throw.StaticTypeError('the catch clause for $1 can never run, since an earlier clause accepts every such value',
+                Value(caught ? displayType(caught) : 'any')).Value as ObjectValue);
+            }
+            if (!caught || mentionsTypeParameter(caught)) continue;
+            if (caught.Kind === 'any') catchesAll = true;
+            else earlier.push(caught);
+          }
         }
         // Then walk on. Breaking here skipped the default case, which is what
         // descends into a node's children - so every declaration and check
@@ -29457,19 +29854,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const completion = Throw.StaticTypeError('$1 is not a case of enum $2', Value(shown), Value(coverage.enumName)) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
+          for (const shown of coverage.duplicates) pushImpossibleTest('never-succeeds', shown);
           const hasDefault = n.CaseBlock.DefaultClause !== undefined && n.CaseBlock.DefaultClause !== null;
-          // #sec-enums: a `default` after a case for every enumerator can never
-          // be taken; the narrowing row gives it an empty type.
-          if (hasDefault && coverage.invalid.length === 0
-              && enumeratorsNotCovered(coverage.record, coverage.names, coverage.covered).length === 0) {
-            errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken', Value(coverage.enumName)).Value as ObjectValue);
-          }
+          const missing = enumeratorsNotCovered(coverage.record, coverage.names, coverage.covered);
           if (!hasDefault) {
-            const missing = enumeratorsNotCovered(coverage.record, coverage.names, coverage.covered);
             if (missing.length > 0) {
               const completion = Throw.StaticTypeError('switch over enum $1 is missing $2 and has no default', Value(coverage.enumName), Value(missing.join(', '))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
+          } else if (missing.length === 0 && coverage.invalid.length === 0) {
+            // #table-narrowing-forms: the `default` of an enum `switch` holds the
+            // discriminant with every case's type removed, which is empty once
+            // every enumerator has a case, so the `default` can never be taken
+            // (#sec-narrowfrom). A `default` covering a sentinel or any other
+            // enumerator without a case is live.
+            errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken',
+              Value(coverage.enumName)).Value as ObjectValue);
           }
         } else if ((n.CaseBlock as { DefaultClause?: ParseNode | null }).DefaultClause && switchCasesCoverDiscriminant(n)) {
           // A sealed hierarchy is closed as an enum is: a `default` after a
@@ -29490,6 +29890,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // had. A LITERAL label is excluded for the reason the `===` rule
         // excludes one: `case 5` for a `uint32` compares against a literal whose
         // Base is `number`, and the literal adopts.
+        // `switch (typeof v)` applies the `typeof v === k` row of
+        // #table-narrowing-forms to each label, in order: a tag no value has, a
+        // tag an earlier label tested, or a tag none of what is left can have
+        // is a test that can never succeed (#sec-narrowfrom).
+        const caseLabels = [
+          ...((n.CaseBlock as unknown as { CaseClauses_a?: readonly ParseNode[] | null }).CaseClauses_a ?? []),
+          ...((n.CaseBlock as unknown as { CaseClauses_b?: readonly ParseNode[] | null }).CaseClauses_b ?? []),
+        ].map((clause) => (clause as unknown as { Expression?: ParseNode | null }).Expression ?? null);
+        if (n.Expression.type === 'UnaryExpression' && (n.Expression as unknown as { operator?: string }).operator === 'typeof') {
+          let left = staticType((n.Expression as unknown as { UnaryExpression: ParseNode }).UnaryExpression);
+          const tested: string[] = [];
+          for (const label of caseLabels) {
+            if (!label || label.type !== 'StringLiteral') continue;
+            const tag = (label as unknown as { value: string }).value;
+            const display = `typeof ${JSON.stringify(tag)}`;
+            if (tested.includes(tag) || !['undefined', 'object', 'boolean', 'number', 'bigint', 'string', 'symbol', 'function'].includes(tag)) {
+              pushImpossibleTest('never-succeeds', display);
+              continue;
+            }
+            tested.push(tag);
+            if (!left || left.Kind === 'any' || mentionsTypeParameter(left)) continue;
+            const members = left.Kind === 'union' ? left.Members as TypeRecord[] : [left];
+            const tags = members.map((member) => typeofTagOfType(member));
+            if (tags.some((t) => t === null)) continue;
+            if (!tags.includes(tag)) {
+              pushImpossibleTest('never-succeeds', display);
+              continue;
+            }
+            const rest = members.filter((_, i) => tags[i] !== tag);
+            left = rest.length ? CanonicalizeType({ Kind: 'union', Members: rest }) : neverType;
+          }
+        }
         const subject = staticType(n.Expression);
         // A literal discriminant holds one value, so a literal label of any
         // other value is the `v === e` row with a test that can never succeed.
@@ -29507,6 +29939,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         if (subject && subject.Kind !== 'literal') {
+          const testedLabelValues: Value[] = [];
+          let remainingForLabels: Known = subject;
           const clauses = [
             ...((n.CaseBlock as unknown as { CaseClauses_a?: readonly ParseNode[] | null }).CaseClauses_a ?? []),
             ...((n.CaseBlock as unknown as { CaseClauses_b?: readonly ParseNode[] | null }).CaseClauses_b ?? []),
@@ -29541,6 +29975,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 && element.Arguments.length === 0)
                 ? element as Known
                 : null;
+            }
+            // #sec-narrowing, the `case e` row: the labels are tested in order
+            // whatever the clauses' statements do, so each label is the `v === e`
+            // test of what the earlier labels left. A label whose value an
+            // earlier label tested can never succeed, and neither can a string,
+            // boolean or bigint literal outside what is left (#sec-narrowfrom).
+            if (labelType && labelType.Kind === 'literal' && !isEnumType(subject as TypeRecord)) {
+              const value = (labelType as { Value?: Value }).Value;
+              if (value !== undefined && testedLabelValues.some((earlier) => SameValue(earlier, value))) {
+                pushImpossibleTest('never-succeeds', displayType(labelType as TypeRecord));
+                continue;
+              }
+              if (value !== undefined) testedLabelValues.push(value);
+              const base = (labelType as { Base?: TypeRecord }).Base;
+              const numeric = base?.Kind === 'primitive' && base.Name === 'number';
+              // A label whose base is disjoint from the discriminant keeps the
+              // disjointness message below.
+              if (!numeric && remainingForLabels && remainingForLabels.Kind !== 'any' && !mentionsTypeParameter(remainingForLabels)
+                  && !(base && AreDisjoint(subject as TypeRecord, base))) {
+                if (NarrowTo(remainingForLabels, labelType as TypeRecord) === empty && stablyDisjoint(remainingForLabels, labelType as TypeRecord)) {
+                  pushImpossibleTest('never-succeeds', displayType(labelType as TypeRecord));
+                  continue;
+                }
+                const rest = NarrowFrom(remainingForLabels, labelType as TypeRecord);
+                remainingForLabels = rest === empty ? neverType : rest as Known;
+              }
             }
             // A LITERAL label is exempt because it adopts - but only a NUMERIC
             // literal adopts a numeric discriminant. A string, boolean or bigint
@@ -30327,11 +30787,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'OptionalExpression': {
         // #sec-narrowing lists `?.` with `??` and `== null`: its nullish branch
-        // is dead where the receiver cannot be nullish, and the rest of the
-        // chain is dead where it always is (#sec-narrowfrom), as for `??`.
+        // is dead where the receiver cannot be nullish, and the rest of the chain
+        // is dead where the receiver is always nullish (#sec-narrowfrom).
         {
           const receiver = staticType((n as ParseNode.OptionalExpression).MemberExpression as ParseNode);
-          if (receiver) reportNeverNullish(receiver, '?.', true);
+          if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true);
         }
         optionalChainView(n, true);
         return;
@@ -30442,6 +30902,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const condition = n.type === 'ForStatement'
           ? ForPatternPositions(n).test
           : (n as unknown as { Expression?: ParseNode | null }).Expression;
+        if (condition) markDeciding(condition);
         for (const key of Object.keys(n)) {
           if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
             continue;
@@ -30453,6 +30914,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (condition) {
           staticType(condition);
+          const fact = narrowingFactOf(condition, true);
+          if (fact) judgeFact(fact);
         }
         };
         if (n.type === 'ForStatement') {
@@ -30533,10 +30996,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const assignment = n as ParseNode.AssignmentExpression;
         const a = { ...assignment, LeftHandSideExpression: patternExpression(assignment.LeftHandSideExpression)! };
         // `??=` is the nullish row too: it can never assign to a target that
-        // cannot be nullish.
+        // cannot be nullish, and always assigns to one that is always nullish.
         if (assignment.AssignmentOperator === '??=') {
           const target = staticType(a.LeftHandSideExpression as ParseNode);
-          if (target) reportNeverNullish(target, '??=');
+          if (target) reportImpossibleTest(target, nullishType(), '??=', true);
+        }
+        // #sec-narrowfrom: `||=` and `&&=` are `||` and `&&` whose right operand
+        // is a store. Where the target's type settles the test, the right
+        // operand can never be evaluated.
+        if (assignment.AssignmentOperator === '||=' || assignment.AssignmentOperator === '&&=') {
+          const target = staticType(a.LeftHandSideExpression as ParseNode);
+          const settled = target ? settledTruthiness(target) : undefined;
+          if (settled !== undefined && settled === (assignment.AssignmentOperator === '||=')) {
+            errors.push(Throw.StaticTypeError('the right operand of $1 can never be evaluated, so it is dead code',
+              Value(assignment.AssignmentOperator)).Value as ObjectValue);
+          }
         }
         // #sec-user-defined-operators: a declared compound invokes its method
         // without storing back to the assignment target.

@@ -433,7 +433,7 @@ test('an enum\'s enumerator NAMES are reached through `keyof Reflect.typeOf`', (
   // is the line TypeScript draws, where `keyof Color` gives a number's methods
   // and `keyof Reflect.typeOf(Color)` gives the names.
   const C = 'enum C { Zero, One } ';
-  expect(evaluated(`${C}type K = keyof Reflect.typeOf(C); String(("Zero" is K) && ("One" is K));`)).toBe('true');
+  expect(evaluated(`${C}type K = keyof Reflect.typeOf(C); [("Zero" is K), ("One" is K)].join();`)).toBe('true,true');
   expect(evaluated(`${C}type K = keyof Reflect.typeOf(C); String("Nope" is K);`)).toBe('false');
   // The parenthesized and two-step spellings agree with it.
   expect(evaluated(`${C}type K = keyof (Reflect.typeOf(C)); String("Zero" is K);`)).toBe('true');

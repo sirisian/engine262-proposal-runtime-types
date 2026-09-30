@@ -44,7 +44,7 @@ test('a GUARD sees the pattern\'s bindings', () => {
 
 test('`is` creates an environment for its bindings too', () => {
   expect(outcome('const v = 1; v is let x;')).toBe('StaticTypeError');
-  expect(evaluated('String((1 is let x) && true);')).toBe('true');
+  expect(evaluated('function anyv(v) { return v; } String((anyv(1) is let x) && true);')).toBe('true');
 });
 
 test('the binding COLON is resolved by CONTEXT, not by lookahead', () => {
@@ -63,11 +63,14 @@ test('the binding COLON is resolved by CONTEXT, not by lookahead', () => {
   expect(evaluated('String(match (uint8(1)) { when let x: uint8: "yes"; });')).toBe('yes');
   expect(evaluated('String(match (5) { when let x: x * 2; });')).toBe('10');
   // `is` position, where there is no clause colon to find.
-  expect(outcome2('if (uint8(1) is let x: uint8) {}')).toBe('ACCEPTED');
-  expect(evaluated('String((uint8(1) is let x: uint8) && true);')).toBe('true');
+  expect(outcome2('function anyv(v) { return v; } if (anyv(uint8(1)) is let x: uint8) {}')).toBe('ACCEPTED');
+  expect(evaluated('function anyv(v) { return v; } String((anyv(uint8(1)) is let x: uint8) && true);')).toBe('true');
+  // An irrefutable binding over a subject of known type can never fail, so it
+  // cannot guard a branch (#sec-narrowfrom).
+  expectEarlyError('String((uint8(1) is let x: uint8) && true);', 'StaticTypeError');
   expectEarlyError('String((1 is let x: uint8) && true);', 'StaticTypeError');
   expect(evaluated('let subject: any = 1; String((subject is let x: uint8) && true);')).toBe('false');
-  expect(evaluated('String((1 is let x) && true);')).toBe('true');
+  expect(evaluated('function anyv(v) { return v; } String((anyv(1) is let x) && true);')).toBe('true');
 });
 
 test('what the checker half does not yet do', () => {
@@ -98,7 +101,7 @@ test('a bound name is IN SCOPE where the truth of the test governs', () => {
   // of it.
   expect(evaluated('const val = 5; let out = "X"; if (val is let x) { out = String(x); } out;')).toBe('5');
   expect(evaluated('const val = 5; String((val is let x) && x);')).toBe('5');
-  expect(evaluated('let out = "X"; if (uint8(5) is let x: uint8) { out = String(x); } out;')).toBe('5');
+  expect(evaluated('function anyv(v) { return v; } let out = "X"; if (anyv(uint8(5)) is let x: uint8) { out = String(x); } out;')).toBe('5');
   expect(evaluated('let out = "X"; if (({ a: 7 }) is { a: let n }) { out = String(n); } out;')).toBe('7');
   expect(evaluated('const S = { [Symbol.customMatcher](x) { return [x * 2]; } }; '
     + 'let out = "X"; if (5 is S(let d)) { out = String(d); } out;')).toBe('10');
@@ -114,7 +117,7 @@ test('a LOOP rebinds per iteration', () => {
   // The immutability the clause wants is against USER ASSIGNMENT, which is the
   // checker's to enforce along with the scope.
   expect(evaluated('let n = 0; const log = []; while ((n += 1) is let c and 1..<5) { log.push(String(c)); } log.join(",");')).toBe('1,2,3,4');
-  expect(evaluated('const log = []; for (const q of [1, 2, 3]) { if (q is let c) { log.push(String(c)); } } log.join(",");')).toBe('1,2,3');
+  expect(evaluated('function anyv(v) { return v; } const log = []; for (const q of [1, 2, 3]) { if (anyv(q) is let c) { log.push(String(c)); } } log.join(",");')).toBe('1,2,3');
   // A MISS binds nothing and the governed position does not run.
   expect(evaluated('let subject: any = 5; let out = "ok"; if (subject is let x: string) { out = "matched"; } out;')).toBe('ok');
 });

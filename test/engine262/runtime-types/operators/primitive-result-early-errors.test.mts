@@ -181,3 +181,8 @@ test.each([
 ])('additional values and effects: %s', (_name, source, expected) => {
   expect(evaluated(source + 'String(globalThis.settled);')).toBe(expected);
 });
+
+test('an optional key read through a receiver that is always null is dead code', () => {
+  // #sec-narrowfrom: the key conversion after `?.` can never be evaluated.
+  expectStaticTypeError('function f(x:null,key:{[Symbol.toPrimitive]:()=>symbol}){return x?.[key];}');
+});

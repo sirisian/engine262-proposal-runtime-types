@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-is-pattern (The Is Pattern) - `is` takes a pattern.
@@ -66,13 +66,16 @@ test('COMBINATORS: not binds tightest, then and, then or', () => {
   expect(evaluated('String(5 is 5 and 6);')).toBe('false');
   // A combinator over a TYPE pattern, which is what says the two kinds of
   // pattern compose rather than living in separate grammars.
-  expect(evaluated('String(1 is uint8 or number);')).toBe('true');
+  expect(evaluated('function anyv(v) { return v; } String(anyv(1) is uint8 or number);')).toBe('true');
+  // Over a subject of known type, an alternative that can match nothing is a
+  // type error (#sec-pattern-static-semantics).
+  expectStaticTypeError('String(1 is uint8 or number);');
   expect(evaluated('String("s" is not uint8);')).toBe('true');
 });
 
 test('bindings require governed positions and array patterns retain matching', () => {
   // #sec-is-pattern: the successful match governs the right operand of &&.
-  expect(evaluated('String((1 is let x) && true);')).toBe('true');
+  expect(evaluated('function anyv(v) { return v; } String((anyv(1) is let x) && true);')).toBe('true');
   // ARRAY patterns, and the `[[Iterations]]` half of the cache with them.
   // `[1, 2]` currently parses as a TUPLE TYPE of two literal types, so the
   // answer coincides with what an array pattern would give - the same

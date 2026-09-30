@@ -68,10 +68,10 @@ test('SameValueZero (Map/Set keying) distinguishes typed numbers', () => {
 test('an enumerator type admits the enumerator and nothing that merely equals it', () => {
   // `E.A` denotes the enumerator. A typed 1 is not it, and neither is a plain 1
   // - membership is the one-way rule, and `E(1)` is the way across.
-  expect(evaluated('enum E { A = 1 } type T = E.A; (1 := uint8) is T ? "member" : "not";')).toBe('not');
-  expect(evaluated('enum E { A = 1 } type T = E.A; 1 is T ? "member" : "not";')).toBe('not');
-  expect(evaluated('enum E { A = 1 } type T = E.A; E.A is T ? "member" : "not";')).toBe('member');
-  expect(evaluated('enum E { A = 1 } type T = E.A; E(1) is T ? "member" : "not";')).toBe('member');
+  expect(evaluated('enum E { A = 1 } type T = E.A; String((1 := uint8) is T);')).toBe('false');
+  expect(evaluated('enum E { A = 1 } type T = E.A; String(1 is T);')).toBe('false');
+  expect(evaluated('enum E { A = 1 } type T = E.A; String(E.A is T);')).toBe('true');
+  expect(evaluated('enum E { A = 1 } type T = E.A; String(E(1) is T);')).toBe('true');
 });
 
 test('an enum operand is read at its underlying type in a comparison', () => {

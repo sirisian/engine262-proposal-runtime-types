@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrown, ok, evaluated } from '../harness.mts';
+import { expectThrown, ok, evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
  * sec-enums lets two enumerators of ONE enum share a value. The rule against a
@@ -29,6 +29,10 @@ test('an alias is covered by the name that shares its value', () => {
   expect(evaluated('enum E { A = 1, B = 1 } String(E.A === E.B);')).toBe('true');
   expect(evaluated('enum E { A = 1, B = 1 } let e: E = E.B; let hit = "none";'
     + ' switch (e) { case E.A: hit = "A"; break; } hit;')).toBe('A');
+  // The alias covers the value, so a `default` after it can never be taken,
+  // and a second label for the shared value can never succeed (#sec-enums).
+  expectStaticTypeError('enum E { A = 1, B = 1 } let e: E = E.B; switch (e) { case E.A: break; default: break; }');
+  expectStaticTypeError('enum E { A = 1, B = 1 } let e: E = E.B; switch (e) { case E.A: break; case E.B: break; }');
 });
 
 test('DISTINCT values still need every arm', () => {

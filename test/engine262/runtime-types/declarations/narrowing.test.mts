@@ -9,10 +9,8 @@ import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
  * either half is empty the branch it guards can never be taken, and that is a type
  * error rather than a narrowing to `never`, because a branch the program wrote and
  * can never reach is dead code and not a computation. This file covers that rule
- * for the two forms delivered so far, `instanceof` and the nullish `??`. The
- * remaining rows (the `is` operator, a literal `===`, `typeof`, a brand check, the
- * comparison of a parameterized type, and signature-driven narrowing) and the
- * narrowing of the discriminant inside a matched branch are not yet covered.
+ * for `instanceof` and the nullish `??`; the other rows of #table-narrowing-forms,
+ * and the positions nested in a test, are covered in ../narrowing/dead-branches.test.mts.
  */
 
 // -- A guard whose test can never succeed --------------------------------------
@@ -60,7 +58,7 @@ test('narrowing: a test asked as a value, deciding no branch, is left alone', ()
   // legitimately ask, and membership answers it.
   expect(evaluated('let a: uint8 = (5 := uint8); String(a instanceof uint8);')).toBe('true');
   expect(evaluated('let a: uint8 = (5 := uint8); String(a instanceof string);')).toBe('false');
-  expect(evaluated('type T = uint8; ((5 := T) instanceof T) && !("x" instanceof T) ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type T = uint8; String((5 := T) instanceof T) + String("x" instanceof T);')).toBe('truefalse');
 });
 
 // -- Flag off: no checking happens at all --------------------------------------

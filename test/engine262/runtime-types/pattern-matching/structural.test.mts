@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated } from '../harness.mts';
+import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-match-structural (Structural Matching) and the Match Cache Record
@@ -34,8 +34,11 @@ test('OBJECT patterns: presence is the `in` test', () => {
   expect(evaluated('String({ x: 3 } is { x: 1 or 2 });')).toBe('false');
   expect(evaluated('String({ x: 1 } is { x: not 2 });')).toBe('true');
   // A non-object subject fails rather than throwing.
-  expect(evaluated('String(1 is { x: _ });')).toBe('false');
-  expect(evaluated('String(null is { x: _ });')).toBe('false');
+  expect(evaluated('function anyv(v) { return v; } String(anyv(1) is { x: _ });')).toBe('false');
+  expect(evaluated('function anyv(v) { return v; } String(anyv(null) is { x: _ });')).toBe('false');
+  // Where the subject's type shows it can never be an Object, the pattern can
+  // never match, and that is a type error (#sec-pattern-static-semantics).
+  expectStaticTypeError('String(1 is { x: _ });');
 });
 
 test('THE CACHE IS A CORRECTNESS REQUIREMENT: a getter runs ONCE', () => {
@@ -84,7 +87,8 @@ test('ARRAY patterns match through ITERATION', () => {
   // exists for - it has a null prototype and no `Symbol.iterator`.
   expect(evaluated('String(Composite([1, 2]) is [1, _]);')).toBe('true');
   // A non-iterable subject fails rather than throwing.
-  expect(evaluated('String(1 is [_]);')).toBe('false');
+  expect(evaluated('function anyv(v) { return v; } String(anyv(1) is [_]);')).toBe('false');
+  expectStaticTypeError('String(1 is [_]);');
 });
 
 test('RANGE patterns match by containment', () => {
@@ -125,7 +129,7 @@ test('THE SPECULATION DECLINES what a type can express', () => {
 test('structural bindings use governed positions', () => {
   const bindings = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
   // #sec-is-pattern: a binding is visible only in a governed position.
-  expect(evaluated('String((1 is let x) && true);')).toBe('true');
+  expect(evaluated('function anyv(v) { return v; } String((anyv(1) is let x) && true);')).toBe('true');
   // A REST BINDING works in `is` position: it "collects the
   // remaining own enumerable members", meaning those the pattern did not NAME.
   expect(evaluated('let out = "X"; if (({ a: 1, b: 2, c: 3 }) is { a: 1, ...let rest }) { out = Object.keys(rest).join(","); } out;')).toBe('b,c');
