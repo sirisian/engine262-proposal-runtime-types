@@ -1,8 +1,7 @@
 import { expect, test } from 'vitest';
 import { expectStaticTypeError, ok } from '../harness.mts';
 
-// Early errors found in round 2 of the early-error review. Each is determinable
-// before the source runs, so by #sec-type-errors it is an Early Error.
+// Early errors, each determinable before the source runs, so by #sec-type-errors it is an Early Error.
 
 // -- a type default's value copies ---------------------------------------------
 // #sec-array-and-tuple-types, #sec-object-types, #sec-function-types: a default

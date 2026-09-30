@@ -4,7 +4,7 @@ import { evaluated, evaluatedFlagOff, expectThrownKind, ok } from '../harness.mt
 /**
  * Unspecified: the specification defines the `ClassAccessor` reflection
  * (#sec-reflection-shape-class) and its replacement (#sec-replacement-values), but no clause for the
- * `accessor` field declaration itself. These tests pin the design's declaration, judged through
+ * `accessor` field declaration itself. These tests pin the declaration the ecmascript-types README describes (Class Members), judged through
  * #sec-typed-classes and laid out through #sec-memory-layout.
  *
  * An `accessor` field declares a typed field together with a getter and setter over it. It desugars

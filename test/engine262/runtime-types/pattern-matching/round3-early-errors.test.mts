@@ -1,10 +1,9 @@
 import { expect, test } from 'vitest';
 import { expectStaticTypeError, ok } from '../harness.mts';
 
-// Early errors found in round 3 of the early-error review: narrowing and
-// pattern tests the spec already makes type errors (#sec-narrowfrom, "a
-// narrowing form where the test can never succeed or can never fail", and
-// #sec-match-exhaustiveness). Each is judged where the test guards a branch.
+// Early errors for narrowing and pattern tests the spec already makes type errors (#sec-narrowfrom, "a
+// narrowing form where the test can never succeed or can never fail", and #sec-match-exhaustiveness). Each is
+// judged where the test guards a branch.
 
 // -- a clause whose values were all covered before it --------------------------
 // #sec-match-exhaustiveness: a clause is dead "where every atom the clause

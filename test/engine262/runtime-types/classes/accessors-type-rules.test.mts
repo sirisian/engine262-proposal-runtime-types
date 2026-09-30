@@ -12,7 +12,7 @@ const outcome = (source: string): string => evaluated(`try { eval(${JSON.stringi
 /**
  * Judged through #sec-typed-classes. Unspecified: the specification states the accessor-pair
  * declaration rule ("the setter must accept every value of the getter's effective return type",
- * #sec-typed-classes) but no variance rule for an accessor OVERRIDE; these tests pin the design's.
+ * #sec-typed-classes) but no variance rule for an accessor OVERRIDE; these tests pin the ecmascript-types README's (Class Members).
  *
  * The first rule: AN ACCESSOR OVERRIDE IS INVARIANT. It falls out of two variance rules meeting on ONE
  * declaration. A hand-written pair may refine its halves separately - a derived getter may refine its

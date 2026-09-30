@@ -1,10 +1,9 @@
 import { expect, test } from 'vitest';
 import { expectThrown, expectStaticTypeError, ok } from '../harness.mts';
 
-// Early errors at the APPLICATION of a generic, as opposed to its declaration
-// list. Each refusal below is determinable before the source runs, so by
-// #sec-type-errors it is an Early Error; each was once accepted, or refused
-// only when evaluation happened to reach it.
+// Early errors at the APPLICATION of a generic, as opposed to its declaration list. Each refusal below is
+// determinable before the source runs, so by #sec-type-errors it is an Early Error, and it is refused at the
+// application whether or not evaluation reaches it.
 
 // -- a class application runs the whole of BindTypeArguments ------------------
 // #sec-bindtypearguments: a value parameter takes a value, converted to its
