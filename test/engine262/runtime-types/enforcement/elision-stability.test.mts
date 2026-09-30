@@ -82,7 +82,7 @@ test('the boundaries the elision rule already governed are unchanged', () => {
   // A parameter-derived return still elides: a parameter is checked on entry,
   // so its type is not a claim about a replaceable binding.
   expect(value(`let reads = 0; const o = { get a() { reads += 1; return (5 := uint8); } };
-    function f(s: { a: uint8 }): { a: uint8 } { reads = 0; return s; }
+    function f(s: { readonly a: uint8 }): { readonly a: uint8 } { reads = 0; return s; }
     f(o); \`\${reads}\`;`)).toBe('0');
   // A literal is assignable and still must be converted.
   expect(value('function f(): uint8 { return 5; } `${f() is uint8}`;')).toBe('true');

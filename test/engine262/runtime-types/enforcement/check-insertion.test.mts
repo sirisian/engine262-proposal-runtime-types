@@ -894,11 +894,11 @@ test('the RETURN boundary elides too, and the condition is a property of the fun
   // the body must end in one, since falling off the end hands back *undefined*
   // and no numeric or object annotation admits it.
   const src = 'let reads = 0; const o = { get a() { reads += 1; return (5 := uint8); } }; ';
-  expect(evaluated(`${src} function f(s: { a: uint8 }): { a: uint8 } { reads = 0; return s; } f(o); String(reads);`)).toBe('0');
-  expect(evaluated(`${src} function g(s): { a: uint8 } { reads = 0; return s; } g(o); String(reads);`)).toBe('1');
+  expect(evaluated(`${src} function f(s: { readonly a: uint8 }): { readonly a: uint8 } { reads = 0; return s; } f(o); String(reads);`)).toBe('0');
+  expect(evaluated(`${src} function g(s): { readonly a: uint8 } { reads = 0; return s; } g(o); String(reads);`)).toBe('1');
   // ONE unproven return spoils the function, which is what makes this a
   // whole-function property rather than a per-statement one.
-  expect(evaluated(`${src} function h(s: { a: uint8 }, c): { a: uint8 } { reads = 0; if (c) { return c; } return s; } h(o, 0); String(reads);`)).toBe('1');
+  expect(evaluated(`${src} function h(s: { readonly a: uint8 }, c): { readonly a: uint8 } { reads = 0; if (c) { return c; } return s; } h(o, 0); String(reads);`)).toBe('1');
   // The value is unchanged either way, and the cases the boundary exists for
   // are untouched: a LITERAL is assignable and still must be CONVERTED, and an
   // ~any~ return is still checked.

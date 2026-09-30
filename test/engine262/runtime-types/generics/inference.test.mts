@@ -32,7 +32,7 @@ const kit = [
   'function litval(T) { return Reflect.getReflection(T).value; }',
   'function joinResult(P, d) { return literal(Reflect.getReflection(P).elements.map(e => litval(e.type)).join(d)); }',
 ].join(' ');
-const join = 'function join<D: string, P: [].<string>>(delimiter: D, ...parts: P): joinResult(P, delimiter) { return parts.join(delimiter); }';
+const join = 'function join<D: string, P: type extends [].<string>>(delimiter: D, ...parts: P): joinResult(P, delimiter) { return parts.join(delimiter); }';
 
 // -- Inference and return-type evaluation over the bindings --------------------
 test('an unconstrained parameter is inferred and the return type resolves over it', () => {
@@ -64,17 +64,18 @@ test('String Join (847) - Reflect.typeOf of a generic call is the joined literal
   expect(evaluated(`${kit} ${join} Reflect.typeOf(join("", "a", "b", "c")) === type "abc" ? "ok" : "no";`)).toBe('ok');
   // a single element is itself
   expect(evaluated(`${kit} ${join} Reflect.typeOf(join("-", "a")) === type "a" ? "ok" : "no";`)).toBe('ok');
+  expect(evaluated(`${kit} ${join} Reflect.typeOf(join("-")) === type "" ? "ok" : "no";`)).toBe('ok');
   // and the call still produces the right runtime string value
   expect(evaluated(`${kit} ${join} join("-", "a", "b", "c");`)).toBe('a-b-c');
 });
 
 // -- Computed constraints reading a prior binding ------------------------------
 test('a computed constraint is evaluated over earlier bindings, left to right', () => {
-  // pair<T, U: baseOf(T)>: U's constraint reads T (bound first)
-  const baseOf = 'function baseOf(T) { return T; } ';
-  expect(ok(`${baseOf}function pair<T: type, U: baseOf(T)>(x: T, y: U): U { return y; } Reflect.typeOf(pair((5 := uint32), (7 := uint32))) === uint32;`)).toBe(true);
-  // a binding that violates the computed constraint is rejected
-  expect(evaluated(`${baseOf}function pair<T: type, U: baseOf(T)>(x: T, y: U): U { return y; } try { pair((5 := uint32), (7 := uint16)); "no-throw"; } catch (e) { "rejected"; }`)).toBe('rejected');
+  // #sec-computed-constraints: U is a type parameter with a computed bound.
+  const prefix = 'function baseOf(T) { return T; } '
+    + 'function pair<T: type, U: type extends baseOf(T)>(x: T, y: U): U { return y; } ';
+  expect(evaluated(`${prefix}String(Reflect.typeOf(pair((5 := uint32), (7 := uint32))) === uint32);`)).toBe('true');
+  expect(evaluated(`${prefix}try { pair((5 := uint32), (7 := uint16)); "no-throw"; } catch (e) { "rejected"; }`)).toBe('rejected');
 });
 
 // -- The typed-literal value carrier is transparent ----------------------------

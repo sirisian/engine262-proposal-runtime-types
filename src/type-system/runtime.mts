@@ -1705,10 +1705,8 @@ function literalArmsFit(bound: TypeRecord, constraint: TypeRecord): boolean {
   // each element on the same literal-fit terms as a scalar. The checker makes
   // the same judgment for the same binding; the two must agree.
   if (constraint.Kind === 'array' && bound.Kind === 'tuple') {
-    const element = (constraint as { Element?: TypeRecord }).Element;
-    const elements = (bound as { Elements: readonly { Type: TypeRecord }[] }).Elements;
-    return element !== undefined && elements.length > 0
-      && elements.every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element));
+    return bound.Elements.every((entry) => !entry.Rest)
+      && !packConstraintRefuses(bound.Elements.map((entry) => entry.Type), constraint);
   }
   // A TUPLE constraint against a tuple bound is element-wise for the reason the
   // array constraint above is: the bound is a tuple of the literals a program
@@ -5199,7 +5197,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         }
       }
       let intrinsicAvailable = true;
-      if (intrinsicParameters(name) || libraryTypeParameters(name)) {
+      // #sec-type-expressions: primitive names are ordinary, shadowable identifiers too.
+      if (builtinTypeRecord(name) || libraryTypeRecord(name) || intrinsicParameters(name) || libraryTypeParameters(name)) {
         intrinsicAvailable = Q(yield* UsesIntrinsicDeclaration(node, name));
       }
       if (node.TypeArguments && libraryTypeParameters(name) && intrinsicAvailable) {

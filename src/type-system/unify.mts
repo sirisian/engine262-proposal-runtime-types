@@ -386,9 +386,10 @@ export function unifyTypeParameters(
     }
     // A FUNCTION parameter: a callback's shape says what a variable is as
     // plainly as a direct position does; `K` in `f<K>(cb: () => K)` is known
-    // from nowhere else. Only the FIRST signature of each, and only pairwise.
+    // from nowhere else. Compare single signatures positionally, collecting a
+    // rest parameter's whole run into its inferred tuple.
     type SigShape = {
-      Parameters?: readonly { Type?: TypeRecord }[],
+      Parameters?: readonly { Type?: TypeRecord, Rest?: boolean }[],
       Return?: TypeRecord | null,
       InferredReturn?: TypeRecord | null,
       ReturnType?: TypeRecord | null,
@@ -398,12 +399,23 @@ export function unifyTypeParameters(
     if (pSigs?.length === 1 && aSigs?.length === 1) {
       const pSig = pSigs[0]!;
       const aSig = aSigs[0]!;
-      (pSig.Parameters ?? []).forEach((pp, i) => {
+      for (const [i, pp] of (pSig.Parameters ?? []).entries()) {
+        // #sec-variadic-parameters: a callback rest binds the parameter run,
+        // just as a value rest binds its arguments, rather than its first slot.
+        if (pp.Rest && pp.Type?.Kind === 'parameter') {
+          const tail = (aSig.Parameters ?? []).slice(i);
+          if (tail.every((entry) => entry.Type)) {
+            match(pp.Type, { Kind: 'tuple', Elements: tail.map((entry) => ({
+              Type: entry.Type!, Rest: entry.Rest === true, Initial: 'none',
+            })) });
+          }
+          break;
+        }
         const ap = (aSig.Parameters ?? [])[i];
         if (pp?.Type && ap?.Type) {
           match(pp.Type, ap.Type);
         }
-      });
+      }
       const pReturn = pSig.Return ?? pSig.InferredReturn ?? pSig.ReturnType;
       const aReturn = aSig.Return ?? aSig.InferredReturn ?? aSig.ReturnType;
       if (pReturn && aReturn) {

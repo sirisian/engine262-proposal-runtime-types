@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { expectStaticTypeError } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -267,12 +268,13 @@ test('a generator infers its yield type', () => {
   expectOk('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); } for (const v of g(1)) { const u: uint8 = v; }');
 });
 
-test('yield* contributes conservatively', () => {
-  // `yield*` yields the elements of its OPERAND, not the operand, and reading
-  // the operand's own type would have published a generator of generators.
-  // Until the operand's yield type is read, the honest answer is unknown.
-  expectEarly('function f(): uint8 { return 1; } function* inner() { yield f(); }'
-    + ' function* g(a: uint32) { yield* inner(); } const n: number = g(1);', 'Generator.<any, void, void>');
+test('yield* contributes the delegated element type', () => {
+  // #sec-inference-and-function-forms: delegation contributes yielded values.
+  const source = 'function f(): uint8 { return 1; } function* inner() { yield f(); }'
+    + ' function* g(a: uint32) { yield* inner(); } ';
+  expectEarly(source + 'const n: number = g(1);', 'Generator.<uint.<8>, void, void>');
+  expectStaticTypeError(source + 'for (const x of g(1)) { let s: string = x; }');
+  expectOk(source + 'for (const x of g(1)) { let n: uint8 = x; }');
 });
 
 test('an async declaration reads its declared return type', () => {
@@ -413,17 +415,15 @@ test('an inferred reference return is a location', () => {
   expect(value(arr + at + 'let v = at(arr, 0); v = 9; String(arr[0]) + ":" + String(v);')).toBe('1:9');
 });
 
-test('a mixed reference and value body is decided at the assignment', () => {
-  // Where the contributions MIX a reference with a value the call's return type
-  // is not statically one or the other, so the check is the deferred run-time
-  // one: the branch that returned a reference writes through, and the branch
-  // that returned a value reports that there is no location to assign to.
-  // Refusing the declaration outright is the stricter reading and is not what
-  // the implementation does.
+test('a mixed reference and value return is not a guaranteed location', () => {
+  // #sec-location-consuming-contexts: every known alternative must supply a
+  // reference. A value position instead reads through a returned reference.
   const setup = 'let arr: [].<uint32> = [1, 2]; '
     + 'function m(b, a: [].<uint32>) { if (b) { return ref a[0]; } return 0; } ';
-  expect(value(setup + 'm(1, arr) = 5; String(arr[0]);')).toBe('5');
-  expect(run(setup + 'm(0, arr) = 5;')).toMatchObject({ Type: 'throw' });
+  expectStaticTypeError(setup + 'm(1, arr) = 5;');
+  expectStaticTypeError(setup + 'm(0, arr) = 5;');
+  expect(value(setup + 'let n = m(1, arr); n = 5; String(arr[0]) + "/" + String(n);')).toBe('1/5');
+  expect(value(setup + 'String(m(0, arr));')).toBe('0');
 });
 
 test('an inference-sourced error names the annotation it came from', () => {

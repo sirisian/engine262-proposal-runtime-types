@@ -17,6 +17,8 @@ import { evaluated, ok, expectStaticTypeError, expectThrownKind, expectError } f
 test('the examples: a typed-object parameter, in both spellings, renaming ignored', () => {
   expect(evaluated('interface IExample { ({ a: uint32 }): uint32 } function f(a: IExample) { return a({ a: 1 }); } String(f(({(a:uint32):b}) => b));')).toBe('1');
   expect(evaluated('interface IExample { ({ a: uint32; }): uint32; } function f(a: IExample) { return a({ a: 1 }); } String(f(a => a.a));')).toBe('1');
+  expect(evaluated('type F = { ({ a: uint32 }): uint32 }; function f(cb: F) { return cb({ a: 2 }); } String(f(({(a:uint32):b}) => b));')).toBe('2');
+  expectStaticTypeError('interface I { ({ a: uint32 }): uint32 } function f(cb: I) { return cb({ a: 1 }); } f(({(a:uint32):b}) => "bad");');
 });
 
 test('overloads: a matching call runs; a call no signature accepts is refused statically', () => {
@@ -98,7 +100,9 @@ test('the default is evaluated once for the type and converted at the parameter\
 });
 
 test('an untyped primitive argument takes the parameter\'s type, as at a declared parameter', () => {
-  expect(evaluated('let g: (x: uint8, y: uint8 = 9) => boolean = (p, q) => p is uint8 && q is uint8; String(g(x: 2));')).toBe('true');
+  expect(evaluated('let g: (x: uint8, y: uint8 = 9) => boolean = (p, q) => Reflect.typeOf(p) === uint8 && Reflect.typeOf(q) === uint8; String(g(x: 2));')).toBe('true');
+  // #sec-narrowing: a contextual parameter's established type makes this guard redundant.
+  expectStaticTypeError('let g: (x: uint8, y: uint8 = 9) => boolean = (p, q) => p is uint8 && q is uint8;');
   expectStaticTypeError('interface I { (n: uint8, s: string); } function f(a: I) { return a(n: "x", s: "y"); } f((n, s) => n);');
   // An object argument is passed as it is.
   expect(evaluated('interface I { (o: object, n: uint8 = 1); } function f(a: I) { const k = {}; return a(o: k) === k; } String(f((o, n) => o));')).toBe('true');

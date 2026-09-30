@@ -28,7 +28,9 @@ test('keyof as a constraint, honoured after binding', () => {
 });
 
 test('a union key yields a union', () => {
-  expect(evaluated(`${P}${PLUCK}${O}let k: "a" | "b" = "a"; let v: uint8 | string = pluck(o, k); \`\${v}\`;`)).toBe('1');
+  // A union of keys is a type argument; a value parameter binds one key.
+  const pluck = 'function pluck<T: type, K: type extends keyof T>(o: T, key: K): T[K] { return o[key]; } ';
+  expect(evaluated(`${P}${pluck}${O}let k: "a" | "b" = "a"; let v: uint8 | string = pluck(o, k); \`\${v}\`;`)).toBe('1');
 });
 
 test('SOUNDNESS: the wrong target is refused for the real reason', () => {
@@ -124,5 +126,5 @@ test('the checker\'s binding travels to the run time for a declared shape', () =
   // checker binds a rest pack to an array of a literal union, the run time to a
   // tuple - and a builder reading the tuple's elements broke when handed the
   // array. This is the corpus test that caught it, kept here as the guard.
-  expect(evaluated('function literal(v) { return Reflect.makeType({ kind: "literal", value: v, base: Reflect.typeOf(v) }); } function litval(T) { return Reflect.getReflection(T).value; } function joinResult(P, d) { return literal(Reflect.getReflection(P).elements.map(e => litval(e.type)).join(d)); } function join<D: string, P: [].<string>>(delimiter: D, ...parts: P): joinResult(P, delimiter) { return parts.join(delimiter); } Reflect.typeOf(join("-", "a", "b", "c")) === type "a-b-c" ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('function literal(v) { return Reflect.makeType({ kind: "literal", value: v, base: Reflect.typeOf(v) }); } function litval(T) { return Reflect.getReflection(T).value; } function joinResult(P, d) { return literal(Reflect.getReflection(P).elements.map(e => litval(e.type)).join(d)); } function join<D: string, P: type extends [].<string>>(delimiter: D, ...parts: P): joinResult(P, delimiter) { return parts.join(delimiter); } Reflect.typeOf(join("-", "a", "b", "c")) === type "a-b-c" ? "ok" : "no";')).toBe('ok');
 });

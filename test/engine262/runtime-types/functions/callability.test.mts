@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown, ok, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrown, ok, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-type-errors. A determinable type violation is an Early Error, so
@@ -136,8 +136,10 @@ test('a UNION is not callable when no member is', () => {
   // A call checks each known callable alternative; a non-callable arm requires
   // narrowing before the call, even when another arm is callable.
   expectThrown(dead('let u: uint8 | (() => uint8) = uint8(1); let q = u();'), 'is not callable');
-  // A TYPE PARAMETER is not judged - it stands for something not yet known.
-  expect(ok(dead('function g<T: type extends uint8>(v: T) { let q = v(); }'))).toBe(true);
+  // #sec-generics: an established bound supplies its operation contract.
+  expectStaticTypeError(dead('function g<T: type extends uint8>(v: T) { let q = v(); }'));
+  expect(ok(dead('function g<T: type>(v: T) { let q = v(); }'))).toBe(true);
+  expect(ok(dead('function g<T: type extends (() => uint8)>(v: T) { let q = v(); }'))).toBe(true);
 });
 
 test('an INTERSECTION is decided, for the opposite reason a union is', () => {

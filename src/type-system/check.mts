@@ -10864,6 +10864,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const name = n.type === 'TypeReference' ? n.TypeName.IdentifierReference.name
         : n.type === 'IdentifierReference' ? n.name : undefined;
+      const reference = n.type === 'TypeReference' ? n.TypeName.IdentifierReference
+        : n.type === 'IdentifierReference' ? n : undefined;
+      // Signature and alias prepasses may precede the function's value frame.
+      // A runtime parameter still makes an annotation dependent in that pass.
+      if (name && reference && ResolveBindingDeclaration(reference, name)?.kind === 'parameter') open = true;
       if (name && (assignedGlobalProperties.has(name) || typeParameterInScope(name) || enclosingParameters.has(name) || (frames.some((frame) => frame.declaredNames.has(name))
           && !frames.some((frame) => frame.constLiteralValues.has(name) || frame.aliases.has(name))
           && !functionNodes.has(name) && !classNodes.has(name) && !interfaceNodes.has(name) && !aliasNodes.has(name)))) {
@@ -10927,6 +10932,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     switch (node.type) {
       case 'TypeReference': {
         const intrinsicName = node.TypeName.IdentifierReference.name;
+        const lexicalBinding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, intrinsicName);
+        if (lexicalBinding?.kind === 'parameter' && !typeParameterInScope(intrinsicName)) return null;
         // A named class expression has a private binding in its own body;
         // it is absent from the surrounding declaration map.
         if (!node.TypeArguments && node.TypeName.MemberNames.length === 0
@@ -10938,7 +10945,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         if (node.TypeName.MemberNames.length === 0 && intrinsicParameters(intrinsicName)
-            && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)
+            && !lexicalBinding && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)
             && !aliasNodes.has(intrinsicName) && !classNodes.has(intrinsicName) && !interfaceNodes.has(intrinsicName)) {
           if (!node.TypeArguments && isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) return intrinsicDeclarationRecord(intrinsicName)!;
           const written = node.TypeArguments?.TypeArgumentList ?? [];
@@ -10964,7 +10971,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return libraryTypeRecord(intrinsicName, arguments_);
         }
         const appliedName = node.TypeName.IdentifierReference.name;
-        const lexicalBinding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, appliedName);
         const lexicalDeclaration = lexicalBinding?.node;
         const genericDeclaration = lexicalBinding?.kind === 'type'
           && (lexicalDeclaration?.type === 'TypeAliasDeclaration' || lexicalDeclaration?.type === 'InterfaceDeclaration')
@@ -11007,6 +11013,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // The BASE name decides: `Reflect.Block` means the intrinsic only
               // where the program has not bound `Reflect` itself.
               const base = node.TypeName.IdentifierReference.name;
+              const declaration = enumNodes.get(base);
+              const evaluated = declaration && (!lexicalBinding || lexicalBinding.node === declaration)
+                ? evaluatedEnums.get(declaration) : undefined;
+              const value = node.TypeName.MemberNames.length === 1
+                ? evaluated?.members.get(node.TypeName.MemberNames[0].name) : undefined;
+              if (value !== undefined) return { Kind: 'literal', Value: value, Base: evaluated!.record };
               if (shadowedByProgram(base)) {
                 return null;
               }
@@ -12464,7 +12476,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // takes, so a type argument IS the value argument there.
         const constrainedToType = bound?.Kind === 'primitive' && (bound as { Name?: string }).Name === 'type';
         if (bound && !mentionsTypeParameter(bound) && !mentionsTypeParameter(supplied)) {
-          if (tp.Variadic && supplied.Kind === 'tuple') {
+          // #sec-computed-constraints: a collected tuple is checked by its
+          // contributed positions, including the collection's stated extent.
+          if (supplied.Kind === 'tuple' && (tp.Variadic || (bound.Kind === 'array' && supplied.Elements.every((e) => !e.Rest)))) {
             if (packConstraintRefuses(supplied.Elements.map((element) => element.Type), bound)) report(supplied, bound);
           } else if (constrainedToType) {
             // A literal is a value that is not a type, and is the one thing a
@@ -14402,6 +14416,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // which is not assignable to `{ value: uint8, done: boolean }` however
     // plainly the program meant it. Recorded here, where a node meets its
     // contextual type, and read by the literal's own arm in `staticType`.
+    if (isFunctionLiteral(node) && contextual?.Kind === 'nominal') {
+      const signature = callableForm(contextual);
+      // A generic signature owns its binders; this parameter-context path
+      // adopts only a concrete callable contract.
+      if (signature?.Kind === 'function' && signature.Signatures.every((s) => !s.TypeParameters?.length)) contextual = signature;
+    }
     if (isFunctionLiteral(node)
       && contextual && contextual.Kind === 'function' && contextual.Signatures.length === 1) {
       setContextualParameters(node, contextual.Signatures[0].Parameters);
@@ -27259,10 +27279,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         finishTypeArgumentBindings(generic, bindings, {
-          complete: !mapped.spread && mapped.entries.every(({ node }) => {
-            const type = argumentStaticType(node);
-            return type !== null && type.Kind !== 'any';
-          }),
+          complete: !mapped.spread && !(argNodes?.some((argument) => !resolveType(argument as ParseNode.Type)))
+            && mapped.entries.every(({ node }) => {
+              const type = argumentStaticType(node);
+              return type !== null && type.Kind !== 'any';
+            }),
           mayInfer: (name) => !formals || referenced.has(name),
           application: n as GenericDefaultCheck['application'],
         });
@@ -29783,6 +29804,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           Object.assign(target, resolved);
         }
+        // The prelude's generic alias can resolve to its unbound parameter.
+        // Capture its declaration independently of whether its body resolved.
+        if (n.BindingIdentifier.name === 'Identity' && n.TypeParameters && !getParsedIdentityDeclaration()) {
+          setParsedIdentityDeclaration({ Kind: 'nominal', Declaration: n, Arguments: [] } as TypeRecord);
+        }
         if (resolved) {
           // proposal-runtime-types `sec-dependent-record-types`: an alias
           // carrying `where` clauses keeps its NOMINAL identity, wrapping the
@@ -29803,15 +29829,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : (isPlainAlias ? placeholder : resolved);
           frames[frames.length - 1].aliases.set(n.BindingIdentifier.name, aliasType);
         } else if ((n as unknown as { TypeParameters?: unknown }).TypeParameters) {
-          // proposal-runtime-types: capture the prelude's `Identity` so the
-          // global binding can hold a PARSED declaration. Every consumer of a
-          // declaration node reads fields the parser sets, and an assembled
-          // node crashes at the first enforced annotation.
-          if (n.BindingIdentifier.name === 'Identity' && !getParsedIdentityDeclaration()) {
-            setParsedIdentityDeclaration(
-              { Kind: 'nominal', Declaration: n, Arguments: [] } as unknown as TypeRecord,
-            );
-          }
           // proposal-runtime-types: a GENERIC alias resolves its body with its
           // parameters unbound, so `type Identity<T> = T` yields nothing and the
           // name was registered nowhere. That is right for a type position -
