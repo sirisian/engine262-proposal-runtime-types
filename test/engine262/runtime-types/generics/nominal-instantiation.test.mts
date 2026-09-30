@@ -22,21 +22,23 @@ import { evaluated, ok, bool } from '../harness.mts';
 test('Promise.<T> interns distinctly by its argument', () => {
   expect(ok('type A = Promise.<uint32>; type B = Promise.<uint32>; A === B;')).toBe(true);
   expect(bool('type A = Promise.<uint32>; type B = Promise.<string>; String(A === B);')).toBe(false);
-  // the bare nominal and an instantiation are distinct
+  // The defaulted application differs from a concrete fulfillment type.
   expect(bool('type BB = Promise; type A = Promise.<uint32>; String(BB === A);')).toBe(false);
 });
 
 test('Promise.<T> reflects a generic view a builder can read', () => {
   expect(evaluated('type P = Promise.<uint32>; let r = Reflect.getReflection(P); r.generic ? "yes" : "no";')).toBe('yes');
   // the argument leaf is the applied type object
-  expect(ok('type P = Promise.<uint32>; Reflect.getReflection(P).generic.arguments[0] === uint32;')).toBe(true);
-  // the base is the bare nominal, stable across instantiations, and equal to `Promise` in type position
-  expect(ok('type PB = Promise; type P = Promise.<uint32>; Reflect.getReflection(P).generic.base === PB;')).toBe(true);
-  expect(ok('type A = Promise.<uint32>; type B = Promise.<string>; Reflect.getReflection(A).generic.base === Reflect.getReflection(B).generic.base;')).toBe(true);
+  expect(bool('type P = Promise.<uint32>; String(Reflect.getReflection(P).generic.arguments[0] === uint32);')).toBe(true);
+  // #sec-parameterized-types: a bare Promise is its defaulted application,
+  // while generic.base identifies the declaration across applications.
+  expect(bool('type PB = Promise; type P = Promise.<uint32>; String(Reflect.getReflection(P).generic.base === PB);')).toBe(false);
+  expect(bool('type A = Promise.<uint32>; type B = Promise.<string>; String(Reflect.getReflection(A).generic.base === Reflect.getReflection(B).generic.base);')).toBe(true);
 });
 
 test('makeType reconstructs Promise.<T> from base and arguments', () => {
   expect(evaluated('type PB = Promise; type A = Promise.<uint32>; let X = Reflect.makeType({ kind: "generic", base: PB, arguments: [uint32] }); X === A ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('type A = Promise.<uint32>; const base = Reflect.getReflection(A).generic.base; String(Reflect.makeType({ kind: "generic", base, arguments: [uint32] }) === A);')).toBe('true');
 });
 
 // -- User generic class: Box ---------------------------------------------------

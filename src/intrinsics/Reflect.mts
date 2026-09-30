@@ -18,6 +18,7 @@ import { RegisterReflectionContexts } from '../type-system/reflection-contexts.m
 import { type MetadataRecord, propertyKeyValue, parameter, type ParameterRecord, type NarrowingRecord, displayType } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { invalidTupleRest } from '../type-system/tuple-rests.mts';
+import { bindLibraryTypeArguments, libraryTypeParameters } from '../type-system/library-type-arguments.mts';
 import { IsAssignable } from '../type-system/relations.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import type {
@@ -620,6 +621,16 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
         if (!bound || 'Error' in bound) return Throw.TypeError('$1', Value(bound && 'Error' in bound ? bound.Error : 'unknown intrinsic generic family'));
         return (builtinTypeRecord(intrinsicName, bound.Arguments) ?? libraryTypeRecord(intrinsicName, bound.Arguments))!;
       }
+      // #sec-library-type-parameters: reflection binds the same arguments and
+      // defaults as a written application before its Type Object is interned.
+      if (baseRec?.Kind === 'nominal' && baseRec.LibraryName && libraryTypeParameters(baseRec.LibraryName)) {
+        if (Arguments.some((argument) => typeof argument === 'number')) {
+          return Throw.TypeError('$1', Value('a library type argument must be a Type Object'));
+        }
+        const bound = bindLibraryTypeArguments(baseRec.LibraryName, Arguments as TypeRecord[])!;
+        if ('Error' in bound) return Throw.TypeError('$1', Value(bound.Error));
+        return libraryTypeRecord(baseRec.LibraryName, bound.Arguments)!;
+      }
       return { ...baseRec!, Arguments } as TypeRecord;
     }
     case 'family-pattern': return Throw.TypeError('$1', Value('a family pattern is a constraint, not a concrete type'));
@@ -924,11 +935,9 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
       // was a kind no specification defined, so a walker written from the table
       // met a kind it could not handle, and `makeType` had no case for it, so
       // #sec-reflect-maketype's round-trip law threw on every enum.
-      // proposal-runtime-types: a generic instantiation additionally exposes its
-      // base (the bare declaration's type) and arguments, so a builder can read
-      // `node.generic.base` and `node.generic.arguments` (spec ~nominal~
-      // [[Arguments]]). The bare base is the same nominal with no arguments, so
-      // `Promise` and the base of `Promise.<T>` are the same interned object.
+      // #sec-reflect-getreflection: intrinsic applications expose their
+      // declaration's String name and complete arguments. Other nominal
+      // applications expose the declaration Type Object as their base.
       const intrinsicName = t.Kind === 'primitive' ? t.Name : t.Kind === 'nominal' ? t.LibraryName : undefined;
       if ((t.Kind === 'primitive' || t.Kind === 'nominal') && intrinsicName && intrinsicParameters(intrinsicName)) {
         const parameters = intrinsicParameters(intrinsicName)!;

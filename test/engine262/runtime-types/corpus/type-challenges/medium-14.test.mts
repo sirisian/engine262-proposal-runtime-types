@@ -42,19 +42,12 @@ test('medium 12 - Chainable Options (withKey accumulator)', () => {
   `));
 });
 
-// 20 - Promise.all - settled(T) maps a tuple/array's element types through
-// `awaited` and the signature wraps the result in `Promise.<...>`. Promise is a
-// library generic type (implemented in this phase): `Promise.<T>` is a real type,
-// reflection exposes it through a `generic` view (`node.generic.base` and
-// `node.generic.arguments`), and `makeType({ kind: 'generic', ... })` constructs
-// one. `awaited` reads the argument off a Promise and passes anything else
-// through. The settled-and-wrapped transform is asserted directly (the corpus's
-// `promiseAll.<...>` form would additionally need generic call inference, as with
-// Currying). Expected types use aliases, since a nested `Promise.<...>` written
-// inline in expression position does not yet parse.
-test('medium 20 - Promise.all (settled)', () => {
-  const f = `
-    type PromiseBase = Promise;
+// #sec-reflect-getreflection: a Promise application's base is its nominal
+// declaration Type Object, while bare `type Promise` applies its defaults.
+// Unwrap the fulfillment type and preserve tuple and array structure before
+// reconstructing a Promise application.
+const PROMISE_BUILDERS = `
+    const PromiseBase = Reflect.getReflection(type Promise).generic.base;
     function promiseOf(X) { return Reflect.makeType({ kind: 'generic', base: PromiseBase, arguments: [X] }); }
     function awaited(T) {
       const n = Reflect.getReflection(T);
@@ -69,16 +62,16 @@ test('medium 20 - Promise.all (settled)', () => {
       throw new TypeError('not an array or tuple');
     }
     function promiseAll(T) { return promiseOf(settled(T)); }`;
-  // awaited unwraps a Promise, recursively, and passes a non-Promise through
-  expectBuilderTrue(kit(`${f}\n type P = Promise.<uint32>; String(awaited(P) === uint32);`));
-  expectBuilderTrue(kit(`${f}\n type P = Promise.<Promise.<string | uint32>>; type Expected = string | uint32; String(awaited(P) === Expected);`));
-  expectBuilderTrue(kit(`${f}\n String(awaited(uint32) === uint32);`));
-  // promiseAll on a plain tuple wraps it unchanged
-  expectBuilderTrue(kit(`${f}\n type T = [1, 2, 3]; type Expected = Promise.<[1, 2, 3]>; String(promiseAll(T) === Expected);`));
-  // a promise element is awaited before wrapping
-  expectBuilderTrue(kit(`${f}\n type T = [1, 2, Promise.<uint32>]; type Expected = Promise.<[1, 2, uint32]>; String(promiseAll(T) === Expected);`));
-  // awaiting reaches inside a union inside a dynamic array element
-  expectBuilderTrue(kit(`${f}\n type T = [].<uint32 | Promise.<string>>; type Inner = [].<uint32 | string>; type Expected = Promise.<Inner>; String(promiseAll(T) === Expected);`));
+
+test.each([
+  ['fulfillment type', 'type P = Promise.<uint32>; String(awaited(P) === uint32);'],
+  ['nested fulfillment union', 'type P = Promise.<Promise.<string | uint32>>; type Expected = string | uint32; String(awaited(P) === Expected);'],
+  ['ordinary value', 'String(awaited(uint32) === uint32);'],
+  ['plain tuple', 'type T = [1, 2, 3]; type Expected = Promise.<[1, 2, 3]>; String(promiseAll(T) === Expected);'],
+  ['promise tuple element', 'type T = [1, 2, Promise.<uint32>]; type Expected = Promise.<[1, 2, uint32]>; String(promiseAll(T) === Expected);'],
+  ['array element union', 'type T = [].<uint32 | Promise.<string>>; type Inner = [].<uint32 | string>; type Expected = Promise.<Inner>; String(promiseAll(T) === Expected);'],
+])('medium 20 - Promise.all (settled): %s', (_name, source) => {
+  expectBuilderTrue(kit(`${PROMISE_BUILDERS}\n${source}`));
 });
 
 // 26401 - JSON Schema to TypeScript - a recursive schema interpreter: an object

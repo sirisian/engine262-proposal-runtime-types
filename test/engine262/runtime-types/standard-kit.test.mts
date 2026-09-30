@@ -88,6 +88,38 @@ function run(body: string): Promise<string> {
  */
 const holds = (expr: string, setup = '') => run(`${setup}${NL}if (!(${expr})) { throw new Error("assertion failed"); }`);
 
+// #sec-reflect-getreflection and #annex-standard-kit: kit consumers preserve
+// intrinsic String names, nominal bases, and completed arguments.
+test.each([
+  'std.awaited(type Promise.<Promise.<string, boolean>, uint8>) === string',
+  'std.awaited(type uint8 | Promise.<string>) === type uint8 | string',
+  'std.awaited(type { then: ((string) => void) => void }) === string',
+  'std.awaited(type { value: uint8 }) === type { value: uint8 }',
+  "std.genericApplication(Reflect.getReflection(type Promise).generic.base, []) === type Promise.<any, any>",
+  "std.genericApplication(Reflect.getReflection(type Promise).generic.base, [string, boolean]) === type Promise.<string, boolean>",
+  "std.genericApplication('rational', [64]) === rational64",
+])('kit reflection agreement: %s', async (expression) => {
+  expect(await holds(expression)).toBe('ok');
+});
+
+test('genericApplication preserves nominal declaration identity', async () => {
+  expect(await holds(`std.genericApplication(Reflect.getReflection(type Box.<uint8>).generic.base, [string])
+    === type Box.<string>`, 'class Box<T: type> {}')).toBe('ok');
+});
+
+test.each([
+  "std.genericApplication(Reflect.getReflection(type Promise).generic.base, [string, boolean, uint8])",
+  "std.genericApplication(Reflect.getReflection(type Promise).generic.base, [64])",
+  "std.genericApplication(Reflect.getReflection(type Map.<string, uint8>).generic.base, [string])",
+  "std.genericApplication('rational', [])",
+  "std.genericApplication('rational', [string])",
+  "std.genericApplication('UnknownIntrinsic', [])",
+])('genericApplication validates its intrinsic application: %s', async (expression) => {
+  expect(await run(`let refused = false;
+    try { ${expression}; } catch (error) { refused = error instanceof TypeError; }
+    if (!refused) throw new Error('expected TypeError');`)).toBe('ok');
+});
+
 /** Evaluate a two-module program: the kit through the engine, _extra_ through a host loader. */
 function runWith(extraSpecifier: string, extraSource: string, body: string): Promise<string> {
   const agent = new Agent({ features: ['runtime-types'] });
@@ -144,7 +176,7 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   ['mapPropertyTypes', 'std.mapPropertyTypes(type { a: uint8 }, () => string) === type { a: string }', ''],
   ['mapElements', 'std.mapElements(type [uint8, uint8], () => string) === type [string, string]', ''],
   ['propertyType', 'std.propertyType(U, "b") === string', U],
-  ['genericApplication', 'std.genericApplication(type Promise, [string]) === type Promise.<string>', ''],
+  ['genericApplication', "std.genericApplication(Reflect.getReflection(type Promise).generic.base, [string]) === type Promise.<string>", ''],
   ['fn', 'std.fn([uint8], string) === type (uint8) => string', ''],
 
   // keys and indexing (3)

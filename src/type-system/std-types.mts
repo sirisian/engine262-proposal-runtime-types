@@ -34,16 +34,9 @@ import { FinishLoadingImportedModule, surroundingAgent, type Realm, type ScriptR
  *     `[].<type>` annotation makes the result a CHECKED array, so the guard is
  *     statically dead code and the empty case raises rather than yielding
  *     `undefined`. Written as a length test.
- *   - §4.3's `awaited` compares `node.generic?.base === Promise`, which is the
- *     CONSTRUCTOR, not the type. `type Promise` is the operand.
  *   - a signature's `this` slot reflects as a NODE where every other
  *     type-valued slot reflects as a Type Object, so §6.3's
  *     `thisParameterType` needs a `makeType` to normalise it.
- *   - §4.0's `genericApplication` spreads the READ view
- *     (`{ ...reflect(base), generic: {...} }`). The write side ignores a
- *     `generic` field on a primitive node, so that spelling silently returns
- *     the BARE BASE - a wrong type rather than an error. The write form is the
- *     `generic` KIND.
  *
  * THE EXPORT SET IS 71, and three choices moved it after this module first
  * landed at 73. Each is recorded at the definition it touches:
@@ -154,12 +147,9 @@ export function propertyType(T: type, name: string | symbol) {
   }
   throw new TypeError(\`propertyType expects an object type, got \${String(T)}\`);
 }
-export function genericApplication(base: type, args: [].<any>): type {
-  // §4.0 writes \`{ ...reflect(base), generic: { base, arguments } }\`,
-  // which mirrors the READ view. The write side ignores a \`generic\` FIELD on a
-  // primitive node, so that spelling silently returns the bare base instead of
-  // the application - a wrong answer rather than an error. The write form is
-  // the \`generic\` KIND.
+export function genericApplication(base: type | string, args: [].<any>): type {
+  // #sec-reflect-getreflection: intrinsic declarations use String names;
+  // nominal declarations retain their Type Object bases.
   return Reflect.makeType({ kind: 'generic', base, arguments: args });
 }
 
@@ -434,7 +424,7 @@ export function indexed(T: type, K: type): type {
 export function awaited(T: type): type {
   const node = reflect(T);
   if (node.kind === 'union') return union(node.members.map(awaited));
-  if (node.kind === 'primitive' && node.generic?.base === type Promise)   // §4.3 writes bare \`Promise\`, which is the CONSTRUCTOR, not the type
+  if (node.kind === 'primitive' && node.generic?.base === reflect(type Promise).generic.base)
     return awaited(node.generic.arguments[0]);
   const then = node.kind === 'object' && node.properties.find(p => p.name === 'then');
   if (then) {

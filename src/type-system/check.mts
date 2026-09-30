@@ -10963,7 +10963,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           checkWeakKeyConstraint(intrinsicName, arguments_);
           return libraryTypeRecord(intrinsicName, arguments_);
         }
-        if (node.TypeName.MemberNames.length > 0 || node.TypeArguments) {
+        const appliedName = node.TypeName.IdentifierReference.name;
+        const lexicalBinding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, appliedName);
+        const lexicalDeclaration = lexicalBinding?.node;
+        const genericDeclaration = lexicalBinding?.kind === 'type'
+          && (lexicalDeclaration?.type === 'TypeAliasDeclaration' || lexicalDeclaration?.type === 'InterfaceDeclaration')
+          ? lexicalDeclaration : !lexicalBinding ? aliasNodes.get(appliedName) ?? interfaceNodes.get(appliedName) : undefined;
+        const genericParameters = (genericDeclaration as ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | undefined)?.TypeParameters?.TypeParameterList ?? [];
+        const higherKindedArgument = !node.TypeArguments
+          && isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name));
+        // #sec-higher-kinded-parameters: this position binds the declaration,
+        // even when its alias body has a known structural shape.
+        if (higherKindedArgument && genericDeclaration?.type === 'TypeAliasDeclaration' && genericParameters.length > 0) {
+          return { Kind: 'nominal', Declaration: genericDeclaration, Arguments: [] } as TypeRecord;
+        }
+        // #sec-parameterized-types: a bare alias in a concrete type position
+        // binds defaults exactly as an empty application does. The cached
+        // declaration body still contains unbound parameters.
+        const applyBareAlias = !node.TypeArguments && genericDeclaration?.type === 'TypeAliasDeclaration'
+          && genericParameters.length > 0 && !typeParameterInScope(appliedName)
+          && !higherKindedArgument;
+        if (node.TypeName.MemberNames.length > 0 || node.TypeArguments || applyBareAlias) {
           const args: (TypeRecord | number)[] = [];
           if (node.TypeName.MemberNames.length > 0) {
             // #sec-computed-constraints: `I.length` in a default or a
@@ -11001,12 +11021,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // table), and answers null - "this pass does not know" - where they
           // are not, so the runtime's ordering (or its refusal) governs alone
           // rather than being contradicted.
-          const rawArgList = node.TypeArguments!.TypeArgumentList;
-          const appliedName = node.TypeName.IdentifierReference.name;
-          const lexicalDeclaration = ResolveBindingDeclaration(node.TypeName.IdentifierReference, appliedName)?.node;
-          const genericDeclaration = lexicalDeclaration?.type === 'TypeAliasDeclaration' || lexicalDeclaration?.type === 'InterfaceDeclaration'
-            ? lexicalDeclaration : aliasNodes.get(appliedName) ?? interfaceNodes.get(appliedName);
-          const genericParameters = (genericDeclaration as ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | undefined)?.TypeParameters?.TypeParameterList ?? [];
+          const rawArgList = node.TypeArguments?.TypeArgumentList ?? [];
           if (genericDeclaration && genericParameters.length) {
             // #sec-bindtypearguments: aliases and interfaces share the same
             // named/default/constraint binding as expression applications.

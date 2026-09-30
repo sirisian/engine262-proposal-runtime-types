@@ -39,7 +39,8 @@ test('the refusal says which mistake was made', () => {
   expect(message('enum E: object { A = Math } enum F: object { B = Math }'))
     .toContain('is already an enumerator of');
   expect(message('enum E { A, A }')).toContain('is already an enumerator of this enum');
-  expect(message('enum E: string { A }')).toContain('underlying type is not numeric');
+  expect(message('enum E: string { A }'))
+    .toContain('the first enumerator of "E" requires an initializer because "string" is not numeric');
   expect(message('enum E { A = Math.random() }')).toContain('outside the compile-time-evaluable fragment');
 });
 

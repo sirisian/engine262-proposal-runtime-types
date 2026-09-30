@@ -29,8 +29,9 @@ const TABLE_KINDS = [
 /** [name, setup, expression asserting identity of one type-valued slot] */
 const SLOTS: ReadonlyArray<readonly [string, string, string]> = [
   ['primitive.type', '', 'Reflect.getReflection(type uint8).type === uint8'],
-  ['primitive.generic.base', '',
-    'Reflect.getReflection(type Promise.<uint8>).generic.base === (type Promise)'],
+  ['primitive.generic.base (nominal)', 'class Box<T: type> {}',
+    '(Reflect.getReflection(type Box.<uint8>).generic.base is type)'
+    + ' && Reflect.getReflection(type Box.<uint8>).generic.base === Reflect.getReflection(type Box.<string>).generic.base'],
   ['primitive.generic.arguments', '',
     'Reflect.getReflection(type Promise.<uint8>).generic.arguments[0] === uint8'],
   ['literal.base', '', 'Reflect.getReflection(type "a").base === (type string)'],
@@ -73,6 +74,15 @@ for (const [name, setup, expr] of SLOTS) {
     expect(evaluated(`${setup} String(${expr});`), name).toBe('true');
   });
 }
+
+test('a Promise base retains its declaration and the application completes defaults', () => {
+  expect(evaluated(`const node = Reflect.getReflection(type Promise.<uint8>);
+    String(node.generic.base === Reflect.getReflection(type Promise).generic.base
+      && node.generic.base !== type Promise
+      && node.generic.arguments.length === 2
+      && node.generic.arguments[0] === uint8 && node.generic.arguments[1] === any
+      && Reflect.makeType({ kind: 'generic', ...node.generic }) === type Promise.<uint8>);`)).toBe('true');
+});
 
 test('every emitted kind is one the table lists', () => {
   // The other half of the invariant, and the one that would have caught the

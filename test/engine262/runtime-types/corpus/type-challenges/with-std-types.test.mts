@@ -78,7 +78,7 @@ test('with std:types - 43  Exclude', () => {
 test('with std:types - 189  Awaited', () => {
   expectBuilderTrue(kit(`function thenValue(T: type): type | null {
   const node = reflect(T);
-  if (node.kind === 'primitive' && node.generic?.base === type Promise)
+  if (node.kind === 'primitive' && node.generic?.base === reflect(type Promise).generic.base)
     return node.generic.arguments[0];
   const then = node.kind === 'object' && node.properties.find(p => p.name === 'then');
   return then ? firstParameter(reflect(then.type).signatures[0].parameters[0].type) : null;
@@ -90,7 +90,7 @@ function myAwaited(T: type): type {
 }\nString(std.awaited(type Promise.<Promise.<string | uint32>>) === type string | uint32);`));
   expectBuilderTrue(kit(`function thenValue(T: type): type | null {
   const node = reflect(T);
-  if (node.kind === 'primitive' && node.generic?.base === type Promise)
+  if (node.kind === 'primitive' && node.generic?.base === reflect(type Promise).generic.base)
     return node.generic.arguments[0];
   const then = node.kind === 'object' && node.properties.find(p => p.name === 'then');
   return then ? firstParameter(reflect(then.type).signatures[0].parameters[0].type) : null;
@@ -208,7 +208,7 @@ test('with std:types - 20  Promise.all', () => {
     default: throw new TypeError(\`promiseAll: \${String(T)} is not an array or tuple type\`);
   }
 }
-function promiseAll<T: type>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.genericApplication(type Promise, [std.mapElements(type [1, 2, Promise.<uint32>], std.awaited)])
+function promiseAll<T: type>(values: T): Promise.<settled(T)> { /* implementation elsewhere */ return undefined; }\nString(std.genericApplication(Reflect.getReflection(type Promise).generic.base, [std.mapElements(type [1, 2, Promise.<uint32>], std.awaited)])
   === type Promise.<[1, 2, uint32]>);`));
   expectBuilderTrue(kit(`function settled(T: type): type {
   const node = reflect(T);
