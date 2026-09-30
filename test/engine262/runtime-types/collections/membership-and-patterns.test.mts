@@ -2,77 +2,46 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../harness.mts';
 
 /**
- * Collection MEMBERSHIP and the type patterns built on it.
+ * Collection MEMBERSHIP and the type patterns built on it (#sec-collection-membership). A value is of the
+ * type `Map.<K, V>` when it is a Map and the type arguments it CARRIES are K and V; an argument written
+ * `any` admits any instantiation in its position. Membership is compared against the [[TypedCollection]]
+ * stamp: a bare prototype-chain test never consults [[Arguments]], so every specialization of `Map` would
+ * have the same extension and the test would answer nothing (`m is Map.<string, string>` true for a
+ * `Map.<string, uint8>`, and `new Map() is Map.<string, uint8>` true for a collection with no type
+ * arguments at all).
  *
- * FIXED. Membership on a collection specialization now compares the type
- * arguments against the [[TypedCollection]] stamp, so these tests assert
- * behaviour rather than record a gap.
+ * Membership answers two different questions: "is this value already of type T", asked by the CONVERSION
+ * BOUNDARY so it can skip converting, and "does this value claim to be T", asked by `is`. So the boundary
+ * ADOPTS an unstamped collection into the target's arguments before asking, at both of its sites: `let
+ * m: Map.<string, uint8> = new Map()` must be accepted, since an unstamped Map is not yet a
+ * `Map.<string, uint8>` and would otherwise never get the chance to become one. Only an unstamped
+ * collection is adopted; one already carrying arguments is judged on its merits, so `let m: Map.<string,
+ * uint8> = someMapOfStrings` is still refused rather than silently re-stamped.
  *
- * What was wrong: `m is Map.<string, string>` was *true* for a
- * `Map.<string, uint8>`, and `new Map() is Map.<string, uint8>` was *true* for a
- * collection with no type arguments at all. Membership was a bare prototype-chain
- * test that never consulted [[Arguments]], so every specialization of `Map` had
- * the same extension and the test answered nothing.
+ * The three relations agree, as they do for a user generic (foundations/generic-instance-membership): SameType,
+ * IsAssignable and `is` all agree, and `Reflect.isAssignable(type Map.<string, uint8>, type Map.<string,
+ * number>)` is false. A user generic's specialization is a distinct constructor, so membership is carried by
+ * the constructor on the Type Record; a library collection has no per-specialization constructor, so the
+ * specialization is carried by the [[TypedCollection]] stamp and IsOfType reads it.
  *
- * THE FIX HAD A CONSEQUENCE WORTH KNOWING, because it is the shape of the next
- * one. Membership was doing duty for two different questions: "is this value
- * already of type T", asked by the CONVERSION BOUNDARY so it can skip converting,
- * and "does this value claim to be T", asked by `is`. The boundary was relying on
- * the loose answer - any Map passed, so the branch that STAMPS a fresh
- * `new Map()` was reached. Tightening membership for `is` therefore refused every
- * annotation: `let m: Map.<string, uint8> = new Map()` threw, because an
- * unstamped Map is not a `Map.<string, uint8>` and never got the chance to
- * become one.
+ * DECIDED BY THE STAMP RATHER THAN BY CONTENTS. Inspecting the entries would be the ARRAY's answer -
+ * `[1,2,3] is [].<uint8>` walks elements - and it loses on three counts: it is O(n) per test in the
+ * positions `is` is read from (narrowing, a `when` arm, a `catch` match, each of which can sit in a loop);
+ * its answer is invalidated by the next store, so a narrowing cannot be relied on downstream; and it would
+ * licence the unsoundness invariance exists to prevent, since what a container will ACCEPT NEXT is not a
+ * function of what it currently holds. That makes the array's contents-inspecting answer the questionable
+ * one, which is noted here rather than changed.
  *
- * So the boundary now ADOPTS an unstamped collection into the target's arguments
- * before asking, at both of its two sites - and there are two, which is how the
- * first attempt still left every annotation refused. Only an unstamped
- * collection is adopted; one already carrying arguments is judged on their
- * merits, so `let m: Map.<string, uint8> = someMapOfStrings` is still refused
- * rather than silently re-stamped.
- *
- * This contradicts `sec-issubtype` - "a generic class is invariant in its
- * arguments, so `Map.<string, uint8>` is a subtype of no other instantiation of
- * `Map`" - which names `Map` as its example, and it contradicts the relations,
- * since `Reflect.isAssignable(type Map.<string, uint8>, type Map.<string,
- * number>)` correctly answers *false*. So the three-way agreement that
- * `foundations/generic-instance-membership.test.mts` established for a USER
- * generic (SameType, IsAssignable and `is` all agreeing) does not hold for a
- * library one.
- *
- * The cause was the same one level along. A user generic's specialization is a
- * distinct constructor, so membership was
- * fixed by carrying the right constructor on the Type Record. A library
- * collection has no per-specialization constructor - the specialization is
- * carried by the [[TypedCollection]] stamp instead - and IsOfType had never been
- * taught to read it.
- *
- * DECIDED BY THE STAMP RATHER THAN BY CONTENTS. Inspecting the entries
- * would be the ARRAY's answer - `[1,2,3] is [].<uint8>` walks elements - and it
- * loses on three counts: it is O(n) per test in the positions `is` is read from
- * (narrowing, a `when` arm, a `catch` match, each of which can sit in a loop);
- * its answer is invalidated by the next store, so a narrowing cannot be relied on
- * downstream; and it would licence the unsoundness invariance exists to prevent,
- * since what a container will ACCEPT NEXT is not a function of what it currently
- * holds. That makes the array's contents-inspecting answer the questionable one,
- * which is filed rather than changed here.
- *
- * CONSEQUENCES BEYOND `is`, all of which follow: narrowing reads membership,
- * `catch (e: Map.<K, V>)` selects on the specialization, and a `when` pattern
- * naming one selects on it too - which is why the pattern tests live in this
- * file rather than in a pattern-matching one. They are membership wearing
+ * CONSEQUENCES BEYOND `is`, all of which follow: narrowing reads membership, `catch (e: Map.<K, V>)`
+ * selects on the specialization, and a `when` pattern naming one selects on it too - which is why the
+ * pattern tests live in this file rather than in a pattern-matching one. They are membership wearing
  * different syntax.
  *
- * THE `when extends` FORM, CORRECTED. An earlier draft filed "a type pattern over a collection does
- * not match" as a collections defect on the strength of `match (m) { when
- * (Map.<K: type, V: type>): ... }` throwing. That spelling was wrong twice over -
- * the design's form is `when extends Map.<K: type, V: type>:`, and its subject is
- * a TYPE OBJECT rather than an instance. Written correctly it still fails, but
- * so does `when extends uint8:` and `when extends string:`, with the same
- * "Unexpected token". **The `when extends` form is unimplemented across the
- * board.** That is a pattern-matching gap and NOT a collections one; it is
- * recorded here only so the finding is not lost, and the collections work does
- * not move it.
+ * THE `when extends` FORM, over a type object: `match (type Map.<string, uint8>) { when extends Map.<K:
+ * type, V: type>: ... }`. Divergence: the form is specified (#sec-matchtypepattern) and the engine does
+ * not parse it - `when extends uint8:` and `when extends string:` fail with the same "Unexpected token".
+ * It is a pattern-matching gap and not a collections one, recorded here as a `test.fails` so the finding
+ * is not lost.
  */
 
 // ---------------------------------------------------------------------------
@@ -131,7 +100,7 @@ test('a typed catch selects on the specialization', () => {
 // ---------------------------------------------------------------------------
 
 test.fails('`when extends` over a type object is unimplemented (not collection-specific)', () => {
-  // The collection spelling the design gives...
+  // The collection spelling...
   expect(ok('match (type Map.<string, uint8>) { when extends Map.<K: type, V: type>: 1; default: 0; }')).toBe(true);
   // ...and the two non-collection spellings that fail identically, which is what
   // places the defect outside the collections work.
@@ -173,8 +142,7 @@ test('control: the assignability relation is already correct', () => {
 test('control: `when` and `catch` still work at the bare nominal', () => {
   expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map: "matched"; default: "no"; }')).toBe('matched');
   expect(evaluated('try { throw new Map(); } catch (e: Map) { "caught"; }')).toBe('caught');
-  // A bare type name in `when` position tests MEMBERSHIP, so against a type
-  // object it is always false - the design states this as the reason `extends`
-  // exists at all.
+  // A bare type name in `when` position tests MEMBERSHIP (#sec-matchtypepattern), so against a type object
+  // it is always false: that is the reason `extends` exists at all.
   expect(evaluated('match (type uint8) { when uint8: "m"; default: "no"; }')).toBe('no');
 });

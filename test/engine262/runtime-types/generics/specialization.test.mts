@@ -78,14 +78,14 @@ test('a higher-kinded parameter keeps the nominal path', () => {
     + ' const b: B.<Identity> = new B.<Identity>(); String(typeof b);')).toBe('object');
 });
 
-test('the design\'s GridArray runs as written', () => {
+test('the GridArray example runs as written', () => {
   const GRID = 'class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * W + x]; } } ';
   expect(evaluated(`${GRID}const g = new GridArray.<4, 4>(); g[2, 1] = 10; String(g[2, 1]);`)).toBe('10');
   expect(evaluated(`${GRID}String(new GridArray.<4, 4>().length);`)).toBe('16');
   // the write reached the slot the accessor computed
   expect(evaluated(`${GRID}const g = new GridArray.<4, 4>(); g[2, 1] = 10; String(g[6]);`)).toBe('10');
-  // README's two-overload form
+  // The two-overload form of a grid's index operator.
   expect(evaluated('class GridArray<W: uint32, H: uint32> extends [W * H].<uint8> {'
     + ' get operator[](i: uint32) { return ref this[i]; }'
     + ' get operator[](x: uint32, y: uint32) { return ref this[y * W + x]; } }'
@@ -211,8 +211,8 @@ test('an accessor keeps everything else it could already do', () => {
 
 // -- a method may declare type parameters -------------------------------------
 test('a method may declare type parameters', () => {
-  // generics.md writes this as the illustration of a type parameter used as a
-  // value; the grammar admitted it on a function but not on a method
+  // A type parameter used as a value (#sec-generic-parameters-as-values): a method takes it as a function
+  // does.
   expect(evaluated('class C { m<W: uint32>() { return W; } } String(new C().m.<4>());')).toBe('4');
   expect(evaluated('const o = { m<W: uint32>() { return W; } }; String(o.m.<4>());')).toBe('4');
   expect(evaluated('class C { static m<W: uint32>() { return W; } } String(C.m.<4>());')).toBe('4');
@@ -248,8 +248,8 @@ test('ordinary methods and object shorthand are untouched', () => {
 });
 
 test('a method\'s own parameter may annotate its signature', () => {
-  // `emit<T>(event: T)` - the shape generics.md writes - where the annotation
-  // names the method's own parameter and is resolved before the body runs
+  // `emit<T>(event: T)`: the annotation names the method's own parameter and is resolved before the body
+  // runs.
   expect(evaluated('class C { m<T: type>(v: T) { return v; } } String(new C().m.<uint8>((5 := uint8)));')).toBe('5');
   expect(evaluated('class C { m<T: type>(v: T): T { return v; } } String(new C().m.<uint8>((5 := uint8)));')).toBe('5');
   // and enforced: a value of another type is refused - STATICALLY, since the

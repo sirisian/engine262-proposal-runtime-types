@@ -1,9 +1,9 @@
-// The design's binary packet example
-// (ecmascript-types, examples/binarypacket.md) - its writer, reader, and tuple
-// reader, with the design's `doc` decorators, typed inputs, and the writer's
-// bytes in place of the network - as a string, as the corpus suites hold their
-// programs: it is proposal syntax, which the TypeScript build must not check
-// as JavaScript (as a `.js` file it reported one error per line).
+// Fixture: examples/binarypacket.md of the ecmascript-types repository.
+//
+// The binary packet example - its writer, reader, and tuple reader, with `doc` decorators, typed inputs,
+// and the writer's bytes in place of the network - as a string, as the corpus suites hold their programs:
+// it is proposal syntax, which the TypeScript build must not check as JavaScript (as a `.js` file it
+// reported one error per line).
 export const binaryPacketProgram = `const docKey = Symbol('doc');
 
 // Metadata

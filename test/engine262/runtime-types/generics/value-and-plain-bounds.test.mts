@@ -2,19 +2,17 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
- * `value` and `plain` are the two BOUND types. A generic class can constrain its
- * type parameter only through `extends` - a class-level `where` is refused on
- * purpose (generics/applications.test.mts) - so the question a pool needs to ask
- * has no other place to be asked.
+ * `value` and `plain` are the two BOUND types of #sec-layout-properties: `value` is the type every value
+ * type is assignable to, and `plain` the type every plain-data type is assignable to. A generic class can
+ * constrain its type parameter only through `extends` - a class-level `where` is refused on purpose
+ * (generics/applications.test.mts) - so the question a pool needs to ask has no other place to be asked.
  *
- * generationalstore.md asks for `extends value` and names both halves while
- * asking for one spelling: "implicit `Sized` plus explicit `Copy`". They are not
- * the same bound. A class of `string` fields is a VALUE TYPE with no layout, so
- * `extends value` alone admits it and the contiguity a store advertises is still
- * lost; `plain` is the bound that actually gates layout.
+ * They are not the same bound. A class of `string` fields is a VALUE TYPE with no layout, so `extends
+ * value` alone admits it and the contiguity a store advertises is still lost; `plain` is the bound that
+ * actually gates layout.
  *
- * There is deliberately no `layout` beside them: having a layout is a property of
- * a TYPE rather than of its values, so there is no set of values for it to name.
+ * Unspecified: there is deliberately no `layout` bound beside them. Having a layout is a property of a
+ * TYPE rather than of its values, so there is no set of values for it to name.
  */
 
 test('value admits a value type class and refuses a dynamic one', () => {

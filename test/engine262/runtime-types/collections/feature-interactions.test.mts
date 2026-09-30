@@ -90,9 +90,9 @@ test('a collection is compared by identity and is truthy', () => {
 // ---------------------------------------------------------------------------
 
 test('a collection cannot be shared, and says why', () => {
-  // threading.md: `shared` applies to a value type, and a collection is not one.
-  // Asserted at RUN TIME, because the no-default-value rule fires first at a
-  // bare declaration and would mask this.
+  // `shared` applies to a value type (#sec-threading-shared-modifier), and a collection is not one.
+  // Asserted at RUN TIME, because the no-default-value rule fires first at a bare declaration and would
+  // mask this.
   expect(ok('let m: shared Map.<string, uint8> = new Map();')).toBe(false);
   expect(ok('let s: shared Set.<uint8> = new Set();')).toBe(false);
   // The contrast: a fixed array of a value type IS sharable, so the refusal is
@@ -151,7 +151,7 @@ test('a vector as a value and as an element', () => {
 test('a decorated collection field, and a collection through a pipeline', () => {
   expect(ok('function d(v, c) { return v; } class K { @d m: Map.<string, uint8> = new Map(); }')).toBe(true);
   expect(ok('const s = new Set.<uint8>(); s.add(1); const n = s |> %.size;')).toBe(true);
-  // The WeakMap-keyed registry `decorators.md` builds its signals on.
+  // A WeakMap-keyed registry, the shape a signals implementation is built on.
   expect(evaluated('const reg = new WeakMap.<object, uint8>(); const k = {}; reg.set(k, 1); String(reg.get(k));')).toBe('1');
 });
 
@@ -160,11 +160,9 @@ test('a decorated collection field, and a collection through a pipeline', () => 
 // ---------------------------------------------------------------------------
 
 test('a `ref` in a collection type is accepted today, and should not be', () => {
-  // references.md: "a reference cannot be stored in a binding that outlives it,
-  // a field, an array, or a collection." The type still forms. This was
-  // resolved as an annotation-position refusal owned by `references.md`;
-  // asserted here as the CURRENT answer so that implementing it is a visible
-  // change rather than a silent one.
+  // The intended rule, not yet in the specification: a reference cannot be stored in a binding that
+  // outlives it, a field, an array, or a collection. The type still forms. Asserted here as the CURRENT
+  // answer, so that implementing the refusal is a visible change rather than a silent one.
   expect(ok('let m: Map.<string, ref uint8> = new Map();')).toBe(true);
   expect(ok('let a: [].<ref uint8> = [];')).toBe(true);
 });

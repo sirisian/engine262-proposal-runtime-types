@@ -31,8 +31,7 @@ test('an evaluated constraint or any default may not read its own parameter', ()
 
 test('earlier parameters, F-bounds and inner binders are admitted', () => {
   expect(evaluated('function f<T: type, K: keyof T>(x: T, k: K): K { return k; } f({ a: 1 }, "a");')).toBe('a');
-  // `T: Ordered.<T>` is the F-bounded constraint the design writes for
-  // NumberBounds (primitivemetadata.md), checked once T has its binding.
+  // `T: Ordered.<T>` is an F-bounded constraint, checked once T has its binding.
   expect(evaluated('interface Ordered<T: type> { operator<(other: T): boolean; } '
     + 'type NB<T: type extends Ordered.<T>> = { nonZero?: boolean }; "ok";')).toBe('ok');
   // A name a binder inside the constraint declares is that binder's.

@@ -127,7 +127,7 @@ test('a TYPE parameter given a literal argument reads as the type', () => {
 });
 
 test('a VALUE parameter still reads as its value', () => {
-  // The other half, and the reason the old rule existed: the design's `y * W + x`.
+  // The other half: a VALUE parameter still reads as its value, as `W` does in `y * W + x`.
   expect(evaluated("type L = 'abc'; function f<P: string>() { return String(P); } String(f.<L>());")).toBe('abc');
   expect(evaluated('type N = 5; function f<V: uint8>() { return V * 2; } String(f.<N>());')).toBe('10');
 });
@@ -197,10 +197,9 @@ test('a type variable is inferred from a CALLBACK, in both directions', () => {
 });
 
 test('two variables bind from one call, which is `Map.groupBy`\'s shape', () => {
-  // `standardlibrary.md` gives `Map.groupBy<K, T>(items, callback): Map.<K, [].<T>>`,
-  // where T comes from the items and K from the callback's RETURN and from
-  // nowhere else. This is that shape written as a user generic, and it is what
-  // the standard library's typed statics rest on.
+  // `Map.groupBy<K, T>(items, callback): Map.<K, [].<T>>` (#sec-typed-standard-library-statics): T comes
+  // from the items and K from the callback's RETURN and from nowhere else. This is that shape written as a
+  // user generic, and it is what the standard library's typed statics rest on.
   const G = 'function g<T: type, K: type>(a: [].<T>, cb: (v: T) => K): Map.<K, [].<T>> { throw new Error(); } '
     + 'const a: [].<uint8> = [1]; ';
   // Guarded by `if (false)`, so what is asserted is the STATIC property: the
@@ -236,14 +235,11 @@ test('a type variable is inferred through an INTERFACE-typed parameter', () => {
 });
 
 test('an INFERRED binding reaches a callback\'s unannotated parameter', () => {
-  // Contextual typing was never missing: a CONCRETE parameter has always worked,
-  // and so has `a.map`. What was missing is the substitution ahead of it - only
-  // EXPLICIT type arguments were substituted before the parameter type was
-  // pushed into the literal, so `g(a, (v) => …)` pushed the unbound
-  // `(v: T) => void` and the body read `v` at the bare variable.
-  //
-  // This is the design's stated purpose for the standard library's signatures,
-  // "so fully typed call sites infer their callbacks".
+  // Contextual typing of a callback needs the substitution ahead of it: the type arguments inferred from
+  // the other arguments are substituted before the parameter type is pushed into the literal, so
+  // `g(a, (v) => …)` pushes `(v: uint8) => void` and not the unbound `(v: T) => void`. A CONCRETE
+  // parameter, and `a.map`, always worked. This is the purpose of the standard library's typed signatures:
+  // a fully typed call site infers its callback's parameter (#sec-typed-standard-library-statics).
   const G = 'function g<T: type>(a: [].<T>, cb: (v: T) => void) {} const a: [].<uint8> = [1]; ';
   const guard = (src: string) => `if (false) { ${src} } 1;`;
   expectStaticTypeError(guard(`${G} g(a, (v) => { let s: string = v; });`));

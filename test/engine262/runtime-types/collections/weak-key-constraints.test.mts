@@ -4,25 +4,17 @@ import { evaluated, ok, expectStaticTypeError, expectThrownKind } from '../harne
 // ---------------------------------------------------------------------------
 // THE WEAK GENERICS HOLD THEIR KEY WEAKLY, SO THE KEY TYPE MUST BE HOLDABLE.
 //
-// README, "Weak References": `class WeakMap<K extends object | symbol, V>`,
-// `class WeakSet<T extends object | symbol>`, `class WeakRef<T extends object |
-// symbol>`; `FinalizationRegistry<T>` where T is the HELD value, unconstrained,
-// and `register(target: object | symbol, heldValue: T, unregisterToken?:
-// object | symbol)`. "Passing one is a TypeError, statically when the type is
-// known and at run time otherwise."
+// `class WeakMap<K extends object | symbol, V>`, `class WeakSet<T extends object | symbol>`,
+// `class WeakRef<T extends object | symbol>`; `FinalizationRegistry<T>` where T is the HELD value,
+// unconstrained, and `register(target: object | symbol, heldValue: T, unregisterToken?: object |
+// symbol)`. Passing a type that cannot be held weakly is a TypeError, statically when the type is known
+// and at run time otherwise (#sec-weak-references-and-typed-objects).
 //
-// #sec-weak-references-and-typed-objects: "An instance of a typed class cannot
-// be held weakly ... A class becomes ineligible exactly when it becomes a typed,
-// sealed class." The run time derives "sealed" as a non-`dynamic` class with a
-// typed instance field; the static check derives it the same way, so the two
-// agree by construction. The clause carves out no reference form: `A | null`
-// for a typed class `A` is refused with `A`. (The README's "Weak References"
-// section has an `A | null` example that contradicts the clause; the clause is
-// normative and is what this file asserts.)
-//
-// Before this nothing was refused at the type. `new WeakMap.<string, uint8>()`
-// was accepted in every position and the program learned at its first `set`,
-// from the run time's own TypeError, that no key could ever satisfy it.
+// #sec-weak-references-and-typed-objects: "An instance of a typed class cannot be held weakly ... A class
+// becomes ineligible exactly when it becomes a typed, sealed class." The run time derives "sealed" as a
+// non-`dynamic` class with a typed instance field; the static check derives it the same way, so the two
+// agree by construction. The clause carves out no reference form: `A | null` for a typed class `A` is
+// refused with `A`. A type that can never be a key is refused at the type, not at the first `set`.
 // ---------------------------------------------------------------------------
 
 const WEAK = ['WeakMap', 'WeakSet', 'WeakRef'] as const;
@@ -84,7 +76,7 @@ test('a typed (sealed) class is refused, its nullable union with it, as the clau
   // reference class; a `dynamic` typed class is not sealed. Both hold.
   expect(ok('class R { x = 1; } new WeakRef(new R());')).toBe(true);
   expect(ok('dynamic class D { a: uint8 = 0; } new WeakRef(new D());')).toBe(true);
-  // A typed ARRAY is an object (README: "a typed array is an object").
+  // A typed ARRAY is an object, and so may be held weakly.
   expect(ok('const d: [10].<uint8> = new [10].<uint8>(); new WeakRef(d);')).toBe(true);
   // And the run time agrees where the type was not known statically.
   expectThrownKind(`${A} function f(x) { return new WeakRef(x); } f(new A());`, 'TypeError');
@@ -103,8 +95,8 @@ test('the set and add arguments are checked by the same constraint', () => {
 });
 
 test('FinalizationRegistry: the held value is unconstrained; the target and token are not', () => {
-  // README: "FinalizationRegistry's held value is unconstrained, so it can be a
-  // value type. This is the common case."
+  // #sec-library-constructor-contracts: `FinalizationRegistry.<T>` takes `callback: (heldValue: T) => void`,
+  // and the held value is unconstrained, so it can be a value type. This is the common case.
   expect(ok('const r = new FinalizationRegistry.<uint32>((h) => {});')).toBe(true);
   expect(ok('const r = new FinalizationRegistry.<string>((h) => {});')).toBe(true);
   expect(ok('const r = new FinalizationRegistry.<uint32>((h) => {}); const t = {}; r.register(t, 1);')).toBe(true);

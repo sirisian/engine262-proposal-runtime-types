@@ -150,13 +150,14 @@ test('comparison recurses by field KIND, not by byte image', () => {
 // ---------------------------------------------------------------------------
 
 test('control: the built-in aggregate value types already key structurally', () => {
-  // rational.md states this one verbatim: "new Set.<rational64>([rational64(1, 2),
-  // rational64(50, 100)]).size; // 1". Canonical form makes structural equality
-  // and mathematical equality the same question.
+  // Unspecified: the specification does not state rational keys. These tests pin the engine's:
+  // `new Set.<rational64>([rational64(1, 2), rational64(50, 100)]).size` is 1. Canonical form makes
+  // structural equality and mathematical equality the same question.
   expect(evaluated('const s = new Set.<rational64>(); s.add(rational64(1, 2)); s.add(rational64(50, 100)); String(s.size);')).toBe('1');
-  // decimal.md: "as a `Map` or `Set` key a decimal compares by value under
-  // SameValueZero, so `1.0` and `1.00` are one key rather than two" - the split
-  // Java's BigDecimal does not make.
+  // As a `Map` or `Set` key a decimal compares by value under SameValueZero, so `1.0` and `1.00` are one
+  // key rather than two (#sec-decimal-floating-point-types: SameValueZero and `==` compare numerical value
+  // and find them equal, while SameValue distinguishes cohort members) - the split Java's BigDecimal does
+  // not make.
   expect(evaluated('const s = new Set.<decimal128>(); s.add(1.0 := decimal128); s.add(1.00 := decimal128); String(s.size);')).toBe('1');
   // A complex compares over the pair.
   expect(ok('const s = new Set.<complex>(); s.add(1 + 2i); s.add(1 + 2i);')).toBe(true);

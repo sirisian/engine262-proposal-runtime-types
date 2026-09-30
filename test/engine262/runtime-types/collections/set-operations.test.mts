@@ -194,7 +194,7 @@ test('a genuine error from the other operand still propagates', () => {
   expect(evaluated('const a = new Set.<uint8>([1]); const bad = { size: 1, has: () => { throw new RangeError("boom"); }, keys: () => [1][Symbol.iterator]() }; try { a.intersection(bad); "no"; } catch (e) { e.constructor.name; }')).toBe('RangeError');
 });
 
-test('the constant-fold case the design names', () => {
+test('the constant-fold case', () => {
   // "When T and U are unrelated value types the compiler can constant-fold the
   // answer: an intersection of a Set.<uint8> and a Set.<string> is empty
   // without iterating, and isDisjointFrom is true."

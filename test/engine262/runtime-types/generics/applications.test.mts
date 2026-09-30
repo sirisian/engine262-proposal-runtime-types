@@ -112,10 +112,8 @@ test('a checked contract names the builder, the arguments and the clause', () =>
 });
 
 test('the where positions previously claimed as covered', () => {
-  // Audited. Three of the required rows had no assertion, and writing them
-  // found one behaviour that had been asserted wrongly.
-  //
-  // An ABSTRACT method carries a clause, since `simd.md` writes them bodiless.
+  // An ABSTRACT method carries a clause: a bodiless declaration still states what it requires
+  // (#sec-generic-where).
   expect(ok('abstract class V<N: uint32> { lane<I: uint32>(): uint32 where I < N; }')).toBe(true);
   // A class-level `where` is still refused - nothing writes one, and the
   // dependent-record form is left to its extension.

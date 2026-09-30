@@ -73,9 +73,10 @@ test('a float -0 and +0 are one key', () => {
 // ---------------------------------------------------------------------------
 
 test('decimal cohorts are ONE key', () => {
-  // decimal.md: "as a `Map` or `Set` key a decimal compares by value under
-  // SameValueZero, so `1.0` and `1.00` are one key rather than two" - the split
-  // Java's BigDecimal makes, and the trap its `equals` is known for.
+  // As a `Map` or `Set` key a decimal compares by value under SameValueZero, so `1.0` and `1.00` are one
+  // key rather than two (#sec-decimal-floating-point-types: SameValueZero and `==` compare numerical value
+  // and find them equal, while SameValue distinguishes cohort members) - the split Java's BigDecimal does
+  // not make.
   for (const t of ['decimal32', 'decimal64', 'decimal128']) {
     expect(evaluated(`const s = new Set.<${t}>(); s.add(1.0 := ${t}); s.add(1.00 := ${t}); String(s.size);`), t).toBe('1');
     expect(evaluated(`const m = new Map.<${t}, string>(); m.set(1.0 := ${t}, "hit"); String(m.get(1.00 := ${t}));`), t).toBe('hit');
@@ -85,9 +86,9 @@ test('decimal cohorts are ONE key', () => {
 });
 
 test('rational keys compare in canonical form', () => {
-  // rational.md states this one verbatim: "new Set.<rational64>([rational64(1, 2),
-  // rational64(50, 100)]).size; // 1". Canonical form makes structural equality
-  // and mathematical equality the same question.
+  // Unspecified: the specification does not state rational keys. These tests pin the engine's:
+  // `new Set.<rational64>([rational64(1, 2), rational64(50, 100)]).size` is 1. Canonical form makes
+  // structural equality and mathematical equality the same question.
   expect(evaluated('const s = new Set.<rational64>(); s.add(rational64(1, 2)); s.add(rational64(50, 100)); String(s.size);')).toBe('1');
   expect(evaluated('const m = new Map.<rational64, string>(); m.set(rational64(1, 2), "half"); String(m.get(rational64(2, 4))));'.replace('));', ');'))).toBe('half');
   expect(evaluated('const s = new Set.<rational64>(); s.add(rational64(1, 2)); s.add(rational64(1, 3)); String(s.size);')).toBe('2');

@@ -77,23 +77,19 @@ test('generics: a generic mixin function returns a class expression', () => {
 
 // -- A variadic generic parameter parses ------------------------------------
 test('generics: a variadic generic parameter parses and an application leaving it empty runs', () => {
-  // generics.md: a parameter written `...Name: [].<T>` collects constant
-  // arguments into a tuple, which is what lets a projection take its indices as
-  // generic arguments. The rest form in the generic parameter list parses now
-  // (`generics/pack-grammar.test.mts` is the grammar's own file); binding a
-  // non-empty pack at an application is not yet done.
+  // A parameter written `...Name: [].<T>` collects constant arguments into a tuple
+  // (#sec-variadic-parameters), which is what lets a projection take its indices as generic arguments. The
+  // rest form in the generic parameter list parses (`generics/pack-grammar.test.mts` is the grammar's own
+  // file), and an application leaving it empty runs.
   expect(evaluated('function f<...I: [].<uint32>>() { return 1; } String(f());')).toBe('1');
 });
 
 test('generics: a class type parameter reaches a field annotation', () => {
-  // generics.md's opening example depends on this, and it failed with "T is
-  // not defined": a field is evaluated during class definition, where nothing
-  // bound the class's parameters. Each is bound to a ~parameter~ record now -
-  // the kind #table-type-record-kinds specifies and the engine lacked.
-  // The annotation resolves; the INITIALIZER is then checked against it, and
-  // `null` is not a value of an opaque `T` any more than `5` is
-  // (generic-body-checking, "a value of the bound is not a value of the
-  // parameter") - which is the checking the field's type now takes part in.
+  // A class type parameter reaches a field annotation: a field is evaluated during class definition, so
+  // each of the class's parameters is bound there to a ~parameter~ record (#table-type-record-kinds). The
+  // annotation resolves; the INITIALIZER is then checked against it, and `null` is not a value of an
+  // opaque `T` any more than `5` is (generic-body-checking, "a value of the bound is not a value of the
+  // parameter").
   expect(ok('class B<T: type> { v: T = null; }')).toBe(false);
   expect(ok('class B<T: type> { v: T; constructor(v: T) { this.v = v; } }')).toBe(true);
   // Uninitialized too: a parameter has no default, which is what leaves the
@@ -131,10 +127,8 @@ test('generics: a class type parameter reaches a field annotation', () => {
  */
 
 test('generics: a generic class is usable end to end', () => {
-  // generics.md's opening example, verbatim. It failed at three separate
-  // points before this: the field annotation could not resolve T, an
-  // uninitialized field of a parameter type was checked against it, and the
-  // constructor could not be called.
+  // The canonical generic class example: the field annotation resolves `T`, an uninitialized field of a
+  // parameter type is not checked against it, and the constructor can be called.
   expect(ok(`
     class A<T: type = uint8> {
       a: T;
@@ -194,9 +188,9 @@ test('generics: a method of a generic class is callable', () => {
  */
 
 test('generics: an application is a distinct type', () => {
-  // generics.md: "Each application - A.<uint8>, A.<uint16> - is a distinct type
-  // with its own type object." Both sides had been dropping their arguments, so
-  // two empty argument lists agreed and every application matched every other.
+  // #sec-generic-specialization: each application - `A.<uint8>`, `A.<uint16>` - is a distinct type with its
+  // own type object. Each side must carry its arguments, or two empty argument lists would agree and every
+  // application would match every other.
   const A = 'class A<T: type> { m(v: T) {} } ';
   expect(ok(`${A}const x: A.<uint8> = new A.<uint8>();`)).toBe(true);
   expect(ok(`${A}const x: A.<uint16> = new A.<uint8>();`)).toBe(false);
@@ -265,10 +259,10 @@ test('generics: a type parameter is reachable as a value', () => {
 });
 
 test('generics: the deferred surface is refused, not silently wrong', () => {
-  // #table-extension-hooks defers most of generics.md to the generics
-  // extension. These assert what the engine does with the deferred forms today,
-  // so a change is visible rather than a surprise - and so the markers are
-  // measured rather than assumed.
+  // #table-extension-hooks defers most of the generics surface to the generics extension: specialized
+  // overloads, constraint families as specialization selectors, argument-bound value generics, and the
+  // generic parameters a decorator declares. These assert what the engine does with the deferred forms,
+  // so a change is visible rather than a surprise.
 
   // Both declarations bind one type parameter: `uint8` is a parameter name
   // in this grammar, so these signatures are identical up to renaming.
@@ -277,8 +271,8 @@ test('generics: the deferred surface is refused, not silently wrong', () => {
     function f<uint8: type>(x: uint8): uint8 { return x; }
   `)).toBe(false);
 
-  // Generic parameters on a decorator do not parse. This is the form that
-  // appears in generics.md and in the hooks row of #table-extension-hooks.
+  // Generic parameters on a decorator do not parse: the form the hooks row of #table-extension-hooks lists
+  // as deferred.
   expect(ok('function d<T: type>(c: Reflect.ClassField) {} class C { @d.<uint8> f: uint8 = 1; }')).toBe(false);
 
   // A VALUE type parameter declares, which is worth pinning separately: the

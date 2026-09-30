@@ -4,44 +4,30 @@ import {
 } from '../harness.mts';
 
 /**
- * THE BACKCOMPAT GUARD.
+ * THE BACKCOMPAT GUARD. The governing invariant of the typed collections (#sec-untyped-collections): **a
+ * `Map` or `Set` written without type arguments is an ordinary JavaScript `Map` or `Set` and stays one.**
+ * `size` is a Number, keys and values are unconstrained, `for`-`of` binds at ~any~, and nothing the typed
+ * surface adds is observable from such a value. It is the collection reading of the rule an array already
+ * has (#sec-array-and-tuple-types): an array with no element type is untouched by any of this.
  *
- * The governing invariant of the typed-collections work: **a `Map` or `Set`
- * written without type arguments is an ordinary JavaScript `Map` or `Set` and
- * stays one.** `size` is a Number, keys and values are unconstrained, `for`-`of`
- * binds at ~any~, and nothing the typed surface adds is observable from such a
- * value.
+ * WHY THIS FILE COMES FIRST. Everything the typed surface adds changes what a TYPED collection does -
+ * `size` becomes `uint64`, the iteration members acquire signatures, the constructors check their seed.
+ * Each of those changes runs through code an untyped collection also reaches, so each is an opportunity
+ * to change untyped behaviour by accident. A baseline asserted AFTER such a change records whatever the
+ * change did; a baseline asserted before it is a guard.
  *
- * This is not a new rule. It is the collection reading of one the design already
- * states for arrays - "An array with no element type is untouched by any of
- * this. A plain `[1, 2, 3]` reports a `length` that is a Number, exactly as it
- * does today, and no program that does not use these types can observe the index
- * type at all." The corresponding sentence for collections did not exist in
- * either the design or the specification, which is why this file was written
- * before any of the work it guards.
+ * EVERY ASSERTION HERE IS CURRENT ES2026 BEHAVIOUR, asserted verbatim. Nothing in this file should ever
+ * need to change. If a later change makes one of these fail, the change is wrong, not the test.
  *
- * WHY THIS FILE COMES FIRST. Everything the typed surface adds changes what a
- * TYPED collection does - `size` becomes `uint64`, the iteration members acquire
- * signatures, the constructors check their seed. Each of those changes runs
- * through code an untyped collection also reaches, so each is an opportunity to
- * change untyped behaviour by accident. A baseline asserted AFTER such a change
- * records whatever the change did; a baseline asserted before it is a guard.
+ * The mechanism the invariant rests on is the [[TypedCollection]] stamp: a collection acquires one only
+ * from a type carrying arguments, either through `new Map.<K, V>()` (NewExpression) or through an
+ * annotation's boundary (RequireType/ConvertValue). Where the stamp is absent the ES2026 algorithm runs
+ * unmodified. These tests exercise the absence.
  *
- * EVERY ASSERTION HERE IS CURRENT ES2026 BEHAVIOUR, asserted verbatim. Nothing
- * in this file should ever need to change. If a later change makes one of these
- * fail, the change is wrong, not the test.
- *
- * The mechanism the invariant rests on is the [[TypedCollection]] stamp: a
- * collection acquires one only from a type carrying arguments, either through
- * `new Map.<K, V>()` (NewExpression) or through an annotation's boundary
- * (RequireType/ConvertValue). Where the stamp is absent the ES2026 algorithm
- * runs unmodified. These tests exercise the absence.
- *
- * Paired with `test262`'s `built-ins/Map`, `built-ins/Set`, `built-ins/WeakMap`
- * and `built-ins/WeakSet`, which are the other half of the guard and must be run
- * alongside it. NOTE that `test/test262/test262` is a git submodule and
- * is NOT checked out in a fresh clone; run
- * `git submodule update --init test/test262/test262` before relying on it.
+ * Paired with `test262`'s `built-ins/Map`, `built-ins/Set`, `built-ins/WeakMap` and
+ * `built-ins/WeakSet`, which are the other half of the guard and must be run alongside it. NOTE that
+ * `test/test262/test262` is a git submodule and is NOT checked out in a fresh clone; run `git submodule
+ * update --init test/test262/test262` before relying on it.
  */
 
 // ---------------------------------------------------------------------------

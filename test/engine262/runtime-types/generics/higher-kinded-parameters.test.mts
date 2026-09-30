@@ -23,9 +23,9 @@ test('a higher-kinded parameter declares, at each arity and position', () => {
 });
 
 test('only `_` is a hole', () => {
-  // Each of these is a spelling a reader might reasonably try. `<W<T>>` reads
-  // as a nested parameter; `~`, `*`, and a numeral are the three alternatives
-  // named and rejected in higherkindedtypes.md.
+  // Each of these is a spelling a reader might reasonably try, and each is refused: `<W<T>>` reads as a
+  // nested parameter, and `~`, `*` and a numeral are alternatives to the `_` hole (#sec-higher-kinded-parameters:
+  // the arity is a bracketed list of `_` tokens).
   expect(ok('interface I<W<T>> {}')).toBe(false);
   expect(ok('interface I<W<~>> {}')).toBe(false);
   expect(ok('interface I<W<*>> {}')).toBe(false);

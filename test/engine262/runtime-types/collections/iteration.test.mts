@@ -117,11 +117,10 @@ test('getOrInsertComputed types its callback parameter but not its return', () =
   // The parameter is K and is checked.
   expectStaticTypeError(`${M} m.getOrInsertComputed("a", (k: uint8) => 1);`);
   expect(ok(`${M} let v: uint8 = m.getOrInsertComputed("a", (k: string) => 1);`)).toBe(true);
-  // The RETURN is left unconstrained on purpose. Constraining it to V refuses
-  // the natural spelling `(k) => 1`, because inferring a callback's return from
-  // an expected type is the argument-position inference the design defers. An
-  // annotated callback working where an unannotated one did not would be a
-  // worse trade than under-approximating.
+  // The RETURN is left unconstrained on purpose. Constraining it to V refuses the natural spelling
+  // `(k) => 1`, because inferring a callback's return from an expected type is the argument-position
+  // inference deferred to the generics extension (#table-extension-hooks). An annotated callback working
+  // where an unannotated one did not would be a worse trade than under-approximating.
   expect(ok(`${M} m.getOrInsertComputed("a", (k) => 1);`)).toBe(true);
   // The value is checked at INSERTION either way, so a wrong one is refused -
   // just at run time rather than as an Early Error.

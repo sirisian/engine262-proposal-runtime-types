@@ -69,7 +69,8 @@ test('an attached case is a replacement or an additive overload', () => {
 });
 
 test('an unmarked bodyless generic method in an abstract class keeps its abstract reading', () => {
-  // simd.md writes abstract members this way; the owner reading is a concrete class's.
+  // An abstract member is written this way (a bodiless generic method); the owner reading is a concrete
+  // class's.
   expect(evaluated(`abstract class V<N: uint32> { lane<I: uint32>(): uint32 where I < N; } 'ok';`)).toBe('ok');
 });
 

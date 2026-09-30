@@ -18,7 +18,7 @@ test('a lookup on an any-valued Map is any', () => {
   // Assignable as `any` is, and no dead-code report on the nullish test.
   expect(ok('let m: Map.<string, any> = new Map.<string, any>(); m.set("a", 1); let s: string = m.get("a");')).toBe(true);
   expect(ok('let m: Map.<string, any> = new Map.<string, any>(); let x = m.get("a") ?? [];')).toBe(true);
-  // A Map keyed by TYPE, the shape the design's EventBus is built on.
+  // A Map keyed by TYPE, the shape an event bus is built on.
   expect(evaluated('let m: Map.<type, any> = new Map.<type, any>(); m.set(uint8, [1]); String((m.get(uint8) ?? []).length);')).toBe('1');
   expect(evaluated('let m: Map.<type, any> = new Map.<type, any>(); String((m.get(uint8) ?? []).length);')).toBe('0');
 });

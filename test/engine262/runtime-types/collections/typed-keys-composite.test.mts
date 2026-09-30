@@ -33,43 +33,36 @@ test('two separately built composites of equal contents are one key', () => {
 });
 
 test.fails('a typed composite key type loses its object members', () => {
-  // `Composite.<{cx: int32, cy: int32}>` resolves with an EMPTY object argument -
-  // the diagnostic reads `Composite.<{  }>` - so nothing is assignable to it and
-  // the chunk-store idiom composites.md names cannot be written with its key
-  // type spelled out.
-  //
-  // PRE-EXISTING, and not a collection defect: the same failure appears in a
-  // bare `let c: Composite.<{x: int32}> = Composite({ (x: int32): 1 });`, verified
-  // on a clean build. It became visible here only once `new Map.<K, V>()`
-  // acquired a Static Type, so the key position is checked where it
-  // previously was not.
+  // Divergence from #sec-composite-types: `Composite.<{cx: int32, cy: int32}>` resolves with an EMPTY object
+  // argument - the diagnostic reads `Composite.<{ }>` - so nothing is assignable to it and the chunk-store
+  // idiom (a composite key) cannot be written with its key type spelled out. Not a collection defect: the
+  // same failure appears in a bare `let c: Composite.<{x: int32}> = Composite({ (x: int32): 1 });`. It is
+  // visible here because `new Map.<K, V>()` has a Static Type, so the key position is checked.
   const k = 'Composite({ (cx: int32): 1, (cy: int32): 2 })';
   expect(ok(`const m = new Map.<Composite.<{cx: int32, cy: int32}>, string>(); m.set(${k}, "chunk");`)).toBe(true);
   expect(ok('let c: Composite.<{x: int32}> = Composite({ (x: int32): 1 });')).toBe(true);
 });
 
 test('an UNTYPED composite key works, which is the idiom in practice', () => {
-  // The same chunk store with the key type left to inference. This is what
-  // composites.md's own examples write, and the defect above does not reach it.
+  // The same chunk store with the key type left to inference; the defect above does not reach it.
   const k = 'Composite({ cx: 1, cy: 2 })';
   expect(evaluated(`const m = new Map(); m.set(${k}, "chunk"); String(m.get(${k}));`)).toBe('chunk');
   expect(evaluated(`const m = new Map(); m.set(${k}, "chunk"); String(m.get(Composite({ cx: 9, cy: 2 })));`)).toBe('undefined');
 });
 
 test('a tuple composite and a record composite never intern together', () => {
-  // composites.md is explicit that the two forms are distinct however alike
-  // their contents look, so a positional composite cannot collide with a named
-  // one that happens to carry the same values under index keys.
+  // A positional composite and a named one are distinct however alike their contents look
+  // (#sec-composites), so a positional composite cannot collide with a named one that happens to carry the
+  // same values under index keys.
   expect(evaluated('const s = new Set(); s.add(Composite([1])); s.add(Composite({ 0: 1 })); String(s.size);')).toBe('2');
   expect(evaluated('const s = new Set(); s.add(Composite([1, 2])); s.add(Composite([1, 2])); String(s.size);')).toBe('1');
   expect(evaluated('const s = new Set(); s.add(Composite([1, 2])); s.add(Composite([2, 1])); String(s.size);')).toBe('2');
 });
 
 test('the field TYPE participates in the key, not only the value', () => {
-  // The interning hazard composites.md calls out: the same source text under a
-  // different type is a different composite, so a program that means one key
-  // must write one type. Asserted so that a change making interning value-only
-  // is caught here rather than in a chunk store.
+  // The interning hazard: the same source text under a different type is a different composite
+  // (#sec-composite-registry), so a program that means one key must write one type. Asserted so that a
+  // change making interning value-only is caught here rather than in a chunk store.
   const typed = 'Composite({ (x: int32): 1 })';
   const untyped = 'Composite({ x: 1 })';
   expect(evaluated(`const s = new Set(); s.add(${typed}); s.add(${untyped}); String(s.size);`)).toBe('2');
@@ -77,12 +70,12 @@ test('the field TYPE participates in the key, not only the value', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The idioms the design names
+// The idioms of composite keys
 // ---------------------------------------------------------------------------
 
 test('Map.groupBy over a composite key groups by contents', () => {
-  // "Group by a composite" is the idiom composites.md gives for grouping on
-  // more than one field, and it works only because equal composites are one key.
+  // "Group by a composite" - grouping on more than one field - works only because equal composites are one
+  // key.
   expect(evaluated('const g = Map.groupBy([1, 2, 1], (n) => Composite({ v: n })); String(g.size);')).toBe('2');
   // `get` answers `V | undefined`; with a composite key the group type is known,
   // so the read goes through `?.` or the narrowing rule refuses it.
