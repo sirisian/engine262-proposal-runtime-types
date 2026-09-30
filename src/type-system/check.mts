@@ -21124,6 +21124,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               || (tag === 'function' && current.Kind === 'nominal' && typedClassDeclarationOf(current)))) {
             return { name: operandName, type: current, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display };
           }
+          // #sec-narrowing: the row narrows by "the union of the types whose
+          // `typeof` is k". Where every member of the subject has a known tag,
+          // that union is exactly the members carrying k - so `'number'` takes
+          // every numeric type, not only `number`, in both branches.
+          if (operandName !== null && current && current.Kind === 'union') {
+            const tags = current.Members.map((m) => typeofTagOfType(m as TypeRecord));
+            if (tags.every((x) => x !== null)) {
+              const matching = current.Members.filter((_, i) => tags[i] === tag);
+              if (matching.length > 0 && matching.length < current.Members.length) {
+                const partition = matching.length === 1 ? matching[0] as TypeRecord : CanonicalizeType({ Kind: 'union', Members: matching } as TypeRecord) as TypeRecord;
+                return { name: operandName, type: partition, negated: writtenNegated };
+              }
+            }
+          }
           const t = typeofStringToType(tag);
           if (t) {
             return { name: operandName, type: t, subjectType: operandType, negated: writtenNegated };
@@ -21466,6 +21480,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * speaks about narrowed in each. Shared by `if`, `while`, and the conditional
    * operator, which differ only in what they guard.
    */
+  /** A `case` clause's narrowed discriminant, set by the `switch` before its block is walked. */
+  const caseClauseNarrowing = new WeakMap<ParseNode, { name: string, type: TypeRecord }>();
+
   const walkGuarded = (test: ParseNode, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
     // #sec-metadata-narrowing: record the comparison for the checking pass,
     // which can call `narrow` where this pass cannot. The enclosing request is
@@ -28728,6 +28745,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     const single = node && !Array.isArray(node) ? node as ParseNode : undefined;
+    // #sec-narrowing: a `case` clause's statements see the discriminant as the
+    // labels that reach them establish (computed at the `switch`).
+    const clauseNarrowing = single ? caseClauseNarrowing.get(single) : undefined;
+    if (single && clauseNarrowing) {
+      caseClauseNarrowing.delete(single);
+      const clause = single as unknown as { Expression?: ParseNode | null, StatementList?: readonly ParseNode[] | null };
+      if (clause.Expression) walk(clause.Expression);
+      frames.push(emptyFrame());
+      declareNarrowed(clauseNarrowing.name, clauseNarrowing.type);
+      walk(clause.StatementList ?? null);
+      frames.pop();
+      return;
+    }
     const barrier = single && ['CallExpression', 'RefExpression', 'IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunction'].includes(single.type);
     if (barrier) invalidateMutableMetadataFacts();
     walkNode(node);
@@ -30355,6 +30385,69 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // Walk the discriminant and case bodies as usual.
         walk(n.Expression);
+        // #sec-narrowing: each label narrows the statements it reaches to
+        // NarrowTo(s, L), joined over the labels that fall through to them, and
+        // the `default` to s with every case's type removed. Only where the
+        // discriminant is a narrowable path; a clause that declares a lexical
+        // binding is left unnarrowed, since its scope is the whole case block.
+        {
+          const discriminantName = narrowableName(n.Expression);
+          const subject = staticType(n.Expression);
+          if (discriminantName !== null && subject && subject.Kind !== 'any' && !mentionsTypeParameter(subject)) {
+            const block = n.CaseBlock as unknown as { CaseClauses_a?: readonly ParseNode[] | null, DefaultClause?: ParseNode | null, CaseClauses_b?: readonly ParseNode[] | null };
+            const ordered = [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])];
+            const labelOf = (clause: ParseNode): TypeRecord | null => {
+              const label = (clause as unknown as { Expression?: ParseNode | null }).Expression;
+              if (!label) return null;
+              // `case e` "where e names a literal type": a `const` naming one
+              // counts, resolved as the label check resolves it.
+              const t = singleValueOperandType(label) ?? staticType(label);
+              // A numeric literal label adopts a numeric discriminant's type, as
+              // `x === 1` does, so `case 1` over a `uint8` narrows to that `1`.
+              if (t?.Kind === 'literal' && subject.Kind === 'primitive'
+                  && ((t as { Base?: { Kind?: string, Name?: string } }).Base?.Name === 'number') && (subject as { Name?: string }).Name !== 'number'
+                  && !cannotHoldValue(subject as TypeRecord, t as TypeRecord)) {
+                return { ...(t as TypeRecord), Base: subject } as TypeRecord;
+              }
+              if (t?.Kind === 'literal') return t as TypeRecord;
+              // An enumerator label names one of the enum's atoms.
+              if (label.type === 'MemberExpression' && subject.Kind === 'nominal') {
+                const member = (label as unknown as { IdentifierName?: { name?: string } }).IdentifierName?.name;
+                const atom = member ? Atoms(subject as TypeRecord).find((a) => a.key === member || a.key.endsWith(`.${member}`)) : undefined;
+                if (atom) return atom.type as TypeRecord;
+              }
+              if (label.type === 'IdentifierReference' && subject.Kind === 'nominal') {
+                const instance = classTypeOf((label as unknown as { name: string }).name);
+                if (instance && instance.Kind === 'nominal') return instance as TypeRecord;
+              }
+              return null;
+            };
+            const labels = ordered.map((c) => (c.type === 'DefaultClause' ? undefined : labelOf(c)));
+            const everyLabelKnown = labels.every((l) => l !== null);
+            let carried: TypeRecord | null = null;
+            for (let k = 0; k < ordered.length; k += 1) {
+              const clause = ordered[k]!;
+              let own: TypeRecord = subject as TypeRecord;
+              const label = labels[k];
+              if (label === undefined) {
+                if (everyLabelKnown) {
+                  let rest: TypeRecord | typeof empty = subject as TypeRecord;
+                  for (const l of labels) if (l && rest !== empty) rest = NarrowFrom(rest, l);
+                  if (rest !== empty) own = rest;
+                }
+              } else if (label) {
+                const narrowed = NarrowTo(subject as TypeRecord, label);
+                if (narrowed !== empty) own = narrowed;
+              }
+              const entry: TypeRecord = carried ? CanonicalizeType({ Kind: 'union', Members: [carried, own] } as TypeRecord) as TypeRecord : own;
+              const statements = (clause as unknown as { StatementList?: readonly ParseNode[] | null }).StatementList ?? [];
+              const declares = statements.some((st) => ['LexicalDeclaration', 'ClassDeclaration', 'FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration'].includes(st.type));
+              if (!declares) caseClauseNarrowing.set(clause, { name: discriminantName, type: entry });
+              const fallsThrough = statements.length === 0 || statements.every((st) => canCompleteNormally(st));
+              carried = fallsThrough ? entry : null;
+            }
+          }
+        }
         walk(n.CaseBlock);
         return;
       }
@@ -31209,14 +31302,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ? ForPatternPositions(n).test
           : (n as unknown as { Expression?: ParseNode | null }).Expression;
         if (condition) markDeciding(condition);
+        // #sec-narrowing: a `for` body is the branch its condition guards, as a
+        // `while` body is, so the two are walked through walkGuarded.
+        const forBody = n.type === 'ForStatement' && condition ? (n as unknown as { Statement?: ParseNode }).Statement : undefined;
         for (const key of Object.keys(n)) {
           if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
             continue;
           }
           const child = (n as unknown as Record<string, unknown>)[key];
+          if (forBody && (child === condition || child === forBody)) continue;
           if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
             walk(child as ParseNode);
           }
+        }
+        if (forBody && condition) {
+          walkGuarded(condition, forBody, null);
         }
         if (condition) {
           staticType(condition);
