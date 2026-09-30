@@ -82,7 +82,9 @@ test('a position\'s type reaches exactly the expression at that position', () =>
   // type as its own - the position-precise stack (contextualTypeFor).
   expect(evaluated(`${BOX} function g(): Box.<uint8> { new Box("s"); return new Box(1); } String(Reflect.typeOf(g()));`)).toBe('Box.<uint.<8>>');
   expect(evaluated(`${BOX} function g(): Box.<uint8> { const x = new Box("s"); return new Box(1); } String(Reflect.typeOf(g()));`)).toBe('Box.<uint.<8>>');
-  expect(evaluated(`${BOX} function g(): Box.<uint8> { if (new Box("s")) {} return new Box(1); } String(Reflect.typeOf(g()));`)).toBe('Box.<uint.<8>>');
+  // The constructed object is always truthy; compare its value for a live condition.
+  expectStaticTypeError(`${BOX} function g(): Box.<uint8> { if (new Box("s")) {} return new Box(1); }`);
+  expect(evaluated(`${BOX} function g(): Box.<uint8> { if (new Box("s").v === "s") {} return new Box(1); } String(Reflect.typeOf(g()));`)).toBe('Box.<uint.<8>>');
   // The forms the checker is transparent to carry the position through.
   expect(evaluated(`${BOX} const b: Box.<uint8> = (new Box(1)); String(Reflect.typeOf(b));`)).toBe('Box.<uint.<8>>');
   expect(evaluated(`${BOX} const b: Box.<uint8> = true ? new Box(1) : new Box(2); String(Reflect.typeOf(b));`)).toBe('Box.<uint.<8>>');

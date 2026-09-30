@@ -39,6 +39,6 @@ test('complex falsiness: it reaches every ToBoolean path', () => {
 
 test('complex falsiness: nothing else changed', () => {
   expect(evaluated('const a: uint8 = 0; ' + truth('a'))).toBe('falsy');
-  expect(evaluated(truth('{}'))).toBe('truthy');
-  expect(evaluated(truth("''"))).toBe('falsy');
+  expect(evaluated('String(Boolean({}));')).toBe('true');
+  expect(evaluated("String(Boolean(''));")).toBe('false');
 });

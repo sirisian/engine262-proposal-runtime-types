@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok } from '../harness.mts';
+import { evaluated, ok, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Collection MEMBERSHIP and the type patterns built on it (#sec-collection-membership). A value is of the
@@ -81,8 +81,9 @@ test('the three relations agree, as they do for a user generic', () => {
 test('a `when` pattern naming a specialization selects on it', () => {
   // Membership in different syntax: `when T:` tests membership, so this arm and
   // the `is` above are one question.
-  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, string>: "wrong"; default: "fell through"; }')).toBe('fell through');
-  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<string, uint8>: "right"; }')).toBe('right');
+  expectStaticTypeError('const m = new Map.<string, uint8>(); match (m) { when Map.<string, string>: "wrong"; default: "fell through"; }');
+  expect(evaluated('function select(m: any) { return match (m) { when Map.<string, uint8>: "right"; default: "other"; }; }'
+    + ' select(new Map.<string, uint8>()) + "," + select(new Map.<string, string>());')).toBe('right,other');
 });
 
 test('a typed catch selects on the specialization', () => {
@@ -140,9 +141,13 @@ test('control: the assignability relation is already correct', () => {
 });
 
 test('control: `when` and `catch` still work at the bare nominal', () => {
-  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map: "matched"; default: "no"; }')).toBe('matched');
+  expect(evaluated('function select(m: any) { return match (m) { when Map: "matched"; default: "no"; }; }'
+    + ' select(new Map()) + "," + select(new Set());')).toBe('matched,no');
+  // #sec-the-array-family-top: the typed family is Map.<any, any>, not bare Map.
+  expect(evaluated('const m = new Map.<string, uint8>(); match (m) { when Map.<any, any>: "matched"; }')).toBe('matched');
   expect(evaluated('try { throw new Map(); } catch (e: Map) { "caught"; }')).toBe('caught');
   // A bare type name in `when` position tests MEMBERSHIP (#sec-matchtypepattern), so against a type object
   // it is always false: that is the reason `extends` exists at all.
   expect(evaluated('match (type uint8) { when uint8: "m"; default: "no"; }')).toBe('no');
+  expect(evaluated('function select(value: any) { return match (value) { when uint8: "m"; default: "no"; }; } select(type uint8);')).toBe('no');
 });

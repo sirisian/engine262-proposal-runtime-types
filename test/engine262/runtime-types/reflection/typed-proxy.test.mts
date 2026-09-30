@@ -117,11 +117,14 @@ test('ProxyHandler.<T> checks a handler where it is written', () => {
   // A wrong return, a wrong arity, and a mistyped trap NAME - the typo case a
   // declaration-site type exists to catch.
   expectThrown(`${P}let h: ProxyHandler.<P> = { has(t, k) { return "nope"; } };`, 'is not assignable to "boolean"');
-  expectThrown(`${P}let h: ProxyHandler.<P> = { isExtensible(t, extra) { return true; } };`, 'is not assignable to');
+  expectThrown(`${P}let h: ProxyHandler.<P> = { isExtensible(t, extra: uint8) { return true; } };`, 'is not assignable to');
   expectThrown(`${P}let h: ProxyHandler.<P> = { gett(t, k) { return 1; } };`, '"gett" is not declared');
   // Every trap is optional: a handler declares the ones it intercepts.
   expect(evaluated(`${P}let h: ProxyHandler.<P> = {}; \`\${typeof h}\`;`)).toBe('object');
   expect(evaluated(`${P}let h: ProxyHandler.<P> = { has(t, k) { return true; } }; \`\${typeof h}\`;`)).toBe('object');
+  // An unannotated extra parameter admits the omitted argument's undefined.
+  expect(evaluated(`${P}let h: ProxyHandler.<P> = { isExtensible(t, extra) { return extra === undefined; } };`
+    + ' const p = new Proxy.<P>({ a: 1 }, h); String(Object.isExtensible(p));')).toBe('true');
 });
 
 test('the construction checks its arguments against the declared parameters', () => {

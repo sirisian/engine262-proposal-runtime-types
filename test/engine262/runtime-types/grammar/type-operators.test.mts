@@ -38,7 +38,7 @@ test('keyof - membership: a key value is of the key type', () => {
   expectBuilderTrue(`
     type T = { a: uint8 };
     type K = keyof T;
-    String('z' is K ? false : true);
+    String(!('z' is K));
   `);
 });
 

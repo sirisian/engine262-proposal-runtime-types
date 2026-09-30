@@ -84,3 +84,23 @@ test('a complex compares with a real literal as the complex on the real axis', (
   expect(evaluated('let c: complex64 = 3; String(c);')).toBe('3+0i');
   expect(v('(3 := complex64) + 3')).toBe('6+0i');
 });
+
+// #sec-literal-propagation, #sec-narrowing: a branch uses the adopted value.
+test.each([
+  ['decimal64', '1.5', '1.5', '2', ''],
+  ['decimal128', '0.1', '0.1', '0.2', ''],
+  ['decimal128', '(-0.1)', '-0.1', '0.1', ''],
+  ['rational64', '0.1', '0.1', '0.2', ''],
+  ['float128', '0.1', '0.1', '0.2', ''],
+  ['complex64', '3', '3', '4', ''],
+  ['decimal64', '0', '-0', '1', ''],
+  ['decimal128', 'threshold', '0.1', '0.2', 'const threshold = 0.1;'],
+])('equality narrowing retains %s for %s', (type, literal, matching, different, setup) => {
+  expect(evaluated(`${setup}
+    function matches(value: ${type}) {
+      if (value === ${literal}) { const retained: ${type} = value; return "yes"; }
+      return "no";
+    }
+    matches(${matching}) + "," + matches(${different});
+  `)).toBe('yes,no');
+});

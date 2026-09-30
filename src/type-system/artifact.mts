@@ -1,6 +1,6 @@
-import { GetTypeObject } from './intern.mts';
-import { TypeOrigins } from './provenance.mts';
 import { Value, TypedNumberValue } from '../value.mts';
+import { GetTypeObject, isTypeObject } from './intern.mts';
+import { TypeOrigins } from './provenance.mts';
 import { orderKey, type TypeRecord } from './records.mts';
 
 /**
@@ -64,7 +64,14 @@ export interface TypeTable {
   readonly exports: Readonly<Record<string, number>>;
 }
 
-export const TYPE_TABLE_VERSION = 1;
+export const TYPE_TABLE_VERSION = 2;
+
+/** A Type Object value is materialized after every referenced record is filled. */
+class DeferredTypeObject {
+  constructor(readonly record: TypeRecord) {}
+}
+
+class UnsupportedArtifactValue extends Error {}
 
 function isTypeRecord(value: unknown): value is TypeRecord {
   return typeof value === 'object' && value !== null
@@ -90,6 +97,10 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, object>): TypeTabl
   // Determinism has to be a property of the format rather than of the caller.
   const reachable = new Set<TypeRecord>();
   const collect = (value: unknown): void => {
+    if (isTypeObject(value)) {
+      collect(value.TypeRecord);
+      return;
+    }
     if (Array.isArray(value)) {
       value.forEach(collect);
       return;
@@ -139,6 +150,9 @@ export function SerializeTypeTable(roots: ReadonlyMap<string, object>): TypeTabl
   ordered.forEach((record, index) => indices.set(record, index));
 
   const encode = (value: unknown): unknown => {
+    if (isTypeObject(value)) {
+      return { $type: indices.get(value.TypeRecord)! };
+    }
     if (Array.isArray(value)) {
       return value.map(encode);
     }
@@ -232,11 +246,9 @@ function isParseNode(value: object): boolean {
 }
 
 /**
- * A LEAF is encoded, not carried. Once a nominal travels by name, every leaf a
- * table holds is a primitive value - measured: a string, a number, a boolean, a
- * bigint, or a typed number - so the table becomes bytes rather than an
- * in-process structure, and that is what makes it an artifact rather than a
- * stage toward one.
+ * Primitive leaves use tagged values so JSON preserves their value and numeric
+ * representation. Type Object values use table references instead. Other live
+ * objects remain unencodable rather than leaking into a serialized artifact.
  *
  * A TYPED NUMBER is not quite a leaf: it carries the numeric type its value has,
  * so its type is a reference into the table like any other. That is why the
@@ -251,28 +263,43 @@ function encodeLeaf(value: unknown, ref: (r: TypeRecord) => unknown): unknown {
   const leaf = value as { type?: string, value?: unknown, TypeRecord?: TypeRecord };
   switch (leaf.type) {
     case 'String': return { $str: leaf.value as string };
-    case 'Number': return { $num: leaf.value as number };
+    case 'Number': return { $num: encodeNumber(leaf.value as number) };
     case 'Boolean': return { $bool: leaf.value as boolean };
     case 'BigInt': return { $bigint: String(leaf.value) };
     case 'TypedNumber':
-      return { $typed: { value: String(leaf.value), type: ref(leaf.TypeRecord as TypeRecord) } };
+      return { $typed: {
+        value: typeof leaf.value === 'bigint' ? { $bigint: String(leaf.value) } : { $num: encodeNumber(leaf.value as number) },
+        type: ref(leaf.TypeRecord as TypeRecord),
+      } };
     default:
       return undefined;
   }
 }
 
+// JSON numbers cannot preserve negative zero or non-finite Number values.
+function encodeNumber(value: number): number | string {
+  if (Object.is(value, -0)) return '-0';
+  return Number.isFinite(value) ? value : String(value);
+}
+
 function decodeLeaf(value: Record<string, unknown>, deref: (v: unknown) => unknown): unknown {
-  if ('$str' in value) { return Value(value.$str as string); }
-  if ('$num' in value) { return Value(value.$num as number); }
-  if ('$bool' in value) { return value.$bool === true ? Value.true : Value.false; }
-  if ('$bigint' in value) { return Value(BigInt(value.$bigint as string)); }
+  if ('$str' in value) {
+    return Value(value.$str as string);
+  }
+  if ('$num' in value) {
+    return Value(Number(value.$num));
+  }
+  if ('$bool' in value) {
+    return value.$bool === true ? Value.true : Value.false;
+  }
+  if ('$bigint' in value) {
+    return Value(BigInt(value.$bigint as string));
+  }
   if ('$typed' in value) {
-    const typed = value.$typed as { value: string, type: unknown };
+    const typed = value.$typed as { value: { $num?: number | string, $bigint?: string }, type: unknown };
     const record = deref(typed.type) as TypeRecord;
-    const numeric = typed.value.includes('.') || typed.value.includes('e')
-      ? Number(typed.value)
-      : BigInt(typed.value);
-    return new TypedNumberValue(numeric as never, record as never);
+    const numeric = '$bigint' in typed.value ? BigInt(typed.value.$bigint!) : Number(typed.value.$num);
+    return new TypedNumberValue(numeric, record);
   }
   return undefined;
 }
@@ -354,8 +381,9 @@ export function DeserializeTypeTable(
    */
   resolveNominal?: (name: { name?: string, source?: string }) => object | undefined,
 ): Map<string, unknown> | undefined {
-  if (table.version > TYPE_TABLE_VERSION) {
-    // A newer producer: ignore rather than misread, and let the caller evaluate.
+  if (table.version !== TYPE_TABLE_VERSION) {
+    // An older table lost numeric representation; a newer one is unknown.
+    // Both take the specified fallback to evaluation.
     return undefined;
   }
   const shells: Record<string, unknown>[] = table.types.map(() => ({}));
@@ -364,6 +392,10 @@ export function DeserializeTypeTable(
       return value.map(decode);
     }
     if (typeof value === 'object' && value !== null) {
+      const typeIndex = (value as { $type?: number }).$type;
+      if (typeof typeIndex === 'number') {
+        return new DeferredTypeObject(shells[typeIndex] as unknown as TypeRecord);
+      }
       const ref = (value as Partial<Ref>).$ref;
       if (typeof ref === 'number') {
         return shells[ref];
@@ -382,6 +414,7 @@ export function DeserializeTypeTable(
     }
     return value;
   };
+  const complete = new Set<object>();
   for (const [index, entry] of table.types.entries()) {
     const named = (entry as { nominal?: { name?: string, source?: string } }).nominal;
     if (named) {
@@ -394,11 +427,36 @@ export function DeserializeTypeTable(
       }
       const record = (resolved as { TypeRecord?: unknown }).TypeRecord ?? resolved;
       Object.assign(shells[index]!, record as object);
+      complete.add(shells[index]!);
       continue;
     }
     for (const [key, value] of Object.entries(entry)) {
       shells[index]![key] = decode(value);
     }
+  }
+  const active = new Set<object>();
+  const materialize = (value: unknown): unknown => {
+    if (value instanceof DeferredTypeObject) {
+      // A cycle through Type Object values needs evaluation; ordinary recursive
+      // Type Record references remain supported by the table's shells.
+      if (active.has(value.record)) throw new UnsupportedArtifactValue();
+      materialize(value.record);
+      return GetTypeObject(value.record);
+    }
+    if ((!Array.isArray(value) && !isPlainRecord(value)) || complete.has(value) || active.has(value)) return value;
+    active.add(value);
+    for (const [key, child] of Object.entries(value)) {
+      (value as Record<string, unknown>)[key] = materialize(child);
+    }
+    active.delete(value);
+    complete.add(value);
+    return value;
+  };
+  try {
+    shells.forEach(materialize);
+  } catch (error) {
+    if (error instanceof UnsupportedArtifactValue) return undefined;
+    throw error;
   }
   const out = new Map<string, unknown>();
   for (const [name, index] of Object.entries(table.exports)) {

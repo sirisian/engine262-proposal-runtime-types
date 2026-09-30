@@ -107,6 +107,11 @@ test('genericApplication preserves nominal declaration identity', async () => {
     === type Box.<string>`, 'class Box<T: type> {}')).toBe('ok');
 });
 
+test('prop preserves its named type argument without shadowing the metatype', async () => {
+  expect(await holds('p.name === "value" && p.type === uint8 && std.objectOf([p]) === type { value: uint8 }',
+    'const p = std.prop(type: uint8, name: "value");')).toBe('ok');
+});
+
 test.each([
   "std.genericApplication(Reflect.getReflection(type Promise).generic.base, [string, boolean, uint8])",
   "std.genericApplication(Reflect.getReflection(type Promise).generic.base, [64])",
@@ -261,10 +266,13 @@ const EXPORTS: ReadonlyArray<readonly [string, string, string]> = [
   // #sec-primitive-metadata's StringPattern builders. Withheld while the `pattern` claim
   // looked provisional; the key is claimed by a shipped intrinsic either way, so
   // withholding preserved nothing. Validation is live, which is what they use.
-  ['suffixed', 'typeof std.suffixed === "function" && std.suffixed.length === 1', ''],
-  ['prefixed', 'typeof std.prefixed === "function" && std.prefixed.length === 1', ''],
-  ['stringPattern', 'typeof std.stringPattern === "function"', ''],
-  ['inverse', 'typeof std.inverse === "function" && std.inverse.length === 2 && unpack(new Box.<uint8>(1)) === "uint.<8>"',
+  ['suffixed', 'accepts(std.suffixed(".js"), "a.js") && !accepts(std.suffixed(".js"), "abjs")',
+    'function accepts(T: type, value) { return value is T; }'],
+  ['prefixed', 'accepts(std.prefixed("get."), "get.x") && !accepts(std.prefixed("get."), "getX")',
+    'function accepts(T: type, value) { return value is T; }'],
+  ['stringPattern', 'accepts(std.stringPattern`a.b`, "a.b") && !accepts(std.stringPattern`a.b`, "axb")',
+    'function accepts(T: type, value) { return value is T; }'],
+  ['inverse', 'std.inverse.length === 2 && unpack(new Box.<uint8>(1)) === "uint.<8>"',
     'class Box<T: type> { v: T; constructor(v: T) { this.v = v; } }' + NL
     + 'function unboxed(Bs) { return Reflect.makeType({ kind: "tuple", elements: Reflect.getReflection(Bs).elements.map((e) => ({ type: Reflect.getReflection(e.type).generic.arguments[0] })) }); }' + NL
     + '@std.inverse(unboxed)' + NL

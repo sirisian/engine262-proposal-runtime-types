@@ -267,6 +267,10 @@ export function ProvenLibraryOperations(root: ParseNode, realm: Realm, inertAnno
   const safe = (node: ParseNode): boolean => candidates.has(node) || boundCall(node)
     || ((node.type === 'IdentifierReference' || node.type === 'TypeArgumentsExpression') && typeObjectTarget(node))
     || (node.type === 'CallExpression' && candidates.has(node.CallExpression))
+    // A proven count getter and a scalar RHS cannot replace the descriptor
+    // before this compound store. Unknown RHS effects still defeat the proof.
+    || (node.type === 'AssignmentExpression' && scalar(node.AssignmentExpression)
+      && candidates.get(unwrap(node.LeftHandSideExpression))?.kind === 'descriptor')
     || (node.type === 'UpdateExpression' && candidates.get(unwrap(node.LeftHandSideExpression ?? node.UnaryExpression!))?.kind === 'descriptor');
   const declarationOf = (name: string): ParseNode | null | undefined => {
     const declarations = definitions.get(name);

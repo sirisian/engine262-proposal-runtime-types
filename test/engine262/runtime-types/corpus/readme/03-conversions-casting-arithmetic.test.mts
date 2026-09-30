@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, bool, expectThrown, expectThrownKind } from '../../harness.mts';
+import { evaluated, bool, expectThrown, expectThrownKind, expectStaticTypeError } from '../../harness.mts';
 
 /**
  * Fixture: the README sections Conversions, Explicit Casting, Arithmetic and Overflow, Integer Binary Shifts and
@@ -181,8 +181,10 @@ test('Arithmetic: increment and decrement preserve type and wrap', () => {
 test('Integer Binary Shifts: << and >> stay in the operand type', () => {
   expect(bool('String((1 := uint8) << (3 := uint8) === (8 := uint8));')).toBe(true);
   expect(bool('String((8 := uint8) >> (2 := uint8) === (2 := uint8));')).toBe(true);
-  // a shift that overflows the width wraps
-  expect(bool('String((1 := uint8) << (8 := uint8) === (0 := uint8));')).toBe(true);
+  // A known distance at the width is an early error; a dynamic distance keeps
+  // the runtime rule that shifts every bit out without masking the distance.
+  expectStaticTypeError('String((1 := uint8) << (8 := uint8) === (0 := uint8));');
+  expect(bool('function shift(k: uint8) { return (1 := uint8) << k; } String(shift(8) === (0 := uint8));')).toBe(true);
 });
 
 // -- Integer Division and Remainder --------------------------------------------

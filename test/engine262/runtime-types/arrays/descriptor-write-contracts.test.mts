@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectStaticTypeError, ok } from '../harness.mts';
+import { evaluated, expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-get-array.prototype.capacity
 
@@ -15,6 +15,18 @@ test.each([
   [
     "compound capacity store",
     "let a:[].<uint8>=[1];a.capacity+=1;"
+  ],
+  [
+    "subtraction capacity store",
+    "let a:[].<uint8>=[1];a.capacity-=1;"
+  ],
+  [
+    "shift capacity store",
+    "let a:[].<uint8>=[1];a.capacity<<=1;"
+  ],
+  [
+    "computed capacity compound store",
+    "let a:[].<uint8>=[1];a[\"capacity\"]+=1;"
   ],
   [
     "capacity update",
@@ -47,6 +59,10 @@ test.each([
     "let a:[].<uint8>=[1]; Object.defineProperty(a,\"capacity\",{value:1,writable:true}); a.capacity=4;"
   ],
   [
+    "capacity shadow compound store",
+    "let a:[].<uint8>=[1]; Object.defineProperty(a,\"capacity\",{value:1 := uint64,writable:true}); a.capacity+=1;"
+  ],
+  [
     "capacity prototype replaced",
     "const a:[].<uint8>=[1]; Object.defineProperty(Object.getPrototypeOf(a),\"capacity\",{set(v){globalThis.__observation=String(v);}});a.capacity=4;"
   ],
@@ -64,4 +80,16 @@ test.each([
   ]
 ])('%s', (_name, source) => {
   expect(ok(source)).toBe(true);
+});
+
+test('an effectful compound RHS can replace the capacity descriptor', () => {
+  expect(evaluated(`
+    let a: [].<uint8> = [1];
+    function replace(): uint64 {
+      Object.defineProperty(a, "capacity", {value: 1 := uint64, writable: true});
+      return 1;
+    }
+    a.capacity += replace();
+    String(a.capacity);
+  `)).toBe('2');
 });

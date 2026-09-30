@@ -55,14 +55,12 @@ test('function runtime type: a function that declares nothing reports one anyway
 });
 
 test('function runtime type: the two mechanisms now agree, in both directions', () => {
-  // The property this change exists to restore. Before it, `f` was a
-  // `() => void` to a binding and a `{}` to reflection; `type {}` to reflection
-  // and NOT a `{}` to a binding. Asserted in both directions and beside the
-  // binding forms, so reflection and the checker cannot drift apart again.
+  // #sec-issubtype: a callable satisfies an empty object contract while
+  // retaining its distinct function type in reflection and identity checks.
   expect(evaluated('function f() {} String(Reflect.isAssignable(Reflect.typeOf(f), type () => void));')).toBe('true');
-  expect(evaluated('function f() {} String(Reflect.isAssignable(Reflect.typeOf(f), type {}));')).toBe('false');
+  expect(evaluated('function f() {} String(Reflect.isAssignable(Reflect.typeOf(f), type {}));')).toBe('true');
   expect(evaluated('function f() {} let x: () => void = f; String(typeof x);')).toBe('function');
-  expectThrown('function f() {} let x: {} = f;');
+  expect(evaluated('function f() {} let x: {} = f; String(x === f);')).toBe('true');
   expect(evaluated('function f() {} String(Reflect.typeOf(f) === type {});')).toBe('false');
 });
 
@@ -137,7 +135,7 @@ test('a TYPE OBJECT is callable and is NOT a function - the ordering the change 
   // why. Without the same exclusion here, an enum reported a function type and
   // lost the enumerator names that `keyof Reflect.typeOf(C)` reads.
   expect(evaluated('enum C { Zero, One } type K = keyof Reflect.typeOf(C);'
-    + ' String(("Zero" is K) && ("One" is K));')).toBe('true');
+    + ' String(["Zero" is K, "One" is K, "missing" is K]);')).toBe('true,true,false');
   expect(evaluated('enum A: any { X = uint8 } String(Reflect.typeOf(uint8) === A);')).toBe('true');
   // and the steps the branch must not preempt still answer
   expect(evaluated('class C {} String(Reflect.getReflection(Reflect.typeOf(new C())).kind);')).toBe('primitive');

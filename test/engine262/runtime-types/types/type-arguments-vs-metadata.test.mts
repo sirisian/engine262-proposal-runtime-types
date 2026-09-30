@@ -163,7 +163,7 @@ test('an arity error names the parameter list, not the alias', () => {
     const c = run(src) as { Type: string, Value?: { HostDefinedMessageString?: string } };
     return c.Type === 'throw' ? String(c.Value?.HostDefinedMessageString) : `NO THROW: ${src}`;
   };
-  expect(message('type Box<T: type> = { v: T }; type B = Box.<>;')).toContain('required parameter');
+  expect(message('type Box<T: type> = { v: T }; type B = Box.<>;')).toContain('has no default');
   expect(message('type Box<T: type> = { v: T }; type B = Box.<>;')).toContain('T');
   expect(message('type Pair<A: type, B: type> = { a: A, b: B }; type P = Pair.<uint8>;')).toContain('B');
   expect(message('type Box<T: type> = { v: T }; type B = Box.<uint8, string>;')).toContain('type arguments');

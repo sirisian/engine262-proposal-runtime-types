@@ -79,7 +79,8 @@ test('a collection is compared by identity and is truthy', () => {
   // of them is identity. This is the contrast with a value type class, whose
   // instances compare field by field.
   expect(evaluated('const a = new Map.<string, uint8>(); const b = new Map.<string, uint8>(); String(a === b) + "/" + String(a === a);')).toBe('false/true');
-  expect(evaluated('const m = new Map.<string, uint8>(); String(m ? "t" : "f");')).toBe('t');
+  expectStaticTypeError('const m = new Map.<string, uint8>(); String(m ? "t" : "f");');
+  expect(evaluated('function truthy(m: any) { return m ? "t" : "f"; } String(truthy(new Map.<string, uint8>()));')).toBe('t');
   // An empty collection is truthy, as every object is - `size` is what a
   // program tests.
   expect(evaluated('const m = new Map.<string, uint8>(); String(!m) + "/" + String(m.size === 0);')).toBe('false/true');

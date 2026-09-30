@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectThrown, ok } from '../harness.mts';
+import { expectStaticTypeError, expectThrown, ok } from '../harness.mts';
 
 /**
  * A BRAND is a ~parameterized~ marker over a base, and the judgments about what
@@ -46,9 +46,9 @@ test('a brand against another brand, or against its own base', () => {
   // the mixing rule read the eraser that REMOVES a brand. Two erasers now - one
   // for what a value can DO, one for what two types ARE.
   const V = "type V = uint32.<{ brand: 'C' }>; let v: V = V((7 := uint32)); ";
-  expectThrown(dead(`${U}${V}let q = u * v;`), 'do not mix');
-  expectThrown(dead(`${U}let p: uint32 = uint32(7); let q = u * p;`), 'do not mix');
+  expectStaticTypeError(dead(`${U}${V}let q = u * v;`));
+  expectStaticTypeError(dead(`${U}let p: uint32 = uint32(7); let q = u * p;`));
   // A comparison decides it the same way.
-  expectThrown(dead(`${U}let p: uint32 = uint32(7); let q = u < p;`), 'do not mix');
+  expectStaticTypeError(dead(`${U}let p: uint32 = uint32(7); let q = u < p;`));
   expect(ok(dead(`${U}let q = u <= u;`))).toBe(true);
 });

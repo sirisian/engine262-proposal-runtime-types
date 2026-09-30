@@ -303,7 +303,7 @@ test('a keyless member of an intersection contributes nothing, rather than voidi
   // so a keyless member empties it, which needs no special case either.
   expect(evaluated('type A = { a: uint8 }; type K = keyof (A | uint8); String("a" is K);')).toBe('false');
   expect(evaluated('type A = { a: uint8, b: string }; type B = { a: uint8 }; type K = keyof (A | B); '
-    + 'String(("a" is K) && !("b" is K));')).toBe('true');
+    + 'String(["a" is K, "b" is K]);')).toBe('true,false');
 });
 
 // -- keyof over a class ---------------------------------------------------------
@@ -313,7 +313,7 @@ test('a class type answers with its declared instance members', () => {
   // structural in overload resolution, and a class must stay nominal by declaration.
   // So `keyof C` answers as `keyof I` does for an interface of the same shape.
   const C = 'class C { a: uint8 = 1; b: string = "x"; m(): void {} static s = 1; #p = 2; } ';
-  expect(evaluated(`${C}type K = keyof C; String(("a" is K) && ("b" is K));`)).toBe('true');
+  expect(evaluated(`${C}type K = keyof C; String(["a" is K, "b" is K]);`)).toBe('true,true');
   // Methods are keys, as they are for an interface.
   expect(evaluated(`${C}type K = keyof C; String("m" is K);`)).toBe('true');
   // A static belongs to the constructor, reached through `keyof Reflect.typeOf(C)`.

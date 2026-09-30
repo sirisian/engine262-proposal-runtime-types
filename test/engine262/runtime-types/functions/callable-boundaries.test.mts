@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { expectStaticTypeError, ok } from '../harness.mts';
+import { expectStaticTypeError, expectThrownKind, ok } from '../harness.mts';
 
 // #sec-issignaturesubtype; #sec-declared-narrowing
 
@@ -123,10 +123,15 @@ test.each([
   ],
   [
     "explicit any keeps a dynamic callable crossing",
-    "function f(ref x:uint8):void{} let erased:any=f;let g:(x:uint8)=>void=erased;"
+    "function f(ref x:uint8):void{} function unused(){let erased:any=f;let g:(x:uint8)=>void=erased;}"
   ]
 ])('%s', (_name, source) => {
   expect(ok(source)).toBe(true);
+});
+
+test('an erased callable still checks reference permissions at runtime', () => {
+  expectThrownKind('function f(ref x:uint8):void{} let erased:any=f;let g:(x:uint8)=>void=erased;', 'TypeError');
+  expect(ok('function f(ref x:uint8):void{} let erased:any=f;let g:(ref x:uint8)=>void=erased;')).toBe(true);
 });
 
 

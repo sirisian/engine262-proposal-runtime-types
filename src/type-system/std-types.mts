@@ -92,7 +92,9 @@ export function literalValue(T: type): any {
   if (values.length !== 1) throw new TypeError(\`literalValue expects a single literal type, got \${String(T)}\`);
   return values[0];
 }
-export function prop(name: string | symbol, type: type,
+// #sec-type-names: the parameter named type must not shadow its own annotation.
+type TypeObject = type;
+export function prop(name: string | symbol, type: TypeObject,
     { optional = false, readonly = false, initial = undefined } = {}) {
   return { name, type, optional, readonly, initial };
 }

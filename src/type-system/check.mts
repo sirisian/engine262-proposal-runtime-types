@@ -17,6 +17,7 @@ import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, Governin
 import { SameValue, ToBoolean } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
+import { NumericValue } from '../static-semantics/NumericValue.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
@@ -10502,10 +10503,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-type-references: expanding a recursive specialization may create
       // another record for the same declaration and arguments. Only an active
       // expansion closes a cycle; later structures still need their checks.
-      const active = formingNominals.get(type.Declaration) ?? [];
+      // Library records can have no source declaration; their record identity
+      // is still a valid cycle key, and their arguments still need checking.
+      const formationKey = type.Declaration ?? type;
+      const active = formingNominals.get(formationKey) ?? [];
       if (active.some((instance) => SameType(instance, type))) return;
       active.push(type);
-      formingNominals.set(type.Declaration, active);
+      formingNominals.set(formationKey, active);
       try {
         for (const argument of type.Arguments) if (typeof argument === 'object') checkTypeFormation(argument);
         checkClosedCaseContract(type);
@@ -10520,7 +10524,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         checkTypeFormation(structureOf(type));
       } finally {
         active.pop();
-        if (active.length === 0) formingNominals.delete(type.Declaration);
+        if (active.length === 0) formingNominals.delete(formationKey);
       }
     } else if (type.Kind === 'function') {
       for (const signature of type.Signatures) {
@@ -21195,6 +21199,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let lit: Known = named ?? staticType(against);
           const source = (name !== NON_PATH ? lookup(name) : null) ?? staticType(subject);
           const numericSource = source ? eraseMetadata(source) : null;
+          if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
+              && (numericSource.Name.startsWith('decimal') || ['rational', 'complex', 'float128'].includes(numericSource.Name))) {
+            // #sec-literal-propagation: equality reads the source digits in the
+            // peer's numeric type. A Number literal is not that narrowing fact.
+            const digits = foldDecimal(against);
+            // Equality admits both signs of zero. Without an exact constant,
+            // retain the subject type rather than assert a Number refinement.
+            if (!digits || digits.sig === 0n) return undefined;
+            const text = `${digits.sig}e${digits.exp}`;
+            const literal = { type: 'NumericLiteral', SourceText: text, value: Number(text) } as ParseNode.NumericLiteral;
+            const before = errors.length;
+            staticTypeIn(literal, numericSource);
+            const value = EnsureCompletion(NumericValue(literal));
+            errors.length = before;
+            if (value.Type !== 'normal') return undefined;
+            lit = { ...lit, Base: numericSource, Value: value.Value };
+          }
           if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
               && ['uint', 'int', 'float16', 'float32', 'float64'].includes(numericSource.Name)
               && literalFitsNumericType(lit, numericSource)) {
