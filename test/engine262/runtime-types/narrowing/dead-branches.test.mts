@@ -161,3 +161,85 @@ test('a discriminant test loses only the members whose discriminant is the liter
   expect(evaluated('type A = { kind: "a", v: uint8 }; type B = { kind: "b", v: string }; function f(x: A | B) { if (!(x.kind === "a")) { let s: string = x.v; } } "ok";')).toBe('ok');
   expect(evaluated('type C = { kind: "a", n: uint8 }; type D = { kind: "b", t: string }; function g(o: { s: C | D }) { if (o.s.kind === "a") { let n: uint8 = o.s.n; } } "ok";')).toBe('ok');
 });
+
+test('the global constructors usable as type names are class types', () => {
+  expectStaticTypeError('function f(d: Date) { if (d is Map) {} }');
+  expectStaticTypeError('function f(e: TypeError) { if (e instanceof Error) {} }');
+  expectStaticTypeError('try {} catch (e: TypeError) { if (e instanceof RangeError) {} }');
+  expectStaticTypeError('class A {} function f(d: Date) { if (d instanceof A) {} }');
+  // A test that can go either way, and a subclass of a constructor type.
+  expect(evaluated('function f(e: Error) { if (e instanceof TypeError) {} } function g(d: Date | Map) { if (d is Date) {} } "ok";')).toBe('ok');
+  expect(evaluated('class D extends Date {} function f(d: Date) { if (d instanceof D) {} } String(new D() instanceof Date);')).toBe('true');
+});
+
+test('NarrowTo takes a union target member by member', () => {
+  const classes = 'class A {} class B {} class C {} type U = A | B; ';
+  expectStaticTypeError(`${classes} function f(c: C) { if (c is U) {} }`);
+  expectStaticTypeError(`${classes} function f(c: C) { if (c instanceof U) {} }`);
+  expect(evaluated(`${classes} function f(c: A | C) { if (c is U) {} } "ok";`)).toBe('ok');
+});
+
+test('a match guard decides its arm and narrows it', () => {
+  expectStaticTypeError('function f(x: uint8 | string) { return match (x) { when uint8 if (x is string): 1; default: 2; }; }');
+  expectStaticTypeError('function f(x: uint8 | string) { return match (x) { when uint8 if (x is uint8): 1; default: 2; }; }');
+  expect(evaluated('function f(x: uint8 | string, y: uint8 | string) { return match (x) { when uint8 if (y is uint8): y; default: (0 := uint8); }; } String(f((1 := uint8), (2 := uint8)));')).toBe('2');
+});
+
+test('an operand naming one value is read as the literal it names', () => {
+  expectStaticTypeError('function f(a: "a" | "b") { if (a === `c`) {} }');
+  expectStaticTypeError('function f(n: uint8) { if (typeof n === `string`) {} }');
+  expectStaticTypeError('function f(a: "a" | "b") { switch (a) { case `c`: break; } }');
+  expectStaticTypeError('const K = "c"; function f(a: "a" | "b") { if (a === K) {} }');
+  expectStaticTypeError('const K = "c"; function f(a: "a" | "b") { switch (a) { case K: break; } }');
+  expectStaticTypeError('function f(u: undefined) { if (u === void 0) {} }');
+  expectStaticTypeError('enum E { A, B } function f(e: E) { if (e === E.A) { if (e === E.B) {} } }');
+  // A const narrows as its literal does, and aliased enumerators are one value.
+  expect(evaluated('const K = "a"; function f(a: "a" | "b") { if (a === K) { let x: "a" = a; } } "ok";')).toBe('ok');
+  expect(evaluated('enum E { A = 1, B = 1, C = 2 } function f(e: E) { if (e === E.B) {} } "ok";')).toBe('ok');
+});
+
+test('typeof is judged for the types whose tag is fixed', () => {
+  expectStaticTypeError('function f(a: [].<uint8>) { if (typeof a === "object") {} }');
+  expectStaticTypeError('function f(a: [].<uint8>) { if (typeof a === "function") {} }');
+  expectStaticTypeError('function f(t: [uint8, string]) { if (typeof t === "function") {} }');
+  expectStaticTypeError('function f(v: float32x4) { if (typeof v === "object") {} }');
+  expectStaticTypeError('function f(z: complex) { if (typeof z === "object") {} }');
+  expectStaticTypeError('class K { a: uint8 = 1; } function f(k: K) { if (typeof k === "object") {} }');
+  // A structural object type, an untyped class and a constructor type do not fix their tag.
+  expect(evaluated('function f(o: { x: uint8 }) { if (typeof o === "object") {} } "ok";')).toBe('ok');
+  expect(evaluated('class U { m() {} } function f(u: U, d: Date) { if (typeof u === "function") {} if (typeof d === "function") {} } "ok";')).toBe('ok');
+  expect(evaluated('function f(v: uint8 | complex) { if (typeof v === "object") { return 1; } return 0; } String(f(complex(1, 2)));')).toBe('1');
+});
+
+test('a numeric literal or range pattern at a position its value cannot take', () => {
+  expectStaticTypeError('function f(s: string) { if (s is 5) {} }');
+  expectStaticTypeError('function f(s: string) { return match (s) { when 5: 1; default: 2; }; }');
+  expectStaticTypeError('function f(o: { x: string, y: uint8 }) { if (o is { x: 5, y: let z }) { z; } }');
+  expectStaticTypeError('function f(s: string) { if (s is 0..<10) {} }');
+  expectStaticTypeError('function f(s: string) { return match (s) { when 0..<10: 1; default: 2; }; }');
+  expect(evaluated('function f(a: uint8) { return match (a) { when 5: 0; when 0..<10: 1; default: 2; }; } String(f((3 := uint8)));')).toBe('1');
+});
+
+test('a loose discriminant is judged as the strict one', () => {
+  const S = 'type A = { k: "a" }; type B = { k: "b" }; ';
+  expectStaticTypeError(`${S} function f(x: A | B) { if (x.k == "c") {} }`);
+  expect(evaluated(`${S} function f(x: A | B) { if (x.k == "a") {} } "ok";`)).toBe('ok');
+});
+
+test('a test whose type settles its truthiness is judged, except the literal idioms', () => {
+  expectStaticTypeError('function f(o: { x: uint8 }) { if (o) {} else {} }');
+  expectStaticTypeError('function f(o: { x: uint8 }) { if (!o) {} }');
+  expectStaticTypeError('function f(s: symbol) { while (s) { break; } }');
+  expectStaticTypeError('function f(z: 0 | null) { if (z) {} }');
+  expectStaticTypeError('function f(u: false | undefined) { return u ? 1 : 2; }');
+  expect(evaluated('let i = 0; while (true) { if (i++ > 1) break; } for (;;) { break; } while (1) { break; } if (false) {} "ok";')).toBe('ok');
+  expect(evaluated('function g() { return 1; } function f(c: uint8, s: string, o: { x: uint8 }, cb?: () => void) { if (c) {} if (s) {} if (cb) { cb(); } return o && g(); } "ok";')).toBe('ok');
+});
+
+test('a switch over a Boolean literal judges and narrows by its labels', () => {
+  expectStaticTypeError('function f(a: uint8) { switch (true) { case a is string: break; } }');
+  expectStaticTypeError('function f(a: uint8) { switch (true) { case a is uint8: break; } }');
+  // The labels after one see its negation.
+  expectStaticTypeError('function f(a: uint8 | string) { switch (true) { case a is uint8: break; case a is string: break; } }');
+  expect(evaluated('function f(a: uint8 | string | boolean) { switch (true) { case a is uint8: { let n: uint8 = a; return "n"; } case a is string: { let s: string = a; return "s"; } } return "b"; } f((1 := uint8)) + f("x") + f(true);')).toBe('nsb');
+});

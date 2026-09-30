@@ -63,7 +63,7 @@ import {
 } from './type-argument-order.mts';
 import { OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
-import { NarrowTo, NarrowFrom, nullishType, empty } from './narrowing.mts';
+import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, parameterReceiving, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
@@ -159,6 +159,11 @@ interface Frame {
    * RUN TIME where `let a: uint8 = 300` reports before the program runs.
    */
   readonly constLiteralTypes: Map<string, TypeRecord>;
+  /**
+   * The literal type of a `const` bound, unannotated, to a literal expression,
+   * which the `v === e` row of #sec-narrowing reads as naming one value.
+   */
+  readonly constOperandLiterals: Map<string, TypeRecord>;
   readonly constPropertyKeys: Map<string, string | SymbolValue>;
   /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
   readonly constLiteralValues: Map<string, bigint>;
@@ -211,7 +216,8 @@ function emptyFrame(): Frame {
     bindings: new Map(),
     bindingKinds: new Map(),
     constLiterals: new Set<string>(),
-    constLiteralTypes: new Map<string, TypeRecord>(), constPropertyKeys: new Map<string, string | SymbolValue>(),
+    constLiteralTypes: new Map<string, TypeRecord>(), constOperandLiterals: new Map<string, TypeRecord>(),
+    constPropertyKeys: new Map<string, string | SymbolValue>(),
     constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), constClosedInitializers: new Map<string, ParseNode>(),
     constTypedValues: new Map<string, bigint>(),
     letConstants: new Set<string>(),
@@ -242,6 +248,7 @@ function cloneFrame(frame: Frame): Frame {
     dynamicBindings: frame.dynamicBindings,
     constLiterals: new Set(frame.constLiterals),
     constLiteralTypes: new Map(frame.constLiteralTypes),
+    constOperandLiterals: new Map(frame.constOperandLiterals),
     constPropertyKeys: new Map(frame.constPropertyKeys),
     constLiteralValues: new Map(frame.constLiteralValues),
     constDecimalValues: new Map(frame.constDecimalValues),
@@ -4395,8 +4402,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const isEnumType = (t: TypeRecord): boolean => t.Kind === 'nominal'
     && ((t as { Declaration?: { type?: string } }).Declaration?.type === 'EnumDeclaration'
       || (t as { EnumMembers?: unknown }).EnumMembers !== undefined);
-  const isClassType = (t: TypeRecord): boolean => t.Kind === 'nominal'
-    && (t as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
+  const isClassType = (t: TypeRecord): boolean => isClassNominal(t);
   // `type` values are Type Objects, and the `object` the `typeof` row names
   // stands for every Object, so neither is a value that cannot be an Object.
   const isImmutableValueType = (t: TypeRecord): boolean => (t.Kind === 'primitive' && t.Name !== 'type' && t.Name !== 'object')
@@ -20486,8 +20492,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // Every value of a function type is callable, so its tag is 'function'.
     if (t.Kind === 'function') return 'function';
-    if (t.Kind !== 'primitive' || mentionsTypeParameter(t)) return null;
+    if (mentionsTypeParameter(t)) return null;
+    // An array, a tuple and an instance of a typed class are Objects that
+    // cannot be called, so each answers 'object'. A structural object type
+    // does not fix its tag, since a function with the right properties
+    // satisfies it; nor does an untyped class, whose constructor may return a
+    // function, nor a global constructor's type, whose membership is by
+    // prototype chain, which a function can be given.
+    if (t.Kind === 'array' || t.Kind === 'tuple') return 'object';
+    if (t.Kind === 'nominal') {
+      if (isEnumType(t)) {
+        const underlying = (t as { Underlying?: TypeRecord }).Underlying;
+        return underlying ? typeofTagOfType(underlying) : null;
+      }
+      return typedClassDeclarationOf(t) ? 'object' : null;
+    }
+    if (t.Kind === 'parameterized') return typeofTagOfType(t.Base as TypeRecord);
+    if (t.Kind !== 'primitive') return null;
     const name = (t as { Name?: string }).Name ?? '';
+    // A vector, complex, rational or composite value is an Object (#sec-complex-types and its siblings).
+    if (name === 'vector' || name === 'Composite' || /^(complex|rational)/.test(name)) return 'object';
     if (['number', 'int', 'uint', 'float', 'decimal'].includes(name) || /^(u?int|float|decimal)\d+$/.test(name)) return 'number';
     if (['string', 'boolean', 'symbol', 'bigint', 'undefined'].includes(name)) return name;
     if (name === 'null') return 'object';
@@ -20553,6 +20577,74 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return seen === 1 ? found : null;
   };
 
+  /**
+   * The literal type of a literal expression (#sec-narrowing): a numeric
+   * literal with an optional sign, or a string, BigInt or Boolean literal, or a
+   * template without substitutions, which is the string literal it spells.
+   */
+  const literalExpressionType = (node: ParseNode): TypeRecord | null => {
+    let n = node;
+    while (n.type === 'ParenthesizedExpression') n = (n as unknown as { Expression: ParseNode }).Expression;
+    if (n.type === 'TemplateLiteral') {
+      const template = n as unknown as ParseNode.TemplateLiteral;
+      if (template.ExpressionList.length !== 0 || template.TemplateSpanList.length !== 1) return null;
+      const cooked = TV(template.TemplateSpanList[0]!);
+      return cooked === undefined ? null : { Kind: 'literal', Value: Value(cooked), Base: makePrimitive('string') } as TypeRecord;
+    }
+    const signed = n.type === 'UnaryExpression' && ['-', '+'].includes((n as unknown as { operator: string }).operator)
+      && (n as unknown as { UnaryExpression: ParseNode }).UnaryExpression.type === 'NumericLiteral';
+    if (!signed && !['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'BigIntLiteral'].includes(n.type)) return null;
+    const t = staticType(n);
+    return t?.Kind === 'literal' ? t : null;
+  };
+
+  /**
+   * #sec-narrowing: the literal type an operand of the `v === e` row names -
+   * a literal expression, a `const` bound to one, or an enumerator reference,
+   * whose type is that enumerator's. An enumerator is read so only against a
+   * value of an enum (_against_); against any other operand it is a value of
+   * its underlying type (#sec-enums), which the comparison rules read as before.
+   */
+  const singleValueOperandType = (node: ParseNode, against: Known = null): TypeRecord | null => {
+    const literal = literalExpressionType(node);
+    if (literal) return literal;
+    let n = node;
+    while (n.type === 'ParenthesizedExpression') n = (n as unknown as { Expression: ParseNode }).Expression;
+    if (n.type === 'IdentifierReference') {
+      const name = (n as unknown as { name: string }).name;
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        if (frames[i].declaredNames.has(name) || frames[i].bindings.has(name)) return frames[i].constOperandLiterals.get(name) ?? null;
+      }
+      return null;
+    }
+    // An enumerator reference `E.A` names the enumerator's value, taken as a
+    // literal of the enum: two enumerators are disjoint exactly where their
+    // values differ, so aliases stay one value (#sec-enums).
+    const enumValued = (t: Known): boolean => !!t && (isEnumType(t as TypeRecord)
+      || (t.Kind === 'literal' && !!t.Base && isEnumType(t.Base as TypeRecord))
+      || (t.Kind === 'union' && t.Members.length > 0 && (t.Members as TypeRecord[]).every(enumValued)));
+    const m = n as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name: string } | null };
+    if (n.type === 'MemberExpression' && m.MemberExpression?.type === 'IdentifierReference' && m.IdentifierName && enumValued(against)) {
+      const enumName = (m.MemberExpression as unknown as { name: string }).name;
+      const info = lookupEnum(enumName);
+      const record = info ? enumTypeOf(enumName) : null;
+      const values = (record as { EnumMembers?: readonly unknown[] } | null)?.EnumMembers;
+      const index = info ? info.names.indexOf(m.IdentifierName.name) : -1;
+      const value = values && index >= 0 && values.length === info!.names.length ? values[index] : undefined;
+      return value !== undefined && value !== null ? { Kind: 'literal', Value: value, Base: record } as TypeRecord : null;
+    }
+    return null;
+  };
+
+  /**
+   * The type a global constructor on the right of `instanceof` denotes, where
+   * it is a class to #sec-narrowto (`libraryClassNames`) and the program has
+   * not bound the name itself.
+   */
+  const libraryClassTypeOf = (name: string): Known => (libraryClassNames.has(name) && !shadowedByProgram(name)
+    ? libraryTypeRecord(name) ?? null
+    : null);
+
   /** A literal operand spelled in the source, or `undefined`. */
   const isLiteralOperand = (node: ParseNode): boolean => {
     let n = node;
@@ -20574,6 +20666,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * pattern establishes nothing here; the structural impossibility rule judges
    * it in `declareMatchPatternBindings`.
    */
+  /**
+   * Whether a numeric literal can take a type at a position of _t_ by
+   * #sec-literal-propagation: some member is numeric, or the position is not
+   * known. Where none is, the literal keeps its base `number`.
+   */
+  const admitsNumericLiteral = (t: TypeRecord): boolean => {
+    if (t.Kind === 'any' || mentionsTypeParameter(t)) return true;
+    if (t.Kind === 'union') return (t.Members as TypeRecord[]).some(admitsNumericLiteral);
+    const tag = typeofTagOfType(t);
+    return tag === null || tag === 'number' || tag === 'bigint';
+  };
+  /**
+   * #sec-pattern-static-semantics: a range pattern can never match where no
+   * member of its position is ordered with the range's element type, which
+   * MatchRange requires. Only positions whose members all have a known
+   * `typeof` tag are judged; a Number and a BigInt are taken as ordered.
+   */
+  const rangePatternUnmatchable = (pattern: ParseNode.MatchRangePattern, positionType: Known): boolean => {
+    if (!positionType || positionType.Kind === 'any' || mentionsTypeParameter(positionType)) return false;
+    const range = pattern.Range as unknown as { RangeStart?: ParseNode | null, RangeEnd?: ParseNode | null };
+    const endpoint = range.RangeStart ?? range.RangeEnd;
+    const endpointType = endpoint ? staticType(endpoint) : null;
+    const endpointTag = endpointType ? typeofTagOfType(endpointType) : null;
+    if (endpointTag !== 'number' && endpointTag !== 'bigint' && endpointTag !== 'string') return false;
+    const ordered = (tag: string | null): boolean => (endpointTag === 'string' ? tag === 'string' : tag === 'number' || tag === 'bigint');
+    const tags = (positionType.Kind === 'union' ? positionType.Members as TypeRecord[] : [positionType]).map((m) => typeofTagOfType(m));
+    return tags.length > 0 && tags.every((tag) => tag !== null) && !tags.some(ordered);
+  };
+
   const patternBranches = (s: TypeRecord, p: ParseNode.MatchPattern | null): {
     match: TypeRecord | typeof empty, miss: TypeRecord | typeof empty, matchStable: boolean, missStable: boolean,
   } | null => {
@@ -20599,7 +20720,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MatchBindingPattern':
         return exact(p.TypeAnnotation ? resolveType(p.TypeAnnotation) : anyTypeRecord);
       case 'MatchLiteralPattern': {
-        if (p.Literal.type === 'NumericLiteral' || p.Literal.type === 'UnaryExpression') return null;
+        // A numeric literal adopts a numeric position and is judged by fit;
+        // at a position with no numeric member it keeps its base `number`.
+        if (p.Literal.type === 'NumericLiteral' || p.Literal.type === 'UnaryExpression') {
+          if (admitsNumericLiteral(s)) return null;
+          const t = staticType(p.Literal);
+          return t?.Kind === 'literal' ? exact(t) : null;
+        }
         const t = staticType(p.Literal);
         return t && (t.Kind === 'literal' || (t.Kind === 'primitive' && (t.Name === 'null' || t.Name === 'undefined')))
           ? exact(t) : partial(null);
@@ -20612,6 +20739,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return partial(makePrimitive('string'));
       case 'MatchJuxtapositionPattern':
         return partial(resolveType(p.Head as ParseNode.Type));
+      case 'MatchRangePattern':
+        return rangePatternUnmatchable(p, s)
+          ? { match: empty, miss: s, matchStable: true, missStable: false }
+          : { match: s, miss: s, matchStable: false, missStable: false };
       case 'MatchNotPattern': {
         const q = patternBranches(s, p.Operand);
         return q && { match: q.miss, miss: q.match, matchStable: q.missStable, missStable: q.matchStable };
@@ -20663,6 +20794,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const whenTrue = fact.negated ? narrowFromTested(source, excluded) : narrowToTested(source, fact.type);
     const whenFalse = fact.negated ? narrowToTested(source, fact.type) : narrowFromTested(source, excluded);
     return { source, whenTrue, whenFalse };
+  };
+
+  /**
+   * #sec-narrowfrom with #sec-falsy-and-truthy-parts: a test whose value's type
+   * leaves its falsy or its truthy part empty can never succeed or can never
+   * fail. A test written as `true`, `false`, `0` or `1` is exempt, since
+   * `while (true)` and `if (false)` say what they mean. Only a test whose value
+   * is an operand is read; an operator's result is judged by the operator's
+   * own rules, and `!` is seen through.
+   */
+  const truthinessOperandTypes = new Set(['IdentifierReference', 'MemberExpression', 'CallExpression', 'OptionalExpression',
+    'ThisExpression', 'ObjectLiteral', 'ArrayLiteral', 'FunctionExpression', 'ArrowFunction', 'ClassExpression',
+    'TemplateLiteral', 'NewExpression', 'StringLiteral', 'NumericLiteral', 'NullLiteral', 'BigIntLiteral', 'RegularExpressionLiteral']);
+  const judgeTruthiness = (test: ParseNode): void => {
+    const core = stripTest(test);
+    if (core.type === 'BooleanLiteral') return;
+    if (core.type === 'NumericLiteral' && [0, 1].includes(Number((core as unknown as { value: unknown }).value))) return;
+    if (!truthinessOperandTypes.has(core.type)) return;
+    const t = staticType(core);
+    if (!t || t.Kind === 'any' || mentionsTypeParameter(t)) return;
+    const settled = settledTruthiness(t);
+    if (settled === undefined) return;
+    errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
+      Value(displayType(t)), Value(settled ? 'truthy' : 'falsy')).Value as ObjectValue);
   };
 
   /**
@@ -20748,6 +20903,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (['LogicalANDExpression', 'LogicalORExpression', 'CommaOperator', 'ConditionalExpression'].includes(stripTest(node).type)) return;
     const fact = narrowingFactOf(node, true);
     if (fact) judgeFact(fact);
+    judgeTruthiness(node);
   };
   const walkDeciding = (node: ParseNode | null): void => {
     judgeDeciding(node);
@@ -20848,7 +21004,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const right = rel.ShiftExpression;
       const rightName = right.type === 'IdentifierReference' ? (right as unknown as { name: string }).name : null;
-      const t = (rightName ? classTypeOf(rightName) : null) ?? typeDenotedBy(right);
+      const t = (rightName ? classTypeOf(rightName) ?? libraryClassTypeOf(rightName) : null) ?? typeDenotedBy(right);
       return t ? { name: subject, type: t, subjectType: staticType(rel.RelationalExpression), negated } : undefined;
     }
     // `a && b` implies its LEFT operand only where the whole is true, and
@@ -20883,11 +21039,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // a fact, while `% is string` got one - the same binding, under a name
           // no program can write, narrowed by one test and not the other.
           const operandName = subjectOf(operand);
-          if (operandName === null || against.type !== 'StringLiteral') {
+          const tagType = operandName === null ? null : singleValueOperandType(against);
+          if (!tagType || !(tagType.Value instanceof JSStringValue)) {
             continue;
           }
           const operandType = staticType(operand);
-          const tag = (against as unknown as { value: string }).value;
+          const tag = (tagType.Value as JSStringValue).stringValue();
           const writtenNegated = negated !== inverted;
           const display = `typeof ${JSON.stringify(tag)}`;
           // #sec-narrowing: `typeof v === k` narrows to "the union of the types
@@ -20900,6 +21057,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const current = (operandName !== NON_PATH ? lookup(operandName) : null) ?? operandType;
           if (current && typeofTagOfType(current) === tag) {
             return { name: operandName, type: current, subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display };
+          }
+          // Where every member's tag is fixed and none is _k_, the test can
+          // never succeed.
+          if (current && current.Kind !== 'any') {
+            const tags = (current.Kind === 'union' ? current.Members as TypeRecord[] : [current]).map((m) => typeofTagOfType(m));
+            if (tags.length && tags.every((known) => known !== null) && !tags.includes(tag)) {
+              return { name: operandName, type: current, subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display };
+            }
           }
           // A function type's values are always 'function', and a typed class's
           // instances never are: #sec-typed-classes refuses a constructor that
@@ -20941,7 +21106,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `x === null` and `x === undefined`, and the LOOSE forms, which test
         // for either: `x == null` is the idiom for "nullish" and narrows to
         // both, which is what nullishType is for.
-        if (against.type === 'NullLiteral' || (against.type === 'IdentifierReference' && (against as unknown as { name: string }).name === 'undefined')) {
+        const voidLiteral = against.type === 'UnaryExpression' && (against as unknown as { operator: string }).operator === 'void'
+          && literalExpressionType((against as unknown as { UnaryExpression: ParseNode }).UnaryExpression) !== null;
+        if (against.type === 'NullLiteral' || voidLiteral || (against.type === 'IdentifierReference' && (against as unknown as { name: string }).name === 'undefined')) {
           const t = loose
             ? nullishType()
             : (against.type === 'NullLiteral'
@@ -20958,8 +21125,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && ((against as unknown as { operator?: string }).operator === '-'
             || (against as unknown as { operator?: string }).operator === '+')
           && (against as unknown as { UnaryExpression?: { type?: string } }).UnaryExpression?.type === 'NumericLiteral';
-        if (signedLiteral || against.type === 'NumericLiteral' || against.type === 'StringLiteral' || against.type === 'BooleanLiteral') {
-          let lit = staticType(against);
+        const named = singleValueOperandType(against, (name !== NON_PATH ? lookup(name) : null) ?? staticType(subject));
+        if (signedLiteral || named) {
+          let lit: Known = named ?? staticType(against);
           const source = (name !== NON_PATH ? lookup(name) : null) ?? staticType(subject);
           const numericSource = source ? eraseMetadata(source) : null;
           if (lit?.Kind === 'literal' && lit.Value instanceof NumberValue && numericSource?.Kind === 'primitive'
@@ -21024,10 +21192,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const writtenNegated = negated !== inverted;
         // No member admits the literal, so the test can never succeed; every
         // member's `p` is the literal, so it can never fail (#sec-narrowfrom).
-        if (kept.length === 0 && !loose) {
+        // A loose comparison reaches here only where every member's `p` shares
+        // the literal's base, where `==` answers as `===` does.
+        if (kept.length === 0) {
           return { name: objName, type: discriminant as TypeRecord, subjectType: objType, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display: displayType(discriminant as TypeRecord) };
         }
-        if (exact.length === objType.Members.length && !loose) {
+        if (exact.length === objType.Members.length) {
           return { name: objName, type: discriminant as TypeRecord, subjectType: objType, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display: displayType(discriminant as TypeRecord) };
         }
         if (kept.length === 0) {
@@ -21642,6 +21812,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ) as ThrowCompletion).Value as ObjectValue);
           }
         }
+        if (numeric !== null && positionType && !admitsNumericLiteral(positionType)) {
+          if (subPattern) {
+            errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType))).Value as ObjectValue);
+          }
+          return neverType;
+        }
         if (numeric !== null && positionType) {
           const numericTypes = (positionType.Kind === 'union' ? positionType.Members : [positionType])
             .filter((type) => type.Kind === 'primitive' && (isNumericValueTypeName(type.Name) || type.Name === 'number' || type.Name === 'bigint'));
@@ -21817,6 +21993,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
         break;
       }
+      case 'MatchRangePattern':
+        if (rangePatternUnmatchable(pattern, positionType)) {
+          if (subPattern) {
+            errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType as TypeRecord))).Value as ObjectValue);
+          }
+          return neverType;
+        }
+        break;
       default:
         break;
     }
@@ -21945,7 +22129,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         if (clause.Guard) {
-          walk(clause.Guard as ParseNode);
+          // #sec-narrowing: once the pattern has matched, the guard alone
+          // decides whether the arm runs, so it is judged as a test that
+          // decides a branch (#sec-narrowfrom) and its facts hold in the arm,
+          // which this clause's frame covers.
+          const guard = clause.Guard as ParseNode;
+          markDeciding(guard);
+          walk(guard);
+          const fact = narrowingFactOf(guard, true);
+          if (fact) {
+            for (const entry of [fact, ...(fact.additional ?? [])]) {
+              judgeFact(entry);
+              const { whenTrue } = branchTypes(entry);
+              if (whenTrue !== empty && entry.sense !== 'false' && entry.name !== NON_PATH && !entry.verdict) {
+                declareNarrowed(entry.name, whenTrue as Known);
+              }
+            }
+          }
+          judgeTruthiness(guard);
         }
         if (clause.IsBlock) markCompletionContext(clause.Body, armContext);
         const result = clause.IsThrow ? neverType
@@ -29393,7 +29594,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // was never reported.
           const rightNode = rel.ShiftExpression as ParseNode;
           const rightName = rightNode.type === 'IdentifierReference' ? (rightNode as unknown as { name: string }).name : null;
-          const t = (rightName ? classTypeOf(rightName) : null) ?? typeDenotedBy(rightNode);
+          const t = (rightName ? classTypeOf(rightName) ?? libraryClassTypeOf(rightName) : null) ?? typeDenotedBy(rightNode);
           if (s && t) {
             reportImpossibleTest(s, t, 'instanceof', guardsABranch(rel as ParseNode));
           }
@@ -29902,8 +30103,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let left = staticType((n.Expression as unknown as { UnaryExpression: ParseNode }).UnaryExpression);
           const tested: string[] = [];
           for (const label of caseLabels) {
-            if (!label || label.type !== 'StringLiteral') continue;
-            const tag = (label as unknown as { value: string }).value;
+            const tagType = label ? singleValueOperandType(label) : null;
+            if (!tagType || !(tagType.Value instanceof JSStringValue)) continue;
+            const tag = (tagType.Value as JSStringValue).stringValue();
             const display = `typeof ${JSON.stringify(tag)}`;
             if (tested.includes(tag) || !['undefined', 'object', 'boolean', 'number', 'bigint', 'string', 'symbol', 'function'].includes(tag)) {
               pushImpossibleTest('never-succeeds', display);
@@ -29950,7 +30152,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!label) {
               continue;
             }
-            let labelType = staticType(label);
+            let labelType = singleValueOperandType(label) ?? staticType(label);
             // A RANGE LABEL MATCHES BY CONTAINMENT. #sec-ranges: "A `case` whose
             // label is a range matches where the range contains the
             // discriminant ... Matching is by containment rather than by `===`".
@@ -30049,6 +30251,53 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               errors.push(completion.Value as ObjectValue);
             }
           }
+        }
+        // #sec-narrowing: where the discriminant is a Boolean literal, each label
+        // is a test deciding whether its clause is entered, judged as the test
+        // of an `if` is (#sec-narrowfrom). Its facts hold in the statements it
+        // reaches unless an earlier clause falls into them, and the labels after
+        // it, tested only where it failed, see its negation.
+        if (n.Expression.type === 'BooleanLiteral') {
+          const sense = (n.Expression as unknown as { value: boolean }).value;
+          const block = n.CaseBlock as unknown as {
+            CaseClauses_a?: readonly ParseNode[] | null, DefaultClause?: ParseNode | null, CaseClauses_b?: readonly ParseNode[] | null,
+          };
+          const ordered = [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])];
+          const declareBranch = (facts: readonly NarrowingFact[], branch: 'whenTrue' | 'whenFalse') => {
+            for (const fact of facts) {
+              const narrowed = branchTypes(fact)[branch];
+              if (narrowed !== empty && fact.name !== NON_PATH && !fact.verdict && !fact.sense) declareNarrowed(fact.name, narrowed as Known);
+            }
+          };
+          const failed: NarrowingFact[] = [];
+          let fallsIn = false;
+          walk(n.Expression);
+          for (const clause of ordered) {
+            const label = (clause as { Expression?: ParseNode | null }).Expression ?? null;
+            let fact: NarrowingFact | undefined;
+            if (label) {
+              pushBlock(() => {
+                declareBranch(failed, 'whenFalse');
+                markDeciding(label);
+                walk(label);
+                const found = narrowingFactOf(label, true);
+                fact = found && (sense ? found : { ...found, negated: !found.negated });
+                if (fact) judgeFact(fact);
+              });
+            }
+            const statements = (clause as { StatementList?: readonly ParseNode[] | null }).StatementList ?? [];
+            pushBlock(() => {
+              if (!fallsIn) {
+                declareBranch(failed, 'whenFalse');
+                if (fact) declareBranch([fact], 'whenTrue');
+              }
+              walk(statements);
+            });
+            fallsIn = statements.length === 0
+              || canCompleteNormally({ type: 'Block', StatementList: statements } as unknown as ParseNode, switchCoversDiscriminant);
+            if (fact) failed.push(fact);
+          }
+          return;
         }
         // Walk the discriminant and case bodies as usual.
         walk(n.Expression);
@@ -30164,6 +30413,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (isConstDeclaration && n.Initializer) {
             const key = memberKey({ Expression: n.Initializer });
             if (key !== undefined) bindingFrame.constPropertyKeys.set(n.BindingIdentifier.name, key);
+            const literal = n.TypeAnnotation ? null : literalExpressionType(n.Initializer);
+            if (literal) bindingFrame.constOperandLiterals.set(n.BindingIdentifier.name, literal);
           }
           if (!n.TypeAnnotation && n.Initializer && isNumericConstantExpression(n.Initializer)) {
             const frame = frames[frames.length - 1];
@@ -30783,6 +31034,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // statements, so the same fact applies.
         const c = n as unknown as { ShortCircuitExpression: ParseNode, AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
         walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
+        judgeTruthiness(c.ShortCircuitExpression);
         return;
       }
       case 'OptionalExpression': {
@@ -30916,6 +31168,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           staticType(condition);
           const fact = narrowingFactOf(condition, true);
           if (fact) judgeFact(fact);
+          judgeTruthiness(condition);
         }
         };
         if (n.type === 'ForStatement') {
@@ -30937,6 +31190,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // call it for one.
         staticType(w.Expression);
         walkGuarded(w.Expression, w.Statement, null);
+        judgeTruthiness(w.Expression);
         return;
       }
       case 'IfStatement': {
@@ -30958,6 +31212,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // came from the latter, and this is the former.
         staticType(s.Expression);
         walkGuarded(s.Expression, s.Statement_a, s.Statement_b ?? null);
+        judgeTruthiness(s.Expression);
         return;
       }
       case 'UpdateExpression': {

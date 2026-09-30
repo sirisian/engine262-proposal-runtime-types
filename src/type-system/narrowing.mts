@@ -98,9 +98,29 @@ function isNumberCategory(t: TypeRecord): boolean {
  * disjoint from the sized numeric types, which is right for assignment and wrong
  * for a `typeof` narrowing.
  */
-/** A ~nominal~ whose [[Declaration]] is a class declaration: rule 967's test (check.mts `classDeclarationOf`). */
-function isClassNominal(t: TypeRecord): boolean {
-  return t.Kind === 'nominal' && (t as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
+/**
+ * The global constructors whose types are classes to #sec-narrowto and
+ * #sec-narrowfrom: nominal types whose values are their instances by prototype
+ * chain, with the single-inheritance identity a declared class has. `Symbol`
+ * names primitive values, and a `Proxy` takes its target's prototype, so
+ * neither is one, nor is `ProxyHandler`.
+ */
+export const libraryClassNames: ReadonlySet<string> = new Set([
+  'AggregateError', 'ArrayBuffer', 'DataView', 'Date', 'Error', 'EvalError', 'FinalizationRegistry', 'Map',
+  'RangeError', 'ReferenceError', 'RegExp', 'Set', 'SharedArrayBuffer', 'SyntaxError', 'TokenStream', 'TypeError',
+  'URIError', 'WeakMap', 'WeakRef', 'WeakSet',
+]);
+
+/**
+ * A ~nominal~ that is a class: one whose [[Declaration]] is a class
+ * declaration (check.mts `classDeclarationOf`), or a global constructor's type
+ * from `libraryClassNames`.
+ */
+export function isClassNominal(t: TypeRecord): boolean {
+  if (t.Kind !== 'nominal') return false;
+  if ((t as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration') return true;
+  const name = (t as { LibraryName?: unknown }).LibraryName;
+  return typeof name === 'string' && libraryClassNames.has(name);
 }
 
 function categoryOverlap(m: TypeRecord, t: TypeRecord): boolean {
@@ -169,6 +189,17 @@ export function NarrowTo(s: TypeRecord, t: TypeRecord): NarrowResult {
   }
   if (IsSubtype(t, s, [])) {
     return t;
+  }
+  // #sec-narrowto: a union target is taken member by member, since
+  // CanonicalizeType does not distribute an intersection over a union and
+  // `C & (A | B)` would otherwise stand for a type with no values.
+  if (t.Kind === 'union') {
+    const parts: TypeRecord[] = [];
+    for (const m of (t as { Members: readonly TypeRecord[] }).Members) {
+      const part = NarrowTo(s, m);
+      if (part !== empty) parts.push(part as TypeRecord);
+    }
+    return parts.length === 0 ? empty : fromMembers(parts);
   }
   // Two ~nominal~ records whose declarations are
   // both CLASS declarations, neither a subtype of the other (both tests just
