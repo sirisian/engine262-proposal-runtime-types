@@ -197,10 +197,9 @@ test('a switch with no default contributes undefined', () => {
 });
 
 test('an exhaustive enum switch contributes no undefined', () => {
-  // #sec-completiontypeof. Exhaustiveness is the SWITCH's, which the design
-  // reserves to enums and sealed hierarchies, so the coverage the checker
-  // already computes for its own diagnostics is what this reads - one
-  // computation, consulted from both places, rather than two that drift.
+  // #sec-completiontypeof. Exhaustiveness is the SWITCH's, which is reserved to enums and sealed hierarchies, so the
+  // coverage the checker already computes for its own diagnostics is what this reads - one computation, consulted
+  // from both places, rather than two that drift.
   expect(ok(`
     enum E: uint8 { A, B }
     function f(e: E) { const x: number = do { switch (e) { case E.A: 1; break; case E.B: 2; break; } }; }
@@ -213,8 +212,8 @@ test('an exhaustive enum switch contributes no undefined', () => {
     function f(e: E) { const x: number = do { switch (e) { case E.A: 1; break; } }; }
   `)).toBe(false);
 
-  // A discriminant the design does not reserve the word for still needs a
-  // `default`, which is the asymmetry with `match` the clause records.
+  // A discriminant not reserved that way still needs a `default`, which is the asymmetry with `match` that
+  // #sec-divergence records.
   expect(ok("const s = 'a'; const x: number = do { switch (s) { case 'a': 1; break; } };")).toBe(false);
 });
 
@@ -257,8 +256,8 @@ test('the do block contexts are registered', () => {
 });
 
 test('a decorated do block reports its own kind', () => {
-  // The decorator goes BEFORE the keyword, as doexpressions.md writes it: it
-  // names the thing that produces the value, which is the expression.
+  // The decorator goes BEFORE the keyword (#sec-do-expression-modifications): it names the thing that produces the
+  // value, which is the expression.
   expect(evaluated(`
     let k = '';
     function d(c: Reflect.DoBlock) { k = c.kind; }
@@ -297,21 +296,8 @@ test('a do block decorator fires on every entry', () => {
 });
 
 /**
- * Two things the decorator contexts do NOT do, recorded rather than left to be
- * discovered.
- *
- * The RETURN REPLACEMENT is the new capability the design gives these two
- * contexts - a `DoBlock` decorator returning a value of the expression's type,
- * a `DoGeneratorBlock` decorator returning a generator - and it is not wired:
- * ApplyDecorators' result is still discarded by Evaluate_Block, as it is for
- * every other block. Without it `@memo do { ... }` runs the decorator and
- * ignores what it returns.
- *
- * The spelling is the design's - `@memo do { ... }`, the decorator before the
- * keyword - which was settled in favour of the design after the engine first
- * read it the other way round. `do @memo { ... }` also parses, and means what
- * it says: that decorates the BLOCK, which is the general block-decorator
- * feature and not this one.
+ * The spelling is `@memo do { ... }`, the decorator before the keyword. `do @memo { ... }` also parses, and means
+ * what it says: that decorates the BLOCK, which is the general block-decorator feature and not this one.
  */
 
 /**
@@ -435,8 +421,7 @@ test('arguments inside a do is the enclosing function\'s', () => {
 });
 
 test('a do composes with the value types', () => {
-  // The shape doexpressions.md gives for it: a temporary or two to build a key,
-  // kept in the scope that needed them rather than hoisted above the const.
+  // A temporary or two to build a key, kept in the scope that needed them rather than hoisted above the const.
   expect(evaluated(`
     const k = do { const n = 2; Composite({ page: n }) };
     String(k === Composite({ page: 2 }));

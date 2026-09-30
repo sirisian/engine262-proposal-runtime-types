@@ -149,12 +149,10 @@ test('the topic goes where any expression goes', () => {
 });
 
 /**
- * Two of the design's corpus items are not testable here, and the reason is not
- * the pipeline. Overload declarations
- * (`function f(v: uint32): string;`) and generic function declarations
- * (`function id.<T>(v: T): T`) are not parsed by this engine at all - both fail
- * identically without a pipe. The pipeline's part of each rule, that resolution
- * and inference read the topic's type like any argument's, is specified in
+ * Two of the corpus items are not testable here, and the reason is not the pipeline. Overload declarations
+ * (`function f(v: uint32): string;`) and generic function declarations (`function id.<T>(v: T): T`) are not
+ * parsed by this engine at all - both fail identically without a pipe. The pipeline's part of each rule, that
+ * resolution and inference read the topic's type like any argument's, is specified in
  * #sec-pipeline-static-semantics and will be testable when the declarations are.
  */
 

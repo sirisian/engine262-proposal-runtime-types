@@ -3,38 +3,34 @@ import { expect, test } from 'vitest';
 import { KIND_NAMES } from '#self';
 
 /**
- * The `kind` vocabulary lives in three places - `decorators.md`'s reflections,
- * the specification's list of positions, and the engine's mapping - and three
- * copies of one list is the shape this project has been bitten by most.
+ * Spec: #sec-reflection-shape-rules and #table-reflection-contexts. Every reflection carries a `kind`, a string
+ * naming the context it came from.
  *
- * So the engine's set is checked against the DOCUMENT, which is the authority:
- * `decorators.md` defines a reflection per position and every `kind` is one of
- * their names. An earlier draft of the mapping carried `'TryBlock'`,
- * `'SwitchBlock'` and `'MatchBlock'`, none of which the document defines; this
- * is the test that would have caught them.
+ * The `kind` vocabulary lives in two places - the specification's reflection contexts and the engine's mapping from
+ * parse nodes - and two copies of one list is the shape this project has been bitten by most. So the engine's set is
+ * checked against the SPECIFICATION, which is normative: the decorators chapter of spec.emu defines a context per
+ * position, and every `kind` is one of their names. A mapping that carried `'TryBlock'`, `'SwitchBlock'` or
+ * `'MatchBlock'`, none of which the specification defines, is what this test catches.
  *
- * The converse is NOT asserted. The document defines 46 reflections and the
- * engine implements a subset - parameters, returns, enums, object members and
- * the accessor family are not yet decorable - which is an implementation gap
- * rather than drift, and one this test should not pretend is closed.
+ * The converse is NOT asserted. The specification defines more contexts than the engine's mapping produces, which
+ * is an implementation gap rather than drift, and one this test should not pretend is closed.
  */
+
 /**
- * The design document, found rather than assumed.
+ * The specification, found rather than assumed.
  *
- * It was one hardcoded absolute path, so this anti-drift test threw ENOENT in
- * any checkout that does not put the two repositories side by side at that exact
- * location - a false red that says nothing about drift. The candidates below are
- * tried in order, and the test SKIPS where none exists, because a test that
- * cannot read its source should say so rather than fail as though it had.
+ * The test reads spec.emu from the proposal-runtime-types repository, which is not part of this one, so it may be
+ * absent (a checkout without its sibling). The candidates are tried in order and the tests SKIP where none exists,
+ * because a test that cannot read its source should say so rather than fail as though it had found drift.
  */
-const DECORATORS_MD_CANDIDATES = [
-  '/home/claude/ecmascript-types/decorators.md',
-  '/home/claude/work/ecmascript-types/decorators.md',
-  new URL('../../../../ecmascript-types/decorators.md', import.meta.url).pathname,
+const SPEC_CANDIDATES = [
+  '/home/claude/proposal-runtime-types/spec.emu',
+  '/home/claude/work/proposal-runtime-types/spec.emu',
+  new URL('../../../../proposal-runtime-types/spec.emu', import.meta.url).pathname,
 ];
 
-function decoratorsMarkdown(): string | null {
-  for (const candidate of DECORATORS_MD_CANDIDATES) {
+function specificationPath(): string | null {
+  for (const candidate of SPEC_CANDIDATES) {
     if (existsSync(candidate)) {
       return candidate;
     }
@@ -42,40 +38,48 @@ function decoratorsMarkdown(): string | null {
   return null;
 }
 
-function documentedReflections(): Set<string> {
-  const path = decoratorsMarkdown();
-  if (path === null) {
-    return new Set<string>();
-  }
-  const text = readFileSync(path, 'latin1');
+const specPath = specificationPath();
+
+/**
+ * The names in the first column of the tables of the decorators chapter (the reflection contexts, and the family
+ * labels beside them). The chapter is the emu-clause `sec-decorators`, found by counting clause nesting.
+ */
+function specifiedContexts(path: string): Set<string> {
+  const lines = readFileSync(path, 'utf8').split('\n');
+  const first = lines.findIndex((line) => line.includes('id="sec-decorators"'));
   const names = new Set<string>();
-  const pattern = new RegExp('type (' + '\\' + 'w+)Reflection', 'g');
-  let match = pattern.exec(text);
-  while (match !== null) {
-    names.add(match[1]);
-    match = pattern.exec(text);
+  if (first === -1) {
+    return names;
+  }
+  const cell = /<td>\s*(?:<code>)?`?([A-Z][A-Za-z]+)`?(?:<\/code>)?\s*<\/td>/g;
+  let depth = 0;
+  for (let i = first; i < lines.length; i += 1) {
+    depth += (lines[i].match(/<emu-clause/g) ?? []).length;
+    for (const match of lines[i].matchAll(cell)) {
+      names.add(match[1]);
+    }
+    depth -= (lines[i].match(/<\/emu-clause>/g) ?? []).length;
+    if (depth <= 0) {
+      break;
+    }
   }
   return names;
 }
 
-test('every kind the engine produces is a reflection the document defines', () => {
-  const documented = documentedReflections();
-  // No exemptions. `Region` was the one value the document did not have, and it
-  // is gone: a captured region reports `Block`, which `decorators.md` already
-  // defines.
-  //
-  // Kept as a plain filter rather than an empty exemption set, so that adding a
-  // kind the document does not define fails here rather than being waved
-  // through by a set someone forgot to empty.
-  const undocumented = KIND_NAMES.filter((k) => !documented.has(k));
-  expect(undocumented).toEqual([]);
+test.skipIf(specPath === null)('every kind the engine produces is a context the specification defines', () => {
+  const specified = specifiedContexts(specPath as string);
+  // No exemptions: kept as a plain filter rather than an empty exemption set, so that adding a kind the
+  // specification does not define fails here rather than being waved through by a set someone forgot to empty.
+  // (A captured region reports `Block`, which the specification defines.)
+  const undefinedKinds = KIND_NAMES.filter((k) => !specified.has(k));
+  expect(undefinedKinds).toEqual([]);
 });
 
-test('the document is readable and has the reflections this depends on', () => {
-  // If the document moves or its shape changes, the test above would pass
-  // vacuously by finding nothing documented and nothing undocumented.
-  const documented = documentedReflections();
-  expect(documented.size).toBeGreaterThan(40);
-  expect(documented.has('ClassField')).toBe(true);
-  expect(documented.has('MatchArmBlock')).toBe(true);
+test.skipIf(specPath === null)('the specification is readable and has the contexts this depends on', () => {
+  // If the specification moves or its shape changes, the test above would pass vacuously by finding nothing
+  // defined and nothing undefined.
+  const specified = specifiedContexts(specPath as string);
+  expect(specified.size).toBeGreaterThan(40);
+  expect(specified.has('ClassField')).toBe(true);
+  expect(specified.has('MatchArmBlock')).toBe(true);
 });

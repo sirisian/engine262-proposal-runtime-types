@@ -2,19 +2,13 @@ import { expect, test } from 'vitest';
 import { realmWithMacro } from './harness.mts';
 
 /**
- * A replacement decorator's context.
- *
- * `{ kind }` and nothing else. The reason is the one `decoratorreplacement.md`
- * gives in 3.1 for having no `source` field beside the tokens: a field beside a
- * token stream is two ways to say one thing, and they must agree forever. A
- * replacement decorator receives the TOKENS OF WHAT IT DECORATES, so a name,
- * `static`, a `for`'s binding and a match arm's pattern are already in them. A
- * runtime decorator needs those in its context because it gets no tokens.
- *
- * The `kind` vocabulary is `decorators.md`'s: "Every reflection below carries a
- * `kind`, a string naming the context it came from - `'ClassField'`,
- * `'FunctionParameter'`, and so on." A captured region reports `'Block'`: it IS
- * a block, and the engine not parsing its text is a fact about the DECORATOR.
+ * A replacement decorator's context. `{ kind }` and nothing else. The reason (#sec-replacement-decorators): a
+ * field beside a token stream is two ways to say one thing, and they must agree forever. A replacement decorator
+ * receives the TOKENS OF WHAT IT DECORATES, so a name, `static`, a `for`'s binding and a match arm's pattern are
+ * already in them. A runtime decorator needs those in its context because it gets no tokens. The `kind`
+ * vocabulary is the reflection contexts' (#sec-reflection-shape-rules): every reflection carries a `kind`, a
+ * string naming the context it came from - `'ClassField'`, `'FunctionParameter'`, and so on. A captured region
+ * reports `'Block'`: it IS a block, and the engine not parsing its text is a fact about the DECORATOR.
  */
 const NL = String.fromCharCode(10);
 const REPORT = '(function (t, c) { return [{ kind: "string",'
@@ -83,11 +77,10 @@ test('arguments move to the THIRD parameter', () => {
 });
 
 test('a label reaches the macro, being the one thing the tokens cannot carry', () => {
-  // Everything else a runtime context reports syntactically is IN the tokens a
-  // replacement decorator receives. A label is not: it PRECEDES the decoration -
-  // `lbl:` then `@m` then `{ ... }` - so a span reaching back for it would
-  // contain the decoration being expanded. decorators.md already declares
-  // `label?: string` on every block reflection.
+  // Everything else a runtime context reports syntactically is IN the tokens a replacement decorator receives. A
+  // label is not: it PRECEDES the decoration - `lbl:` then `@m` then `{ ... }` - so a span reaching back for it
+  // would contain the decoration being expanded. Every block reflection declares `label?: string`
+  // (#sec-reflection-shape-block).
   const report = '(function (t, c) { return [{ kind: "string",'
     + ' value: JSON.stringify(c.kind + "/" + String(c.label)), span: t[0] && t[0].span }]; })';
   expect(reported('lbl: @m { y; }', report)).toBe('lbl: "Block/lbl";');

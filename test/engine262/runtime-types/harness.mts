@@ -5,14 +5,13 @@ import {
 } from '#self';
 
 /**
- * Shared harness for the README feature suite. Each test verifies a concrete,
- * engine-checkable part of a feature described in ecmascript-types/README.md.
+ * Shared harness for the runtime-types feature suite. Each test verifies a concrete, engine-checkable part of a
+ * clause of the specification (spec.emu in the proposal-runtime-types repository).
  *
- * The suite is organized to mirror the README's section order, one file per run
- * of sections, so a reader can walk the proposal and the tests side by side. Where
- * a feature's full surface is out of the core engine's scope (SIMD hardware ops,
- * memory layout, and the like), the test verifies the part that is implemented and
- * says plainly, in a comment, what is deferred to an extension document.
+ * The suite is organized by the specification's chapters, one directory per chapter or extension, so a reader can
+ * walk the specification and the tests side by side. Where a feature's full surface is out of the core engine's
+ * scope (SIMD hardware ops, memory layout, and the like), the test verifies the part that is implemented and says
+ * plainly, in a comment, what is deferred.
  */
 
 /** Run a script with the runtime-types feature on; return the raw completion. */

@@ -2,26 +2,21 @@ import { test, expect } from 'vitest';
 import { evaluated, run, expectThrown, runFlagOff, ok, expectStaticTypeError } from './harness.mts';
 
 /**
- * Design: regexp.md - the capture-type inference of a regular expression
- * literal.
+ * Spec: #sec-typed-regular-expressions - the capture-type inference of a regular expression literal. A regular
+ * expression literal has type `RegExp.<Captures, Groups>` inferred from its pattern, where Captures is a tuple
+ * of the capture-group types in source order and Groups is an object type of the named groups. A capture that
+ * can fail to participate in a match, one under a zero-minimum quantifier, one in an alternation branch, or one
+ * inside a lookaround, is typed `string | undefined`; a capture entered by every matching path is `string`. The
+ * type is checked at an annotated declaration: a `RegExp.<Captures, Groups>` annotation is invariant in its
+ * arguments, so a literal whose inferred shape differs is a type error, while a bare `RegExp` accepts any
+ * literal as the raw supertype of its parameterizations.
  *
- * A regular expression literal has type `RegExp.<Captures, Groups>` inferred from
- * its pattern, where Captures is a tuple of the capture-group types in source
- * order and Groups is an object type of the named groups. A capture that can fail
- * to participate in a match, one under a zero-minimum quantifier, one in an
- * alternation branch, or one inside a lookaround, is typed `string | undefined`;
- * a capture entered by every matching path is `string`. The type is checked at an
- * annotated declaration: a `RegExp.<Captures, Groups>` annotation is invariant in
- * its arguments, so a literal whose inferred shape differs is a type error, while
- * a bare `RegExp` accepts any literal as the raw supertype of its parameterizations.
- *
- * Deferred with the rest of the typed match-result surface, since each needs a
- * facility another extension supplies: the Flags argument and the flag-dependent
- * shapes (the `d`-flag `indices`, the `g`-flag `match` overload); the typed exec
- * result and group-name access checking on it; the capture types threaded through
- * the String methods; `RegExp.template`; string narrowing by pattern; the dynamic
- * `new RegExp` construction assertion; and the custom matcher symbols. The untyped
- * regexp runtime is unchanged and is covered in extensions/regexp.test.mts.
+ * The typed match-result surface is only partly specified (#sec-coverage-of-the-design-documents) and is not
+ * exercised here, each part needing a facility another extension supplies: the Flags argument and the
+ * flag-dependent shapes (the `d`-flag `indices`, the `g`-flag `match` overload); the typed exec result and
+ * group-name access checking on it; the capture types threaded through the String methods; `RegExp.template`;
+ * string narrowing by pattern; the dynamic `new RegExp` construction assertion; and the custom matcher symbols.
+ * The untyped regexp runtime is unchanged and is covered below.
  */
 
 // -- capture count is inferred and checked (invariant RegExp.<C, G>) -----------
@@ -126,16 +121,12 @@ test('the untyped regexp runtime is unchanged with the feature off', () => {
 // -- The regexp surface this rests on --------------------------------------------
 
 /**
- * Extension coverage (regexp.md, typed regular expressions).
- *
- * The core of the typed layer is implemented: `RegExp` is a nominal type, and a
- * regular expression literal has the type `RegExp.<Captures, Groups>` inferred
- * from its pattern, checked at an annotated declaration - the section above
- * covers that. The fuller match-result surface (exact exec-result shapes,
- * group-name access checking on a result, typed replace callbacks, the Flags
- * argument, `RegExp.template`, string narrowing by pattern) is not implemented.
- * What follows is the untyped regexp runtime, which the typed layer leaves
- * unchanged.
+ * Extension coverage (#sec-typed-regular-expressions). The core of the typed layer is implemented: `RegExp` is a
+ * nominal type, and a regular expression literal has the type `RegExp.<Captures, Groups>` inferred from its
+ * pattern, checked at an annotated declaration - the section above covers that. The fuller match-result surface
+ * (exact exec-result shapes, group-name access checking on a result, typed replace callbacks, the Flags argument,
+ * `RegExp.template`, string narrowing by pattern) is not implemented. What follows is the untyped regexp runtime,
+ * which the typed layer leaves unchanged.
  */
 
 // -- The untyped runtime is intact ---------------------------------------------

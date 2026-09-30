@@ -244,9 +244,8 @@ test('the table covers every export, and only exports', async () => {
   // Guards the suite against the kit growing past it. A helper added without a
   // test fails on the count here rather than passing unnoticed.
   const named = EXPORTS.map(([name]) => name);
-  // 75: the 71 of `typeprogramming.md`'s table, plus `inverse` from
-  // #sec-declared-inverses and the three StringPattern builders. The guard below fired on it, as it should - an
-  // export with no row here is an export with no test.
+  // 75: the 71 rows of the kit's table, plus `inverse` from #sec-declared-inverses and the three StringPattern
+  // builders. The guard below fires on it, as it should - an export with no row here is an export with no test.
   expect(new Set(named).size).toBe(75);
   expect(await run(`const extra = Object.keys(std).filter(k => !${JSON.stringify(named)}.includes(k));`
     + ' if (extra.length) { throw new Error("untested exports: " + extra.join(",")); }'
@@ -292,10 +291,8 @@ test('agreement: keyless is `never`, and the refusal lives at the USE', async ()
 });
 
 test('agreement: `indexed` IS `T[K]`', async () => {
-  // §4.1's `js` block is missing from typeprogramming.md, so `indexed`
-  // had no definition anywhere and this reconstruction is the only statement of
-  // it. Pinned against the operator across the cases
-  // #sec-indexed-access-types names.
+  // #sec-indexed-access-types states `indexed` as an abstract operation, and the kit's `indexed()` computes the same
+  // function as the operator. This reconstruction is pinned against the operator across the cases the clause names.
   expect(await holds('std.indexed(type { a: uint8 }, type "a") === type { a: uint8 }["a"]')).toBe('ok');
   // distributes over K's arms
   expect(await holds('std.indexed(U, type "a" | "b") === type U["a" | "b"]', U)).toBe('ok');
@@ -431,12 +428,10 @@ test('the polyfill claim: the same source loads as an ordinary user module', asy
   expect(await runWith('polyfill', STD_TYPES_SOURCE, main)).toBe('ok');
 });
 
-// typeprogramming.md 6.2: the kit carries its own contracts, so the mechanism
-// has a user and downstream generic code has a reasoned surface. The bounds are
-// the variance each builder actually has - a widening makes the argument
-// assignable to the result, a narrowing the reverse - and #sec-checked-contracts
-// verifies them at every concrete evaluation, which is the half that crosses a
-// module boundary.
+// The kit carries its own contracts (#sec-checked-contracts), so the mechanism has a user and downstream generic
+// code has a reasoned surface. The bounds are the variance each builder actually has - a widening makes the
+// argument assignable to the result, a narrowing the reverse - and #sec-checked-contracts verifies them at every
+// concrete evaluation, which is the half that crosses a module boundary.
 test('the kit states its own bounds, and they hold', async () => {
   const T = 'type T = { a: uint8, b: string }; ';
   // Widenings: the argument is assignable to the result.

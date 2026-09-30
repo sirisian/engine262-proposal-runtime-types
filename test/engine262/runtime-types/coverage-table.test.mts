@@ -2,17 +2,15 @@ import { test, expect } from 'vitest';
 import { ok, evaluated } from './harness.mts';
 
 /**
- * A spot check of the specification's coverage table (#sec-coverage-of-the-design-documents)
- * against the engine.
+ * A spot check of the specification's coverage table (#sec-coverage-of-the-design-documents) against the engine.
  *
- * The table claims a state per design document. A row claiming "Specified" for a
- * document whose sections are only partly covered is found by checking the claim against
- * the clauses, not by any test failing, so this file checks the rows the same way: one
- * representative construction per extension, chosen from the design's own spelling rather
- * than a plausible one.
+ * The table claims a state per design document. A row claiming "Specified" for a document whose sections are only
+ * partly covered is found by checking the claim against the clauses, not by any test failing, so this file checks
+ * the rows the same way: one representative construction per extension, chosen from the spelling the
+ * specification and its examples use rather than a plausible one.
  *
- * These are not thorough tests of each extension - each has its own file. They exist so
- * that a row silently ceasing to be true is a failure rather than a discovery.
+ * These are not thorough tests of each extension - each has its own file. They exist so that a row silently
+ * ceasing to be true is a failure rather than a discovery.
  */
 
 test('the parameterized numeric extensions resolve in an annotation', () => {

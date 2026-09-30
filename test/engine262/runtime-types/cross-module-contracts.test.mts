@@ -5,20 +5,15 @@ import {
 } from '#self';
 
 /**
- * #sec-checked-contracts has two halves and they behaved differently across a
- * module boundary. The VERIFIED half fires at every concrete evaluation of an
- * imported builder. The ASSUMED half - what lets a generic body reason about a
- * deferred application before specialization - reads the builder's DECLARATION
- * for its `where` clauses, and the only declarations in reach were those in the
- * caller's own compilation. So `sanitize<T>` checked against a locally declared
- * `omit` and not against the same `omit` imported from a module, which is the
- * case typeprogramming.md 6.2 is written for.
- *
- * Rust's where clauses and C++'s concepts are part of a published interface and
- * cross a compilation boundary; a contract that stops at one has no precedent.
- * The declaration travels the channel that already carries what an imported name
- * IS, recorded when the exporting module is checked and read when the importer
- * links.
+ * #sec-checked-contracts has two halves and they behave differently across a module boundary unless the
+ * declaration travels. The VERIFIED half fires at every concrete evaluation of an imported builder. The ASSUMED
+ * half - what lets a generic body reason about a deferred application before specialization - reads the
+ * builder's DECLARATION for its `where` clauses, so `sanitize<T>` must be checked against an `omit` imported from
+ * a module as against a locally declared one: the standard kit's contracts (#annex-standard-kit) are written for
+ * exactly that case. Rust's where clauses and C++'s concepts are part of a published interface and cross a
+ * compilation boundary; a contract that stops at one has no precedent. The declaration travels the channel that
+ * already carries what an imported name IS, recorded when the exporting module is checked and read when the
+ * importer links.
  */
 
 const NL = String.fromCharCode(10);

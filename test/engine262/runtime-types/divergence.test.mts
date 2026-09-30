@@ -3,22 +3,11 @@ import { Diverges } from '../../../src/type-system/divergence.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * Spec: #sec-divergence (Divergence).
- *
- * A statement DIVERGES when no path of control through it completes normally.
- * The clause is owed to `switch` and to `match` rather than to do expressions -
- * #sec-pattern-static-semantics already reads a match arm's type by it, and the
- * README's switch chapter defines it - and nothing in this engine computed it,
- * so CompletionTypeOf had nothing to call.
- *
- * It is tested directly at the module rather than through a script, since what
- * it computes is a property of a Parse Node and not an observable of a program;
- * CompletionTypeOf is its consumer, and do-expressions.test.mts covers that
- * side.
- *
- * The analysis is SYNTACTIC, and the tests below are written to pin that: a
- * `while (cond)` does not diverge however plainly the reader can see that
- * `cond` is true.
+ * Spec: #sec-divergence (Divergence). A statement DIVERGES when no path of control through it completes
+ * normally. The clause is owed to `switch` and to `match` rather than to do expressions -
+ * #sec-pattern-static-semantics already reads a match arm's type by it. It is tested directly at the module rather
+ * than through a script, since what it computes is a property of a Parse Node and not an observable of a program;
+ * CompletionTypeOf is its consumer, and do-expressions.test.mts covers that side.
  */
 
 setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
