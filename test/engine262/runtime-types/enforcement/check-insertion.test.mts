@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { expectStaticTypeError } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 // Spec: #sec-check-insertion (Check Insertion), enumerated by
@@ -727,33 +728,28 @@ test('every narrowing form the checker reads, and where it applies', () => {
 });
 
 test('a typed array length and element-preserving results flow statically', () => {
-  // Asserted by REJECTION, because a permissive checker passes every positive
-  // test: only a rejection proves it knows the type. Each of these looks fine
-  // from its positive case alone, which is why they are written this way.
-  //
-  // "The Static Type of a member access reading the `length` property of an
-  // array is `uint32`" - the run time does this too; this is the static
-  // half.
-  expectStatic('function nc(a: [].<uint8>) { let n: string = a.length; }');
-  expectStatic('function nc(a: [].<uint8>) { let n: uint8 = a.length; }');
+  // #sec-array-and-tuple-types: length has the index type, uint64.
+  expectStaticTypeError('function nc(a: [].<uint8>) { let n: string = a.length; }');
+  expectStaticTypeError('function nc(a: [].<uint8>) { let n: uint8 = a.length; }');
   expect(evaluated('function nc(a: [].<uint8>) { let n: uint64 = a.length; } "ok";')).toBe('ok');
-  // A result drawn from the receiver's own elements is an array of the SAME
-  // element type.
-  expectStatic('function nc(a: [].<uint8>) { let b: string = a.filter(x => true); }');
-  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.filter(x => true); }');
-  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.slice(0); }');
-  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.sort(); }');
-  expect(evaluated('function nc(a: [].<uint8>) { let b: [].<uint8> = a.filter(x => true); } "ok";')).toBe('ok');
-  // `map` DOES flow, once the callback can be typed: its element
-  // type is the callback's return, so a `[].<uint8>` mapped to strings is a
-  // string array and not a number one.
-  expectStatic('function nc(a: [].<uint8>) { let b: [].<uint8> = a.map(x => "s"); }');
-  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => x); }');
-  expect(evaluated('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => "s"); } "ok";')).toBe('ok');
-  // An untyped array declares no element type and constrains nothing.
+
+  // #sec-intrinsic-array-contracts: result inference needs a proved intrinsic.
+  const a = 'const a: [].<uint8> = [3, 1]; ';
+  expectStaticTypeError(`${a} let b: string = a.filter(x => true);`);
+  expectStaticTypeError(`${a} let b: [].<string> = a.filter(x => true);`);
+  expectStaticTypeError(`${a} let b: [].<string> = a.slice(0);`);
+  expectStaticTypeError(`${a} let b: [].<string> = a.sort();`);
+  expect(evaluated(`${a} let b: [].<uint8> = a.filter(x => true); "ok";`)).toBe('ok');
+  expectStaticTypeError(`${a} let b: [].<uint8> = a.map(x => "s");`);
+  expectStaticTypeError(`${a} let b: [].<string> = a.map(x => x);`);
+  expect(evaluated(`${a} let b: [].<string> = a.map(x => "s"); "ok";`)).toBe('ok');
+
+  // An annotation on a parameter does not establish the selected method.
+  for (const call of ['filter(x => true)', 'slice(0)', 'sort()', 'map(x => x)']) {
+    expect(evaluated(`function nc(a: [].<uint8>) { let b: [].<string> = a.${call}; } "ok";`)).toBe('ok');
+  }
   expect(evaluated('function nc(a) { let n: string = a.length; } "ok";')).toBe('ok');
-  // The run time is untouched.
-  expect(evaluated('let a: [].<uint8> = [3,1]; String(a.filter(x => true)[0] is uint8) + "/" + String(a.length);')).toBe('true/2');
+  expect(evaluated(`${a} String(a.filter(x => true)[0] is uint8) + "/" + String(a.length);`)).toBe('true/2');
 });
 
 test('a check the static types already establish is not inserted', () => {
@@ -763,8 +759,8 @@ test('a check the static types already establish is not inserted', () => {
   // distinguish an elision from a no-op - so the observation is a getter, since
   // an object type's membership check READS the properties.
   const src = 'let reads = 0; const o = { get a() { reads += 1; return (5 := uint8); } }; ';
-  expect(evaluated(`${src} function f(s: { a: uint8 }) { reads = 0; let t: { a: uint8 } = s; return reads; } String(f(o));`)).toBe('0');
-  expect(evaluated(`${src} function g(s) { reads = 0; let t: { a: uint8 } = s; return reads; } String(g(o));`)).toBe('1');
+  expect(evaluated(`${src} function f(s: { readonly a: uint8 }) { reads = 0; let t: { readonly a: uint8 } = s; return reads; } String(f(o));`)).toBe('0');
+  expect(evaluated(`${src} function g(s) { reads = 0; let t: { readonly a: uint8 } = s; return reads; } String(g(o));`)).toBe('1');
   // The value is unchanged either way, which is the property that makes the
   // elision legitimate rather than a behaviour change.
   expect(evaluated('const s = (5 := uint8); let x: uint8 = s; String(x) + "/" + String(x is uint8);')).toBe('5/true');
@@ -852,23 +848,24 @@ test('a BLOCK-bodied callback\'s return type is inferred', () => {
   // `a.map(x => x)` flowed and
   // `a.map(x => { return x; })` did not, which is the same function written
   // two ways. The inference is the JOIN of the body's return expressions.
-  const a = 'function nc(a: [].<uint8>) ';
-  expectStatic(`${a} { let b: [].<string> = a.map(x => { return x; }); }`);
-  expectStatic(`${a} { let b: [].<uint8> = a.map(x => { return "s"; }); }`);
+  // #sec-intrinsic-array-contracts: use a transparent fresh receiver.
+  const a = 'const a: [].<uint8> = [1, 2]; ';
+  expectStaticTypeError(`${a} { let b: [].<string> = a.map(x => { return x; }); }`);
+  expectStaticTypeError(`${a} { let b: [].<uint8> = a.map(x => { return "s"; }); }`);
   expect(evaluated(`${a} { let b: [].<uint8> = a.map(x => { return x; }); } "ok";`)).toBe('ok');
   expect(evaluated(`${a} { let b: [].<string> = a.map(x => { return "s"; }); } "ok";`)).toBe('ok');
   // A FunctionExpression callback, not only an arrow.
-  expectStatic(`${a} { let b: [].<uint8> = a.map(function (x) { return "s"; }); }`);
+  expectStaticTypeError(`${a} { let b: [].<uint8> = a.map(function (x) { return "s"; }); }`);
   // The parameters the position supplies are visible in the body, so the INDEX TYPE flows into the inference too.
   // That type is `uint64` (#index-type, #sec-array-and-tuple-types).
   expect(evaluated(`${a} { let b: [].<uint64> = a.map((x, i) => { return i; }); } "ok";`)).toBe('ok');
 
   // SEVERAL returns join into a union.
-  expectStatic(`${a} { let b: [].<uint8> = a.map(x => { if (x) { return x; } return "s"; }); }`);
+  expectStaticTypeError(`${a} { let b: [].<uint8> = a.map(x => { if (x) { return x; } return "s"; }); }`);
   expect(evaluated(`${a} { let b: [].<uint8 | string> = a.map(x => { if (x) { return x; } return "s"; }); } "ok";`)).toBe('ok');
   // A body that can COMPLETE without returning answers *undefined*, and the
   // inference says so rather than pretending the value is always there.
-  expectStatic(`${a} { let b: [].<uint8> = a.map(x => { if (x) { return x; } }); }`);
+  expectStaticTypeError(`${a} { let b: [].<uint8> = a.map(x => { if (x) { return x; } }); }`);
   expect(evaluated(`${a} { let b: [].<uint8 | undefined> = a.map(x => { if (x) { return x; } }); } "ok";`)).toBe('ok');
   // An UNKNOWN arm makes the whole inference unknown: a union with an unknown
   // member is unknown, and answering the other arms would state more than the
@@ -877,11 +874,11 @@ test('a BLOCK-bodied callback\'s return type is inferred', () => {
   // A nested function's returns belong to IT, so they neither contribute nor
   // spoil the enclosing inference.
   expect(evaluated(`${a} { let b: [].<uint8> = a.map(x => { const g = () => "s"; return x; }); } "ok";`)).toBe('ok');
-  expectStatic(`${a} { let b: [].<string> = a.map(x => { const g = () => "s"; return x; }); }`);
+  expectStaticTypeError(`${a} { let b: [].<string> = a.map(x => { const g = () => "s"; return x; }); }`);
 
   // `flatMap` flattens one level, so a callback returning an array contributes
   // its ELEMENTS - the only difference from `map`.
-  expectStatic(`${a} { let b: [].<uint8> = a.flatMap(x => { return "s"; }); }`);
+  expectStaticTypeError(`${a} { let b: [].<uint8> = a.flatMap(x => { return "s"; }); }`);
   expect(evaluated(`${a} { let b: [].<string> = a.flatMap(x => { return "s"; }); } "ok";`)).toBe('ok');
   expect(evaluated(`${a} { let b: [].<uint8> = a.flatMap(x => { return [x]; }); } "ok";`)).toBe('ok');
 
@@ -914,54 +911,39 @@ test('the RETURN boundary elides too, and the condition is a property of the fun
 });
 
 test('the PARAMETER boundary is a different decision, and this is why', () => {
-  // Recorded as a test rather than as a comment because it is the reason
-  // elision stops at two boundaries. A parameter annotation is shared by every
-  // CALL SITE, and the checker cannot see them all: a function reached through
-  // `apply`, through a builtin taking it as a callback, or through `eval` is
-  // called from outside the source the checker walked. Deciding elision in the
-  // callee on the evidence of the calls it can see would let those through.
+  // #sec-check-elision: visible calls cannot justify eliding a parameter check.
   const f = 'function f(p: uint8) { return p is uint8; } ';
   expect(evaluated(`${f} String(f((5 := uint8)));`)).toBe('true');
-  expect(thrownKind(`${f} f.apply(null, [300]);`)).toBe('RangeError');
-  // The literal `[300]` now has an element type of `number`, so the mismatch
-  // with the callback's `uint8` parameter is reported as a STATIC type error
-  // before the value is examined, where it was previously a RangeError about the
-  // value 300 itself. The stricter report arrives earlier; the weaker one
-  // described the value better, which is the trade this makes. Through `eval`
-  // the checker cannot settle the argument, so the RangeError backstop stands.
-  expect(thrownKind(`${f} [300].map(f);`)).toBe('StaticTypeError');
+
+  // Proved forwarding and intrinsic callback contracts reject known mistakes.
+  expectStaticTypeError(`${f} f.apply(null, [300]);`);
+  expectStaticTypeError(`${f} const a: [].<number> = [300]; a.map(f);`);
+
+  // Unknown forwarded arguments and untyped receivers retain runtime checks.
+  expect(thrownKind(`${f} function args() { return [300]; } f.apply(null, args());`)).toBe('RangeError');
+  expect(thrownKind(`${f} [300].map(f);`)).toBe('RangeError');
   expect(thrownKind(`${f} eval("f(300)");`)).toBe('RangeError');
+  expect(evaluated(`${f} function args() { return [5]; } String(f.apply(null, args()));`)).toBe('true');
 });
 
 test('a callback takes its parameter types from the call site', () => {
-  // Machinery rather than a signature: a function LITERAL takes its parameter
-  // types from the position it is written in, so a callback learns the element
-  // type. Asserted by rejection,
-  // since a positive test passes against a checker that knows nothing.
-  expectStatic('function nc(a: [].<uint8>) { a.forEach((x) => { let y: string = x; }); }');
-  expectStatic('function nc(a: [].<uint8>) { a.map((x) => { let y: string = x; return 1; }); }');
-  expectStatic('function nc(a: [].<uint8>) { a.filter((x) => { let y: string = x; return true; }); }');
-  expect(evaluated('function nc(a: [].<uint8>) { a.forEach((x) => { let y: uint8 = x; }); } "ok";')).toBe('ok');
-  // The INDEX is a `uint32` and the third parameter is the array itself, which
-  // is what the signature says and what a reader would expect.
-  expectStatic('function nc(a: [].<uint8>) { a.forEach((x, i) => { let y: string = i; }); }');
-  expectStatic('function nc(a: [].<uint8>) { a.forEach((x, i, arr) => { let y: string = arr; }); }');
-  // An ANNOTATION wins over the context, since the program said what it wanted.
-  expect(evaluated('function nc(a: [].<uint8>) { a.forEach((x: uint8) => { let y: uint8 = x; }); } "ok";')).toBe('ok');
-  // A BLOCK-bodied callback leaves `map` imprecise rather than wrong: its
-  // return needs inference the checker does not have, so the result stays
-  // ~any~ and nothing is claimed about it.
-  // This line once asserted a LIMIT - a block-bodied callback left `map` at
-  // ~any~, so a wrong annotation was accepted - and the limit is gone: the
-  // return type is inferred from the
-  // body's returns, so the same mistake is caught. The pin is kept in its new
-  // form rather than deleted, since what it guards is that the two spellings
-  // of one function agree.
-  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => { return 1; }); }');
-  expectStatic('function nc(a: [].<uint8>) { let b: [].<string> = a.map(x => 1); }');
-  // An untyped receiver constrains nothing, and the run time is untouched.
-  expect(evaluated('function nc(a) { a.forEach((x) => { let y: string = x; }); } "ok";')).toBe('ok');
-  expect(evaluated('let a: [].<uint8> = [1,2]; let n = 0; a.forEach((x) => { n += 1; }); String(n);')).toBe('2');
+  // #sec-intrinsic-array-contracts: a fresh receiver and stable method give
+  // callback literals the element, uint64 index, and receiver parameter types.
+  const a = 'const a: [].<uint8> = [1, 2]; ';
+  for (const method of ['forEach', 'map', 'filter']) {
+    expectStaticTypeError(`${a} a.${method}(x => { let y: string = x; return true; });`);
+  }
+  expect(evaluated(`${a} a.forEach(x => { let y: uint8 = x; }); "ok";`)).toBe('ok');
+  expectStaticTypeError(`${a} a.forEach((x, i) => { let y: string = i; });`);
+  expectStaticTypeError(`${a} a.forEach((x, i, arr) => { let y: string = arr; });`);
+  expect(evaluated(`${a} a.forEach((x, i, arr) => { let n: uint64 = i; let b: [].<uint8> = arr; }); "ok";`)).toBe('ok');
+  expect(evaluated(`${a} a.forEach((x: uint8) => { let y: uint8 = x; }); "ok";`)).toBe('ok');
+
+  // Both callback body forms contribute the result element type.
+  expectStaticTypeError(`${a} let b: [].<string> = a.map(x => { return 1; });`);
+  expectStaticTypeError(`${a} let b: [].<string> = a.map(x => 1);`);
+  expect(evaluated('function nc(a) { a.forEach(x => { let y: string = x; }); } "ok";')).toBe('ok');
+  expect(evaluated(`${a} let n = 0; a.forEach(x => { n += 1; }); String(n);`)).toBe('2');
 });
 
 test('an assignment invalidates a narrowing rather than being refused by it', () => {
@@ -1419,10 +1401,13 @@ test('a function literal is checked at a binding too', () => {
 });
 
 test('arity is checked, in the direction the subtype rule gives', () => {
-  // A literal needing MORE arguments than the position supplies is refused; one
-  // that ignores arguments is fine, which is what every callback does.
-  expectStatic('function h(f: () => uint8) { return "took"; } h((a, b) => (1 := uint8));');
-  expect(evaluated('function h(f: (x: uint8, y: uint8) => uint8) { return "took"; } h((x) => x);')).toBe('took');
+  // #sec-issignaturesubtype: omission is invalid only when binding cannot
+  // supply the parameter. Untyped parameters admit undefined.
+  expectStaticTypeError('function h(f: () => uint8) { return f(); } h((a: uint8, b: uint8) => (1 := uint8));');
+  expect(evaluated('function h(f: () => uint8) { return f(); } String(h((a, b) => (1 := uint8)));')).toBe('1');
+  expect(evaluated('function h(f: () => uint8) { return f(); } String(h((a: uint8 = 2) => a));')).toBe('2');
+  expect(evaluated('function h(f: () => boolean) { return f(); } String(h((a: uint8 | undefined) => a === undefined));')).toBe('true');
+  expect(evaluated('function h(f: (x: uint8, y: uint8) => uint8) { return f(3, 4); } String(h(x => x));')).toBe('3');
 });
 
 test('contextual typing survives, which is what the diversion existed for', () => {

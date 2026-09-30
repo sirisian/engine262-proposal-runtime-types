@@ -17386,19 +17386,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // A call's static type is the callee function type's return, when
         // known; the argument check happens in the walk.
-        // `a.map(cb)` returns an array of the CALLBACK'S return type, which is
-        // why it is left ~any~ rather than guessed at. The inference happens
-        // HERE rather than through a channel: a declaration asks for its
-        // initializer's type before the walk reaches the call, so a value
-        // recorded during the walk would arrive too late. It is readable
-        // for a concise-bodied arrow, whose body IS the returned expression;
-        // a block body needs return-type inference the checker does not have,
-        // and stays ~any~ - imprecise rather than wrong.
+        // #sec-intrinsic-array-contracts: a proved map/flatMap intrinsic takes
+        // its result element type from the callback. Infer it here because a
+        // declaration asks for its initializer's type before the call walk.
+        // A familiar method name alone establishes neither this result nor
+        // the callback's contextual parameter types.
         const mem = (node as { CallExpression?: ParseNode }).CallExpression;
         const calledName = mem && mem.type === 'MemberExpression'
           ? (mem as unknown as { IdentifierName?: { name: string } | null }).IdentifierName?.name
           : undefined;
-        if (calledName === 'map' || calledName === 'flatMap') {
+        if ((calledName === 'map' || calledName === 'flatMap') && callee?.Kind === 'function' && mem
+            && (provenArrayMembers ??= ProvenArrayMembers(root, surroundingAgent.currentRealmRecord)).has(mem)) {
           const recv = mem && (mem as unknown as { MemberExpression?: ParseNode }).MemberExpression
             ? staticType((mem as unknown as { MemberExpression: ParseNode }).MemberExpression)
             : null;
@@ -17934,7 +17932,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // as a `number`, since the checker cannot tell `[1, 'a']` written
           // inline from a declared tuple and the run time answers a Number there.
           if (receiver && (receiver.Kind === 'array' || receiver.Kind === 'tuple') && m.IdentifierName
-              && ['with', 'toSpliced', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'unshift'].includes(m.IdentifierName.name)) {
+              && ['with', 'toSpliced', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'map', 'flatMap', 'forEach', 'toReversed', 'splice', 'concat', 'push', 'unshift'].includes(m.IdentifierName.name)) {
             return arrayContract(node, receiver, m.IdentifierName.name);
           }
           if (receiver && receiver.Kind === 'tuple') {
@@ -26545,6 +26543,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return joinTypes(joined, added);
       }, element);
       return make([parameter(anyTypeRecord, { Rest: true })], { ...copy, Element: joined });
+    }
+    if (['map', 'flatMap', 'forEach'].includes(name)) {
+      return ArrayMethodSignature(name === 'flatMap' ? 'map' : name, element, receiver);
     }
     if (['push', 'pop', 'shift', 'unshift'].includes(name)) return ArrayMethodSignature(name, element, receiver);
     // The remaining existing array signatures keep their argument policy;

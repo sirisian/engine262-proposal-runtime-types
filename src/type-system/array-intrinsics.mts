@@ -3,7 +3,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 
-const methods = new Set(['with', 'toSpliced', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'pop', 'shift', 'unshift', 'reverse', 'copyWithin', 'fill']);
+const methods = new Set(['with', 'toSpliced', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'map', 'flatMap', 'forEach', 'toReversed', 'splice', 'concat', 'push', 'pop', 'shift', 'unshift', 'reverse', 'copyWithin', 'fill']);
 const originals = new WeakMap<Realm, Map<string, Value>>();
 const species = new WeakMap<Realm, Descriptor>();
 
@@ -118,7 +118,7 @@ export function ProvenArrayMembers(root: ParseNode, realm: Realm): ReadonlySet<P
       if (typedPrototype.properties.has(Value(name)) || intrinsicData(prototype, Value(name)) !== originals.get(realm)!.get(name)) return false;
       // A callback with an unavailable body can mutate a dependency before a
       // later call in this source. Keep such sources at the dynamic boundary.
-      if (['sort', 'toSorted', 'reduce', 'reduceRight', 'filter'].includes(name)) {
+      if (['sort', 'toSorted', 'reduce', 'reduceRight', 'filter', 'map', 'flatMap', 'forEach'].includes(name)) {
         const callback = node.parent.Arguments[0];
         if (callback?.type === 'IdentifierReference' && callback.name !== 'undefined'
             && definitions.get(callback.name)?.type !== 'FunctionDeclaration') return false;
