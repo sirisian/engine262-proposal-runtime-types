@@ -105,13 +105,13 @@ test('a LineTerminator before `all` forbids the form', () => {
 });
 
 test('a plain `match` is unchanged', () => {
-  expect(evaluated('String(match (7) { when 7: "seven"; default: "other"; });')).toBe('seven');
+  expect(evaluated('String(match (7) { when 7: "seven"; });')).toBe('seven');
   expect(evaluated('String(match (8) { when 7: "seven"; default: "other"; });')).toBe('other');
 });
 
 test('the forms nest in each other', () => {
-  expect(evaluated('JSON.stringify(match all (2) { when 2: match (2) { when 2: "inner"; default: "no"; }; });'))
+  expect(evaluated('JSON.stringify(match all (2) { when 2: match (2) { when 2: "inner"; }; });'))
     .toBe('["inner"]');
-  expect(evaluated('String(match (2) { when 2: JSON.stringify(match all (2) { when 2: "a"; when _: "b"; }); default: "no"; });'))
+  expect(evaluated('String(match (2) { when 2: JSON.stringify(match all (2) { when 2: "a"; when _: "b"; }); });'))
     .toBe('["a","b"]');
 });

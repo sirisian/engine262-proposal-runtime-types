@@ -170,7 +170,7 @@ test.each([
   ],
   [
     "optional skips key conversion",
-    "function f(x:null,key:{[Symbol.toPrimitive]:()=>symbol}){return x?.[key];}globalThis.settled=String(f(null,{[Symbol.toPrimitive](){throw 0;}}));",
+    "function f(x:{[k:string]:uint8}|null,key:{[Symbol.toPrimitive]:()=>symbol}){return x?.[key];}globalThis.settled=String(f(null,{[Symbol.toPrimitive](){throw 0;}}));",
     "undefined"
   ],
   [

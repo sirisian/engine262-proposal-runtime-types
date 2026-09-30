@@ -110,7 +110,7 @@ test('a test on the topic narrows it', () => {
 });
 
 test('composes with match and do', () => {
-  expect(evaluated("String(1 |> match (%) { when 1: 'one'; default: 'other'; });")).toBe('one');
+  expect(evaluated("String(1 |> match (%) { when 1: 'one'; });")).toBe('one');
   expect(evaluated('String(3 |> do { const t = % * 2; t + 1 });')).toBe('7');
 });
 

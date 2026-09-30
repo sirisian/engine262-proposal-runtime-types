@@ -126,7 +126,7 @@ test('an ABRUPT COMPLETION leaves a block arm and means what it means outside', 
   //
   // "`return`, `break`, `continue`, `await` and `yield` mean in an arm what they
   // mean in the enclosing function", and they do.
-  expect(evaluated('function f() { match (1) { when 1: { return 7; } default: 0; }; return 3; } String(f());')).toBe('7');
+  expect(evaluated('function f() { match (1) { when 1: { return 7; } }; return 3; } String(f());')).toBe('7');
   expect(evaluated('let out = ""; for (const q of [1, 2]) { match (q) { when 1: { continue; } default: 0; }; out += q; } out;')).toBe('2');
   expect(evaluated('let out = ""; for (const q of [1, 2, 3]) { match (q) { when 2: { break; } default: 0; }; out += q; } out;')).toBe('1');
 });
@@ -138,12 +138,12 @@ test('a `match` statement works in ANY position, and ASI applies', () => {
   // So every `match` that BEGAN A LINE was rejected as a match expression -
   // which is every one inside a block - and the statement was then parsed as
   // something else and failed. It was never about ASI.
-  expect(evaluated('{\nmatch (1) { when 1: 7; default: 0; }\n5;\n}\n"ok";')).toBe('ok');
-  expect(evaluated('function f() {\nmatch (1) { when 1: 7; default: 0; }\nreturn 3;\n}\nString(f());')).toBe('3');
-  expect(evaluated('const f = () => {\nmatch (1) { when 1: 7; default: 0; }\nreturn 3;\n};\nString(f());')).toBe('3');
+  expect(evaluated('{\nmatch (1) { when 1: 7; }\n5;\n}\n"ok";')).toBe('ok');
+  expect(evaluated('function f() {\nmatch (1) { when 1: 7; }\nreturn 3;\n}\nString(f());')).toBe('3');
+  expect(evaluated('const f = () => {\nmatch (1) { when 1: 7; }\nreturn 3;\n};\nString(f());')).toBe('3');
   // And an ABRUPT COMPLETION now leaves a block arm in a program written the
   // way one would actually be written.
-  expect(evaluated('function f() {\nmatch (1) { when 1: { return 7; } default: 0; }\nreturn 3;\n}\nString(f());')).toBe('7');
+  expect(evaluated('function f() {\nmatch (1) { when 1: { return 7; } }\nreturn 3;\n}\nString(f());')).toBe('7');
 });
 
 test('the restriction still holds where the grammar puts it', () => {
@@ -156,5 +156,5 @@ test('the restriction still holds where the grammar puts it', () => {
   // is a SyntaxError in any JavaScript, and this was twice mistaken for
   // evidence about `match`.
   const outcome3 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome3('match (1) { when 1: 7; default: 0; } 5;')).toBe('SyntaxError');
+  expect(outcome3('match (1) { when 1: 7; } 5;')).toBe('SyntaxError');
 });

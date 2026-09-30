@@ -28,7 +28,7 @@ test('an alias is covered by the name that shares its value', () => {
   // The premise, measured rather than assumed.
   expect(evaluated('enum E { A = 1, B = 1 } String(E.A === E.B);')).toBe('true');
   expect(evaluated('enum E { A = 1, B = 1 } let e: E = E.B; let hit = "none";'
-    + ' switch (e) { case E.A: hit = "A"; break; default: hit = "default"; } hit;')).toBe('A');
+    + ' switch (e) { case E.A: hit = "A"; break; } hit;')).toBe('A');
 });
 
 test('DISTINCT values still need every arm', () => {

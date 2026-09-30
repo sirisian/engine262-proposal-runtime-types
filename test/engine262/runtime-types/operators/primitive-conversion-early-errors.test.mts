@@ -119,10 +119,6 @@ test.each([
   [
     "edge: primitive object union result unused",
     "function f(x:{[Symbol.toPrimitive]:(hint:string)=>object|string}){const o={[x]:1};}"
-  ],
-  [
-    "edge: optional access shortcircuits",
-    "function f(x:{[Symbol.toPrimitive]:number}){const o:null=null;o?.[x];}f({[Symbol.toPrimitive]:1});"
   ]
 ])('admits the control: %s', (_name, source) => {
   expect(ok(source)).toBe(true);
@@ -220,4 +216,11 @@ test('a valid primitive-conversion contract does not bypass reference liveness',
 // The successful primitive result is followed into text conversion.
 test('a Symbol-producing hook fails implicit text conversion before evaluation', () => {
   expectStaticTypeError('function f(x:{[Symbol.toPrimitive]:(hint:string)=>symbol}){`${x}`;}f({[Symbol.toPrimitive](hint:string):symbol{return Symbol();}});');
+});
+
+// #sec-narrowing, #sec-narrowfrom: an optional access through an always-null
+// receiver is dead, and is now refused itself rather than admitted for
+// skipping the key conversion.
+test('optional access through an always-null receiver is refused', () => {
+  expectStaticTypeError("function f(x:{[Symbol.toPrimitive]:number}){const o:null=null;o?.[x];}f({[Symbol.toPrimitive]:1});");
 });

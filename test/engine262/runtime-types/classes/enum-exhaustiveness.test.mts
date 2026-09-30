@@ -32,7 +32,10 @@ test('a switch with a default need not list every enumerator', () => {
 });
 
 test('cases split around a default clause are all counted', () => {
-  expect(evaluated('enum E { A, B } let e = E.B; let r = "none"; switch (e) { case E.A: r = "a"; break; default: r = "d"; break; case E.B: r = "b"; break; } r;')).toBe('b');
+  expect(evaluated('enum E { A, B, C } let e = E.B; let r = "none"; switch (e) { case E.A: r = "a"; break; default: r = "d"; break; case E.B: r = "b"; break; } r;')).toBe('b');
+  // Counted, so a case for every enumerator around the default leaves it dead
+  // (#sec-enums): it can never be taken.
+  expectThrown('enum E { A, B } let e = E.B; switch (e) { case E.A: break; default: break; case E.B: break; }', 'the default can never be taken');
 });
 
 // -- Case labels must be enumerators -------------------------------------------

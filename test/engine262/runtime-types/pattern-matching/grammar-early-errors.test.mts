@@ -27,6 +27,6 @@ test.each(['1 + 2', 'true && false', '1..<(2 + 3)', '1..<2 + 3'])('literal cover
 
 test('literal patterns retain interpolation, signs, and named range endpoints', () => {
   expect(evaluated('String(match (3) { when ${1 + 2}: 1; default: 0; });')).toBe('1');
-  expect(evaluated('String(match (-2) { when -2: 1; default: 0; });')).toBe('1');
+  expect(evaluated('String(match (-2) { when -2: 1; });')).toBe('1');
   expect(evaluated('const END = 3; String(match (2) { when 1..<END: 1; default: 0; });')).toBe('1');
 });

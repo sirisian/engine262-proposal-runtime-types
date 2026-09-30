@@ -52,10 +52,6 @@ test.each([
 
 test.each([
   [
-    "guard null optional",
-    "function f(v:{x:uint8}|null){if(v===null){v?.x;}}"
-  ],
-  [
     "guard nonnull positive",
     "function f(v:{x:uint8}|null){if(v!==null){let n:uint8=v.x;}}"
   ],
@@ -79,4 +75,10 @@ test.each([
   ]
 ])('%s preserves its result', (_name, source, value) => {
   expect(evaluated(source)).toBe(value);
+});
+
+// #sec-narrowing, #sec-narrowfrom: inside the guard `v` is `null`, so `v?.x` can
+// never take its present branch, and is refused as `v ?? 0` would be.
+test('an optional chain on a value narrowed to null is refused', () => {
+  expect(ok("function f(v:{x:uint8}|null){if(v===null){v?.x;}}")).toBe(false);
 });

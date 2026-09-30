@@ -82,7 +82,7 @@ test.each([
 test.each([
   [
     "optional null skip",
-    "function f(a:null){delete a?.[0];}f(null);"
+    "function f(a:{[k:string]:uint8}|null){delete a?.['k'];}f(null);"
   ],
   [
     "ordinary extra",

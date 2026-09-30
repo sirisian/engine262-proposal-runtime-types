@@ -131,5 +131,5 @@ test('a numeric literal against a UNION of numeric types is ambiguous', () => {
   // A union with only ONE numeric member is not ambiguous.
   expect(outcome7('function f(v: uint8 | string) { return match (v) { when 5: 1; default: 0; }; } f(uint8(5));')).toBe('ACCEPTED');
   // The runtime is unchanged.
-  expect(evaluated('String(match (5) { when 5: "five"; default: "other"; });')).toBe('five');
+  expect(evaluated('String(match (5) { when 5: "five"; });')).toBe('five');
 });

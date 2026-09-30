@@ -22,8 +22,10 @@ test("accepts optional spread good", () => {
   expect(ok("function unused(f:((x:uint8)=>void)|null,x:Iterable.<uint8>){f?.(...x);}")).toBe(true);
 });
 
-test("accepts optional spread null", () => {
-  expect(ok("function unused(x:uint8){let f:null=null; f?.(...x);}")).toBe(true);
+test("refuses optional spread through an always-null callee", () => {
+  // #sec-narrowing, #sec-narrowfrom: a callee that is always null leaves the
+  // call dead, which is now refused itself, as `??` on an always-null value is.
+  expect(ok("function unused(x:uint8){let f:null=null; f?.(...x);}")).toBe(false);
 });
 
 test("accepts optional spread string", () => {

@@ -50,7 +50,7 @@ test('named fixed arguments following a rest remain pinned', () => {
 test.each([
   'function f(o: {a: {b: uint8}} | null) { let x: uint8 | undefined = o?.a.b; }',
   'function f(o: {a: {b: uint8} | null} | null) { let x: uint8 | undefined = o?.a?.b; }',
-  'function f(o: null) { let x: undefined = o?.a; }',
+  'function f(o: { a: uint8 } | null) { let x: uint8 | undefined = o?.a; }',
   'function f(o: any) { let x: string = o?.a.b; }',
 ])('types a complete optional chain: %s', (source) => {
   expect(ok(source)).toBe(true);

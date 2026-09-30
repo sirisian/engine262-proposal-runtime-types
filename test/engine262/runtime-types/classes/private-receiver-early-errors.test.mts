@@ -113,7 +113,7 @@ test.each([
   ],
   [
     "private-optional-null",
-    "class C{#x:uint8=1;f(o:null){return o?.#x;}}new C().f(null);",
+    "class C{#x:uint8=1;f(o:C|null){return o?.#x;}}new C().f(null);",
     {
       "completion": "normal",
       "bodyRan": "true",
@@ -308,8 +308,8 @@ test.each([
     }
   ],
   [
-    "R56-E06: all-nullish optional private method",
-    "class C{#m():void{globalThis.hookRan=true;}f(o:null|undefined){o?.#m();}}const c=new C();c.f(null);c.f(undefined);",
+    "R56-E06: nullish optional private method",
+    "class C{#m():void{globalThis.hookRan=true;}f(o:C|null|undefined){o?.#m();}}const c=new C();c.f(null);c.f(undefined);",
     {
       "completion": "normal",
       "bodyRan": "true",

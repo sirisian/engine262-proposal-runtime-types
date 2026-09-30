@@ -438,7 +438,7 @@ test('the do contexts are reflectable', () => {
 test('a do nests inside the constructs that take expressions', () => {
   // A match arm, where the arm is an EXPRESSION arm rather than a block one -
   // the parenthesis is what keeps the `do` out of statement position.
-  expect(evaluated('String(match (1) { when 1: (do { 5 }); default: 0; });')).toBe('5');
+  expect(evaluated('String(match (1) { when 1: (do { 5 }); });')).toBe('5');
   // A do * inside a do, and a do inside a do *.
   expect(evaluated('String([...do { (do * { yield 1; }) }]);')).toBe('1');
   expect(evaluated('String([...do * { yield do { 2 }; }]);')).toBe('2');

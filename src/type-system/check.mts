@@ -4352,10 +4352,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The can-never-succeed half of the nullish row of #sec-narrowing, for a
    * form whose nullish branch is dead where _s_ cannot be nullish.
    */
-  const reportNeverNullish = (s: TypeRecord, form: string): void => {
+  const reportNeverNullish = (s: TypeRecord, form: string, bothHalves = false): void => {
     if (s.Kind === 'any' || mentionsTypeParameter(s)) return;
     if (NarrowTo(s, nullishType()) === empty) {
       errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(form)).Value as ObjectValue);
+    } else if (bothHalves && NarrowFrom(s, nullishType()) === empty) {
+      // The other half of the nullish row, as `??` already has it: a receiver
+      // that is always nullish leaves the rest of the chain dead.
+      errors.push(Throw.StaticTypeError('the $1 test can never fail, so the branch it guards is dead code', Value(form)).Value as ObjectValue);
     }
   };
 
@@ -9085,6 +9089,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (block?.DefaultClause) {
       return true;
     }
+    return switchCasesCoverDiscriminant(n);
+  };
+
+  /**
+   * Whether the `case` labels alone, without a `default`, cover every value the
+   * discriminant can take: every enumerator, or every atom of a sealed
+   * hierarchy. Also what makes a `default` after them dead (#sec-enums).
+   */
+  const switchCasesCoverDiscriminant = (n: ParseNode): boolean => {
     const coverage = switchEnumCoverage(n);
     if (coverage) {
       return enumeratorsNotCovered(coverage.record, coverage.names, coverage.covered).length === 0;
@@ -20342,6 +20355,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const tags = t.Members.map((m) => typeofTagOfType(m as TypeRecord));
       return tags.length > 0 && tags.every((tag) => tag !== null && tag === tags[0]) ? tags[0] : null;
     }
+    // Every value of a function type is callable, so its tag is 'function'.
+    if (t.Kind === 'function') return 'function';
     if (t.Kind !== 'primitive' || mentionsTypeParameter(t)) return null;
     const name = (t as { Name?: string }).Name ?? '';
     if (['number', 'int', 'uint', 'float', 'decimal'].includes(name) || /^(u?int|float|decimal)\d+$/.test(name)) return 'number';
@@ -20556,6 +20571,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const current = lookup(operandName);
           if (current && typeofTagOfType(current) === tag) {
             return { name: operandName, type: current, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display };
+          }
+          // A function type's values are always 'function', and a typed class's
+          // instances never are: #sec-typed-classes refuses a constructor that
+          // returns an object, and a subclass of a typed class is typed too.
+          if (current && ((current.Kind === 'function' && tag !== 'function')
+              || (tag === 'function' && current.Kind === 'nominal' && typedClassDeclarationOf(current)))) {
+            return { name: operandName, type: current, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display };
           }
           const t = typeofStringToType(tag);
           if (t) {
@@ -21054,10 +21076,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // literal type would. Only type patterns were read here, so a `match (b)`
     // with arms for both `true` and `false` was reported as covering neither.
     if (p.type === 'MatchLiteralPattern' && p.Literal) {
+      const lit = p.Literal as unknown as { type?: string, value?: unknown, operator?: string, UnaryExpression?: { type?: string, value?: unknown } };
+      // #sec-match-exhaustiveness lists `null` among the atoms as itself, a
+      // primitive rather than a literal, and `when null` covers it.
+      if (lit.type === 'NullLiteral' && atom.Kind === 'primitive' && (atom as { Name?: string }).Name === 'null') {
+        return true;
+      }
       if (atom.Kind !== 'literal') {
         return false;
       }
-      const lit = p.Literal as unknown as { type?: string, value?: unknown };
       const want = (atom as { Value: unknown }).Value;
       if (lit.type === 'BooleanLiteral') {
         return want === (lit.value === true ? Value.true : Value.false)
@@ -21065,6 +21092,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (lit.type === 'NullLiteral') {
         return want === Value.null;
+      }
+      // A numeric or string literal pattern covers the literal type of the same
+      // value, so the NarrowFrom fold of #sec-match-exhaustiveness can empty a
+      // literal subject: `match (1) { when 1: ... }` is the spec's own example.
+      const numberOf = (v: unknown): number | undefined => {
+        if (typeof v === 'number') return v;
+        if (v instanceof NumberValue) return R(v);
+        // TypedNumberValue is not a NumberValue, which R requires.
+        // eslint-disable-next-line @engine262/mathematical-value
+        if (v instanceof TypedNumberValue) return (v as TypedNumberValue).numberValue();
+        return undefined;
+      };
+      const stringOf = (v: unknown): string | undefined => (typeof v === 'string' ? v
+        : typeof (v as { stringValue?: unknown })?.stringValue === 'function' ? (v as { stringValue(): string }).stringValue() : undefined);
+      let numeric: number | undefined;
+      if (lit.type === 'NumericLiteral' && typeof lit.value === 'number') numeric = lit.value;
+      else if ((lit.operator === '-' || lit.operator === '+') && lit.UnaryExpression?.type === 'NumericLiteral' && typeof lit.UnaryExpression.value === 'number') {
+        numeric = lit.operator === '-' ? -lit.UnaryExpression.value : lit.UnaryExpression.value;
+      }
+      if (numeric !== undefined) {
+        const have = numberOf(want);
+        return have !== undefined && Object.is(have, numeric);
+      }
+      if (lit.type === 'StringLiteral' && typeof lit.value === 'string') {
+        return stringOf(want) === lit.value;
       }
       return false;
     }
@@ -21187,6 +21239,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (numeric === null && positionType && positionType.Kind !== 'any' && positionType.Kind !== 'literal' && !mentionsTypeParameter(positionType)) {
           const literalType = staticType(pattern.Literal);
           if (literalType && literalType.Kind !== 'any' && NarrowTo(positionType, literalType) === empty) {
+            errors.push((Throw.StaticTypeError(
+              'the pattern cannot match a position of type $1',
+              Value(displayType(positionType)),
+            ) as ThrowCompletion).Value as ObjectValue);
+          }
+        }
+        // A numeric literal against a union of literals - `1 | 2` - adopts no
+        // numeric type, so it is judged by NarrowTo as a string literal is:
+        // `when 3` over `1 | 2` can match nothing.
+        // A single literal position is left alone, as the string path above
+        // leaves it, and zero is left alone because a bare `0` pattern matches
+        // either zero while their literal types are distinct.
+        if (numeric !== null && numeric !== 0 && positionType && !mentionsTypeParameter(positionType)
+            && positionType.Kind === 'union' && positionType.Members.length > 0 && positionType.Members.every((m) => m.Kind === 'literal')) {
+          const literalType = staticType(pattern.Literal);
+          if (literalType && literalType.Kind === 'literal' && NarrowTo(positionType, literalType) === empty) {
             errors.push((Throw.StaticTypeError(
               'the pattern cannot match a position of type $1',
               Value(displayType(positionType)),
@@ -29390,6 +29458,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             errors.push(completion.Value as ObjectValue);
           }
           const hasDefault = n.CaseBlock.DefaultClause !== undefined && n.CaseBlock.DefaultClause !== null;
+          // #sec-enums: a `default` after a case for every enumerator can never
+          // be taken; the narrowing row gives it an empty type.
+          if (hasDefault && coverage.invalid.length === 0
+              && enumeratorsNotCovered(coverage.record, coverage.names, coverage.covered).length === 0) {
+            errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken', Value(coverage.enumName)).Value as ObjectValue);
+          }
           if (!hasDefault) {
             const missing = enumeratorsNotCovered(coverage.record, coverage.names, coverage.covered);
             if (missing.length > 0) {
@@ -29397,6 +29471,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               errors.push(completion.Value as ObjectValue);
             }
           }
+        } else if ((n.CaseBlock as { DefaultClause?: ParseNode | null }).DefaultClause && switchCasesCoverDiscriminant(n)) {
+          // A sealed hierarchy is closed as an enum is: a `default` after a
+          // case for every atom, the base included where it is instantiable,
+          // can never be taken.
+          errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken',
+            Value(displayType(staticType(n.Expression) as TypeRecord))).Value as ObjectValue);
         }
         // A CASE LABEL that cannot match the discriminant is the `switch`
         // spelling of a test that cannot succeed, which the design refuses
@@ -29411,6 +29491,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // excludes one: `case 5` for a `uint32` compares against a literal whose
         // Base is `number`, and the literal adopts.
         const subject = staticType(n.Expression);
+        // A literal discriminant holds one value, so a literal label of any
+        // other value is the `v === e` row with a test that can never succeed.
+        if (subject && subject.Kind === 'literal') {
+          const literalClauses = [
+            ...((n.CaseBlock as unknown as { CaseClauses_a?: readonly ParseNode[] | null }).CaseClauses_a ?? []),
+            ...((n.CaseBlock as unknown as { CaseClauses_b?: readonly ParseNode[] | null }).CaseClauses_b ?? []),
+          ];
+          for (const clause of literalClauses) {
+            const label = (clause as { Expression?: ParseNode }).Expression;
+            const labelType = label ? staticType(label) : null;
+            if (labelType?.Kind === 'literal' && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
+              errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord))).Value as ObjectValue);
+            }
+          }
+        }
         if (subject && subject.Kind !== 'literal') {
           const clauses = [
             ...((n.CaseBlock as unknown as { CaseClauses_a?: readonly ParseNode[] | null }).CaseClauses_a ?? []),
@@ -29468,6 +29563,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
               errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord))).Value as ObjectValue);
               continue;
+            }
+            // A string or boolean literal label is the `v === e` row too. One
+            // whose base is disjoint from the discriminant keeps the
+            // disjointness message below; one whose base is not, but which the
+            // discriminant's literal type cannot hold (`case 'c'` over
+            // `'a' | 'b'`), is a test that can never succeed.
+            if (labelType && labelType.Kind === 'literal' && !numericLiteral
+                && (subject as { Declaration?: { type?: string } }).Declaration?.type !== 'EnumDeclaration') {
+              const literalBase = (labelType as { Base?: TypeRecord }).Base;
+              if (literalBase && !AreDisjoint(subject as TypeRecord, literalBase) && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
+                errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord))).Value as ObjectValue);
+                continue;
+              }
             }
             if (labelType && labelType.Kind === 'literal') {
               const literalBase = (labelType as { Base?: TypeRecord }).Base;
@@ -30219,13 +30327,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'OptionalExpression': {
         // #sec-narrowing lists `?.` with `??` and `== null`: its nullish branch
-        // is dead where the receiver cannot be nullish (#sec-narrowfrom). Only
-        // that half is taken here. A receiver that is ALWAYS nullish leaves the
-        // rest of the chain dead instead, and this repository's tests rely on
-        // such a chain being admitted; that half is left for a design decision.
+        // is dead where the receiver cannot be nullish, and the rest of the
+        // chain is dead where it always is (#sec-narrowfrom), as for `??`.
         {
           const receiver = staticType((n as ParseNode.OptionalExpression).MemberExpression as ParseNode);
-          if (receiver) reportNeverNullish(receiver, '?.');
+          if (receiver) reportNeverNullish(receiver, '?.', true);
         }
         optionalChainView(n, true);
         return;

@@ -23,7 +23,7 @@ test('EXISTING PROGRAMS USING `match` STILL WORK', () => {
 test('clauses are tried in source order, first match wins', () => {
   expect(evaluated('match (1) { when 1: "one"; }')).toBe('one');
   expect(evaluated('match (2) { when 1: "one"; default: "other"; }')).toBe('other');
-  expect(evaluated('match (2) { when 1: "a"; when 2: "b"; when 2 or 3: "c"; default: "d"; }')).toBe('b');
+  expect(evaluated('const s: number = 2; match (s) { when 1: "a"; when 2: "b"; when 2 or 3: "c"; default: "d"; }')).toBe('b');
   // "If no clause matches, a TypeError is thrown" - and the exhaustiveness rules make
   // that throw statically impossible exactly where the types can prove it;
   // exhaustiveness.test.mts owns that half. A literal subject has a Static Type, so it is
@@ -53,13 +53,13 @@ test('a GUARD fails its arm without abandoning the match', () => {
   // second subject test.
   expect(evaluated('match (5) { when _ if (false): "no"; default: "yes"; }')).toBe('yes');
   expect(evaluated('match (5) { when _ if (true): "yes"; default: "no"; }')).toBe('yes');
-  expect(evaluated('match (5) { when 5 if (false): "a"; when 5: "b"; default: "c"; }')).toBe('b');
+  expect(evaluated('match (5) { when 5 if (false): "a"; when 5: "b"; }')).toBe('b');
 });
 
 test('a `throw` arm throws rather than yielding a value', () => {
   // Admitted "because an arm that reports an impossible case is the commonest
   // arm a total `match` has".
-  expect(outcome('match (1) { when 1: throw new RangeError("x"); default: 0; }')).toBe('RangeError');
+  expect(outcome('match (1) { when 1: throw new RangeError("x"); }')).toBe('RangeError');
   expect(evaluated('match (2) { when 1: throw new RangeError("x"); default: "fine"; }')).toBe('fine');
 });
 
@@ -68,7 +68,7 @@ test('every pattern form works as a clause pattern', () => {
   expect(evaluated('match ({ x: 1 }) { when { x: _ }: "has x"; default: "no"; }')).toBe('has x');
   expect(evaluated('match ("aaa") { when /^a+$/: "as"; default: "no"; }')).toBe('as');
   expect(evaluated('match (uint8(1)) { when uint8: "typed"; }')).toBe('typed');
-  expect(evaluated('match (5) { when 4 or 5: "either"; default: "no"; }')).toBe('either');
+  expect(evaluated('match (5) { when 4 or 5: "either"; }')).toBe('either');
 });
 
 test('THE CACHE COVERS THE TYPE PATH TOO', () => {
@@ -134,22 +134,22 @@ test('a BLOCK arm is a do expression\'s block', () => {
   // already produces, so nothing special is computed for it - that was true
   // under the narrower rule this replaces as well, and no program changes
   // meaning.
-  expect(evaluated('String(match (1) { when 1: { 42; } default: 0; });')).toBe('42');
-  expect(evaluated('String((() => { let n = 0; return match (1) { when 1: { n = 5; n * 2; } default: 0; }; })());')).toBe('10');
+  expect(evaluated('String(match (1) { when 1: { 42; } });')).toBe('42');
+  expect(evaluated('String((() => { let n = 0; return match (1) { when 1: { n = 5; n * 2; } }; })());')).toBe('10');
   // An expression arm is unaffected.
-  expect(evaluated('String(match (1) { when 1: 7; default: 0; });')).toBe('7');
+  expect(evaluated('String(match (1) { when 1: 7; });')).toBe('7');
 
   // What DOES change, in both directions. An arm may now end in an `if` with an
   // `else`, a `try`, or a `switch`, which the old rule made `void` and so
   // unreadable at the use site.
-  expect(evaluated('String(match (1) { when 1: { if (true) 5; else 6; } default: 0; });')).toBe('5');
-  expect(evaluated('String(match (1) { when 1: { try { 5 } catch { 6 } } default: 0; });')).toBe('5');
+  expect(evaluated('String(match (1) { when 1: { if (true) 5; else 6; } });')).toBe('5');
+  expect(evaluated('String(match (1) { when 1: { try { 5 } catch { 6 } } });')).toBe('5');
 
   // And an arm ending in a declaration is a Syntax Error naming it, where it
   // used to be a silent `void` - this line asserted 'undefined' before, which
   // was the old rule's answer and the reason the error is better.
-  expectError('const x = match (1) { when 1: { let a = 1; } default: 0; };');
-  expectError('const ys = []; const x = match (1) { when 1: { for (const y of ys) { 1 } } default: 0; };');
+  expectError('const x = match (1) { when 1: { let a = 1; } };');
+  expectError('const ys = []; const x = match (1) { when 1: { for (const y of ys) { 1 } } };');
 });
 
 test('an abrupt completion cannot leave a block arm', () => {
@@ -167,7 +167,7 @@ test('an abrupt completion cannot leave a block arm', () => {
   // completion is produced - but taking the enclosing function's value throws,
   // so the `return` neither returns nor is silently swallowed.
   const outcome2 = (source: string): string => evaluated(`try { eval(${JSON.stringify(source)}); "ACCEPTED"; } catch (e) { e.constructor.name; }`);
-  expect(outcome2('(function f() { match (1) { when 1: { return 1; } default: 0; } })();')).toBe('ACCEPTED');
+  expect(outcome2('(function f() { match (1) { when 1: { return 1; } } })();')).toBe('ACCEPTED');
   expect(outcome2('String((function f() { match (1) { when 1: { return "r"; } default: 0; } return "fell"; })());')).toBe('SyntaxError');
 });
 
@@ -176,7 +176,9 @@ test('what the match expression does not yet carry', () => {
   // position, since a `match` expression is a valid expression statement - the
   // COVER the spec describes is what a conforming parser needs, and the
   // speculation reaches the same programs here.
-  expect(outcome('match (1) { when 1: 1; default: 2; }')).toBe('ACCEPTED');
+  // #sec-match-exhaustiveness: `when 1` empties the subject `1`, so the default
+  // can match nothing - which the match expression now carries.
+  expect(outcome('match (1) { when 1: 1; default: 2; }')).toBe('StaticTypeError');
   // BINDINGS are bindings.test.mts's. What remains of the checker half is
   // NARROWING and EXHAUSTIVENESS.
   expect(evaluated('String(match (1) { when let x: x + 1; });')).toBe('2');

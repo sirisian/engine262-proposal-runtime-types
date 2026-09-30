@@ -102,17 +102,17 @@ test.each([
 test.each([
   [
     "optional dot",
-    "function f(x:null){return x?.a;}globalThis.settled=String(f(null));",
+    "function f(x:{a:uint8}|null){return x?.a;}globalThis.settled=String(f(null));",
     "undefined"
   ],
   [
     "optional continuous chain",
-    "function f(x:null){return x?.a.b;}globalThis.settled=String(f(null));",
+    "function f(x:{a:{b:uint8}}|null){return x?.a.b;}globalThis.settled=String(f(null));",
     "undefined"
   ],
   [
     "optional computed skips key",
-    "let hits=0;function f(x:null){return x?.[hits++];}f(null);globalThis.settled=String(hits);",
+    "let hits=0;function f(x:[].<uint8>|null){return x?.[hits++];}f(null);globalThis.settled=String(hits);",
     "0"
   ],
   [
@@ -179,7 +179,7 @@ test.each([
 test.each([
   [
     "optional deletion",
-    "function f(x:null){return delete x?.a;}globalThis.settled=String(f(null));",
+    "function f(x:{[k:string]:uint8}|null){return delete x?.a;}globalThis.settled=String(f(null));",
     "true"
   ]
 ])('additional values and effects: %s', (_name, source, expected) => {
