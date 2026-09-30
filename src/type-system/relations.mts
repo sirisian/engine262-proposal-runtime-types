@@ -1230,6 +1230,11 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     }
     return false;
   }
+  // #sec-issubtype: a callable value is an Object. Its signature guarantees
+  // the empty object contract, without inventing any named member or indexer.
+  if (s.Kind === 'function' && t.Kind === 'object' && t.Properties.length === 0 && t.IndexSignatures.length === 0) {
+    return true;
+  }
   // #sec-issubtype's two structural steps.
   // They come BEFORE the step that separates the kinds, which is the whole
   // point: #sec-object-types names the failure this prevents - "Without it the
@@ -1270,14 +1275,14 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     }
     // #sec-interfaces-semantics: an interface "may also type an object, an array, or a
     // function structurally", and #sec-object-types: an interface of call
-    // signatures denotes a ~function~ record. So the structural form is
-    // consulted for a ~function~ source or target where the form IS a function,
-    // as it is for an ~object~ one. Gated on ~object~ alone, a function value
+    // signatures denotes a ~function~ record. A function source may also
+    // satisfy an empty object structure; normalize the interface before
+    // checking that relation. Gated on ~object~ alone, a function value
     // reaching a callable interface - `f((x) => {})` at `f(a: V)` for
     // `interface V { (uint32) }` - was refused, and the interface and object-type
     // spellings of one function type were not interchangeable.
     const targetStructure = InterfaceStructureOf(t);
-    if (targetStructure && (s.Kind === 'object' || (s.Kind === 'function' && targetStructure.Kind === 'function'))) {
+    if (targetStructure && (s.Kind === 'object' || s.Kind === 'function')) {
       return IsSubtype(s, SubstituteTypeArguments(targetStructure, (t as { Declaration?: unknown }).Declaration, (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments), next);
     }
     const sourceStructure = InterfaceStructureOf(s);

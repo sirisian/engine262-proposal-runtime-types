@@ -174,9 +174,9 @@ test.each([
     "name": "terminal return explicitly awaits bad value",
     "source": "type Bad={then:(a:uint8,b:uint8)=>void};type It={[Symbol.asyncIterator]:()=>{next:()=>{done:true,value:Bad}}};async function* f(it:It):AsyncGenerator.<any,any,void>{return yield* it;}",
     "expected": {
-      "completion": "normal",
-      "bodyRan": "true",
-      "kind": null,
+      "completion": "throw",
+      "bodyRan": "false",
+      "kind": "StaticTypeError",
       "settled": "unobserved",
       "hookRan": "false",
       "imports": []
@@ -243,12 +243,12 @@ test.each([
     }
   },
   {
-    "name": "generic annotation remains dynamic",
+    "name": "a concrete delegated value cannot satisfy an arbitrary yield type",
     "source": "type Bad={then:(resolve:uint8,reject:uint8)=>void};type It={[Symbol.asyncIterator]:()=>{next:()=>{done:false,value:Bad}}};async function* f<T: type>(it:It):AsyncGenerator.<T,void,void>{yield* it;}",
     "expected": {
-      "completion": "normal",
-      "bodyRan": "true",
-      "kind": null,
+      "completion": "throw",
+      "bodyRan": "false",
+      "kind": "StaticTypeError",
       "settled": "unobserved",
       "hookRan": "false",
       "imports": []
@@ -256,4 +256,11 @@ test.each([
   }
 ])('$name', ({ source, expected }) => {
   expect(observeProtocol(source)).toMatchObject(expected);
+});
+
+
+test('an unknown delegated value remains dynamic at a generic yield boundary', () => {
+  expect(observeProtocol('async function* f<T: type>(it: any): AsyncGenerator.<T, void, void> { yield* it; }')).toMatchObject({
+    completion: 'normal', bodyRan: 'true', kind: null, settled: 'unobserved', hookRan: 'false', imports: [],
+  });
 });

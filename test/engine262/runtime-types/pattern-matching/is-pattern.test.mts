@@ -37,7 +37,8 @@ test('LITERAL patterns compare by MatchConstant', () => {
   // relation beside SameValue and SameValueZero, not either of them.
   // #sec-pattern-static-semantics: a literal takes the known position type.
   expect(evaluated('String(uint8(5) is 5);')).toBe('true');
-  expect(evaluated('String(uint8(5) is ${5});')).toBe('false');
+  expectStaticTypeError('String(uint8(5) is ${5});');
+  expect(evaluated('function matches(v) { return String(v is ${5}); } matches(uint8(5));')).toBe('false');
   expect(evaluated('String("5" is 5);')).toBe('false');
 });
 

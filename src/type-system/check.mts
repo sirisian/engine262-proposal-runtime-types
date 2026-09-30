@@ -8597,6 +8597,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return out;
   };
 
+  const isHigherKindedPosition = (node: ParseNode): boolean => {
+    if (isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) return true;
+    const list = node.parent;
+    const application = list?.parent;
+    if (list?.type !== 'TypeArguments' || application?.type !== 'TypeArgumentsExpression') return false;
+    // A member application gets its parameter list from the receiver's
+    // callable contract, rather than from a top-level declaration name.
+    const callee = callableForm(staticType(application.Expression));
+    if (callee?.Kind !== 'function' || callee.Signatures.length !== 1) return false;
+    const parameters = callee.Signatures[0]!.TypeParameters ?? [];
+    const label = (node as { ArgumentName?: string }).ArgumentName;
+    const parameter = label === undefined ? parameters[list.TypeArgumentList.indexOf(node as ParseNode.Type)]
+      : parameters.find((p) => p.Name === label);
+    return (parameter?.Arity ?? 0) > 0;
+  };
+
   /**
    * A bare generic class name in a TYPE position names `Box.<>` (#sec-type-references),
    * and `classInstanceType` already binds the defaults where every parameter
@@ -8618,7 +8634,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (params.length === 0 || (resolved as { Arguments?: readonly unknown[] }).Arguments?.length) {
       return resolved;
     }
-    if (isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) {
+    if (isHigherKindedPosition(node)) {
       return resolved;
     }
     // Fill what can be filled and report what cannot; the report names the
@@ -10947,7 +10963,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (node.TypeName.MemberNames.length === 0 && intrinsicParameters(intrinsicName)
             && !lexicalBinding && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)
             && !aliasNodes.has(intrinsicName) && !classNodes.has(intrinsicName) && !interfaceNodes.has(intrinsicName)) {
-          if (!node.TypeArguments && isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) return intrinsicDeclarationRecord(intrinsicName)!;
+          if (!node.TypeArguments && isHigherKindedPosition(node)) return intrinsicDeclarationRecord(intrinsicName)!;
           const written = node.TypeArguments?.TypeArgumentList ?? [];
           const arguments_: (TypeRecord | number)[] = [];
           for (const argument of written) {
@@ -10976,8 +10992,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && (lexicalDeclaration?.type === 'TypeAliasDeclaration' || lexicalDeclaration?.type === 'InterfaceDeclaration')
           ? lexicalDeclaration : !lexicalBinding ? aliasNodes.get(appliedName) ?? interfaceNodes.get(appliedName) : undefined;
         const genericParameters = (genericDeclaration as ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | undefined)?.TypeParameters?.TypeParameterList ?? [];
-        const higherKindedArgument = !node.TypeArguments
-          && isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name));
+        const higherKindedArgument = !node.TypeArguments && isHigherKindedPosition(node);
         // #sec-higher-kinded-parameters: this position binds the declaration,
         // even when its alias body has a known structural shape.
         if (higherKindedArgument && genericDeclaration?.type === 'TypeAliasDeclaration' && genericParameters.length > 0) {
@@ -12439,7 +12454,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
       for (const tp of typeParams) {
         if (!into.has(tp.Name) && tp.DefaultNode) {
-          const resolved = evaluatedGenericDefaults.get(validation.application)?.get(tp.DefaultNode)
+          // A later default must wait for an earlier default's binding, not
+          // publish that parameter's placeholder as an application result.
+          const pending = FreeReferences(tp.DefaultNode).some((reference) => scope.has(reference.name) && !into.has(reference.name));
+          const resolved = pending ? null : evaluatedGenericDefaults.get(validation.application)?.get(tp.DefaultNode)
             ?? resolveType(tp.DefaultNode);
           const supplied = resolved && substituteTypeParameters(resolved, into);
           if (supplied) into.set(tp.Name, supplied);
@@ -27191,6 +27209,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           bindTypeParametersFromArguments(
             chosen.Parameters.map((pr) => ({ Type: pr.Type })),
             chosen.Parameters.map((pr, pi) => {
+            // A spread leaves this run undetermined, not empty. Preserve only
+            // contributions whose destination is independent of its count.
+            if (mapped.spread && !mapped.certainEntries.some((entry) => entry.slot === pi)) return null;
             // A COMPOSITE LITERAL is typed against the parameter's
             // CONSTRAINT rather than bare. #sec-computed-constraints: "the
             // constraint IS A CONTEXTUAL TYPE."

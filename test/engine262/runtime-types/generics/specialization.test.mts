@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, expectError, expectThrown, expectThrownKind,
+  evaluated, expectError, expectStaticTypeError, expectThrown, expectThrownKind,
 } from '../harness.mts';
 
 /**
@@ -265,7 +265,7 @@ test('a higher-kinded method parameter follows the function rule', () => {
   // by explicit application and never inferred
   expect(evaluated('type Identity<T: type> = T; class C { m<W<_>: type>() { return 1; } }'
     + ' String(new C().m.<Identity>());')).toBe('1');
-  expectThrownKind('class C { m<W<_>: type>() { return 1; } } new C().m();', 'TypeError');
+  expectStaticTypeError('class C { m<W<_>: type>() { return 1; } } new C().m();');
 });
 
 // -- type parameter defaults --------------------------------------------------

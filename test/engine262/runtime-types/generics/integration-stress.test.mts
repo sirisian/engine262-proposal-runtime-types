@@ -4,7 +4,7 @@
 // `test.fails` with its finding, so a silent fix or a regression is equally
 // loud.
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 // ---- B.1 SIMD slice: value packs, where over class parameters, value view, specialized values, identity ----
 const VEC = `
@@ -120,7 +120,7 @@ test('positional, named, named-run, spread, and default forms bind one declarati
 test('the refusals, each by its own rule', () => {
   expectThrown(`${STRESS} stress.<uint8, 0, 1, "x", 3>();`);                        // the type-blind split hands 'x' to N, and its domain refuses it
   expectThrown(`${STRESS} stress.<T: uint8, N: 1, I: 0, 1>();`, 'where');
-  expectThrown(`${STRESS} stress.<>();`, 'has no argument and no default');
+  expectStaticTypeError(`${STRESS} stress.<>();`);
   expectThrown(`${STRESS} stress.<uint8, I: 0, N: 4, 1>();`, 'positional');
   expectThrown(`${STRESS} stress.<uint8, N: 4, N: 5>();`, 'supplied twice');
   expectThrown(`${STRESS} function u(xs: [].<uint32>) { return stress.<uint8, ...xs, N: 4>(); } u([1]);`);   // a spread operand that is no type; the static refusal is below

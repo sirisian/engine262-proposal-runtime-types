@@ -145,12 +145,12 @@ test('memory layout: a bit-field has no byte address to refer to', () => {
   // to." A reference borrows a storage LOCATION, and a field packed into part
   // of a byte is not one.
   const c = '@packed class C { r: uint.<5>; n: uint8; } const c = new C(); ';
-  expectThrown(`${c} function f(p: ref uint.<5>) { return 1; } f(ref c.r);`);
+  expectThrown(`${c} function f(ref p: uint.<5>) { return 1; } f(ref c.r);`);
   // A byte-addressable field of the same class is still borrowable, which is
   // what keeps this a rule about bit-fields rather than about typed classes.
-  expect(evaluated(`${c} function g(p: ref uint8) { return 2; } String(g(ref c.n));`)).toBe('2');
+  expect(evaluated(`${c} function g(ref p: uint8) { return 2; } String(g(ref c.n));`)).toBe('2');
   // And an ordinary object property is untouched.
-  expect(evaluated('const o = { z: 1 }; function h(p: ref number) { return 3; } String(h(ref o.z));')).toBe('3');
+  expect(evaluated('const o = { z: 1 }; function h(ref p: number) { return 3; } String(h(ref o.z));')).toBe('3');
 });
 
 test('memory layout: a placement allocation lands an instance on existing bytes', () => {

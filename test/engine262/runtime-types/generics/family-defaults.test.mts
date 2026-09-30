@@ -166,7 +166,7 @@ test('ordinary lexical type values shadow intrinsic declarations', () => {
   expect(evaluated('function f(rational: type) { let x: rational = "ok"; return x; } f(string);')).toBe('ok');
   expect(evaluated('type complex = string; let x: complex = "ok"; x;')).toBe('ok');
   expect(evaluated('const Range = string; let x: Range = "ok"; x;')).toBe('ok');
-  for (const name of ['rational', 'complex', 'Range', 'string', 'uint32', 'boolean']) {
+  for (const name of ['rational', 'complex', 'Range', 'SoA', 'string', 'uint32', 'boolean']) {
     expect(evaluated(`function f(${name}: type) { let x: ${name} = 1; return x; } String(Reflect.typeOf(f(uint8)) === uint8);`)).toBe('true');
     expect(evaluated(`const f = (${name}: type) => { let x: ${name} = "ok"; return x; }; f(string);`)).toBe('ok');
   }

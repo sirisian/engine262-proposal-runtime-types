@@ -6844,6 +6844,7 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
       // from the ELLIPSIS); a declaration's rest is a BindingRestElement node.
       // Both spellings reach here, so both are read.
       Rest: (p as { Rest?: boolean }).Rest === true || (p as { type?: string }).type === 'BindingRestElement',
+      Ref: (p as { Ref?: boolean }).Ref === true,
       Optional: (p as { Optional?: boolean }).Optional === true || Initial !== undefined,
       ...(Initial !== undefined ? { Initial } : {}),
     }));
@@ -7063,9 +7064,10 @@ function* UsesIntrinsicDeclaration(node: ParseNode, name: string): PlainEvaluato
   if (declarationNamed(node, name)) return false;
   const reference = Q(yield* ResolveTypeName(Value(name)));
   if (reference.Base === 'unresolvable' || reference.Base === TypeNameEnvironmentFor(surroundingAgent.currentRealmRecord)) return true;
-  if (libraryTypeParameters(name)) {
+  const intrinsic = (surroundingAgent.currentRealmRecord.Intrinsics as unknown as Record<string, Value>)[`%${name}%`];
+  if (intrinsic !== undefined) {
     const value = Q(yield* GetValue(reference));
-    return value === (surroundingAgent.currentRealmRecord.Intrinsics as unknown as Record<string, Value>)[`%${name}%`];
+    if (value === intrinsic) return true;
   }
   if (name !== 'Range') return false;
   const value = Q(yield* GetValue(reference));

@@ -92,6 +92,7 @@ export function describeParameters(
       type?: string,
       TypeAnnotation?: ParseNode.TypeAnnotation | null,
       Optional?: boolean,
+      Ref?: boolean,
       Initializer?: unknown,
       BindingElement?: { Initializer?: unknown },
     };
@@ -100,7 +101,7 @@ export function describeParameters(
       // The rest's own annotation is read elsewhere; resolution needs its
       // position and that it absorbs a run, which is what Rest says.
       params.push({
-        Name: name, Type: node.TypeAnnotation ? typeOf(node.TypeAnnotation) : anyType, Optional: false, Rest: true,
+        Name: name, Type: node.TypeAnnotation ? typeOf(node.TypeAnnotation) : anyType, Optional: false, Rest: true, Ref: node.Ref === true,
       });
       continue;
     }
@@ -108,7 +109,7 @@ export function describeParameters(
     const type = annotation ? typeOf(annotation) : anyType;
     const hasDefault = node.Initializer !== undefined && node.Initializer !== null;
     params.push({
-      Name: name, Type: type, Optional: node.Optional === true || hasDefault, Rest: false,
+      Name: name, Type: type, Optional: node.Optional === true || hasDefault, Rest: false, Ref: node.Ref === true,
     });
   }
   return params;

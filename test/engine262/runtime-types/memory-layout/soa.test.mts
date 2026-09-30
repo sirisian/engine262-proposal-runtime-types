@@ -176,7 +176,7 @@ test('soa: a ref into an SoA is a column set and an index', () => {
   // against the other" - and neither call site says which layout produced the
   // reference. No other test proves this.
   const cross = 'class Particle { x: float32; y: float32; } '
-    + 'function move(p: ref Particle) { p.x = Number(p.x) + 1; } '
+    + 'function move(ref p: Particle) { p.x++; } '
     + 'const soa = new SoA.<Particle, 2>(); const seed = new Particle(); seed.x = 10; soa[0] = seed; '
     + 'let arr: [2].<Particle>; arr[0].x = 20; '
     + 'move(ref soa[0]); move(ref arr[0]); ';
