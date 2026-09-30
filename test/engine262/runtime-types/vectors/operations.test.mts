@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, run } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrown, run } from '../harness.mts';
 
 /**
  * SIMD operations, sectioned so that what is covered reads against the
@@ -266,7 +266,10 @@ test('a BigInt crosses into a lane by value, and never mixes in an operator', ()
   // that change; what still holds is that an OPERATOR never converts.
   expect(evaluated('String(int64x2(1n, 2n));')).toBe('(1, 2)');
   expect(evaluated('String(int32x4(1n, 2n, 3n, 4n));')).toBe('(1, 2, 3, 4)');
-  expectThrown('int32x4(2147483648n, 2n, 3n, 4n);', 'is not in the range of');
+  // #sec-vector-lanes: a lane argument is judged as an argument is, so a value
+  // the lane type cannot hold is refused before evaluation, as `g(2147483648n)`
+  // is for a parameter `x: int32`.
+  expectStaticTypeError('int32x4(2147483648n, 2n, 3n, 4n);');
   expectThrown('(1 := int64) + 1n;', 'Cannot mix BigInt and other types');
 });
 

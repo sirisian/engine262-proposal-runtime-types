@@ -43,7 +43,7 @@ import {
   anyType as anyTypeRecord, namedNumericLiteralRecord, BoundTypeRecordForName,
   parameter, parameterFromDeclaration, generatorDeclaredType, generatorParameters, typeParameterRecordsOf,
   setAliasApplicationImpl,
-  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument } from './records.mts';
+  badKindedArgument, restElementType, parameterTypeRecord, validateVectorType, IsFamilyRecord, InjectedClassOf, CanonicalWidthArgument, UnderlyingOf } from './records.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
@@ -12179,6 +12179,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * the parameter `T` it was declared as. Memoized per record; a structure with
    * no parameters in it is returned as it is.
    */
+  const enumUnderlying = (t: Known): Known => (t ? UnderlyingOf(t) : t);
   const operationalType = (t: Known, seen = new Set<TypeRecord>()): Known => {
     if (t?.Kind !== 'parameter' || !t.Constraint || seen.has(t)) return t;
     seen.add(t);
@@ -13494,6 +13495,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return 'unresolved';
   };
 
+  /**
+   * #sec-vector-lanes, #sec-literal-propagation: a vector type called with its
+   * lanes constructs the vector, and each argument is judged at the lane type as
+   * an argument is - so a literal the lane type cannot represent is a type
+   * error, as `uint8x16(300, …)` is refused at run time. Two forms exist: one
+   * argument per lane, or one scalar broadcast to every lane. A single VECTOR
+   * argument is an explicit conversion between vector types instead, and a
+   * single argument to a bit-lane vector is a bitmask; both are left to their
+   * own rules.
+   */
+  const vectorConstructorType = (t: Known, args: readonly ParseNode[]): TypeRecord | null => {
+    if (!t || t.Kind !== 'primitive' || (t as { Name?: string }).Name !== 'vector') return null;
+    const [lane, count] = (t as { Arguments?: readonly unknown[] }).Arguments ?? [];
+    if (!lane || typeof lane !== 'object' || typeof count !== 'number') return null;
+    const laneType = lane as TypeRecord;
+    const bitLane = laneType.Kind === 'primitive' && (laneType as { Name?: string }).Name === 'uint'
+      && ((laneType as { Arguments?: readonly unknown[] }).Arguments ?? [])[0] === 1;
+    if (args.length === 1) {
+      const only = staticType(args[0]!);
+      if (bitLane || (only?.Kind === 'primitive' && (only as { Name?: string }).Name === 'vector')) return null;
+    }
+    // One signature, chosen by the argument count: an overload set is resolved
+    // more strictly than a single signature is checked, and would refuse a
+    // literal a lane's declared cast admits. Another count is left to the run
+    // time, which reports it.
+    if (args.length !== count && args.length !== 1) return null;
+    return { Kind: 'function', Signatures: [{ Parameters: args.map(() => parameter(laneType)), Return: t as TypeRecord }] } as TypeRecord;
+  };
+
   const requireExplicitConversion = (source: Known, target: Known): void => {
     if (!source || !target || explicitConversionAvailability(source, target) !== 'impossible') return;
     const base = source.Kind === 'literal' ? source.Base : source;
@@ -14282,6 +14312,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       targetTypedNewTypes.set(node as object, contextual);
+      if (isVector) {
+        const lanes = vectorConstructorType(contextual, (node.Arguments ?? []) as readonly ParseNode[]);
+        if (lanes) checkCallArguments({ CallExpression: node, Arguments: node.Arguments }, lanes, node);
+      }
       if (contextual.Kind === 'nominal') {
         const declared = contextual.Declaration;
         const signatures = constructSignatures.get(declared);
@@ -17737,7 +17771,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // as a `number`, since the checker cannot tell `[1, 'a']` written
           // inline from a declared tuple and the run time answers a Number there.
           if (receiver && (receiver.Kind === 'array' || receiver.Kind === 'tuple') && m.IdentifierName
-              && ['with', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'unshift'].includes(m.IdentifierName.name)) {
+              && ['with', 'toSpliced', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'unshift'].includes(m.IdentifierName.name)) {
             return arrayContract(node, receiver, m.IdentifierName.name);
           }
           if (receiver && receiver.Kind === 'tuple') {
@@ -18720,8 +18754,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         const leftLit = literalOperand(leftNode) ?? constUse(leftNode);
         const rightLit = literalOperand(rightNode) ?? constUse(rightNode);
-        const leftT = leftLit ? null : operationalType(staticType(leftNode));
-        const rightT = rightLit ? null : operationalType(staticType(rightNode));
+        // #sec-enums: "an enum can be used for arithmetic, indexing, and
+        // comparison without a cast" - an operand of an enum type is read at its
+        // UNDERLYING type, as the run time's TypedOperandType reads it, so a
+        // literal's range, numeric mixing and brands are judged there.
+        const leftT = leftLit ? null : enumUnderlying(operationalType(staticType(leftNode)));
+        const rightT = rightLit ? null : enumUnderlying(operationalType(staticType(rightNode)));
         // A DEGENERATE LITERAL OPERAND, refused where the checker can see it.
         // #sec-integer-operations states two such rules, and neither was
         // enforced: "It is a type error if the divisor of `/` or `%` is a
@@ -25793,6 +25831,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return make([parameter(anyTypeRecord), parameter(target)], receiver.Kind === 'tuple'
         ? receiver.Elements.every((entry) => !entry.Rest) ? receiver : anyTypeRecord : copy);
     }
+    // #sec-intrinsic-array-contracts: `toSpliced` creates an ordinary array copy
+    // like `with` and `splice`, whose element contract is the receiver's, so
+    // each inserted item is checked against it. A tuple's copy keeps no
+    // positional shape.
+    if (name === 'toSpliced') {
+      return make([parameter(anyTypeRecord, { Optional: true }), parameter(anyTypeRecord, { Optional: true }),
+        parameter(element, { Rest: true })], receiver.Kind === 'tuple' ? anyTypeRecord : copy);
+    }
     if (name === 'sort' || name === 'toSorted') {
       const callback = make([parameter(element), parameter(element)], anyTypeRecord);
       return make([parameter(callback, { Optional: true })], name === 'sort' ? receiver : receiver.Kind === 'tuple' ? anyTypeRecord : copy);
@@ -27980,6 +28026,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (single?.type === 'UpdateExpression') invalidateMutableMetadataFacts();
   };
+  /**
+   * #sec-arithmetic-never-promotes: "Where one operand is a literal it takes the
+   * type of the other", and #sec-literal-propagation makes a literal that type
+   * cannot represent a type error. That holds for the RELATIONAL operators. The
+   * equality forms are excepted by the clause itself: "A literal the type
+   * cannot represent is not equal to any value of it, so the comparison is
+   * *false* rather than an error", since there the literal need not become a
+   * value. An enum operand is read at its underlying type (#sec-enums).
+   *
+   * Judged without ADOPTING the literal: adoption would also change its
+   * run-time value, which the checker's typing of some builtins' results is not
+   * yet ready for (see the comparison arm of the Static Type walk).
+   */
+  const checkComparisonLiteralRange = (a: ParseNode | undefined | null, b: ParseNode | undefined | null): void => {
+    if (!a || !b) return;
+    const sides: [ParseNode, ParseNode][] = [[b, a], [a, b]];
+    for (const [candidate, other] of sides) {
+      const lit = literalOperand(candidate);
+      if (!lit || literalOperand(other)) continue;
+      const raw = erasedKeepingBrand(staticType(other));
+      const t = raw ? erasedKeepingBrand(UnderlyingOf(raw)) : raw;
+      const base = t?.Kind === 'parameterized' ? t.Base : t;
+      if (!isIntegerValueType(base)) continue;
+      const exact = signedLiteralValue(lit);
+      const fraction = exact === null ? fractionalLiteralValue(lit) : null;
+      const prim = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
+      if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
+        errors.push(Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(base as TypeRecord))).Value as ObjectValue);
+      }
+    }
+  };
+
   const walkNode = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
@@ -28820,25 +28898,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rel = n as ParseNode.RelationalExpression;
         // #sec-arithmetic-never-promotes: "Where one operand is a literal it
         // takes the type of the other", and #sec-literal-propagation makes a
-        // literal that type cannot represent a type error. Only the equality
-        // forms and `case` answer *false* instead (line 3662), so a relational
-        // operator is judged as arithmetic is; the run time
-        // adopted the literal and threw a RangeError.
+        // literal that type cannot represent a type error. The equality forms
+        // answer *false* instead, as that clause states; see
+        // `checkComparisonLiteralRange`.
         if (rel.RelationalExpression && ['<', '<=', '>', '>='].includes(rel.operator)) {
-          const sides: [ParseNode, ParseNode][] = [[rel.ShiftExpression, rel.RelationalExpression], [rel.RelationalExpression, rel.ShiftExpression]];
-          for (const [candidate, other] of sides) {
-            const lit = literalOperand(candidate);
-            if (!lit || literalOperand(other)) continue;
-            const t = erasedKeepingBrand(staticType(other));
-            const base = t?.Kind === 'parameterized' ? t.Base : t;
-            if (!isIntegerValueType(base)) continue;
-            const exact = signedLiteralValue(lit);
-            const fraction = exact === null ? fractionalLiteralValue(lit) : null;
-            const prim = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
-            if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
-              errors.push(Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(base as TypeRecord))).Value as ObjectValue);
-            }
-          }
+          checkComparisonLiteralRange(rel.RelationalExpression, rel.ShiftExpression);
         }
         if (rel.RelationalExpression) {
           if (['<', '<=', '>', '>='].includes(rel.operator)) {
@@ -29836,7 +29900,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (conversionTarget !== undefined) {
           const argNodes = (c.Arguments ?? []).filter((a) => (a as { type?: string }).type !== 'AssignmentRestElement');
-          if (argNodes.length === 1) {
+          const vectorLanes = argNodes.length === (c.Arguments ?? []).length
+            ? vectorConstructorType(conversionTarget, argNodes as readonly ParseNode[]) : null;
+          if (vectorLanes) {
+            checkCallArguments(c, vectorLanes, n);
+          } else if (argNodes.length === 1) {
             requireExplicitConversion(staticType(argNodes[0]!), conversionTarget);
             // The argument is typed IN the target's context, which is what
             // `uint32(f())` needed: the overload resolves because the position

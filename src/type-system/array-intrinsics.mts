@@ -3,7 +3,7 @@ import type { Realm } from '../execution-context/Realm.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 
-const methods = new Set(['with', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'pop', 'shift', 'unshift', 'reverse', 'copyWithin', 'fill']);
+const methods = new Set(['with', 'toSpliced', 'sort', 'toSorted', 'reduce', 'reduceRight', 'slice', 'filter', 'toReversed', 'splice', 'concat', 'push', 'pop', 'shift', 'unshift', 'reverse', 'copyWithin', 'fill']);
 const originals = new WeakMap<Realm, Map<string, Value>>();
 const species = new WeakMap<Realm, Descriptor>();
 

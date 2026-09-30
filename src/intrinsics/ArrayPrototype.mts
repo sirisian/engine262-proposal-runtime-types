@@ -869,9 +869,19 @@ function* ArrayProto_toSpliced(args: Arguments, { thisValue }: FunctionCallConte
     X(CreateDataPropertyOrThrow(A, Pi, iValue));
     i += 1;
   }
+  // proposal-runtime-types #sec-intrinsic-array-contracts: the copy has "the
+  // element contract that the operation establishes" - the receiver's element
+  // type - so each inserted item is converted to it, as `with` converts its
+  // value, before the copy is stamped with it.
+  const element = surroundingAgent.feature('runtime-types')
+    ? (O as unknown as { TypedElement?: TypeRecord }).TypedElement : undefined;
   for (const E of items) {
     const Pi = X(ToString(F(i)));
-    X(CreateDataPropertyOrThrow(A, Pi, E));
+    let inserted = E;
+    if (element !== undefined) {
+      inserted = Q(yield* RequireType(E, element));
+    }
+    X(CreateDataPropertyOrThrow(A, Pi, inserted));
     i += 1;
   }
   while (i < newLen) {
@@ -882,6 +892,7 @@ function* ArrayProto_toSpliced(args: Arguments, { thisValue }: FunctionCallConte
     i += 1;
     r += 1;
   }
+  propagateElementType(O, A);
   return A;
 }
 
