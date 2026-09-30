@@ -2,19 +2,13 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * CONVERSIONS OUT OF A RATIONAL. rational.md specifies them:
- *
- *   To a float: `float64(r)` is `numerator / denominator` rounded to the nearest
- *   `float64`. This is the lossy step, and it is visible.
- *   To an integer: `int64(r)` truncates toward zero.
- *
- * Neither existed. Every numeric target refused a rational source, so a program
- * could compute exactly and never get a value back out - the type was closed in
- * one direction while the document named both. `ToNumber` is no help: a rational
- * deliberately has no Number value, and says so.
- *
- * The lossy step is the point of the design, not a defect: an exact fraction
- * reaching a float rounds, and the program wrote the conversion that says so.
+ * CONVERSIONS OUT OF A RATIONAL (#table-numeric-conversions). To a float: `float64(r)` is
+ * `numerator / denominator` rounded to the nearest `float64`, ties to even. This is the lossy step, and it
+ * is visible. To an integer: `int64(r)` truncates toward zero, then modulo 2**M. Every numeric target
+ * accepts a rational source, so a program can compute exactly and get a value back out. `ToNumber` is no
+ * help: a rational deliberately has no Number value, and says so. The lossy step is the point of the
+ * design, not a defect: an exact fraction reaching a float rounds, and the program wrote the conversion
+ * that says so.
  */
 
 test('to a float, rounded', () => {

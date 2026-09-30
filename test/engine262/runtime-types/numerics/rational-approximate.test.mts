@@ -2,20 +2,12 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown, expectThrownKind } from '../harness.mts';
 
 /**
- * `rational64.approximate(f, maxDenominator)`.
- *
- * rational.md: "For a bounded approximation, `rational64.approximate(f,
- * maxDenominator)` returns the closest rational whose denominator does not
- * exceed the bound, by the continued-fraction expansion", with the worked
- * example `rational64.approximate(Math.PI, 1000); // 355/113`.
- *
- * Distinct from `rational64(f)`, which is the float's EXACT dyadic value and can
- * need a denominator of 2^52. This is what a program wants when it has a
- * measurement and a bound.
- *
- * The document spells this `Rational.approximate` in its two mentions while
- * spelling the neighbouring static `rational64.parse`; they are the same object,
- * and the lowercase form is the one the type carries.
+ * `rational64.approximate(f, maxDenominator)` (#sec-rational-types) returns the value of the type nearest the
+ * Number `f` whose denominator does not exceed the bound, with the worked example
+ * `rational64.approximate(Math.PI, 1000); // 355/113`. Distinct from `rational64(f)`, which is the float's
+ * EXACT dyadic value and can need a denominator of 2^52. This is what a program wants when it has a
+ * measurement and a bound. The static is spelled `approximate` on the lowercase type, beside
+ * `rational64.parse`; they are the same object.
  */
 
 test('the documented example', () => {

@@ -2,19 +2,16 @@ import { expect, test } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * `Math.floor`, `Math.ceil`, `Math.round` and `Math.trunc` OF A RATIONAL.
+ * `Math.floor`, `Math.ceil`, `Math.round` and `Math.trunc` OF A RATIONAL return the `int.<N>` nearest in
+ * their direction, as distinct from `Math.abs`, `Math.sign`, `Math.min` and `Math.max`, which are
+ * overloaded to return a rational. A rounding function answers a whole number, and the type says so.
  *
- * rational.md: these "return the `int.<N>` nearest in their direction" - as
- * distinct from `Math.abs`, `Math.sign`, `Math.min` and `Math.max`, which are
- * overloaded to return a rational. A rounding function answers a whole number,
- * and the type says so.
+ * Unspecified: #sec-rational-types states this for `rational.<bigint>`, whose rounding returns a `bigint`;
+ * the result type of a fixed-width rational is not stated, and these tests pin `int.<N>`.
  *
- * They raised "a rational has no Number value" instead, because they routed
- * through `ToNumber`, so four documented overloads did not exist.
- *
- * Computed on the fraction rather than through a double, which matters beyond
- * tidiness: a rational whose numerator exceeds 2^53 has an exact floor, and a
- * double cannot give it.
+ * They must not route through `ToNumber`, since a rational has no Number value. They are computed on the
+ * fraction rather than through a double, which matters beyond tidiness: a rational whose numerator
+ * exceeds 2^53 has an exact floor, and a double cannot give it.
  */
 const R = (n: string) => `const r: rational64 = ${n}; `;
 

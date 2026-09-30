@@ -2,20 +2,17 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
 
 /**
- * Spec: #sec-vector-types (Vector Types) - `vector.<T, N>` well-formedness.
+ * Spec: #sec-vector-types (Vector Types) - `vector.<T, N>` well-formedness. `vector.<T, N>` is a core value
+ * type whose values are the sequences of exactly N values of the lane type T. It is well-formed when T is a
+ * lane type, meaning an integer type, a binary floating-point type, or itself a vector type, and N is a
+ * positive integer. A vector whose lane type is not a lane type, or whose lane count is not a positive
+ * integer, is a type error at the point its type is formed. A lane type that is itself a vector is validated
+ * recursively, which is how the boolean vectors are built (boolean8 is vector.<uint.<1>, 8> and boolean8x16
+ * is vector.<boolean8, 16>).
  *
- * `vector.<T, N>` is a core value type whose values are the sequences of exactly N
- * values of the lane type T. It is well-formed when T is a
- * lane type, meaning an integer type, a binary floating-point type, or itself a
- * vector type, and N is a positive integer. A vector whose lane type is not a lane
- * type, or whose lane count is not a positive integer, is a type error at the point
- * its type is formed. A lane type that is itself a vector is validated recursively,
- * which is how the design's boolean vectors are built (boolean8 is vector.<uint.<1>,
- * 8> and boolean8x16 is vector.<boolean8, 16>).
- *
- * Not covered here (the SIMD extension): the named lane-type aliases (float32x4,
- * uint32x4, boolean8), the implicit broadcast constructor from the lane type, the
- * SIMD operators over matching vector types, and lane access.
+ * Not covered here (see values.test.mts and operations.test.mts): the named lane-type aliases (float32x4,
+ * uint32x4, boolean8), the implicit broadcast constructor from the lane type, the SIMD operators over
+ * matching vector types, and lane access.
  */
 
 // -- Well-formed vectors -------------------------------------------------------
@@ -65,8 +62,8 @@ test('with the feature off, vector type syntax is not part of the language', () 
 // -- The named lane types --------------------------------------------------------
 
 test('simd: the shorthand names abbreviate the register-width vectors', () => {
-  // memorylayout.md's own example: a SIMD vector aligns to its whole width rather
-  // than the capped natural rule, since the register is addressed that way
+  // Unspecified: a SIMD vector aligns to its whole width rather than the capped natural rule, since the
+  // register is addressed that way.
   expect(evaluated('type V = float32x4; String(V.byteLength);')).toBe('16');
   expect(evaluated('type V = float32x4; String(V.alignment);')).toBe('16');
   // a shorthand is an alias, not a new type

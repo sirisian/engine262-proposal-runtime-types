@@ -2,18 +2,13 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
- * Spec: #sec-rational-types; rational.md.
- *
- * `rational.<N>` holds "the exact rational numbers representable as a quotient
- * of two values of `int.<N>`", and "an operation whose exact result is not
- * representable, including one whose normalized numerator or denominator falls
- * outside `int.<N>`, throws a RangeError rather than rounding." The bare
- * `rational` is `rational.<64>`.
- *
- * Every rational value is built by one constructor, which enforces the bound, so
- * conversion, arithmetic, literals, `Math` and `++` all reach it. The check is on
- * the NORMALIZED fraction. The canonical denominator is positive, so it spans 1
- * to 2**63 - 1; the numerator spans all of `int.<64>`.
+ * Spec: #sec-rational-types. `rational.<N>` holds the exact rational numbers representable as a quotient
+ * of two values of `int.<N>`, and an operation whose exact result is not representable, including one whose
+ * normalized numerator or denominator falls outside `int.<N>`, throws a RangeError rather than rounding.
+ * The bare `rational` is `rational.<64>`. Every rational value is built by one constructor, which enforces
+ * the bound, so conversion, arithmetic, literals, `Math` and `++` all reach it. The check is on the
+ * NORMALIZED fraction. The canonical denominator is positive, so it spans 1 to 2**63 - 1; the numerator
+ * spans all of `int.<64>`.
  */
 
 const i64 = (digits: string) => `(BigInt('${digits}') := int64)`;

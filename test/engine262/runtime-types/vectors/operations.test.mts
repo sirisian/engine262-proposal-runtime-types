@@ -80,11 +80,10 @@ test('the comparison rules around equality are unchanged', () => {
 
 // -- Mask consumers --------------------------------------------------------------
 /**
- * A comparison produces a mask in two shapes: the COMPACT one, a lane per input
- * lane and one bit per lane, and the WIDE one, a lane of the boolean type of
- * the same width as the compared element. Only the compact shape was recognised
- * as a mask, so `all`, `any`, and `select` were absent from the very value the
- * design's examples call them on - `const m: boolean32x4 = a < b; if (m.any())`.
+ * A comparison produces a mask in two shapes (#sec-vector-comparisons): the COMPACT one, a lane per input
+ * lane and one bit per lane, and the WIDE one, a lane of the boolean type of the same width as the compared
+ * element. Both are masks, so `all`, `any`, and `select` are present on either:
+ * `const m: boolean32x4 = a < b; if (m.any())`.
  */
 test('a wide mask answers the operations that consume a mask', () => {
   const M = 'const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1);'
@@ -364,10 +363,9 @@ test('masked operations compose, and both arms are still evaluated', () => {
 
 // -- The designed-but-unimplemented surface --------------------------------------
 /**
- * `README.md` states the checked and saturating forms are "overloaded for every
- * integer type", and an integer-lane vector is one. The scalar forms worked;
- * the vector forms were refused, because these were registered without the
- * wrapper that carries the lane-wise dispatch.
+ * Unspecified: the checked and saturating forms are overloaded for every integer type, and an integer-lane
+ * vector is one, but the specification states neither. The scalar forms and the vector forms both work; the
+ * vector forms carry the lane-wise dispatch.
  */
 test('the checked and saturating forms apply lane-wise', () => {
   const U = 'const a = uint8x16(255, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);'
@@ -391,13 +389,11 @@ test('the checked and saturating forms apply lane-wise', () => {
 });
 
 /**
- * `operatoroverloading.md`: "`Math.fma(a, b, c)` computes `a * b + c` with a
- * single rounding. It is overloaded for the scalar and vector types."
- *
- * The single rounding is the whole of it: computing `a * b` and then adding
- * rounds twice and is a different function. The two cases below are ones where
- * the answers differ, so an implementation that shimmed over `*` and `+` would
- * fail them; the expected values are the exactly-computed ones.
+ * Unspecified: `Math.fma(a, b, c)` computes `a * b + c` with a single rounding and is overloaded for the
+ * scalar and vector types; the specification does not state it. The single rounding is the whole of it:
+ * computing `a * b` and then adding rounds twice and is a different function. The two cases below are ones
+ * where the answers differ, so an implementation that shimmed over `*` and `+` would fail them; the
+ * expected values are the exactly-computed ones.
  */
 test('Math.fma rounds once', () => {
   expect(evaluated('String(Math.fma(2, 3, 4));')).toBe('10');
@@ -416,15 +412,12 @@ test('Math.fma rounds once', () => {
 });
 
 /**
- * `operatoroverloading.md`: "`Math.rsqrt(x)` is exactly `1 / Math.sqrt(x)`,
- * correctly rounded, so it does not lower to a bare `rsqrtps`, which is a
- * twelve-bit approximation."
- *
- * CORRECTLY ROUNDED is stronger than evaluating `1 / Math.sqrt(x)` in doubles,
- * which rounds twice and differs for roughly a quarter of inputs. The values
- * below are the exactly-computed ones, and four of them are cases where the
- * naive form gives a different double - so an implementation that shimmed over
- * `1 / Math.sqrt(x)`, or reached for the approximate instruction, fails here.
+ * Unspecified: `Math.rsqrt(x)` is exactly `1 / Math.sqrt(x)`, correctly rounded, so it does not lower to a
+ * bare `rsqrtps`, which is a twelve-bit approximation. CORRECTLY ROUNDED is stronger than evaluating
+ * `1 / Math.sqrt(x)` in doubles, which rounds twice and differs for roughly a quarter of inputs. The values
+ * below are the exactly-computed ones, and four of them are cases where the naive form gives a different
+ * double - so an implementation that shimmed over `1 / Math.sqrt(x)`, or reached for the approximate
+ * instruction, fails here.
  */
 test('Math.rsqrt is correctly rounded', () => {
   expect(evaluated('String(Math.rsqrt(4));')).toBe('0.5');
@@ -488,10 +481,9 @@ test('the dot product is a reduction over two vectors', () => {
 });
 
 test('the approximate reciprocal square root carries a stated bound', () => {
-  // the design asked for "a named intrinsic and a specified error bound": the
-  // bound is a relative error of at most 2**-12, which rsqrtps and frsqrte both
-  // meet. Any value within it conforms; this implementation returns the
-  // correctly rounded one, which is within it trivially.
+  // A named intrinsic with a specified error bound would also conform: the bound is a relative error of at
+  // most 2**-12, which rsqrtps and frsqrte both meet. Any value within it conforms; this implementation
+  // returns the correctly rounded one, which is within it trivially.
   expect(evaluated('String(Math.rsqrtApprox(4));')).toBe('0.5');
   expect(evaluated('const r = Math.rsqrtApprox(2);'
     + ' String(Math.abs(r - Math.rsqrt(2)) / Math.rsqrt(2) <= Math.pow(2, -12));')).toBe('true');

@@ -192,7 +192,7 @@ test('approximate breaks a tie by the smaller denominator, then nearer zero', ()
   expect(outcome('rational.<8>.approximate(0.25, 2)')).toBe('0');
 });
 
-test('approximate: the design example at each width, and overflow refused', () => {
+test('approximate: the worked example at each width, and overflow refused', () => {
   expect(outcome('rational.<8>.approximate(Math.PI, 1000)')).toBe('22/7');
   expect(outcome('rational.<16>.approximate(Math.PI, 1000)')).toBe('355/113');
   expect(outcome('rational64.approximate(Math.PI, 1000)')).toBe('355/113');
@@ -375,11 +375,10 @@ test('parse: an exponent too large for a width is refused from the exponent, qui
 });
 
 test('a rational.<N> is laid out as a record of its two int.<N> fields', () => {
-  // rational.md: "a value type holding two `int.<N>` fields". The layout was
-  // 2N / 8 bytes - `rational.<7>` 1.75 bytes, `rational.<12>` 3 where two
-  // `int.<12>` take 4. The oracle is the engine's own record layout: a class of
-  // two `int.<N>` fields, packed by the bit where sub-byte and padded to the
-  // part's alignment where not.
+  // A rational is "a value type holding two `int.<N>` fields" (#sec-rational-types), so its layout is that of
+  // two such fields and not 2N / 8 bytes: `rational.<7>` is not 1.75 bytes, and `rational.<12>` is 4 where two
+  // `int.<12>` take 4, not 3. The oracle is the engine's own record layout: a class of two `int.<N>` fields,
+  // packed by the bit where sub-byte and padded to the part's alignment where not.
   for (const n of [1, 2, 3, 4, 5, 7, 8, 12, 16, 24, 40, 100, 128, 200, 65536]) {
     expect(evaluated(`class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([${T(n)}.byteLength, ${T(n)}.alignment]);`), T(n))
       .toBe(evaluated(`class P { a: int.<${n}> = 0; b: int.<${n}> = 0; } String([P.byteLength, P.alignment]);`));

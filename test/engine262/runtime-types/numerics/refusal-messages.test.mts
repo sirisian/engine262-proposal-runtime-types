@@ -22,9 +22,8 @@ test('a complex, rational or decimal in a message is written as its value', () =
 });
 
 test('the two-argument rational constructor names why a bigint is refused', () => {
-  // rational.md: the parts are `int.<N>`, and "a value of another integer type
-  // is converted explicitly". A bigint is an integer, so "must be an integer"
-  // misstated the reason.
+  // The parts of a rational are `int.<N>` (#sec-rational-types), and a value of another integer type is
+  // converted explicitly. A bigint is an integer, so "must be an integer" would misstate the reason.
   expect(thrownMessage('rational64(5n, 1);')).toBe('5n is not assignable to "int.<64>"');
   expect(thrownMessage('rational64(1, 5n);')).toBe('5n is not assignable to "int.<64>"');
   // A non-integral Number is still told it is not an integer.

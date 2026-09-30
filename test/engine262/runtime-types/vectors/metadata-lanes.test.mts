@@ -2,12 +2,10 @@ import { expect, test } from 'vitest';
 import { evaluated, expectEarlyError, expectThrown } from '../harness.mts';
 
 /**
- * #sec-vector-types, #sec-primitive-metadata: a parameterization of a lane type
- * is a lane type, so a vector's lanes can carry metadata - a vector of meters,
- * `vector.<float32.<{ m: 1 }>, 3>`, with the representation of
- * `vector.<float32, 3>`. The design's dimensioned vectors
- * (primitivemetadata.md, `primitive vector<float32.<const D: Dimensions>,
- * const N: uint32>`) are written this way, and it was refused: "not a valid
+ * #sec-vector-types, #sec-primitive-metadata: a parameterization of a lane type is a lane type, so a
+ * vector's lanes can carry metadata - a vector of meters, `vector.<float32.<{ m: 1 }>, 3>`, with the
+ * representation of `vector.<float32, 3>`. A dimensioned vector, `primitive vector<float32.<const D:
+ * Dimensions>, const N: uint32>`, is written this way and must be accepted, not refused as "not a valid
  * vector lane type".
  */
 

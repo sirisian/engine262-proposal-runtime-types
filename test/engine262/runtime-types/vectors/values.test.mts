@@ -2,15 +2,12 @@ import { test, expect } from 'vitest';
 import { ok, evaluated, expectThrown } from '../harness.mts';
 
 /**
- * Spec: #sec-vector-types (Vector Types), #sec-vector-widths. Design: simd.md.
- *
- * Vector VALUES. Without them the SIMD surface is types alone - `vector.<T, N>`
- * and every shorthand resolve in an annotation and nothing can be built, so no
- * operation is testable. A vector is a value type whose values are "the
- * sequences of N values of T" (#sec-vector-types), and it carries the Type
- * Record it was built at, since the lane type and count are not recoverable
- * from the lanes alone: `float32x4(1, 2, 3, 4)` and `int32x4(1, 2, 3, 4)` hold
- * equal lane values.
+ * Spec: #sec-vector-types (Vector Types), #sec-vector-widths. Vector VALUES. A vector is a value type whose
+ * values are "the sequences of N values of T" (#sec-vector-types), and it carries the Type Record it was
+ * built at, since the lane type and count are not recoverable from the lanes alone: `float32x4(1, 2, 3, 4)`
+ * and `int32x4(1, 2, 3, 4)` hold equal lane values. Without values the SIMD surface would be types alone -
+ * `vector.<T, N>` and every shorthand would resolve in an annotation and nothing could be built - so no
+ * operation would be testable.
  */
 
 test('a vector type name is a callable Type Object', () => {
@@ -73,14 +70,10 @@ test('typeof a vector is object', () => {
 });
 
 /**
- * Lane access: #sec-vector-lanes.
- *
- * #sec-vector-lanes gives a vector two ways to reach a lane, and they differ in
- * WHEN the lane is chosen. A computed access takes an expression, so no static
- * rule bounds it and an out-of-range index throws a RangeError; the constant
- * form `lane.<I>()` is refused before the program runs. That asymmetry is the
- * reason the design gives both, and it is what these assert.
- *
+ * Lane access: #sec-vector-lanes. #sec-vector-lanes gives a vector two ways to reach a lane, and they differ
+ * in WHEN the lane is chosen. A computed access takes an expression, so no static rule bounds it and an
+ * out-of-range index throws a RangeError; the constant form `lane.<I>()` is refused before the program
+ * runs. That asymmetry is the reason the clause gives both, and it is what these assert.
  */
 
 test('the constant lane forms take a compile-time index', () => {
@@ -158,30 +151,9 @@ test('a written lane converts to the lane type', () => {
 });
 
 /**
- * The broadcast: attempted, reverted, and located.
- *
- * #sec-vector-lanes says `vector.<T, N>` declares a cast operator from T, so
- * `let b: float32x4 = s` for a `float32` s should broadcast. The CONVERSION is
- * written and works - `float32x4(2)` gives `(2, 2, 2, 2)`, and
- * CheckedConvertValue fills every lane - but the assignment does not reach it.
- *
- * TWO PATHS GUARD IT AND THEY MUST AGREE. The checker's IsAssignable refuses
- * the assignment statically, before any conversion runs. Making IsAssignable
- * admit a lane type produced something WORSE than the refusal: the assignment
- * was accepted and the value stayed a `float32`, so `Reflect.typeOf(b) ===
- * float32x4` was false and a broadcast had silently not happened. That is a
- * type system admitting a value it did not convert, which is unsound rather
- * than incomplete, so it was reverted.
- *
- * The two halves have to land together: IsAssignable admitting the lane type
- * AND the enforcement path converting rather than passing the value through.
- * requireMembership now attempts CheckedConvertValue when membership fails,
- * which is the second half; the first half needs the checker to tell the
- * enforcement path that a conversion is owed, rather than just permitting the
- * assignment. That is the next step.
- *
- * The refusal is the current behaviour and is correct-but-incomplete: it
- * rejects a program the design permits, rather than accepting one it does not.
+ * The broadcast (#sec-vector-lanes, #sec-operator-results). `vector.<T, N>` declares a cast operator from
+ * T, so a lane value assigned to a vector fills every lane: `let b: float32x4 = s` for a `float32` s. The
+ * CONVERSION fills every lane (`float32x4(2)` gives `(2, 2, 2, 2)`), and an assignment reaches it.
  */
 
 test('the broadcast cast fills every lane', () => {
@@ -189,46 +161,29 @@ test('the broadcast cast fills every lane', () => {
   expect(evaluated('String(float32x4(2));')).toBe('(2, 2, 2, 2)');
   expect(evaluated('String(int32x4(7));')).toBe('(7, 7, 7, 7)');
 
-  // And through an ANNOTATION, which is the design's own spelling. Every case
-  // below is from the README verbatim.
+  // And through an ANNOTATION.
   expect(evaluated('let a: float32x4 = 1; String(a);')).toBe('(1, 1, 1, 1)');
   expect(evaluated('let s: float32 = 2; let b: float32x4 = s; String(b);')).toBe('(2, 2, 2, 2)');
 
-  // Soundness, asserted separately: the binding holds a VECTOR, not the lane
-  // value the checker admitted. Two earlier attempts passed the assignment and
-  // failed this, which is why it is its own assertion rather than trusted.
+  // Soundness, asserted separately: the binding holds a VECTOR, not the lane value the checker admitted.
   expect(evaluated('let s: float32 = 2; let b: float32x4 = s; String(Reflect.typeOf(b) === float32x4);')).toBe('true');
 
-  // Only the LANE type converts: a float32 reaches float32x4 and not
-  // float64x2, and the design writes the second as a cast first.
+  // Only the LANE type converts: a float32 reaches float32x4 and not float64x2, which is written as a cast
+  // first.
   expect(ok('let s: float32 = 2; let c: float64x2 = s;')).toBe(false);
   expect(evaluated('let s: float32 = 2; let d: float64x2 = float64(s); String(d);')).toBe('(2, 2)');
   expect(ok('let a: float32x4 = "x";')).toBe(false);
 });
 
 /**
- * The broadcast, and why it took three attempts to land soundly.
- *
- * #sec-vector-lanes: "`vector.<T, N>` declares a cast operator from T", so a
- * lane value assigned to a vector fills every lane. Every README case works and
- * the result is genuinely a vector.
- *
- * TWO EARLIER ATTEMPTS PUT THE STATIC RULE IN IsAssignable AND WERE UNSOUND.
- * That predicate is consulted by paths which then pass the value through
- * unchanged, so admitting the lane type there let a `float32` sit in a
- * `float32x4` binding unconverted - the assignment succeeded and
- * `Reflect.typeOf(b) === float32x4` was false. Both were reverted.
- *
- * The rule belongs at the checker's REPORT site instead. That site decides
- * whether to complain and nothing else; the value it governs still reaches
- * requireMembership, which performs the conversion. Same admission, opposite
- * soundness, and the difference is only which of two similar-looking functions
- * carries it.
- *
- * A numeric literal needed its own admission, because the literal narrowing
- * above the site returns before this branch - `let a: float32x4 = 1` is the
- * design's own first example and would otherwise have been the one case left
- * refused.
+ * The static rule for the broadcast belongs at the checker's REPORT site and not in IsAssignable.
+ * IsAssignable is consulted by paths which then pass the value through unchanged, so admitting the lane
+ * type there would let a `float32` sit in a `float32x4` binding unconverted - the assignment would succeed
+ * and `Reflect.typeOf(b) === float32x4` would be false, a type system admitting a value it did not convert.
+ * The report site decides whether to complain and nothing else; the value it governs still reaches
+ * requireMembership, which performs the conversion. A numeric literal needs its own admission, because the
+ * literal narrowing above the site returns before this branch: `let a: float32x4 = 1` would otherwise be
+ * the one case left refused.
  */
 
 
@@ -253,15 +208,14 @@ test('a lane value broadcasts where the runtime decides the type', () => {
  */
 
 test('an integer converts to a bit vector by its bits', () => {
-  // simd.md's own example, verbatim.
+  // An integer converts to a bit vector by its bits (#sec-vector-lanes).
   expect(evaluated('let a: boolean8 = 0b00000010; String(a[1]);')).toBe('1');
   expect(evaluated('let a: boolean8 = 0b00000010; String(a[0]);')).toBe('0');
   expect(evaluated('let a: boolean8 = 0b00000010; String(a);')).toBe('(0, 1, 0, 0, 0, 0, 0, 0)');
 });
 
 test('a bit vector converts back to an integer', () => {
-  // The rest of simd.md's example: set lane 3 and read the value back, which
-  // the design writes as 0b00001010.
+  // The rest of that example: set lane 3 and read the value back, which is 0b00001010.
   expect(evaluated('let a: boolean8 = 0b00000010; a[3] = 1; let n: uint8 = a; String(n);')).toBe('10');
   expect(evaluated('let a: boolean8 = 0; a[0] = 1; a[7] = 1; let n: uint8 = a; String(n);')).toBe('129');
 });
@@ -358,9 +312,9 @@ test('an accessor of L characters is an L-lane vector', () => {
   const P = 'const v = float32x4(1, 2, 3, 4); ';
   expect(evaluated(`${P}String(v.xyzw);`)).toBe('(1, 2, 3, 4)');
   expect(evaluated(`${P}String(v.xy);`)).toBe('(1, 2)');
-  // A REPEAT reads fine and is the design's own broadcast spelling. Only the
-  // ASSIGNMENT is refused, and having both here is what keeps the rule from
-  // reading as "repeats are banned".
+  // A REPEAT reads fine and is the broadcast spelling (#sec-vector-component-accessors). Only the
+  // ASSIGNMENT is refused, and having both here is what keeps the rule from reading as "repeats are
+  // banned".
   expect(evaluated(`${P}String(v.xxxx);`)).toBe('(1, 1, 1, 1)');
 });
 
@@ -439,12 +393,10 @@ test('`in` and Reflect.get refuse a vector as they refuse a string', () => {
 });
 
 /**
- * Lane-wise arithmetic, comparisons, and the operations that consume a mask:
- * #sec-vector-lane-wise-math, #sec-vector-comparisons, #sec-vector-masks.
- *
- * Arithmetic is what the rest of the surface is FOR - the design's own dot
- * product is `(a * b).sum()`, so an engine with swizzle and sum and no `*`
- * cannot run the example that motivates sum.
+ * Lane-wise arithmetic, comparisons, and the operations that consume a mask: #sec-vector-lane-wise-math,
+ * #sec-vector-comparisons, #sec-vector-masks. Arithmetic is what the rest of the surface is FOR - a dot
+ * product is `(a * b).sum()`, so an engine with swizzle and sum and no `*` could not run the example that
+ * motivates sum.
  */
 
 test('an operator over two vectors applies lane-wise', () => {
@@ -462,8 +414,8 @@ test('vectors of different shapes are not operands of one operator', () => {
 });
 
 test('a comparison yields one mask lane per input lane', () => {
-  // simd.md's own example: (true, true, false, false), which is the bit vector
-  // (1, 1, 0, 0).
+  // A comparison yields one mask lane per input lane (#sec-vector-comparisons): (true, true, false, false),
+  // which is the bit vector (1, 1, 0, 0).
   const P = 'type Mask = vector.<uint.<1>, 4>; const a = float32x4(1, 2, 3, 4); const b = float32x4(4, 3, 2, 1); ';
   expect(evaluated(`${P}const r: Mask = a < b; String(r);`)).toBe('(1, 1, 0, 0)');
   expect(evaluated(`${P}const r: Mask = a > b; String(r);`)).toBe('(0, 0, 1, 1)');
@@ -506,12 +458,9 @@ test('a mask is an ordinary vector', () => {
 });
 
 /**
- * Wrapping: #sec-vector-wrapping.
- *
- * The clause adds no rule - it states a consequence of the ones for aliases and
- * classes, and is stated because it decides a design question simd.md poses. A
- * math library's `Vector4` is an alias or a class, and component accessors
- * decide which.
+ * Wrapping: #sec-vector-wrapping. The clause adds no rule - it states a consequence of the ones for aliases
+ * and classes, and is stated because it decides a question a math library meets: a `Vector4` is an alias or
+ * a class, and component accessors decide which.
  */
 
 test('an alias of a vector type has its accessors and a wrapping class does not', () => {
@@ -629,27 +578,25 @@ test('a vector carries its type through the pipeline', () => {
 });
 
 test('a vector is not iterable', () => {
-  // simd.md gives lanes an index and a permutation and no iterator, so
-  // destructuring and spreading REPORT rather than succeeding. They crashed the
-  // host before, because the refusal boxed through ToObject - which asserts on
-  // a vector - where a typed number in the same position already reported.
+  // Unspecified: whether a vector is iterable. Lanes have an index and a permutation and no iterator, so
+  // destructuring and spreading REPORT rather than succeeding. The refusal must not box a vector through
+  // ToObject, which asserts on one, as a typed number in the same position already reports.
   expectThrown('const [p, q] = float32x4(1, 2, 3, 4);');
   expectThrown('const xs = [...float32x4(1, 2, 3, 4)];');
 });
 
 /**
- * simd.md's Instructions table, as a checklist.
+ * Fixture: the Instructions table of simd.md in the ecmascript-types repository, as a checklist.
  *
- * That table lists eleven expressions against their x86 and AArch64 encodings.
- * It is informative - this engine compiles none of them - but it is the
- * DESIGN'S OWN ENUMERATION of what a vector is for, so every row should run.
- * All eleven do.
+ * That table lists eleven expressions against their x86 and AArch64 encodings. It is informative - this
+ * engine compiles none of them - but it enumerates what a vector is for, so every row should run. All
+ * eleven do.
  *
- * Reading it as a checklist rather than as prose is what finds a missing
- * operation: lane-wise arithmetic, and `v.xxxx` among the accessors.
+ * Reading it as a checklist rather than as prose is what finds a missing operation: lane-wise arithmetic,
+ * and `v.xxxx` among the accessors.
  */
 
-test("every expression in the design's instruction table runs", () => {
+test('every expression in the instruction checklist runs', () => {
   const P = 'const v = float32x4(1, 2, 3, 4); const w = float32x4(5, 6, 7, 8); ';
   expect(evaluated(`${P}String(v.lane.<0>());`)).toBe('1');                       // extractps
   expect(evaluated(`${P}let i = 1; String(v[i]);`)).toBe('2');                    // variable permute
@@ -665,17 +612,12 @@ test("every expression in the design's instruction table runs", () => {
 });
 
 /**
- * The lane-write question is closed, and a test pins what closed it.
- *
- * simd.md asked whether `v[i] = value` should be an error, since `withLane`
- * expresses the same intent without mutating a value type. It does not: the two
- * do not overlap, because `withLane`'s index is a COMPILE-TIME CONSTANT and
- * this one's is not. Refusing the assignment would leave a lane whose index is
- * computed with no way to be written.
- *
- * #sec-vector-lanes records the decision and names what would reopen it: an
- * operation taking a computed index and returning a new vector would restore
- * the redundancy, and nothing proposes one.
+ * The lane-write question is closed (#sec-vector-lanes): `v[i] = value` is not an error, even though
+ * `withLane` expresses the same intent without mutating a value type. The two do not overlap, because
+ * `withLane`'s index is a COMPILE-TIME CONSTANT and this one's is not. Refusing the assignment would leave a
+ * lane whose index is computed with no way to be written. The clause names what would reopen it: an
+ * operation taking a computed index and returning a new vector would restore the redundancy, and nothing
+ * proposes one.
  */
 
 test('withLane cannot take a computed index, which is why the write stays', () => {
@@ -686,8 +628,7 @@ test('withLane cannot take a computed index, which is why the write stays', () =
 });
 
 test('an array permits writing through a value-type element', () => {
-  // The design's own consistency argument, verified: refusing the vector case
-  // would be inconsistent with arrays. It is the weaker of the two reasons and
-  // is asserted because simd.md rests on it alone.
+  // The consistency argument: refusing the vector case would be inconsistent with arrays. It is the weaker of
+  // the two reasons, and is asserted because it is the one a reader arriving from arrays reaches for.
   expect(evaluated('class P { x: uint8 = 0; } const a: [].<P> = [new P()]; a[0].x = 5; String(a[0].x);')).toBe('5');
 });

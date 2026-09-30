@@ -2,21 +2,17 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * `/` AT AN INTEGER CONTEXT IS INTEGER DIVISION, truncating toward zero.
+ * `/` AT AN INTEGER CONTEXT IS INTEGER DIVISION, truncating toward zero. With an `int32` context the same
+ * `1 / 3` is integer division and gives `0`; in an untyped context it is `Number` division and gives
+ * `0.333…`. The literal never converts a typed value - it just adopts the type the context asks for.
  *
- * rational.md states the rule and gives this as its example: "With an `int32`
- * context the same `1 / 3` is integer division and gives `0`; in an untyped
- * context it is `Number` division and gives `0.333…`. The literal never converts
- * a typed value - it just adopts the type the context asks for."
- *
- * The constant folder previously folded `/` only where the quotient was exact,
- * so `7 / 2` fell through to Number arithmetic, produced `3.5`, and was refused
- * as out of range - an error naming an intermediate value the program never
- * wrote, and a rule no neighbouring language has.
- *
- * It also split `/` from itself. The contextual type decides the operator for a
- * `rational`, where `1 / 3` is exactly `1/3`, and decided nothing for an
- * integer. One rule now covers both: the context says what the operator means.
+ * Unspecified: the specification says an integer family defines `divide`
+ * (#sec-which-operations-each-family-defines) but does not state the contextual rule. These tests pin it.
+ * The constant folder must fold `/` at an integer context even where the quotient is not exact: `7 / 2` is
+ * `3`, and not `3.5` refused as out of range, which would be an error naming an intermediate value the
+ * program never wrote, and a rule no neighbouring language has. The contextual type decides the operator
+ * for a `rational`, where `1 / 3` is exactly `1/3`, and it decides it for an integer too: one rule covers
+ * both, and the context says what the operator means.
  */
 
 test('an integer context truncates toward zero', () => {
@@ -27,8 +23,7 @@ test('an integer context truncates toward zero', () => {
 });
 
 test('truncation is toward zero, not toward negative infinity', () => {
-  // The C, C++, Rust and Go rule, which memorylayout.md already names as this
-  // proposal's default for layout. `Math.floor` would give -4.
+  // Truncation toward zero is the C, C++, Rust and Go rule. `Math.floor` would give -4.
   expect(evaluated('let a: int32 = -7 / 2; String(a);')).toBe('-3');
   expect(evaluated('let a: int32 = 7 / -2; String(a);')).toBe('-3');
 });

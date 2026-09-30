@@ -2,14 +2,11 @@ import { expect, test } from 'vitest';
 import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
 
 /**
- * Spec: #sec-which-operations-each-family-defines lists unaryMinus for the
- * rational family; "Unary `-` applies T::unaryMinus for the numeric type T of
- * its operand." rational.md: "unary `-` negates the numerator."
- *
- * The dispatch had negation for typed numbers, vectors, complex, decimal and
- * ranges, but none for a rational, which fell through to ToNumeric - where a
- * rational has no Number value - so even `-rational64(3, 4)` was a TypeError,
- * though the checker, reading the same table, accepted it.
+ * Spec: #sec-which-operations-each-family-defines lists unaryMinus for the rational family, and "Unary `-`
+ * applies T::unaryMinus for the numeric type T of its operand." Unary `-` negates the numerator. The
+ * dispatch must reach negation for a rational as it does for typed numbers, vectors, complex, decimal and
+ * ranges: falling through to ToNumeric, where a rational has no Number value, would make
+ * `-rational64(3, 4)` a TypeError though the checker, reading the same table, accepts it.
  */
 
 test('unary minus negates a rational', () => {

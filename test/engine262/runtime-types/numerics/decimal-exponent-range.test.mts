@@ -45,9 +45,8 @@ test('narrowing a decimal to a width that cannot hold it is refused', () => {
 });
 
 test('conversions in range are unchanged', () => {
-  // A float64 VALUE carries what it holds, which is the rule decimal.md states
-  // and which this does not touch: exact where the double holds the value
-  // exactly, the width's full precision where it does not.
+  // A float64 VALUE carries what it holds (#table-numeric-conversions): exact where the double holds the
+  // value exactly, the width's full precision where it does not.
   expect(evaluated('let f = 0.5; String(decimal64(f));')).toBe('0.5');
   expect(evaluated('let f = 0.1; String(decimal64(f));')).toBe('0.1000000000000000');
   expect(evaluated('let f = 0.1; String(decimal128(f));')).toBe('0.1000000000000000055511151231257827');
@@ -58,19 +57,14 @@ test('conversions in range are unchanged', () => {
 });
 
 /**
- * decimal.md gives three exact spellings and one that carries the bits:
- * `let tenth: decimal128 = 0.1` and `0.1 := decimal128` are exact, the second
- * "forcing decimal on an otherwise-Number literal", while `decimal128(f)`
- * "CARRIES WHATEVER `f` ALREADY HOLDS".
- *
- * The CALL is a conversion whatever its argument looks like: the argument is
- * evaluated first, so by the time the conversion sees it the literal IS the
- * double. A round of this work read "the distinction bites only when a
- * `float64` *value* is involved" as excluding a literal argument and made
- * `decimal128(0.1)` exact - which `type-universe/decimal.test.mts` pins against
- * with the comment "THE ASSERTION THAT SAYS WHY": making it equal
- * `decimal128.parse("0.1")` "would launder a binary approximation into an
- * exact-looking decimal and hide the whole reason these types exist".
+ * Three spellings are exact and one carries the bits (#table-numeric-conversions, any numeric type to
+ * `decimal`): `let tenth: decimal128 = 0.1` and `0.1 := decimal128` are exact - the second forces decimal on
+ * an otherwise-Number literal - while `decimal128(f)` CARRIES WHATEVER `f` ALREADY HOLDS. The CALL is a
+ * conversion whatever its argument looks like: the argument is evaluated first, so by the time the
+ * conversion sees it the literal IS the double, and `decimal128(0.1)` is not exact.
+ * `type-universe/decimal.test.mts` pins this against making it equal `decimal128.parse("0.1")`, which
+ * "would launder a binary approximation into an exact-looking decimal and hide the whole reason these
+ * types exist"; the table's own note says the same.
  */
 test('the exact spellings are the annotation and the cast', () => {
   expect(evaluated('let t: decimal128 = 0.1; String(t);')).toBe('0.1');
@@ -118,17 +112,12 @@ test('any numeric type is a source, and exact digits are kept', () => {
 });
 
 /**
- * decimal.md, "Conversions - Explicit in every direction, and each names its
- * loss", gives four outgoing rules: "To a binary float: `float64(d)` rounds to
- * the nearest `float64`"; "To an integer: `int64(d)` truncates toward zero";
- * "Between widths: `decimal32` to `decimal128` is exact; the reverse rounds";
- * and the rational pair.
- *
- * `#table-numeric-conversions` marks this direction "Open", and the note beside
- * it explains the difficulty as "which cohort member results" - which is
- * one-sided. A binary type has no cohorts, so nothing has to be chosen going
- * out, and the design settles all four. The integer one was the rule the engine
- * did not have: `int64(d)` and `uint8(d)` were refused as not assignable.
+ * Outgoing conversions from a decimal (#table-numeric-conversions), each naming its loss: to a binary
+ * float, `float64(d)` rounds to the nearest `float64`, ties to even, which reintroduces the binary error a
+ * decimal exists to avoid; to an integer, `int64(d)` truncates toward zero, then modulo 2**M, reading the
+ * source's digits; between widths, `decimal32` to `decimal128` is exact and the reverse rounds; and the
+ * rational pair. A binary type has no cohorts, so nothing has to be chosen going out. The integer rule is
+ * the one a program most needs: `int64(d)` and `uint8(d)` must be accepted, not refused as not assignable.
  */
 test('a decimal converts to an integer by truncating toward zero', () => {
   expect(evaluated("let d = decimal64.parse('7.9'); String(int64(d));")).toBe('7');
@@ -190,16 +179,12 @@ test('a boundary still refuses what a conversion wraps', () => {
 });
 
 /**
- * #table-numeric-conversions, `binary float or the Number type` to `rational`:
- * "The source's exact value, which is a dyadic rational, in lowest terms."
- * decimal.md adds the decimal source: "a terminating decimal is exactly a
- * rational with a power-of-ten denominator, so `rational64(d)` is exact - `0.1`
- * becomes `1/10`".
- *
- * One numeric argument was answered by the TWO-argument constructor's rule, "a
- * rational numerator must be an integer", so `rational64(5)` worked and
- * `rational64(0.5)` did not - one spelling, two verdicts, decided by whether the
- * source happened to be integral.
+ * #table-numeric-conversions, `binary float or the Number type` to `rational`: "The source's exact value,
+ * which is a dyadic rational, in lowest terms." A decimal source is exact too: a terminating decimal is
+ * exactly a rational with a power-of-ten denominator, so `rational64(d)` is exact - `0.1` becomes `1/10`.
+ * One numeric argument is converted by this rule and not by the TWO-argument constructor's rule, "a
+ * rational numerator must be an integer": `rational64(5)` and `rational64(0.5)` are one spelling with one
+ * verdict, not decided by whether the source happens to be integral.
  */
 test('one numeric argument is the conversion, exactly', () => {
   expect(evaluated('String(rational64(0.5));')).toBe('1/2');
@@ -213,7 +198,7 @@ test('one numeric argument is the conversion, exactly', () => {
   // that - not one tenth, which is the point of converting exactly rather than
   // prettily.
   expect(evaluated('let x = 0.1; String(rational64(x));')).toBe('3602879701896397/36028797018963968');
-  // A decimal converts to the power-of-ten fraction decimal.md names.
+  // A decimal converts to its power-of-ten fraction (#table-numeric-conversions).
   expect(evaluated("let d = decimal64.parse('0.1'); String(rational64(d));")).toBe('1/10');
 });
 
