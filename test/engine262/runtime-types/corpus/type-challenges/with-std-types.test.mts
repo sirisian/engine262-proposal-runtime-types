@@ -2,26 +2,17 @@ import { test } from 'vitest';
 import { expectBuilderThrows, expectBuilderTrue, kit } from './harness.mts';
 
 /**
- * proposal-runtime-types `annex-standard-kit`.
+ * Spec: #annex-standard-kit. Fixture: examples/typechallenges.md of the ecmascript-types repository, which gives 46 of
+ * its challenges a second block, "With std:types", showing the same answer as a call into the kit. Forty-two of the
+ * kit's exports are demonstrated across them, and running them makes the library index a test rather than a claim:
+ * a helper that drifts from the block advertising it turns red.
  *
- * typechallenges.md gives 46 of its challenges a second block, "With
- * std:types", showing the same answer as a call into the kit. Forty-two of the
- * kit's exports are demonstrated across them - and until now NONE of them ran.
- * They existed only as markdown, so the library index was a claim rather than a
- * test, and a helper could drift from the block advertising it without anything
- * going red.
- *
- * Generated from the document: each case is the challenge's own `// Builder`
- * block, which declares the types the assertions name, followed by the
- * `// With std:types` block's assertions. A line the document annotates with
- * `// TypeError:` is asserted to THROW, because a demonstrated diagnostic is as
- * much a claim as a demonstrated value.
- *
- * These are the OPPOSITE case from the challenge solutions beside them. The
- * corpus preamble's exercise rule - "implementing the utility is the whole
- * point" - is why a challenge's own answer stays hand-written; these blocks
- * exist to show the library entry that already ships the answer, so calling it
- * IS the demonstration.
+ * Generated from the document: each case is the challenge's own `// Builder` block, which declares the types the
+ * assertions name, followed by the `// With std:types` block's assertions. A line the document annotates with
+ * `// TypeError:` is asserted to THROW, because a demonstrated diagnostic is as much a claim as a demonstrated
+ * value. These are the OPPOSITE case from the challenge solutions beside them. The corpus preamble's exercise rule -
+ * "implementing the utility is the whole point" - is why a challenge's own answer stays hand-written; these blocks
+ * exist to show the library entry that already ships the answer, so calling it IS the demonstration.
  */
 
 test('with std:types - 4  Pick', () => {

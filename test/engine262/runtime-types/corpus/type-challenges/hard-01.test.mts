@@ -2,14 +2,11 @@ import { test } from 'vitest';
 import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
- * Type Challenges - the hard tier, shard 1.
- * Source: ecmascript-types/examples/typechallenges.md
+ * Type Challenges - the hard tier, shard 1. Source: ecmascript-types/examples/typechallenges.md
  *
- * Optional/required property reflection, string transforms, and union/tuple
- * conversion, over getReflection/makeType. The `undefined` type was enabled this
- * shard (it names the type of the `undefined` value, which is `void`), so the
- * challenges whose examples use `undefined`-typed properties port fully.
- * Tuple operands are aliases.
+ * Optional/required property reflection, string transforms, and union/tuple conversion, over
+ * getReflection/makeType. The `undefined` type names the type of the `undefined` value (which is `void`), so the
+ * challenges whose examples use `undefined`-typed properties port fully. Tuple operands are aliases.
  */
 
 

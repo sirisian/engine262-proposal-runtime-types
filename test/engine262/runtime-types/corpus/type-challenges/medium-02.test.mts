@@ -2,14 +2,12 @@ import { test } from 'vitest';
 import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
- * Type Challenges - the medium tier, shard 2.
- * Source: ecmascript-types/examples/typechallenges.md
+ * Type Challenges - the medium tier, shard 2. Source: ecmascript-types/examples/typechallenges.md
  *
- * String transforms (a value in, a literal type out) and object utilities
- * (getReflection + makeType over properties), ported in corpus builder form.
- * `type` operator on literal operands and the kit primitives carry these. Where
- * the corpus writes `type 'x'` for a key operand it is used directly (the
- * operator now accepts literals); tuple/paren operands, where any, are aliases.
+ * String transforms (a value in, a literal type out) and object utilities (getReflection + makeType over
+ * properties), ported in corpus builder form. The `type` operator on literal operands and the kit primitives carry
+ * these. Where the corpus writes `type 'x'` for a key operand it is used directly (the operator accepts literals);
+ * tuple/paren operands, where any, are aliases.
  */
 
 

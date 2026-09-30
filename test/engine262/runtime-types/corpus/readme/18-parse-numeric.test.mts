@@ -2,17 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown, expectThrownKind } from '../../harness.mts';
 
 /**
- * README feature coverage - parseFloat and parseInt for each new type.
- * Section: parseFloat and parseInt For Each New Type.
+ * Fixture: the README section parseFloat and parseInt For Each New Type, in the ecmascript-types repository.
  *
- * A numeric Type Object has a `parse` method: `uint8.parse('1')` returns the
- * value as that type. For integer types the signature is parse(string, radix=10).
- * The accepted input is exactly a literal of the type, with optional surrounding
- * whitespace and an optional sign; numeric separators are accepted and the radix
- * form accepts the matching base prefix. Unlike parseInt/parseFloat, no trailing
- * text is consumed and a failed parse throws rather than returning NaN: a
- * malformed string is a SyntaxError, and a well-formed literal out of range is a
- * RangeError (#sec-parsing).
+ * A numeric Type Object has a `parse` method (#sec-parsing): `uint8.parse('1')` returns the value as that type. For
+ * integer types the signature is parse(string, radix=10). The accepted input is exactly a literal of the type,
+ * with optional surrounding whitespace and an optional sign; numeric separators are accepted and the radix form
+ * accepts the matching base prefix. Unlike parseInt/parseFloat, no trailing text is consumed and a failed parse
+ * throws rather than returning NaN: a malformed string is a SyntaxError, and a well-formed literal out of range
+ * is a RangeError (#sec-parsing).
  */
 
 // -- The parse method exists on numeric types ----------------------------------

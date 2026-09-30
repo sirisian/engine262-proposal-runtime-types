@@ -2,15 +2,12 @@ import { test } from 'vitest';
 import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
- * Type Challenges - the medium tier, shard 3.
- * Source: ecmascript-types/examples/typechallenges.md
+ * Type Challenges - the medium tier, shard 3. Source: ecmascript-types/examples/typechallenges.md
  *
- * Function-type reflection and construction, and recursion over reflected
- * structure. getReflection exposes a function type's signatures (parameter types
- * and return type), and makeType constructs a function type from that shape
- * (the `function` node case was added this shard, completing the function round
- * trip makeType(getReflection(F)) === F). Recursion uses the reflect/makeType
- * round trip applied to nested structure.
+ * Function-type reflection and construction, and recursion over reflected structure. getReflection exposes a
+ * function type's signatures (parameter types and return type), and makeType constructs a function type from that
+ * shape (the `function` node case), completing the function round trip makeType(getReflection(F)) === F.
+ * Recursion uses the reflect/makeType round trip applied to nested structure.
  */
 
 const FN = `function fnType(params, ret) { return Reflect.makeType({ kind: 'function', signatures: [{ parameters: params.map(t => ({ type: t })), return: { type: ret } }] }); }`;

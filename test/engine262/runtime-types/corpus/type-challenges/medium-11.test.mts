@@ -2,13 +2,11 @@ import { test } from 'vitest';
 import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
- * Type Challenges - the medium tier, shard 11.
- * Source: ecmascript-types/examples/typechallenges.md
+ * Type Challenges - the medium tier, shard 11. Source: ecmascript-types/examples/typechallenges.md
  *
- * String character algorithms, route/param parsing, BEM string generation, and
- * the numeric-key object challenge. Numeric object keys were enabled this shard:
- * `{ 1: T }` now parses and a numeric key canonicalizes to its string form
- * (`"1"`), as an object key does in JavaScript. Tuple operands are aliases.
+ * String character algorithms, route/param parsing, BEM string generation, and the numeric-key object challenge.
+ * Numeric object keys are accepted: `{ 1: T }` parses and a numeric key canonicalizes to its string form (`"1"`),
+ * as an object key does in JavaScript. Tuple operands are aliases.
  */
 
 

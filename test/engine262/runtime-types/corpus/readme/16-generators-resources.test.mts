@@ -2,17 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, ok } from '../../harness.mts';
 
 /**
- * README feature coverage - typed iteration and generators, explicit resource
- * management.
- * Sections: Typed Iteration and Generators, Explicit Resource Management.
+ * Fixture: the README sections Typed Iteration and Generators and Explicit Resource Management, in the
+ * ecmascript-types repository.
  *
- *  - Typed generators work: the yield-type shorthand `function* f(): int32` and
- *    the full `Generator.<Y, R, N>` form parse, and the generator yields and
- *    iterates. The yield/return/next TYPE checking is a static-checker feature.
- *  - Explicit Resource Management (`using` / `await using`) is not in the base
- *    engine262 at all, so the runtime-types annotation on it has nothing to
- *    attach to. It is a base-engine dependency rather than a gap in this
- *    proposal.
+ * - Typed generators work: the yield-type shorthand `function* f(): int32` and the full `Generator.<Y, R, N>` form
+ *   parse, and the generator yields and iterates. The yield/return/next TYPE checking is a static-checker
+ *   feature.
+ * - Explicit Resource Management (`using` / `await using`) admits a type annotation as a `const` does, and the
+ *   declared type must carry the disposal method (#sec-typed-resource-management).
  */
 
 // -- Typed Iteration and Generators --------------------------------------------
@@ -41,7 +38,15 @@ test('Explicit Resource Management: a using declaration disposes its resource', 
   // A resource is disposed when the block is left, so the flag is set by the time
   // the block's value is read.
   expect(evaluated('let disposed = false; { using r = { [Symbol.dispose]() { disposed = true; } }; } String(disposed);')).toBe('true');
-  // Still to come (README): the const-style annotation `using f: File = open()`,
-  // with the rule that the declared type must carry the disposal method.
+  // The `Symbol.dispose` protocol is available. The annotated form `using f: File = open()` is asserted in the next
+  // test.
   expect(evaluated('typeof Symbol.dispose;')).toBe('symbol');
+});
+
+test('Explicit Resource Management: a using declaration admits a type annotation', () => {
+  // #sec-typed-resource-management: `using` admits the same annotations as `const`, and the declared type must
+  // carry the disposal method.
+  const setup = 'function open(): File { return new File(); } ';
+  expect(evaluated(`class File { [Symbol.dispose]() {} } ${setup} { using f: File = open(); } 'ok';`)).toBe('ok');
+  expect(evaluated(`class File { } ${setup} try { eval('{ using f: File = open(); }'); 'ACCEPTED'; } catch (e) { e.constructor.name; }`)).toBe('TypeError');
 });

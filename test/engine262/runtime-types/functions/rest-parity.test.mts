@@ -18,7 +18,7 @@ test('the multi-rest example splits by element type', () => {
   expect(evaluated('function g(a: string, ...args: [].<uint32>, ...args2: [].<string>, cb: () => void) { return String(args.length) + "/" + String(args2.length); } g("a", 0, 1, 2, "a", "b", () => {});')).toBe('3/2');
 });
 
-test('a value the element type refuses still refuses after the literal rule (F-E boundary)', () => {
+test('a value the element type refuses still refuses after the literal rule', () => {
   expectThrown('function f(...a: [].<uint.<8>>, ...b: [].<string>) {} f(300, 300);');
 });
 

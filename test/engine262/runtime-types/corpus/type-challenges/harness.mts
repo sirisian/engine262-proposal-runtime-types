@@ -1,5 +1,5 @@
 /**
- * Harness for the type-challenge corpus (ecmascript-types/examples/typechallenges.md).
+ * Fixture: examples/typechallenges.md of the ecmascript-types repository. Harness for the type-challenge corpus.
  *
  * Each challenge's builder solution is a sequence of statements ending in one or
  * more assertion expressions written as bare statements, e.g.
@@ -70,11 +70,9 @@ function keyVals(K) { return new Set(arms(K).map(a => reflect(a).value)); }
 `;
 
 /**
- * The kit's exports also reachable as `std.<name>`, which is how
- * typechallenges.md's "With std:types" blocks are written - the corpus document
- * imports the module as a namespace. Built by scraping the export names out of
- * the source rather than listing them, so a helper added to the kit is reachable
- * both ways without editing this file.
+ * The kit's exports also reachable as `std.<name>`, which is how the corpus's "With std:types" blocks are
+ * written - the corpus document imports the module as a namespace. Built by scraping the export names out of the
+ * source rather than listing them, so a helper added to the kit is reachable both ways without editing this file.
  */
 const STD_NAMESPACE = `const std = { ${STD_TYPES_SOURCE.split('\n')
   .filter((line) => line.startsWith('export function '))
@@ -160,12 +158,10 @@ export function evaluateBuilder(source: string): ChallengeResult {
     Type: 'normal' | 'throw';
     Value?: { stringValue?(): string };
   };
-  // Report the THROWN MESSAGE, not the first sixty
-  // characters of source. Those sixty characters are now the kit prelude, so a
-  // failure read "builder threw: const std = (() => { // ---- foundations" for
-  // every challenge in the corpus - identical, and useless for telling one
-  // cause from another. Triaging the ported blocks was impossible until this
-  // reported what actually went wrong.
+  // Report the THROWN MESSAGE, not the first sixty characters of source. Those sixty characters are the kit prelude,
+  // so a failure would read "builder threw: const std = (() => { // ---- foundations" for every challenge in the corpus -
+  // identical, and useless for telling one cause from another. Reporting what actually went wrong is what makes the
+  // ported blocks triageable.
   let error;
   if (completion.Type === 'throw') {
     const v = completion.Value as unknown as {

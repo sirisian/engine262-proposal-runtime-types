@@ -2,25 +2,18 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - interfaces and typed assignment.
- * Sections: Interfaces (Object/Index Signatures/Array/Function Interfaces),
- * Implementing Interfaces, Typed Assignment.
+ * Fixture: the README sections Interfaces (Object, Index Signatures, Array and Function Interfaces), Implementing
+ * Interfaces and Typed Assignment, in the ecmascript-types repository.
  *
- * Two README/spec reconciliations are recorded:
+ * Interfaces and typed assignment. An interface is NOMINAL where a class declares it implements one and STRUCTURAL
+ * where a value is checked against it (#sec-interfaces-semantics: an object that has the members satisfies an
+ * interface-typed position whether or not any class declared it), and IsSubtype reads the structural form
+ * (#sec-object-types), so a bare object type that has the members is assignable to the interface, as an
+ * implementing class is.
  *
- *  - An interface is NOMINAL where a class declares it implements one and
- *    STRUCTURAL where a value is checked against it (#sec-interfaces-semantics:
- *    "an object that has the members satisfies an interface-typed
- *    position whether or not any class declared it"). So `obj instanceof I` is a
- *    structural membership test, while `Reflect.isAssignable(objectType, I)`
- *    follows the nominal hierarchy. Both are verified below and are correct per
- *    spec; they are not the same question.
- *
- *  - `interface B extends A` appears in the README but the NORMATIVE grammar
- *    (#sec-classes-interfaces-and-enums) has no heritage clause; interface
- *    inheritance is
- *    expressed by intersection. The extends form does not parse and is noted as a
- *    documented gap superseded by the spec.
+ * `interface B extends A` has no counterpart in the specification's grammar (#sec-classes-interfaces-and-enums):
+ * there is no heritage clause, and interface inheritance is expressed by intersection. The extends form does not
+ * parse.
  */
 
 // -- Object Interfaces: declaration and structural membership ------------------
@@ -65,17 +58,14 @@ test('Implementing Interfaces: a class implements an interface', () => {
   expect(evaluated('interface A { a: uint32; } class B {} class C extends B implements A { a = (1 := uint32); } typeof C;')).toBe('function');
   // an instance is created normally
   expect(evaluated('interface A { a: uint32; } class C implements A { a: uint32; } let c = new C(); typeof c;')).toBe('object');
-  // The README's own program: `C` declares `a` and inherits `b`'s host from `B`.
+  // The interface example: `C` declares `a` and inherits `b`'s host from `B`.
   expect(evaluated('interface A { a: uint32; b(uint32): uint32; } class B {} class C extends B implements A { a: uint32; b(a) { return a; } } const x = new C(); x.a = x.b(5); String(x.a);')).toBe('5');
   // A member is DECLARED if the class or a class it extends declares it: an
   // inherited member satisfies the interface as an own one does.
   expect(evaluated('interface A { a: uint32; } class B { a: uint32 = 0; } class C extends B implements A { } typeof C;')).toBe('function');
-  // What does NOT declare a member: a constructor assignment, or an assignment on
-  // the instance after construction. A class states its members; `this.a = ...`
-  // creates a property on one object. The row here used to assert the
-  // constructor form was accepted, and the README's original text assigned
-  // `a` on the instance - both are refused, for the same reason, and both were
-  // rewritten to declare the field.
+  // What does NOT declare a member: a constructor assignment, or an assignment on the instance after construction. A
+  // class states its members; `this.a = ...` creates a property on one object. Both forms are refused for the same
+  // reason, and the field must be declared.
   expectThrown('interface A { a: uint32; } class C implements A { constructor() { this.a = (1 := uint32); } }');
 });
 
@@ -83,22 +73,12 @@ test('Implementing Interfaces: a class implements an interface', () => {
 // A class that implements an interface is a subtype of it; a plain object type is
 // not a declared subtype (though its values satisfy it structurally, above).
 test('Interfaces: assignability follows the nominal hierarchy', () => {
-  // an implementing class relates to its interface, and so does a bare object
-  // type that has the members.
-  //
-  // THIS ASSERTION CHANGED, and the change is worth a decision rather than a
-  // silent flip. This line asserted *false*, on
-  // the reading that an interface is nominal for assignability and structural
-  // only for membership. `#sec-object-types` says otherwise, in the clause that
-  // defines the structural form: "This is what lets a value satisfy an
-  // interface by having its members, which IsSubtype reads. Without it the
-  // rules would refuse `f({ a: 'a' })` for `interface IExample { a: string; }`
-  // ... the step separating the kinds would answer before any member was
-  // inspected." `#sec-issubtype` carries the step itself. `f(o)` for an
-  // object-typed `o` was refused here, which is that failure exactly.
-  //
-  // If the README's nominal reading is the intended one, this is the line to
-  // revert and the specification's two steps are what want changing.
+  // An implementing class relates to its interface, and so does a bare object type that has the members:
+  // #sec-object-types defines the structural form ("This is what lets a value satisfy an interface by having its
+  // members, which IsSubtype reads") and #sec-issubtype carries the step itself. `f(o)` for an object-typed `o` is
+  // therefore accepted, and refusing it would be the failure that clause describes. The nominal reading of an
+  // interface for assignability would make this line false, and would mean changing the specification's two
+  // steps.
   expect(bool('interface I { a: uint8; } type O = { a: uint8 }; String(Reflect.isAssignable(O, I));')).toBe(true);
 });
 
@@ -121,10 +101,9 @@ test('Typed Assignment: expression := Type is an expression that converts', () =
   expect(bool('let a := (300 := uint8); String(a === (44 := uint8));')).toBe(true);
 });
 
-// -- Documented gap: interface extends -----------------------------------------
-test('Interfaces: the extends heritage clause is not in the normative grammar (documents the gap)', () => {
-  // Target (README): `interface B extends A { ... }`. The normative spec grammar
-  // has no interface heritage clause; inheritance is expressed by intersection.
-  // The extends form does not parse.
+// -- interface extends: no heritage clause in the grammar --------------------------
+test('Interfaces: the extends heritage clause is not in the normative grammar', () => {
+  // `interface B extends A { ... }`: the specification's grammar has no interface heritage clause; inheritance is
+  // expressed by intersection. The extends form does not parse.
   expectThrown('interface A { a: uint8; } interface B extends A { b: string; } typeof B;');
 });

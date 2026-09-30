@@ -2,17 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - weak references and global objects as types.
- * Sections: Weak References, Global Objects.
+ * Fixture: the README sections Weak References and Global Objects, in the ecmascript-types repository.
  *
- *  - Weak references work for reference types (ordinary objects, functions,
- *    symbols) and reject VALUE types: a value type has no identity, so a weak
- *    reference to one, a weak collection keyed on one, or a finalization target of
- *    one is a TypeError. This is the same identity principle as the parallel
- *    Proxy-over-typed-class rejection, and is implemented and verified here.
- *  - Global objects as type names are a README listing not yet in the normative
- *    type-name clause; most are not registered as types (Promise is, via typed
- *    promises). Documented as deferred below.
+ * - Weak references work for reference types (ordinary objects, functions, symbols) and reject VALUE types: a value
+ *   type has no identity, so a weak reference to one, a weak collection keyed on one, or a finalization target of
+ *   one is a TypeError (#sec-weak-references-and-typed-objects). This is the same identity principle as the
+ *   parallel Proxy-over-typed-class rejection.
+ * - Global objects as type names: #sec-type-names lists the built-in constructors that are type names (Promise,
+ *   Date, RegExp, Map, Set, Error, and the rest), each a nominal type whose values are its instances.
  */
 
 // -- Weak References: reference types ------------------------------------------
@@ -28,11 +25,9 @@ test('Weak References: WeakMap and WeakSet accept object keys/values', () => {
   expect(evaluated('let o = {}; let s = new WeakSet(); s.add(o); String(s.has(o));')).toBe('true');
 });
 
-// -- Documented gaps -----------------------------------------------------------
 // -- Weak References: a value-type instance cannot be held weakly ---------------
-// A value of a value type has no identity, so a weak reference to it, a weak
-// collection keyed on it, or a finalization target of it is a TypeError (README
-// "Weak References").
+// A value of a value type has no identity, so a weak reference to it, a weak collection keyed on it, or a
+// finalization target of it is a TypeError (#sec-weak-references-and-typed-objects).
 test('Weak References: a WeakRef over a typed-class instance is a TypeError', () => {
   expectThrown('class A { a: uint8 = (0 := uint8); } new WeakRef(new A());');
 });
@@ -49,8 +44,8 @@ test('Weak References: an untyped class instance can still be held weakly', () =
 });
 
 test('Global Objects: global constructors are usable as type names', () => {
-  // README "Global Objects": Error, Map, Date, and the rest are usable as type
-  // annotations, each a nominal type whose values are its instances.
+  // Global Objects (#sec-type-names): Error, Map, Date, and the rest are usable as type annotations, each a nominal
+  // type whose values are its instances.
   expect(evaluated('let e: Error = new Error("x"); typeof e;')).toBe('object');
   expect(evaluated('let m: Map = new Map(); typeof m;')).toBe('object');
   expect(evaluated('let d: Date = new Date(); typeof d;')).toBe('object');

@@ -2,17 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - class operators, extension, sealed, abstract, mixins.
- * Sections: Classes and Operator Overloading, Class Extension, Sealed Classes,
- * Abstract Classes, Class Expressions and Mixins, SIMD Operators.
+ * Fixture: the README sections Classes and Operator Overloading, Class Extension, Sealed Classes, Abstract
+ * Classes, Class Expressions and Mixins and SIMD Operators, in the ecmascript-types repository.
  *
- * Deferrals documented rather than asserted:
- *
- *  - SIMD Operators are the SIMD extension and are not exercised here.
- *  - The full operator-overloading rules (operand resolution, scalar-on-the-left,
- *    SIMD intrinsics) are the operator-overloading extension; here we verify the
- *    core dispatch: a class operator's receiver is the left operand and its
- *    parameter is the right.
+ * Class operators, extension, sealed, abstract and mixins. SIMD operators are covered in vectors/ and operators/.
+ * Here we verify the core dispatch: a class operator's receiver is the left operand and its parameter is the
+ * right. The fuller operator-overloading rules (operand resolution, scalar-on-the-left, SIMD intrinsics) are
+ * covered in operators/.
  */
 
 // -- Classes and Operator Overloading ------------------------------------------
@@ -74,8 +70,7 @@ test('Mixins: a mixin is a function returning a class expression that extends it
 });
 
 // -- Class Extension: partial class --------------------------------------------
-// A `partial class` re-opens an existing class to add methods and operators
-// (README "Class Extension").
+// A `partial class` re-opens an existing class to add methods and operators (#sec-partial-classes).
 test('Class Extension: a partial class adds methods to an existing class', () => {
   expect(evaluated('class V { x = 1; } partial class V { getX() { return this.x; } } String(new V().getX());')).toBe('1');
   // the original members remain

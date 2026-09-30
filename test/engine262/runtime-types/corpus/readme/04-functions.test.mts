@@ -2,16 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, ok } from '../../harness.mts';
 
 /**
- * README feature coverage - functions.
- * Sections: Function signatures with constraints (including Optional
- * Parameters), Typed Arrow Functions (including Function Types in Unions).
+ * Fixture: the README sections Function signatures with constraints (including Optional Parameters) and Typed Arrow
+ * Functions (including Function Types in Unions), in the ecmascript-types repository.
  *
- * The "default return type is void", "undefined is not a valid return type",
- * and "a body that returns a value under a void signature is a TypeError" rules
- * are STATIC checker rules and are covered by the checker tests. Here we verify
- * the runtime and type-identity behavior: that these forms parse and run, that a
- * function type records its parameter and return types correctly, and that
- * optional parameters and typed arrows behave at run time.
+ * Functions. The "default return type is void", "undefined is not a valid return type", and "a body that returns a
+ * value under a void signature is a TypeError" rules are STATIC checker rules and are covered by the checker
+ * tests. Here we verify the runtime and type-identity behavior: that these forms parse and run, that a function
+ * type records its parameter and return types correctly, and that optional parameters and typed arrows behave at
+ * run time.
  */
 
 // -- Function type identity: parameters and return are part of the type --------

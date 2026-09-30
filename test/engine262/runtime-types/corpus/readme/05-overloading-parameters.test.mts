@@ -2,19 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - overloading and parameter forms.
- * Sections: Function Overloading (and Overload Resolution), Named Parameters,
- * Rest Parameters.
+ * Fixture: the README sections Function Overloading (and Overload Resolution), Named Parameters and Rest
+ * Parameters, in the ecmascript-types repository.
  *
- * Function OVERLOADING resolves a call to the signature that best fits the
- * argument types (#sec-overload-resolution): same-name function declarations
- * accumulate as signatures, and a call selects among them by a ranking of each
- * argument against each parameter. Rest parameters and type-based dispatch are
- * verified here.
- *
- * NAMED arguments (`f(a: 1, b: 2)`) select a parameter by name, and an object
- * spread (`f(...{ a: 1, b: 2 })`) binds each property by parameter name. Both are
- * verified here alongside the positional and rest forms.
+ * Overloading and parameter forms. Function OVERLOADING resolves a call to the signature that best fits the
+ * argument types (#sec-overload-resolution): same-name function declarations accumulate as signatures, and a call
+ * selects among them by a ranking of each argument against each parameter. Rest parameters and type-based
+ * dispatch are verified here. NAMED arguments (`f(a: 1, b: 2)`) select a parameter by name, and an object spread
+ * (`f(...{ a: 1, b: 2 })`) binds each property by parameter name (#sec-named-arguments); both are verified here
+ * alongside the positional and rest forms.
  */
 
 // -- Rest Parameters -----------------------------------------------------------
@@ -70,8 +66,8 @@ test('Function Overloading: type-based dispatch selects the matching signature',
 });
 
 // -- Named Parameters ----------------------------------------------------------
-// A named argument `name: expr` selects a parameter by name; an object spread
-// binds each property by parameter name (README "Named Parameters").
+// A named argument `name: expr` selects a parameter by name; an object spread binds each property by parameter
+// name (#sec-named-arguments).
 test('Named Parameters: a named argument selects a parameter by name', () => {
   expect(evaluated('function f(a: uint8, b: string) { return b; } f((1 := uint8), b: "x");')).toBe('x');
   // named arguments may be written in any order
@@ -81,7 +77,7 @@ test('Named Parameters: a named argument selects a parameter by name', () => {
 test('Named Parameters: named arguments skip defaulted parameters', () => {
   // a defaulted parameter may be omitted and named arguments supplied for later ones
   expect(evaluated('function f(a: string = "x", b: string) { return a + b; } f(b: "a");')).toBe('xa');
-  // omitting a required parameter is an error (README: no signature matches)
+  // omitting a required parameter is an error: no signature matches
   expectThrown('function g(option1: string, option2: string) {} g(option2: "a");');
 });
 

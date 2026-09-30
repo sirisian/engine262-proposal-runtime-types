@@ -64,7 +64,7 @@ test('type builders: an indexed-access type is the type of the named property', 
 });
 
 // -- Documented gaps: the catalog ships as builders, not syntax -----------------
-test('type builders: conditional-type syntax is deferred (documents the gap)', () => {
+test('type builders: conditional-type syntax is deferred', () => {
   // Conditional types ship as builder functions over makeType (#sec-computed-types), not as `extends ? :`
   // syntax; that syntax does not parse.
   expectThrown('type T = uint8 extends number ? "yes" : "no"; T;');
@@ -88,7 +88,7 @@ test('typeof and indexed access compose and round-trip through reflection', () =
 });
 
 // -- indexed access is limited to string-literal keys today --------------------
-test('indexed access rejects non-literal and numeric-index keys (documents the gap)', () => {
+test('indexed access rejects non-literal and numeric-index keys', () => {
   // #sec-indexed-access-types: only a String literal key is admitted in this edition. A numeric key, an index
   // signature and a tuple index are each a type error; the diagnostic for a non-literal key names the
   // string-literal requirement.

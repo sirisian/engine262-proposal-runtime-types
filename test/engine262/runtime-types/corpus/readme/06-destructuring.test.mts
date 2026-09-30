@@ -2,26 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - destructuring.
- * Sections: Destructuring Assignment Casting, Array Rest Destructuring, Object
- * Rest Destructuring, Typed return values for destructuring.
+ * Fixture: the README sections Destructuring Assignment Casting, Array Rest Destructuring, Object Rest
+ * Destructuring and Typed return values for destructuring, in the ecmascript-types repository.
  *
- * Two boundaries are documented rather than asserted:
- *
- *  - The normative spec annotates a binding pattern's elements through
- *    SingleNameBinding (`let { a?: uint8, b: c } = o;`, `let [d: uint8] = arr;`),
- *    which the engine implements and this file verifies. The README's more
- *    elaborate parenthesized forms (`{ (a: uint8): b }`, `{ ...(y: {...}) }`)
- *    reuse the object-typing syntax and go beyond the pattern grammar the core
- *    spec fixes; those parenthesized pattern forms are not parsed and are noted
- *    as a documented gap.
- *
- *  - Typed return values for destructuring (`function f(): [uint8, uint32] {
- *    return [1, 2]; }`) require converting an array/object literal to a typed
- *    tuple/object at the boundary. That aggregate-VALUE conversion is the
- *    array/object-value runtime deferred to the memory-layout extension; the
- *    tuple and object TYPES themselves are implemented (verified in the
- *    arrays/tuples and object-typing files).
+ * Destructuring. The specification annotates a binding pattern's elements through SingleNameBinding
+ * (`let { a?: uint8, b: c } = o;`, `let [d: uint8] = arr;`), and the parenthesized forms (`{ (a: uint8): b }`)
+ * reuse the object-typing syntax (#sec-typed-destructuring); both are verified here. A typed return value for
+ * destructuring converts an array or object literal to the declared tuple or object type at the return boundary
+ * (`function f(): [uint8, uint32] { return [1, 2]; }`).
  */
 
 // -- Array destructuring with typed elements and defaults ----------------------
@@ -84,8 +72,7 @@ test('Typed return for destructuring: the returned literal converts', () => {
 });
 
 test('Object destructuring: the parenthesized pattern syntax binds', () => {
-  // WAS a gap pin: the parenthesized `(a: type)` form did not parse. It does now,
-  // and both README targets hold - `let { (a: uint8): b = 1 } = { a: 2 };` binds
+  // The parenthesized `(a: type)` form parses, and both targets hold: `let { (a: uint8): b = 1 } = { a: 2 };` binds
   // b = 2, and the shorthand list binds each name.
   expect(evaluated('let { (a: uint8): b = 1 } = { a: 2 }; String(b);')).toBe('2');
   expect(evaluated('let { (a: uint8), (b: uint8) } = { a: 2, b: 3 }; String(a) + "," + String(b);')).toBe('2,3');

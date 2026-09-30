@@ -2,18 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - 128-bit integers, Proxy and typed objects, keyed
- * collections.
- * Sections: 128-bit Integer Types, Proxy and Typed Objects, Keyed Collections.
+ * Fixture: the README sections 128-bit Integer Types, Proxy and Typed Objects and Keyed Collections, in the
+ * ecmascript-types repository.
  *
- *  - 128-bit types (int128/uint128) are core type names that resolve and intern;
- *    like the 64-bit types they do not implicitly convert to number. The
- *    value-level 128-bit arithmetic (two 64-bit limbs) is the numeric-value
- *    runtime the memory-layout/number sections cover.
- *  - Proxy over a typed-class instance is a TypeError (normative core): such a
- *    value is layout-backed and a trap has no correct point to run. Verified here.
- *  - Keyed collections work; the value-type-key structural comparison is the
- *    memory-layout extension (value type classes) and is not exercised here.
+ * - 128-bit types (int128/uint128) are core type names that resolve and intern; like the 64-bit types they do not
+ *   implicitly convert to number. The value-level 128-bit arithmetic (two 64-bit limbs) is covered in numerics/ and
+ *   memory-layout/.
+ * - Proxy over a typed-class instance is a TypeError (normative core): such a value is layout-backed and a trap
+ *   has no correct point to run. Verified here.
+ * - Keyed collections work; the value-type-key structural comparison is covered in collections/.
  */
 
 // -- 128-bit Integer Types -----------------------------------------------------

@@ -2,23 +2,17 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - arrays and tuples.
- * Sections: Variable-length Typed Arrays, Fixed-length Typed Arrays, Mixing
- * Variable- and Fixed-length Arrays, Any Typed Array, Tuple Types, Array length
- * Type And Operations.
+ * Fixture: the README sections Variable-length Typed Arrays, Fixed-length Typed Arrays, Mixing Variable- and
+ * Fixed-length Arrays, Any Typed Array, Tuple Types and Array length Type And Operations, in the ecmascript-types
+ * repository.
  *
- * Scope note: the proposal's TYPE-level array and tuple features are implemented
- * in the core (the type constructors, interning, fixed-vs-dynamic identity,
- * assignability, tuple spread, and tuple-object intersection), and are what this
- * file verifies. One VALUE-level behavior is also implemented and verified here:
- * a plain array literal in a `[].<T>` position propagates the element type, so
- * each element is converted to T at the binding boundary (README "Typed Array
- * Propagation"). The remaining VALUE-level runtime of typed arrays - the
- * buffer-backed view constructor `[].<T>(buffer)`, `window`, bounds checking,
- * materializing a zero-filled fixed-length array, the delete/push/pop guards, and
- * the `shared` backing - is deferred by the spec to the memory-layout and
- * threading extensions (#table-extension-hooks) and is exercised with those
- * documents, not here.
+ * Arrays and tuples. The TYPE-level array and tuple features are implemented in the core (the type constructors,
+ * interning, fixed-vs-dynamic identity, assignability, tuple spread, and tuple-object intersection:
+ * #sec-array-and-tuple-types) and are what this file verifies. One VALUE-level behavior is verified here too: a
+ * plain array literal in a `[].<T>` position propagates the element type, so each element is converted to T at
+ * the binding boundary (#sec-array-literal-static-type). The rest of the value-level runtime of typed arrays - the
+ * buffer-backed view constructor, `window`, bounds checking, zero-filled fixed-length arrays, the delete/push/pop
+ * guards and the `shared` backing - is covered in arrays/, memory-layout/ and threading/.
  */
 
 // -- Variable-length Typed Arrays: [].<T> --------------------------------------
@@ -72,11 +66,9 @@ test('Fixed-length arrays: [N].<T> is distinct by extent and from the dynamic ar
 });
 
 test('Fixed-length arrays: the extents must agree, and a window takes either', () => {
-  // The README used to say a fixed-length array was assignable to the dynamic
-  // one. It is not, and that assignment was the unsoundness `Span.<T>` exists
-  // to replace: `[].<uint8>` promises growth and a fixed array cannot grow, so
-  // `function f(p: [].<uint8>) { p.push(0); }` accepted a `[4].<uint8>` and
-  // threw at the push.
+  // A fixed-length array is not assignable to the dynamic one: `[].<uint8>` promises growth and a fixed array cannot
+  // grow, so `function f(p: [].<uint8>) { p.push(0); }` would accept a `[4].<uint8>` and throw at the push. That
+  // assignment is the unsoundness `Span.<T>` exists to replace.
   expect(bool('type F = [4].<uint8>; type D = [].<uint8>; String(Reflect.isAssignable(F, D));')).toBe(false);
   expect(bool('type F = [4].<uint8>; type D = [].<uint8>; String(Reflect.isAssignable(D, F));')).toBe(false);
   // What a function saying "any array of uint8, however long" writes instead.

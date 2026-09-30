@@ -2,10 +2,9 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, ok, expectError, expectErrorFlagOff } from '../../harness.mts';
 
 /**
- * README feature coverage - the type-system fundamentals.
- * Sections: Types Proposed, Variable Declaration With Type, typeof, instanceof,
- * Union and Nullable Types, Intersection types, Type Aliases and Recursion,
- * Literal Types, any Type.
+ * Fixture: the README sections Types Proposed, Variable Declaration With Type, typeof, instanceof, Union and Nullable
+ * Types, Intersection types, Type Aliases and Recursion, Literal Types and any Type, in the ecmascript-types
+ * repository. The type-system fundamentals.
  */
 
 // -- Types Proposed ------------------------------------------------------------
@@ -57,11 +56,8 @@ test('Variable Declaration: a typed binding without an initializer takes the def
   expect(evaluated('let b: boolean; String(b);')).toBe('false'); // default false
   expect(evaluated('let n: bigint; String(n === 0n);')).toBe('true'); // default 0n
   expect(evaluated('let x: uint8 | null; String(x === null);')).toBe('true'); // nullable -> null
-  // This asserted the opposite - "a `const` without
-  // an initializer remains a Syntax Error whether or not it is typed (the README
-  // prose is superseded here)" - and #sec-typed-bindings now says the README was
-  // right: the annotation is what makes the initializer redundant rather than
-  // absent, so `const c: [].<uint8>;` needs no `= []`.
+  // A `const` without an initializer is legal where it is annotated (#sec-typed-bindings): the annotation is what
+  // makes the initializer redundant rather than absent, so `const c: [].<uint8>;` needs no `= []`.
   expect(evaluated('const d: uint32; d + 1;')).toBe('1');
   // All three keywords agree, which is what the clause's first line already
   // claimed: "`var`, `let`, and `const` accept the same annotations".

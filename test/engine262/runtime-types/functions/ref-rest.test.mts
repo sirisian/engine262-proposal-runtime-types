@@ -25,7 +25,7 @@ test('`...refs` forwards the run into another ref-rest position', () => {
   expect(evaluated(`function g(ref ...ys: [].<uint32>): void { ys[1] = 7; } function f(ref ...xs: [].<uint32>): void { g(...xs); } ${AB} f(ref a, ref b); String(b);`)).toBe('7');
 });
 
-test('a generic ref rest binds its pack from the referents, and a callback takes the run (B.2, F-T)', () => {
+test('a generic ref rest binds its pack from the referents, and a callback takes the run', () => {
   expect(evaluated('function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; apply2((ref x: uint32) => { x = 5; }, ref a); String(a);')).toBe('5');
   expect(evaluated('function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; let f: float32 = 2; apply2((ref x: uint32, ref y: float32) => { x = 2; y = 3; }, ref a, ref f); String(a) + "/" + String(f);')).toBe('2/3');
 });

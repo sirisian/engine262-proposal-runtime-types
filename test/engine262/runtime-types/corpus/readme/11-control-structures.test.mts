@@ -2,17 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, expectErrorFlagOff } from '../../harness.mts';
 
 /**
- * README feature coverage - control structures.
- * Section: Control Structures (if else, switch).
+ * Fixture: the README section Control Structures (if else, switch), in the ecmascript-types repository.
  *
- * if/else truthiness and the ordinary (value-matching) switch are implemented and
- * verified here, as is enum switch exhaustiveness: a switch over an enumerator must
- * cover every enumerator when it has no default, and its labels must be enumerators
- * of that enum (#sec-enums). The sealed-class switch, whose case labels are type
- * objects compiled to instanceof tests with narrowing (#sec-narrowing), is a
- * deeper static-checker and runtime-dispatch feature and is documented as deferred
- * below. Floating-point discriminants with range case labels are the ranges
- * extension.
+ * if/else truthiness and the ordinary (value-matching) switch are implemented and verified here, as is enum
+ * switch exhaustiveness: a switch over an enumerator must cover every enumerator when it has no default, and its
+ * labels must be enumerators of that enum (#sec-enums). Divergence: the sealed-class switch, whose case labels are
+ * type objects narrowed per case (#sec-narrowing, the `switch` row), compares the label by value here; see below.
+ * Floating-point discriminants with range case labels are covered in ranges/.
  */
 
 // -- if else: truthiness is unchanged ------------------------------------------
@@ -49,11 +45,9 @@ test('switch: an enum-valued discriminant matches enumerator cases', () => {
   expect(evaluated('enum Count { Zero, One, Two }; let a = Count.Two; let r = "none"; switch (a) { case Count.Zero: r = "z"; break; default: r = "d"; } r;')).toBe('d');
 });
 
-// -- Documented gaps -----------------------------------------------------------
-// -- switch: enum exhaustiveness -----------------------------------------------
-// A switch over an enumerator must cover every enumerator when it has no default,
-// and its case labels must be enumerators of that enum (#sec-enums; README
-// "Control Structures").
+// -- switch: enum exhaustiveness ------------------------------------------------
+// A switch over an enumerator must cover every enumerator when it has no default, and its case labels must be
+// enumerators of that enum (#sec-enums).
 test('switch: an enum switch missing an enumerator with no default is a type error', () => {
   expectThrown('enum Count { Zero, One, Two }; let a = Count.Two; switch (a) { case Count.Zero: break; case Count.One: break; }');
 });
@@ -70,10 +64,10 @@ test('switch: a non-enumerator case label in an enum switch is a type error', ()
   expectThrown('enum Count { Zero, One }; let a = Count.Zero; switch (a) { case Count.Zero: break; case 5: break; }');
 });
 
-test('switch: sealed-class switch with type-object case labels is not implemented (documents the gap)', () => {
-  // Target (README): where the discriminant's static type is a sealed class, each
-  // case label is a type object and the case is an instanceof test. Today the
-  // label is compared by value, so `case NumberNode:` does not match an instance.
+test('switch: sealed-class switch with type-object case labels is not implemented', () => {
+  // Divergence from #sec-narrowing (the `switch` row): where the discriminant's static type is a sealed class, each
+  // case label is a type object and the case is an instanceof test. The engine compares the label by value, so
+  // `case NumberNode:` does not match an instance.
   expect(evaluated('sealed class Node {} class NumberNode extends Node {} let n = new NumberNode(); let r = "none"; switch (n) { case NumberNode: r = "num"; break; } r;')).toBe('none');
 });
 

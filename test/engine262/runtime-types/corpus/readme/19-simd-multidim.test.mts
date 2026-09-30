@@ -2,21 +2,17 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown, expectErrorFlagOff } from '../../harness.mts';
 
 /**
- * README feature coverage - SIMD and multidimensional/jagged arrays.
- * Sections: Implicit SIMD Constructors, SIMD Operators, Multidimensional and
- * Jagged Array Support Via User-defined Index Operators.
+ * Fixture: the README sections Implicit SIMD Constructors, SIMD Operators and Multidimensional and Jagged Array
+ * Support Via User-defined Index Operators, in the ecmascript-types repository.
  *
- *  - The index-accessor operator `operator[](...)` declares and, for the read
- *    direction, dispatches: a numeric index access `m[i]` on an instance whose
- *    class declares `operator[]` calls that operator with the index. Implemented and
- *    verified here. The write direction (`set operator[]`), the multi-argument form
- *    `m[x, y]` (which needs the comma-index grammar of the ranges extension), and
- *    overload resolution among several index operators are deferred.
- *  - `vector.<T, N>` is validated as a core value type: T must be an integer,
- *    binary floating-point, or vector type and N a positive integer, else it is a
- *    type error. The named SIMD lane types (`float32x4`, `uint32x4`), their implicit
- *    broadcast constructors, the SIMD operators, and lane access are the SIMD
- *    extension and are not registered.
+ * - The index-accessor operator `operator[](...)` declares and dispatches (#sec-user-defined-operators): a numeric
+ *   index access `m[i]` on an instance whose class declares `operator[]` calls that operator with the index. The
+ *   write direction, the multi-argument form `m[x, y]` and overload resolution among several index operators are
+ *   covered in operators/index-operator.test.mts.
+ * - `vector.<T, N>` is validated as a core value type: T must be an integer, binary floating-point, or vector
+ *   type and N a positive integer, else it is a type error (#sec-vector-types). The named lane types
+ *   (`float32x4`, `uint32x4`), the broadcast constructors, the SIMD operators and lane access are covered in
+ *   vectors/.
  */
 
 // -- Index-accessor operator declaration ---------------------------------------
@@ -41,11 +37,9 @@ test('Index operators: the declaration syntax requires the runtime-types feature
   expectErrorFlagOff('class Arr { operator[](i) { return i; } } typeof Arr;');
 });
 
-// -- Documented gaps -----------------------------------------------------------
 // -- Index operator dispatch (read direction) ----------------------------------
-// A numeric index access `m[i]` on an instance whose class declares `operator[]`
-// dispatches to that operator, called with the index (README "Multidimensional and
-// Jagged Array Support Via User-defined Index Operators").
+// A numeric index access `m[i]` on an instance whose class declares `operator[]` dispatches to that operator,
+// called with the index (#sec-user-defined-operators).
 test('Index operators: m[i] on a class with an index operator dispatches to it', () => {
   expect(evaluated('class M { operator[](i: uint32) { return (99 := uint32); } } let m = new M(); String(m[(0 := uint32)]);')).toBe('99');
   // the index is passed to the operator

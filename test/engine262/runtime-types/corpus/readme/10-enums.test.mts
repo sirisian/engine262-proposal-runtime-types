@@ -2,20 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - enum Type.
- * Section: enum Type.
+ * Fixture: the README section enum Type, in the ecmascript-types repository.
  *
- * The type-level enum semantics the normative spec fixes are implemented and
- * verified here: an enum is a nominal type whose values are its enumerators, with
- * sequential and explicit values, an underlying type (int32 by default, any type
- * after `:`), and the subtype relation that makes an enum value usable wherever
- * its underlying type is.
- *
- * One behavior is documented as deferred rather than asserted:
- *
- *  - The `toString`-maps-to-key behavior and `%Enum.prototype%` iterator methods
- *    (keys/values/entries) appear in the README but are not in the normative
- *    spec.emu enum clause; they are design-level and not implemented.
+ * The type-level enum semantics the specification fixes (#sec-enums) are verified here: an enum is a nominal type
+ * whose values are its enumerators, with sequential and explicit values, an underlying type (int32 by default, any
+ * type after `:`), and the subtype relation that makes an enum value usable wherever its underlying type is.
+ * `%Enum.prototype%` and its `toString(value)`, `keys`, `values` and `entries` are specified too and are covered
+ * in classes/enum-exhaustiveness.test.mts.
  */
 
 // -- Sequential and explicit values --------------------------------------------
@@ -68,11 +61,9 @@ test('enum: the declaration binds a static enum object', () => {
   expect(bool('enum A { X }; enum B { X }; String(A === B);')).toBe(false);
 });
 
-// -- Documented gaps -----------------------------------------------------------
 // -- Enum construction: Count(n) -----------------------------------------------
-// A call on the enum type returns the enumerator whose underlying value is the
-// argument, and is a TypeError for a value that is not one of them
-// (#sec-enums).
+// A call on the enum type returns the enumerator whose underlying value is the argument, and is a TypeError for a
+// value that is not one of them (#sec-enums).
 test('enum: Count(n) returns the enumerator with that underlying value', () => {
   expect(evaluated('enum Count { Zero, One, Two }; String(Count(1));')).toBe('1');
   // the result is the enumerator itself
@@ -84,16 +75,10 @@ test('enum: Count(n) throws for a value that is not an enumerator', () => {
 });
 
 test('enum: %Enum.prototype% carries the enumeration surface', () => {
-  // One correction to what an earlier reading recorded as the target. It
-  // expected
-  // `Count.One.toString()` to answer "One", and that is not what the design
-  // says: the signature is `%Enum.prototype%.toString(value)`, a lookup ON THE
-  // ENUMERATION taking the value as an argument. An enumerator IS its
-  // underlying value - that is the whole of the one-way subtype rule - so it
-  // has no method of its own to override, and `Count.One.toString()` answering
-  // "1" is correct rather than a gap. The design says as much in the sentence
-  // after the listing: interpolation sees the underlying value, and getting the
-  // key is what `toString` is for.
+  // `Count.One.toString()` answers "1": the signature is `%Enum.prototype%.toString(value)`, a lookup ON THE
+  // ENUMERATION taking the value as an argument (#sec-enums). An enumerator IS its underlying value - that is the
+  // whole of the one-way subtype rule - so it has no method of its own to override. Interpolation sees the
+  // underlying value, and getting the key is what `toString` on the enumeration is for.
   expect(evaluated('enum Count { Zero, One, Two }; Count.One.toString();')).toBe('1');
   expect(evaluated('enum Count { Zero, One, Two }; Count.toString(Count.One);')).toBe('One');
   expect(evaluated('enum Count { Zero, One, Two }; String(typeof Count.keys);')).toBe('function');

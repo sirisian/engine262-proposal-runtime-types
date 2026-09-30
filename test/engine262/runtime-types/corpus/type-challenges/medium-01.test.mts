@@ -123,8 +123,8 @@ test('medium 298 - Length of String', () => {
   `));
 });
 
-// 15 - Last of Array - the last element type, or never for empty. Written in
-// the corpus's own form, `last(type [3,2,1])`, now that a tuple operand parses.
+// 15 - Last of Array - the last element type, or never for empty. Written in the corpus's own form,
+// `last(type [3,2,1])`, with a tuple operand.
 test('medium 15 - Last of Array', () => {
   expectBuilderTrue(kit(`
     function last(T) { const els = elementTypes(T); return Number(els.length) ? els[Number(els.length) - 1] : never; }

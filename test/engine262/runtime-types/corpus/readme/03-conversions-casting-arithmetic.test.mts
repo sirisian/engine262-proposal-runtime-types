@@ -2,16 +2,14 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, expectThrown, expectThrownKind } from '../../harness.mts';
 
 /**
- * README feature coverage - conversions, casting, and arithmetic.
- * Sections: Conversions, Explicit Casting, Arithmetic and Overflow, Integer
- * Binary Shifts, Integer Division and Remainder.
+ * Fixture: the README sections Conversions, Explicit Casting, Arithmetic and Overflow, Integer Binary Shifts and
+ * Integer Division and Remainder, in the ecmascript-types repository.
  *
- * One boundary is documented rather than asserted as runtime behavior:
- *
- *  1. "Two operands of different value types are a TypeError" is a STATIC checker
- *     rule. At run time, mixed-type arithmetic does not throw; it proceeds with
- *     the left operand's type. The static rejection is covered by the checker
- *     tests; here we verify the runtime arithmetic that the checker permits.
+ * Conversions, casting and arithmetic. One boundary is documented rather than asserted as run-time behavior:
+ * "two operands of different value types are a TypeError" is a STATIC checker rule
+ * (#sec-arithmetic-never-promotes). At run time, mixed-type arithmetic does not throw; it proceeds with the left
+ * operand's type. The static rejection is covered by the checker tests; here we verify the runtime arithmetic that
+ * the checker permits.
  */
 
 // -- Conversions: no implicit widening -----------------------------------------

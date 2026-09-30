@@ -241,12 +241,9 @@ test('every generic form still specializes', () => {
 // ---- #sec-typed-classes: overriding ---------------------------------
 
 test('an override may narrow a return but not change it', () => {
-  // "It is a type error if the declared return type of such a method is not
-  // a subtype of the inherited signature's return type." The rule was the
-  // design's (README "Methods and Inheritance", "Covariant Return Types") and
-  // is now the specification's; without it a derived `f(a: uint8): string`
-  // over `f(a: uint8): uint8` was a second overload told apart by return type
-  // alone, which no dispatch slot has room for.
+  // "It is a type error if the declared return type of such a method is not a subtype of the inherited signature's
+  // return type." Without the rule a derived `f(a: uint8): string` over `f(a: uint8): uint8` would be a second
+  // overload told apart by return type alone, which no dispatch slot has room for.
   expectStaticTypeError('class A { f(a: uint8): uint8 { return a; } } class B extends A { f(a: uint8): string { return "x"; } }');
   // A numeric NARROWING is a change: `uint8` is not a subtype of `uint16`.
   expectStaticTypeError('class A { f(): uint16 { return 1; } } class B extends A { f(): uint8 { return 1; } }');

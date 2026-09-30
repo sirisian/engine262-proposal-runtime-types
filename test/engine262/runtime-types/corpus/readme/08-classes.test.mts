@@ -2,25 +2,15 @@ import { test, expect } from 'vitest';
 import { evaluated, bool, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - classes.
- * Sections: Class: Value Type and Reference Type Behavior, Class Members
- * (Readonly Fields, Static Members), Constructor Overloading.
+ * Fixture: the README sections Class: Value Type and Reference Type Behavior, Class Members (Readonly Fields,
+ * Static Members) and Constructor Overloading, in the ecmascript-types repository.
  *
- * Deferrals documented rather than asserted:
- *
- *  - The VALUE-TYPE layout of a class (contiguous memory, byteLength, array
- *    views, `shared` backing) is the memory-layout and threading extensions.
- *    Here we verify the class SEMANTICS the core specifies: auto-sealing of a
- *    class with typed fields, typed-field defaults, and typed static/private
- *    members.
- *
- *  - The `readonly` class-FIELD modifier is implemented: a readonly field is
- *    assignable only in its initializer and the declaring constructor. Object
- *    and interface members is implemented and verified in the interfaces file.
- *
- *  - Constructor OVERLOADING needs overload resolution extended to constructors;
- *    multiple constructors are a "Duplicate constructor" error today, verified
- *    below.
+ * Classes. The VALUE-TYPE layout of a class (contiguous memory, byteLength, array views, `shared` backing) is
+ * covered in memory-layout/ and threading/. Here we verify the class SEMANTICS the core specifies: auto-sealing of
+ * a class with typed fields, typed-field defaults, and typed static/private members (#sec-typed-classes). The
+ * `readonly` class-FIELD modifier is implemented: a readonly field is assignable only in its initializer and the
+ * declaring constructor. Constructor OVERLOADING (#sec-constructor-overloading) is implemented where at least one
+ * parameter carries an annotation; two untyped constructors are still a "Duplicate constructor" error.
  */
 
 // -- Auto-sealing: a class with a typed field is sealed ------------------------
@@ -85,11 +75,9 @@ test('Constructors: a single typed constructor enforces its parameters', () => {
   expect(ok('class A { x: float32; constructor(x: float32) { this.x = x; } } typeof A;')).toBe(true);
 });
 
-// -- Documented gaps -----------------------------------------------------------
-// -- Readonly Fields -----------------------------------------------------------
-// A `readonly` field may be assigned only in its own initializer and in the
-// declaring class's constructors; every other assignment is a TypeError (README
-// "Readonly Fields").
+// -- Readonly Fields -------------------------------------------------------------
+// A `readonly` field may be assigned only in its own initializer and in the declaring class's constructors; every
+// other assignment is a TypeError (#sec-typed-classes).
 test('Readonly Fields: a readonly field is assignable in its initializer and constructor', () => {
   expect(evaluated('class A { readonly id: uint32 = (5 := uint32); } let a = new A(); String(a.id);')).toBe('5');
   expect(evaluated('class A { readonly id; constructor() { this.id = 10; } } let a = new A(); String(a.id);')).toBe('10');
@@ -103,21 +91,15 @@ test('Readonly Fields: assignment outside the constructor is a TypeError', () =>
 });
 
 test('Constructor Overloading: a class may declare more than one constructor', () => {
-  // The README's target, and no longer a gap. Base ECMAScript forbids a second
-  // `constructor` outright and this proposal previously declined to relax it;
-  // it now does, where the declarations are distinct signatures and at least one
-  // parameter across the set carries an annotation.
-  //
-  // The annotation is what turns the feature on, so a class body with no types in
-  // it behaves as it did: two untyped constructors are still refused, and are
-  // still refused with the feature off.
+  // Constructor overloading (#sec-constructor-overloading): base ECMAScript forbids a second `constructor`
+  // outright, and this proposal relaxes it where the declarations are distinct signatures and at least one parameter
+  // across the set carries an annotation. The annotation is what turns the feature on, so a class body with no types
+  // in it behaves as it always did: two untyped constructors are refused, and are refused with the feature off.
   expect(ok('class A { constructor(x: float32) {} constructor(y: uint32) {} }')).toBe(true);
   expect(ok('class A { constructor(x: float32) {} constructor(x: float32, y: uint32) {} }')).toBe(true);
-  // The README's own version of this example assigns a `uint32` parameter to a
-  // `float32` field, which is a separate type error and not what this tests:
-  // `class A { x: float32; ... constructor(y: uint32) { this.x = y; } }` refuses
-  // with "uint.<32>" is not assignable to "float32". The overload set parses;
-  // the body does not check.
+  // A constructor overload whose body assigns a `uint32` parameter to a `float32` field is a separate type error
+  // and is not what this tests: `class A { x: float32; ... constructor(y: uint32) { this.x = y; } }` refuses with
+  // "uint.<32>" is not assignable to "float32". The overload set parses; the body does not check.
   expect(ok('class A { constructor(a: uint32) {} constructor(a, b) {} }')).toBe(true);
   expectThrown('class A { constructor(a) {} constructor(a, b) {} }', 'Duplicate constructor');
   // One constructor, annotated or not, is untouched.

@@ -2,16 +2,13 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - object typing and typed promises.
- * Sections: Object Typing, Typed Promises.
+ * Fixture: the README sections Object Typing and Typed Promises, in the ecmascript-types repository.
  *
- *  - Typed promises (Promise.<R, E>) parse, construct, and await correctly; the
- *    resolve/reject TYPE enforcement and combinator inference are static-checker
- *    features. The runtime surface is verified here.
- *  - Object typing via Object.defineProperty with a `type` key is implemented and
- *    verified here (#sec-object-types-semantics): a property defined with a
- *    `type` takes the type's default when no value is given, checks each write
- *    against the type, and cannot be deleted, on both the Object and Reflect paths.
+ * - Typed promises (`Promise.<R, E>`) parse, construct, and await correctly; the resolve/reject TYPE enforcement
+ *   and combinator inference are static-checker features. The runtime surface is verified here.
+ * - Object typing via Object.defineProperty with a `type` key is implemented and verified here
+ *   (#sec-object-types-semantics): a property defined with a `type` takes the type's default when no value is
+ *   given, checks each write against the type, and cannot be deleted, on both the Object and Reflect paths.
  */
 
 // -- Typed Promises ------------------------------------------------------------
@@ -43,10 +40,8 @@ test('Typed Promises: the combinators are present', () => {
 });
 
 // -- Object Typing -------------------------------------------------------------
-// A property defined with a `type` key has a declared type: a write is checked
-// against it, a descriptor with a type and no value takes the type's default, and
-// the property cannot be deleted (#sec-object-types-semantics; README "Object
-// Typing").
+// A property defined with a `type` key has a declared type: a write is checked against it, a descriptor with a type
+// and no value takes the type's default, and the property cannot be deleted (#sec-object-types-semantics).
 test('Object Typing: a type key gives a property a declared type, checked on write', () => {
   // the call with a type key succeeds and the value is set
   expect(evaluated('let o = {}; Object.defineProperty(o, "a", { type: uint8, value: (5 := uint8), writable: true, configurable: true }); String(o.a);')).toBe('5');

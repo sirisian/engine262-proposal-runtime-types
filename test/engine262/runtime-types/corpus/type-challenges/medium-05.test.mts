@@ -2,15 +2,13 @@ import { test } from 'vitest';
 import { expectBuilderTrue, kit } from './harness.mts';
 
 /**
- * Type Challenges - the medium tier, shard 5: the property-modifier family.
- * Source: ecmascript-types/examples/typechallenges.md
+ * Type Challenges - the medium tier, shard 5: the property-modifier family. Source:
+ * ecmascript-types/examples/typechallenges.md
  *
- * These all turn on the `readonly` property modifier, built this shard: the
- * object record now carries a readonly flag, the parser accepts the modifier
- * (while `readonly` stays a valid property NAME), and the flag participates in
- * interning (readonly and mutable objects are distinct types) and reflection.
- * mapProperties over getReflection sets or clears the flag; `type 'name'` names
- * the key set via the literal type operator.
+ * These all turn on the `readonly` property modifier: the object record carries a readonly flag, the parser accepts
+ * the modifier (while `readonly` stays a valid property NAME), and the flag participates in interning (readonly and
+ * mutable objects are distinct types) and reflection. mapProperties over getReflection sets or clears the flag;
+ * `type 'name'` names the key set via the literal type operator.
  */
 
 

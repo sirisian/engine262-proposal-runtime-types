@@ -2,13 +2,11 @@ import { test, expect } from 'vitest';
 import { evaluated, ok, expectThrown } from '../../harness.mts';
 
 /**
- * README feature coverage - type propagation to literals, 64-bit integer types
- * and number interop.
- * Sections: Type Propagation to Literals, 64-bit Integer Types and Number Interop.
+ * Fixture: the README sections Type Propagation to Literals and 64-bit Integer Types and Number Interop, in the
+ * ecmascript-types repository.
  *
- * Both are substantially implemented. The one gap is the `T(v)` cast-call form
- * (e.g. `number(a)`), which needs callable Type Objects; the equivalent `:= T`
- * form works and is verified here.
+ * Both are implemented. The `T(v)` cast-call form (e.g. `number(a)`) works alongside the equivalent `:= T` form,
+ * and both are verified here.
  */
 
 // -- Type Propagation to Literals ----------------------------------------------
