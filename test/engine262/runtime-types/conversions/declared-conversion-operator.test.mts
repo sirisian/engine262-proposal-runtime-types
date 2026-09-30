@@ -60,11 +60,9 @@ test('form 3 parses beside the other operator forms', () => {
   expect(evaluated('class M { constructor(){ this.d=[1,2]; } operator [](i: uint32) { return this.d[Number(i)]; } } const m = new M(); String(m[1]);')).toBe('2');
 });
 
-// The TUPLE conversion target, README's own example. `operator [number, number,
-// string]()` was a Syntax Error: the operator parser claimed every `[` for the
-// index accessor `operator[]`, so the `[` opening a tuple type was consumed as
-// the operator name and `expect(RBRACK)` then failed at `number`. Only an EMPTY
-// bracket pair names the index accessor.
+// The TUPLE conversion target (#sec-user-defined-conversions): `operator [number, number, string]()`. Only an
+// EMPTY bracket pair names the index accessor `operator[]`; a `[` opening a tuple type is a conversion target,
+// and must not be consumed as the operator name.
 
 test('a conversion may target a tuple type', () => {
   const decl = 'class A { x = 1; y = 2; z = "s"; operator [number, number, string]() { return [this.x, this.y, this.z]; } } ';

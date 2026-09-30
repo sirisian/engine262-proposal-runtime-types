@@ -81,9 +81,8 @@ test('nothing observable about the binding changes', () => {
 });
 
 test('with no contextual type, an adopting constant is a `number`', () => {
-  // Untyped code must run unchanged - this proposal's rule - which is also what
-  // keeps the design on the right side of Haskell's monomorphism restriction:
-  // a polymorphic binding with no default answer is where that language's
+  // Untyped code must run unchanged - this proposal's rule - which is also what keeps it on the right side of
+  // Haskell's monomorphism restriction: a polymorphic binding with no default answer is where that language's
   // ambiguity confusion comes from.
   expect(evaluated('const K = 3.14; String(K * 2);')).toBe('6.28');
   expect(evaluated('const K = 3.14; K + "x";')).toBe('3.14x');
@@ -272,16 +271,12 @@ test('a literal reaches a literal type over a NUMERIC VALUE TYPE', () => {
 });
 
 test('the reach is ONE layer: a written numeric literal still has base `number`', () => {
-  // The guard on the direction NOT taken. #sec-literal-types fixes the base of a
-  // written numeric literal - "the base of a numeric literal is `number` however
-  // the literal will be used" - so nothing above gives `5` a base it was not
-  // constructed with, and a sized numeric intersected with a written literal
-  // stays empty.
-  //
-  // Reading a sibling member to re-base the literal would make that pair
-  // inhabited, and is refused elsewhere: `&` is order-insignificant and
-  // canonicalization sorts its members, so a rule that typed one member from
-  // another would depend on an order the design does not have.
+  // The guard on the direction NOT taken. #sec-literal-types fixes the base of a written numeric literal - "the base
+  // of a numeric literal is `number` however the literal will be used" - so nothing above gives `5` a base it was
+  // not constructed with, and a sized numeric intersected with a written literal stays empty. Reading a sibling
+  // member to re-base the literal would make that pair inhabited, and is refused elsewhere: `&` is
+  // order-insignificant and canonicalization sorts its members, so a rule that typed one member from another would
+  // depend on an order it does not have.
   expectThrown('type T = { a: uint32 } & { a: 5 };', 'no value is of both');
   expectThrown('type T = uint8 & 5;', 'no value is of both');
   // The written literal keeps behaving as it did.
@@ -289,8 +284,7 @@ test('the reach is ONE layer: a written numeric literal still has base `number`'
   expect(evaluated("type S = 'a'; let v: S = 'a'; String(v);")).toBe('a');
   expect(evaluated('let a: uint32 = 5; String(Number(a));')).toBe('5');
 
-  // ...and a CONSTRUCTED literal over the sized numeric is what narrows such a
-  // member, which is the case the design reached for and could not spell.
+  // ...and a CONSTRUCTED literal over the sized numeric is what narrows such a member (#sec-literal-types).
   const L = "const L = Reflect.makeType({ kind: 'literal', value: (5 := uint32), base: type uint32 });";
   expect(evaluated(`${L} type T = { a: uint32 } & { a: L }; let v: T = { a: 5 }; String(Number(v.a));`)).toBe('5');
 });

@@ -14,7 +14,7 @@ import { evaluated, expectThrown } from '../harness.mts';
 
 const A = 'class A { x = 1; y = 2; z = "s"; operator [number, number, string]() { return [this.x, this.y, this.z]; } } ';
 
-test('the design\u2019s own example runs', () => {
+test('the worked example runs', () => {
   expect(evaluated(`${A}const a = new A(); const [x, y, z] = a; String(x) + "," + String(y) + "," + String(z);`)).toBe('1,2,s');
 });
 

@@ -5,25 +5,21 @@ import {
 } from '../harness.mts';
 
 /**
- * Spec: #sec-references-and-borrowing (References and Borrowing). Design:
- * references.md.
+ * Spec: #sec-references-and-borrowing (References and Borrowing), #sec-reference-values,
+ * #sec-reference-iteration, #sec-requireborrowablereference.
  *
- * A `ref` is a borrow: a handle to a storage location - a variable, an object
- * property, or an array element - that reads and writes through to the original
- * rather than a copy. It has no observable identity, so `typeof` and the like
- * see the referent, and a reference value decays to the referent at any boundary
- * that consumes a value. The borrowing forms are the call-site `ref` argument
- * and `ref` return, the `ref` parameter, the `let ref` / `const ref` lexical
- * binding and its rebinding, and the index-based `for (const ref p of a)` loop.
- * A `let ref` may be written through and rebound; a `const ref` may not. Two
- * liveness rules hold: a reference may not be taken of a non-location, and an
- * array may not be resized while a reference into it is live.
+ * A `ref` is a borrow: a handle to a storage location - a variable, an object property, or an array element -
+ * that reads and writes through to the original rather than a copy. It has no observable identity, so `typeof`
+ * and the like see the referent, and a reference value decays to the referent at any boundary that consumes a
+ * value. The borrowing forms are the call-site `ref` argument and `ref` return, the `ref` parameter, the
+ * `let ref` / `const ref` lexical binding and its rebinding, and the index-based `for (const ref p of a)` loop.
+ * A `let ref` may be written through and rebound; a `const ref` may not. Two liveness rules hold: a reference
+ * may not be taken of a non-location, and an array may not be resized while a reference into it is live.
  *
- * Deferred by design (noted where relevant): a location-consuming return such as
- * `first(a)++` (needs a relaxed AssignmentTargetType), destructuring `ref`
- * members `f({ (ref a) })` (needs the typed-own-property form), a user-defined
- * iterator yielding references (the `...` yield type is a value type), and the
- * SoA/typed-buffer substrate (a reference denotes a column set and an index).
+ * A location-consuming return such as `first(a)++` is covered here (#sec-location-consuming-contexts),
+ * destructuring `ref` members in typed-destructuring.test.mts, and the SoA substrate (a reference denotes a
+ * column set and an index) in memory-layout/soa.test.mts. A user-defined iterator yielding references is not
+ * supported (#sec-reference-iteration).
  */
 
 // -- ref parameter: write-through ---------------------------------------------
@@ -178,8 +174,8 @@ test('a bare ref call and a ref assignment are not borrow forms', () => {
 
 // -- #sec-reference-syntax: arrow ref parameters (the zip callback idiom) ------
 test('a plain arrow takes ref parameters, so the zip callback idiom works', () => {
-  // references.md "Reference callback parameters": the container passes
-  // `ref a[i], ref b[i]` and the arrow mutates both arrays in place.
+  // Reference callback parameters: the container passes `ref a[i], ref b[i]` and the arrow mutates both arrays in
+  // place.
   expect(evaluated(
     'function zip(a, b, cb) { for (let i = 0; i < a.length; i++) cb(ref a[i], ref b[i]); }'
     + ' let t = [1, 2], v = [10, 20];'
@@ -351,7 +347,7 @@ test('a reference to an ordinary property is a slot alias and never relocates', 
 const first = 'function first(a) { return ref a[0]; } ';
 
 test('a returned reference is consumed as a location by ++ and --', () => {
-  // references.md: `first(a)++` post-increments the element in place
+  // `first(a)++` post-increments the element in place (#sec-location-consuming-contexts)
   expect(evaluated(`${first}let a = [7]; first(a)++; String(a[0]);`)).toBe('8');
   // postfix yields the OLD value, as it does for any target
   expect(evaluated(`${first}let a = [7]; String(first(a)++) + "/" + String(a[0]);`)).toBe('7/8');
@@ -434,7 +430,7 @@ test('a borrow of an SoA element is a reference like any other', () => {
 });
 
 test('the callback idiom composes over an SoA', () => {
-  // references.md's zip, over the container the value-type story exists for
+  // A `zip` over the container the value-type story exists for
   expect(evaluated(
     'class P { x: uint8; } const s1 = new SoA.<P>(); s1.push({ x: 1 });'
     + ' const s2 = new SoA.<P>(); s2.push({ x: 10 });'
@@ -507,7 +503,8 @@ test('an object pattern member may carry a type in parentheses', () => {
 });
 
 test('a ref member borrows the property location on the destructured object', () => {
-  // references.md's own example: `g(o)`, not `g(ref o)`
+  // A `ref` member of a destructured parameter borrows the property location: the caller writes `g(o)`, not
+  // `g(ref o)`
   expect(evaluated('const o = { a: (0 := int32) }; function g({ (ref a: int32) }) { a++; } g(o); g(o); String(o.a);')).toBe('2');
   expect(evaluated('let o = { a: 1 }; function g({ (ref a) }) { a++; } g(o); String(o.a);')).toBe('2');
   // and the binding form borrows the same location
@@ -655,17 +652,11 @@ test('the borrowing forms are inert with the feature off', () => {
 // -- The ref TYPE ----------------------------------------------------------------
 
 /**
- * Extension coverage - references.md (the `ref` type and borrowing runtime).
- *
- * The `ref` TYPE is wired at the type level: `ref T` parses, resolves to a
- * reference Type Record, interns, is invariant in its target, and reflects. The
- * borrowing RUNTIME is implemented too: the call-site `ref` argument
- * and `ref` return, `ref` parameter aliasing, the `let ref` / `const ref`
- * lexical binding and rebinding, the index-based `for (const ref p of a)` loop,
- * decay to the referent at value boundaries, and the two liveness rules. The
- * fuller borrowing surface (location-consuming returns such as `first(a)++`,
- * destructuring `ref` members, and the SoA/typed-buffer substrate) is exercised
- * in extensions/borrowing.test.mts and noted there as deferred.
+ * Extension coverage (#sec-references-and-borrowing): the `ref` type and the borrowing runtime. The `ref` TYPE is
+ * wired at the type level: `ref T` parses, resolves to a reference Type Record, interns, is invariant in its
+ * target, and reflects. The borrowing RUNTIME is implemented too: the call-site `ref` argument and `ref` return,
+ * `ref` parameter aliasing, the `let ref` / `const ref` lexical binding and rebinding, the index-based
+ * `for (const ref p of a)` loop, decay to the referent at value boundaries, and the two liveness rules.
  */
 
 // -- The ref type at the type level --------------------------------------------
@@ -701,14 +692,12 @@ test('ref parameter: a `ref` parameter declaration parses', () => {
 
 // -- The borrowing runtime ----------------------------------------------------
 test('ref runtime: the call-site `ref` argument passes the caller location', () => {
-  // Target (references.md): `f(ref a)` passes the caller's location, so a write
-  // in the callee is a write in the caller.
+  // `f(ref a)` passes the caller's location, so a write in the callee is a write in the caller.
   expect(evaluated('function f(ref a) { a++; } let x = 0; f(ref x); String(x);')).toBe('1');
 });
 
 test('ref runtime: the `for (const ref p of a)` form binds each element by reference', () => {
-  // Target (references.md): a ref loop binds each element by reference, so the
-  // body writes into the array in place.
+  // A ref loop binds each element by reference, so the body writes into the array in place.
   expect(evaluated('let a = [1, 2, 3]; for (let ref p of a) { p = p * 10; } a[0] + "," + a[1] + "," + a[2];')).toBe('10,20,30');
 });
 

@@ -36,7 +36,7 @@ test('a rational: exact where its expansion terminates, rounded once where it do
 test('what does not change', () => {
   // A literal is still read from its digits, not converted from a double.
   expect(evaluated('String(0.1 := decimal128);')).toBe('0.1');
-  // A double still carries its binary value (decimal.md).
+  // A double still carries its binary value (#table-numeric-conversions).
   expect(evaluated('let f = 0.1; String(f := decimal128);')).toBe('0.1000000000000000055511151231257827');
   expect(evaluated("String(decimal64.parse('1.23456789012345678') := decimal32);")).toBe('1.234568');
   expectThrownKind('(3 := complex64) := decimal128;', 'TypeError');

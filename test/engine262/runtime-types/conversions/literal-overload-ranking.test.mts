@@ -2,19 +2,11 @@ import { test, expect } from 'vitest';
 import { evaluated } from '../harness.mts';
 
 /**
- * #sec-literal-overload-ranking, which states the case this file tests:
- *
- *   "The ranking is the only place the order of the numeric types matters, and
- *    it matters only for a literal. Given `f(a: float32)` and `f(a: uint32)`,
- *    the call `f(1)` selects the `float32` signature."
- *
- * The engine reported that call as ambiguous. `Tier.Literal` already existed and
- * cited the clause by name - an untyped literal can take either parameter's type,
- * so both signatures scored it and the tiers tied - but the ranking that breaks
- * that tie was never implemented.
- *
- * Found by running the design documents' examples: `README.md:1004` is the
- * clause's example, written out, and it failed.
+ * #sec-literal-overload-ranking, which states the case this file tests: "The ranking is the only place the order
+ * of the numeric types matters, and it matters only for a literal. Given `f(a: float32)` and `f(a: uint32)`, the
+ * call `f(1)` selects the `float32` signature." An untyped literal can take either parameter's type, so both
+ * signatures score it and the tiers tie (`Tier.Literal`); the ranking is what breaks that tie, and without it that
+ * call is ambiguous.
  */
 
 const two = (a: string, b: string) => `function f(x: ${a}) { return "A"; } function f(x: ${b}) { return "B"; } f(1);`;

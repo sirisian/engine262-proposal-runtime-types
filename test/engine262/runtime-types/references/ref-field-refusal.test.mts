@@ -2,17 +2,15 @@ import { expect, test } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * A FIELD MAY NOT BE DECLARED `ref`, and `references.md` says why: a reference
- * "cannot be stored in a binding that outlives it, a field, an array, or a
- * collection". A reference is a borrow - a storage location and an index - and
- * a field outlives the borrow.
+ * A FIELD MAY NOT BE DECLARED `ref`. A reference cannot be stored in a binding that outlives it, a field, an
+ * array, or a collection: a reference is a borrow - a storage location and an index - and a field outlives the
+ * borrow. So the refusal is right, and so must be its message: `ref r: A;` must not reach the ordinary field
+ * path and fail on the identifier after `ref` with "Unexpected token", which says nothing about why and reads as
+ * a typo. It is refused by name, before any production accepts it, since there is no spelling that makes the
+ * form work and nothing to suggest beyond storing the value or its owner.
  *
- * So the refusal is right and only the message was wrong. `ref r: A;` reached
- * the ordinary field path and failed on the identifier after `ref` with
- * "Unexpected token", which says nothing about why and reads as a typo. It is
- * refused by name now, before any production accepts it, since there is no
- * spelling that makes the form work and nothing to suggest beyond storing the
- * value or its owner.
+ * Unspecified: #sec-reference-values gives a reference no observable identity but the specification does not
+ * yet state that a field may not be declared `ref`; these tests pin the refusal.
  */
 
 test('a ref field is refused with its reason', () => {
@@ -33,7 +31,7 @@ test('references themselves still work where they may live', () => {
   // A binding, which does not outlive the borrow.
   expect(evaluated(`class A { x: uint8 = 1; } const arr: [1].<A>;
     const ref e = arr[0]; e.x = 5; String(arr[0].x);`)).toBe('5');
-  // A parameter, which is the borrow the design is built around.
+  // A parameter, which is the borrow this form is built around.
   expect(evaluated(`class A { x: uint8 = 1; }
     function f(ref a: A): uint8 { return a.x; }
     const arr: [1].<A>; arr[0].x = 3; String(f(ref arr[0]));`)).toBe('3');

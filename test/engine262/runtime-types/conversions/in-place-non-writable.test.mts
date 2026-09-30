@@ -61,13 +61,10 @@ test('the fault is gone, whatever makes the property unwritable', () => {
 });
 
 test('a COMPOSITE cannot be narrowed at a boundary, and says so', () => {
-  // The sharpest consequence of that refusal, because both sides are the design's own
-  // constructs: a composite is frozen from its creation (#sec-composite-types),
-  // so a member needing conversion cannot acquire the narrower type.
-  //
-  // Pinned deliberately. It is the cost the decision accepted, and if it is ever
-  // reconsidered - by copying for composites alone - this test is what records
-  // that the behaviour was chosen rather than stumbled into.
+  // The sharpest consequence of that refusal, because both sides are this proposal's own constructs: a composite is
+  // frozen from its creation (#sec-composite-types), so a member needing conversion cannot acquire the narrower
+  // type. Pinned deliberately. It is the cost the decision accepted, and if it is ever reconsidered - by copying for
+  // composites alone - this test is what records that the behaviour was chosen rather than stumbled into.
   const source = 'type C = Composite.<{ n: number }>; const c = C({ n: 1 });'
     + ' function f(x: { n: uint32 }) { return 1; } f(c);';
   expect(message(source)).toContain('not writable');

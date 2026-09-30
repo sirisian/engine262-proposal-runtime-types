@@ -2,23 +2,16 @@ import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
 /**
- * A conversion call - one whose callee names a TYPE - and what the checker knows
- * about it.
+ * A conversion call - one whose callee names a TYPE - and what the checker knows about it (#sec-conversions).
+ * It has a static result type, its own target, so `const c: string = uint32(1)` is refused before the source
+ * runs; and a bad conversion source is a static error where the argument's type is known, so `uint32("s")` is
+ * refused even in a dead branch.
  *
- * Today: nothing. `uint32("s")` in a dead branch raises no static error, and
- * `const c: string = uint32(1)` is accepted, so neither the argument nor the
- * result is checked. Everything about `uint32(x)` is decided at run time.
- *
- * Two consequences, one in each direction:
- *
- *   uint32(f())                 // ambiguous - the argument gets no contextual type
- *   const c: string = uint32(1) // accepted  - the call has no static result type
- *
- * and `README.md:2088` documents `h(uint32(f()))` as the REMEDY for return-type
- * ambiguity, which does not work.
- *
- * The tests below are the regression guard, written before the feature: they pin
- * what a conversion call does today and must keep doing.
+ * Return-type overloading is where a conversion call does not help: `uint32(f())` for a return-type-overloaded
+ * `f` remains ambiguous, since the argument of a conversion call gets no contextual type. And converting the
+ * result first does not resolve an overloaded callee: `h(uint32(f()))`, for `h` overloaded on `uint8` and
+ * `string`, is refused, because a boundary checks a typed value rather than converting it, so a `uint32`
+ * reaches neither parameter.
  */
 
 test('a conversion call resolves its callee by ORDINARY SCOPE', () => {
@@ -56,39 +49,30 @@ test('the runtime still rejects a bad conversion source', () => {
 });
 
 test('a conversion call answers its target type', () => {
-  // Without this the checker did not know what `uint32(1)` IS, so a wrong program
-  // passed: `const c: string = uint32(1)` was accepted. That is the mirror of the
-  // ambiguity above - a right program refused - and both came from the checker
-  // not modelling the construct.
+  // The checker knows what `uint32(1)` is - its target type - so a wrong program such as
+  // `const c: string = uint32(1)` is refused.
   expectThrown('const c: string = uint32(1);', 'not assignable');
   expectThrown('if (false) { const c: string = uint32(1); }', 'not assignable');
   expect(evaluated('const c: uint32 = uint32(1); String(Number(c));')).toBe('1');
 });
 
-test('...but the POSITION wins where it converts', () => {
-  // `#sec-conversions` keys the numeric conversions on FAMILIES - "a numeric
-  // target has a conversion available only when the value is itself numeric" -
-  // so a `uint32` in a `uint8` position converts, though `IsAssignable` is false
-  // for it and the runtime converts there too.
-  //
-  // Answering the target type UNCONDITIONALLY refused this, which is the remedy
-  // `README.md:2088` documents. The test is here because four attempts at this
-  // step passed the two rows above and failed this one.
+test('a conversion call answers its target type everywhere, and a boundary checks rather than converts', () => {
+  // A conversion call answers its TARGET type everywhere, and a boundary checks a typed value rather than
+  // converting it (runtime type checks, amended step 3). #sec-conversions keys the numeric conversions on
+  // FAMILIES - "a numeric target has a conversion available only when the value is itself numeric" - but the
+  // position does not win where a typed value would convert: a `uint32` reaches neither a `uint8` parameter nor,
+  // through `any`, one.
   const F = 'function f(): uint32 { return 10; } function f(): string { return "10"; } ';
-  // Since the stricter-runtime decision the position no longer wins: a
-  // conversion call answers its TARGET type everywhere, and a boundary checks a
-  // typed value rather than converting it (runtime type checks, amended step 3),
-  // so a `uint32` reaches neither a `uint8` parameter nor, through `any`, one.
+  // The overloaded callee and the `any` route: both are refused.
   expectThrown(`${F} function h(a: uint8) { return 1; } function h(a: string) { return 2; }`
     + ' String(h(uint32(f())));', 'not assignable');
   expectThrown('function h(a: uint8) { return 1; } const v: any = uint32(1); String(h(v));', 'is not assignable to');
 });
 
 test('a bad conversion source is a STATIC error', () => {
-  // `#sec-conversions`: "the numeric conversions are keyed on NUMERIC families,
-  // so a numeric target has a conversion available only when the value is itself
-  // numeric." `uint32("s")` was a runtime TypeError only - it raised nothing in
-  // a dead branch - though both sides are written down.
+  // #sec-conversions: "the numeric conversions are keyed on NUMERIC families, so a numeric target has a
+  // conversion available only when the value is itself numeric." So `uint32("s")` is a static error, not only a
+  // runtime TypeError: it is refused even in a dead branch.
   expectThrown('if (false) { uint32("s"); }', 'not a conversion source');
   expectThrown('uint32("s");', 'not a conversion source');
 });
