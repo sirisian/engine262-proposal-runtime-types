@@ -12,7 +12,8 @@ interface Outcome extends CompletionPath {
 }
 
 /** #sec-completiontypeof: retain UpdateEmpty values across targeted exits. */
-export function CompletionPaths(list: readonly ParseNode[] = [], covers?: (node: ParseNode) => boolean): readonly CompletionPath[] {
+export function CompletionPaths(list: readonly ParseNode[] = [], covers?: (node: ParseNode) => boolean,
+  nonReturning?: (node: ParseNode) => boolean): readonly CompletionPath[] {
   const normal = (value: ValueSource = 'empty', effects: readonly ParseNode[] = []): Outcome => ({ kind: 'normal', value, effects });
   const unique = (outcomes: Outcome[]): Outcome[] => {
     const result: Outcome[] = [];
@@ -37,6 +38,7 @@ export function CompletionPaths(list: readonly ParseNode[] = [], covers?: (node:
   };
   const visit = (node: ParseNode): Outcome[] => {
     if (--budget < 0) return [normal('unknown')];
+    if (nonReturning?.(node)) return [{ kind: 'throw', value: 'unknown', effects: [] }];
     switch (node.type) {
       case 'ExpressionStatement': return [normal(node)];
       case 'BreakStatement': return [{ kind: 'break', target: node.LabelIdentifier?.name, value: 'empty', effects: [] }];
@@ -87,6 +89,7 @@ export function CompletionPaths(list: readonly ParseNode[] = [], covers?: (node:
   return budget < 0 ? [normal('unknown')] : unique(outcomes);
 }
 
-export function CompletionValues(list: readonly ParseNode[] = [], covers?: (node: ParseNode) => boolean): readonly ValueSource[] {
-  return [...new Set(CompletionPaths(list, covers).map((path) => path.value))];
+export function CompletionValues(list: readonly ParseNode[] = [], covers?: (node: ParseNode) => boolean,
+  nonReturning?: (node: ParseNode) => boolean): readonly ValueSource[] {
+  return [...new Set(CompletionPaths(list, covers, nonReturning).map((path) => path.value))];
 }

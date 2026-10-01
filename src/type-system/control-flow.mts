@@ -19,6 +19,7 @@ import type { TypeRecord } from './records.mts';
 export const canCompleteNormally = (
   stmt: ParseNode | null | undefined,
   covers?: (n: ParseNode) => boolean,
+  nonReturning?: (n: ParseNode) => boolean,
 ): boolean => {
   type Outcome = 'normal' | 'return' | 'throw' | `break:${string}` | `continue:${string}`;
   type Outcomes = Set<Outcome>;
@@ -33,6 +34,9 @@ export const canCompleteNormally = (
   };
   const visit = (node: ParseNode | null | undefined, labels: readonly string[] = []): Outcomes => {
     if (!node) return new Set(['normal']);
+    // A never result may throw or diverge. Keep the exceptional possibility
+    // so a surrounding catch/finally still participates in completion.
+    if (nonReturning?.(node)) return new Set(['throw']);
     const n = node as ParseNode & Record<string, unknown>;
     if (n.type === 'ConciseBody' || n.type === 'AsyncConciseBody') return new Set(['return']);
     switch (n.type) {
@@ -85,7 +89,9 @@ export const canCompleteNormally = (
         for (const label of labels) iterates = body.delete(`continue:${label}`) || iterates;
         const exits = body.delete('break:');
         // A do loop must reach its test; other loops may perform zero steps.
-        if (exits || (!unbounded && (n.type !== 'DoWhileStatement' || iterates))) body.add('normal');
+        const testDiverges = test !== undefined && nonReturning?.(test);
+        if (exits || (!unbounded && !testDiverges && (n.type !== 'DoWhileStatement' || iterates))) body.add('normal');
+        if (iterates && testDiverges) body.add('throw');
         return body;
       }
       case 'LabelledStatement': {

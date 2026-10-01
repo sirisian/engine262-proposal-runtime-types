@@ -4,10 +4,11 @@ import type { Realm } from '../execution-context/Realm.mts';
 import { AddWrittenNames, EffectFreeConstruction, IsDirectEvalCall, intrinsicData, intrinsicSourceIsStable } from './intrinsic-origin.mts';
 
 const groups = {
+  '%Number%': ['isNaN', 'isFinite', 'isInteger', 'isSafeInteger'],
   '%Function.prototype%': ['call', 'apply', 'bind', 'callThread'],
   '%Atomics%': ['load', 'store', 'exchange', 'compareExchange', 'add', 'sub', 'and', 'or', 'xor', 'wait', 'waitAsync', 'notify'],
   '%Object%': ['create', 'setPrototypeOf', 'is', 'assign', 'defineProperty', 'defineProperties', 'keys', 'values', 'entries', 'groupBy'],
-  '%Array%': ['from', 'fromAsync', 'of'],
+  '%Array%': ['from', 'fromAsync', 'of', 'isArray'],
   '%Map%': ['groupBy'],
   '%Promise%': ['all', 'race', 'any', 'allSettled', 'resolve'],
   '%Reflect%': ['set', 'defineProperty', 'apply', 'construct'],
