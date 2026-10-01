@@ -98,7 +98,10 @@ test('RANGE patterns match by containment', () => {
   expect(evaluated('String(5 is 1..<10);')).toBe('true');
   expect(evaluated('String(50 is 1..<10);')).toBe('false');
   expect(evaluated('String(1.5 is 1..<2);')).toBe('true');
-  expect(evaluated('String(5 is 1..<3 or 4..<6);')).toBe('true');
+  expect(evaluated('function f(n: number) { return n is 1..<3 or 4..<6; } String(f(5));')).toBe('true');
+  // At a position of literal type the first alternative can match nothing,
+  // which #sec-pattern-static-semantics refuses though the other can match.
+  expectStaticTypeError('String(5 is 1..<3 or 4..<6);');
 });
 
 test('REGEXP patterns match the ENTIRE subject', () => {

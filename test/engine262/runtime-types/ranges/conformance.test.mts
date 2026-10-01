@@ -540,12 +540,16 @@ test('sec-metadata-narrowing: the false branch narrows by the negation', () => {
 });
 
 test('sec-metadata-narrowing: narrowing is monotone, so a looser comparison changes nothing', () => {
-  // Intersection is monotone, so `if (v < 1000)` over a value already bounded
-  // by `0..<100` neither widens it nor loses it. This is the property the
-  // intersection design exists to guarantee.
+  // Intersection is monotone, so `if (v < 50)` over a value already bounded by
+  // `0..<100` narrows within that bound and never widens it. This is the
+  // property the intersection design exists to guarantee.
   const g = 'function g(w: float64.<{ bounds: 0..<100 }>) { return 1; }';
   expect(evaluated(`${NARROWS} ${g}
-    function f(v: float64.<{ bounds: 0..<100 }>) { if (v < 1000) { return g(v); } return 0; } "ok";`)).toBe('ok');
+    function f(v: float64.<{ bounds: 0..<100 }>) { if (v < 50) { return g(v); } return 0; } \"ok\";`)).toBe('ok');
+  // A looser comparison keeps the whole bound where it is true and leaves an
+  // empty one where it is false, so it can never fail (#sec-narrowto, #sec-narrowfrom).
+  expectStaticTypeError(`${NARROWS} ${g}
+    function f(v: float64.<{ bounds: 0..<100 }>) { if (v < 1000) { return g(v); } return 0; }`);
 });
 
 test('sec-metadata-narrowing: a meta type defining no `narrow` keeps the constraint it had', () => {
@@ -588,19 +592,13 @@ test('sec-metadata-narrowing: an assignment invalidates a narrowing', () => {
     function f(v: float64.<{ bounds: ..<100 }>) { if (v >= 0) { v = -1; return g(v); } return 0; } "ok";`);
 });
 
-test('sec-narrowing: an empty narrowed bound is NOT reported as dead code', () => {
-  // The dead-branch rule is defined operationally - "These are the branches
-  // for which NarrowTo or NarrowFrom returns ~empty~" - over the two TYPE-level
-  // operations. Metadata narrowing goes through NarrowMetadata, which is
-  // neither, so an empty bound is outside the rule as written and not reporting
-  // it is CONFORMING.
-  //
-  // Extending the rule would need a way to ask a meta type whether a portion is
-  // inhabited, and none of the protocol's hooks answers that: `validate` is the
-  // closest and needs a VALUE, which is what a dead branch has none of. If that
-  // hook is ever proposed, this row is what has to change.
-  expect(evaluated(`${NARROWS}
-    function f(v: float64.<{ bounds: 0..<10 }>) { if (v >= 100) { return 1; } return 0; } "ok";`)).toBe('ok');
+test('sec-narrowing: an empty narrowed bound is reported as dead code', () => {
+  // NarrowTo and NarrowFrom return ~empty~ where their result admits no value,
+  // and a parameterization whose metadata holds an empty range admits none
+  // (#sec-metadata-decomposition). The emptiness is the range's own, so no hook
+  // is asked whether a portion is inhabited.
+  expectStaticTypeError(`${NARROWS}
+    function f(v: float64.<{ bounds: 0..<10 }>) { if (v >= 100) { return 1; } return 0; }`);
 });
 
 test('sec-metadata-narrowing: a program that narrows nothing is untouched', () => {

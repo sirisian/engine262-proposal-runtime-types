@@ -105,7 +105,7 @@ test('an untyped primitive argument takes the parameter\'s type, as at a declare
   expectStaticTypeError('let g: (x: uint8, y: uint8 = 9) => boolean = (p, q) => p is uint8 && q is uint8;');
   expectStaticTypeError('interface I { (n: uint8, s: string); } function f(a: I) { return a(n: "x", s: "y"); } f((n, s) => n);');
   // An object argument is passed as it is.
-  expect(evaluated('interface I { (o: object, n: uint8 = 1); } function f(a: I) { const k = {}; return a(o: k) === k; } String(f((o, n) => o));')).toBe('true');
+  expect(evaluated('interface I { (o: object, n: uint8 = 1): object; } function f(a: I) { const k = {}; return a(o: k) === k; } String(f((o, n) => o));')).toBe('true');
 });
 
 test('a required parameter left unfilled, and a name the signature lacks, are TypeErrors', () => {

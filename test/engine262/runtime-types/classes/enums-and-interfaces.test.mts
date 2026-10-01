@@ -57,7 +57,7 @@ test('a bare underlying value is not of the enum type; the enum call is the way 
   // other side.
   expect(evaluated('enum E { A, B } let x: E = E.B; x === 1 ? "ok" : "no";')).toBe('ok');
   expect(evaluated('enum E { A = 5, B } let x: E = E(6); x === 6 ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('enum S: string { A = "a" } let x: S = S.A; x === "a" ? "ok" : "no";')).toBe('ok');
+  expect(evaluated('enum S: string { A = "a", B = "b" } let x: S = S.A; x === "a" ? "ok" : "no";')).toBe('ok');
 });
 
 test('interfaces check structurally', () => {

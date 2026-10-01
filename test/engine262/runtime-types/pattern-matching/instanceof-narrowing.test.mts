@@ -39,15 +39,25 @@ test('it narrows a parameter and the right operand of &&', () => {
 });
 
 test('a sealed hierarchy dispatches through it', () => {
+  // #sec-narrowto reads a `sealed abstract` class as its direct subclasses, so
+  // past the `Circle` guard `sh` is a `Square` (#sec-narrowing).
   expect(evaluated(`sealed abstract class Shape { }
+    class Circle extends Shape { r: float32 = 1; }
+    class Square extends Shape { s: float32 = 2; }
+    function area(sh: Shape): float32 {
+      if (sh instanceof Circle) { return sh.r; }
+      return sh.s;
+    }
+    String(area(new Square()));`)).toBe('2');
+  // A second test there can never fail, and `return 0` can never run (#sec-narrowfrom).
+  expectStaticTypeError(`sealed abstract class Shape { }
     class Circle extends Shape { r: float32 = 1; }
     class Square extends Shape { s: float32 = 2; }
     function area(sh: Shape): float32 {
       if (sh instanceof Circle) { return sh.r; }
       if (sh instanceof Square) { return sh.s; }
       return 0;
-    }
-    String(area(new Square()));`)).toBe('2');
+    }`);
 });
 
 test('the other narrowing forms are unaffected', () => {

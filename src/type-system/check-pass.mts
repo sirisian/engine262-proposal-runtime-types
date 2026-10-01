@@ -860,6 +860,11 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // Named where the pair was written at a member, as the synchronous
         // member rule names it: a reader given two constraints still has to find
         // which of the arms' members they came from.
+        if (pair.narrowing !== undefined) {
+          return Throw.StaticTypeError(pair.negated
+            ? 'the $1 test can never fail, so the branch it guards is dead code'
+            : 'the $1 test can never succeed, so the branch it guards is dead code', Value(pair.narrowing));
+        }
         if (pair.member !== undefined) {
           return Throw.StaticTypeError(
             'no value is of both $1 and $2 at member $3, so their intersection is never',

@@ -24,6 +24,8 @@ import {
   Get, Call, IsCallable,
 } from '#self';
 import { isRangeObject } from '../intrinsics/Range.mts';
+import { IsSealedSwitchClause } from '../type-system/check.mts';
+import { InstanceofOperator } from './all.mts';
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-caseclauseisselected */
 function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value): PlainEvaluator<boolean> {
@@ -39,6 +41,12 @@ function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value):
   // a typed value matched no numeric label, which is the form an enum-like
   // dispatch over a `uint8` takes.
   if (surroundingAgent.feature('runtime-types')) {
+    // proposal-runtime-types #sec-sealed-classes: where the discriminant's
+    // Static Type is a sealed class, each label is a class and the clause is
+    // selected by an `instanceof` test, the labels tested in source order.
+    if (IsSealedSwitchClause(constructor) && IsCallable(clauseSelector)) {
+      return Q(yield* InstanceofOperator(input, clauseSelector)) === Value.true;
+    }
     // proposal-runtime-types (ranges.md, #sec-matchrange): a RANGE label selects
     // by containment rather than by identity - "when a case label is a range,
     // the clause matches if the range contains the discriminant". Without this a
