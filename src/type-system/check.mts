@@ -3098,6 +3098,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || key === 'strict' || key === 'sourceText' ? false : containsCall(n[key])));
   };
 
+  const containsPropertyRead = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some(containsPropertyRead);
+    const value = node as Record<string, unknown>;
+    if (value.type === 'MemberExpression' || value.type === 'SuperProperty'
+      || value.type === 'MatchObjectPattern' || value.type === 'MatchArrayPattern') return true;
+    return Object.entries(value).some(([key, child]) => !['parent', 'location', 'strict', 'sourceText'].includes(key)
+      && containsPropertyRead(child));
+  };
+
   /** Drop the narrowing of the PLACE an assignment target names, if it names one. */
   const invalidatePlace = (target: ParseNode | null | undefined): void => {
     if (!target) {
@@ -3554,7 +3564,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
     return result;
   };
-  const restoreFlow = (facts: FlowFacts): void => {
+  const restoreFlow = (facts: FlowFacts = new Map()): void => {
     const current = captureFlow();
     const active = [...facts].filter(([frame, entries]) => frames.includes(frame) && entries.size);
     if (current.size === active.length && active.every(([frame, entries]) => {
@@ -3609,7 +3619,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (facts) restoreFlow(facts);
   };
   const normalFlow = (): FlowFacts | undefined => flowLive ? captureFlow() : undefined;
-  const runFlow = (facts: FlowFacts, action: () => void): FlowFacts | undefined => {
+  const runFlow = (facts: FlowFacts | undefined, action: () => void): FlowFacts | undefined => {
     resumeFlow(facts);
     action();
     return normalFlow();
@@ -21179,6 +21189,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const intervalIsEmpty = (iv: { lo: number, hi: number, loOpen: boolean, hiOpen: boolean }): boolean => iv.lo > iv.hi
     || (iv.lo === iv.hi && (iv.loOpen || iv.hiOpen));
+  const uncoveredIntervals = (interval: NonNullable<ReturnType<typeof rangePatternInterval>>,
+    covered: readonly NonNullable<ReturnType<typeof rangePatternInterval>>[]) => {
+    let remaining = [interval];
+    for (const previous of covered) {
+      remaining = remaining.flatMap((part) => {
+        const lo = Math.max(part.lo, previous.lo);
+        const hi = Math.min(part.hi, previous.hi);
+        const loOpen = (lo === part.lo && part.loOpen) || (lo === previous.lo && previous.loOpen);
+        const hiOpen = (hi === part.hi && part.hiOpen) || (hi === previous.hi && previous.hiOpen);
+        if (intervalIsEmpty({ lo, hi, loOpen, hiOpen })) return [part];
+        return [
+          { lo: part.lo, loOpen: part.loOpen, hi: lo, hiOpen: !loOpen },
+          { lo: hi, loOpen: !hiOpen, hi: part.hi, hiOpen: part.hiOpen },
+        ].filter((piece) => !intervalIsEmpty(piece));
+      });
+      if (!remaining.length) break;
+    }
+    return remaining;
+  };
   // The integers an interval holds, as closed integer bounds.
   const integerBounds = (iv: { lo: number, hi: number, loOpen: boolean, hiOpen: boolean }) => ({
     lo: Number.isFinite(iv.lo) ? (iv.loOpen ? Math.floor(iv.lo) + 1 : Math.ceil(iv.lo)) : iv.lo,
@@ -21354,10 +21383,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return partial(makePrimitive('string'));
       case 'MatchJuxtapositionPattern':
         return partial(resolveType(p.Head as ParseNode.Type));
-      case 'MatchRangePattern':
+      case 'MatchRangePattern': {
+        if (s.Kind === 'union') {
+          const members = s.Members.map((member) => patternBranches(member, p)!);
+          return {
+            match: members.reduce((type, member) => union(type, member.match), empty as TypeRecord | typeof empty),
+            miss: members.reduce((type, member) => union(type, member.miss), empty as TypeRecord | typeof empty),
+            matchStable: members.every((member) => member.match !== empty || member.matchStable),
+            missStable: members.every((member) => member.miss !== empty || member.missStable),
+          };
+        }
         if (rangePatternUnmatchable(p, s)) return { match: empty, miss: s, matchStable: true, missStable: false };
         if (rangePatternCovers(p, s)) return { match: s, miss: empty, matchStable: false, missStable: true };
         return { match: s, miss: s, matchStable: false, missStable: false };
+      }
       case 'MatchNotPattern': {
         const q = patternBranches(s, p.Operand);
         return q && { match: q.miss, miss: q.match, matchStable: q.missStable, missStable: q.matchStable };
@@ -22007,7 +22046,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  type TestFlow = { whenTrue: FlowFacts, whenFalse: FlowFacts };
+  type TestFlow = { whenTrue: FlowFacts | undefined, whenFalse: FlowFacts | undefined };
+  type TestRequest = { deciding: boolean, truthiness: boolean, visit: boolean, result?: TestFlow };
+  const assignmentTests = new Map<ParseNode.AssignmentExpression, TestRequest>();
+  const joinTestFlow = (results: readonly TestFlow[]): TestFlow => ({
+    whenTrue: joinFlow(results.map((result) => result.whenTrue)),
+    whenFalse: joinFlow(results.map((result) => result.whenFalse)),
+  });
+  const booleanType = (type: Known): boolean => !!type && (type.Kind === 'primitive' && type.Name === 'boolean'
+    || type.Kind === 'literal' && booleanType(type.Base as Known)
+    || type.Kind === 'union' && type.Members.length > 0 && type.Members.every(booleanType));
+  const booleanSingleton = (type: Known): boolean | undefined => booleanType(type) ? settledTruthiness(type!) : undefined;
+  const effectOnTest = (result: TestFlow, effect: (edge: FlowFacts) => void): TestFlow => {
+    const entry = captureFlow();
+    const live = flowLive;
+    const apply = (edge: FlowFacts | undefined): FlowFacts | undefined => {
+      if (!edge) return undefined;
+      resumeFlow(edge);
+      effect(edge);
+      return normalFlow();
+    };
+    const changed = { whenTrue: apply(result.whenTrue), whenFalse: apply(result.whenFalse) };
+    restoreFlow(entry);
+    flowLive = live;
+    return changed;
+  };
+  type CapturedPlace = { name: string, owner: Frame, marker: string };
+  let capturedPlaceSerial = 0;
+  const capturedPlaces = new Set<CapturedPlace>();
+  const capturePlace = (expression: ParseNode): CapturedPlace | undefined => {
+    const name = narrowableName(expression);
+    if (name === null) return undefined;
+    const origin = { name, owner: flowOwner(name), marker: `${name}.\u0000capture${capturedPlaceSerial++}` };
+    declareNarrowed(origin.marker, anyTypeRecord);
+    capturedPlaces.add(origin);
+    return origin;
+  };
+  const placeStillCaptured = (origin: CapturedPlace | undefined): origin is CapturedPlace => !!origin
+    && flowOwner(origin.name) === origin.owner && !!captureFlow().get(origin.owner)?.has(origin.marker);
+  const releaseCapturedPlaces = (result: TestFlow, origins: readonly CapturedPlace[]): TestFlow => {
+    const clear = () => origins.forEach((origin) => invalidateNarrowing(origin.marker));
+    const outgoing = effectOnTest(result, clear);
+    clear();
+    origins.forEach((origin) => capturedPlaces.delete(origin));
+    return outgoing;
+  };
+  const invalidateCapturedReads = (): void => {
+    for (const origin of capturedPlaces) {
+      if ([...assignedInsideFunction].some((name) => origin.name === name || origin.name.startsWith(`${name}.`))) {
+        invalidateNarrowing(origin.marker);
+      }
+    }
+  };
   const factFlow = (fact: NarrowingFact, sense: boolean): FlowFacts => {
     for (const entry of [fact, ...(fact.additional ?? [])]) {
       const narrowed = branchTypes(entry)[sense ? 'whenTrue' : 'whenFalse'];
@@ -22023,13 +22113,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const previewFlowEffects = (node: ParseNode): void => {
     for (const name of flowWrites(node)) invalidateNarrowing(name);
     if (containsCall(node)) for (const name of assignedInsideFunction) invalidateNarrowing(name);
+    if (node.type === 'MemberExpression' || node.type === 'SuperProperty') invalidateCapturedReads();
   };
 
   type CompletionTest = { deciding: boolean, truthiness: boolean, results: (TestFlow & { truth?: boolean })[] };
   const completionTests = new Map<ParseNode.ExpressionStatement, CompletionTest>();
 
-  const testedCompletion = (node: ParseNode.DoExpression, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
-    const paths = CompletionPaths(node.Block!.StatementList, switchCoversDiscriminant);
+  const testedCompletion = (node: ParseNode.DoExpression | ParseNode.Block, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
+    const block = node.type === 'Block' ? node : node.Block!;
+    const paths = CompletionPaths(block.StatementList, switchCoversDiscriminant);
     const entry = captureFlow();
     const producers = new Map<ParseNode.ExpressionStatement, CompletionTest>();
     for (const path of paths) {
@@ -22038,7 +22130,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (visit) {
       for (const [producer, test] of producers) completionTests.set(producer, test);
       try {
-        walk(node.Block);
+        walk(block);
       } finally {
         for (const producer of producers.keys()) completionTests.delete(producer);
       }
@@ -22047,7 +22139,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // and install lexical owners so a local name cannot refine an outer one.
       for (const [producer, test] of producers) {
         restoreFlow(entry);
-        previewFlowEffects(node.Block!);
+        previewFlowEffects(block);
         const scopes: ParseNode[] = [];
         for (let parent = producer.parent; parent && parent !== node; parent = parent.parent) scopes.unshift(parent);
         for (const scope of scopes) {
@@ -22079,7 +22171,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       restoreFlow(entry);
-      previewFlowEffects(node.Block!);
+      previewFlowEffects(block);
     }
     const outgoing = captureFlow();
     const yes: FlowFacts[] = [];
@@ -22092,7 +22184,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       for (const result of producers.get(path.value)!.results) {
         for (const [sense, destination] of [['whenTrue', yes], ['whenFalse', no]] as const) {
-          if (result.truth === (sense === 'whenFalse')) continue;
+          if (!result[sense] || result.truth === (sense === 'whenFalse')) continue;
           restoreFlow(result[sense]);
           path.effects.forEach(previewFlowEffects);
           destination.push(captureFlow());
@@ -22100,7 +22192,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     restoreFlow(outgoing);
-    return { whenTrue: joinFlow(yes) ?? outgoing, whenFalse: joinFlow(no) ?? outgoing };
+    return { whenTrue: joinFlow(yes), whenFalse: joinFlow(no) };
   };
 
   const changesPlace = (node: ParseNode, name: string, prefixesOnly = false): boolean => {
@@ -22111,6 +22203,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Evaluate each operand once, retaining separate facts for both answers. */
   const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
+    const live = flowLive;
+    const result = walkTestResult(test, deciding, truthiness, visit);
+    return live ? result : { whenTrue: undefined, whenFalse: undefined };
+  };
+  const walkTestResult = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     if (PatternScopeOf(test).length && !activePatternScopes.has(test)) {
       return withPatternScope(test, () => walkTest(test, deciding, truthiness, visit));
     }
@@ -22121,6 +22218,106 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return { whenTrue: result.whenFalse, whenFalse: result.whenTrue };
     }
     if (test.type === 'DoExpression' && !test.star) return testedCompletion(test, deciding, truthiness, visit);
+    if (test.type === 'EqualityExpression' && ['===', '!=='].includes(test.operator)) {
+      const left = test.EqualityExpression;
+      const right = test.RelationalExpression;
+      const leftLiteral = singleValueOperandType(left);
+      const rightLiteral = singleValueOperandType(right);
+      const leftType = leftLiteral ?? staticType(left);
+      const rightType = rightLiteral ?? staticType(right);
+      const constant = booleanSingleton(rightType) ?? booleanSingleton(leftType);
+      const rightPlace = narrowableName(right);
+      const rightStable = rightLiteral !== null || rightPlace === null
+        || (!changesPlace(left, rightPlace) && flowWrites(left).size === 0 && !containsCall(left) && !containsPropertyRead(left));
+      if (constant !== undefined && booleanType(leftType) && booleanType(rightType) && rightStable
+        && narrowableName(booleanSingleton(rightType) !== undefined ? left : right) === null) {
+        if (visit) staticType(test);
+        const rightConstant = booleanSingleton(rightType) !== undefined;
+        let result: TestFlow;
+        if (rightConstant) {
+          result = walkTest(left, deciding, truthiness, visit);
+          resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
+          if (visit) walk(right);
+          else previewFlowEffects(right);
+          result = effectOnTest(result, () => previewFlowEffects(right));
+        } else {
+          if (visit) walk(left);
+          else previewFlowEffects(left);
+          result = walkTest(right, deciding, truthiness, visit);
+        }
+        return constant === (test.operator === '===') ? result
+          : { whenTrue: result.whenFalse, whenFalse: result.whenTrue };
+      }
+    }
+    if (test.type === 'AssignmentExpression' && ['=', '&&=', '||=', '??='].includes(test.AssignmentOperator)
+      && booleanType(staticType(test.AssignmentExpression))) {
+      const request: TestRequest = { deciding, truthiness, visit };
+      if (visit) {
+        assignmentTests.set(test, request);
+        try {
+          walk(test);
+        } finally {
+          assignmentTests.delete(test);
+        }
+      } else {
+        // A query must still process target evaluation before the RHS. Stores
+        // through unknown accessors cannot preserve captured-binding facts.
+        const target = patternExpression(test.LeftHandSideExpression)!;
+        previewFlowEffects(target);
+        let skipped: FlowFacts | undefined;
+        if (test.AssignmentOperator !== '=') {
+          const branches = test.AssignmentOperator === '??=' ? nullishFlow(target) : walkTest(target, false, false, false);
+          const onTrue = test.AssignmentOperator !== '||=';
+          skipped = onTrue ? branches.whenFalse : branches.whenTrue;
+          resumeFlow(onTrue ? branches.whenTrue : branches.whenFalse);
+        }
+        const result = walkTest(test.AssignmentExpression, deciding, truthiness, false);
+        request.result = assignmentResult(test, result, skipped);
+      }
+      if (request.result) return request.result;
+      const unchanged = normalFlow();
+      return { whenTrue: unchanged, whenFalse: unchanged };
+    }
+    if (test.type === 'OptionalExpression') {
+      const skipped: FlowFacts[] = [];
+      const origins: CapturedPlace[] = [];
+      if (visit) {
+        const receiver = staticType(test.MemberExpression);
+        if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true);
+      }
+      const view = optionalChainView(test, visit, skipped, true, origins);
+      // The chain has already visited its callee, arguments and keys. Judge
+      // the captured result without repeating those effects.
+      const result = testResultOfVisited(view.expression, deciding && visit, truthiness && visit);
+      return releaseCapturedPlaces({ whenTrue: result.whenTrue, whenFalse: joinFlow([result.whenFalse, ...skipped]) }, origins);
+    }
+    if (test.type === 'MatchExpression' && !test.All) {
+      const request: TestRequest = { deciding, truthiness, visit };
+      checkMatchExpression(test, matchContexts.get(test) ?? null, request);
+      if (request.result) return request.result;
+    }
+    if (test.type === 'PipelineExpression') {
+      const input = test.PipelineExpression;
+      const origin = capturePlace(input);
+      const topic = pipelineInputType(input);
+      if (visit) walk(input);
+      else previewFlowEffects(input);
+      const frame = emptyFrame();
+      if (topic) frame.bindings.set(TOPIC_NAME, topic);
+      frame.declaredNames.add(TOPIC_NAME);
+      frames.push(frame);
+      let result: TestFlow;
+      try {
+        result = walkTest(test.Body, deciding, truthiness, visit);
+      } finally {
+        frames.pop();
+      }
+      result = effectOnTest(result, (edge) => {
+        const narrowed = edge.get(frame)?.get(TOPIC_NAME);
+        if (placeStillCaptured(origin) && narrowed) declareNarrowed(origin.name, narrowed);
+      });
+      return releaseCapturedPlaces(result, origin ? [origin] : []);
+    }
     if (test.type === 'CommaOperator') {
       const list = test.ExpressionList;
       list.slice(0, -1).forEach((operand) => visit ? walk(operand) : previewFlowEffects(operand));
@@ -22157,12 +22354,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const rightType = staticType(right);
       const rightTruth = rightType ? settledTruthiness(rightType) : undefined;
       const fallback = walkTest(right, deciding, truthiness, visit);
-      const joined = joinFlow([selected.whenFalse, fallback.whenTrue, fallback.whenFalse])!;
       return {
         whenTrue: joinFlow([leftTruth === false ? undefined : selected.whenFalse,
-          rightTruth === false ? undefined : fallback.whenTrue]) ?? joined,
+          rightTruth === false ? undefined : fallback.whenTrue]),
         whenFalse: joinFlow([leftTruth === true ? undefined : selected.whenFalse,
-          rightTruth === true ? undefined : fallback.whenFalse]) ?? joined,
+          rightTruth === true ? undefined : fallback.whenFalse]),
       };
     }
     if (test.type === 'ConditionalExpression') {
@@ -22235,13 +22431,69 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
     }
-    const unchanged = captureFlow();
-    return { whenTrue: unchanged, whenFalse: unchanged };
+    const unchanged = normalFlow();
+    const type = singleValueOperandType(test) ?? staticType(test);
+    const settled = type ? settledTruthiness(type) : undefined;
+    return { whenTrue: settled === false ? undefined : unchanged, whenFalse: settled === true ? undefined : unchanged };
   };
 
-  const nullishFlow = (operand: ParseNode): TestFlow => {
+  const testResultOfVisited = (test: ParseNode, deciding: boolean, truthiness: boolean): TestFlow => {
     const entry = captureFlow();
-    const fact: NarrowingFact = { name: narrowableName(operand) ?? NON_PATH,
+    const fact = narrowingFactOf(test, true);
+    if (deciding && fact) judgeFact(fact);
+    const type = staticType(test);
+    if (truthiness) judgeTruthiness(test);
+    else if (deciding && type?.Kind === 'void') pushVoidUse('tested');
+    const truth = type ? settledTruthiness(type) : undefined;
+    const whenTrue = fact ? factFlow(fact, true) : normalFlow();
+    restoreFlow(entry);
+    const whenFalse = fact ? factFlow(fact, false) : normalFlow();
+    return { whenTrue: truth === false ? undefined : whenTrue, whenFalse: truth === true ? undefined : whenFalse };
+  };
+
+  const assignmentStoreEffects = (target: ParseNode): void => {
+    invalidatePlace(target);
+    const kind = target.type === 'IdentifierReference' ? bindingKindOf(target.name) : undefined;
+    if (kind === 'mutable-ref' || kind === 'immutable-ref' || target.type === 'CallExpression') {
+      // An unresolved reference destination can alias a different named place.
+      // A result about its old value is not a fact about the overwritten value.
+      restoreFlow(new Map());
+    } else if (target.type !== 'IdentifierReference') {
+      for (const [owner, entries] of captureFlow()) {
+        for (const name of entries.keys()) {
+          if ((name.includes('.') && !name.includes('\u0000')) || owner.bindingKinds.get(name)?.endsWith('-ref')) invalidateNarrowing(name);
+        }
+      }
+      for (const origin of capturedPlaces) if (origin.name.includes('.')) invalidateNarrowing(origin.marker);
+      for (const name of assignedInsideFunction) invalidateNarrowing(name);
+    } else if (locationWriteTypes(target).some((type) => type.Kind === 'parameterized' || conversionHasEffect(type))) {
+      for (const name of assignedInsideFunction) invalidateNarrowing(name);
+    }
+  };
+
+  const assignmentResult = (assignment: ParseNode.AssignmentExpression, result: TestFlow,
+    skipped: FlowFacts | undefined): TestFlow => {
+    const target = patternExpression(assignment.LeftHandSideExpression)!;
+    const stored = effectOnTest(result, () => assignmentStoreEffects(target));
+    const operator = assignment.AssignmentOperator;
+    let skippedTruth: boolean | undefined;
+    if (operator === '??=' && skipped) {
+      const current = captureFlow();
+      restoreFlow(skipped);
+      const source = staticType(target);
+      const present = source ? NarrowFrom(source, nullishType()) : null;
+      skippedTruth = present && present !== empty ? settledTruthiness(present) : undefined;
+      restoreFlow(current);
+    }
+    return {
+      whenTrue: joinFlow([stored.whenTrue, operator === '||=' || (operator === '??=' && skippedTruth !== false) ? skipped : undefined]),
+      whenFalse: joinFlow([stored.whenFalse, operator === '&&=' || (operator === '??=' && skippedTruth !== true) ? skipped : undefined]),
+    };
+  };
+
+  const nullishFlow = (operand: ParseNode, name = narrowableName(operand) ?? NON_PATH): TestFlow => {
+    const entry = captureFlow();
+    const fact: NarrowingFact = { name,
       subjectType: staticType(operand), type: nullishType(), negated: false };
     const whenTrue = factFlow(fact, true);
     restoreFlow(entry);
@@ -22748,11 +23000,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     || (t as unknown) === empty
     || (t?.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0);
 
-  const checkMatchExpression = (me: ParseNode.MatchExpression, contextual: Known): Known => {
+  const checkMatchExpression = (me: ParseNode.MatchExpression, contextual: Known, tested?: TestRequest): Known => {
     if (contextual) matchContexts.set(me, contextual);
     const armContext = me.All ? (contextual?.Kind === 'array' ? contextual.Element : null) : contextual;
     const cached = matchResults.get(me);
-    if (cached?.revision === typeRevision && cached.contextual === contextual) return cached.type;
+    if (!tested && cached?.revision === typeRevision && cached.contextual === contextual) return cached.type;
     if (checkingMatches.has(me)) return null;
     checkingMatches.add(me);
     try {
@@ -22765,6 +23017,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const subjectOwner = subjectName === null ? null : flowOwner(subjectName);
       let subjectStable = true;
       const completed: (FlowFacts | undefined)[] = [];
+      const results: TestFlow[] = [];
       me.Clauses.forEach((clause) => {
         resumeFlow(matchEntry);
         frames.push(emptyFrame());
@@ -22894,7 +23147,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const result = clause.IsThrow ? neverType
           : clause.IsBlock ? null : staticTypeIn(clause.Body, armContext);
         if (!clause.IsThrow && !clause.IsBlock) requireAssignable(result, armContext);
-        walk(clause.Body as ParseNode);
+        if (tested && !clause.IsThrow && !me.All) {
+          const edges = clause.IsBlock
+            ? testedCompletion(clause.Body as ParseNode.Block, tested.deciding, tested.truthiness, tested.visit)
+            : walkTest(clause.Body, tested.deciding, tested.truthiness, tested.visit);
+          results.push(edges);
+          resumeFlow(joinFlow([edges.whenTrue, edges.whenFalse]));
+        } else walk(clause.Body as ParseNode);
         armTypes.push(clause.IsThrow ? neverType : clause.IsBlock
           ? completionTypeOf((clause.Body as ParseNode.Block).StatementList) : result);
         const outgoing = clause.IsThrow ? undefined : normalFlow();
@@ -22909,6 +23168,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       });
       resumeFlow(me.All ? matchEntry : joinFlow(completed));
+      if (tested) tested.result = joinTestFlow(results);
       // #sec-match-exhaustiveness: a clause is also dead "where every atom the
       // clause covers is covered before it". Narrowing cannot see that for a
       // boolean, an enum or a numeric subject - it does not empty them arm by
@@ -23270,6 +23530,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const patternNamesByScope = new WeakMap<ParseNode, Set<string>>();
   const functionBoundary = (node: ParseNode): boolean => /FunctionDeclaration|FunctionExpression|ArrowFunction|Method|GeneratorDeclaration|GeneratorExpression/.test(node.type);
+  const borrowedDeclarations = new WeakMap<ParseNode, Map<string, Set<ParseNode>>>();
+  const enumerationSourceStable = (source: ParseNode): boolean => {
+    const read = unparenthesized(source);
+    if (read.type !== 'IdentifierReference' || hasDirectEval) return false;
+    const kind = bindingKindOf(read.name);
+    if (kind === 'mutable-ref' || kind === 'immutable-ref') return false;
+    const binding = ResolveBindingDeclaration(read, read.name);
+    if (!binding) return false;
+    const scopeOf = (node: ParseNode): ParseNode | undefined => {
+      let scope: ParseNode | undefined = node;
+      while (scope && !functionBoundary(scope) && scope.type !== 'ScriptBody' && scope.type !== 'ModuleBody') scope = scope.parent;
+      return scope;
+    };
+    const scope = scopeOf(binding.node);
+    if (!scope || scope !== scopeOf(read) || (!functionBoundary(scope) && binding.kind !== 'const')) return false;
+    let borrowed = borrowedDeclarations.get(scope);
+    if (!borrowed) {
+      borrowed = new Map();
+      const collect = (node: ParseNode): void => {
+        const fields = node as unknown as { Ref?: boolean, Initializer?: ParseNode, RefTarget?: ParseNode, Expression?: ParseNode };
+        const target = node.type === 'RefExpression' || node.type === 'RefRebindingStatement' ? fields.Expression
+          : fields.RefTarget ?? (fields.Ref ? fields.Initializer : undefined);
+        const place = target && unparenthesized(target);
+        if (place?.type === 'IdentifierReference') {
+          const declaration = ResolveBindingDeclaration(place, place.name);
+          if (declaration) {
+            let declarations = borrowed!.get(place.name);
+            if (!declarations) borrowed!.set(place.name, declarations = new Set());
+            declarations.add(declaration.node);
+          }
+        }
+        for (const [key, value] of Object.entries(node)) {
+          if (key === 'parent' || key === 'location') continue;
+          if (Array.isArray(value)) {
+            for (const child of value) if (child && typeof child === 'object' && 'type' in child) collect(child as ParseNode);
+          } else if (value && typeof value === 'object' && 'type' in value) collect(value as ParseNode);
+        }
+      };
+      collect(scope);
+      borrowedDeclarations.set(scope, borrowed);
+    }
+    return !borrowed.get(read.name)?.has(binding.node);
+  };
   const checkPatternBindingReference = (node: ParseNode.IdentifierReference): void => {
     if (frames.some((frame) => frame.declaredNames.has(node.name))) return;
     for (let scope = node.parent; scope; scope = scope.parent) {
@@ -28975,30 +29278,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const optionalChainView = (node: ParseNode.OptionalExpression, visit: boolean, skipped?: FlowFacts[]): { expression: ParseNode, shortCircuits: boolean } => {
+  const optionalChainView = (node: ParseNode.OptionalExpression, visit: boolean, skipped?: FlowFacts[], tested = false,
+    captured?: CapturedPlace[]): { expression: ParseNode, shortCircuits: boolean, origin?: CapturedPlace } => {
     const shortCircuitExits = skipped ?? [];
+    const origins = captured ?? [];
+    const active = visit || tested;
+    const remember = (expression: ParseNode) => {
+      const origin = active ? capturePlace(expression) : undefined;
+      if (origin) origins.push(origin);
+      return origin;
+    };
     let view = node.MemberExpression.type === 'OptionalExpression'
-      ? optionalChainView(node.MemberExpression, visit, shortCircuitExits)
-      : { expression: node.MemberExpression as ParseNode, shortCircuits: false };
-    if (visit && node.MemberExpression.type !== 'OptionalExpression') {
-      walk(node.MemberExpression);
-    }
+      ? optionalChainView(node.MemberExpression, visit, shortCircuitExits, tested, origins)
+      : { expression: node.MemberExpression as ParseNode, shortCircuits: false, origin: remember(node.MemberExpression) };
     const base = staticType(view.expression);
+    if (node.MemberExpression.type !== 'OptionalExpression') {
+      if (visit) walk(node.MemberExpression);
+      else if (tested) previewFlowEffects(node.MemberExpression);
+    }
     const present = base ? NarrowFrom(base, nullishType()) : null;
-    const canShortCircuit = base !== null && present !== base;
-    if (visit) {
-      const branches = nullishFlow(node.MemberExpression);
-      if (canShortCircuit) shortCircuitExits.push(branches.whenTrue);
+    const canShortCircuit = base === null || base.Kind === 'any' || present !== base;
+    if (active) {
+      const branches = nullishFlow(typedExpressionView(view.expression, base), placeStillCaptured(view.origin) ? view.origin.name : NON_PATH);
+      if (canShortCircuit && branches.whenTrue) shortCircuitExits.push(branches.whenTrue);
       resumeFlow(branches.whenFalse);
     }
     view = {
-      expression: canShortCircuit ? typedExpressionView(view.expression, present === empty ? neverType : present) : view.expression,
+      expression: typedExpressionView(view.expression, canShortCircuit ? present === empty ? neverType : present : base),
       shortCircuits: view.shortCircuits || canShortCircuit,
+      origin: view.origin,
     };
     const append = (chain: ParseNode.OptionalChain): void => {
-      if (chain.OptionalChain) {
-        append(chain.OptionalChain);
-      }
+      if (chain.OptionalChain) append(chain.OptionalChain);
       const receiver = staticType(view.expression);
       const unreachable = receiver !== null && SameType(receiver, neverType);
       if (chain.Arguments) {
@@ -29015,25 +29326,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           walk(chain.Arguments);
           for (const name of assignedInsideFunction) invalidateNarrowing(name);
           applyAssertionNarrowing(call);
+        } else if (tested) {
+          chain.Arguments.forEach(previewFlowEffects);
+          for (const name of assignedInsideFunction) invalidateNarrowing(name);
         }
         view.expression = unreachable ? typedExpressionView(call, neverType) : call;
+        view.origin = undefined;
       } else {
         const member = {
           type: 'MemberExpression', MemberExpression: view.expression,
           IdentifierName: chain.IdentifierName, PrivateIdentifier: chain.PrivateIdentifier, Expression: chain.Expression,
         } as ParseNode.MemberExpression;
+        const origin = remember(member);
         if (visit) {
           if (!unreachable) {
             staticType(member);
             checkProtectedAccess(member);
           }
           walk(chain.Expression);
-        }
+        } else if (tested && chain.Expression) previewFlowEffects(chain.Expression);
+        if (active) for (const name of assignedInsideFunction) invalidateNarrowing(name);
         view.expression = unreachable ? typedExpressionView(member, neverType) : member;
+        view.origin = origin;
       }
     };
     append(node.OptionalChain);
-    if (visit && !skipped) resumeFlow(joinFlow([normalFlow(), ...shortCircuitExits]));
+    if (active && !skipped) {
+      const result = releaseCapturedPlaces({ whenTrue: normalFlow(), whenFalse: joinFlow(shortCircuitExits) }, origins);
+      resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
+    }
     return view;
   };
 
@@ -29468,6 +29789,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const barrier = single && ['CallExpression', 'RefExpression', 'IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunction'].includes(single.type);
     if (barrier) invalidateMutableMetadataFacts();
     walkNode(node);
+    if (single?.type === 'MemberExpression' || single?.type === 'SuperProperty') invalidateCapturedReads();
+    if (capturedPlaces.size && single?.type === 'AssignmentExpression') {
+      const target = patternExpression(single.LeftHandSideExpression);
+      if (target) assignmentStoreEffects(target);
+    }
     if (single && flowLive && ['ReturnStatement', 'ThrowStatement', 'BreakStatement', 'ContinueStatement'].includes(single.type)) {
       const kind = single.type === 'ReturnStatement' ? 'return' : single.type === 'ThrowStatement' ? 'throw'
         : single.type === 'BreakStatement' ? 'break' : 'continue';
@@ -30031,6 +30357,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         literalDerivedNumbers.add(bindingType as object);
       }
       const iterationEntry = captureFlow();
+      const sourceName = source ? narrowableName(source) : null;
+      const sourceOwner = sourceName === null ? undefined : flowOwner(sourceName);
+      const sourcePresent = enumerating && source && sourceName !== null && enumerationSourceStable(source)
+        && !changesPlace(node as ParseNode, sourceName)
+        && ![...assignedInsideFunction].some((name) => name === sourceName || sourceName.startsWith(`${name}.`))
+        ? NarrowFrom(staticType(source) ?? anyTypeRecord, nullishType()) : null;
       const walkBody = () => {
         const binding = (f.ForDeclaration as ParseNode.ForDeclaration | undefined)?.ForBinding ?? f.ForBinding;
         const check = () => {
@@ -30042,6 +30374,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               f.ForBinding ? varFrames[varFrames.length - 1] : frames[frames.length - 1]);
           } else if (f.LeftHandSideExpression) {
             checkPattern(f.LeftHandSideExpression as PatternNode, { type: element }, false);
+          }
+          if (sourcePresent && sourcePresent !== empty && sourceName !== null && flowOwner(sourceName) === sourceOwner) {
+            declareNarrowed(sourceName, sourcePresent);
           }
           walk(f.Statement);
         };
@@ -30849,7 +31184,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             left = rest.length ? CanonicalizeType({ Kind: 'union', Members: rest }) : neverType;
           }
         }
-        const subject = staticType(expression);
+        const namedDiscriminant = singleValueOperandType(expression);
+        const subject = booleanType(namedDiscriminant) ? namedDiscriminant : staticType(expression);
         if (subject && subject.Kind !== 'any' && !mentionsTypeParameter(subject)) {
           for (const label of caseLabels) {
             if (!label) continue;
@@ -30986,6 +31322,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
+        const booleanDiscriminant = booleanSingleton(singleValueOperandType(expression) ?? staticType(expression));
         walk(expression);
         const discriminant = expression.type === 'UnaryExpression' && expression.operator === 'typeof'
           ? expression.UnaryExpression : expression;
@@ -30998,19 +31335,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const statements = ordered.flatMap((clause) => clause.StatementList ?? []);
           predeclareFlowLexicals(statements);
           declareFunctionSignatures(statements, false);
-          const entries = new Map<ParseNode, FlowFacts>();
-          let failed = captureFlow();
+          const entries = new Map<ParseNode, FlowFacts | undefined>();
+          let failed: FlowFacts | undefined = captureFlow();
           let stable = name !== null && flowOwner(name) === owner;
+          const coveredRanges: NonNullable<ReturnType<typeof rangePatternInterval>>[] = [];
           for (const clause of ordered) {
             if (clause.type === 'DefaultClause') continue;
             resumeFlow(failed);
-            if (expression.type === 'BooleanLiteral') {
+            if (booleanDiscriminant !== undefined) {
               const test = walkTest(clause.Expression);
-              entries.set(clause, expression.value ? test.whenTrue : test.whenFalse);
-              failed = expression.value ? test.whenFalse : test.whenTrue;
+              entries.set(clause, booleanDiscriminant ? test.whenTrue : test.whenFalse);
+              failed = booleanDiscriminant ? test.whenFalse : test.whenTrue;
               continue;
             }
             const label = clause.Expression;
+            const rangeLabel = unparenthesized(label);
+            if (rangeLabel.type === 'RangeExpression' && subject && subject.Kind !== 'any') {
+              const interval = rangePatternInterval({ type: 'MatchRangePattern', Range: rangeLabel } as ParseNode.MatchRangePattern);
+              if (interval) {
+                if (coveredRanges.length && uncoveredIntervals(interval, coveredRanges).every((piece) => intervalMisses(piece, subject))) {
+                  errors.push(Throw.StaticTypeError('the range label can match nothing the preceding range labels have left').Value as ObjectValue);
+                }
+                coveredRanges.push(interval);
+              }
+            }
             walk(label);
             if (name !== null && (flowWrites(label).has(name.split('.')[0])
               || (containsCall(label) && assignedInsideFunction.has(name.split('.')[0])))) stable = false;
@@ -31018,6 +31366,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: expression,
               RelationalExpression: label } as ParseNode.EqualityExpression;
             let fact = stable ? narrowingFactOf(comparison) : undefined;
+            const range = unparenthesized(label);
+            if (stable && name !== null && range.type === 'RangeExpression'
+              && !(expression.type === 'UnaryExpression' && expression.operator === 'typeof')) {
+              fact = { name, subjectType, type: anyTypeRecord, negated: false,
+                pattern: { type: 'MatchRangePattern', Range: range } as ParseNode.MatchRangePattern };
+            }
             // A nominal enumerator/class label names an atom rather than a
             // literal expression type. Retain the switch's nominal partition.
             if (!fact && stable && name !== null && subjectType?.Kind === 'nominal') {
@@ -32163,14 +32517,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             branches = walkTest(a.LeftHandSideExpression);
           }
           const onTrue = a.AssignmentOperator !== '||=';
+          const request = assignmentTests.get(assignment);
           const written = runFlow(onTrue ? branches.whenTrue : branches.whenFalse, () => {
-            walk(a.AssignmentExpression);
+            if (request) {
+              const result = walkTest(a.AssignmentExpression, request.deciding, request.truthiness);
+              request.result = assignmentResult(assignment, result, onTrue ? branches.whenFalse : branches.whenTrue);
+              resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
+            } else walk(a.AssignmentExpression);
             invalidatePlace(a.LeftHandSideExpression);
           });
           resumeFlow(joinFlow([written, onTrue ? branches.whenFalse : branches.whenTrue]));
         } else {
           walk(a.LeftHandSideExpression);
-          walk(a.AssignmentExpression);
+          const request = assignmentTests.get(assignment);
+          if (request) {
+            const result = walkTest(a.AssignmentExpression, request.deciding, request.truthiness);
+            request.result = assignmentResult(assignment, result, undefined);
+            resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
+          } else walk(a.AssignmentExpression);
           const stored = a.AssignmentOperator === '=' ? staticType(a.AssignmentExpression) : null;
           const retain = preserved && stored && stored.Kind !== 'any' && !mentionsTypeParameter(stored)
             && !metadataFlowInputs.has(preserved) && IsSubtype(stored, preserved, [])
