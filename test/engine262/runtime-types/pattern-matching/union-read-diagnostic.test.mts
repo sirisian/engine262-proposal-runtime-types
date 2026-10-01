@@ -13,7 +13,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * misspelling after a fix that cannot work, so the hint is attached only where
  * narrowing actually reaches the key.
  */
-const A = 'class A { x: uint8 = 1; } let v: A | null = new A(); ';
+const A = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); ';
 
 test('the refusal names both fixes', () => {
   expectThrown(`${A}String(v.x);`, 'narrow the receiver first, or read it with');

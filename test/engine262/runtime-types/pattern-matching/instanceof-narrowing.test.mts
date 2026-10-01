@@ -13,19 +13,19 @@ import { evaluated, expectStaticTypeError, expectThrown } from '../harness.mts';
 
 test('a successful instanceof narrows the branch it guards', () => {
   expect(evaluated(`class A { x: uint8 = 1; }
-    let v: A | null = new A();
+    function readV(): A | null { return new A(); } let v: A | null = readV();
     if (v instanceof A) { String(v.x); } else { 'no'; }`)).toBe('1');
 });
 
 test('the false branch subtracts the type', () => {
   expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
-    let v: A | B = new B();
+    function readV(): A | B { return new B(); } let v: A | B = readV();
     if (v instanceof A) { String(v.x); } else { String(v.y); }`)).toBe('2');
 });
 
 test('a negated test narrows the other way', () => {
   expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
-    let v: A | B = new A();
+    function readV(): A | B { return new A(); } let v: A | B = readV();
     if (!(v instanceof B)) { String(v.x); } else { String(v.y); }`)).toBe('1');
 });
 
@@ -34,7 +34,7 @@ test('it narrows a parameter and the right operand of &&', () => {
     function f(v: A | B): uint8 { if (v instanceof A) { return v.x; } return v.y; }
     String(f(new A()));`)).toBe('1');
   expect(evaluated(`class A { x: uint8 = 1; }
-    let v: A | null = new A();
+    function readV(): A | null { return new A(); } let v: A | null = readV();
     ((v instanceof A) && v.x === 1) ? 'yes' : 'no';`)).toBe('yes');
 });
 
@@ -61,11 +61,11 @@ test('a sealed hierarchy dispatches through it', () => {
 });
 
 test('the other narrowing forms are unaffected', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } let v: A | null = new A();
+  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
     if (v is A) { String(v.x); } else { 'no'; }`)).toBe('1');
-  expect(evaluated(`class A { x: uint8 = 1; } let v: A | null = new A();
+  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
     if (v !== null) { String(v.x); } else { 'no'; }`)).toBe('1');
-  expect(evaluated(`let v: string | uint8 = "hi";
+  expect(evaluated(`function readV(): string | uint8 { return "hi"; } let v: string | uint8 = readV();
     if (typeof v === "string") { String(v.length); } else { String(v); }`)).toBe('2');
 });
 
@@ -129,7 +129,7 @@ test('the other relational forms are untouched', () => {
  */
 
 test('a discarded ternary narrows an additive arm', () => {
-  const H = 'class A { x: uint8 = 1; } let v: A | null = new A(); ';
+  const H = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); ';
   expect(evaluated(`${H}(v is A) ? ('' + v.x) : 'no';`)).toBe('1');
   expect(evaluated(`${H}(v instanceof A) ? (1 + v.x) : 0;`)).toBe('2');
   expect(evaluated(`${H}(v !== null) ? (1 + v.x) : 0;`)).toBe('2');
@@ -137,14 +137,14 @@ test('a discarded ternary narrows an additive arm', () => {
 
 test('both arms of a discarded ternary are narrowed, and negation flips them', () => {
   expect(evaluated(`class A { x: uint8 = 1; } class B { y: uint8 = 2; }
-    let v: A | B = new B();
+    function readV(): A | B { return new B(); } let v: A | B = readV();
     (v is A) ? (1 + v.x) : (1 + v.y);`)).toBe('3');
-  expect(evaluated(`class A { x: uint8 = 1; } let v: A | null = new A();
+  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV();
     (!(v is A)) ? 0 : (1 + v.x);`)).toBe('2');
 });
 
 test('the positions that already narrowed still do', () => {
-  const H = 'class A { x: uint8 = 1; } let v: A | null = new A(); ';
+  const H = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); ';
   expect(evaluated(`${H}(v is A) ? v.x : 0;`)).toBe('1');
   expect(evaluated(`${H}const r: string = (v is A) ? ('' + v.x) : 'no'; r;`)).toBe('1');
   expect(evaluated(`${H}if (v is A) { '' + v.x; } else { 'no'; }`)).toBe('1');
@@ -154,7 +154,7 @@ test('a discarded expression is still checked', () => {
   // The case that added the arithmetic branch in the first place: a statement
   // never calls `staticType`, so these checks run from there or not at all.
   expectThrown('const a: [2].<uint8>; a[9];', 'is not an index of');
-  expectThrown(`class A { x: uint8 = 1; } let v: A | null = new A(); '' + v.x;`,
+  expectThrown(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); '' + v.x;`,
     'is not declared by every member');
   expect(evaluated('let n: uint8 = 3; (n > 1) ? (1 + n) : 0;')).toBe('4');
 });

@@ -19,10 +19,10 @@ test.each([
 
 test.each([
   // A guarded clause covers nothing for the clauses after it.
-  'const n: uint8 = 1; const g = true; const r = match (n) { when 1 if (g): 1; when 1: 2; default: 0; }; String(r);',
+  'const n: uint8 = 1; function readGuard(): boolean { return true; } const g: boolean = readGuard(); const r = match (n) { when 1 if (g): 1; when 1: 2; default: 0; }; String(r);',
   'const n: uint8 = 1; const r = match (n) { when 1: 1; when 2: 2; default: 0; }; String(r);',
   // A typed binding over a union is not irrefutable, so the default is live.
-  'const v: uint8 | string = 1; const r = match (v) { when let x: uint8: 1; default: 0; }; String(r);',
+  'function readV(): uint8 | string { return 1; } const v: uint8 | string = readV(); const r = match (v) { when let x: uint8: 1; default: 0; }; String(r);',
 ])('a clause that can match is accepted: %s', (source) => expect(ok(source)).toBe(true));
 
 // -- typeof tests ----------------------------------------------------------------
@@ -38,12 +38,12 @@ test.each([
 ])('a typeof test that cannot go both ways is refused: %s', expectStaticTypeError);
 
 test.each([
-  "const x: uint8 | string = 1; let r = 0; if (typeof x === 'number') { r = 1; } String(r);",
+  "function readX(): uint8 | string { return 1; } const x: uint8 | string = readX(); let r = 0; if (typeof x === 'number') { r = 1; } String(r);",
   "const x: any = 1; if (typeof x === 'strng') {} if (typeof x === 'number') {} 'ok';",
 ])('a typeof test that can go both ways is accepted: %s', (source) => expect(ok(source)).toBe(true));
 
 // -- v.p === e on a union ------------------------------------------------------
-const S = "type S = { k: 'a', v: uint8 } | { k: 'b', v: string }; const s: S = { k: 'a', v: 1 }; ";
+const S = "type S = { k: 'a', v: uint8 } | { k: 'b', v: string }; function readS(): S { return { k: 'a', v: 1 }; } const s: S = readS(); ";
 test('a member literal no union member admits is refused', () => {
   expectStaticTypeError(`${S}if (s.k === 'c') {}`);
 });
@@ -60,8 +60,8 @@ test.each([
 ])('a nullish operator on a value that cannot be nullish is refused: %s', expectStaticTypeError);
 
 test.each([
-  'const o: { a: uint8 } | null = null; const r = o?.a; String(r);',
-  'const o: { a: { b: uint8 } | null } | null = { a: null }; const r = o?.a?.b; String(r);',
-  'let x: uint8 | null = null; x ??= 2; String(x);',
+  'function readO(): { a: uint8 } | null { return null; } const o: { a: uint8 } | null = readO(); const r = o?.a; String(r);',
+  'function readO(): { a: { b: uint8 } | null } | null { return { a: null }; } const o: { a: { b: uint8 } | null } | null = readO(); const r = o?.a?.b; String(r);',
+  'function readX(): uint8 | null { return null; } let x: uint8 | null = readX(); x ??= 2; String(x);',
   'const o = { a: 1 }; String(o?.a);',
 ])('a nullish operator on a value that may be nullish is accepted: %s', (source) => expect(ok(source)).toBe(true));

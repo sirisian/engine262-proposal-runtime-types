@@ -254,7 +254,7 @@ for (const [name, source] of [
   ['finalizer break overrides a return', 'function f(x:uint8|string){while(x is uint8){try{return;}finally{break;}}if(x is uint8){}}'],
   ['handler normal completion joins the try body', 'function f(x:uint8|string){try{if(x is string)return;}catch{}if(x is string){}}'],
   ['iteration may execute zero times', 'function f(xs:[].<uint8>,x:uint8|string){for(const v of xs){if(x is string)return;}if(x is string){}}'],
-  ['switch case lexical binding shadows the subject', 'function f(x:"a"|"b"){switch(x){case "a":let x:"a"|"b"="b";if(x==="a"){}break;default:break;}}'],
+  ['switch case lexical binding shadows the subject', 'function f(x:"a"|"b",y:"a"|"b"){switch(x){case "a":let x:"a"|"b"=y;if(x==="a"){}break;default:break;}}'],
   ['switch selection observes label mutation', 'function f(x:"a"|"b",y:"a"|"b"){switch(x){case (x=y,"a"):if(x==="b"){}break;default:break;}}'],
   ['later boolean labels can invalidate earlier failed facts', 'function f(x:uint8|string,y:uint8|string,b:boolean){switch(true){default:if(x is uint8){}break;case x is uint8:break;case (x=y,b):break;}}'],
   ['boolean fallthrough includes a selected case', 'function f(x:uint8|string){switch(false){case x is uint8:default:if(x is string){}break;}}'],

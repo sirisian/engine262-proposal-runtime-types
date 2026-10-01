@@ -192,7 +192,7 @@ test("optional-selection: computed-key-write", () => {
 });
 
 test("optional-selection: getter-write", () => {
-  evaluated("function f(o:{readonly tag:string}|null){o={get tag():string{o=null;return \"a\";}};if(o?.tag===\"a\"){if(o is null){}}}");
+  evaluated("function f(o:{readonly tag:string}|null){function make():{readonly tag:string}|null{return {get tag():string{o=null;return \"a\";}};}o=make();if(o?.tag===\"a\"){if(o is null){}}}");
 });
 
 test("equality-domains: one-known-domain", () => {
@@ -364,7 +364,7 @@ test("runtime: optional-key-mutation", () => {
 });
 
 test("runtime: optional-getter-mutation", () => {
-  expect(evaluated("function f(o:{readonly tag:string}|null){o={get tag():string{o=null;return \"a\";}};if(o?.tag===\"a\")return o is null;return false;}String(f(null));")).toBe("true");
+  expect(evaluated("function f(o:{readonly tag:string}|null){function make():{readonly tag:string}|null{return {get tag():string{o=null;return \"a\";}};}o=make();if(o?.tag===\"a\")return o is null;return false;}String(f(null));")).toBe("true");
 });
 
 test("runtime: two-value-equality", () => {

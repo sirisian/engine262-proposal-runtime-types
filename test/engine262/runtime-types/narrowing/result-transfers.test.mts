@@ -372,7 +372,7 @@ test("optional-result: nullable-false", () => {
 });
 
 test("optional-result: getter-write", () => {
-  evaluated("function f(o:{readonly b:boolean}|null){o={get b():boolean{o=null;return true;}};if(o?.b){if(o is null){}}}");
+  evaluated("function f(o:{readonly b:boolean}|null){function make():{readonly b:boolean}|null{return {get b():boolean{o=null;return true;}};}o=make();if(o?.b){if(o is null){}}}");
 });
 
 test("optional-result: predicate-false", () => {
@@ -536,7 +536,7 @@ test("boolean-comparison: changed-comparison-value", () => {
 });
 
 test("assignment-result: coalesce-captured-skip", () => {
-  evaluated("function f(x:uint8|string,b:boolean|null){if(b??=do{b=true;if(b!==true)throw 0;x is uint8;}){}else{if(x is uint8){}}}");
+  evaluated("function f(x:uint8|string,b:boolean|null){if(b??=do{b=true;x is uint8;}){}else{if(x is uint8){}}}");
 });
 
 test("enumeration-entry: ref-source", () => {
@@ -596,7 +596,7 @@ test("runtime: match-results", () => {
 });
 
 test("runtime: optional-getter-write", () => {
-  expect(evaluated("function f(o:{readonly b:boolean}|null){o={get b():boolean{o=null;return true;}};if(o?.b){return o is null;}return false;}String(f(null));")).toBe("true");
+  expect(evaluated("function f(o:{readonly b:boolean}|null){function make():{readonly b:boolean}|null{return {get b():boolean{o=null;return true;}};}o=make();if(o?.b){return o is null;}return false;}String(f(null));")).toBe("true");
 });
 
 test("runtime: assignment-reference-alias", () => {

@@ -18,7 +18,7 @@ import { evaluated, expectThrown } from '../harness.mts';
  * first pass and stale on the second, and one walk cannot tell them apart. The
  * rule is therefore conservative by exactly that much.
  */
-const H = 'class A { x: uint8 = 1; } let v: A | null = new A(); let n: uint8 = 0; ';
+const H = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); let n: uint8 = 0; ';
 
 test('every loop form widens a narrowing its body can invalidate', () => {
   expectThrown(`${H}if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; v = null; } }`,
@@ -44,8 +44,8 @@ test('typeof narrowing widens the same way', () => {
   // it cannot tell the leak from the ordinary refusal. Assigning the narrowed
   // binding to a `string` is refused unguarded and allowed when guarded, so the
   // control discriminates.
-  expect(evaluated('let s: string | uint8 = "hi"; let t: string = ""; if (typeof s === "string") { t = s; } t;')).toBe('hi');
-  expectThrown(`let s: string | uint8 = "hi"; let t: string = "";
+  expect(evaluated('function readS(): string | uint8 { return "hi"; } let s: string | uint8 = readS(); let t: string = ""; if (typeof s === "string") { t = s; } t;')).toBe('hi');
+  expectThrown(`function readS(): string | uint8 { return "hi"; } let s: string | uint8 = readS(); let t: string = "";
     if (typeof s === "string") { for (let i: uint8 = 0; i < 2; i = i + 1) { t = s; s = (1 := uint8); } }`,
   'is not assignable to');
 });
@@ -56,13 +56,13 @@ test('the idioms that were always correct still are', () => {
   // test - none of these is touched by the widening.
   expect(evaluated(`${H}if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; } } String(n);`)).toBe('1');
   expect(evaluated(`${H}for (let i: uint8 = 0; i < 2; i = i + 1) { if (v !== null) { n = v.x; v = null; } } String(n);`)).toBe('1');
-  expect(evaluated(`class A { x: uint8 = 1; } const v: A | null = new A(); let n: uint8 = 0;
+  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } const v: A | null = readV(); let n: uint8 = 0;
     if (v !== null) { for (let i: uint8 = 0; i < 2; i = i + 1) { n = v.x; } } String(n);`)).toBe('1');
   expect(evaluated(`${H}while (v !== null) { n = v.x; v = null; } String(n);`)).toBe('1');
 });
 
 test('straight-line invalidation outside a loop is unchanged', () => {
-  expectThrown(`${H}if (v !== null) { v = null; n = v.x; }`, 'is not declared by every member');
+  expectThrown(`${H}if (v !== null) { v = null; n = v.x; }`, 'null');
 });
 
 /**
@@ -80,7 +80,7 @@ test('straight-line invalidation outside a loop is unchanged', () => {
  * a loop body containing a call widens those names up front, for the same
  * single-pass reason the assigned set does.
  */
-const C = 'class A { x: uint8 = 1; } let v: A | null = new A(); let n: uint8 = 0; ';
+const C = 'class A { x: uint8 = 1; } function readV(): A | null { return new A(); } let v: A | null = readV(); let n: uint8 = 0; ';
 
 test('a call widens a narrowing of a name some function assigns', () => {
   expectThrown(`${C}function clob(): uint8 { v = null; return 0; }
@@ -103,7 +103,7 @@ test('a call that cannot touch the binding widens nothing', () => {
 });
 
 test('a const base survives any call', () => {
-  expect(evaluated(`class A { x: uint8 = 1; } const v: A | null = new A(); let n: uint8 = 0;
+  expect(evaluated(`class A { x: uint8 = 1; } function readV(): A | null { return new A(); } const v: A | null = readV(); let n: uint8 = 0;
     function clob(): uint8 { return 0; }
     if (v !== null) { clob(); n = v.x; } String(n);`)).toBe('1');
 });

@@ -22,8 +22,8 @@ test('EXISTING PROGRAMS USING `match` STILL WORK', () => {
 
 test('clauses are tried in source order, first match wins', () => {
   expect(evaluated('match (1) { when 1: "one"; }')).toBe('one');
-  expect(evaluated('match (2) { when 1: "one"; default: "other"; }')).toBe('other');
-  expect(evaluated('const s: number = 2; match (s) { when 1: "a"; when 2: "b"; when 2 or 3: "c"; default: "d"; }')).toBe('b');
+  expect(evaluated('function f(x: number) { return match (x) { when 1: "one"; default: "other"; }; } f(2);')).toBe('other');
+  expect(evaluated('function read(): number { return 2; } const s: number = read(); match (s) { when 1: "a"; when 2: "b"; when 2 or 3: "c"; default: "d"; }')).toBe('b');
   // "If no clause matches, a TypeError is thrown" - and the exhaustiveness rules make
   // that throw statically impossible exactly where the types can prove it;
   // exhaustiveness.test.mts owns that half. A literal subject has a Static Type, so it is
@@ -35,7 +35,7 @@ test('clauses are tried in source order, first match wins', () => {
 
 test('`default` must be LAST, and it is reserved', () => {
   expect(outcome('match (1) { default: 1; when 2: 2; }')).toBe('SyntaxError');
-  expect(evaluated('match (99) { when 1: "one"; default: "fallback"; }')).toBe('fallback');
+  expect(evaluated('function f(x: number) { return match (x) { when 1: "one"; default: "fallback"; }; } f(99);')).toBe('fallback');
 });
 
 test('THE SUBJECT IS EVALUATED ONCE, before any pattern', () => {
@@ -60,7 +60,7 @@ test('a `throw` arm throws rather than yielding a value', () => {
   // Admitted "because an arm that reports an impossible case is the commonest
   // arm a total `match` has".
   expect(outcome('match (1) { when 1: throw new RangeError("x"); }')).toBe('RangeError');
-  expect(evaluated('match (2) { when 1: throw new RangeError("x"); default: "fine"; }')).toBe('fine');
+  expect(evaluated('function f(x: number) { return match (x) { when 1: throw new RangeError("x"); default: "fine"; }; } f(2);')).toBe('fine');
 });
 
 test('every pattern form works as a clause pattern', () => {

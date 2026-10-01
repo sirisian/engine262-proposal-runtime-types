@@ -326,6 +326,8 @@ interface NarrowingFact {
   name: string;
   type: TypeRecord;
   excluded?: TypeRecord;
+  branches?: { whenTrue: TypeRecord | typeof empty, whenFalse: TypeRecord | typeof empty };
+  scalarExclusion?: TypeRecord;
   pattern?: ParseNode.MatchPattern;
   truthiness?: boolean;
   subjectType?: TypeRecord | null;
@@ -4816,6 +4818,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return mentionsTypeParameter(t) ? null : t;
   };
   const judgedType = (t: TypeRecord): TypeRecord | null => (mentionsTypeParameter(t) ? projectBound(t) : t);
+  // Proof domains never replace the parameter identity used for stores and returns.
+  const proofDomain = (name: string, written: TypeRecord): TypeRecord => mentionsTypeParameter(written)
+    ? (name !== NON_PATH ? lookup(`${name}.\u0000domain`) : null) ?? judgedType(written) ?? written : written;
 
   /**
    * The integers an integer type holds, as BigInt limits, or `null` where its
@@ -21493,8 +21498,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const base = singleNumericDomain(s);
             const literal = literalExpressionType(p.Literal);
             const digits = foldDecimal(p.Literal);
-            if (!base || !literal || literal.Kind !== 'literal' || !digits
-              || !literalFitsNumericType(literal, eraseMetadata(base))) return null;
+            if (!base || !literal || literal.Kind !== 'literal' || !digits) return null;
+            if (base.Kind === 'primitive' && base.Name === 'number') {
+              return exact(p.BareZero ? CanonicalizeType({ Kind: 'union', Members: [literal,
+                { ...literal, Value: Value(-0) } as TypeRecord] }) : literal);
+            }
+            if (!literalFitsNumericType(literal, eraseMetadata(base))) return null;
             const negativeZero = literal.Value instanceof NumberValue && Object.is(R(literal.Value), -0);
             const text = negativeZero ? '-0' : `${digits.sig}e${digits.exp}`;
             const at = { type: 'NumericLiteral', SourceText: text, value: Number(text) } as ParseNode.NumericLiteral;
@@ -21579,6 +21588,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && scalarPatternVerdict(pattern.Left) && scalarPatternVerdict(pattern.Right);
   };
 
+  const excludedScalars: TypeRecord[] = [];
+  const scalarKey = (name: string, type: TypeRecord): string => {
+    let index = excludedScalars.findIndex((entry) => SameType(entry, type));
+    if (index < 0) index = excludedScalars.push(type) - 1;
+    return `${name}.\u0000excluded${index}`;
+  };
+  const scalarMembers = (type: TypeRecord | typeof empty | null): TypeRecord[] => {
+    if (!type || type === empty) return [];
+    const members = type.Kind === 'union' ? type.Members : [type];
+    return members.every((member) => member.Kind === 'literal' && strictDomainMembers(member, '===')) ? [...members] : [];
+  };
+  const excludedByFact = (fact: NarrowingFact): { values: TypeRecord[], negated: boolean } => {
+    if (fact.scalarExclusion) {
+      const type = fact.scalarExclusion;
+      // Strict equality identifies both signs of zero, even when the operand
+      // explicitly writes a sign. Literal patterns retain their own semantics.
+      if (type.Kind === 'literal' && strictDomainMembers(type, '===') && numericValueOf(type.Value) === 0 && type.Base?.Kind === 'primitive'
+        && ['number', 'float16', 'float32', 'float64'].includes(type.Base.Name)) {
+        return { values: [0, -0].map((zero) => ({ ...type, Value: (type.Base as { Name: string }).Name === 'number'
+          ? Value(zero) : new TypedNumberValue(zero, type.Base as never) }) as TypeRecord), negated: fact.negated };
+      }
+      return { values: scalarMembers(type), negated: fact.negated };
+    }
+    let pattern = fact.pattern;
+    let negated = fact.negated;
+    while (pattern?.type === 'MatchNotPattern') {
+      negated = !negated;
+      pattern = pattern.Operand;
+    }
+    if (pattern?.type !== 'MatchLiteralPattern') return { values: [], negated };
+    const written = lookup(fact.name) ?? fact.subjectType;
+    const source = written ? proofDomain(fact.name, written) : null;
+    const branches = source ? patternBranches(source, pattern) : null;
+    return { values: scalarMembers(branches?.match ?? null), negated };
+  };
+  const scalarFactExcluded = (fact: NarrowingFact): boolean => {
+    if (fact.name === NON_PATH) return false;
+    const { values } = excludedByFact(fact);
+    return values.length > 0 && values.every((type) => !!lookup(scalarKey(fact.name, type)));
+  };
+  const recordScalarExclusion = (fact: NarrowingFact, sense: boolean): void => {
+    if (fact.name === NON_PATH) return;
+    const { values, negated } = excludedByFact(fact);
+    if (sense !== negated) return;
+    for (const type of values) declareNarrowed(scalarKey(fact.name, type), anyTypeRecord);
+  };
   /**
    * The Static Types a fact gives the two branches of its test: NarrowTo of
    * what the test establishes where it succeeds and NarrowFrom of what it
@@ -21586,7 +21641,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * operand's own Static Type where the place has not been narrowed.
    */
   const branchTypes = (fact: NarrowingFact) => {
-    const source = (fact.name !== NON_PATH ? lookup(fact.name) : null) ?? fact.subjectType ?? anyTypeRecord;
+    const written = (fact.name !== NON_PATH ? lookup(fact.name) : null) ?? fact.subjectType ?? anyTypeRecord;
+    const source = proofDomain(fact.name, written);
+    if (fact.branches) return { source,
+      whenTrue: fact.branches[fact.negated ? 'whenFalse' : 'whenTrue'],
+      whenFalse: fact.branches[fact.negated ? 'whenTrue' : 'whenFalse'] };
     if (fact.truthiness) {
       const expanded = expandClosed(source);
       return { source, whenTrue: fact.negated ? falsyPartOf(expanded) : truthyPartOf(expanded),
@@ -21617,7 +21676,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const truthinessOperandTypes = new Set(['IdentifierReference', 'MemberExpression', 'CallExpression', 'OptionalExpression',
     'ThisExpression', 'ObjectLiteral', 'ArrayLiteral', 'FunctionExpression', 'ArrowFunction', 'ClassExpression',
-    'TemplateLiteral', 'NewExpression', 'StringLiteral', 'NumericLiteral', 'NullLiteral', 'BigIntLiteral', 'RegularExpressionLiteral']);
+    'TemplateLiteral', 'NewExpression', 'StringLiteral', 'NumericLiteral', 'NullLiteral', 'BigIntLiteral', 'RegularExpressionLiteral', 'AwaitExpression']);
   const isUnshadowedGlobal = (node: ParseNode | null | undefined, name: string): boolean => {
     const core = node ? unparenthesized(node) ?? node : null;
     return !!core && core.type === 'IdentifierReference' && (core as unknown as { name: string }).name === name && !shadowedByProgram(name);
@@ -21673,7 +21732,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `Number` statics declare no BigInt overload, so a BigInt keeps the
    * existing signature there.
    */
-  const predicateAnswer = (call: ParseNode): boolean | undefined => {
+  const predicatePartition = (call: ParseNode): { argument: ParseNode, source: TypeRecord, members: TypeRecord[], answers: (boolean | undefined)[] } | undefined => {
     const c = call as unknown as { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
     const args = c.Arguments ?? [];
     if (!c.CallExpression || args.length !== 1 || /Spread|Rest/.test(args[0]?.type ?? '')) return undefined;
@@ -21685,9 +21744,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : global ?? (statik && ['isNaN', 'isFinite', 'isInteger', 'isSafeInteger'].includes(statik) ? statik : undefined);
     if (!which) return undefined;
     const argument = staticType(args[0]);
-    const judged = argument && argument.Kind !== 'any' ? judgedType(argument) : null;
+    const judged = argument && argument.Kind !== 'any' ? judgedType(proofDomain(narrowableName(args[0]) ?? NON_PATH, argument)) : null;
     if (!judged) return undefined;
-    const answers = (judged.Kind === 'union' ? judged.Members as TypeRecord[] : [judged]).map((member): boolean | undefined => {
+    const members = judged.Kind === 'union' ? judged.Members as TypeRecord[] : [judged];
+    const answers = members.map((member): boolean | undefined => {
       const m = member.Kind === 'parameterized' ? numericBase(member) : member;
       // `Array.isArray` answers by kind: never for a primitive, always for an
       // array or a tuple, whose values are Arrays.
@@ -21718,8 +21778,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (m.Kind === 'primitive' && m.Name === 'bigint' && global) return which === 'isFinite';
       return undefined;
     });
-    return answers.length > 0 && answers.every((a) => a !== undefined && a === answers[0])
-      && libraryPredicateOrigin(call as ParseNode.CallExpression, global, statik, isArray) ? answers[0] : undefined;
+    return libraryPredicateOrigin(call as ParseNode.CallExpression, global, statik, isArray)
+      ? { argument: args[0], source: judged, members, answers } : undefined;
+  };
+  const predicateAnswer = (call: ParseNode): boolean | undefined => {
+    const partition = predicatePartition(call);
+    const answers = partition?.answers;
+    return answers?.length && answers.every((answer) => answer !== undefined && answer === answers[0]) ? answers[0] : undefined;
   };
   const judgeTruthiness = (test: ParseNode): void => {
     const core = stripTest(test);
@@ -21747,7 +21812,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (!t || t.Kind === 'any') return;
-    const judged = judgedType(t);
+    const judged = judgedType(proofDomain(narrowableName(core) ?? NON_PATH, t));
     if (!judged) return;
     const settled = settledTruthiness(judged);
     if (settled === undefined) return;
@@ -21766,6 +21831,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!afterTypeEvaluation && fact.type?.Kind === 'parameterized') deferredGuardChecks.add(root);
     const { source } = branchTypes(fact);
     if (source.Kind === 'any') return;
+    if (scalarFactExcluded(fact)) {
+      pushImpossibleTest(excludedByFact(fact).negated ? 'never-fails' : 'never-succeeds', fact.display ?? displayType(fact.type));
+      return;
+    }
     if (fact.verdict) {
       pushImpossibleTest(fact.verdict, fact.display ?? displayType(fact.type));
       return;
@@ -21778,6 +21847,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       verdict = !branches ? null
         : branches.match === empty && branches.matchStable ? 'never-succeeds'
           : branches.miss === empty && branches.missStable ? 'never-fails' : null;
+    } else if (fact.branches) {
+      verdict = fact.branches.whenTrue === empty ? 'never-succeeds' : fact.branches.whenFalse === empty ? 'never-fails' : null;
     } else {
       verdict = impossibleVerdict(source, fact.type, fact.excluded ?? fact.type);
     }
@@ -21839,15 +21910,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
   /**
-   * A test every member of whose subject answers the same way is a verdict;
-   * one every member answers, some each way, narrows to the members answering
-   * *true*. Members with no established answer leave the test undecided.
+   * Each member supplies an independent answer. Unknown members survive both
+   * edges; a verdict requires every member to give the same known answer.
    */
   const decidedMembersFact = (name: string | null, s: TypeRecord, decide: (m: TypeRecord) => boolean | undefined,
-    display: string, negated: boolean): NarrowingFact | undefined => {
+    display: string, negated: boolean, partial = false): NarrowingFact | undefined => {
     const members = s.Kind === 'union' ? s.Members as TypeRecord[] : [s];
     const answers = members.map(decide);
-    if (answers.some((a) => a === undefined)) return undefined;
+    if (answers.every((a) => a === undefined) || (!partial && answers.some((a) => a === undefined))) return undefined;
     const allTrue = answers.every((a) => a === true);
     const allFalse = answers.every((a) => a === false);
     if (allTrue || allFalse) {
@@ -21857,7 +21927,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } as NarrowingFact;
     }
     if (name === null) return undefined;
-    return { name, type: unionOf(members.filter((_, i) => answers[i])) as TypeRecord, subjectType: s, negated, display } as NarrowingFact;
+    return { name, type: s, subjectType: s, negated, display, branches: {
+      whenTrue: unionOf(members.filter((_, i) => answers[i] !== false)),
+      whenFalse: unionOf(members.filter((_, i) => answers[i] !== true)),
+    } };
   };
   const lengthComparisonFact = (a: ParseNode, operator: string, b: ParseNode): NarrowingFact | undefined => {
     for (const [side, other] of [[a, b], [b, a]] as const) {
@@ -21882,7 +21955,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // by the operand's type; `null` where a member's tag is not known.
   const typeofTagsOf = (operand: ParseNode): string[] | null => {
     const written = staticType(operand);
-    const t = written && written.Kind !== 'any' ? judgedType(written) : null;
+    const t = written && written.Kind !== 'any' ? judgedType(proofDomain(narrowableName(operand) ?? NON_PATH, written)) : null;
     if (!t) return null;
     const tags = (t.Kind === 'union' ? t.Members as TypeRecord[] : [t]).map((m) => typeofTagOfType(m));
     return tags.every((tag) => tag !== null) ? [...new Set(tags as string[])] : null;
@@ -22097,7 +22170,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (key !== null && subject) {
           const receiver = narrowableName(rel.ShiftExpression);
           const constructing = receiver !== null && receiver.split(/[.[]/)[0] === 'this';
-          const fact = decidedMembersFact(receiver, subject, (m) => keyPresence(m, key, constructing), `${JSON.stringify(key)} in`, false);
+          const fact = decidedMembersFact(receiver, subject, (m) => keyPresence(m, key, constructing), `${JSON.stringify(key)} in`, negated, true);
           if (fact) return fact;
         }
       }
@@ -22173,7 +22246,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const current = (operandName !== NON_PATH ? lookup(operandName) : null) ?? operandType;
           // #sec-type-parameters: a bounded parameter is judged by its bound.
-          const tagged = current && mentionsTypeParameter(current) ? projectBound(current) ?? current : current;
+          const tagged = current ? proofDomain(operandName, current) : current;
           if (current && tagged && typeofTagOfType(tagged) === tag) {
             return { name: operandName, type: current, subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display };
           }
@@ -22196,11 +22269,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // `typeof` is k". Where every member of the subject has a known tag,
           // that union is exactly the members carrying k - so `'number'` takes
           // every numeric type, not only `number`, in both branches.
-          if (operandName !== null && current && current.Kind === 'union') {
-            const tags = current.Members.map((m) => typeofTagOfType(m as TypeRecord));
+          if (operandName !== null && tagged?.Kind === 'union') {
+            const tags = tagged.Members.map((m) => typeofTagOfType(m as TypeRecord));
             if (tags.every((x) => x !== null)) {
-              const matching = current.Members.filter((_, i) => tags[i] === tag);
-              if (matching.length > 0 && matching.length < current.Members.length) {
+              const matching = tagged.Members.filter((_, i) => tags[i] === tag);
+              if (matching.length > 0 && matching.length < tagged.Members.length) {
                 const partition = matching.length === 1 ? matching[0] as TypeRecord : CanonicalizeType({ Kind: 'union', Members: matching } as TypeRecord) as TypeRecord;
                 return { name: operandName, type: partition, negated: writtenNegated };
               }
@@ -22288,7 +22361,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             lit = { ...lit, Base: numericSource, Value: new TypedNumberValue(R(lit.Value), numericSource as never) };
           }
           if (lit && (!loose || sameEqualityBase(source, lit))) {
-            return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: negated !== inverted };
+            return { name, type: lit as TypeRecord, subjectType: staticType(subject), negated: negated !== inverted,
+              ...(name !== NON_PATH && dataValuePlace(subject) && !changesPlace(against, name)
+                ? { scalarExclusion: lit as TypeRecord } : {}) };
           }
         }
       }
@@ -22374,6 +22449,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // The callee's type is reachable only now that a call-form alias resolves
     // at an annotation: [[Narrows]] has no source spelling, so a
     // constructed type behind an alias is the ONLY way a program states one.
+    if (e.type === 'CallExpression') {
+      const partition = predicatePartition(e);
+      const name = partition ? narrowableName(partition.argument) : null;
+      if (partition && name !== null && dataValuePlace(partition.argument)) {
+        const fact = decidedMembersFact(name, partition.source, (member) => partition.answers[partition.members.indexOf(member)], 'library predicate', negated, true);
+        if (fact) return fact;
+      }
+    }
     if (e.type === 'CallExpression' || e.type === 'TaggedTemplateExpression') {
       const facts = predicateFacts(e.type === 'CallExpression' ? e : templateCallView(e), false).map((fact) => ({ ...fact, negated }));
       if (facts.length) return { ...facts[0], additional: facts.slice(1) };
@@ -22384,7 +22467,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || (anyOperand && (e.type === 'CallExpression' || e.type === 'OptionalExpression')) ? subjectOf(e) : null;
     if (bareName !== null && !isLiteralOperand(e)) {
       const source = staticType(e);
-      if (source && source.Kind !== 'any' && !mentionsTypeParameter(source)) {
+      if (source && source.Kind !== 'any' && judgedType(source)) {
         return { name: bareName, type: source, subjectType: source, truthiness: true, negated };
       }
     }
@@ -22545,6 +22628,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type TestFlow = { whenTrue: FlowFacts | undefined, whenFalse: FlowFacts | undefined };
   type TestRequest = { deciding: boolean, truthiness: boolean, visit: boolean, result?: TestFlow };
   const assignmentTests = new Map<ParseNode.AssignmentExpression, TestRequest>();
+  const handledStoreEffects = new WeakSet<ParseNode>();
   const joinTestFlow = (results: readonly TestFlow[]): TestFlow => ({
     whenTrue: joinFlow(results.map((result) => result.whenTrue)),
     whenFalse: joinFlow(results.map((result) => result.whenFalse)),
@@ -22612,6 +22696,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return outgoing;
   };
   const invalidateCapturedReads = (): void => {
+    for (const name of assignedInsideFunction) invalidateNarrowing(name);
     for (const origin of capturedPlaces) {
       if ([...assignedInsideFunction].some((name) => origin.name === name || origin.name.startsWith(`${name}.`))) {
         invalidateNarrowing(origin.marker);
@@ -22619,16 +22704,83 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
   const invalidateCapturedAliases = (): void => {
+    for (const [owner, entries] of captureFlow()) {
+      for (const key of entries.keys()) {
+        const name = key.split('.\u0000')[0];
+        if (name.includes('.') || owner.bindingKinds.get(name)?.endsWith('-ref')) invalidateNarrowing(name);
+      }
+    }
     for (const origin of capturedPlaces) {
       const rootName = origin.name.split('.')[0];
       if (origin.name.includes('.') || bindingKindOf(rootName)?.endsWith('-ref')) invalidateNarrowing(origin.name);
     }
   };
+  type SavedPredicate = { result: TestFlow, origins: CapturedPlace[] };
+  const savedPredicates = new WeakMap<Frame, Map<string, SavedPredicate>>();
+  const rememberPredicate = (owner: Frame, name: string, initializer: ParseNode, result: TestFlow): void => {
+    const origins: CapturedPlace[] = [];
+    const names = new Set([...result.whenTrue ?? [], ...result.whenFalse ?? []].flatMap(([, entries]) => [...entries.keys()]));
+    const subjectExpression = (node: unknown, subject: string): ParseNode | undefined => {
+      if (!node || typeof node !== 'object') return undefined;
+      if (Array.isArray(node)) return node.map((child) => subjectExpression(child, subject)).find(Boolean);
+      const candidate = node as ParseNode;
+      if (typeof candidate.type !== 'string') return undefined;
+      if (['IdentifierReference', 'MemberExpression', 'ThisExpression', 'TopicReference'].includes(candidate.type)
+        && narrowableName(candidate) === subject && dataValuePlace(candidate)) return candidate;
+      for (const [key, child] of Object.entries(candidate)) {
+        if (['parent', 'location', 'sourceText', 'TypeAnnotation'].includes(key)) continue;
+        const found = subjectExpression(child, subject);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    for (const key of names) {
+      const subject = key.split('.\u0000')[0];
+      if (subject === name || origins.some((origin) => origin.name === subject) || changesPlace(initializer, subject)) continue;
+      const expression = subjectExpression(initializer, subject);
+      const origin = expression ? capturePlace(expression) : undefined;
+      if (origin) origins.push(origin);
+    }
+    if (!origins.length) return;
+    if (!savedPredicates.has(owner)) savedPredicates.set(owner, new Map());
+    savedPredicates.get(owner)!.set(name, { result, origins });
+  };
+  const savedPredicateResult = (expression: ParseNode): TestFlow | undefined => {
+    const core = unparenthesized(expression);
+    if (core.type !== 'IdentifierReference') return undefined;
+    const saved = savedPredicates.get(flowOwner(core.name))?.get(core.name);
+    if (!saved) return undefined;
+    const entry = captureFlow();
+    const apply = (facts: FlowFacts | undefined, sense: boolean): FlowFacts | undefined => {
+      restoreFlow(entry);
+      if (!facts) return undefined;
+      for (const origin of saved.origins) {
+        if (!placeStillCaptured(origin)) continue;
+        for (const [name, type] of facts.get(origin.owner) ?? []) {
+          if (name === origin.name || name === `${origin.name}.\u0000domain` || name.startsWith(`${origin.name}.\u0000excluded`)) {
+            const current = lookup(name);
+            const narrowed = current ? NarrowTo(current, type) : type;
+            if (narrowed !== empty) declareNarrowed(name, narrowed);
+          }
+        }
+      }
+      const source = staticType(core);
+      if (source) factFlow({ name: core.name, type: source, subjectType: source, truthiness: true, negated: false }, sense);
+      return normalFlow();
+    };
+    const result = { whenTrue: apply(saved.result.whenTrue, true), whenFalse: apply(saved.result.whenFalse, false) };
+    restoreFlow(entry);
+    return result;
+  };
   const factFlow = (fact: NarrowingFact, sense: boolean): FlowFacts => {
     for (const entry of [fact, ...(fact.additional ?? [])]) {
       const narrowed = branchTypes(entry)[sense ? 'whenTrue' : 'whenFalse'];
+      recordScalarExclusion(entry, sense);
       if (narrowed !== empty && entry.name !== NON_PATH && !entry.verdict) {
-        declareNarrowed(entry.name, narrowed as Known);
+        const written = lookup(entry.name) ?? entry.subjectType;
+        if (written && mentionsTypeParameter(written)) {
+          if (!mentionsTypeParameter(narrowed)) declareNarrowed(`${entry.name}.\u0000domain`, narrowed);
+        } else declareNarrowed(entry.name, narrowed as Known);
       }
     }
     return captureFlow();
@@ -22750,7 +22902,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const commonEqualityDomain = (left: readonly TypeRecord[], right: readonly TypeRecord[]): TypeRecord | typeof empty =>
     unionOf(left.filter((a) => right.some((b) => equalityCompatible(a, b))));
 
-  type OptionalResult = { evaluated: FlowFacts | undefined, skipped: FlowFacts | undefined, type: Known, origins: CapturedPlace[] };
+  type OptionalResult = { evaluated: FlowFacts | undefined, skipped: FlowFacts | undefined, type: Known, skippedType?: TypeRecord, origins: CapturedPlace[] };
   const visitOptionalResult = (node: ParseNode.OptionalExpression, visit: boolean): OptionalResult => {
     const live = flowLive;
     const skipped: FlowFacts[] = [];
@@ -22767,18 +22919,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     clearAccessors();
     return { evaluated: live ? edges.whenTrue : undefined, skipped: live ? edges.whenFalse : undefined, type: staticType(view.expression), origins };
   };
+  const optionalProducer = (node: ParseNode): { node: ParseNode.OptionalExpression, tagged: boolean } | undefined => {
+    const core = unparenthesized(node);
+    const tagged = core.type === 'UnaryExpression' && core.operator === 'typeof';
+    const operand = tagged ? unparenthesized(core.UnaryExpression) : core;
+    return operand.type === 'OptionalExpression' ? { node: operand, tagged } : undefined;
+  };
+  const visitOptionalProducer = (producer: NonNullable<ReturnType<typeof optionalProducer>>, visit: boolean): OptionalResult => {
+    const result = visitOptionalResult(producer.node, visit);
+    if (producer.tagged) {
+      const members = result.type?.Kind === 'union' ? result.type.Members : result.type ? [result.type] : [];
+      const tags = members.map(typeofTagOfType);
+      result.type = unionOf((tags.length && tags.every((tag) => tag !== null) ? tags : allTypeofTags)
+        .map((tag) => ({ Kind: 'literal', Value: Value(tag!), Base: makePrimitive('string') }) as TypeRecord)) as Known;
+      result.skippedType = { Kind: 'literal', Value: Value('undefined'), Base: makePrimitive('string') } as TypeRecord;
+    }
+    return result;
+  };
   const optionalSelection = (result: OptionalResult, selected: Known, operator: string): TestFlow | null => {
     const members = strictDomainMembers(selected, operator);
     const evaluated = strictDomainMembers(result.type, operator);
     if (!members || !evaluated) return null;
-    const skippedCanMatch = members.some((member) => equalityCompatible(undefinedType, member));
+    const skippedType = result.skippedType ?? undefinedType;
+    const skippedCanMatch = members.some((member) => equalityCompatible(skippedType, member));
     const evaluatedCanMatch = commonEqualityDomain(evaluated, members) !== empty;
-    const onlyUndefined = members.length > 0 && members.every((member) => SameType(member, undefinedType));
-    const evaluatedOnlyUndefined = evaluated.length > 0 && evaluated.every((member) => SameType(member, undefinedType));
+    const singleton = (member: TypeRecord) => member.Kind === 'literal' || SameType(member, undefinedType)
+      || SameType(member, makePrimitive('null'));
+    const sameValue = (left: readonly TypeRecord[], right: readonly TypeRecord[]) => left.length > 0 && right.length > 0
+      && left.every((a) => singleton(a) && right.every((b) => singleton(b) && SameType(a, b)));
+    const evaluatedAlwaysMatches = sameValue(evaluated, members);
+    const skippedAlwaysMatches = sameValue([skippedType], members);
     return {
       whenTrue: joinFlow([evaluatedCanMatch ? result.evaluated : undefined, skippedCanMatch ? result.skipped : undefined]),
-      whenFalse: joinFlow([onlyUndefined && evaluatedOnlyUndefined ? undefined : result.evaluated,
-        onlyUndefined ? undefined : result.skipped]),
+      whenFalse: joinFlow([evaluatedAlwaysMatches ? undefined : result.evaluated,
+        skippedAlwaysMatches ? undefined : result.skipped]),
     };
   };
   const replayOptionalEffects = (result: OptionalResult, node: ParseNode): void => {
@@ -22843,14 +23017,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return constant === (test.operator === '===') ? result
           : { whenTrue: result.whenFalse, whenFalse: result.whenTrue };
       }
-      const leftCore = unparenthesized(left);
-      const rightCore = unparenthesized(right);
-      if ((leftCore.type === 'OptionalExpression') !== (rightCore.type === 'OptionalExpression')) {
+      const leftOptional = optionalProducer(left);
+      const rightOptional = optionalProducer(right);
+      if (!!leftOptional !== !!rightOptional) {
         if (visit) staticType(test);
         let selected: Known;
         let result: OptionalResult;
-        if (leftCore.type === 'OptionalExpression') {
-          result = visitOptionalResult(leftCore, visit);
+        if (leftOptional) {
+          result = visitOptionalProducer(leftOptional, visit);
           resumeFlow(joinFlow([result.evaluated, result.skipped]));
           selected = singleValueOperandType(right) ?? staticType(right);
           if (visit) walk(right);
@@ -22860,7 +23034,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           selected = singleValueOperandType(left) ?? staticType(left);
           if (visit) walk(left);
           else previewFlowEffects(left);
-          result = visitOptionalResult(rightCore as ParseNode.OptionalExpression, visit);
+          result = visitOptionalProducer(rightOptional!, visit);
         }
         resumeFlow(joinFlow([result.evaluated, result.skipped]));
         const ordinary = testResultOfVisited(test, visit && deciding, visit && truthiness);
@@ -23004,14 +23178,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       resumeFlow(selected.whenFalse);
       const present = source ? NarrowFrom(source, nullishType()) : null;
       const leftTruth = present && present !== empty ? settledTruthiness(present) : undefined;
+      const presentResult = testResultOfVisited(left, false, false);
       resumeFlow(selected.whenTrue);
       const rightType = staticType(right);
       const rightTruth = rightType ? settledTruthiness(rightType) : undefined;
       const fallback = walkTest(right, deciding, truthiness, visit);
       return {
-        whenTrue: joinFlow([leftTruth === false ? undefined : selected.whenFalse,
+        whenTrue: joinFlow([leftTruth === false ? undefined : presentResult.whenTrue,
           rightTruth === false ? undefined : fallback.whenTrue]),
-        whenFalse: joinFlow([leftTruth === true ? undefined : selected.whenFalse,
+        whenFalse: joinFlow([leftTruth === true ? undefined : presentResult.whenFalse,
           rightTruth === true ? undefined : fallback.whenFalse]),
       };
     }
@@ -23022,6 +23197,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       resumeFlow(condition.whenFalse);
       const no = walkTest(test.AssignmentExpression_b, deciding, truthiness, visit);
       return { whenTrue: joinFlow([yes.whenTrue, no.whenTrue])!, whenFalse: joinFlow([yes.whenFalse, no.whenFalse])! };
+    }
+    const saved = savedPredicateResult(test);
+    if (saved) {
+      if (visit) walk(test);
+      else previewFlowEffects(test);
+      if (visit && deciding && truthiness) judgeTruthiness(test);
+      return saved;
     }
     const request = narrowingRequestOf(test);
     if (visit && request) narrowingRequestsHere.push(request);
@@ -23093,6 +23275,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const testResultOfVisited = (test: ParseNode, deciding: boolean, truthiness: boolean): TestFlow => {
+    const saved = savedPredicateResult(test);
+    if (saved) return saved;
     const entry = captureFlow();
     const fact = narrowingFactOf(test, true);
     if (deciding && fact) judgeFact(fact);
@@ -23106,6 +23290,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { whenTrue: truth === false ? undefined : whenTrue, whenFalse: truth === true ? undefined : whenFalse };
   };
 
+  const storedDomain = (source: Known, target: Known): Known => {
+    if (!source || !target || source.Kind === 'any' || target.Kind === 'any'
+      || mentionsTypeParameter(source) || mentionsTypeParameter(target)) return null;
+    const targets = target.Kind === 'union' ? target.Members : [target];
+    if (targets.some(conversionHasEffect)) return null;
+    const sources = source.Kind === 'union' ? source.Members : [source];
+    const results: TypeRecord[] = [];
+    for (const member of sources) {
+      // Immutable scalar values can keep their precise domain. Objects and
+      // callables keep the selected declared view: a source shape must not
+      // change a mutable field, predicate, or contextual-void contract.
+      if (primitiveBased(member) && IsSubtype(member, target, [])) results.push(member);
+      else {
+        const selected = targets.filter((contract) => IsSubtype(member, contract, [])
+          || member.Kind === 'literal' && literalFitsNumericType(member, contract));
+        if (!selected.length) return null;
+        results.push(...selected);
+      }
+    }
+    return results.length ? unionOf(results) as Known : null;
+  };
+  const publishStoredDomain = (target: ParseNode, source: Known, rhs?: ParseNode): void => {
+    const name = narrowableName(target);
+    if (name === null || !dataValuePlace(target) || bindingKindOf(name.split('.')[0])?.endsWith('-ref')) return;
+    if (target.type !== 'IdentifierReference' && rhs
+      && (changesPlace(rhs, name, true) || containsCall(rhs) || containsPropertyRead(rhs))) return;
+    const contracts = locationWriteTypes(target);
+    if (contracts.length !== 1) return;
+    const domain = storedDomain(source, contracts[0]);
+    if (domain) declareNarrowed(name, domain);
+  };
   const assignmentStoreEffects = (target: ParseNode): void => {
     invalidatePlace(target);
     const kind = target.type === 'IdentifierReference' ? bindingKindOf(target.name) : undefined;
@@ -23657,6 +23872,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     || (t as unknown) === empty
     || (t?.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0);
 
+  const neverAwaitResults = new WeakMap<ParseNode.AwaitExpression, boolean>();
+  const establishedNeverAwait = (node: ParseNode.AwaitExpression): boolean => {
+    const operand = unparenthesized(node.UnaryExpression);
+    if (inferenceDepth > 0 && operand.type === 'CallExpression') {
+      const callee = callableForm(staticType(operand.CallExpression));
+      if (callee?.Kind !== 'function' || !callee.Signatures.length
+        || !callee.Signatures.every((signature) => isEmptyRecord(awaitedElementType(signature.Return)))) return false;
+    }
+    return isEmptyRecord(awaitedElementType(staticType(operand)));
+  };
   const neverCallResults = new WeakMap<ParseNode.CallExpression, boolean>();
   const establishedNeverCall = (node: ParseNode.CallExpression): boolean => {
     // A provisional inference seed is not a published non-returning contract.
@@ -23674,6 +23899,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || n.Arguments.some(nonReturningEvaluation);
       case 'ExpressionStatement': case 'IfStatement': case 'SwitchStatement': case 'WhileStatement':
         return nonReturningEvaluation(n.Expression);
+      case 'AwaitExpression': return (inferenceDepth === 0 ? neverAwaitResults.get(n) ?? establishedNeverAwait(n) : establishedNeverAwait(n))
+        || nonReturningEvaluation(n.UnaryExpression);
       case 'UnaryExpression': return nonReturningEvaluation(n.UnaryExpression);
       case 'AssignmentExpression': return nonReturningEvaluation(n.LeftHandSideExpression) || nonReturningEvaluation(n.AssignmentExpression);
       case 'CommaOperator': return n.ExpressionList.some(nonReturningEvaluation);
@@ -23769,10 +23996,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           missed = captureFlow();
           restoreFlow(clauseEntry);
         }
+        if (missed && subjectName !== null && subjectStable && dataValuePlace(me.Expression) && clause.Pattern) {
+          restoreFlow(missed);
+          recordScalarExclusion({ name: subjectName, type: anyTypeRecord, subjectType: before,
+            pattern: clause.Pattern, negated: false }, false);
+          missed = captureFlow();
+          restoreFlow(clauseEntry);
+        }
         publishSubject(selected);
         // #sec-pattern-static-semantics: bounds supply universal verdicts,
         // without replacing a surviving parameter's identity in its bindings.
-        let patternDead = false;
+        let patternDead = subjectName !== null && !!clause.Pattern && scalarFactExcluded({ name: subjectName,
+          type: anyTypeRecord, subjectType: before, pattern: clause.Pattern, negated: false });
         if (before && before.Kind !== 'any' && clause.Pattern && scalarPatternVerdict(clause.Pattern)) {
           const domain = judgedType(before);
           const branches = domain ? patternBranches(domain, clause.Pattern) : null;
@@ -30504,9 +30739,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (single) judgeVoidOperands(single);
     const barrier = single && ['CallExpression', 'RefExpression', 'IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunction'].includes(single.type);
     if (barrier) invalidateMutableMetadataFacts();
+    if (single?.type === 'AssignmentExpression') handledStoreEffects.delete(single);
     walkNode(node);
     if (single?.type === 'MemberExpression' || single?.type === 'SuperProperty') invalidateCapturedReads();
-    if (capturedPlaces.size && single?.type === 'AssignmentExpression') {
+    if (capturedPlaces.size && single?.type === 'AssignmentExpression' && !handledStoreEffects.has(single)) {
       const target = patternExpression(single.LeftHandSideExpression);
       if (target) assignmentStoreEffects(target);
     }
@@ -31233,7 +31469,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'AwaitExpression': {
         const operand = n.UnaryExpression;
         checkAwaitAssimilation(operand);
+        const neverResumes = establishedNeverAwait(n);
+        neverAwaitResults.set(n, neverResumes);
         walk(operand);
+        invalidateCapturedAliases();
+        for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        if (neverResumes) flowLive = false;
         return;
       }
       case 'ImportCall':
@@ -32067,7 +32308,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         const booleanDiscriminant = booleanSingleton(singleValueOperandType(expression) ?? staticType(expression));
-        const optionalResult = expression.type === 'OptionalExpression' ? visitOptionalResult(expression, true) : undefined;
+        const switchOrigin = capturePlace(expression);
+        const switchOrigins = switchOrigin ? [switchOrigin] : [];
+        const switchType = staticType(expression);
+        let savedBoolean = savedPredicateResult(expression);
+        const producer = optionalProducer(expression);
+        const optionalResult = producer ? visitOptionalProducer(producer, true) : undefined;
         if (optionalResult) resumeFlow(joinFlow([optionalResult.evaluated, optionalResult.skipped]));
         else walk(expression);
         const discriminant = expression.type === 'UnaryExpression' && expression.operator === 'typeof'
@@ -32105,7 +32351,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 coveredRanges.push(interval);
               }
             }
+            const labelOrigin = capturePlace(label);
+            if (labelOrigin) switchOrigins.push(labelOrigin);
+            const labelTypeBefore = staticType(label);
             walk(label);
+            if (savedBoolean) {
+              savedBoolean = effectOnTest(savedBoolean, () => previewFlowEffects(label));
+              const selected = booleanSingleton(singleValueOperandType(label) ?? staticType(label));
+              if (selected !== undefined) {
+                entries.set(clause, selected ? savedBoolean.whenTrue : savedBoolean.whenFalse);
+                failed = selected ? savedBoolean.whenFalse : savedBoolean.whenTrue;
+                if (selected) savedBoolean.whenTrue = undefined;
+                else savedBoolean.whenFalse = undefined;
+                continue;
+              }
+            }
             if (optionalResult) {
               replayOptionalEffects(optionalResult, label);
               const selection = optionalSelection(optionalResult, singleValueOperandType(label) ?? staticType(label), '===');
@@ -32114,7 +32374,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // Ordered failures are a constraint on each alternative, too.
                 // A label for undefined removes the skipped alternative.
                 const labelType = singleValueOperandType(label) ?? staticType(label);
-                if (labelType && SameType(labelType, undefinedType)) optionalResult.skipped = undefined;
+                if (labelType && SameType(labelType, optionalResult.skippedType ?? undefinedType)) optionalResult.skipped = undefined;
                 failed = selection.whenFalse;
                 continue;
               }
@@ -32139,9 +32399,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const type = atom?.type ?? (label.type === 'IdentifierReference' ? classTypeOf(label.name) : null);
               if (type) fact = { name, type, subjectType, negated: false };
             }
-            entries.set(clause, fact ? factFlow(fact, true) : after);
+            let selected: FlowFacts | undefined = fact ? factFlow(fact, true) : after;
+            if (!fact && !producer) {
+              const left = strictDomainMembers(switchType, '===');
+              const right = strictDomainMembers(labelTypeBefore, '===');
+              if (left && right) {
+                const a = commonEqualityDomain(left, right);
+                const b = commonEqualityDomain(right, left);
+                if (a === empty || b === empty) selected = undefined;
+                else {
+                  if (placeStillCaptured(switchOrigin) && switchOrigin.data) declareNarrowed(switchOrigin.name, a);
+                  if (placeStillCaptured(labelOrigin) && labelOrigin.data) declareNarrowed(labelOrigin.name, b);
+                  selected = normalFlow();
+                }
+              }
+            }
+            if (labelOrigin) {
+              const released = releaseCapturedPlaces({ whenTrue: selected, whenFalse: after }, [labelOrigin]);
+              selected = released.whenTrue;
+              restoreFlow(released.whenFalse);
+            }
+            entries.set(clause, selected);
             restoreFlow(after);
             failed = fact ? factFlow(fact, false) : after;
+            if (labelOrigin) failed?.get(labelOrigin.owner)?.delete(labelOrigin.marker);
           }
           if (block.DefaultClause) entries.set(block.DefaultClause, failed);
           let fallthrough: FlowFacts | undefined;
@@ -32152,8 +32433,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           resumeFlow(joinFlow([fallthrough, ...takeFlowExits(n, 'break'),
             !block.DefaultClause && !switchCoversDiscriminant(n) ? failed : undefined]));
         });
-        if (optionalResult) {
-          const released = releaseCapturedPlaces({ whenTrue: normalFlow(), whenFalse: undefined }, optionalResult.origins);
+        if (optionalResult || switchOrigins.length) {
+          const released = releaseCapturedPlaces({ whenTrue: normalFlow(), whenFalse: undefined }, [...(optionalResult?.origins ?? []), ...switchOrigins]);
           resumeFlow(released.whenTrue);
         }
         return;
@@ -32200,7 +32481,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             requireBindingType(inferred);
             declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null, bindingFrame);
-            walk(n.TypedInitializer.AssignmentExpression);
+            if (isConstDeclaration && booleanType(inferred)) {
+              const result = walkTest(n.TypedInitializer.AssignmentExpression, false, false);
+              resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
+              rememberPredicate(bindingFrame, n.BindingIdentifier.name, n.TypedInitializer.AssignmentExpression, result);
+            } else walk(n.TypedInitializer.AssignmentExpression);
+            const domain = storedDomain(inferred, inferred ? widen(inferred) : null);
+            if (domain) declareNarrowed(n.BindingIdentifier.name, domain);
             return;
           }
           const declared = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
@@ -32242,6 +32529,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               elidableAnnotations.add(n.TypeAnnotation);
             }
           }
+          let initialized: Known = null;
+          let predicate: TestFlow | undefined;
           if (n.Initializer) {
             if ((n as { Ref?: boolean }).Ref) {
               requireBorrowable(n.Initializer);
@@ -32250,7 +32539,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             withProvenance(n.Initializer, () => requireAssignable((n as { Ref?: boolean }).Ref
               ? locationType(n.Initializer!) : staticTypeIn(n.Initializer!, declared), declared));
-            walk(n.Initializer);
+            initialized = staticType(n.Initializer);
+            if (isConstDeclaration && booleanType(declared ?? (constInitializerParticipates(n.Initializer) ? initialized : null))
+              && !(n as { Ref?: boolean }).Ref) {
+              predicate = walkTest(n.Initializer, false, false);
+              resumeFlow(joinFlow([predicate.whenTrue, predicate.whenFalse]));
+            } else walk(n.Initializer);
           }
           // A `const` bound to a compile-time numeric constant behaves as if
           // its initializer were written at each use: `const K = 3.14` used in
@@ -32302,6 +32596,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (inferred && inferred.Kind !== 'any') {
               inferredConstTypes.set(n, inferred);
               declare(n.BindingIdentifier.name, inferred, bindingFrame);
+              if (predicate) rememberPredicate(bindingFrame, n.BindingIdentifier.name, newInit, predicate);
               return;
             }
           }
@@ -32346,6 +32641,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           declare(n.BindingIdentifier.name, declared, bindingFrame);
+          if (!(n as { Ref?: boolean }).Ref) {
+            const domain = storedDomain(initialized, declared);
+            if (domain) declareNarrowed(n.BindingIdentifier.name, domain);
+            if (predicate && n.Initializer) rememberPredicate(bindingFrame, n.BindingIdentifier.name, n.Initializer, predicate);
+          }
           const fact = metadataFact(n.Initializer);
           setMetadataFact(bindingFrame, n.BindingIdentifier.name,
             fact && (!declared || declared.Kind === 'primitive') ? (fact.Kind === 'primitive' ? declared ?? fact : fact) : undefined,
@@ -33291,28 +33591,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const onTrue = a.AssignmentOperator !== '||=';
           const request = assignmentTests.get(assignment);
           const written = runFlow(onTrue ? branches.whenTrue : branches.whenFalse, () => {
+            const stored = staticType(a.AssignmentExpression);
             if (request) {
               const result = walkTest(a.AssignmentExpression, request.deciding, request.truthiness);
               request.result = assignmentResult(assignment, result, onTrue ? branches.whenFalse : branches.whenTrue);
               resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
             } else walk(a.AssignmentExpression);
-            invalidatePlace(a.LeftHandSideExpression);
+            assignmentStoreEffects(a.LeftHandSideExpression);
+            handledStoreEffects.add(assignment);
+            publishStoredDomain(a.LeftHandSideExpression, stored, a.AssignmentExpression);
           });
           resumeFlow(joinFlow([written, onTrue ? branches.whenFalse : branches.whenTrue]));
         } else {
           walk(a.LeftHandSideExpression);
+          const stored = a.AssignmentOperator === '=' ? staticType(a.AssignmentExpression) : null;
           const request = assignmentTests.get(assignment);
           if (request) {
             const result = walkTest(a.AssignmentExpression, request.deciding, request.truthiness);
             request.result = assignmentResult(assignment, result, undefined);
             resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
           } else walk(a.AssignmentExpression);
-          const stored = a.AssignmentOperator === '=' ? staticType(a.AssignmentExpression) : null;
           const retain = preserved && stored && stored.Kind !== 'any' && !mentionsTypeParameter(stored)
             && !metadataFlowInputs.has(preserved) && IsSubtype(stored, preserved, [])
             && storedName !== null && !changesPlace(a.AssignmentExpression, storedName, true);
-          invalidatePlace(a.LeftHandSideExpression);
+          assignmentStoreEffects(a.LeftHandSideExpression);
+          handledStoreEffects.add(assignment);
           if (retain) declareNarrowed(storedName!, preserved);
+          publishStoredDomain(a.LeftHandSideExpression, stored, a.AssignmentExpression);
         }
         return;
       }

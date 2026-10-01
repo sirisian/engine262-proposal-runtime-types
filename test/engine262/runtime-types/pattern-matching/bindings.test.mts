@@ -17,7 +17,7 @@ test('a binding binds, and the arm sees it', () => {
   expect(evaluated('String(match (5) { when const x: x + 1; });')).toBe('6');
   // Each clause gets a FRESH environment, so one arm's binding is invisible to
   // the next - asserted by binding the same name in two clauses.
-  expect(evaluated('String(match (2) { when 1: "one"; when let x: x * 3; });')).toBe('6');
+  expect(evaluated('function f(n: number) { return match (n) { when 1: "one"; when let x: x * 3; }; } String(f(2));')).toBe('6');
 });
 
 test('an ANNOTATED binding tests before it binds', () => {

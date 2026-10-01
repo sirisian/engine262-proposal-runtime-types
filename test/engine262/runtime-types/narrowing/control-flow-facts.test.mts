@@ -23,5 +23,5 @@ test.each([
   "function next(): string | null { return null; } function f(x: string | null) { while (x !== null) { if (x === 'q') break; x = next(); } if (x === null) {} } 'ok';",
   "function f(x: 'a' | 'b' | 'c') { switch (x) { case 'a': return 1; case 'b': break; } if (x === 'b') {} return 3; } 'ok';",
   "function f(x: string | null, y: string | null) { if (x === null && y === null) return; if (x === null) {} } 'ok';",
-  "let x: uint8 | string = 'a'; for (let i = 0; i < 2; i++) {} if (x is string) {} 'ok';",
+  "function f(x: uint8 | string) { for (let i = 0; i < 2; i++) {} if (x is string) {} } f('a'); 'ok';",
 ])("a test the joined paths leave open is accepted: %s", (source) => expect(ok(source)).toBe(true));

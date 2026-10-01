@@ -17,7 +17,7 @@ test.each([
 
 test.each([
   "const r = match (1) { when 1: 'one'; }; String(r);",
-  "const v: 1 | 2 = 2; const r = match (v) { when 1: 'a'; default: 'c'; }; String(r);",
+  "function readV(): 1 | 2 { return 2; } const v: 1 | 2 = readV(); const r = match (v) { when 1: 'a'; default: 'c'; }; String(r);",
   "const v: uint8 = 2; const r = match (v) { when 1: 'a'; when 2: 'b'; default: 'c'; }; String(r);",
 ])('a clause over a literal subject that can match is accepted: %s', (source) => expect(ok(source)).toBe(true));
 
@@ -30,7 +30,7 @@ test.each([
 
 test.each([
   "class U { m() {} } const u: U = new U(); if (typeof u === 'function') {} 'ok';",
-  "const f: ((x: uint8) => uint8) | null = null; let r = 0; if (typeof f === 'function') { r = 1; } String(r);",
+  "function readF(): ((x: uint8) => uint8) | null { return null; } const f: ((x: uint8) => uint8) | null = readF(); let r = 0; if (typeof f === 'function') { r = 1; } String(r);",
 ])('a typeof test that can go both ways is accepted: %s', (source) => expect(ok(source)).toBe(true));
 
 // -- string and boolean case labels ------------------------------------------------
@@ -42,7 +42,7 @@ test.each([
 
 test.each([
   "const v: 'a' | 'b' = 'a'; let r = 0; switch (v) { case 'a': r = 1; break; default: break; } String(r);",
-  "const v: string = 'a'; let r = 0; switch (v) { case 'z': r = 1; break; default: break; } String(r);",
+  "function readV(): string { return 'a'; } const v: string = readV(); let r = 0; switch (v) { case 'z': r = 1; break; default: break; } String(r);",
   'const b: true = true; let r = 0; switch (b) { case true: r = 1; break; default: break; } String(r);',
 ])('a literal case label the discriminant can hold is accepted: %s', (source) => expect(ok(source)).toBe(true));
 
@@ -66,5 +66,5 @@ test.each([
 ])('an optional chain whose receiver is always nullish is refused: %s', expectStaticTypeError);
 
 test('an optional chain whose receiver may be nullish is accepted', () => {
-  expect(ok('const o: { a: uint8 } | null = null; const r = o?.a; String(r);')).toBe(true);
+  expect(ok('function readO(): { a: uint8 } | null { return null; } const o: { a: uint8 } | null = readO(); const r = o?.a; String(r);')).toBe(true);
 });
