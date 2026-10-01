@@ -26,7 +26,7 @@ test('custom operators can accept a range, including derived comparisons', () =>
 });
 
 test('range equality and interval operations remain available', () => {
-  expect(evaluated('const r = uint8(1)..<uint8(3); String(r === r && r.contains(uint8(1)));')).toBe('true');
+  expect(evaluated('const r = uint8(1)..<uint8(3); const q = r; String(r === q && r.contains(uint8(1)));')).toBe('true');
 });
 
 test('a user class named Range does not acquire the built-in exclusion', () => {

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectEarlyError } from '../harness.mts';
+import { evaluated, expectEarlyError, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-patternmatches (PatternMatches) - the BINDING half.
@@ -38,8 +38,12 @@ test('a GUARD sees the pattern\'s bindings', () => {
   // "A guard runs after the pattern matches, with the pattern's bindings in
   // scope and the subject narrowed" - which is what makes a guard a refinement
   // of the clause rather than a second, independent test.
-  expect(evaluated('String(match (5) { when let x if (x > 3): "big"; default: "small"; });')).toBe('big');
-  expect(evaluated('String(match (2) { when let x if (x > 3): "big"; default: "small"; });')).toBe('small');
+  const size = 'function size(n: number) { return match (n) { when let x if (x > 3): "big"; default: "small"; }; }';
+  expect(evaluated(`${size} String(size(5));`)).toBe('big');
+  expect(evaluated(`${size} String(size(2));`)).toBe('small');
+  // A literal subject has its literal type, so a guard comparing it with a
+  // constant has a fixed answer and is refused (#sec-narrowfrom).
+  expectStaticTypeError('String(match (5) { when let x if (x > 3): "big"; default: "small"; });');
 });
 
 test('`is` creates an environment for its bindings too', () => {

@@ -4659,7 +4659,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
     return records.every((r) => r !== null) ? records as TypeRecord[] : null;
   };
-  const closedMembers = (t: TypeRecord): TypeRecord[] | null => enumeratorLiterals(t) ?? sealedAbstractSubclasses(t);
+  // `boolean` is read as `true | false` inside narrowing only; it stays a
+  // type distinct from that union (#sec-literal-types).
+  const booleanLiterals = (t: TypeRecord): TypeRecord[] | null => (t.Kind === 'primitive' && t.Name === 'boolean'
+    ? [Value.true, Value.false].map((v) => ({ Kind: 'literal', Value: v, Base: t }) as unknown as TypeRecord)
+    : null);
+  const closedMembers = (t: TypeRecord): TypeRecord[] | null => enumeratorLiterals(t) ?? sealedAbstractSubclasses(t)
+    ?? booleanLiterals(t);
   const unionOf = (members: readonly TypeRecord[]): TypeRecord | typeof empty => (members.length === 0 ? empty
     : members.length === 1 ? members[0] : CanonicalizeType({ Kind: 'union', Members: members } as TypeRecord) as TypeRecord);
   const expandClosed = (t: TypeRecord): TypeRecord => {
@@ -4790,8 +4796,94 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * never fail. A type the checker does not know is `any`, which narrows to
    * itself in both directions and so never has a verdict.
    */
+  /**
+   * #sec-type-parameters: an established upper bound supplies the contracts a
+   * generic body is checked against, a narrowing test among them, so a test is
+   * judged with each bounded parameter read as its bound. A verdict that holds
+   * for the bound holds for every specialization it admits. A parameter with
+   * no established bound gives no verdict.
+   */
+  const projectBound = (t: TypeRecord): TypeRecord | null => {
+    if (t.Kind === 'parameter') {
+      const bound = (t as { Constraint?: TypeRecord }).Constraint;
+      return bound && !mentionsTypeParameter(bound) ? bound : null;
+    }
+    if (t.Kind === 'union') {
+      const members = (t.Members as TypeRecord[]).map(projectBound);
+      return members.every((m) => m !== null) ? unionOf(members as TypeRecord[]) as TypeRecord : null;
+    }
+    return mentionsTypeParameter(t) ? null : t;
+  };
+  const judgedType = (t: TypeRecord): TypeRecord | null => (mentionsTypeParameter(t) ? projectBound(t) : t);
+
+  /**
+   * The integers an integer type holds, as BigInt limits, or `null` where its
+   * width is not known here.
+   */
+  const integerLimits = (t: TypeRecord): { lo: bigint, hi: bigint } | null => {
+    const integer = integerTypeOf(t);
+    if (!integer) return null;
+    const argument = (integer as { Arguments?: readonly unknown[] }).Arguments?.[0];
+    const width = typeof argument === 'number' ? argument : numericValueOf(literalValueOf(argument as TypeRecord));
+    if (width === undefined || !Number.isInteger(width) || width <= 0) return null;
+    const w = BigInt(width);
+    return (integer as { Name?: string }).Name === 'uint'
+      ? { lo: 0n, hi: (1n << w) - 1n }
+      : { lo: -(1n << (w - 1n)), hi: (1n << (w - 1n)) - 1n };
+  };
+  // A total order between a limit and a constant, either possibly infinite.
+  const compareLimit = (a: number | bigint, b: number): number => {
+    if (typeof a === 'bigint') {
+      if (Number.isNaN(b)) return Number.NaN;
+      if (!Number.isFinite(b)) return b > 0 ? -1 : 1;
+      if (Number.isInteger(b)) {
+        const bb = BigInt(b);
+        return a < bb ? -1 : a > bb ? 1 : 0;
+      }
+      const fa = Number(a);
+      return fa < b ? -1 : fa > b ? 1 : 0;
+    }
+    return a < b ? -1 : a > b ? 1 : a === b ? 0 : Number.NaN;
+  };
+  /**
+   * The values a member of a relational operand's type can take: its limits,
+   * and whether it can hold NaN. `null` where they are not known here; a
+   * parameterized member is left to the metadata row of #table-narrowing-forms.
+   */
+  const valueLimits = (m: TypeRecord): { lo: number | bigint, hi: number | bigint, nan: boolean } | null => {
+    if (m.Kind === 'parameterized') return null;
+    if (m.Kind === 'literal') {
+      const n = numericValueOf(m.Value);
+      return n === undefined ? null : { lo: n, hi: n, nan: Number.isNaN(n) };
+    }
+    const integer = integerLimits(m);
+    if (integer) return { ...integer, nan: false };
+    if (m.Kind === 'primitive' && (m.Name === 'number' || isFloatTypeName(m.Name as string))) return { lo: -Infinity, hi: Infinity, nan: true };
+    return null;
+  };
+  // Whether some value of a type can be NaN; unknown kinds answer *true*.
+  const canHoldNaN = (t: TypeRecord): boolean => {
+    const members = t.Kind === 'union' ? t.Members as TypeRecord[] : [t];
+    return members.some((m) => {
+      if (m.Kind === 'parameterized') return canHoldNaN(m.Base as TypeRecord);
+      if (m.Kind === 'literal') {
+        const n = numericValueOf(m.Value);
+        return n !== undefined && Number.isNaN(n);
+      }
+      if (integerTypeOf(m)) return false;
+      if (m.Kind === 'primitive') return !['bigint', 'string', 'boolean', 'null', 'undefined', 'symbol', 'type'].includes(m.Name as string);
+      if (isEnumType(m)) return (enumeratorLiterals(m) ?? [m]).some((e) => e === m || canHoldNaN(e));
+      return !['object', 'array', 'tuple', 'function', 'nominal'].includes(m.Kind);
+    });
+  };
+
   const impossibleVerdict = (s: TypeRecord, t: TypeRecord, excluded: TypeRecord = t): 'never-succeeds' | 'never-fails' | null => {
-    if (s.Kind === 'any' || mentionsTypeParameter(s) || mentionsTypeParameter(t) || mentionsTypeParameter(excluded)) return null;
+    if (s.Kind === 'any' || mentionsTypeParameter(t) || mentionsTypeParameter(excluded)) return null;
+    if (mentionsTypeParameter(s)) {
+      const bound = projectBound(s);
+      if (!bound) return null;
+      s = bound;
+    }
     // A DYNAMIC array tested against a TUPLE type is not decidable here, and
     // narrowing answers as though it were: `[].<uint8>` is not assignable to
     // `[uint8, ...string]`, so NarrowTo keeps no member and the test reads as
@@ -9679,6 +9771,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       taken.push(t as TypeRecord);
       if (remaining !== empty) remaining = NarrowFrom(remaining, t as TypeRecord);
     }
+  };
+
+  /**
+   * #sec-narrowfrom: a `switch` whose discriminant's members are all `boolean`,
+   * `null` or `undefined`, read as closed sets, has a dead `default` where its
+   * labels leave nothing.
+   */
+  const ownedAtomsCovered = (n: ParseNode): boolean => {
+    const disc = (n as { Expression?: ParseNode }).Expression;
+    const t = disc ? staticType(disc) : null;
+    if (!t || mentionsTypeParameter(t)) return false;
+    const members = t.Kind === 'union' ? t.Members as TypeRecord[] : [t];
+    const owned = (m: TypeRecord) => m.Kind === 'primitive' && ['boolean', 'null', 'undefined'].includes(m.Name as string);
+    if (!members.every(owned) || !members.some((m) => m.Kind === 'primitive' && m.Name === 'boolean')) return false;
+    const block = (n as { CaseBlock?: { CaseClauses_a?: readonly ParseNode[] | null, CaseClauses_b?: readonly ParseNode[] | null } }).CaseBlock;
+    let remaining: TypeRecord | typeof empty = t;
+    for (const clause of [...(block?.CaseClauses_a ?? []), ...(block?.CaseClauses_b ?? [])]) {
+      const label = (clause as { Expression?: ParseNode | null }).Expression;
+      const core = label ? unparenthesized(label) ?? label : null;
+      const labelType = core?.type === 'NullLiteral' ? makePrimitive('null')
+        : isUnshadowedGlobal(core, 'undefined') ? makePrimitive('undefined')
+          : label ? singleValueOperandType(label, remaining as Known) : null;
+      if (!labelType) return false;
+      remaining = narrowFromTested(remaining as TypeRecord, labelType);
+      if (remaining === empty) return true;
+    }
+    return false;
   };
 
   const switchCasesCoverDiscriminant = (n: ParseNode): boolean => {
@@ -21461,6 +21580,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const truthinessOperandTypes = new Set(['IdentifierReference', 'MemberExpression', 'CallExpression', 'OptionalExpression',
     'ThisExpression', 'ObjectLiteral', 'ArrayLiteral', 'FunctionExpression', 'ArrowFunction', 'ClassExpression',
     'TemplateLiteral', 'NewExpression', 'StringLiteral', 'NumericLiteral', 'NullLiteral', 'BigIntLiteral', 'RegularExpressionLiteral']);
+  const isUnshadowedGlobal = (node: ParseNode | null | undefined, name: string): boolean => {
+    const core = node ? unparenthesized(node) ?? node : null;
+    return !!core && core.type === 'IdentifierReference' && (core as unknown as { name: string }).name === name && !shadowedByProgram(name);
+  };
+  // `Number.<name>`, with `Number` the unshadowed global.
+  const numberStaticName = (node: ParseNode | null | undefined): string | null => {
+    const core = node ? unparenthesized(node) ?? node : null;
+    if (!core || core.type !== 'MemberExpression') return null;
+    const m = core as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+    return m.IdentifierName?.name && isUnshadowedGlobal(m.MemberExpression, 'Number') ? m.IdentifierName.name : null;
+  };
+  const isNaNConstant = (node: ParseNode | null | undefined): boolean => isUnshadowedGlobal(node, 'NaN') || numberStaticName(node) === 'NaN';
+  /**
+   * #sec-numeric-predicates, #table-numeric-predicates: the answer of a numeric
+   * predicate where the family of every member of its argument's type fixes it.
+   * `Number` statics declare no BigInt overload, so a BigInt keeps the
+   * existing signature there.
+   */
+  const predicateAnswer = (call: ParseNode): boolean | undefined => {
+    const c = call as unknown as { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null };
+    const args = c.Arguments ?? [];
+    if (!c.CallExpression || args.length !== 1 || /Spread|Rest/.test(args[0]?.type ?? '')) return undefined;
+    const callee = unparenthesized(c.CallExpression) ?? c.CallExpression;
+    const global = ['isNaN', 'isFinite'].find((name) => isUnshadowedGlobal(callee, name));
+    const statik = numberStaticName(callee);
+    const which = global ?? (statik && ['isNaN', 'isFinite', 'isInteger', 'isSafeInteger'].includes(statik) ? statik : undefined);
+    if (!which) return undefined;
+    const argument = staticType(args[0]);
+    const judged = argument && argument.Kind !== 'any' ? judgedType(argument) : null;
+    if (!judged) return undefined;
+    const answers = (judged.Kind === 'union' ? judged.Members as TypeRecord[] : [judged]).map((member): boolean | undefined => {
+      const m = member.Kind === 'parameterized' ? numericBase(member) : member;
+      if (m.Kind === 'literal') {
+        const n = numericValueOf(m.Value);
+        if (n === undefined) return undefined;
+        return which === 'isNaN' ? Number.isNaN(n) : which === 'isFinite' ? Number.isFinite(n)
+          : which === 'isInteger' ? Number.isInteger(n) : Number.isSafeInteger(n);
+      }
+      const limits = integerLimits(m);
+      if (limits) {
+        if (which === 'isSafeInteger') {
+          const safe = BigInt(Number.MAX_SAFE_INTEGER);
+          return limits.lo >= -safe && limits.hi <= safe ? true : undefined;
+        }
+        return which !== 'isNaN';
+      }
+      if (m.Kind === 'primitive' && m.Name === 'bigint' && global) return which === 'isFinite';
+      return undefined;
+    });
+    return answers.length > 0 && answers.every((a) => a !== undefined && a === answers[0]) ? answers[0] : undefined;
+  };
   const judgeTruthiness = (test: ParseNode): void => {
     const core = stripTest(test);
     if (core.type === 'BooleanLiteral') return;
@@ -21471,8 +21641,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       pushVoidUse('tested');
       return;
     }
-    if (!t || t.Kind === 'any' || mentionsTypeParameter(t)) return;
-    const settled = settledTruthiness(t);
+    // #sec-narrowfrom: an array literal is an Array whatever its elements, so
+    // it is always truthy, even where #sec-static-iteration-contribution gives
+    // it no Static Type.
+    if (!t && core.type === 'ArrayLiteral') {
+      errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
+        Value('an array literal'), Value('truthy')).Value as ObjectValue);
+      return;
+    }
+    // #sec-numeric-predicates: a predicate whose answer #table-numeric-predicates
+    // fixes for the argument's family returns that literal Boolean type.
+    const answer = core.type === 'CallExpression' ? predicateAnswer(core) : undefined;
+    if (answer !== undefined) {
+      errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
+        Value(answer ? 'true' : 'false'), Value(answer ? 'truthy' : 'falsy')).Value as ObjectValue);
+      return;
+    }
+    if (!t || t.Kind === 'any') return;
+    const judged = judgedType(t);
+    if (!judged) return;
+    const settled = settledTruthiness(judged);
     if (settled === undefined) return;
     errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
       Value(displayType(t)), Value(settled ? 'truthy' : 'falsy')).Value as ObjectValue);
@@ -21528,6 +21716,77 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return core;
   };
 
+  const constantNumber = (node: ParseNode): number | null => {
+    let core = unparenthesized(node) ?? node;
+    let sign = 1;
+    if (core.type === 'UnaryExpression' && (core as unknown as { operator?: string }).operator === '-') {
+      sign = -1;
+      const operand = (core as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
+      core = unparenthesized(operand) ?? operand;
+    }
+    if (isUnshadowedGlobal(core, 'Infinity')) return sign * Infinity;
+    if (core.type === 'NumericLiteral') {
+      const v = (core as unknown as { value?: unknown }).value;
+      return typeof v === 'number' ? sign * v : null;
+    }
+    if (core.type === 'IdentifierReference') {
+      const n = numericValueOf(literalValueOf(singleValueOperandType(core)));
+      return n === undefined ? null : sign * n;
+    }
+    return null;
+  };
+  const mirroredOperator: Record<string, string> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=' };
+  const relationalLimitsFact = (left: ParseNode, operator: string, right: ParseNode): NarrowingFact | undefined => {
+    let operand = left;
+    let op = operator;
+    let c = constantNumber(right);
+    if (c === null) {
+      c = constantNumber(left);
+      if (c === null) return undefined;
+      operand = right;
+      op = mirroredOperator[operator];
+    }
+    const written = staticType(operand);
+    const s = written && written.Kind !== 'any' ? judgedType(written) : null;
+    if (!s) return undefined;
+    const limits = (s.Kind === 'union' ? s.Members as TypeRecord[] : [s]).map(valueLimits);
+    if (limits.length === 0 || limits.some((l) => l === null)) return undefined;
+    const k = c;
+    const succeedsNever = (l: { lo: number | bigint, hi: number | bigint }) => (op === '<' ? compareLimit(l.lo, k) >= 0
+      : op === '<=' ? compareLimit(l.lo, k) > 0 : op === '>' ? compareLimit(l.hi, k) <= 0 : compareLimit(l.hi, k) < 0);
+    const failsNever = (l: { lo: number | bigint, hi: number | bigint, nan: boolean }) => !l.nan && (op === '<' ? compareLimit(l.hi, k) < 0
+      : op === '<=' ? compareLimit(l.hi, k) <= 0 : op === '>' ? compareLimit(l.lo, k) > 0 : compareLimit(l.lo, k) >= 0);
+    const known = limits as { lo: number | bigint, hi: number | bigint, nan: boolean }[];
+    const verdict = Number.isNaN(k) || known.every(succeedsNever) ? 'never-succeeds' as const
+      : known.every(failsNever) ? 'never-fails' as const : null;
+    if (!verdict) return undefined;
+    return {
+      name: narrowableName(operand) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict, display: `${operator} ${String(c)}`,
+    } as NarrowingFact;
+  };
+  const nanComparisonFact = (a: ParseNode, operator: string, b: ParseNode): NarrowingFact | undefined => {
+    const negated = operator === '!==' || operator === '!=';
+    for (const [constant, other] of [[a, b], [b, a]] as const) {
+      if (!isNaNConstant(constant)) continue;
+      // An operand that does not participate gains no error
+      // (#sec-unary-operators-for-typed-values).
+      const s = staticType(other);
+      if (!s || s.Kind === 'any') return undefined;
+      return {
+        name: narrowableName(other) ?? NON_PATH, type: s, subjectType: s, negated,
+        verdict: negated ? 'never-fails' as const : 'never-succeeds' as const, display: 'NaN',
+      } as NarrowingFact;
+    }
+    const left = narrowableName(a);
+    if (left === null || left === NON_PATH || left !== narrowableName(b)) return undefined;
+    const written = lookup(left) ?? staticType(a);
+    const s = written && written.Kind !== 'any' ? judgedType(written) : null;
+    if (!s || canHoldNaN(s)) return undefined;
+    return {
+      name: left, type: s, subjectType: s, negated,
+      verdict: negated ? 'never-succeeds' as const : 'never-fails' as const, display: `${left} ${operator} ${left}`,
+    } as NarrowingFact;
+  };
   const narrowingFactOf = (expr: ParseNode, anyOperand = false): NarrowingFact | undefined => {
     let e = expr;
     let negated = false;
@@ -21613,6 +21872,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const owner = classOwningPrivateName(rel.PrivateIdentifier.name);
         return owner ? { name: subject, type: owner, subjectType: staticType(rel.ShiftExpression), negated } : undefined;
       }
+      // #sec-narrowfrom: a relational comparison of a numeric operand with a
+      // constant has a fixed answer where the limits of the operand's type
+      // settle it; it is a test with that verdict and establishes no fact.
+      if (rel.operator && ['<', '<=', '>', '>='].includes(rel.operator) && rel.RelationalExpression && rel.ShiftExpression) {
+        const limits = relationalLimitsFact(rel.RelationalExpression, rel.operator, rel.ShiftExpression);
+        if (limits) return limits;
+      }
       if (rel.operator !== 'instanceof' || !rel.RelationalExpression || !rel.ShiftExpression) {
         return undefined;
       }
@@ -21627,6 +21893,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (e.type === 'EqualityExpression') {
       const eq = e as unknown as { operator: string, EqualityExpression: ParseNode, RelationalExpression: ParseNode };
+      if (['===', '!==', '==', '!='].includes(eq.operator)) {
+        const nan = nanComparisonFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
+        if (nan) return nan;
+      }
       // `!==` and `!=` are the same fact with the sense inverted, which is why
       // the forms below need writing only once.
       const inverted = eq.operator === '!==' || eq.operator === '!=';
@@ -21661,13 +21931,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return { name: operandName, type: makePrimitive('undefined'), subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display };
           }
           const current = (operandName !== NON_PATH ? lookup(operandName) : null) ?? operandType;
-          if (current && typeofTagOfType(current) === tag) {
+          // #sec-type-parameters: a bounded parameter is judged by its bound.
+          const tagged = current && mentionsTypeParameter(current) ? projectBound(current) ?? current : current;
+          if (current && tagged && typeofTagOfType(tagged) === tag) {
             return { name: operandName, type: current, subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-succeeds' as const : 'never-fails' as const, display };
           }
           // Where every member's tag is fixed and none is _k_, the test can
           // never succeed.
-          if (current && current.Kind !== 'any') {
-            const tags = (current.Kind === 'union' ? current.Members as TypeRecord[] : [current]).map((m) => typeofTagOfType(m));
+          if (current && tagged && tagged.Kind !== 'any') {
+            const tags = (tagged.Kind === 'union' ? tagged.Members as TypeRecord[] : [tagged]).map((m) => typeofTagOfType(m));
             if (tags.length && tags.every((known) => known !== null) && !tags.includes(tag)) {
               return { name: operandName, type: current, subjectType: operandType, negated: writtenNegated, verdict: writtenNegated ? 'never-fails' as const : 'never-succeeds' as const, display };
             }
@@ -22329,7 +22601,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const left = test.type === 'LogicalORExpression' ? test.LogicalORExpression : test.LogicalANDExpression;
       const right = test.type === 'LogicalORExpression' ? test.LogicalANDExpression : test.BitwiseORExpression;
       const type = staticType(left);
-      if (visit && type && settledTruthiness(type) === isOr) errors.push(Throw.StaticTypeError(
+      const arrayLiteral = !type && unparenthesized(left)?.type === 'ArrayLiteral';
+      const judgedLeft = type ? judgedType(type) : null;
+      if (visit && ((judgedLeft && settledTruthiness(judgedLeft) === isOr) || (arrayLiteral && isOr))) errors.push(Throw.StaticTypeError(
         'the right operand of $1 can never be evaluated, so it is dead code', Value(isOr ? '||' : '&&'),
       ).Value as ObjectValue);
       const first = walkTest(left, visit, false, visit);
@@ -30703,6 +30977,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const s = staticType(co.CoalesceExpressionHead as ParseNode);
         if (s) {
           reportImpossibleTest(s, nullishType(), '??', true);
+        } else if (unparenthesized(co.CoalesceExpressionHead as ParseNode)?.type === 'ArrayLiteral') {
+          // #sec-narrowfrom: an array literal is never nullish.
+          pushImpossibleTest('never-succeeds', '??');
         }
         walk(co.CoalesceExpressionHead as ParseNode);
         const branches = nullishFlow(co.CoalesceExpressionHead as ParseNode);
@@ -31137,6 +31414,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // can never be taken.
           errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken',
             Value(displayType(staticType(expression) as TypeRecord))).Value as ObjectValue);
+        } else if ((n.CaseBlock as { DefaultClause?: ParseNode | null }).DefaultClause && ownedAtomsCovered(n)) {
+          // #sec-narrowfrom: `boolean`, `null` and `undefined` are closed sets the
+          // language owns, so a `default` past labels for all of them can never
+          // be taken. A written union of literal types stays outside.
+          errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken',
+            Value(displayType(staticType(expression) as TypeRecord))).Value as ObjectValue);
+        }
+        // #sec-narrowfrom: `case NaN` can never succeed, NaN being strictly
+        // equal to nothing, where the discriminant participates.
+        {
+          const discriminantType = staticType(expression);
+          const block = n.CaseBlock as { CaseClauses_a?: readonly ParseNode[] | null, CaseClauses_b?: readonly ParseNode[] | null };
+          if (discriminantType && discriminantType.Kind !== 'any') {
+            for (const clause of [...(block.CaseClauses_a ?? []), ...(block.CaseClauses_b ?? [])]) {
+              if (isNaNConstant((clause as { Expression?: ParseNode | null }).Expression)) pushImpossibleTest('never-succeeds', 'NaN');
+            }
+          }
         }
         judgeSealedSwitch(n);
         // A CASE LABEL that cannot match the discriminant is the `switch`
