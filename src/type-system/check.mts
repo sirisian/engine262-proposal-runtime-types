@@ -21582,7 +21582,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const scalarPatternVerdict = (pattern: ParseNode.MatchPattern): boolean => {
-    if (pattern.type === 'MatchLiteralPattern' || pattern.type === 'MatchRangePattern') return true;
+    if (pattern.type === 'MatchLiteralPattern' || pattern.type === 'MatchRangePattern' || pattern.type === 'MatchRegExpPattern') return true;
     if (pattern.type === 'MatchNotPattern') return scalarPatternVerdict(pattern.Operand);
     return (pattern.type === 'MatchAndPattern' || pattern.type === 'MatchOrPattern')
       && scalarPatternVerdict(pattern.Left) && scalarPatternVerdict(pattern.Right);
@@ -21806,6 +21806,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // #sec-narrowfrom: an untagged template literal with non-empty text is a
     // non-empty String, so it is always truthy.
+    // #sec-narrowfrom: a fixed shape's `length` is truthy where every exact
+    // length is non-zero and falsy where every one is zero.
+    const lengths = exactLengthsOf(core);
+    if (lengths && (lengths.every((l) => l !== 0) || lengths.every((l) => l === 0))) {
+      const truthy = lengths[0] !== 0;
+      errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
+        Value(`a length of ${lengths.join(' or ')}`), Value(truthy ? 'truthy' : 'falsy')).Value as ObjectValue);
+      return;
+    }
     if (core.type === 'TemplateLiteral' && templateAlwaysTruthy(core)) {
       errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
         Value('a template with text'), Value('truthy')).Value as ObjectValue);
@@ -22007,6 +22016,75 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const m = core as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
     return m.IdentifierName?.name && isUnshadowedGlobal(m.MemberExpression, global) ? m.IdentifierName.name : null;
   };
+  // #sec-composite-types: the ~object~ shape of a composite type over one.
+  const compositeObjectShape = (t: Known): Known => {
+    if (!t || t.Kind !== 'primitive' || t.Name !== 'Composite') return null;
+    const shape = (t as { Arguments?: readonly unknown[] }).Arguments?.[0] as Known;
+    return shape && shape.Kind === 'object' ? shape : null;
+  };
+  // The exact lengths of `v.length` where every member of _v_'s type is a
+  // fixed shape (#sec-array-and-tuple-types), and `null` otherwise.
+  const exactLengthsOf = (node: ParseNode | null | undefined): number[] | null => {
+    const core = node ? unparenthesized(node) ?? node : null;
+    if (!core || core.type !== 'MemberExpression') return null;
+    const m = core as unknown as { MemberExpression?: ParseNode, IdentifierName?: { name?: string } | null };
+    if (m.IdentifierName?.name !== 'length' || !m.MemberExpression) return null;
+    const written = staticType(m.MemberExpression);
+    const subject = written && written.Kind !== 'any' ? judgedType(written) : null;
+    if (!subject) return null;
+    const lengths = (subject.Kind === 'union' ? subject.Members as TypeRecord[] : [subject]).map(exactLength);
+    return lengths.length > 0 && lengths.every((l) => l !== null) ? [...new Set(lengths as number[])] : null;
+  };
+  const jsString = (v: unknown): string | null => {
+    if (typeof v === 'string') return v;
+    const text = v as { stringValue?: () => string } | null | undefined;
+    return text && typeof text.stringValue === 'function' ? text.stringValue() : null;
+  };
+  const constantString = (node: ParseNode): string | null => {
+    const core = unparenthesized(node) ?? node;
+    if (core.type === 'StringLiteral') return jsString((core as unknown as { value?: unknown }).value);
+    if (core.type === 'IdentifierReference') return jsString(literalValueOf(singleValueOperandType(core)));
+    return null;
+  };
+  /**
+   * #sec-narrowfrom: String order has a least value, the empty String, and a
+   * union of literal String types, or an enum over `string`, has a least and
+   * a greatest member in code-unit order, so a comparison with a String
+   * constant can be settled as a numeric one is.
+   */
+  const stringOrderFact = (left: ParseNode, operator: string, right: ParseNode): NarrowingFact | undefined => {
+    let operand = left;
+    let op = operator;
+    let c = constantString(right);
+    if (c === null) {
+      c = constantString(left);
+      if (c === null) return undefined;
+      operand = right;
+      op = mirroredOperator[operator];
+    }
+    const written = staticType(operand);
+    const subject = written && written.Kind !== 'any' ? judgedType(written) : null;
+    if (!subject) return undefined;
+    const closed = expandClosed(subject);
+    const limits = (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map((m): { lo: string, hi: string | null } | null => {
+      if (m.Kind === 'primitive' && m.Name === 'string') return { lo: '', hi: null };
+      const text = m.Kind === 'literal' ? jsString(m.Value) : null;
+      return text === null ? null : { lo: text, hi: text };
+    });
+    if (limits.length === 0 || limits.some((l) => l === null)) return undefined;
+    const k = c;
+    const known = limits as { lo: string, hi: string | null }[];
+    const succeedsNever = (l: { lo: string, hi: string | null }) => (op === '<' ? l.lo >= k : op === '<=' ? l.lo > k
+      : op === '>' ? l.hi !== null && l.hi <= k : l.hi !== null && l.hi < k);
+    const failsNever = (l: { lo: string, hi: string | null }) => (op === '<' ? l.hi !== null && l.hi < k
+      : op === '<=' ? l.hi !== null && l.hi <= k : op === '>' ? l.lo > k : l.lo >= k);
+    const verdict = known.every(succeedsNever) ? 'never-succeeds' as const : known.every(failsNever) ? 'never-fails' as const : null;
+    if (!verdict) return undefined;
+    return {
+      name: narrowableName(operand) ?? NON_PATH, type: subject, subjectType: subject, negated: false, verdict,
+      display: `${operator} ${JSON.stringify(c)}`,
+    } as NarrowingFact;
+  };
   const constantNumber = (node: ParseNode): number | null => {
     let core = unparenthesized(node) ?? node;
     let sign = 1;
@@ -22016,6 +22094,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       core = unparenthesized(operand) ?? operand;
     }
     if (isUnshadowedGlobal(core, 'Infinity')) return sign * Infinity;
+    // A fixed shape's `length` is its exact length (#sec-array-and-tuple-types).
+    const exact = exactLengthsOf(core);
+    if (exact && exact.length === 1) return sign * exact[0];
     if (core.type === 'NumericLiteral') {
       const v = (core as unknown as { value?: unknown }).value;
       return typeof v === 'number' ? sign * v : null;
@@ -22033,7 +22114,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let c = constantNumber(right);
     if (c === null) {
       c = constantNumber(left);
-      if (c === null) return undefined;
+      if (c === null) return stringOrderFact(left, operator, right);
       operand = right;
       op = mirroredOperator[operator];
     }
@@ -22043,7 +22124,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A closed set is read by its members, so an enum's limits are its
     // least and greatest enumerator values.
     const closed = expandClosed(s);
-    const limits = (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map(valueLimits);
+    // A fixed shape's `length` has its exact lengths as limits.
+    const lengths = exactLengthsOf(operand);
+    const limits = lengths ? lengths.map((length) => ({ lo: length, hi: length, nan: false }))
+      : (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map(valueLimits);
     if (limits.length === 0 || limits.some((l) => l === null)) return undefined;
     const k = c;
     const succeedsNever = (l: { lo: number | bigint, hi: number | bigint }) => (op === '<' ? compareLimit(l.lo, k) >= 0
@@ -23414,6 +23498,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return !!positions && positions.length === pattern.Elements.length
           && pattern.Elements.every((element, index) => !element || structuralPatternCovers(element, positions[index]));
       }
+      // #sec-match-exhaustiveness: an object pattern covers a composite atom
+      // whose every property it names is declared required there, each
+      // sub-pattern covering the member's declared type. A composite is frozen
+      // with its members; a structural object can lose one to `delete`.
+      case 'MatchObjectPattern': {
+        const shape = compositeObjectShape(atom);
+        if (!shape || shape.Kind !== 'object' || pattern.Rest) return false;
+        return pattern.Properties.every((prop) => {
+          const member = shape.Properties.find((property) => property.key === prop.Key) as
+            { type?: TypeRecord, Optional?: boolean, optional?: boolean } | undefined;
+          return !!member?.type && !member.Optional && !member.optional && structuralPatternCovers(prop.Pattern, member.type);
+        });
+      }
       default: break;
     }
     const p = pattern as unknown as { type?: string, Type?: ParseNode.Type, Literal?: ParseNode };
@@ -23756,7 +23853,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         pattern.Properties.forEach((prop) => {
           const members = positionType?.Kind === 'union' ? positionType.Members : [positionType];
           const types = members.map((member) => {
-            const shape = structureOf(member);
+            const shape = compositeObjectShape(member) ?? structureOf(member);
             return shape?.Kind === 'object' ? shape.Properties.find((property) => property.key === prop.Key)?.type ?? null : null;
           });
           const memberType = types.length && types.every((type) => type)
@@ -32117,9 +32214,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         {
           const discriminantType = staticType(expression);
           const block = n.CaseBlock as { CaseClauses_a?: readonly ParseNode[] | null, CaseClauses_b?: readonly ParseNode[] | null };
+          // A `case` of a `switch (v.length)` over fixed shapes names a length
+          // _v_ either has or never can.
+          const lengths = exactLengthsOf(expression);
           if (discriminantType && discriminantType.Kind !== 'any') {
             for (const clause of [...(block.CaseClauses_a ?? []), ...(block.CaseClauses_b ?? [])]) {
               if (isNaNConstant((clause as { Expression?: ParseNode | null }).Expression)) pushImpossibleTest('never-succeeds', 'NaN');
+              const label = (clause as { Expression?: ParseNode | null }).Expression;
+              const k = label && lengths ? constantNumber(label) : null;
+              if (k !== null && lengths && !lengths.includes(k)) pushImpossibleTest('never-succeeds', `case ${String(k)}`);
             }
           }
         }
