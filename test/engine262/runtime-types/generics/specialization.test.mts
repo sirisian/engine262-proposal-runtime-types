@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import {
-  evaluated, expectError, expectStaticTypeError, expectThrown, expectThrownKind,
+  evaluated, expectError, expectStaticTypeError, expectThrown,
 } from '../harness.mts';
 
 /**

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { expectStaticTypeError, ok, evaluated } from '../harness.mts';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-void-type: a program must not depend on a `void` result, so one that is
 // tested or computed with is refused, while discarding it, returning it from a

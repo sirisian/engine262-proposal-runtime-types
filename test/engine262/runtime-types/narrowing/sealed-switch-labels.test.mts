@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { expectStaticTypeError, ok, evaluated } from '../harness.mts';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-sealed-classes with #table-narrowing-forms: each label of a sealed `switch`
 // sees the discriminant less what the labels before it took, so an unrelated,

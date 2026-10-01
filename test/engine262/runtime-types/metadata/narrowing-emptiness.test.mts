@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { expectStaticTypeError, ok, evaluated } from '../harness.mts';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-narrowto: a narrowing whose result admits no value is ~empty~: a pair of
 // parameterizations whose governing meta type's `meet` answers null (#table-meta-hooks),

@@ -1,11 +1,4 @@
-import { ProvenArrayMembers } from './array-intrinsics.mts';
-import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
-import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
-import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
-import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
-import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution } from './iteration-contribution.mts';
-import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import { EnsureCompletion } from '../completion.mts';
@@ -21,6 +14,14 @@ import { NumericValue } from '../static-semantics/NumericValue.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
+import { ProvenArrayMembers } from './array-intrinsics.mts';
+import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
+import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
+import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
+import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
+import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution } from './iteration-contribution.mts';
+import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { MissingLiteralSymbol, OrdinaryPrototypeLacks } from './literal-prototype.mts';
 import { ProvenLibraryBoundaries } from './library-boundary-origin.mts';
 import { OriginalLibraryFunction, ProvenLibraryOperations } from './library-operation-origin.mts';
@@ -75,7 +76,6 @@ import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeri
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
 import { eraseMetadata, literalFitsNumericType, keyAdmittedBy } from './literal-fit.mts';
-import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import { falsyPartOf, joinTypes, logicalResultType } from './logical-types.mts';
 import {
   effectiveFunctionType, callableForm, sameConstructParameter, selectConstructSignature,
@@ -91,6 +91,10 @@ import {
   libraryConstructParameters,
 } from './std-signatures.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
+import { intrinsicDeclarationRecord } from './records.mts';
+import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
+import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
+import { rememberDeclaredConstraint } from './records.mts';
 import { R, Throw, wellKnownSymbols } from '#self';
 
 /**
@@ -945,6 +949,14 @@ const inferredLoopBindingTypes = new WeakMap<object, TypeRecord>();
 export function InferredLoopBindingType(node: object): TypeRecord | undefined {
   return inferredLoopBindingTypes.get(node);
 }
+/**
+ * The value a literal type carries, read without first narrowing the union of
+ * every TypeRecord kind; `undefined` for any other kind.
+ */
+function literalValueOf(t: TypeRecord | null | undefined): unknown {
+  return t && t.Kind === 'literal' ? (t as { Value?: unknown }).Value : undefined;
+}
+
 /**
  * #sec-sealed-classes: the clauses of a `switch` whose discriminant's Static
  * Type is a sealed class. Each label of one is an `instanceof` test, evaluated
@@ -3450,7 +3462,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const frame = frames[frames.length - 1] as Frame & { narrowed?: Set<string> };
     if (frame.declaredNames.has(name) && !frame.narrowed?.has(name)) {
       let originals = narrowedDeclarations.get(frame);
-      if (!originals) { originals = new Map(); narrowedDeclarations.set(frame, originals); }
+      if (!originals) {
+ originals = new Map(); narrowedDeclarations.set(frame, originals); 
+}
       originals.set(name, frame.bindings.get(name) ?? null);
     }
     frame.bindings.set(name, t as TypeRecord);
@@ -4595,14 +4609,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // and a `sealed abstract` class as the union of its direct subclasses
   // (#sec-enums, #sec-sealed-classes). A non-abstract sealed base is a member
   // of its own set, so it is read as written.
+  // A Number literal's mathematical value, read through R.
+  const numericValueOf = (v: unknown): number | undefined => {
+    if (v instanceof TypedNumberValue) return (v as TypedNumberValue).numberValue(); // eslint-disable-line @engine262/mathematical-value -- R takes a Number, not a typed number
+    return v instanceof NumberValue ? Number(R(v)) : undefined;
+  };
   const sameLiteralValue = (a: unknown, b: unknown): boolean => {
     if (a === b) return true;
     const x = a as { numberValue?(): number, stringValue?(): string, value?: unknown };
     const y = b as { numberValue?(): number, stringValue?(): string, value?: unknown };
-    if (typeof x?.numberValue === 'function' && typeof y?.numberValue === 'function') {
-      return Object.is(Number(x.numberValue()), Number(y.numberValue()))
-        || Number(x.numberValue()) === Number(y.numberValue());
-    }
+    const nx = numericValueOf(a);
+    const ny = numericValueOf(b);
+    if (nx !== undefined && ny !== undefined) return Object.is(nx, ny) || nx === ny;
     if (typeof x?.stringValue === 'function' && typeof y?.stringValue === 'function') return x.stringValue() === y.stringValue();
     if (typeof x?.value === 'bigint' && typeof y?.value === 'bigint') return x.value === y.value;
     return false;
@@ -4653,7 +4671,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const miss: TypeRecord[] = [];
     for (const m of members) {
       if (isEnumerator(m)) {
-        (sameLiteralValue(m.Value, t.Value) ? match : miss).push(m);
+        (sameLiteralValue((m as { Value?: unknown }).Value, t.Value) ? match : miss).push(m);
         continue;
       }
       const to = NarrowTo(m, t);
@@ -4685,7 +4703,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const numeric = (x: unknown): number | undefined => {
       if (typeof x === 'number' || typeof x === 'bigint') return Number(x);
       const value = x as { numberValue?(): number, value?: unknown } | undefined;
-      if (typeof value?.numberValue === 'function') return Number(value.numberValue());
+      const n = numericValueOf(x);
+      if (n !== undefined) return n;
       return typeof value?.value === 'bigint' ? Number(value.value) : undefined;
     };
     const x = numeric(a);
@@ -4788,10 +4807,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (v === Value.true) return true;
     if (v === Value.false || v === Value.null || v === Value.undefined) return false;
     const x = v as { numberValue?(): number, stringValue?(): string, value?: unknown };
-    if (typeof x?.numberValue === 'function') {
-      const n = Number(x.numberValue());
-      return n !== 0 && !Number.isNaN(n);
-    }
+    const n = numericValueOf(v);
+    if (n !== undefined) return n !== 0 && !Number.isNaN(n);
     if (typeof x?.stringValue === 'function') return x.stringValue().length > 0;
     if (typeof x?.value === 'bigint') return x.value !== 0n;
     if (x && typeof x === 'object' && 'value' in x) return Boolean(x.value);
@@ -9642,7 +9659,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = classTypeOf(name);
       if (!t || t.Kind !== 'nominal') continue;
       const dominated = taken.some((u) => IsSubtype(t as TypeRecord, u, []));
-      const left = remaining === empty ? empty : NarrowTo(remaining, t as TypeRecord);
+      const left: TypeRecord | typeof empty = remaining === empty ? empty : NarrowTo(remaining, t as TypeRecord);
       if (dominated || (left === empty && (remaining === empty || stablyDisjoint(remaining, t as TypeRecord)))) {
         pushImpossibleTest('never-succeeds', name);
       }
@@ -12983,8 +13000,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           'supplied-twice': `the type parameter ${name} is supplied twice`,
           'positional-after-named': 'a positional type argument cannot follow a named one',
           'too-many': 'too many type arguments',
-          missing: `the type parameter ${name} has no argument and no default`,
-          unmatched: 'the type arguments do not match the parameter list',
+          "missing": `the type parameter ${name} has no argument and no default`,
+          "unmatched": 'the type arguments do not match the parameter list',
         };
         // Every refusal that reaches here needed the DECLARATION: whether a
         // name is one of its parameters, whether a name was already supplied
@@ -21140,7 +21157,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = literalExpressionType(node) ?? staticType(node);
       if (!t || t.Kind !== 'literal') return null;
       const v = t.Value as { numberValue?(): number, value?: unknown };
-      if (typeof v?.numberValue === 'function') return Number(v.numberValue());
+      const n = numericValueOf(v);
+      if (n !== undefined) return n;
       if (typeof v?.value === 'bigint') {
         const b = v.value;
         return b >= BigInt(Number.MIN_SAFE_INTEGER) && b <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(b) : null;
@@ -21172,9 +21190,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (intervalIsEmpty(iv)) return false;
     const base = numericBase(m);
     if (base.Kind === 'literal') {
-      const v = base.Value as { numberValue?(): number };
-      if (typeof v?.numberValue !== 'function') return true;
-      const n = Number(v.numberValue());
+      const n = numericValueOf(literalValueOf(base));
+      if (n === undefined) return true;
       return (iv.loOpen ? n > iv.lo : n >= iv.lo) && (iv.hiOpen ? n < iv.hi : n <= iv.hi);
     }
     const integer = integerTypeOf(base);
@@ -21212,9 +21229,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return members.every((m) => {
       const base = numericBase(m);
       if (base.Kind === 'literal') {
-        const v = base.Value as { numberValue?(): number };
-        return typeof v?.numberValue === 'function' && Number.isInteger(Number(v.numberValue()))
-          && Number(v.numberValue()) >= lo && Number(v.numberValue()) <= hi;
+        const n = numericValueOf(literalValueOf(base));
+        return n !== undefined && Number.isInteger(n) && n >= lo && n <= hi;
       }
       const integer = integerTypeOf(base);
       if (!integer || m.Kind === 'parameterized') return false;
@@ -21545,12 +21561,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // a fact, while `% is string` got one - the same binding, under a name
           // no program can write, narrowed by one test and not the other.
           const operandName = subjectOf(operand);
-          const tagType = operandName === null ? null : singleValueOperandType(against);
-          if (!tagType || !(tagType.Value instanceof JSStringValue)) {
+          const tagValue = operandName === null ? undefined : literalValueOf(singleValueOperandType(against));
+          if (operandName === null || !(tagValue instanceof JSStringValue)) {
             continue;
           }
           const operandType = staticType(operand);
-          const tag = (tagType.Value as JSStringValue).stringValue();
+          const tag = tagValue.stringValue();
           const writtenNegated = negated !== inverted;
           const display = `typeof ${JSON.stringify(tag)}`;
           // #sec-narrowing: `typeof v === k` narrows to "the union of the types
@@ -30616,9 +30632,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let left = staticType((n.Expression as unknown as { UnaryExpression: ParseNode }).UnaryExpression);
           const tested: string[] = [];
           for (const label of caseLabels) {
-            const tagType = label ? singleValueOperandType(label) : null;
-            if (!tagType || !(tagType.Value instanceof JSStringValue)) continue;
-            const tag = (tagType.Value as JSStringValue).stringValue();
+            const tagValue = label ? literalValueOf(singleValueOperandType(label)) : undefined;
+            if (!(tagValue instanceof JSStringValue)) continue;
+            const tag = tagValue.stringValue();
             const display = `typeof ${JSON.stringify(tag)}`;
             if (tested.includes(tag) || !['undefined', 'object', 'boolean', 'number', 'bigint', 'string', 'symbol', 'function'].includes(tag)) {
               pushImpossibleTest('never-succeeds', display);
@@ -33042,7 +33058,3 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   return errors;
 }
 
-import { intrinsicDeclarationRecord } from './records.mts';
-import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
-import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
-import { rememberDeclaredConstraint } from './records.mts';

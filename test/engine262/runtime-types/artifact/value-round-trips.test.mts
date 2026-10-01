@@ -1,11 +1,11 @@
 import { expect, test } from 'vitest';
 import { run } from '../harness.mts';
 import {
-  Agent, ManagedRealm, setSurroundingAgent, DeserializeTypeTable, SerializeTypeTable, TYPE_TABLE_VERSION,
+  Agent, ManagedRealm, setSurroundingAgent, DeserializeTypeTable, SerializeTypeTable, TYPE_TABLE_VERSION, EnsureCompletion,
 } from '#self';
 
 function typeOf(source: string) {
-  const result = run(source);
+  const result = EnsureCompletion(run(source));
   expect(result.Type).toBe('normal');
   return result.Value as object;
 }
@@ -42,7 +42,7 @@ test.each([
   const wire = JSON.parse(JSON.stringify(SerializeTypeTable(new Map([['T', original]]))));
   expect(DeserializeTypeTable(wire)?.get('T')).toBe(original);
   const consumer = readFresh(wire);
-  const evaluated = consumer.realm.evaluateScriptSkipDebugger(source);
+  const evaluated = EnsureCompletion(consumer.realm.evaluateScriptSkipDebugger(source));
   expect(evaluated.Type).toBe('normal');
   expect(consumer.types?.get('T')).not.toBe(original);
   expect(consumer.types?.get('T')).toBe(evaluated.Value);
@@ -54,11 +54,11 @@ test('pattern metadata resolves Type Object values in the consumer agent', () =>
   const wire = JSON.parse(JSON.stringify(SerializeTypeTable(new Map([['P', original]]))));
   const consumer = readFresh(wire);
   const read = consumer.types?.get('P') as typeof original;
-  const owner = consumer.realm.evaluateScriptSkipDebugger('type { pattern: any };');
+  const owner = EnsureCompletion(consumer.realm.evaluateScriptSkipDebugger('type { pattern: any };'));
   expect(owner.Type).toBe('normal');
   expect(read.TypeRecord.MetaType).toBe(owner.Value);
   expect(read.TypeRecord.MetaType).not.toBe(original.TypeRecord.MetaType);
-  expect(read).toBe(consumer.realm.evaluateScriptSkipDebugger(source).Value);
+  expect(read).toBe(EnsureCompletion(consumer.realm.evaluateScriptSkipDebugger(source)).Value);
 });
 
 test('a Type Object default remains a value of type type', () => {
@@ -66,7 +66,7 @@ test('a Type Object default remains a value of type type', () => {
   const original = typeOf(source);
   const wire = JSON.parse(JSON.stringify(SerializeTypeTable(new Map([['T', original]]))));
   const consumer = readFresh(wire);
-  const evaluated = consumer.realm.evaluateScriptSkipDebugger(source);
+  const evaluated = EnsureCompletion(consumer.realm.evaluateScriptSkipDebugger(source));
   expect(evaluated.Type).toBe('normal');
   expect(consumer.types?.get('T')).toBe(evaluated.Value);
 });

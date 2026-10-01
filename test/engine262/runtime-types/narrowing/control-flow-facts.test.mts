@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { expectStaticTypeError, ok, evaluated } from '../harness.mts';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-narrowing: the facts holding where control joins are the join of the facts on
 // every path reaching it; a path through a statement that cannot complete normally

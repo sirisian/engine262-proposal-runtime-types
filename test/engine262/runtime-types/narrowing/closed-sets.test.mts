@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { expectStaticTypeError, ok, evaluated } from '../harness.mts';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-narrowto, the closed-set reading: an enum narrows as its enumerators and a
 // `sealed abstract` class as its direct subclasses, in `if` and truthiness as in

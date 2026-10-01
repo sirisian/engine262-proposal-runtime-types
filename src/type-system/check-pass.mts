@@ -1,12 +1,6 @@
-import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
-import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
-import {
-  DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
-  EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
-import type { TypeRecord } from './records.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
 import {
@@ -15,6 +9,12 @@ import {
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { JSStringValue, ObjectValue, Value } from '../value.mts';
+import type { TypeRecord } from './records.mts';
+import {
+  DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
+  EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
+import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
+import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import { SetMetResolution, CanonicalizeType } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
 import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './records.mts';

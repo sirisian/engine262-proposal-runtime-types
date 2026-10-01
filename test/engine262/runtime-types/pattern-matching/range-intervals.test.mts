@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { expectStaticTypeError, ok, evaluated } from '../harness.mts';
+import { expectStaticTypeError, ok } from '../harness.mts';
 
 // #sec-pattern-static-semantics: a range pattern whose interval holds no value of its
 // position can never match, and one holding every value of an integer position can

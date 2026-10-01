@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown } from '../harness.mts';
+import { evaluated } from '../harness.mts';
 
 /**
  * Spec: #sec-runtimetypeof. "If _value_ is callable and has declared

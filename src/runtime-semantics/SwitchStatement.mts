@@ -13,19 +13,19 @@ import {
 import { AdoptLiteralOperand, DecayEnumOperands } from '../type-system/arithmetic.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { isRangeObject } from '../intrinsics/Range.mts';
+import { IsSealedSwitchClause } from '../type-system/check.mts';
 import { isNumericLiteralOperand } from './EvaluateStringOrNumericBinaryExpression.mts';
 import {
   BlockDeclarationInstantiation,
   Evaluate_StatementList,
 } from './all.mts';
+import { InstanceofOperator } from './all.mts';
 import {
   surroundingAgent,
   Assert, GetValue, IsStrictlyEqual, DeclarativeEnvironmentRecord,
   Get, Call, IsCallable,
 } from '#self';
-import { isRangeObject } from '../intrinsics/Range.mts';
-import { IsSealedSwitchClause } from '../type-system/check.mts';
-import { InstanceofOperator } from './all.mts';
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-caseclauseisselected */
 function* CaseClauseIsSelected(constructor: ParseNode.CaseClause, input: Value): PlainEvaluator<boolean> {
