@@ -76,7 +76,6 @@ import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
 import { eraseMetadata, literalFitsNumericType, keyAdmittedBy } from './literal-fit.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
-import { BoundNames } from '../static-semantics/BoundNames.mts';
 import { falsyPartOf, joinTypes, logicalResultType } from './logical-types.mts';
 import {
   effectiveFunctionType, callableForm, sameConstructParameter, selectConstructSignature,
@@ -326,7 +325,6 @@ interface NarrowingFact {
   pattern?: ParseNode.MatchPattern;
   subjectType?: TypeRecord | null;
   negated: boolean;
-  sense?: 'true' | 'false';
   additional?: NarrowingFact[];
   verdict?: 'never-succeeds' | 'never-fails';
   display?: string;
@@ -768,12 +766,11 @@ export function GenericWhereChecksOf(root: object): readonly GenericWhereCheck[]
  * a narrowing yields a TYPE the walk itself must then check against. The
  * resolution therefore feeds a second walk rather than a report.
  *
- * [[Parent]] is what makes nesting work in one resolution sweep. The clause
- * requires composition - `if (v >= 0)` giving `bounds: 0..` and "a further
- * `if (v <= 343)` intersect that bound to `0..=343`" - and a request resolved
- * against the DECLARED type would give the inner branch `..=343`. The nesting is
- * known here, so it is recorded rather than searched for later.
+ * Incoming sources retain the branch and binding that produced a fact. They
+ * form a bounded dependency graph resolved before the checking walk.
  */
+export type NarrowingInput = { readonly key: object, readonly branch: 'whenTrue' | 'whenFalse' } | { readonly type: TypeRecord };
+
 export interface NarrowingRequest {
   /** The test node, which keys the resolution table. */
   readonly key: object;
@@ -784,9 +781,9 @@ export interface NarrowingRequest {
   /** The compile-time constant compared against. */
   readonly constant: Value;
   /** The binding's parameterized type as this walk knows it. */
-  readonly subject: TypeRecord & { readonly Kind: 'parameterized' };
-  /** The enclosing request's key, or null at the outermost. */
-  readonly parent: object | null;
+  readonly subject: TypeRecord;
+  /** Alternative incoming facts; a source without a prior comparison holds its type. */
+  readonly inputs: readonly NarrowingInput[];
 }
 
 const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
@@ -3059,6 +3056,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /** Names whose facts a subtree can invalidate by writing. */
+  const flowWrites = (node: unknown): Set<string> => {
+    const names = new Set<string>();
+    assignedNamesIn(node, names);
+    return names;
+  };
+
   /** Whether a subtree contains a call, which may reassign a captured binding. */
   const containsCall = (node: unknown): boolean => {
     if (!node || typeof node !== 'object') {
@@ -3425,6 +3429,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const declare = (name: string, t: Known, frame = frames[frames.length - 1]) => {
     typeRevision += 1;
     frame.declaredNames.add(name);
+    frame.narrowed?.delete(name);
+    narrowedDeclarations.get(frame)?.delete(name);
     if (!frame.bindingKinds.has(name)) frame.bindingKinds.set(name, 'ordinary');
     uninitializedVars.get(frame)?.delete(name);
     if (t) {
@@ -3500,6 +3506,127 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
     }
+  };
+
+  // Flow facts are indexed by the declaring frame as well as the place. A
+  // block-local `x` must never replace a fact about an outer `x` at a join.
+  const metadataFlowInputs = new WeakMap<TypeRecord, readonly NarrowingInput[]>();
+  type FlowFacts = Map<Frame, Map<string, TypeRecord>>;
+  type FlowExit = { kind: 'break' | 'continue' | 'return' | 'throw', target?: ParseNode, facts: FlowFacts };
+  let flowLive = true;
+  let flowExits: FlowExit[] = [];
+  const flowOwner = (name: string, from = frames.length - 1): Frame => {
+    const rootName = name.split('.')[0];
+    for (let i = from; i >= 0; i -= 1) {
+      const frame = frames[i];
+      if (frame.declaredNames.has(rootName) || frame.dynamicBindings
+        || (frame.bindings.has(rootName) && !frame.narrowed?.has(rootName))) return frame;
+    }
+    return frames[0];
+  };
+  const captureFlow = (): FlowFacts => {
+    const result: FlowFacts = new Map();
+    frames.forEach((frame, index) => {
+      for (const name of frame.narrowed ?? []) {
+        const type = frame.bindings.get(name);
+        if (!type) continue;
+        const owner = flowOwner(name, index);
+        if (!result.has(owner)) result.set(owner, new Map());
+        result.get(owner)!.set(name, type);
+      }
+    });
+    return result;
+  };
+  const restoreFlow = (facts: FlowFacts): void => {
+    const current = captureFlow();
+    const active = [...facts].filter(([frame, entries]) => frames.includes(frame) && entries.size);
+    if (current.size === active.length && active.every(([frame, entries]) => {
+      const existing = current.get(frame);
+      return existing?.size === entries.size && [...entries].every(([name, type]) => existing.get(name) === type);
+    })) return;
+    typeRevision += 1;
+    for (const frame of frames) {
+      for (const name of frame.narrowed ?? []) {
+        const original = narrowedDeclarations.get(frame)?.get(name);
+        if (original) frame.bindings.set(name, original);
+        else frame.bindings.delete(name);
+      }
+      frame.narrowed?.clear();
+      narrowedDeclarations.delete(frame);
+    }
+    for (const [frame, entries] of facts) {
+      if (!frames.includes(frame)) continue;
+      for (const [name, type] of entries) {
+        if (frame.declaredNames.has(name)) {
+          if (!narrowedDeclarations.has(frame)) narrowedDeclarations.set(frame, new Map());
+          narrowedDeclarations.get(frame)!.set(name, frame.bindings.get(name) ?? null);
+        }
+        frame.bindings.set(name, type);
+        ((frame as { narrowed?: Set<string> }).narrowed ??= new Set()).add(name);
+      }
+    }
+  };
+  const joinFlow = (incoming: readonly (FlowFacts | undefined)[]): FlowFacts | undefined => {
+    const live = incoming.filter((facts): facts is FlowFacts => facts !== undefined);
+    if (!live.length) return undefined;
+    const joined: FlowFacts = new Map();
+    for (const [owner, entries] of live[0]) {
+      for (const [name] of entries) {
+        const types = live.map((facts) => facts.get(owner)?.get(name));
+        // A missing fact is an unknown predecessor, not an impossible path.
+        if (types.some((type) => !type)) continue;
+        if (!joined.has(owner)) joined.set(owner, new Map());
+        let type = types.every((entry) => entry === types[0]) ? types[0]!
+          : CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] });
+        if (!types.every((entry) => entry === types[0]) && types.some((entry) => metadataFlowInputs.has(entry!))) {
+          type = { ...type } as TypeRecord;
+          metadataFlowInputs.set(type, types.flatMap((entry) => metadataFlowInputs.get(entry!) ?? [{ type: entry! }]));
+        }
+        joined.get(owner)!.set(name, type);
+      }
+    }
+    return joined;
+  };
+  const resumeFlow = (facts: FlowFacts | undefined): void => {
+    flowLive = facts !== undefined;
+    if (facts) restoreFlow(facts);
+  };
+  const normalFlow = (): FlowFacts | undefined => flowLive ? captureFlow() : undefined;
+  const runFlow = (facts: FlowFacts, action: () => void): FlowFacts | undefined => {
+    resumeFlow(facts);
+    action();
+    return normalFlow();
+  };
+  const takeFlowExits = (target: ParseNode, kind: FlowExit['kind']): FlowFacts[] => {
+    const matching = flowExits.filter((exit) => exit.target === target && exit.kind === kind);
+    flowExits = flowExits.filter((exit) => exit.target !== target || exit.kind !== kind);
+    return matching.map((exit) => exit.facts);
+  };
+  const flowTarget = (node: ParseNode.BreakStatement | ParseNode.ContinueStatement): ParseNode | undefined => {
+    const label = node.LabelIdentifier?.name;
+    for (let parent = node.parent; parent; parent = parent.parent) {
+      if (functionBoundary(parent)) return undefined;
+      if (label) {
+        if (parent.type !== 'LabelledStatement' || parent.LabelIdentifier.name !== label) continue;
+        if (node.type === 'BreakStatement') return parent;
+        let target = parent.LabelledItem;
+        while (target.type === 'LabelledStatement') target = target.LabelledItem;
+        return target;
+      }
+      if (['WhileStatement', 'DoWhileStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(parent.type)
+        || (node.type === 'BreakStatement' && parent.type === 'SwitchStatement')) return parent;
+    }
+    return undefined;
+  };
+
+  // Leaving a lexical scope exports only facts whose declarations survive it.
+  const flowBlock = (action: () => void): void => {
+    let result: FlowFacts | undefined;
+    pushBlock(() => {
+      action();
+      result = normalFlow();
+    });
+    resumeFlow(result);
   };
 
   /**
@@ -14221,24 +14348,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           AssignmentExpression_b: ParseNode,
         };
         validateDiscardedExpression(c.ShortCircuitExpression);
-        const fact = narrowingFactOf(c.ShortCircuitExpression);
-        if (!fact) {
+        conditionalArmTypes(c.ShortCircuitExpression, () => {
           validateDiscardedExpression(c.AssignmentExpression_a);
+          return null;
+        }, () => {
           validateDiscardedExpression(c.AssignmentExpression_b);
-          return;
-        }
-        const { whenTrue, whenFalse } = branchTypes(fact);
-        pushBlock(() => {
-          if (whenTrue !== empty && fact.sense !== 'false') {
-            declareNarrowed(fact.name, whenTrue as Known);
-          }
-          validateDiscardedExpression(c.AssignmentExpression_a);
-        });
-        pushBlock(() => {
-          if (whenFalse !== empty && fact.sense !== 'true') {
-            declareNarrowed(fact.name, whenFalse as Known);
-          }
-          validateDiscardedExpression(c.AssignmentExpression_b);
+          return null;
         });
         return;
       }
@@ -14505,24 +14620,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * same ternary failed identically.
    */
   const conditionalArmTypes = (test: ParseNode | undefined, typeTrue: () => Known, typeFalse: () => Known): [Known, Known] => {
-    const fact = test ? narrowingFactOf(test) : undefined;
-    if (!fact) {
-      return [typeTrue(), typeFalse()];
+    if (!test) return [typeTrue(), typeFalse()];
+    const entry = captureFlow();
+    const live = flowLive;
+    const exits = flowExits;
+    flowExits = [];
+    try {
+      const branches = walkTest(test, false, false, false);
+      resumeFlow(branches.whenTrue);
+      const yes = pushBlock(typeTrue);
+      resumeFlow(branches.whenFalse);
+      return [yes, pushBlock(typeFalse)];
+    } finally {
+      restoreFlow(entry);
+      flowLive = live;
+      flowExits = exits;
     }
-    const { whenTrue, whenFalse } = branchTypes(fact);
-    const a = pushBlock(() => {
-      if (whenTrue !== empty && fact.sense !== 'false') {
-        declareNarrowed(fact.name, whenTrue as Known);
-      }
-      return typeTrue();
-    });
-    const b = pushBlock(() => {
-      if (whenFalse !== empty && fact.sense !== 'true') {
-        declareNarrowed(fact.name, whenFalse as Known);
-      }
-      return typeFalse();
-    });
-    return [a, b];
   };
 
   /**
@@ -21272,11 +21385,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /**
    * #sec-narrowfrom: report a narrowing form that decides a branch and whose
-   * test can never succeed or can never fail. A fact derived through `&&` or
-   * `||` is judged where its own operand is walked, so it is not judged again.
+   * test can never succeed or can never fail. Compound tests judge their
+   * operands under the corresponding incoming facts.
    */
   const judgeFact = (fact: NarrowingFact): void => {
-    if (fact.sense) return;
     // A parameterization is met by its meta type's hook, which runs after type
     // evaluation; the test is judged again then (#table-meta-hooks).
     if (!afterTypeEvaluation && fact.type?.Kind === 'parameterized') deferredGuardChecks.add(root);
@@ -21305,15 +21417,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     pushImpossibleTest(written, fact.display ?? displayType(fact.type));
   };
 
-  /**
-   * #sec-narrowing: a test decides every position it governs. Within a test
-   * that decides a branch, the right operand of `&&` or `||`, the last operand
-   * of a comma expression, and each arm of a conditional expression decide the
-   * same branch, so each is judged as the whole test is (#sec-narrowfrom). Each
-   * is judged where it is walked, inside the narrowing the operands before it
-   * establish: `(v instanceof A) && v.x === 1` reads `v.x` of an `A`.
-   */
-  const decidingNodes = new WeakSet<ParseNode>();
   const stripTest = (test: ParseNode): ParseNode => {
     let core = test;
     while (core.type === 'ParenthesizedExpression'
@@ -21323,47 +21426,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : (core as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
     }
     return core;
-  };
-  const markDeciding = (test: ParseNode): void => {
-    const core = stripTest(test);
-    const mark = (node: ParseNode) => {
-      decidingNodes.add(node);
-      markDeciding(node);
-    };
-    switch (core.type) {
-      case 'LogicalANDExpression':
-        mark((core as unknown as { BitwiseORExpression: ParseNode }).BitwiseORExpression);
-        break;
-      case 'LogicalORExpression':
-        mark((core as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression);
-        break;
-      case 'CommaOperator': {
-        const list = (core as unknown as { ExpressionList: readonly ParseNode[] }).ExpressionList;
-        decidingNodes.add(core);
-        if (list.length) mark(list[list.length - 1]);
-        break;
-      }
-      case 'ConditionalExpression': {
-        const c = core as unknown as { AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
-        mark(c.AssignmentExpression_a);
-        mark(c.AssignmentExpression_b);
-        break;
-      }
-      default:
-        break;
-    }
-  };
-  /** Judge a marked position that is itself a test rather than a combination of tests. */
-  const judgeDeciding = (node: ParseNode | null | undefined): void => {
-    if (!node || !decidingNodes.has(node)) return;
-    if (['LogicalANDExpression', 'LogicalORExpression', 'CommaOperator', 'ConditionalExpression'].includes(stripTest(node).type)) return;
-    const fact = narrowingFactOf(node, true);
-    if (fact) judgeFact(fact);
-    judgeTruthiness(node);
-  };
-  const walkDeciding = (node: ParseNode | null): void => {
-    judgeDeciding(node);
-    walk(node);
   };
 
   const narrowingFactOf = (expr: ParseNode, anyOperand = false): NarrowingFact | undefined => {
@@ -21462,18 +21524,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const rightName = right.type === 'IdentifierReference' ? (right as unknown as { name: string }).name : null;
       const t = (rightName ? classTypeOf(rightName) ?? libraryClassTypeOf(rightName) : null) ?? typeDenotedBy(right);
       return t ? { name: subject, type: t, subjectType: staticType(rel.RelationalExpression), negated } : undefined;
-    }
-    // `a && b` implies its LEFT operand only where the whole is true, and
-    // `a || b` implies the left is false only where the whole is false. So a
-    // conjunction narrows the branch it guards and a disjunction narrows the
-    // other one, and neither says anything about the branch it does not imply.
-    if (e.type === 'LogicalANDExpression') {
-      const l = narrowingFactOf((e as unknown as { LogicalANDExpression: ParseNode }).LogicalANDExpression, anyOperand);
-      return l ? { ...l, negated: l.negated !== negated, sense: negated ? 'false' : 'true' } : undefined;
-    }
-    if (e.type === 'LogicalORExpression') {
-      const l = narrowingFactOf((e as unknown as { LogicalORExpression: ParseNode }).LogicalORExpression, anyOperand);
-      return l ? { ...l, negated: l.negated !== negated, sense: negated ? 'true' : 'false' } : undefined;
     }
     if (e.type === 'EqualityExpression') {
       const eq = e as unknown as { operator: string, EqualityExpression: ParseNode, RelationalExpression: ParseNode };
@@ -21745,9 +21795,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return undefined;
   };
 
-  /** The enclosing request's key, maintained as the walk descends. */
-  let enclosingRequestKey: object | null = null;
-
   const narrowingRequestsHere: NarrowingRequest[] = [];
 
   /**
@@ -21763,7 +21810,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * "each meta type _M_ defining `narrow`" is asked and "each other meta type is
    * unchanged", which is the opposite of how `subtype` participates.
    */
-  const narrowingRequestOf = (test: ParseNode): Omit<NarrowingRequest, 'parent'> | undefined => {
+  const narrowingRequestOf = (test: ParseNode): NarrowingRequest | undefined => {
     if (test.type !== 'RelationalExpression') {
       return undefined;
     }
@@ -21796,7 +21843,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const name = (subjectNode as unknown as { name: string }).name;
     const subject = lookup(name);
-    if (!subject || subject.Kind !== 'parameterized') {
+    if (!subject || !(subject.Kind === 'parameterized'
+      || (subject.Kind === 'union' && subject.Members.every((member) => member.Kind === 'parameterized')))) {
       return undefined;
     }
     // NOT gated on a meta type defining `narrow`, though it looks like it
@@ -21811,19 +21859,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // the resolution's job, where the hooks exist, rather than the walk's.
     return {
       key: test, name, operator, constant: constantType.Value, subject,
+      inputs: (metadataFlowInputs.get(subject) ?? [{ type: subject }]).map((input) =>
+        'key' in input && input.key === test ? { type: subject } : input),
     };
   };
 
-  /**
-   * The narrowing an ASSERTION statement states, applied to the rest of its
-   * block.
-   *
-   * #sec-declared-narrowing gives [[Narrows]] two forms. The `boolean` one is a
-   * test and narrows a branch, which `narrowingFactOf` reads. The ~void~ one is
-   * an assertion - `assertU8(box);` - and narrows every position the call
-   * dominates, so there is no branch to hang it on and it belongs here, where
-   * the statements it dominates are still to be walked.
-   */
+  /** The effective selected signature's targets at this call site. */
   const predicateFacts = (call: ParseNode.CallExpression, assertion: boolean): { name: string, type: TypeRecord, subjectType: Known }[] => {
     const callee = callableForm(staticType(call.CallExpression));
     // Named binding alone does not select among several signatures sharing
@@ -21836,6 +21877,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ?? (callee?.Kind === 'function' && callee.Signatures.length === 1 ? callee.Signatures[0] : undefined);
     if (!signature || (!signature.Return || signature.Return.Kind === 'void') !== assertion) return [];
     const mapped = mapCallArguments(signature.Parameters, expandValueSpreads(call.Arguments));
+    const changedByLaterArguments = (name: string, from: number): boolean => {
+      const rootName = name.split('.')[0];
+      return call.Arguments.slice(from).some((argument) => flowWrites(argument).has(rootName)
+        || (containsCall(argument) && assignedInsideFunction.has(rootName)));
+    };
     const facts: { name: string, type: TypeRecord, subjectType: Known }[] = [];
     for (const rule of signature.Narrows ?? []) {
       if (mentionsTypeParameter(rule.Type)) continue;
@@ -21843,26 +21889,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         let target: ParseNode = call.CallExpression;
         while (target.type === 'ParenthesizedExpression' || target.type === 'TypeArgumentsExpression') target = target.Expression;
         const name = target.type === 'MemberExpression' ? narrowableName(target.MemberExpression) : null;
-        if (name !== null) facts.push({ name, type: rule.Type, subjectType: staticType((target as ParseNode.MemberExpression).MemberExpression) });
+        if (name !== null && !changedByLaterArguments(name, 0)) facts.push({ name, type: rule.Type, subjectType: staticType((target as ParseNode.MemberExpression).MemberExpression) });
         continue;
       }
       const slot = signature.Parameters.findIndex((parameter) => parameter.Name === rule.Target);
       const entries = mapped.certainEntries.filter((entry) => entry.slot === slot);
       if (entries.length !== 1 || signature.Parameters[slot]?.Rest) continue;
       const name = narrowableName(entries[0].node);
-      if (name !== null) facts.push({ name, type: rule.Type, subjectType: staticType(entries[0].node) });
+      const position = call.Arguments.findIndex((argument) => (argument.type === 'NamedArgument'
+        ? argument.AssignmentExpression : argument) === entries[0].node);
+      if (name !== null && !changedByLaterArguments(name, position < 0 ? 0 : position + 1)) {
+        facts.push({ name, type: rule.Type, subjectType: staticType(entries[0].node) });
+      }
     }
     return facts;
   };
 
-  const applyAssertionNarrowing = (statement: ParseNode): void => {
-    if (statement.type !== 'ExpressionStatement') {
-      return;
-    }
-    const expression = (statement as unknown as { Expression?: ParseNode }).Expression;
-    if (!expression || expression.type !== 'CallExpression') {
-      return;
-    }
+  const applyAssertionNarrowing = (expression: ParseNode.CallExpression): void => {
     const callee = expression.CallExpression;
     if (!afterTypeEvaluation && callee.type === 'IdentifierReference' && !staticType(callee)) {
       for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -21897,140 +21940,153 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   };
 
-  /**
-   * Walk a test and the two branches it guards, with the binding the test
-   * speaks about narrowed in each. Shared by `if`, `while`, and the conditional
-   * operator, which differ only in what they guard.
-   */
-  /** A `case` clause's narrowed discriminant, set by the `switch` before its block is walked. */
-  const caseClauseNarrowing = new WeakMap<ParseNode, { name: string, type: TypeRecord }>();
-
-  const walkGuarded = (test: ParseNode, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
-    // #sec-metadata-narrowing: record the comparison for the checking pass,
-    // which can call `narrow` where this pass cannot. The enclosing request is
-    // the parent, so the resolution sweep can compose an inner narrowing onto
-    // its outer one in a single pass.
-    const request = narrowingRequestOf(test);
-    if (request) {
-      narrowingRequestsHere.push({ ...request, parent: enclosingRequestKey });
-    }
-    markDeciding(test);
-    walk(test);
-    const fact = narrowingFactOf(test, true);
-    // The enclosing key covers BOTH paths. A relational comparison yields no
-    // type-level fact, so the guard below returns early - and that is exactly
-    // the shape a narrowing request has, so skipping the push here left every
-    // nested request without its parent, which is the one thing the parent link
-    // exists for.
-    const outerKey = enclosingRequestKey;
-    if (request) {
-      enclosingRequestKey = request.key;
-    }
-    try {
-      // #sec-metadata-narrowing, consumed: the checking pass resolved this
-      // comparison by calling `narrow`, which this walk cannot; where it did,
-      // the branch types are its answer. Recorded through `declareNarrowed` so
-      // an assignment invalidates a metadata narrowing exactly as it
-      // invalidates a type-level one.
-      const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
-      if (resolved) {
-        // #sec-narrowto: a comparison whose narrowed constraint admits no value
-        // can never succeed, or never fail (#sec-narrowfrom).
-        if (primitiveBased(request!.subject as TypeRecord)) {
-          const shown = `${request!.operator} comparison`;
-          if (isUninhabited(resolved.whenTrue as TypeRecord)) pushImpossibleTest('never-succeeds', shown);
-          else if (isUninhabited(resolved.whenFalse as TypeRecord)) pushImpossibleTest('never-fails', shown);
-        }
-        frames.push(emptyFrame());
-        declareNarrowed(request!.name, resolved.whenTrue);
-        walkDeciding(whenTrueNode);
-        frames.pop();
-        frames.push(emptyFrame());
-        declareNarrowed(request!.name, resolved.whenFalse);
-        walkDeciding(whenFalseNode);
-        frames.pop();
-        return;
+  const predeclareFlowLexicals = (statements: readonly ParseNode[]): void => {
+    for (const statement of statements) {
+      if (statement.type === 'LexicalDeclaration') {
+        for (const binding of statement.BindingList) declarePatternAnnotations(binding);
+      } else if (statement.type === 'ClassDeclaration' && statement.BindingIdentifier) {
+        declare(statement.BindingIdentifier.name, null);
       }
-      if (!fact) {
-        // Only a written annotation awaiting type evaluation can become a
-        // declared guard. An ordinary untyped callback contributes no fact.
-        let guardTest = test;
-        while (guardTest.type === 'ParenthesizedExpression'
-            || (guardTest.type === 'UnaryExpression' && guardTest.operator === '!')) {
-          guardTest = guardTest.type === 'ParenthesizedExpression'
-            ? guardTest.Expression : guardTest.UnaryExpression;
-        }
-        const call = guardTest.type === 'CallExpression' ? guardTest : null;
-        const callee = call?.CallExpression;
-        let pending = false;
-        if (!afterTypeEvaluation && callee?.type === 'IdentifierReference' && !staticType(callee)) {
-          for (let i = frames.length - 1; i >= 0; i -= 1) {
-            if (frames[i].declaredNames.has(callee.name)) {
-              pending = frames[i].unresolvedAnnotations.has(callee.name);
-              break;
-            }
-          }
-        }
-        if (pending) {
-          deferredGuardChecks.add(root);
-          pushBlock(() => {
-            // Only argument subjects may acquire a narrowing. Treat their
-            // current reads as unknown for this provisional walk; writes still
-            // use lookupDeclared. Independent literal/type errors are retained.
-            for (const argument of call!.Arguments ?? []) {
-              const name = narrowableName(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument);
-              if (name !== null) {
-                declareNarrowed(name, { Kind: 'any' });
-              }
-            }
-            walkDeciding(whenTrueNode);
-            walkDeciding(whenFalseNode);
-          });
-        } else {
-          walkDeciding(whenTrueNode);
-          walkDeciding(whenFalseNode);
-        }
-        return;
-      }
-      walkGuardedBranches(fact, whenTrueNode, whenFalseNode);
-    } finally {
-      enclosingRequestKey = outerKey;
     }
   };
 
-  /**
-   * The narrowed walk of the two branches, split out so the parent-link
-   * bookkeeping in `walkGuarded` covers both without duplicating the restore.
-   */
-  const walkGuardedBranches = (fact: NarrowingFact, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
-    const paths = [fact, ...(fact.additional ?? [])].map((entry) => {
-      const fact = { ...entry, sense: 'sense' in entry ? entry.sense : undefined };
-      judgeFact(fact);
-      const { source, whenTrue, whenFalse } = branchTypes(fact);
-      // A fact that already knows its test's answer - a `typeof` tag no value
-      // has or every value has, a member literal no union member admits -
-      // narrows nothing.
-      if (fact.verdict && source.Kind !== 'any') {
-        return { fact, whenTrue: source as Known | typeof empty, whenFalse: source as Known | typeof empty };
+  type TestFlow = { whenTrue: FlowFacts, whenFalse: FlowFacts };
+  const factFlow = (fact: NarrowingFact, sense: boolean): FlowFacts => {
+    for (const entry of [fact, ...(fact.additional ?? [])]) {
+      const narrowed = branchTypes(entry)[sense ? 'whenTrue' : 'whenFalse'];
+      if (narrowed !== empty && entry.name !== NON_PATH && !entry.verdict) {
+        declareNarrowed(entry.name, narrowed as Known);
       }
-      return { fact, whenTrue, whenFalse };
-    });
-    if (whenTrueNode) {
-      pushBlock(() => {
-        for (const { fact, whenTrue } of paths) {
-          if (whenTrue !== empty && fact.sense !== 'false' && fact.name !== NON_PATH) declareNarrowed(fact.name, whenTrue as Known);
-        }
-        walkDeciding(whenTrueNode);
-      });
     }
-    if (whenFalseNode) {
-      pushBlock(() => {
-        for (const { fact, whenFalse } of paths) {
-          if (whenFalse !== empty && fact.sense !== 'true' && fact.name !== NON_PATH) declareNarrowed(fact.name, whenFalse as Known);
-        }
-        walkDeciding(whenFalseNode);
-      });
+    return captureFlow();
+  };
+
+  // Type queries use the same edge algebra without executing the checker
+  // walk recursively. Effects may widen facts; queries never publish them.
+  const previewFlowEffects = (node: ParseNode): void => {
+    for (const name of flowWrites(node)) invalidateNarrowing(name);
+    if (containsCall(node)) for (const name of assignedInsideFunction) invalidateNarrowing(name);
+  };
+
+  /** Evaluate each operand once, retaining separate facts for both answers. */
+  const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
+    if (PatternScopeOf(test).length && !activePatternScopes.has(test)) {
+      return withPatternScope(test, () => walkTest(test, deciding, truthiness, visit));
     }
+    if (test.type === 'ParenthesizedExpression') return walkTest(test.Expression, deciding, truthiness, visit);
+    if (test.type === 'UnaryExpression' && test.operator === '!') {
+      if (visit) judgeVoidOperands(test);
+      const result = walkTest(test.UnaryExpression, deciding, truthiness, visit);
+      return { whenTrue: result.whenFalse, whenFalse: result.whenTrue };
+    }
+    if (test.type === 'CommaOperator') {
+      const list = test.ExpressionList;
+      list.slice(0, -1).forEach((operand) => visit ? walk(operand) : previewFlowEffects(operand));
+      return walkTest(list[list.length - 1], deciding, truthiness, visit);
+    }
+    if (test.type === 'LogicalANDExpression' || test.type === 'LogicalORExpression') {
+      if (visit) judgeVoidOperands(test);
+      const isOr = test.type === 'LogicalORExpression';
+      const left = test.type === 'LogicalORExpression' ? test.LogicalORExpression : test.LogicalANDExpression;
+      const right = test.type === 'LogicalORExpression' ? test.LogicalANDExpression : test.BitwiseORExpression;
+      const type = staticType(left);
+      if (visit && type && settledTruthiness(type) === isOr) errors.push(Throw.StaticTypeError(
+        'the right operand of $1 can never be evaluated, so it is dead code', Value(isOr ? '||' : '&&'),
+      ).Value as ObjectValue);
+      const first = walkTest(left, visit, false, visit);
+      resumeFlow(isOr ? first.whenFalse : first.whenTrue);
+      const second = walkTest(right, deciding, truthiness, visit);
+      return isOr
+        ? { whenTrue: joinFlow([first.whenTrue, second.whenTrue])!, whenFalse: second.whenFalse }
+        : { whenTrue: second.whenTrue, whenFalse: joinFlow([first.whenFalse, second.whenFalse])! };
+    }
+    if (test.type === 'ConditionalExpression') {
+      const condition = walkTest(test.ShortCircuitExpression, visit, visit, visit);
+      resumeFlow(condition.whenTrue);
+      const yes = walkTest(test.AssignmentExpression_a, deciding, truthiness, visit);
+      resumeFlow(condition.whenFalse);
+      const no = walkTest(test.AssignmentExpression_b, deciding, truthiness, visit);
+      return { whenTrue: joinFlow([yes.whenTrue, no.whenTrue])!, whenFalse: joinFlow([yes.whenFalse, no.whenFalse])! };
+    }
+    const request = narrowingRequestOf(test);
+    if (visit && request) narrowingRequestsHere.push(request);
+    if (visit) walk(test);
+    else previewFlowEffects(test);
+    const fact = narrowingFactOf(test, true);
+    if (visit && deciding) {
+      if (fact) judgeFact(fact);
+      if (truthiness) judgeTruthiness(test);
+    }
+    const entry = captureFlow();
+    const resolved = request ? GetNarrowingResolution(root, request.key) : undefined;
+    if (resolved) {
+      // #sec-narrowto: a comparison whose narrowed constraint admits no value
+      // can never succeed, or never fail (#sec-narrowfrom).
+      if (visit && deciding && primitiveBased(request!.subject as TypeRecord)) {
+        const shown = `${request!.operator} comparison`;
+        if (isUninhabited(resolved.whenTrue as TypeRecord)) pushImpossibleTest('never-succeeds', shown);
+        else if (isUninhabited(resolved.whenFalse as TypeRecord)) pushImpossibleTest('never-fails', shown);
+      }
+      declareNarrowed(request!.name, resolved.whenTrue);
+      const whenTrue = captureFlow();
+      restoreFlow(entry);
+      declareNarrowed(request!.name, resolved.whenFalse);
+      return { whenTrue, whenFalse: captureFlow() };
+    }
+    if (request) {
+      // Before hooks can run, carry symbolic edge identities through the same
+      // joins and invalidations as ordinary facts. Their provisional type is
+      // unchanged; the checking pass resolves the dependency graph once.
+      const branch = (sense: 'whenTrue' | 'whenFalse'): FlowFacts => {
+        restoreFlow(entry);
+        const type = { ...request.subject } as TypeRecord;
+        metadataFlowInputs.set(type, [{ key: request.key, branch: sense }]);
+        declareNarrowed(request.name, type);
+        return captureFlow();
+      };
+      return { whenTrue: branch('whenTrue'), whenFalse: branch('whenFalse') };
+    }
+    if (fact) {
+      const whenTrue = factFlow(fact, true);
+      restoreFlow(entry);
+      const whenFalse = factFlow(fact, false);
+      return { whenTrue, whenFalse };
+    }
+    // Before type evaluation only an unresolved written annotation can supply
+    // a predicate. Keep its argument subjects provisional in both branches.
+    if (!afterTypeEvaluation && test.type === 'CallExpression' && test.CallExpression.type === 'IdentifierReference'
+      && !staticType(test.CallExpression)) {
+      const callee = test.CallExpression;
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        if (!frames[i].declaredNames.has(callee.name)) continue;
+        if (frames[i].unresolvedAnnotations.has(callee.name)) {
+          deferredGuardChecks.add(root);
+          for (const argument of test.Arguments) {
+            const name = narrowableName(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument);
+            if (name !== null) declareNarrowed(name, anyTypeRecord);
+          }
+        }
+        break;
+      }
+    }
+    const unchanged = captureFlow();
+    return { whenTrue: unchanged, whenFalse: unchanged };
+  };
+
+  const nullishFlow = (operand: ParseNode): TestFlow => {
+    const entry = captureFlow();
+    const fact: NarrowingFact = { name: narrowableName(operand) ?? NON_PATH,
+      subjectType: staticType(operand), type: nullishType(), negated: false };
+    const whenTrue = factFlow(fact, true);
+    restoreFlow(entry);
+    return { whenTrue, whenFalse: factFlow(fact, false) };
+  };
+
+  const walkGuarded = (test: ParseNode, whenTrueNode: ParseNode | null, whenFalseNode: ParseNode | null) => {
+    const result = walkTest(test);
+    const yes = runFlow(result.whenTrue, () => flowBlock(() => walk(whenTrueNode)));
+    const no = runFlow(result.whenFalse, () => flowBlock(() => walk(whenFalseNode)));
+    resumeFlow(joinFlow([yes, no]));
   };
 
   /**
@@ -22538,7 +22594,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       walk(me.Expression as ParseNode);
       const subjectType = staticType(me.Expression as ParseNode);
       let remaining = subjectType;
+      let matchEntry = captureFlow();
+      const completed: (FlowFacts | undefined)[] = [];
       me.Clauses.forEach((clause) => {
+        resumeFlow(matchEntry);
         frames.push(emptyFrame());
         let selected = remaining;
         // What the preceding unguarded clauses left, read before this clause
@@ -22635,26 +22694,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ) as ThrowCompletion).Value as ObjectValue);
           }
         }
-        if (clause.Guard) {
-          // #sec-narrowing: once the pattern has matched, the guard alone
-          // decides whether the arm runs, so it is judged as a test that
-          // decides a branch (#sec-narrowfrom) and its facts hold in the arm,
-          // which this clause's frame covers.
-          const guard = clause.Guard as ParseNode;
-          markDeciding(guard);
-          walk(guard);
-          const fact = narrowingFactOf(guard, true);
-          if (fact) {
-            for (const entry of [fact, ...(fact.additional ?? [])]) {
-              judgeFact(entry);
-              const { whenTrue } = branchTypes(entry);
-              if (whenTrue !== empty && entry.sense !== 'false' && entry.name !== NON_PATH && !entry.verdict) {
-                declareNarrowed(entry.name, whenTrue as Known);
-              }
-            }
-          }
-          judgeTruthiness(guard);
-        }
+        if (clause.Guard) resumeFlow(walkTest(clause.Guard).whenTrue);
         if (clause.IsBlock) markCompletionContext(clause.Body, armContext);
         const result = clause.IsThrow ? neverType
           : clause.IsBlock ? null : staticTypeIn(clause.Body, armContext);
@@ -22662,8 +22702,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(clause.Body as ParseNode);
         armTypes.push(clause.IsThrow ? neverType : clause.IsBlock
           ? completionTypeOf((clause.Body as ParseNode.Block).StatementList) : result);
+        const outgoing = clause.IsThrow ? undefined : normalFlow();
+        if (clause.IsThrow && flowLive) flowExits.push({ kind: 'throw', facts: captureFlow() });
+        completed.push(outgoing);
         frames.pop();
+        if (me.All) matchEntry = joinFlow([matchEntry, outgoing])!;
       });
+      resumeFlow(me.All ? matchEntry : joinFlow(completed));
       // #sec-match-exhaustiveness: a clause is also dead "where every atom the
       // clause covers is covered before it". Narrowing cannot see that for a
       // boolean, an enum or a numeric subject - it does not empty them arm by
@@ -24928,7 +24973,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (let i = scope; i >= 0; i -= 1) {
         const frame = frames[i];
         // A flow fact changes the value type, not the declaration's contract.
-        if ((frame as Frame & { narrowed?: Set<string> }).narrowed?.has(node.name)) continue;
+        if (frame.narrowed?.has(node.name) && !frame.declaredNames.has(node.name)) continue;
         const contribution = unaryBindingParticipation.get(frame)?.get(node.name);
         if (contribution !== undefined) return contribution;
         const origin = invocationOrigins.get(frame)?.get(node.name);
@@ -25969,6 +26014,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? resolveType((p as { TypeAnnotation: ParseNode.TypeAnnotation }).TypeAnnotation.Type) ?? anyTypeRecord : anyTypeRecord,
       { Rest: p.type === 'BindingRestElement' },
     )), formals[0]?.parent);
+    const outerFlow = captureFlow();
+    const outerLive = flowLive;
+    const outerExits = flowExits;
+    flowLive = true;
+    flowExits = [];
     frames.push(emptyFrame());
     varFrames.push(frames[frames.length - 1]);
     // #sec-annotations-on-the-remaining-function-forms: a generator's return
@@ -26155,6 +26205,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     asyncReturns.pop();
     varFrames.pop();
     frames.pop();
+    restoreFlow(outerFlow);
+    flowLive = outerLive;
+    flowExits = outerExits;
   };
 
   // The enclosing `for`-over-a-range loops, innermost last: each binding name
@@ -28717,9 +28770,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const optionalChainView = (node: ParseNode.OptionalExpression, visit: boolean): { expression: ParseNode, shortCircuits: boolean } => {
+  const optionalChainView = (node: ParseNode.OptionalExpression, visit: boolean, skipped?: FlowFacts[]): { expression: ParseNode, shortCircuits: boolean } => {
+    const shortCircuitExits = skipped ?? [];
     let view = node.MemberExpression.type === 'OptionalExpression'
-      ? optionalChainView(node.MemberExpression, visit)
+      ? optionalChainView(node.MemberExpression, visit, shortCircuitExits)
       : { expression: node.MemberExpression as ParseNode, shortCircuits: false };
     if (visit && node.MemberExpression.type !== 'OptionalExpression') {
       walk(node.MemberExpression);
@@ -28727,6 +28781,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const base = staticType(view.expression);
     const present = base ? NarrowFrom(base, nullishType()) : null;
     const canShortCircuit = base !== null && present !== base;
+    if (visit) {
+      const branches = nullishFlow(node.MemberExpression);
+      if (canShortCircuit) shortCircuitExits.push(branches.whenTrue);
+      resumeFlow(branches.whenFalse);
+    }
     view = {
       expression: canShortCircuit ? typedExpressionView(view.expression, present === empty ? neverType : present) : view.expression,
       shortCircuits: view.shortCircuits || canShortCircuit,
@@ -28749,6 +28808,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             checkArgumentSpreads(chain.Arguments);
           }
           walk(chain.Arguments);
+          for (const name of assignedInsideFunction) invalidateNarrowing(name);
+          applyAssertionNarrowing(call);
         }
         view.expression = unreachable ? typedExpressionView(call, neverType) : call;
       } else {
@@ -28767,6 +28828,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     };
     append(node.OptionalChain);
+    if (visit && !skipped) resumeFlow(joinFlow([normalFlow(), ...shortCircuitExits]));
     return view;
   };
 
@@ -29184,23 +29246,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     const single = node && !Array.isArray(node) ? node as ParseNode : undefined;
-    if (single) judgeVoidOperands(single);
-    // #sec-narrowing: a `case` clause's statements see the discriminant as the
-    // labels that reach them establish (computed at the `switch`).
-    const clauseNarrowing = single ? caseClauseNarrowing.get(single) : undefined;
-    if (single && clauseNarrowing) {
-      caseClauseNarrowing.delete(single);
-      const clause = single as unknown as { Expression?: ParseNode | null, StatementList?: readonly ParseNode[] | null };
-      if (clause.Expression) walk(clause.Expression);
-      frames.push(emptyFrame());
-      declareNarrowed(clauseNarrowing.name, clauseNarrowing.type);
-      walk(clause.StatementList ?? null);
-      frames.pop();
+    // Unreachable source is still checked, but cannot contribute an outgoing
+    // edge. In particular it cannot revive a return with a later declaration.
+    if (!flowLive) {
+      const saved = captureFlow();
+      const exits = flowExits;
+      flowExits = [];
+      flowLive = true;
+      walk(node);
+      restoreFlow(saved);
+      flowExits = exits;
+      flowLive = false;
       return;
     }
+    if (single) judgeVoidOperands(single);
     const barrier = single && ['CallExpression', 'RefExpression', 'IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunction'].includes(single.type);
     if (barrier) invalidateMutableMetadataFacts();
     walkNode(node);
+    if (single && flowLive && ['ReturnStatement', 'ThrowStatement', 'BreakStatement', 'ContinueStatement'].includes(single.type)) {
+      const kind = single.type === 'ReturnStatement' ? 'return' : single.type === 'ThrowStatement' ? 'throw'
+        : single.type === 'BreakStatement' ? 'break' : 'continue';
+      const target = single.type === 'BreakStatement' || single.type === 'ContinueStatement' ? flowTarget(single) : undefined;
+      flowExits.push({ kind, target, facts: captureFlow() });
+      flowLive = false;
+    }
     if (barrier) invalidateMutableMetadataFacts();
     if (single?.type === 'AssignmentExpression' && single.LeftHandSideExpression.type === 'IdentifierReference') {
       const name = single.LeftHandSideExpression.name;
@@ -29756,6 +29825,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         bindingType = { ...(bindingType as object) } as Known;
         literalDerivedNumbers.add(bindingType as object);
       }
+      const iterationEntry = captureFlow();
       const walkBody = () => {
         const binding = (f.ForDeclaration as ParseNode.ForDeclaration | undefined)?.ForBinding ?? f.ForBinding;
         const check = () => {
@@ -29776,16 +29846,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           check();
         }
       };
+      const finishIteration = () => resumeFlow(joinFlow([iterationEntry, normalFlow(),
+        ...takeFlowExits(node as ParseNode, 'break'), ...takeFlowExits(node as ParseNode, 'continue')]));
       if (bound && typeof name === 'string') {
         rangeCounters.push({ name, ...bound });
         try {
           walkBody();
         } finally {
           rangeCounters.pop();
+          finishIteration();
         }
         return;
       }
       walkBody();
+      finishIteration();
       return;
     }
     if (!Array.isArray(node) && (node as ParseNode).type === 'IdentifierReference') {
@@ -29834,150 +29908,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // any of it is walked, which is what lets `f(300)` above `function
       // f(v: uint8) {}` be the Early Error it should be.
       declareFunctionSignatures(node as readonly ParseNode[], false);
-      // A GUARD CLAUSE carries its fact to the statements after it.
-      // #sec-narrowing: "The Static Type of a reference to a binding at a given
-      // point is its declared type refined by the narrowing facts that HOLD
-      // THERE." Where one branch of an `if` cannot complete, the other branch's
-      // fact holds for everything following it, because reaching that point is
-      // what the taken branch made impossible:
-      //
-      //   if (n === null) { return 0; } return n;   // `n` is not null here
-      //
-      // Only the `else` spelling worked before, so the commonest form of the
-      // idiom was the one refused. The fact is declared in a PUSHED frame
-      // covering the remaining statements, which is what makes it both outlive
-      // the `if` and stay droppable: `invalidateNarrowing` deletes the entry
-      // from whichever frame holds it, so in a pushed frame a later assignment
-      // reveals the outer declaration, while in the declaring frame it would
-      // remove the declaration itself.
-      // #sec-narrowing: the facts holding after a statement are the join of
-      // the facts on every path leaving it normally, a path through a statement
-      // that cannot complete normally (#sec-divergence) contributing none. Where
-      // exactly one path survives, its facts hold for the statements after: the
-      // other branch of an `if`, the failed test of a loop no `break` leaves,
-      // and the fall-out past a `switch` whose clauses all leave.
-      const factsWhere = (test: ParseNode, truth: boolean): { name: string, type: Known }[] => {
-        let e = test;
-        let t = truth;
-        for (;;) {
-          if (e.type === 'ParenthesizedExpression') {
-            e = (e as unknown as { Expression: ParseNode }).Expression;
-          } else if (e.type === 'UnaryExpression' && (e as unknown as { operator?: string }).operator === '!') {
-            t = !t;
-            e = (e as unknown as { UnaryExpression: ParseNode }).UnaryExpression;
-          } else {
-            break;
-          }
-        }
-        if (e.type === 'LogicalANDExpression' || e.type === 'LogicalORExpression') {
-          const and = e.type === 'LogicalANDExpression';
-          // Every operand of a true `&&`, and of a false `||`, has that truth;
-          // the other outcome says only that some operand did not.
-          if (t !== and) return [];
-          const l = e as unknown as { LogicalANDExpression?: ParseNode, LogicalORExpression?: ParseNode, BitwiseORExpression?: ParseNode };
-          const left = (and ? l.LogicalANDExpression : l.LogicalORExpression)!;
-          const right = (and ? l.BitwiseORExpression : l.LogicalANDExpression)!;
-          const first = factsWhere(left, t);
-          // The right operand runs where the left one's facts hold.
-          let second: { name: string, type: Known }[] = [];
-          pushBlock(() => {
-            for (const fact of first) declareNarrowed(fact.name, fact.type);
-            second = factsWhere(right, t);
-          });
-          return [...first, ...second];
-        }
-        const fact = narrowingFactOf(e);
-        if (!fact || fact.sense || fact.verdict) return [];
-        const out: { name: string, type: Known }[] = [];
-        for (const entry of [fact, ...(fact.additional ?? [])]) {
-          const { whenTrue, whenFalse } = branchTypes({ ...entry, sense: undefined } as NarrowingFact);
-          const r = t ? whenTrue : whenFalse;
-          if (r !== empty && entry.name !== NON_PATH) out.push({ name: entry.name, type: r as Known });
-        }
-        return out;
-      };
-      // Whether a `break` can leave _node_: an unlabelled one not inside a
-      // nested loop or `switch`, or any labelled one, functions excluded.
-      const breaksOut = (node: unknown, nested = false): boolean => {
-        if (!node || typeof node !== 'object') return false;
-        if (Array.isArray(node)) return node.some((x) => breaksOut(x, nested));
-        const n = node as { type?: unknown, LabelIdentifier?: unknown };
-        if (typeof n.type !== 'string') return false;
-        if (n.type === 'BreakStatement') return !!n.LabelIdentifier || !nested;
-        if (/Function|Arrow|Class|Method|Generator|Getter|Setter/.test(n.type)) return false;
-        const inner = nested || /^(While|DoWhile|For|ForIn|ForOf|ForAwait|ForInOf)Statement$/.test(n.type) || n.type === 'SwitchStatement';
-        for (const key of Object.keys(n)) {
-          if (key !== 'parent' && key !== 'location' && breaksOut((n as Record<string, unknown>)[key], inner)) return true;
-        }
-        return false;
-      };
-      const rootName = (name: string) => name.split(/[.[]/)[0];
-      const carriedSwitchFacts = (sw: ParseNode): { name: string, type: Known }[] => {
-        const node = sw as unknown as {
-          Expression: ParseNode,
-          CaseBlock: { CaseClauses_a?: readonly ParseNode[] | null, CaseClauses_b?: readonly ParseNode[] | null, DefaultClause?: ParseNode | null },
-        };
-        const name = narrowableName(node.Expression);
-        if (name === null || node.CaseBlock.DefaultClause) return [];
-        const clauses = [...(node.CaseBlock.CaseClauses_a ?? []), ...(node.CaseBlock.CaseClauses_b ?? [])];
-        if (clauses.length === 0) return [];
-        for (const [index, clause] of clauses.entries()) {
-          const statements = (clause as unknown as { StatementList?: readonly ParseNode[] | null }).StatementList ?? [];
-          // A clause with no statements falls into the next one.
-          if (statements.length === 0) {
-            if (index === clauses.length - 1) return [];
-            continue;
-          }
-          const block = { type: 'Block', StatementList: statements } as unknown as ParseNode;
-          if (breaksOut(statements) || canCompleteNormally(block, switchCoversDiscriminant)) return [];
-        }
-        let source: Known | typeof empty = lookup(name) ?? staticType(node.Expression);
-        if (!source || source.Kind === 'any') return [];
-        for (const clause of clauses) {
-          const label = (clause as unknown as { Expression?: ParseNode | null }).Expression;
-          const labelType = label ? singleValueOperandType(label, source as Known) : null;
-          if (!labelType) return [];
-          source = narrowFromTested(source as TypeRecord, labelType);
-          if (source === empty) return [];
-        }
-        return [{ name, type: source as Known }];
-      };
-      const carriedFacts = (stmt: ParseNode | undefined): { name: string, type: Known }[] => {
-        if (!stmt) return [];
-        if (stmt.type === 'IfStatement') {
-          const g = stmt as unknown as { Expression: ParseNode, Statement_a: ParseNode, Statement_b?: ParseNode | null };
-          const leaves = (b: ParseNode | null | undefined) => (b ? !canCompleteNormally(b, switchCoversDiscriminant) : false);
-          const trueLeaves = leaves(g.Statement_a);
-          const falseLeaves = g.Statement_b ? leaves(g.Statement_b) : false;
-          if (trueLeaves && !falseLeaves) return factsWhere(g.Expression, false);
-          if (falseLeaves && !trueLeaves) return factsWhere(g.Expression, true);
-          return [];
-        }
-        if (stmt.type === 'WhileStatement' || stmt.type === 'DoWhileStatement' || stmt.type === 'ForStatement') {
-          const loop = stmt as unknown as { Expression?: ParseNode | null, Statement: ParseNode, LexicalDeclaration?: ParseNode | null };
-          const test = stmt.type === 'ForStatement' ? ForPatternPositions(stmt as ParseNode.ForStatement).test : loop.Expression;
-          if (!test || breaksOut(loop.Statement)) return [];
-          const scoped = loop.LexicalDeclaration ? new Set<string>(BoundNames(loop.LexicalDeclaration).map((n) => n.stringValue())) : new Set<string>();
-          return factsWhere(test, false).filter((fact) => !scoped.has(rootName(fact.name)));
-        }
-        if (stmt.type === 'SwitchStatement') return carriedSwitchFacts(stmt);
-        return [];
-      };
-      const walkSequence = (list: readonly ParseNode[], from: number): void => {
-        for (let i = from; i < list.length; i += 1) {
-          const stmt = list[i]!;
-          walk(stmt);
-          const carried = carriedFacts(stmt);
-          if (carried.length) {
-            pushBlock(() => {
-              for (const fact of carried) declareNarrowed(fact.name, fact.type);
-              walkSequence(list, i + 1);
-            });
-            return;
-          }
-        }
-      };
-      walkSequence(node as readonly ParseNode[], 0);
+      for (const statement of node as readonly ParseNode[]) walk(statement);
       // The list's own bindings are declared by now, so an inference anchored by
       // one of them has something to read: `let s: string = "s"; function g(){
       // return s; }` in a block publishes `string` as it does at top level.
@@ -30218,48 +30149,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The last operand of a comma expression that decides a branch decides
         // it too (#sec-narrowing).
         const list = (n as unknown as { ExpressionList: readonly ParseNode[] }).ExpressionList;
-        list.forEach((operand, index) => (index === list.length - 1 ? walkDeciding(operand) : walk(operand)));
+        list.forEach((operand) => walk(operand));
         return;
       }
       case 'LogicalANDExpression':
       case 'LogicalORExpression': {
-        // `??` is reported because its
-        // RIGHT OPERAND can never be evaluated - the form contains code the
-        // program wrote and cannot reach - and `||` and `&&` are the same shape
-        // whenever the left operand's type settles the test.
-        //
-        // This is NOT the constant-answer rule. An impossible `instanceof` in a
-        // value position is a legitimate question, which the corpus relies on to
-        // demonstrate the operator; an unreachable operand is dead code wherever
-        // it appears, which is why `??`'s own example in the clause is a value
-        // position.
-        //
-        // Decidable where truthiness is a property of the TYPE, by the table of
-        // #sec-falsy-and-truthy-parts: a literal by its value; `null` and
-        // `undefined` always falsy; `symbol`, `type`, an object, array, tuple,
-        // function or (non-enum) nominal type always truthy. A `uint8` settles
-        // nothing, since 0 is falsy and every other value is not, and neither
-        // does an enum, whose values are its underlying type's.
-        const lg = n as unknown as { LogicalANDExpression?: ParseNode, LogicalORExpression?: ParseNode, BitwiseORExpression?: ParseNode, BitwiseANDExpression?: ParseNode };
-        const isOr = n.type === 'LogicalORExpression';
-        const leftNode = (isOr ? lg.LogicalORExpression : lg.LogicalANDExpression) as ParseNode | undefined;
-        if (leftNode) {
-          const lt = staticType(leftNode);
-          if (lt) {
-            const t = settledTruthiness(lt);
-            // `||` skips its right operand when the left is truthy; `&&` when
-            // the left is falsy.
-            if (t !== undefined && t === isOr) {
-              const completion = Throw.StaticTypeError(
-                'the right operand of $1 can never be evaluated, so it is dead code',
-                Value(isOr ? '||' : '&&'),
-              );
-              errors.push(completion.Value as ObjectValue);
-            }
-          }
-        }
-        const rightNode = (isOr ? lg.LogicalANDExpression : lg.BitwiseORExpression) as ParseNode;
-        walkGuarded(leftNode!, isOr ? null : rightNode, isOr ? rightNode : null);
+        const result = walkTest(n, false);
+        resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
         return;
       }
       case 'CoalesceExpression': {
@@ -30269,7 +30165,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           reportImpossibleTest(s, nullishType(), '??', true);
         }
         walk(co.CoalesceExpressionHead as ParseNode);
-        walk(co.BitwiseORExpression as ParseNode);
+        const branches = nullishFlow(co.CoalesceExpressionHead as ParseNode);
+        const right = runFlow(branches.whenTrue, () => walk(co.BitwiseORExpression as ParseNode));
+        resumeFlow(joinFlow([branches.whenFalse, right]));
         return;
       }
       case 'ExpressionStatement': {
@@ -30289,11 +30187,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // argument, for one), and that is a separate change with its own
         // consequences. Recorded as a remaining item.
         validateDiscardedExpression((n as unknown as { Expression: ParseNode }).Expression);
-        // The ~void~ form. #sec-declared-narrowing: an assertion narrows "every position the
-        // call dominates" rather than a branch, so it is applied AFTER the
-        // statement is walked and takes effect for its siblings - which the
-        // generic walk visits in order, and whose extent is the enclosing
-        // block's frame.
         for (const key of Object.keys(n)) {
           if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
             continue;
@@ -30309,7 +30202,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           requireAssignable(type, contextual);
           completionValues.set(n, type);
         }
-        applyAssertionNarrowing(n);
         return;
       }
       case 'WithStatement':
@@ -30323,7 +30215,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       case 'Block':
       case 'CaseBlock':
-        pushBlock(() => {
+        flowBlock(() => {
+          if (n.type === 'Block') predeclareFlowLexicals(n.StatementList);
           for (const key of Object.keys(n)) {
             if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
               continue;
@@ -30599,55 +30492,67 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             else earlier.push(caught);
           }
         }
-        // Then walk on. Breaking here skipped the default case, which is what
-        // descends into a node's children - so every declaration and check
-        // inside a `try` stopped being visited, and eight tests in a file this
-        // rule does not touch went red.
-        for (const key of Object.keys(n)) {
-          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
-            continue;
-          }
-          const child = (n as unknown as Record<string, unknown>)[key];
-          if (key === 'Catch') {
-            continue;
-          }
-          if (key === 'CatchClauses' && Array.isArray(child)) {
-            for (const clause of child as readonly ParseNode[]) {
-              const cl = clause as unknown as {
-                CatchParameter?: (ParseNode & { name?: string, BindingIdentifier?: { name?: string } | null }) | null,
-                TypeAnnotation?: ParseNode.TypeAnnotation | null,
-              };
-              const caught = cl.TypeAnnotation ? resolveType(cl.TypeAnnotation.Type) : null;
-              if (cl.CatchParameter) requireBindingType(caught);
-              // A |CatchParameter| that is a single name IS the BindingIdentifier
-              // - its name is on the node itself - rather than a node carrying
-              // one. Reading `.BindingIdentifier.name` found nothing and the
-              // clause was walked untyped, which is what made two earlier
-              // attempts look like a scoping problem when the type had resolved
-              // correctly all along.
-              const caughtName = cl.CatchParameter?.name ?? cl.CatchParameter?.BindingIdentifier?.name;
-              if (caughtName) {
-                pushBlock(() => {
-                  declare(caughtName, caught);
-                  walk(clause);
-                });
-                continue;
-              }
-              // A filter supplies the pattern's input contract. Even an untyped
-              // catch checks its independently written defaults/rest annotations.
-              pushBlock(() => {
-                if (cl.CatchParameter) checkPattern(cl.CatchParameter as PatternNode,
-                  { type: caught, typed: !!cl.TypeAnnotation }, true, !!cl.TypeAnnotation);
-                walk((clause as ParseNode.Catch).Block);
-              });
-            }
-            continue;
-          }
-          if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
-            walk(child as ParseNode);
-          }
+        const entry = captureFlow();
+        const outerExits = flowExits;
+        flowExits = [];
+        walk(n.Block);
+        const normal = [normalFlow()];
+        const handlers = n.CatchClauses ?? (n.Catch ? [n.Catch] : []);
+        // Expressions and cleanup can throw before or after a write. Handler
+        // entry cannot assume a particular explicit throw was the only source.
+        restoreFlow(entry);
+        for (const name of flowWrites(n.Block)) invalidateNarrowing(name);
+        if (containsCall(n.Block)) for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        const exceptional = captureFlow();
+        const thrown = flowExits.filter((exit) => exit.kind === 'throw');
+        if (handlers.some((clause) => !clause.TypeAnnotation)) flowExits = flowExits.filter((exit) => exit.kind !== 'throw');
+        for (const clause of handlers) {
+          normal.push(runFlow(exceptional, () => flowBlock(() => {
+            const caught = clause.TypeAnnotation ? resolveType(clause.TypeAnnotation.Type) : null;
+            if (clause.CatchParameter) requireBindingType(caught);
+            const parameter = clause.CatchParameter;
+            if (parameter?.type === 'BindingIdentifier') declare(parameter.name, caught);
+            else if (parameter) checkPattern(parameter as PatternNode, { type: caught, typed: !!clause.TypeAnnotation }, true, !!clause.TypeAnnotation);
+            walk(clause.Block);
+          })));
         }
-        break;
+        const incomingNormal = joinFlow(normal);
+        if (!n.Finally) {
+          flowExits = [...outerExits, ...flowExits];
+          resumeFlow(incomingNormal);
+          return;
+        }
+        const incoming = flowExits;
+        // An implicit exception also executes the finalizer. It never becomes
+        // a normal try completion unless the finalizer overrides it.
+        const all = joinFlow([incomingNormal, exceptional, ...incoming.map((exit) => exit.facts), ...thrown.map((exit) => exit.facts)])!;
+        flowExits = [];
+        const finalNormal = runFlow(all, () => walk(n.Finally));
+        const finalExits = flowExits;
+        const transfer = (facts: FlowFacts): FlowFacts | undefined => {
+          if (!finalNormal) return undefined;
+          restoreFlow(facts);
+          for (const name of flowWrites(n.Finally)) invalidateNarrowing(name);
+          if (containsCall(n.Finally)) for (const name of assignedInsideFunction) invalidateNarrowing(name);
+          const result = captureFlow();
+          for (const [owner, entries] of finalNormal) {
+            if (!result.has(owner)) result.set(owner, new Map());
+            for (const [name, type] of entries) {
+              const before = result.get(owner)!.get(name);
+              const narrowed = before ? narrowToTested(before, type) : type;
+              if (narrowed === empty) return undefined;
+              result.get(owner)!.set(name, narrowed);
+            }
+          }
+          return result;
+        };
+        const outgoing = incoming.flatMap((exit) => {
+          const facts = transfer(exit.facts);
+          return facts ? [{ ...exit, facts }] : [];
+        });
+        flowExits = [...outerExits, ...outgoing, ...finalExits];
+        resumeFlow(incomingNormal ? transfer(incomingNormal) : undefined);
+        return;
       }
       case 'SwitchStatement': {
         // proposal-runtime-types (spec sec-enums, sec-narrowing): a switch over an
@@ -30860,119 +30765,59 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
-        // #sec-narrowing: where the discriminant is a Boolean literal, each label
-        // is a test deciding whether its clause is entered, judged as the test
-        // of an `if` is (#sec-narrowfrom). Its facts hold in the statements it
-        // reaches unless an earlier clause falls into them, and the labels after
-        // it, tested only where it failed, see its negation.
-        if (n.Expression.type === 'BooleanLiteral') {
-          const sense = (n.Expression as unknown as { value: boolean }).value;
-          const block = n.CaseBlock as unknown as {
-            CaseClauses_a?: readonly ParseNode[] | null, DefaultClause?: ParseNode | null, CaseClauses_b?: readonly ParseNode[] | null,
-          };
-          const ordered = [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])];
-          const declareBranch = (facts: readonly NarrowingFact[], branch: 'whenTrue' | 'whenFalse') => {
-            for (const fact of facts) {
-              const narrowed = branchTypes(fact)[branch];
-              if (narrowed !== empty && fact.name !== NON_PATH && !fact.verdict && !fact.sense) declareNarrowed(fact.name, narrowed as Known);
-            }
-          };
-          const failed: NarrowingFact[] = [];
-          let fallsIn = false;
-          walk(n.Expression);
-          for (const clause of ordered) {
-            const label = (clause as { Expression?: ParseNode | null }).Expression ?? null;
-            let fact: NarrowingFact | undefined;
-            if (label) {
-              pushBlock(() => {
-                declareBranch(failed, 'whenFalse');
-                markDeciding(label);
-                walk(label);
-                const found = narrowingFactOf(label, true);
-                fact = found && (sense ? found : { ...found, negated: !found.negated });
-                if (fact) judgeFact(fact);
-              });
-            }
-            const statements = (clause as { StatementList?: readonly ParseNode[] | null }).StatementList ?? [];
-            pushBlock(() => {
-              if (!fallsIn) {
-                declareBranch(failed, 'whenFalse');
-                if (fact) declareBranch([fact], 'whenTrue');
-              }
-              walk(statements);
-            });
-            fallsIn = statements.length === 0
-              || canCompleteNormally({ type: 'Block', StatementList: statements } as unknown as ParseNode, switchCoversDiscriminant);
-            if (fact) failed.push(fact);
-          }
-          return;
-        }
-        // Walk the discriminant and case bodies as usual.
         walk(n.Expression);
-        // #sec-narrowing: each label narrows the statements it reaches to
-        // NarrowTo(s, L), joined over the labels that fall through to them, and
-        // the `default` to s with every case's type removed. Only where the
-        // discriminant is a narrowable path; a clause that declares a lexical
-        // binding is left unnarrowed, since its scope is the whole case block.
-        {
-          const discriminantName = narrowableName(n.Expression);
-          const subject = staticType(n.Expression);
-          if (discriminantName !== null && subject && subject.Kind !== 'any' && !mentionsTypeParameter(subject)) {
-            const block = n.CaseBlock as unknown as { CaseClauses_a?: readonly ParseNode[] | null, DefaultClause?: ParseNode | null, CaseClauses_b?: readonly ParseNode[] | null };
-            const ordered = [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])];
-            const labelOf = (clause: ParseNode): TypeRecord | null => {
-              const label = (clause as unknown as { Expression?: ParseNode | null }).Expression;
-              if (!label) return null;
-              // `case e` "where e names a literal type": a `const` naming one
-              // counts, resolved as the label check resolves it.
-              const t = singleValueOperandType(label) ?? staticType(label);
-              // A numeric literal label adopts a numeric discriminant's type, as
-              // `x === 1` does, so `case 1` over a `uint8` narrows to that `1`.
-              if (t?.Kind === 'literal' && subject.Kind === 'primitive'
-                  && ((t as { Base?: { Kind?: string, Name?: string } }).Base?.Name === 'number') && (subject as { Name?: string }).Name !== 'number'
-                  && !cannotHoldValue(subject as TypeRecord, t as TypeRecord)) {
-                return { ...(t as TypeRecord), Base: subject } as TypeRecord;
-              }
-              if (t?.Kind === 'literal') return t as TypeRecord;
-              // An enumerator label names one of the enum's atoms.
-              if (label.type === 'MemberExpression' && subject.Kind === 'nominal') {
-                const member = (label as unknown as { IdentifierName?: { name?: string } }).IdentifierName?.name;
-                const atom = member ? Atoms(subject as TypeRecord).find((a) => a.key === member || a.key.endsWith(`.${member}`)) : undefined;
-                if (atom) return atom.type as TypeRecord;
-              }
-              if (label.type === 'IdentifierReference' && subject.Kind === 'nominal') {
-                const instance = classTypeOf((label as unknown as { name: string }).name);
-                if (instance && instance.Kind === 'nominal') return instance as TypeRecord;
-              }
-              return null;
-            };
-            const labels = ordered.map((c) => (c.type === 'DefaultClause' ? undefined : labelOf(c)));
-            const everyLabelKnown = labels.every((l) => l !== null);
-            let carried: TypeRecord | null = null;
-            for (let k = 0; k < ordered.length; k += 1) {
-              const clause = ordered[k]!;
-              let own: TypeRecord = subject as TypeRecord;
-              const label = labels[k];
-              if (label === undefined) {
-                if (everyLabelKnown) {
-                  let rest: TypeRecord | typeof empty = subject as TypeRecord;
-                  for (const l of labels) if (l && rest !== empty) rest = NarrowFrom(rest, l);
-                  if (rest !== empty) own = rest;
-                }
-              } else if (label) {
-                const narrowed = NarrowTo(subject as TypeRecord, label);
-                if (narrowed !== empty) own = narrowed;
-              }
-              const entry: TypeRecord = carried ? CanonicalizeType({ Kind: 'union', Members: [carried, own] } as TypeRecord) as TypeRecord : own;
-              const statements = (clause as unknown as { StatementList?: readonly ParseNode[] | null }).StatementList ?? [];
-              const declares = statements.some((st) => ['LexicalDeclaration', 'ClassDeclaration', 'FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration'].includes(st.type));
-              if (!declares) caseClauseNarrowing.set(clause, { name: discriminantName, type: entry });
-              const fallsThrough = statements.length === 0 || statements.every((st) => canCompleteNormally(st));
-              carried = fallsThrough ? entry : null;
+        const discriminant = n.Expression.type === 'UnaryExpression' && n.Expression.operator === 'typeof'
+          ? n.Expression.UnaryExpression : n.Expression;
+        const name = narrowableName(discriminant);
+        const owner = name === null ? undefined : flowOwner(name);
+        const subjectType = staticType(discriminant);
+        flowBlock(() => {
+          const block = n.CaseBlock;
+          const ordered = [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])];
+          const statements = ordered.flatMap((clause) => clause.StatementList ?? []);
+          predeclareFlowLexicals(statements);
+          declareFunctionSignatures(statements, false);
+          const entries = new Map<ParseNode, FlowFacts>();
+          let failed = captureFlow();
+          let stable = name !== null && flowOwner(name) === owner;
+          for (const clause of ordered) {
+            if (clause.type === 'DefaultClause') continue;
+            resumeFlow(failed);
+            if (n.Expression.type === 'BooleanLiteral') {
+              const test = walkTest(clause.Expression);
+              entries.set(clause, n.Expression.value ? test.whenTrue : test.whenFalse);
+              failed = n.Expression.value ? test.whenFalse : test.whenTrue;
+              continue;
             }
+            const label = clause.Expression;
+            walk(label);
+            if (name !== null && (flowWrites(label).has(name.split('.')[0])
+              || (containsCall(label) && assignedInsideFunction.has(name.split('.')[0])))) stable = false;
+            const after = captureFlow();
+            const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: n.Expression,
+              RelationalExpression: label } as ParseNode.EqualityExpression;
+            let fact = stable ? narrowingFactOf(comparison) : undefined;
+            // A nominal enumerator/class label names an atom rather than a
+            // literal expression type. Retain the switch's nominal partition.
+            if (!fact && stable && name !== null && subjectType?.Kind === 'nominal') {
+              const member = label.type === 'MemberExpression' ? label.IdentifierName?.name : undefined;
+              const atom = member ? Atoms(subjectType).find((a) => a.key === member || a.key.endsWith(`.${member}`)) : undefined;
+              const type = atom?.type ?? (label.type === 'IdentifierReference' ? classTypeOf(label.name) : null);
+              if (type) fact = { name, type, subjectType, negated: false };
+            }
+            entries.set(clause, fact ? factFlow(fact, true) : after);
+            restoreFlow(after);
+            failed = fact ? factFlow(fact, false) : after;
           }
-        }
-        walk(n.CaseBlock);
+          if (block.DefaultClause) entries.set(block.DefaultClause, failed);
+          let fallthrough: FlowFacts | undefined;
+          for (const clause of ordered) {
+            const entry = joinFlow([entries.get(clause), fallthrough])!;
+            fallthrough = runFlow(entry, () => walk(clause.StatementList));
+          }
+          resumeFlow(joinFlow([fallthrough, ...takeFlowExits(n, 'break'),
+            !block.DefaultClause && !switchCoversDiscriminant(n) ? failed : undefined]));
+        });
         return;
       }
       case 'LexicalBinding':
@@ -31491,6 +31336,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(c.CallExpression);
         walk(c.Arguments);
+        for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        applyAssertionNarrowing(n);
         return;
       }
       case 'TypeArgumentsExpression':
@@ -31701,11 +31548,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'ConditionalExpression': {
-        // `t ? a : b` guards its two arms exactly as an `if` guards two
-        // statements, so the same fact applies.
-        const c = n as unknown as { ShortCircuitExpression: ParseNode, AssignmentExpression_a: ParseNode, AssignmentExpression_b: ParseNode };
-        walkGuarded(c.ShortCircuitExpression, c.AssignmentExpression_a, c.AssignmentExpression_b);
-        judgeTruthiness(c.ShortCircuitExpression);
+        const result = walkTest(n, false);
+        resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
         return;
       }
       case 'OptionalExpression': {
@@ -31802,75 +31646,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return;
       }
-      // The remaining CONDITION sites, for the reason the `if` and `while` arms
-      // give: a condition is an expression whose judgments run from
-      // `staticType`, and walking does not call it for one. A `for`'s test is
-      // its SECOND clause, `Expression_b`; its initializer and update are
-      // validated as discarded expressions in the same loop scope.
-      //
-      // Neither node type had an arm at all, so the children are walked here
-      // explicitly - `parent` excluded, which is the recursion an earlier arm in
-      // this file fell into.
       case 'DoWhileStatement':
-      case 'ForStatement': {
-        const checkLoop = () => {
-        // Every name this loop can reassign loses its narrowing before the body
-        // is walked, since the body is walked once and the second iteration is
-        // typed by the same walk as the first.
-        widenForLoop(n);
-        if (n.type === 'ForStatement') {
-          if (!n.LexicalDeclaration && !n.VariableDeclarationList) validateDiscardedExpression(n.Expression_a);
-          validateDiscardedExpression(ForPatternPositions(n).update);
-        }
-        const condition = n.type === 'ForStatement'
-          ? ForPatternPositions(n).test
-          : (n as unknown as { Expression?: ParseNode | null }).Expression;
-        if (condition) markDeciding(condition);
-        // #sec-narrowing: a `for` body is the branch its condition guards, as a
-        // `while` body is, so the two are walked through walkGuarded.
-        const forBody = n.type === 'ForStatement' && condition ? (n as unknown as { Statement?: ParseNode }).Statement : undefined;
-        for (const key of Object.keys(n)) {
-          if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
-            continue;
-          }
-          const child = (n as unknown as Record<string, unknown>)[key];
-          if (forBody && (child === condition || child === forBody)) continue;
-          if (Array.isArray(child) || (child && typeof child === 'object' && 'type' in (child as object))) {
-            walk(child as ParseNode);
-          }
-        }
-        if (forBody && condition) {
-          walkGuarded(condition, forBody, null);
-        }
-        if (condition) {
-          staticType(condition);
-          const fact = narrowingFactOf(condition, true);
-          if (fact) judgeFact(fact);
-          judgeTruthiness(condition);
-        }
-        };
-        if (n.type === 'ForStatement') {
-          pushBlock(checkLoop);
-        } else {
-          checkLoop();
-        }
-        return;
-      }
+      case 'ForStatement':
       case 'WhileStatement': {
-        // A `while` test guards its body on every iteration.
-        const w = n as unknown as { Expression: ParseNode, Statement: ParseNode };
-        // Widened BEFORE `walkGuarded`, so the loop's own test still narrows the
-        // body from the widened type - which is what keeps `while (v !== null)`
-        // working while dropping a narrowing inherited from outside.
-        widenForLoop(n);
-        // Typed for the same reason an `if` condition is: a condition is an
-        // expression whose judgments run from `staticType`, and walking does not
-        // call it for one.
-        staticType(w.Expression);
-        walkGuarded(w.Expression, w.Statement, null);
-        judgeTruthiness(w.Expression);
+        const checkLoop = () => {
+          const condition = n.type === 'ForStatement' ? ForPatternPositions(n).test : n.Expression;
+          const update = n.type === 'ForStatement' ? ForPatternPositions(n).update : null;
+          if (n.type === 'ForStatement') {
+            if (!n.LexicalDeclaration && !n.VariableDeclarationList) validateDiscardedExpression(n.Expression_a);
+            walk(n.LexicalDeclaration ?? n.VariableDeclarationList ?? n.Expression_a);
+          }
+          widenForLoop(n);
+          const entry = captureFlow();
+          let test: TestFlow | undefined;
+          if (n.type !== 'DoWhileStatement' && condition) {
+            staticType(condition);
+            test = walkTest(condition);
+            resumeFlow(test.whenTrue);
+          }
+          walk(n.Statement);
+          const back = joinFlow([normalFlow(), ...takeFlowExits(n, 'continue')]);
+          if (back) resumeFlow(back);
+          if (n.type === 'DoWhileStatement') {
+            if (back) {
+              staticType(condition!);
+              test = walkTest(condition!);
+            } else {
+              // Check the written test once even when no body completion reaches it.
+              runFlow(entry, () => {
+                staticType(condition!);
+                walkTest(condition!);
+              });
+            }
+          } else if (update) {
+            if (!back) resumeFlow(entry);
+            validateDiscardedExpression(update);
+            walk(update);
+          }
+          const unbounded = !condition || (condition.type === 'BooleanLiteral' && condition.value === true);
+          const exits = takeFlowExits(n, 'break');
+          resumeFlow(joinFlow([unbounded ? undefined : test?.whenFalse, ...exits]));
+        };
+        if (n.type === 'ForStatement') flowBlock(checkLoop);
+        else checkLoop();
         return;
       }
+      case 'LabelledStatement':
+        walk(n.LabelledItem);
+        resumeFlow(joinFlow([normalFlow(), ...takeFlowExits(n, 'break')]));
+        return;
       case 'IfStatement': {
         // A test refines a binding's type in the
         // branch it guards. Without this the checker rejected the very idiom
@@ -31890,7 +31714,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // came from the latter, and this is the former.
         staticType(s.Expression);
         walkGuarded(s.Expression, s.Statement_a, s.Statement_b ?? null);
-        judgeTruthiness(s.Expression);
         return;
       }
       case 'UpdateExpression': {
@@ -31993,6 +31816,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // ones below. A plain `b.a = null` inside a branch that narrowed `b.a`
         // left the narrowing standing, so the next read was typed by a fact the
         // assignment had just falsified.
+        const logicalEntry = ['||=', '&&=', '??='].includes(a.AssignmentOperator) ? captureFlow() : undefined;
         invalidatePlace(a.LeftHandSideExpression);
         if (a.AssignmentOperator === '=') checkLengthLiteral(a.LeftHandSideExpression, a.AssignmentExpression);
         if (judgedAssignmentOperator(a.AssignmentOperator) && !['=', '||=', '&&=', '??='].includes(a.AssignmentOperator)) {
@@ -32105,8 +31929,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             requireAssignable(compoundStoreSource(a, target), target);
           }
         }
-        walk(a.LeftHandSideExpression);
-        walk(a.AssignmentExpression);
+        if (logicalEntry) {
+          restoreFlow(logicalEntry);
+          let branches: TestFlow;
+          if (a.AssignmentOperator === '??=') {
+            walk(a.LeftHandSideExpression);
+            branches = nullishFlow(a.LeftHandSideExpression);
+          } else {
+            branches = walkTest(a.LeftHandSideExpression);
+          }
+          const onTrue = a.AssignmentOperator !== '||=';
+          const written = runFlow(onTrue ? branches.whenTrue : branches.whenFalse, () => {
+            walk(a.AssignmentExpression);
+            invalidatePlace(a.LeftHandSideExpression);
+          });
+          resumeFlow(joinFlow([written, onTrue ? branches.whenFalse : branches.whenTrue]));
+        } else {
+          walk(a.LeftHandSideExpression);
+          walk(a.AssignmentExpression);
+          invalidatePlace(a.LeftHandSideExpression);
+        }
         return;
       }
       case 'ReturnStatement': {
@@ -33196,6 +33038,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   genericDefaultChecks.set(root, genericDefaults);
   genericWhereChecks.set(root, [...whereChecks.values()]);
 
+  restoreFlow(new Map());
   return errors;
 }
 

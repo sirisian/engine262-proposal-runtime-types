@@ -532,11 +532,37 @@ test('sec-metadata-narrowing: a further comparison intersects the bound it alrea
 test('sec-metadata-narrowing: the false branch narrows by the negation', () => {
   // "The false branch narrows by the negation of _op_, pairing `>=` with `<`."
   const g = 'function g(w: float64.<{ bounds: ..<0 }>) { return 1; }';
-  // An explicit `else`: the false BRANCH is what the clause narrows. The code
-  // after an `if` that returns is a continuation, not the false branch, and
-  // narrowing it is control-flow analysis this does not claim to do.
+  // The explicit else and a guard-clause continuation use the same false edge.
   expect(evaluated(`${NARROWS} ${g}
     function f(v: float64.<{ bounds: .. }>) { if (v >= 0) { return 0; } else { return g(v); } } "ok";`)).toBe('ok');
+});
+
+test('sec-metadata-narrowing: compound, alternative and continuation facts compose', () => {
+  const g = 'function g(w: float64.<{ bounds: 0..=343 }>) { return 1; }';
+  for (const condition of ['v >= 0 && v <= 343', '!(v < 0 || v > 343)',
+    '(0, v >= 0 && v <= 343)', 'b ? (v >= 0 && v <= 343) : (v >= 0 && v <= 343)']) {
+    expect(evaluated(`${NARROWS} ${g}
+      function f(b:boolean,v:float64.<{ bounds: .. }>) { if (${condition}) return g(v); return 0; } "ok";`)).toBe('ok');
+  }
+  expect(evaluated(`${NARROWS} ${g}
+    function f(v:float64.<{ bounds: .. }>) { { if(v < 0 || v > 343) return 0; } return g(v); } "ok";`)).toBe('ok');
+});
+
+test('sec-metadata-narrowing: false parents and distinct bindings stay independent', () => {
+  const low = 'function low(w:float64.<{ bounds: ..<0 }>) { return 1; }';
+  expect(evaluated(`${NARROWS} ${low}
+    function f(v:float64.<{ bounds: .. }>) { if(v >= 0) return 0; if(v < -10) return low(v); return 0; } "ok";`)).toBe('ok');
+  expectThrown(`${NARROWS} ${low}
+    function f(v:float64.<{ bounds: .. }>) { if(v >= 0) return 0; if(v < -10) { let p:float64.<{ bounds: 0.. }> = v; } }`);
+  expectThrown(`${NARROWS} function positive(w:float64.<{ bounds: 0.. }>) { return 1; }
+    function f(v:float64.<{ bounds: .. }>,w:float64.<{ bounds: .. }>) { if(v >= 0 && w < 100) return positive(w); return 0; }`);
+});
+
+test('sec-metadata-narrowing: composed facts preserve empty-branch diagnostics', () => {
+  expectStaticTypeError(`${NARROWS}
+    function f(v:float64.<{ bounds: .. }>) { if(v >= 0) return; if(v < 10) {} }`);
+  expectStaticTypeError(`${NARROWS}
+    function f(v:float64.<{ bounds: .. }>) { if(v >= 0 && v < 10) { if(v > 20) {} } }`);
 });
 
 test('sec-metadata-narrowing: narrowing is monotone, so a looser comparison changes nothing', () => {

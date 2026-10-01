@@ -550,37 +550,40 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
     }
   }
-  // #sec-metadata-narrowing: resolve each recorded comparison by calling
-  // `narrow`, which this pass can do and the walk cannot. OUTERMOST FIRST along
-  // the parent links, so an inner request narrows from its parent's result -
-  // the clause's example is `if (v >= 0)` giving `bounds: 0..` and "a further
-  // `if (v <= 343)` intersect that bound to `0..=343`", which reading each
-  // request against the declared type would not produce.
+  // #sec-narrowing-flow: resolve the actual incoming edges, including false
+  // branches and alternative joins, rather than assuming a lexical parent's
+  // true result. Inputs for different bindings remain independent.
   const resolutions = new Map<object, NarrowingResolution>();
   const requests = TakeNarrowingRequests(root);
-  const byKey = new Map<object, NarrowingRequest>();
-  for (const r of requests) {
-    byKey.set(r.key, r);
-  }
-  const depthOf = (r: NarrowingRequest): number => {
-    let d = 0;
-    let p = r.parent;
-    while (p) {
-      d += 1;
-      p = byKey.get(p)?.parent ?? null;
+  const byKey = new Map(requests.map((request) => [request.key, request]));
+  const resolving = new Set<object>();
+  function* resolveNarrowing(request: NarrowingRequest): PlainEvaluator<NarrowingResolution> {
+    const known = resolutions.get(request.key);
+    if (known) return known;
+    // A repeated query must not turn a provisional dependency into recursion.
+    if (resolving.has(request.key)) return { whenTrue: request.subject, whenFalse: request.subject };
+    resolving.add(request.key);
+    const sources: TypeRecord[] = [];
+    for (const input of request.inputs) {
+      if ('type' in input) sources.push(input.type);
+      else {
+        const prior = byKey.get(input.key);
+        const resolved = prior ? Q(yield* resolveNarrowing(prior)) : undefined;
+        sources.push(resolved ? resolved[input.branch] : request.subject);
+      }
     }
-    return d;
-  };
-  const ordered = [...requests].sort((x, y) => depthOf(x) - depthOf(y));
-  for (const request of ordered) {
-    // An inner guard sits inside the outer's consequent, so it narrows from the
-    // parent's TRUE-branch result where it has a parent.
-    const parent = request.parent ? resolutions.get(request.parent) : undefined;
-    const from = parent ? parent.whenTrue : (request.subject as TypeRecord);
+    const from = CanonicalizeType({ Kind: 'union', Members: sources.length ? sources : [request.subject] });
     const whenTrue = Q(yield* NarrowedMetadata(from, request.operator, request.constant));
     const negated = NEGATED_COMPARISON[request.operator] ?? request.operator;
     const whenFalse = Q(yield* NarrowedMetadata(from, negated, request.constant));
-    resolutions.set(request.key, { whenTrue, whenFalse });
+    const result = { whenTrue, whenFalse };
+    resolving.delete(request.key);
+    resolutions.set(request.key, result);
+    return result;
+  }
+  for (const request of requests) {
+    const resolved = Q(yield* resolveNarrowing(request));
+    resolutions.set(request.key, resolved);
   }
   SetNarrowingResolutions(root, resolutions);
   // The SECOND walk. The first ran without any narrowing, so it both
@@ -1081,6 +1084,14 @@ const NEGATED_COMPARISON: Record<string, string> = {
  * "learns nothing from a comparison and keeps the constraint it had".
  */
 function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Value): PlainEvaluator<TypeRecord> {
+  if (subject.Kind === 'union') {
+    const members: TypeRecord[] = [];
+    for (const member of subject.Members) {
+      const narrowed = Q(yield* NarrowedMetadata(member, operator, constant));
+      members.push(narrowed);
+    }
+    return CanonicalizeType({ Kind: 'union', Members: members });
+  }
   if (subject.Kind !== 'parameterized') {
     return subject;
   }
