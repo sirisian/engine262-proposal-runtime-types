@@ -5575,6 +5575,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Declared member reads use the same contract for String and Symbol keys. */
   const memberReadType = (type: Known, key: string | SymbolValue, forDelete = false): Known => {
+    // #sec-typed-string-properties: an index within a literal String's length is
+    // its own fixed character. Nothing is claimed past the end, where a read
+    // reaches `String.prototype`.
+    if (typeof key === 'string' && type && !forDelete) {
+      const index = Number(key);
+      const members = type.Kind === 'union' ? type.Members as TypeRecord[] : [type];
+      const texts = members.map((m) => (m.Kind === 'literal' ? jsString(m.Value) : null));
+      if (Number.isInteger(index) && index >= 0 && String(index) === key && texts.length > 0
+        && texts.every((text) => text !== null && index < text.length)) {
+        return unionOf((texts as string[]).map((text) => ({ Kind: 'literal', Value: Value(text[index]), Base: makePrimitive('string') }) as unknown as TypeRecord)) as Known;
+      }
+    }
     const receiver = operationalType(type);
     const propertyType = (shape: Known): Known => {
       if (shape?.Kind !== 'object') return null;
@@ -18831,6 +18843,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (computedKeyBase as { Name?: string }).Name === 'symbol') {
             return null;
           }
+          // #sec-typed-string-properties: an in-range constant index of a literal
+          // String reads its own fixed character; nothing past the end is claimed.
+          const literalIndex = computedKey && computedKey.Kind === 'literal' ? numericValueOf(computedKey.Value) : undefined;
+          if (literalIndex !== undefined && receiver && Number.isInteger(literalIndex) && literalIndex >= 0) {
+            const members = receiver.Kind === 'union' ? receiver.Members as TypeRecord[] : [receiver as TypeRecord];
+            const texts = members.map((member) => (member.Kind === 'literal' ? jsString(member.Value) : null));
+            if (texts.length > 0 && texts.every((text) => text !== null && literalIndex < text.length)) {
+              return unionOf((texts as string[]).map((text) => ({ Kind: 'literal', Value: Value(text[literalIndex]), Base: makePrimitive('string') }) as unknown as TypeRecord)) as Known;
+            }
+          }
           // #sec-span-type: an element read through a WINDOW has the element
           // type, exactly as one through the array it windows. There is no
           // extent to decide a literal index against - a window's length is a
@@ -22146,6 +22168,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // #sec-array-and-tuple-types: the exact length of a fixed shape, a
   // fixed-extent array or a tuple whose positions are all required with no
   // rest; `null` for any other member.
+  // A literal String's length is its UTF-16 length (#sec-typed-string-properties).
+  const fixedLength = (t: TypeRecord): number | null => {
+    const text = t.Kind === 'literal' ? jsString(t.Value) : null;
+    return text !== null ? text.length : exactLength(t);
+  };
   const exactLength = (t: TypeRecord): number | null => {
     if (t.Kind === 'array') return typeof t.Extent === 'number' ? t.Extent : null;
     if (t.Kind === 'tuple') return t.Elements.every((e) => !e.Rest && e.Initial === 'none') ? t.Elements.length : null;
@@ -22162,7 +22189,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const index = Number(key);
     const canonical = Number.isInteger(index) && index >= 0 && String(index) === key;
     const length = exactLength(t);
-    if (length !== null) return canonical ? index < length : undefined;
+    // `in` follows the prototype chain, which a program may extend, so an
+    // index past a fixed shape is unknown rather than absent.
+    if (length !== null) return canonical && index < length ? true : undefined;
     if (t.Kind === 'tuple' && canonical) {
       const restIndex = t.Elements.findIndex((e) => e.Rest);
       const fixed = restIndex < 0 ? t.Elements.length : restIndex;
@@ -22210,7 +22239,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!subject) return undefined;
       const negated = operator === '!==' || operator === '!=';
       return decidedMembersFact(narrowableName(m.MemberExpression), subject, (t) => {
-        const length = exactLength(t);
+        const length = fixedLength(t);
         return length === null ? undefined : length === k;
       }, `length ${operator} ${String(k)}`, negated);
     }
@@ -22305,7 +22334,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const written = staticType(m.MemberExpression);
     const subject = written && written.Kind !== 'any' ? judgedType(written) : null;
     if (!subject) return null;
-    const lengths = (subject.Kind === 'union' ? subject.Members as TypeRecord[] : [subject]).map(exactLength);
+    const lengths = (subject.Kind === 'union' ? subject.Members as TypeRecord[] : [subject]).map(fixedLength);
     return lengths.length > 0 && lengths.every((l) => l !== null) ? [...new Set(lengths as number[])] : null;
   };
   const jsString = (v: unknown): string | null => {
@@ -22454,6 +22483,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { name: narrowableName(left) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict, display: operator } as NarrowingFact;
   };
   const relationalLimitsFact = (left: ParseNode, operator: string, right: ParseNode): NarrowingFact | undefined => {
+    // #sec-narrowing-flow: a value known to be NaN satisfies no comparison.
+    for (const side of [left, right]) {
+      if (placeCategories(side) !== 4) continue;
+      const s = staticType(side) as TypeRecord;
+      return { name: narrowableName(side) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict: 'never-succeeds' as const, display: operator } as NarrowingFact;
+    }
     const both = twoOperandLimitsFact(left, operator, right);
     if (both) return both;
     let operand = left;
@@ -22466,13 +22501,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       op = mirroredOperator[operator];
     }
     const written = staticType(operand);
-    const s = written && written.Kind !== 'any' ? judgedType(written) : null;
+    // A fixed shape's `length` has its exact lengths as limits, whatever its
+    // Static Type.
+    const lengths = exactLengthsOf(operand);
+    const s = written && written.Kind !== 'any' ? judgedType(written) : lengths ? anyTypeRecord as TypeRecord : null;
     if (!s) return undefined;
     // A closed set is read by its members, so an enum's limits are its
     // least and greatest enumerator values.
     const closed = expandClosed(s);
-    // A fixed shape's `length` has its exact lengths as limits.
-    const lengths = exactLengthsOf(operand);
     const limits = lengths ? lengths.map((length) => ({ lo: length, hi: length, nan: false }))
       : (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map(valueLimits);
     if (limits.length === 0 || limits.some((l) => l === null)) return undefined;
@@ -22501,6 +22537,151 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * type over one base are equal exactly where their values are, so the
    * comparison can never fail or never succeed.
    */
+  let programWritten: Set<string> | undefined;
+  // A constructor that returns a value may return an existing object.
+  const constructorReturnsValue = (classNode: unknown): boolean => {
+    const tail = ((classNode as { ClassTail?: unknown }).ClassTail ?? classNode) as { ClassBody?: { ClassElementList?: readonly unknown[] } | readonly unknown[] | null };
+    const body = tail.ClassBody;
+    const elements = (Array.isArray(body) ? body : (body as { ClassElementList?: readonly unknown[] } | null)?.ClassElementList) ?? [];
+    const nameOf = (el: unknown): string | undefined => {
+      const e = el as { MethodDefinition?: unknown, ClassElementName?: unknown };
+      const n = (e.MethodDefinition as { ClassElementName?: unknown } | undefined)?.ClassElementName ?? e.ClassElementName;
+      const found = n as { name?: string, value?: string, PropertyName?: { name?: string, value?: string } } | undefined;
+      return found?.name ?? found?.value ?? found?.PropertyName?.name ?? found?.PropertyName?.value;
+    };
+    const nested = new Set(['FunctionExpression', 'FunctionDeclaration', 'ArrowFunction', 'AsyncArrowFunction', 'ClassExpression',
+      'ClassDeclaration', 'MethodDefinition', 'GeneratorExpression', 'AsyncFunctionExpression']);
+    const returns = (node: unknown, top: boolean): boolean => {
+      if (!node || typeof node !== 'object') return false;
+      if (Array.isArray(node)) return node.some((n) => returns(n, top));
+      const n = node as { type?: string, Expression?: unknown };
+      if (!top && n.type && nested.has(n.type)) return false;
+      if (n.type === 'ReturnStatement' && n.Expression) return true;
+      return Object.entries(node).some(([k, v]) => k !== 'parent' && k !== 'location' && returns(v, false));
+    };
+    return elements.some((el) => nameOf(el) === 'constructor' && returns(el, true));
+  };
+  /**
+   * #table-narrowing-forms, the `v === w` row: an object, array, function,
+   * arrow, class or regular-expression literal, or a `new` of a class binding
+   * the program never writes whose constructor returns no value, creates a
+   * value no other operand holds.
+   */
+  const isFresh = (node: ParseNode | null | undefined): boolean => {
+    const core = node ? unparenthesized(node) ?? node : null;
+    if (!core) return false;
+    if (['ObjectLiteral', 'ArrayLiteral', 'FunctionExpression', 'ArrowFunction', 'AsyncArrowFunction', 'AsyncFunctionExpression',
+      'GeneratorExpression', 'AsyncGeneratorExpression', 'ClassExpression', 'RegularExpressionLiteral'].includes(core.type)) return true;
+    if (core.type !== 'NewExpression') return false;
+    const callee = (core as unknown as { MemberExpression?: ParseNode }).MemberExpression;
+    const name = callee && callee.type === 'IdentifierReference' ? (callee as unknown as { name: string }).name : null;
+    if (!name) return false;
+    programWritten ??= flowWrites(root);
+    if (programWritten.has(name)) return false;
+    const declaration = classDeclarationOf(staticType(core) as TypeRecord) as { ClassTail?: { ClassHeritage?: unknown } } | undefined;
+    if (!declaration || declaration.ClassTail?.ClassHeritage) return false;
+    return !constructorReturnsValue(declaration);
+  };
+  const freshPairFact = (a: ParseNode, operator: string, b: ParseNode): NarrowingFact | undefined => {
+    if (operator !== '===' && operator !== '!==') return undefined;
+    const fa = isFresh(a);
+    const fb = isFresh(b);
+    if (!fa && !fb) return undefined;
+    // An operand that does not participate gains no error.
+    const other = fa ? b : a;
+    const t = staticType(other);
+    if (!(fa && fb) && (!t || t.Kind === 'any')) return undefined;
+    const negated = operator === '!==';
+    const s = (t ?? anyTypeRecord) as TypeRecord;
+    return { name: narrowableName(other) ?? NON_PATH, type: s, subjectType: s, negated,
+      verdict: negated ? 'never-fails' as const : 'never-succeeds' as const, display: 'a fresh value' } as NarrowingFact;
+  };
+  // #sec-narrowing-flow: the numeric categories of a place, read by every
+  // test whose whole success set they decide.
+  const placeCategories = (node: ParseNode): number | undefined => {
+    const name = narrowableName(node);
+    const written = name !== null ? lookup(name) ?? staticType(node) : null;
+    const t = written && written.Kind !== 'any' ? judgedType(written) : null;
+    return name !== null && t ? currentCategories(name, t) : undefined;
+  };
+  // The cell of the partition a constant lies in, as `numericCategories` reads a literal.
+  const categoryOf = (n: number): number => (Number.isNaN(n) ? 4 : !Number.isFinite(n) ? 2
+    : !Number.isInteger(n) ? 1 : Number.isSafeInteger(n) ? 16 : 8);
+  const categoryEqualityFact = (a: ParseNode, operator: string, b: ParseNode): NarrowingFact | undefined => {
+    if (!['===', '!==', '==', '!='].includes(operator)) return undefined;
+    for (const [place, other] of [[a, b], [b, a]] as const) {
+      const mask = placeCategories(place);
+      if (mask === undefined) continue;
+      const c = constantNumber(other, staticType(place));
+      if (c === null || (mask & categoryOf(c))) continue;
+      const negated = operator === '!==' || operator === '!=';
+      const s = staticType(place) as TypeRecord;
+      return { name: narrowableName(place) ?? NON_PATH, type: s, subjectType: s, negated,
+        verdict: negated ? 'never-fails' as const : 'never-succeeds' as const, display: String(c) } as NarrowingFact;
+    }
+    return undefined;
+  };
+  /**
+   * #sec-narrowing-flow: a test over plain bindings with no effects has one
+   * canonical form, recorded as failed or succeeded on each edge, so a later
+   * identical test before any write to those bindings is decided.
+   */
+  const testCanon = (node: ParseNode, allowBare = false): { key: string, places: string[] } | null => {
+    const places = new Set<string>();
+    const ser = (n: ParseNode | null | undefined): string | null => {
+      const core = n ? unparenthesized(n) ?? n : null;
+      if (!core) return null;
+      const e = core as unknown as Record<string, unknown>;
+      switch (core.type) {
+        case 'IdentifierReference': {
+          const name = (e.name as string | undefined) ?? null;
+          if (!name || narrowableName(core) !== name) return null;
+          places.add(name);
+          return name;
+        }
+        case 'NumericLiteral': case 'BooleanLiteral': return String(e.value);
+        case 'StringLiteral': return JSON.stringify(e.value);
+        case 'NullLiteral': return 'null';
+        case 'RelationalExpression': {
+          if (!['<', '<=', '>', '>='].includes(e.operator as string)) return null;
+          const l = ser(e.RelationalExpression as ParseNode);
+          const r = l === null ? null : ser(e.ShiftExpression as ParseNode);
+          return l !== null && r !== null ? `(${l} ${e.operator as string} ${r})` : null;
+        }
+        case 'EqualityExpression': {
+          const l = ser(e.EqualityExpression as ParseNode);
+          const r = l === null ? null : ser(e.RelationalExpression as ParseNode);
+          return l !== null && r !== null ? `(${l} ${e.operator as string} ${r})` : null;
+        }
+        case 'LogicalANDExpression': {
+          const l = ser(e.LogicalANDExpression as ParseNode);
+          const r = l === null ? null : ser(e.BitwiseORExpression as ParseNode);
+          return l !== null && r !== null ? `(${l} && ${r})` : null;
+        }
+        case 'LogicalORExpression': {
+          const l = ser(e.LogicalORExpression as ParseNode);
+          const r = l === null ? null : ser(e.LogicalANDExpression as ParseNode);
+          return l !== null && r !== null ? `(${l} || ${r})` : null;
+        }
+        case 'UnaryExpression': {
+          if (e.operator !== '!') return null;
+          const o = ser(e.UnaryExpression as ParseNode);
+          return o === null ? null : `!${o}`;
+        }
+        default: return null;
+      }
+    };
+    const key = ser(node);
+    if (key === null || places.size === 0) return null;
+    // A bare binding is a truthiness test whose facts already decide it.
+    if (!allowBare && places.has(key)) return null;
+    return { key, places: [...places] };
+  };
+  const recordedOutcome = (canon: { key: string, places: string[] }): boolean | undefined => {
+    if (canon.places.every((place) => !!lookup(`${place}.\u0000testF:${canon.key}`))) return false;
+    if (canon.places.every((place) => !!lookup(`${place}.\u0000testT:${canon.key}`))) return true;
+    return undefined;
+  };
   const singletonPairFact = (a: ParseNode, operator: string, b: ParseNode): NarrowingFact | undefined => {
     // A place is read at its current flow type, as the `v === e` row reads it.
     const typeOf = (node: ParseNode): Known => {
@@ -22678,6 +22859,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (['===', '!==', '==', '!='].includes(eq.operator)) {
         const nan = nanComparisonFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
         if (nan) return nan;
+        const fresh = freshPairFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
+        if (fresh) return fresh;
+        const category = categoryEqualityFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
+        if (category) return category;
         const singletons = singletonPairFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
         if (singletons) return singletons;
         const pair = typeofPairFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
@@ -23630,8 +23815,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Evaluate each operand once, retaining separate facts for both answers. */
   const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
     const live = flowLive;
+    const canon = live && visit ? testCanon(test) : null;
+    const repeated = canon && deciding ? recordedOutcome(canon) : undefined;
+    const errorsBefore = errors.length;
     const result = walkTestResult(test, deciding, truthiness, visit);
-    return live ? result : { whenTrue: undefined, whenFalse: undefined };
+    if (!live) return { whenTrue: undefined, whenFalse: undefined };
+    if (!canon) return result;
+    if (repeated !== undefined && errors.length === errorsBefore) {
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon.key);
+    }
+    const resume = flowLive ? captureFlow() : undefined;
+    const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
+      if (!facts) return facts;
+      restoreFlow(facts);
+      for (const place of canon.places) declareNarrowed(`${place}.\u0000test${outcome ? 'T' : 'F'}:${canon.key}`, anyTypeRecord);
+      return captureFlow();
+    };
+    const recorded = { whenTrue: record(result.whenTrue, true), whenFalse: record(result.whenFalse, false) };
+    if (resume) restoreFlow(resume);
+    return recorded;
   };
   const walkTestResult = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     if (PatternScopeOf(test).length && !activePatternScopes.has(test)) {
@@ -31552,6 +31754,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const enumerating = (node as ParseNode).type === 'ForInStatement';
       const source = enumerating ? f.Expression : f.AssignmentExpression;
       const bound = enumerating ? null : rangeCounterBound(source);
+      // #sec-narrowfrom: entering the body is a test, which can never succeed
+      // where the sequence has no position (#sec-static-iteration-contribution)
+      // or the counter admits no value (#sec-range-literals).
+      if (!enumerating && source) {
+        const sourceCore = unparenthesized(source) ?? source;
+        const emptyLiteral = sourceCore.type === 'ArrayLiteral'
+          && ((sourceCore as unknown as { ElementList?: readonly unknown[] }).ElementList ?? []).length === 0;
+        // A range with constant endpoints and no interior admits no counter.
+        const range = sourceCore.type === 'RangeExpression' ? sourceCore as unknown as {
+          RangeStart?: { value?: unknown, negated?: boolean } | null, RangeEnd?: { value?: unknown, negated?: boolean } | null,
+          RangeStartBound?: string | null, RangeEndBound?: string | null,
+        } : null;
+        const endpoint = (lit: { value?: unknown, negated?: boolean } | null | undefined): number | undefined => (
+          lit && typeof lit.value === 'number' ? (lit.negated ? -lit.value : lit.value) : undefined);
+        const lo = range ? endpoint(range.RangeStart) : undefined;
+        const hi = range ? endpoint(range.RangeEnd) : undefined;
+        const emptyRange = lo !== undefined && hi !== undefined
+          && (lo > hi || (lo === hi && (range!.RangeStartBound === 'open' || range!.RangeEndBound === 'open')));
+        if (emptyLiteral || emptyRange) {
+          errors.push(Throw.StaticTypeError('the body of this loop can never run, since $1 has no element',
+            Value(emptyLiteral ? 'an empty array literal' : 'its range')).Value as ObjectValue);
+        }
+      }
       const decl = (f.ForDeclaration ?? f.ForBinding) as unknown as {
         ForBinding?: { BindingIdentifier?: { name?: string }, Ref?: boolean },
         Ref?: boolean,
@@ -32834,6 +33059,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A `case` of a `switch (v.length)` over fixed shapes names a length
           // _v_ either has or never can.
           const lengths = exactLengthsOf(expression);
+          const seenLabels = new Set<string>();
           if (discriminantType && discriminantType.Kind !== 'any') {
             for (const clause of [...(block.CaseClauses_a ?? []), ...(block.CaseClauses_b ?? [])]) {
               if (isNaNConstant((clause as { Expression?: ParseNode | null }).Expression)) pushImpossibleTest('never-succeeds', 'NaN');
@@ -32845,6 +33071,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const subjectName = narrowableName(expression);
               const labelType = label && subjectName !== null ? singleValueOperandType(label, discriminantType) : null;
               if (labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType));
+              // #sec-narrowing-flow: a label repeating an earlier effect-free label
+              // of this `switch` tests what that one already failed.
+              const labelCanon = label && labelType?.Kind !== 'literal' ? testCanon(label, true) : null;
+              if (labelCanon) {
+                if (seenLabels.has(labelCanon.key)) pushImpossibleTest('never-succeeds', `case ${labelCanon.key}`);
+                else seenLabels.add(labelCanon.key);
+              }
+              if (isFresh(label)) pushImpossibleTest('never-succeeds', 'a fresh value');
             }
           }
         }
