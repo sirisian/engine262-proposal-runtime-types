@@ -9,6 +9,7 @@ import {
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { JSStringValue, ObjectValue, Value } from '../value.mts';
+import { IsGatedMessage } from './checked-code.mts';
 import type { TypeRecord } from './records.mts';
 import {
   DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
@@ -557,6 +558,11 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   const requests = TakeNarrowingRequests(root);
   const byKey = new Map(requests.map((request) => [request.key, request]));
   const resolving = new Set<object>();
+  const messageOf = (error: Value): string => {
+    if (!(error instanceof ObjectValue)) return '';
+    const message = X(Get(error, Value('message')));
+    return message instanceof JSStringValue ? message.stringValue() : '';
+  };
   function* resolveNarrowing(request: NarrowingRequest): PlainEvaluator<NarrowingResolution> {
     const known = resolutions.get(request.key);
     if (known) return known;
@@ -582,7 +588,14 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     return result;
   }
   for (const request of requests) {
-    const resolved = Q(yield* resolveNarrowing(request));
+    const completion = EnsureCompletion(yield* resolveNarrowing(request));
+    // #sec-checked-code: outside checked code a test that can never succeed or
+    // fail is not reported; the binding is simply not narrowed there.
+    if (completion.Type === 'throw' && request.checked === false && IsGatedMessage(messageOf(completion.Value))) {
+      resolving.delete(request.key);
+      continue;
+    }
+    const resolved = Q(completion);
     resolutions.set(request.key, resolved);
   }
   SetNarrowingResolutions(root, resolutions);

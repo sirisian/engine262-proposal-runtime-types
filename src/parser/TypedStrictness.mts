@@ -3,7 +3,8 @@ import type { ParseNode } from './ParseNode.mts';
 export type StrictRange = readonly [start: number, end: number];
 
 const bodyKeys = ['FunctionBody', 'GeneratorBody', 'AsyncBody', 'AsyncGeneratorBody', 'ConciseBody', 'AsyncConciseBody'];
-const functions = new Set([
+/** The function-like units: each owns its parameters, return position and body. */
+export const FunctionLikeUnits: ReadonlySet<string> = new Set([
   'FunctionDeclaration', 'FunctionExpression', 'GeneratorDeclaration', 'GeneratorExpression',
   'AsyncFunctionDeclaration', 'AsyncFunctionExpression', 'AsyncGeneratorDeclaration', 'AsyncGeneratorExpression',
   'ArrowFunction', 'AsyncArrowFunction', 'MethodDefinition', 'GeneratorMethod', 'AsyncMethod', 'AsyncGeneratorMethod',
@@ -24,7 +25,7 @@ export function TypedStrictRanges(root: unknown): readonly StrictRange[] {
     }
     const node = value as ParseNode;
     const fields = value as Record<string, unknown>;
-    const unit = node.type === 'Script' || functions.has(node.type)
+    const unit = node.type === 'Script' || FunctionLikeUnits.has(node.type)
       || (!owner && ['FunctionBody', 'GeneratorBody', 'AsyncBody', 'AsyncGeneratorBody'].includes(node.type));
     const classBoundary = node.type === 'ClassDeclaration' || node.type === 'ClassExpression';
     const scope = unit ? node : classBoundary ? undefined : owner;

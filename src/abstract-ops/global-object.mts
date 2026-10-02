@@ -1,4 +1,5 @@
 import { ExecutionContext } from '../execution-context/ExecutionContext.mts';
+import { MarkInheritedChecked } from '../type-system/checked-code.mts';
 import { JSStringValue, Value } from '../value.mts';
 import { InstantiateFunctionObject } from '../runtime-semantics/all.mts';
 import {
@@ -43,7 +44,7 @@ import {
 /** https://tc39.es/ecma262/#sec-global-object */
 
 /** https://tc39.es/ecma262/#sec-performeval */
-export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): ValueEvaluator {
+export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean, checkedCaller = false): ValueEvaluator {
   // 1. Assert: If direct is false, then strictCaller is also false.
   if (direct === false) {
     Assert(strictCaller === false);
@@ -143,6 +144,9 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean): 
       Parser.decorateSyntaxErrorWithScriptId(completion.Value as Parameters<typeof Parser.decorateSyntaxErrorWithScriptId>[0], scriptId);
       return completion;
     }
+    // #sec-checked-code: direct eval code in checked code is checked, since it
+    // sees the caller's typed bindings, as it inherits the caller's strictness.
+    if (checkedCaller) MarkInheritedChecked(script as unknown as ParseNode);
     const typeErrors = CheckScript(script);
     if (typeErrors.length > 0) {
       Parser.decorateSyntaxErrorWithScriptId(typeErrors[0], scriptId);

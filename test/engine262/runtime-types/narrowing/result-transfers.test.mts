@@ -520,7 +520,11 @@ test("pipeline-result: property-alias", () => {
 });
 
 test("boolean-switch: constant-label-miss", () => {
-  expectStaticTypeError("function f(){const yes=true;switch(yes){case false:break;default:break;}}");
+  expectStaticTypeError("function f(p:number){const yes=true;switch(yes){case false:break;default:break;}}");
+});
+
+test("boolean-switch: constant-label-miss outside checked code", () => {
+  evaluated("function f(){const yes=true;switch(yes){case false:break;default:break;}}");
 });
 
 test("boolean-results: constant-false", () => {

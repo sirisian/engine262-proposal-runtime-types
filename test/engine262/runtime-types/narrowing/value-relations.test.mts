@@ -240,7 +240,7 @@ test("assignment results: control", () => {
 });
 
 test("operator results: control", () => {
-  expectStaticTypeError("function yes():true{return true;}function f(){if(yes()){}}");
+  expectStaticTypeError("function yes():true{return true;}function f(p:number){if(yes()){}}");
 });
 
 test("data destructuring: control", () => {

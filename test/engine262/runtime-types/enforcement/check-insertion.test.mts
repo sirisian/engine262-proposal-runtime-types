@@ -1151,11 +1151,12 @@ test('a typed collection takes its needle at the element type', () => {
   // #sec-array-and-tuple-types: a bare array literal is an array of the join of its
   // elements, so `[1n]` is a `[].<bigint>` and `includes` is read at that
   // element type - which makes the argument a `bigint` position, and literal
-  // propagation builds `1` as `1n`. The answer therefore changes from *false*
-  // to *true*. It is a change to a program with no annotation in it, and it is
-  // accepted deliberately: nothing writes `[1n].includes(1)` expecting *false*,
-  // and the alternative is to leave every array literal untyped.
-  expect(evaluated('String([1n].includes(1));')).toBe('true');
+  // propagation builds `1` as `1n` in checked code. A program with no proposal
+  // syntax is not checked code (#sec-checked-code): there the Array methods'
+  // signatures give the argument no contextual type, so it keeps the answer
+  // every engine gives, while the literal keeps its type.
+  expect(evaluated('let checked: number = 0; String([1n].includes(1));')).toBe('true');
+  expect(evaluated('String([1n].includes(1));')).toBe('false');
 });
 
 test('a typed array reads its length at the index type, and an untyped one does not', () => {

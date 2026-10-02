@@ -171,16 +171,13 @@ test('a bare literal in an unannotated binding stays untyped, by design', () => 
   expectOk('const a = [1, 2]; const s: string = a[0];');
 });
 
-test('an untyped program mostly keeps its meaning', () => {
-  // The reason a bare array literal must not simply acquire a type. With one,
-  // `[1n]` is a `[].<bigint>`, `includes` is read at that element type, and
-  // literal propagation builds the argument `1` as `1n` - so this program,
-  // which has no annotation anywhere, changes from false to true. Every step is
-  // the proposal working as specified; the result is still inadmissible.
-  // Accepted change: `[1n]` is a `[].<bigint>`, so `includes` takes a `bigint`
-  // and literal propagation builds `1` as `1n`. Nothing writes this expecting
-  // *false*, and leaving every array literal untyped to preserve it costs more
-  // than it saves.
-  expect(value('String([1n].includes(1));')).toBe('true');
+test('an untyped program keeps its meaning', () => {
+  // `[1n]` is a `[].<bigint>`, so in checked code `includes` takes a `bigint` and
+  // literal propagation builds `1` as `1n`. An untyped program is not checked
+  // code (#sec-checked-code): the signatures of the existing Array methods give
+  // its arguments no contextual type there, so the literal keeps its type while
+  // the program keeps the answer every engine gives.
+  expect(value('String([1n].includes(1));')).toBe('false');
   expect(value('String([1].includes(1));')).toBe('true');
+  expect(value('let checked: number = 0; String([1n].includes(1));')).toBe('true');
 });

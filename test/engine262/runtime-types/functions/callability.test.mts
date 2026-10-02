@@ -157,10 +157,11 @@ test('an INTERSECTION is decided, for the opposite reason a union is', () => {
 });
 
 test('~void~ has no values, so nothing it describes can be called', () => {
-  expectThrown(dead('function f(): void { } let q = f()();'), 'is not callable');
+  // #sec-checked-code: the calling code is checked code, so the call is refused early.
+  expectThrown(dead('let checked: number = 0; function f(): void { } let q = f()();'), 'is not callable');
 
   // A parenthesized expression resolves to its known value type too.
-  expectThrown(dead('function f(): void { } let q = new (f())();'), 'is not a constructor');
+  expectThrown(dead('let checked: number = 0; function f(): void { } let q = new (f())();'), 'is not a constructor');
 });
 
 test('construction refuses what calling refuses', () => {

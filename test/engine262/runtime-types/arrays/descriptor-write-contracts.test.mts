@@ -10,7 +10,7 @@ test.each([
   ],
   [
     "known size descriptor has no setter",
-    "const m=new Map();m.size=4;"
+    "let checked: number = 0; const m=new Map();m.size=4;"
   ],
   [
     "compound capacity store",
@@ -92,4 +92,10 @@ test('an effectful compound RHS can replace the capacity descriptor', () => {
     a.capacity += replace();
     String(a.capacity);
   `)).toBe('2');
+});
+
+// #sec-checked-code: a store to a built-in accessor is a contract on existing
+// JavaScript, so outside checked code it keeps its behaviour.
+test('outside checked code, a store to a built-in accessor keeps its behaviour', () => {
+  expect(ok('const m=new Map();m.size=4;')).toBe(true);
 });

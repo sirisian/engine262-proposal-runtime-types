@@ -7,11 +7,17 @@ import { expectStaticTypeError, ok } from '../harness.mts';
 
 test.each([
   "function f(x: uint8) { while (void x) { break; } }",
-  "function f() { if (void 0) { return 1; } return 0; }",
+  "function f(p: number) { if (void 0) { return 1; } return 0; }",
   "function f(x: uint8) { if (typeof x) {} else { return 1; } return 0; }",
   "function f(x: object | null) { if (x = null) { return 1; } return 0; }",
   "function f(c: boolean) { if (c ? 1 : 2) {} }",
 ])("a test whose value settles it is refused: %s", expectStaticTypeError);
+
+// #sec-checked-code: outside checked code the same tests keep their behaviour.
+test.each([
+  "function f() { if (void 0) { return 1; } return 0; } 'ok';",
+  "function f(x) { if (typeof x) {} else { return 1; } return 0; } 'ok';",
+])("outside checked code, a test whose value settles it is accepted: %s", (source) => expect(ok(source)).toBe(true));
 
 test.each([
   "function f(c: boolean, s: string) { if (c ? 'a' : s) {} } 'ok';",

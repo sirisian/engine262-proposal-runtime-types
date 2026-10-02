@@ -12,15 +12,15 @@ test.each([
   ],
   [
     "object setter call",
-    "const o={set x(v:()=>void){}};function f(){o.x();}"
+    "const o={set x(v:()=>void){}};function f(p:number){o.x();}"
   ],
   [
     "static setter call",
-    "class C{static set x(v:()=>void){}}function f(){C.x();}"
+    "class C{static set x(v:()=>void){}}function f(p:number){C.x();}"
   ],
   [
     "private setter call",
-    "class C{set #x(v:()=>void){}f(){this.#x();}}"
+    "class C{set #x(v:()=>void){}f(p:number){this.#x();}}"
   ],
   [
     "setter masks inherited getter",
@@ -78,5 +78,6 @@ test.each([
 });
 
 test("setter symbol read is rejected before evaluation", () => {
-  expectStaticTypeError("const o={set [Symbol.iterator](v:()=>void){}};function f(){o[Symbol.iterator]();}");
+  // #sec-checked-code: the call is in checked code, so it is refused early.
+  expectStaticTypeError("const o={set [Symbol.iterator](v:()=>void){}};function f(p:number){o[Symbol.iterator]();}");
 });

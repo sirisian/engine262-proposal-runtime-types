@@ -35,6 +35,7 @@ import { isRangeObject } from '../intrinsics/Range.mts';
 import { X } from '../completion.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
+import { IsCheckedCode } from '../type-system/checked-code.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
 import { ArgumentListEvaluationItems } from './ArgumentListEvaluation.mts';
@@ -1091,7 +1092,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // iv. If the source code matching this CallExpression is strict mode code, let strictCaller be true. Otherwise let strictCaller be false.
       const strictCaller = CallExpression.strict;
       // vi. Return ? PerformEval(evalText, strictCaller, true).
-      return Q(yield* PerformEval(evalText, strictCaller, true));
+      return Q(yield* PerformEval(evalText, strictCaller, true, IsCheckedCode(CallExpression)));
     }
   }
   // 7. Let thisCall be this CallExpression.

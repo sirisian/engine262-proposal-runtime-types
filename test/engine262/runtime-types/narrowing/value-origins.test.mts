@@ -328,7 +328,7 @@ test("generator-result: yield-conditional", () => {
 });
 
 test("generator-result: yield-star", () => {
-  expectStaticTypeError("function* g():Generator.<uint8,true,undefined>{yield uint8(1);return true;} function* f(){if(yield* g()){}}");
+  expectStaticTypeError("function* g():Generator.<uint8,true,undefined>{yield uint8(1);return true;} function* f(p:number){if(yield* g()){}}");
 });
 
 test("generator-result: async-yield", () => {

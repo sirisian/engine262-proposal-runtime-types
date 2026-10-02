@@ -31,8 +31,11 @@ test('a test of a member path is judged against the type of the path', () => {
 test('a test of an operand that is not a path is judged, and narrows nothing', () => {
   const h = 'function h(): uint8 { return (1 := uint8); } ';
   expectStaticTypeError(`${h} function f() { if (h() is string) {} }`);
-  expectStaticTypeError(`${h} function f() { if (typeof h() === "string") {} }`);
-  expectStaticTypeError(`${h} function f() { if (h() == null) {} }`);
+  expectStaticTypeError(`${h} function f(p: number) { if (typeof h() === "string") {} }`);
+  expectStaticTypeError(`${h} function f(p: number) { if (h() == null) {} }`);
+  // #sec-checked-code: an unannotated function is not checked code, whatever the
+  // types of the values it tests, so the same test there keeps its behaviour.
+  expect(evaluated(`${h} function f() { if (h() == null) {} } "ok";`)).toBe('ok');
   // Two literals compared with each other are a constant, not a test of a value.
   expect(evaluated('if ("a" === "a") {} "ok";')).toBe('ok');
 });

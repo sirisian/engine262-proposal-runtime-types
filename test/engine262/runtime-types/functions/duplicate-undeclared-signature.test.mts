@@ -45,19 +45,12 @@ test('two typed declarations that INFER DIFFERENT returns are two signatures', (
   expect(evaluated('function f(a: uint8) { return "s"; } function f(a: string) { return uint8(1); } "ok";')).toBe('ok');
 });
 
-test.fails('an UNTYPED duplicate keeps its JavaScript meaning', () => {
-  // RECORDED, NOT FIXED. Function declarations are var-scoped and the last one
-  // wins; every engine runs both of these and answers 2.
-  //
-  // The DECLARATIONS are no longer refused, which is half the rule: a wholly
-  // untyped function publishes no inferred return, so it is not a signature
-  // written twice. But an untyped declaration still JOINS the overload set, so
-  // the call is refused as "ambiguous between two declared signatures" - the
-  // error the author never wrote, one step later than before.
-  //
-  // The remaining half is that an untyped declaration should not form an
-  // overload set at all. A superset may add meanings; it may not remove
-  // programs, and this program is removed.
+test('an UNTYPED duplicate keeps its JavaScript meaning', () => {
+  // Function declarations are var-scoped and the last one wins; every engine
+  // runs both of these and answers 2. Neither declaration is refused, since a
+  // wholly untyped function publishes no inferred return, and neither joins an
+  // overload set: #sec-checked-code forms a set only where a declaration of the
+  // name is in checked code, so these keep their JavaScript meaning.
   expect(evaluated('function f() { return 1; } function f() { return 2; } String(f());')).toBe('2');
   expect(evaluated('function f(a) { return 1; } function f(a) { return 2; } String(f(0));')).toBe('2');
 });

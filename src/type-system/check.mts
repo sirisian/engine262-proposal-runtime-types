@@ -15,6 +15,7 @@ import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExp
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
+import { ClassifyDynamicFunction, IsCheckedCode, IsGatedMessage } from './checked-code.mts';
 import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
@@ -95,7 +96,9 @@ import { intrinsicDeclarationRecord } from './records.mts';
 import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint } from './records.mts';
-import { R, Throw, wellKnownSymbols } from '#self';
+import {
+  Get, R, Throw, X, wellKnownSymbols,
+} from '#self';
 
 /**
  * proposal-runtime-types #sec-static-type-of-an-expression and #sec-type-errors
@@ -795,6 +798,8 @@ export interface NarrowingRequest {
   readonly subject: TypeRecord;
   /** Alternative incoming facts; a source without a prior comparison holds its type. */
   readonly inputs: readonly NarrowingInput[];
+  /** False where the test is outside checked code (#sec-checked-code). */
+  readonly checked?: boolean;
 }
 
 const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
@@ -2426,7 +2431,7 @@ function writtenAnnotationAbove(node: object): boolean {
  * take a rest parameter, and an argument loop that checked only their first
  * argument would be worse than the run time, which already enforces them.
  */
-const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
+const TypedArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
   const anyType = { Kind: 'any' as const };
   const numberType = makePrimitive('number');
   // sec-array-and-tuple-types: the index type is `uint64`, and `length` is of it. An
@@ -2693,6 +2698,7 @@ export function HasDeferredGuardChecks(root: object): boolean {
  * such pass, so it stays silent rather than report what may not hold.
  */
 export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
+  ClassifyDynamicFunction(expression);
   const statement = { type: 'ExpressionStatement', Expression: expression } as unknown as ParseNode;
   const root = { type: 'Script', ScriptBody: { type: 'ScriptBody', StatementList: [statement] } } as unknown as ParseNode.Script;
   const errors = checkInTwoPasses([statement] as never, root, CreateCheckSession());
@@ -2885,6 +2891,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- outputs and the pre-scan -------------------------------------
 
   const errors: ObjectValue[] = [];
+  // The innermost node being walked. It places a report in its unit, so the
+  // checking boundary can withhold the inference family outside checked code
+  // (#sec-checked-code). A node of no parse, or no walk yet, keeps every check.
+  let gateNode: ParseNode | undefined;
+  const inCheckedCode = (): boolean => !gateNode || IsCheckedCode(gateNode);
+  const messageOf = (error: ObjectValue): string => {
+    const message = X(Get(error, Value('message')));
+    return message instanceof JSStringValue ? message.stringValue() : '';
+  };
+  {
+    const push = errors.push.bind(errors);
+    errors.push = (...items: ObjectValue[]): number => {
+      for (const item of items) {
+        if (!inCheckedCode() && IsGatedMessage(messageOf(item))) continue;
+        push(item);
+      }
+      return errors.length;
+    };
+  }
+  // The signatures this proposal gives the existing Array methods are contracts
+  // on existing JavaScript (#sec-checked-code). Outside checked code their
+  // parameters accept anything, as the methods do today; results keep their types.
+  const ArrayMethodSignature = (name: string, element: TypeRecord, receiver: TypeRecord): Known => {
+    const typed = TypedArrayMethodSignature(name, element, receiver);
+    if (!typed || typed.Kind !== 'function' || inCheckedCode()) return typed;
+    return {
+      ...typed,
+      Signatures: typed.Signatures.map((signature) => ({
+        ...signature,
+        Parameters: signature.Parameters.map((parameter) => ({ ...parameter, Type: { Kind: 'any' } as TypeRecord })),
+      })),
+    } as Known;
+  };
 
   const resumedDelegations = ProvenResumedDelegations(root, statementList ?? [], surroundingAgent.currentRealmRecord);
 
@@ -24082,7 +24121,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return saved;
     }
     const request = narrowingRequestOf(test);
-    if (visit && request) narrowingRequestsHere.push(request);
+    if (visit && request) narrowingRequestsHere.push(inCheckedCode() ? request : { ...request, checked: false });
     if (visit) walk(test);
     else previewFlowEffects(test);
     if (!flowLive) return { whenTrue: undefined, whenFalse: undefined };
@@ -31654,7 +31693,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const barrier = single && ['CallExpression', 'RefExpression', 'IfStatement', 'ConditionalExpression', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunction'].includes(single.type);
     if (barrier) invalidateMutableMetadataFacts();
     if (single?.type === 'AssignmentExpression') handledStoreEffects.delete(single);
-    walkNode(node);
+    const gateSaved = gateNode;
+    if (single?.location) gateNode = single;
+    try {
+      walkNode(node);
+    } finally {
+      gateNode = gateSaved;
+    }
     if (single && selectedOperatorCalls.has(single)) {
       invalidateCapturedReads();
       invalidateCapturedAliases();

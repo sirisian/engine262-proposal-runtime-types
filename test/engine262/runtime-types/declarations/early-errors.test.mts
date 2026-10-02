@@ -686,7 +686,9 @@ test('a binding typed void through its pattern\'s annotation is refused', () => 
 
 test('a logical operand that can never be evaluated is refused whatever settles the test', () => {
   expectStaticTypeError('const o: {} = {}; const x = o || 1;');
-  expectStaticTypeError('const f = (x: uint8): uint8 => x; const h = f || 1;');
+  // #sec-checked-code: the arrow's annotations check only the arrow, so the
+  // test needs checked code of its own to be judged.
+  expectStaticTypeError('let checked: number = 0; const f = (x: uint8): uint8 => x; const h = f || 1;');
   expectStaticTypeError('let n: null = null; const y = n && 1;');
   // The right operand is evaluated in these, so they stay legal.
   expect(evaluated('const obj: {} = {}; function h(): uint8 { return 1; } String(obj && h());')).toBe('1');

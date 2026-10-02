@@ -5801,7 +5801,11 @@ export function collectOverloadGroups(declarations: readonly OverloadableDeclara
     }
   }
   for (const [name, list] of [...byName]) {
-    if (list.length < 2) {
+    // #sec-checked-code: a set forms only where at least one declaration of the
+    // name is in checked code; an untyped declaration then joins it as a
+    // fallback. Duplicates that are all outside checked code keep ECMAScript's
+    // rule that the later one wins, as they do in every engine today.
+    if (list.length < 2 || !list.some((d) => IsCheckedCode(d as unknown as ParseNode))) {
       byName.delete(name);
     }
   }
@@ -6142,3 +6146,4 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
 import { rationalPartsFitWidth } from '../intrinsics/Rational.mts';
 
 import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
+import { IsCheckedCode } from '../type-system/checked-code.mts';
