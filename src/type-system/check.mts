@@ -21622,6 +21622,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const excludedScalars: TypeRecord[] = [];
   const scalarKey = (name: string, type: TypeRecord): string => {
+    // #sec-narrowing-flow: an exclusion is a fact about a value. A literal
+    // compared with a subject adopts the subject's one domain, so the equality
+    // and the pattern spellings of one primitive value share one key.
+    const base = type.Kind === 'literal' ? type.Base as TypeRecord | undefined : undefined;
+    if (base && base.Kind === 'primitive') {
+      const value = (type as { Value?: unknown }).Value;
+      const number = numericValueOf(value as Value);
+      const family = base.Name === 'string' ? 's' : base.Name === 'boolean' ? 'B' : base.Name === 'bigint' ? 'b' : number !== undefined ? 'n' : null;
+      const text = family === 's' ? jsString(value) : family === 'B' ? String(value === Value.true || value === true)
+        : number !== undefined ? String(number) : null;
+      // A zero keeps its own record, since a signed-zero pattern keeps its
+      // sign while strict equality identifies the two.
+      if (family && text !== null && !(family === 'n' && number === 0)) return `${name}.\u0000excluded:${family}:${text}`;
+    }
     let index = excludedScalars.findIndex((entry) => SameType(entry, type));
     if (index < 0) index = excludedScalars.push(type) - 1;
     return `${name}.\u0000excluded${index}`;
@@ -21785,9 +21799,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * is an operand is read; an operator's result is judged by the operator's
    * own rules, and `!` is seen through.
    */
-  const truthinessOperandTypes = new Set(['IdentifierReference', 'MemberExpression', 'CallExpression', 'OptionalExpression',
-    'ThisExpression', 'ObjectLiteral', 'ArrayLiteral', 'FunctionExpression', 'ArrowFunction', 'ClassExpression',
-    'TemplateLiteral', 'NewExpression', 'StringLiteral', 'NumericLiteral', 'NullLiteral', 'BigIntLiteral', 'RegularExpressionLiteral', 'AwaitExpression', 'YieldExpression']);
   const isUnshadowedGlobal = (node: ParseNode | null | undefined, name: string): boolean => {
     const core = node ? unparenthesized(node) ?? node : null;
     return !!core && core.type === 'IdentifierReference' && (core as unknown as { name: string }).name === name && !shadowedByProgram(name);
@@ -21930,7 +21941,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const core = stripTest(test);
     if (core.type === 'BooleanLiteral') return;
     if (core.type === 'NumericLiteral' && [0, 1].includes(Number((core as unknown as { value: unknown }).value))) return;
-    if (!truthinessOperandTypes.has(core.type)) return;
+    // #sec-narrowfrom: a test is judged by its value's Static Type whatever its
+    // form; an operator with a rule of its own produces `boolean`, which this
+    // never settles, so nothing is judged twice. A statement tested for its
+    // completion value is judged through its producers instead.
+    if (/Statement$|^Block$|Declaration$|^StatementList$/.test(core.type)) return;
     const t = staticType(core);
     if (t?.Kind === 'void') {
       pushVoidUse('tested');
@@ -22232,7 +22247,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       display: `${operator} ${JSON.stringify(c)}`,
     } as NarrowingFact;
   };
-  const constantNumber = (node: ParseNode): number | null => {
+  const constantNumber = (node: ParseNode, against: Known = null): number | null => {
     let core = unparenthesized(node) ?? node;
     let sign = 1;
     if (core.type === 'UnaryExpression' && (core as unknown as { operator?: string }).operator === '-') {
@@ -22246,7 +22261,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (exact && exact.length === 1) return sign * exact[0];
     if (core.type === 'NumericLiteral') {
       const v = (core as unknown as { value?: unknown }).value;
+      if (typeof v === 'bigint') return v >= -(2n ** 53n) && v <= 2n ** 53n ? sign * Number(v) : null;
       return typeof v === 'number' ? sign * v : null;
+    }
+    // A BigInt literal, an enumerator member and arithmetic over constants are
+    // compile-time constants as well.
+    if (core.type === 'MemberExpression') {
+      // An enumerator reference names a value against an enum-valued peer.
+      const n = numericValueOf(literalValueOf(singleValueOperandType(core, against ?? staticType(core))));
+      if (n !== undefined) return sign * n;
+    }
+    if (core.type === 'AdditiveExpression' || core.type === 'MultiplicativeExpression') {
+      const e = core as unknown as Record<string, unknown>;
+      const operator = (typeof e.operator === 'string' ? e.operator : e.MultiplicativeOperator) as string | undefined;
+      const parts = Object.entries(e)
+        .filter(([key, v]) => key !== 'parent' && !!v && typeof v === 'object' && typeof (v as { type?: unknown }).type === 'string')
+        .map(([, v]) => v as ParseNode);
+      if (parts.length === 2 && operator) {
+        const l = constantNumber(parts[0], against);
+        const r = l === null ? null : constantNumber(parts[1], against);
+        if (l !== null && r !== null) {
+          const v = operator === '+' ? l + r : operator === '-' ? l - r : operator === '*' ? l * r
+            : operator === '/' ? l / r : operator === '%' ? l % r : null;
+          if (v !== null) return sign * v;
+        }
+      }
     }
     if (core.type === 'IdentifierReference') {
       const n = numericValueOf(literalValueOf(singleValueOperandType(core)));
@@ -22255,12 +22294,55 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
   const mirroredOperator: Record<string, string> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=' };
+  /**
+   * The limits an operand of a relational comparison contributes: a
+   * compile-time constant its value, any other operand those of its Static
+   * Type, `null` where they are not known.
+   */
+  const sideLimits = (node: ParseNode): { lo: number | bigint, hi: number | bigint, nan: boolean }[] | null => {
+    const c = constantNumber(node);
+    if (c !== null) return [{ lo: c, hi: c, nan: Number.isNaN(c) }];
+    const written = staticType(node);
+    const s = written && written.Kind !== 'any' ? judgedType(written) : null;
+    if (!s) return null;
+    const lengths = exactLengthsOf(node);
+    if (lengths) return lengths.map((length) => ({ lo: length, hi: length, nan: false }));
+    const closed = expandClosed(s);
+    const limits = (closed.Kind === 'union' ? closed.Members as TypeRecord[] : [closed]).map(valueLimits);
+    return limits.length > 0 && limits.every((l) => l !== null) ? limits as { lo: number | bigint, hi: number | bigint, nan: boolean }[] : null;
+  };
+  const compareLimits = (a: number | bigint, b: number | bigint): number => {
+    if (typeof a === 'bigint' && typeof b === 'bigint') return a < b ? -1 : a > b ? 1 : 0;
+    if (typeof b === 'number') return compareLimit(a, b);
+    return -compareLimit(b, a as number);
+  };
+  /**
+   * #sec-narrowfrom: a relational comparison reads both operands' limits and
+   * is settled where the two intervals decide it.
+   */
+  const twoOperandLimitsFact = (left: ParseNode, operator: string, right: ParseNode): NarrowingFact | undefined => {
+    if (constantNumber(left, staticType(right)) !== null || constantNumber(right, staticType(left)) !== null) return undefined;
+    const ls = sideLimits(left);
+    const rs = ls ? sideLimits(right) : null;
+    if (!ls || !rs) return undefined;
+    const pairs = ls.flatMap((l) => rs.map((r) => [l, r] as const));
+    const never = pairs.every(([l, r]) => (operator === '<' ? compareLimits(l.lo, r.hi) >= 0 : operator === '<=' ? compareLimits(l.lo, r.hi) > 0
+      : operator === '>' ? compareLimits(l.hi, r.lo) <= 0 : compareLimits(l.hi, r.lo) < 0));
+    const always = pairs.every(([l, r]) => !l.nan && !r.nan && (operator === '<' ? compareLimits(l.hi, r.lo) < 0
+      : operator === '<=' ? compareLimits(l.hi, r.lo) <= 0 : operator === '>' ? compareLimits(l.lo, r.hi) > 0 : compareLimits(l.lo, r.hi) >= 0));
+    const verdict = never ? 'never-succeeds' as const : always ? 'never-fails' as const : null;
+    if (!verdict) return undefined;
+    const s = staticType(left) as TypeRecord;
+    return { name: narrowableName(left) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict, display: operator } as NarrowingFact;
+  };
   const relationalLimitsFact = (left: ParseNode, operator: string, right: ParseNode): NarrowingFact | undefined => {
+    const both = twoOperandLimitsFact(left, operator, right);
+    if (both) return both;
     let operand = left;
     let op = operator;
-    let c = constantNumber(right);
+    let c = constantNumber(right, staticType(left));
     if (c === null) {
-      c = constantNumber(left);
+      c = constantNumber(left, staticType(right));
       if (c === null) return stringOrderFact(left, operator, right);
       operand = right;
       op = mirroredOperator[operator];
@@ -22294,6 +22376,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return {
       name: narrowableName(operand) ?? NON_PATH, type: s, subjectType: s, negated: false, verdict, display: `${operator} ${String(c)}`,
+    } as NarrowingFact;
+  };
+  /**
+   * #table-narrowing-forms, the `v === w` row: two operands each of one literal
+   * type over one base are equal exactly where their values are, so the
+   * comparison can never fail or never succeed.
+   */
+  const singletonPairFact = (a: ParseNode, operator: string, b: ParseNode): NarrowingFact | undefined => {
+    // A place is read at its current flow type, as the `v === e` row reads it.
+    const typeOf = (node: ParseNode): Known => {
+      const place = narrowableName(node);
+      return (place !== null ? lookup(place) : null) ?? staticType(node);
+    };
+    // Two written literals stay with the `v === e` row.
+    if (literalExpressionType(a) || literalExpressionType(b)) return undefined;
+    const ta = typeOf(a);
+    const tb = typeOf(b);
+    if (!ta || !tb || ta.Kind !== 'literal' || tb.Kind !== 'literal') return undefined;
+    if (!ta.Base || !tb.Base || !SameType(ta.Base as TypeRecord, tb.Base as TypeRecord)) return undefined;
+    const equal = sameLiteralValue(ta.Value, tb.Value);
+    const negated = operator === '!==' || operator === '!=';
+    return {
+      name: narrowableName(a) ?? NON_PATH, type: ta, subjectType: ta, negated,
+      verdict: equal !== negated ? 'never-fails' as const : 'never-succeeds' as const, display: operator,
     } as NarrowingFact;
   };
   const nanComparisonFact = (a: ParseNode, operator: string, b: ParseNode): NarrowingFact | undefined => {
@@ -22443,6 +22549,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (['===', '!==', '==', '!='].includes(eq.operator)) {
         const nan = nanComparisonFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
         if (nan) return nan;
+        const singletons = singletonPairFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
+        if (singletons) return singletons;
         const pair = typeofPairFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
         if (pair) return pair;
         const length = lengthComparisonFact(eq.EqualityExpression, eq.operator, eq.RelationalExpression);
@@ -23495,6 +23603,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           resumeFlow(onTrue ? branches.whenTrue : branches.whenFalse);
         }
         const result = walkTest(test.AssignmentExpression, deciding, truthiness, false);
+        if (visit && deciding && truthiness) judgeTruthiness(test);
         request.result = assignmentResult(test, result, skipped);
       }
       if (request.result) return request.result;
@@ -23591,9 +23700,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (test.type === 'ConditionalExpression') {
       const condition = walkTest(test.ShortCircuitExpression, visit, visit, visit);
       resumeFlow(condition.whenTrue);
-      const yes = walkTest(test.AssignmentExpression_a, deciding, truthiness, visit);
+      // #sec-void-type: an arm's value is judged where it is used, so the
+      // conditional is judged by its whole Static Type (#sec-narrowfrom),
+      // while each arm still carries its facts.
+      const yes = walkTest(test.AssignmentExpression_a, deciding, false, visit);
       resumeFlow(condition.whenFalse);
-      const no = walkTest(test.AssignmentExpression_b, deciding, truthiness, visit);
+      const no = walkTest(test.AssignmentExpression_b, deciding, false, visit);
+      if (visit && deciding && truthiness) judgeTruthiness(test);
       return { whenTrue: joinFlow([yes.whenTrue, no.whenTrue])!, whenFalse: joinFlow([yes.whenFalse, no.whenFalse])! };
     }
     const saved = savedPredicateResult(test);
@@ -32536,6 +32649,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const label = (clause as { Expression?: ParseNode | null }).Expression;
               const k = label && lengths ? constantNumber(label) : null;
               if (k !== null && lengths && !lengths.includes(k)) pushImpossibleTest('never-succeeds', `case ${String(k)}`);
+              // #sec-narrowing-flow: a label is a literal test, impossible where
+              // its value was excluded before the `switch`.
+              const subjectName = narrowableName(expression);
+              const labelType = label && subjectName !== null ? singleValueOperandType(label, discriminantType) : null;
+              if (labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType));
             }
           }
         }

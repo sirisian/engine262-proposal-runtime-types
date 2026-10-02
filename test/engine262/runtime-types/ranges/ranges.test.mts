@@ -353,8 +353,10 @@ test('member access binds tighter than the range', () => {
 });
 
 test('a range is looser than a conditional head', () => {
-  // 0..<10 ? x : y is (0..<10) ? x : y, and a range is truthy
-  expect(evaluated('0..<10 ? "y" : "n";')).toBe('y');
+  // 0..<10 ? x : y is (0..<10) ? x : y: the range heads the conditional, and a
+  // range is always truthy, so as a test it is refused by its value
+  // (#sec-narrowfrom), the refusal naming the range type that headed it.
+  expectThrown('0..<10 ? "y" : "n";', 'ClosedOpenRange');
 });
 
 test('a range is non-associative', () => {
